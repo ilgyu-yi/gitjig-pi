@@ -67,12 +67,12 @@
  * `gh`, no `pi`, no fixture.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { repoRoot } from "./harness/run-pi.ts";
 
-const EXTENSION_DIR = join(repoRoot(), ".pi", "extensions", "gitjig");
+const EXTENSIONS_DIR = join(repoRoot(), ".pi", "extensions");
 
 /**
  * The roster and each file's exact-text allowlist of non-path expressions.
@@ -82,7 +82,7 @@ const EXTENSION_DIR = join(repoRoot(), ".pi", "extensions", "gitjig");
  */
 const SOURCES: readonly { file: string; allow: readonly string[] }[] = [
 	{
-		file: "audit.ts",
+		file: "gitjig/audit.ts",
 		allow: [
 			// Numeric dimensions of the sink verdict's Stats — no byte of any
 			// of them comes from a path component.
@@ -105,9 +105,9 @@ const SOURCES: readonly { file: string; allow: readonly string[] }[] = [
 			"nouns.restoredBy",
 		],
 	},
-	{ file: "locate.ts", allow: [] },
+	{ file: "gitjig/locate.ts", allow: [] },
 	{
-		file: "state-root.ts",
+		file: "gitjig/state-root.ts",
 		allow: [
 			// The seam's NAME is a constant of this module, not a value an
 			// actor supplies.
@@ -124,11 +124,61 @@ const SOURCES: readonly { file: string; allow: readonly string[] }[] = [
 	},
 	// No interpolation exists in postures.ts today; it is on the roster so
 	// the module most likely to grow a message cannot grow a raw one.
-	{ file: "postures.ts", allow: [] },
+	{ file: "gitjig/postures.ts", allow: [] },
 ];
 
 function read(file: string): string {
-	return readFileSync(join(EXTENSION_DIR, file), "utf8");
+	return readFileSync(join(EXTENSIONS_DIR, file), "utf8");
+}
+
+/**
+ * Every file the extension tree holds, as paths relative to
+ * `.pi/extensions/`. The DOMAIN is this walk, never a list of containers:
+ * a module added as a new sibling entry beside `gitjig.ts`, or nested
+ * deeper than `gitjig/`, is returned here the moment it exists, so it
+ * cannot join the tree already decided (§3.2 loads extensions from the
+ * repository's extension directory, which makes both shapes supported
+ * growth rather than hypotheses).
+ */
+function walkExtensionFiles(dir: string = EXTENSIONS_DIR, prefix = ""): string[] {
+	const found: string[] = [];
+	for (const entry of readdirSync(dir).sort()) {
+		const absolute = join(dir, entry);
+		const relative = prefix === "" ? entry : `${prefix}/${entry}`;
+		if (statSync(absolute).isDirectory()) {
+			found.push(...walkExtensionFiles(absolute, relative));
+		} else {
+			found.push(relative);
+		}
+	}
+	return found;
+}
+
+/**
+ * The in-module record of non-membership. It lives in the module's own
+ * header, where a reader of the module finds it, and this suite reads THAT
+ * text rather than a second list that could drift from it — the roster and
+ * the reasons are then one record with two readers, not two records.
+ */
+const EXEMPT_MARKER = /Warning-surface roster:\s*EXEMPT\s*—\s*[A-Za-z][^\n]*/;
+
+/**
+ * A walked file is in exactly one of two states. `undecided` is the third
+ * outcome the lock exists to make impossible: a module that joined the tree
+ * and was never ruled on either way.
+ *
+ * One predicate, two call sites (§3.11): the roster arm calls it over the
+ * real tree, the teeth arms below call it over synthetic inputs.
+ */
+function rosterDisposition(
+	file: string,
+	roster: readonly string[],
+	source: string,
+): "locked" | "exempt" | "undecided" {
+	if (roster.includes(file)) {
+		return "locked";
+	}
+	return EXEMPT_MARKER.test(source) ? "exempt" : "undecided";
 }
 
 /**
@@ -204,6 +254,34 @@ describe("warning-surface escaping lock (§3.10, issue #47)", () => {
 		});
 	}
 
+	it("every file the extension walk returns is decided — on the roster, or exempt with a recorded reason", () => {
+		const roster = SOURCES.map(({ file }) => file);
+		const undecided = walkExtensionFiles().filter(
+			(file) => rosterDisposition(file, roster, read(file)) === "undecided",
+		);
+		assert.deepEqual(
+			undecided,
+			[],
+			`${undecided.length} module(s) under .pi/extensions/ are on neither state: not on this suite's roster, ` +
+				`and carrying no recorded reason for staying off it. A module joins the tree and is covered only if ` +
+				`someone remembers, which is the silent-omission the lock exists to close (§3.10 asks for an empty ` +
+				`exemption set and a structural lock so a new site cannot drift in unguarded). Put each on SOURCES ` +
+				`with its allowlist, or write the reason it stays off into its own header as ` +
+				`"Warning-surface roster: EXEMPT — <reason>": ${JSON.stringify(undecided, null, 2)}`,
+		);
+	});
+
+	it("the roster names no file the walk does not return", () => {
+		const walked = new Set(walkExtensionFiles());
+		const stale = SOURCES.map(({ file }) => file).filter((file) => !walked.has(file));
+		assert.deepEqual(
+			stale,
+			[],
+			`the roster names ${stale.length} file(s) the extension tree no longer holds — a roster entry for a ` +
+				`deleted module reads as coverage and scans nothing: ${JSON.stringify(stale, null, 2)}`,
+		);
+	});
+
 	it("no raw error extraction flows to a warn/throw surface in any shipped source", () => {
 		const offenders: string[] = [];
 		for (const { file } of SOURCES) {
@@ -236,6 +314,45 @@ describe("the lock's own teeth (§3.12 — a guard the suite never measures is d
 		]);
 	});
 
+	it("reports an undecided module — on no roster and carrying no recorded reason", () => {
+		assert.equal(rosterDisposition("gitjig/newcomer.ts", ["gitjig/audit.ts"], "export const x = 1;"), "undecided");
+	});
+
+	it("admits a module on the roster", () => {
+		assert.equal(rosterDisposition("gitjig/audit.ts", ["gitjig/audit.ts"], "export const x = 1;"), "locked");
+	});
+
+	it("admits an off-roster module carrying the recorded reason in its own text", () => {
+		assert.equal(
+			rosterDisposition("gitjig/quote.ts", [], "/** Warning-surface roster: EXEMPT — it is the escaper. */"),
+			"exempt",
+		);
+	});
+
+	it("a marker with no reason after it is not a disposition", () => {
+		// The record is the REASON; a bare marker would let a module opt out
+		// by asserting nothing, which is the silent omission under a new name.
+		assert.equal(rosterDisposition("gitjig/quote.ts", [], "/** Warning-surface roster: EXEMPT — */"), "undecided");
+	});
+
+	it("reports a raw path interpolation in a degradedMessage-shaped composition", () => {
+		// Acceptance criterion 3, in the scanner's own terms: the site that
+		// composes the bind-state advisory must not be able to grow a raw path.
+		assert.deepEqual(
+			interpolationViolations("return `gitjig bind state: ${state}; stamp ${stampPath}`;", ["state"]),
+			["stampPath"],
+		);
+	});
+
+	it("reports a raw error interpolation in a recordStampRefusal-shaped composition", () => {
+		// Acceptance criterion 4: the same site with the extraction wrapped passes.
+		assert.deepEqual(
+			interpolationViolations("`could not be opened: ${error.message}`", []),
+			["error.message"],
+		);
+		assert.deepEqual(interpolationViolations("`could not be opened: ${quoted(error.message)}`", []), []);
+	});
+
 	it("reports a raw error extraction and admits a wrapped one", () => {
 		assert.deepEqual(rawErrorReads("const reason = error.message;"), ["const reason = error.message;"]);
 		assert.deepEqual(rawErrorReads("const reason = quoted(error.message);"), []);
@@ -255,7 +372,7 @@ describe("in-place disclosure and shipped-comment hygiene (issue #53)", () => {
 		// honest disclosure of the class names its exemplar, and matching
 		// only that token leaves the wording free to change.
 		assert.match(
-			read("quote.ts"),
+			read("gitjig/quote.ts"),
 			/U\+200B/,
 			"quote.ts's header does not name the non-bidi invisible-format residual — the U+200B class passes quoted() raw, and an undisclosed boundary reads as an omission, not a decision (§3.11)",
 		);
