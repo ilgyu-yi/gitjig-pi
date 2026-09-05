@@ -33,6 +33,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runDispatch } from "../dispatch/index.ts";
+import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 
 /**
  * The fixed dispatch brief (§1.5's dispatch-facts carrier): fixed text by
@@ -53,6 +54,10 @@ const REFUSE_ARGS =
  * dropped: a caller who spelled a bound and got the default silently ran under
  * one they did not ask for. The token is recognized only in first position, so
  * a delegate argv element of the same shape is never eaten (issue #94).
+ *
+ * Admissible is the executor timer's own domain — positive and no greater than
+ * MAX_RUN_BOUND_MS. One surface carries one rule (§2.7), so this command draws
+ * the line the tool surface draws rather than a second one.
  */
 const REFUSE_BOUND =
 	"review refused: the leading timeoutMs= token is not an admissible positive number of " +
@@ -75,7 +80,7 @@ export function registerReviewCommand(pi: ExtensionAPI, repoRoot: string, stateR
 			let boundRefused = false;
 			if (tokens.length > 0 && tokens[0].startsWith("timeoutMs=")) {
 				const raw = Number(tokens[0].slice("timeoutMs=".length));
-				if (!Number.isFinite(raw) || raw <= 0) {
+				if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_RUN_BOUND_MS) {
 					boundRefused = true;
 				} else {
 					timeoutMs = raw;

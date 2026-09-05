@@ -36,7 +36,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendAuditRecord } from "../audit.ts";
 import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
-import { runDelegate } from "./executor.ts";
+import { MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import {
 	cleanupDispatchContext,
 	PROVISION_REFUSAL_CAUSES,
@@ -61,13 +61,19 @@ const REFUSE_BRIEF = "dispatch refused: the dispatch brief is not an admissible 
 const REFUSE_EXPECTED_REF = "dispatch refused: the expected ref is present but not an admissible string";
 
 /**
- * Present-but-inadmissible run bound — refused, never coerced. A bound is
- * inadmissible unless it is a finite positive number: a string, a zero, a
- * negative, a NaN or an infinity cannot bound a run, and resolving one of them
- * to the default would hand the caller a bound they did not ask for while their
- * own value reached nothing. That is the same silently-different-dispatch shape
- * the sibling expectedRef guard refuses on, and one surface carries one rule
- * (§2.7, §3.11).
+ * Present-but-inadmissible run bound — refused, never coerced. The admissible
+ * domain is the one the executor's timer can honor: a positive number no
+ * greater than MAX_RUN_BOUND_MS. A string, a zero, a negative, a NaN, an
+ * infinity or a value past the timer's ceiling cannot bound a run, and
+ * resolving one of them to the default would hand the caller a bound they did
+ * not ask for while their own value reached nothing. That is the same
+ * silently-different-dispatch shape the sibling expectedRef guard refuses on,
+ * and one surface carries one rule (§2.7, §3.11).
+ *
+ * The ceiling is part of the predicate rather than a residual because past it
+ * the bound does not merely go unhonored — it inverts into an immediate kill
+ * reported under the bound-exceeded class, so admitting it would put a false
+ * outcome class in the trail (§5.5).
  */
 const REFUSE_TIMEOUT_MS = "dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
 
@@ -189,7 +195,8 @@ const DISPATCH_PARAMS = {
 			type: "number",
 			description:
 				"Optional run bound in milliseconds for the delegate child; omitted runs at the default. " +
-				"A delegate that outlives its bound is terminated and nothing is admitted.",
+				"A delegate that outlives its bound is terminated and nothing is admitted. Must be positive " +
+				"and no greater than the run timer's ceiling; a bound outside that domain is refused, never run.",
 		},
 	},
 	required: ["brief", "delegateArgv"],
@@ -247,7 +254,13 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 				return result(REFUSE_EXPECTED_REF, { disposition: "refused" });
 			}
 			const timeoutMs: unknown = params.timeoutMs;
-			if (timeoutMs !== undefined && (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+			if (
+				timeoutMs !== undefined &&
+				(typeof timeoutMs !== "number" ||
+					!Number.isFinite(timeoutMs) ||
+					timeoutMs <= 0 ||
+					timeoutMs > MAX_RUN_BOUND_MS)
+			) {
 				// The whole inadmissible set in one predicate, so no member falls
 				// through to a bound the caller did not name. Absent stays legal and
 				// takes the default — the reach is new, the floor is not.
