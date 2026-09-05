@@ -840,6 +840,12 @@ describe("/review's bound token is consumed from first position only (issue #94,
 			join(dir, "zq-report-argv.sh"),
 			`printf '{"ok":true,"summary":"delegate-saw-arg=%s","reviewedHead":"none"}' "$1" > ../return.json\n`,
 		);
+		// A delegate slow enough that the BOUND decides its fate rather than the
+		// machine -- the liveness pair's whole subject.
+		writeFileSync(
+			join(dir, "zq-slow.sh"),
+			`sleep 3\nprintf '{"ok":true,"summary":"delegate-saw-arg=slow-finished","reviewedHead":"none"}' > ../return.json\n`,
+		);
 		git("add", "-A");
 		git("commit", "-qm", "seed");
 		return dir;
@@ -919,6 +925,40 @@ describe("/review's bound token is consumed from first position only (issue #94,
 			JSON.stringify(review.entries).includes("delegate-saw-arg=plain"),
 			`grammar-bound-consumed: the dispatch did not reach the delegate with the bound consumed — the ` +
 				`token must be eaten and HEAD read as the ref: ${JSON.stringify(review.entries)}`,
+		);
+	});
+
+	// The LIVENESS pair, mirroring the tool surface's. Consuming the token and
+	// reading the ref correctly says nothing about the parsed value reaching the
+	// run: a bound accepted and then dropped satisfies every grammar arm above
+	// while leaving the caller on the fallback -- which is issue #94's own defect
+	// one layer up. Either arm alone is worthless; the pair is the evidence.
+	const SLOW = ["sh", "zq-slow.sh"];
+
+	it("a leading bound BELOW the delegate's own duration terminates it", async () => {
+		const review = await drive("grammar-bound-live-low");
+		await review.run(["timeoutMs=400", "HEAD", ...SLOW].join(" "));
+		const serialized = JSON.stringify(review.entries);
+		assert.ok(
+			serialized.includes("exceeded its run bound"),
+			`grammar-bound-live-low: a bound well under the delegate's own duration did not terminate it — ` +
+				`the command parsed the caller's bound and the run never saw it, so the caller ran under the ` +
+				`fallback they never named (§4.9): ${serialized}`,
+		);
+		assert.ok(
+			!serialized.includes("slow-finished"),
+			`grammar-bound-live-low: the delegate ran to completion under a bound far below its duration: ${serialized}`,
+		);
+	});
+
+	it("the SAME delegate admits under a raised leading bound — live in both directions", async () => {
+		const review = await drive("grammar-bound-live-high");
+		await review.run(["timeoutMs=30000", "HEAD", ...SLOW].join(" "));
+		assert.ok(
+			JSON.stringify(review.entries).includes("slow-finished"),
+			`grammar-bound-live-high: the same delegate the low bound terminated did not admit under a raised ` +
+				`one — a bound that is ignored in both directions passes the low arm by accident, so only the ` +
+				`pair shows the value is live: ${JSON.stringify(review.entries)}`,
 		);
 	});
 });
