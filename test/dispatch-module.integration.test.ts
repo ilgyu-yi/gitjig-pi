@@ -1277,6 +1277,15 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 			"bound-schema: the tool advertises no run bound, so the option the executor already honors is " +
 				`reachable by nobody and every dispatch runs at the default (§4.9): ${JSON.stringify(tool.parameters.properties)}`,
 		);
+		// The ADVERTISED TYPE, not merely the key: a bound advertised as anything
+		// but a number is rejected at the substrate's argument validation before
+		// any code here runs, so the key alone leaves the surface unreachable.
+		assert.equal(
+			(tool.parameters.properties.timeoutMs as { type?: unknown }).type,
+			"number",
+			"bound-schema: the bound is advertised under a type that is not number — every caller's numeric " +
+				`bound is refused by the substrate and the parameter is reachable by nobody (§4.9): ${JSON.stringify(tool.parameters.properties.timeoutMs)}`,
+		);
 	});
 
 	it("a caller-supplied bound BELOW the delegate's own duration terminates it", async () => {
@@ -1344,8 +1353,10 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 
 	it("a non-positive bound is refused too — zero is not a bound, it is an unrunnable dispatch", async () => {
 		const index = await requireModule<IndexModule>("index.ts", "bound-nonpositive");
-		const tool = register("bound-nonpositive", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
+		const sink = mintStateRoot();
+		const tool = register("bound-nonpositive", index, mintRepo(PAYLOADS), sink.stateRoot);
 		for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+			const before = dispatchAuditLines(sink).length;
 			const result = await tool.execute("zq-toolcall", {
 				brief: BRIEF,
 				delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
@@ -1357,6 +1368,19 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 				`bound-nonpositive: ${String(value)} was accepted as a bound — a value that cannot bound a run is ` +
 					`the actor's own input and refuses rather than resolving to something they did not ask for ` +
 					`(§3.9): ${JSON.stringify(result)}`,
+			);
+			// WHICH refusal, not merely that one happened. Every one of these values
+			// also reaches a refusal by running: the timer clamps a sub-1, NaN or
+			// oversize delay to 1 ms, the delegate is killed and the dispatch refuses
+			// on bound-exceeded. Only the guard's own record separates a value the
+			// surface rejected from one it accepted and then failed to run.
+			assert.ok(
+				dispatchAuditLines(sink)
+					.slice(before)
+					.some((line) => line.includes('"action":"refuse-timeout-ms"')),
+				`bound-nonpositive: ${String(value)} landed no refuse-timeout-ms record — it was not rejected at ` +
+					`the surface but provisioned and run, and the refusal the caller sees is the bound-exceeded ` +
+					`class of a dispatch that should never have started (§5.5): ${JSON.stringify(dispatchAuditLines(sink).slice(before))}`,
 			);
 		}
 	});
