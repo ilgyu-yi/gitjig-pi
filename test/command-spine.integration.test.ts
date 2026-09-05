@@ -50,8 +50,10 @@
  *
  * AUTHORED PHASE-C CONTRACT (what the arms bind):
  *   - `review` is an extension command registered from the gitjig entry;
- *     its argument string is `<expectedRef> <delegateArgv…>`, whitespace-
- *     split; the handler dispatches through the ONE dispatcher (§4.9's
+ *     its argument string is `[timeoutMs=<n>] <expectedRef> <delegateArgv…>`,
+ *     whitespace-split, the leading bound optional and recognized in FIRST
+ *     POSITION ONLY (issue #94); the handler dispatches through the ONE
+ *     dispatcher (§4.9's
  *     one home, many call sites) and appends a session entry
  *     `customType: "gitjig-review"` whose data carries the disposition,
  *     the compare VALIDITY token (`confirmed`/`invalid`), and the admitted
@@ -959,6 +961,28 @@ describe("/review's bound token is consumed from first position only (issue #94,
 			`grammar-bound-live-high: the same delegate the low bound terminated did not admit under a raised ` +
 				`one — a bound that is ignored in both directions passes the low arm by accident, so only the ` +
 				`pair shows the value is live: ${JSON.stringify(review.entries)}`,
+		);
+	});
+
+	it("the ceiling itself is admitted here too, so the two entry points draw ONE line", async () => {
+		// The command's own comment claims it draws the line the tool entry point
+		// draws rather than a second one. Only the refusing side of that line was
+		// held here: with the comparison weakened to `>=`, every other arm stays
+		// green while the two entry points disagree by exactly one value.
+		const executor = await import(join(repoRoot(), ".pi/extensions/gitjig/dispatch/executor.ts"));
+		const ceiling = (executor as { MAX_RUN_BOUND_MS?: unknown }).MAX_RUN_BOUND_MS;
+		assert.equal(
+			typeof ceiling,
+			"number",
+			`grammar-bound-ceiling: the executor exports no run-bound ceiling, so the arm is vacuous: ${JSON.stringify(ceiling)}`,
+		);
+		const review = await drive("grammar-bound-ceiling");
+		await review.run([`timeoutMs=${String(ceiling)}`, "HEAD", ...DELEGATE, "at-the-edge"].join(" "));
+		assert.ok(
+			JSON.stringify(review.entries).includes("delegate-saw-arg=at-the-edge"),
+			`grammar-bound-ceiling: the largest bound the timer can honor was refused at this entry point ` +
+				`while the tool entry point admits it — the two surfaces draw different lines and a legal bound ` +
+				`is unreachable through the command: ${JSON.stringify(review.entries)}`,
 		);
 	});
 });
