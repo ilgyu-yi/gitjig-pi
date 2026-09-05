@@ -1,8 +1,10 @@
 /**
  * Structural suite for the warning-surface escaping rule (issue #47).
  *
- * Subject under test: the text of the four shipped runtime sources,
- * `.pi/extensions/gitjig/{audit,locate,state-root,postures}.ts`.
+ * Subject under test: the text of every file a recursive walk of
+ * `.pi/extensions/` returns. The domain is the WALK, never a list of files
+ * or of containers — a module added as a new sibling entry, or nested
+ * deeper than `gitjig/`, is in the domain the moment it exists (issue #72).
  *
  * The rule (SPEC §3.10): "a write the guard itself permits must not be able
  * to forge the guard's decisions", and the mitigation for such a class
@@ -16,7 +18,13 @@
  * prose is stranded — it moves into code both sides call. Structural checks
  * over prose files remain normal tests."
  *
- * The lock is lexical: every `${…}` interpolation in the four sources must
+ * Each walked file is in exactly one of two states: on the roster, where
+ * its text is scanned, or off it with a reason recorded IN THAT MODULE'S
+ * OWN HEADER, which this suite reads rather than keeping a second list that
+ * could drift from it. A file in neither state fails — that third outcome,
+ * the module nobody ruled on, is what the lock exists to make impossible.
+ *
+ * The lock is lexical: every `${…}` interpolation in a rostered source must
  * either be escaped where it stands — an expression beginning `quoted(` or
  * `JSON.stringify(` — or appear on that file's exact-text allowlist of
  * expressions that carry no path: numeric Stats dimensions, and the
@@ -48,10 +56,17 @@
  *      exact TEXT per file, so an allowlisted spelling reused for a
  *      genuinely path-bearing variable in the same file is admitted —
  *      per-file scoping narrows that residual but does not close it.
- *   4. That message construction OUTSIDE these four files is escaped. The
- *      lock covers the modules #47 names; a fifth module emitting warnings
- *      joins the roster by being added to SOURCES, and nothing here notices
- *      its absence.
+ *   4. That message construction outside `.pi/extensions/` is escaped, or
+ *      that a recorded exemption reason is TRUE. The silent-omission half
+ *      of this residual is closed: the domain is the walk, so a module
+ *      cannot join the tree undecided (issue #72). What remains is the
+ *      boundary and the reason. The walk's root is `.pi/extensions/`, so a
+ *      surface emitting operator text from elsewhere in the repository is
+ *      outside this domain and no arm here notices it. And the exemption
+ *      state is checked for PRESENCE and for carrying a reason, never for
+ *      the reason being sound — a module can exempt itself with a bad
+ *      argument, which is why the exemption is one file and its reason is
+ *      the structural circularity of escaping the escaper.
  *   5. That a raw error read wrapped LATER on the same line is really
  *      escaped: the raw-extraction arm is same-line lexical, so
  *      `quoted(x) + error.message` would be admitted.
@@ -63,8 +78,8 @@
  * allowlisted one — so a NEW raw site demonstrably fails this check, not
  * just the sites red at the commit that introduced it.
  *
- * This suite reads four files from disk and writes nothing: no network, no
- * `gh`, no `pi`, no fixture.
+ * This suite walks one directory and reads its files, and writes nothing:
+ * no network, no `gh`, no `pi`, no fixture.
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -80,7 +95,7 @@ const EXTENSIONS_DIR = join(repoRoot(), ".pi", "extensions");
  * and not escaped where it stands is a violation, so the exemption set
  * stays enumerated here rather than accreting inline (§3.10).
  */
-const SOURCES: readonly { file: string; allow: readonly string[] }[] = [
+const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorReads?: readonly string[] }[] = [
 	{
 		file: "gitjig/audit.ts",
 		allow: [
@@ -125,6 +140,127 @@ const SOURCES: readonly { file: string; allow: readonly string[] }[] = [
 	// No interpolation exists in postures.ts today; it is on the roster so
 	// the module most likely to grow a message cannot grow a raw one.
 	{ file: "gitjig/postures.ts", allow: [] },
+	{
+		file: "gitjig.ts",
+		allow: [
+			// The entry's two records reach the audit sink and nothing else,
+			// and the sink's writer passes the WHOLE record through
+			// JSON.stringify at write time, so a path carrying a newline or a
+			// quote is encoded before it lands. Measured: a path spelling a
+			// complete second record writes one line, parses as one record,
+			// and forges none. The surrounding double quotes in the message
+			// are presentational, not the escape.
+			"repoRoot",
+			"stateRoot",
+		],
+	},
+	{
+		file: "gitjig/bind-state.ts",
+		allow: [
+			// A closed literal union — `BindState` enumerates the byte set.
+			"state",
+			// A module constant, not a value any actor supplies.
+			"BIND_REARM_COMMAND",
+			// Carriers: the path content is escaped at its own leaf, where
+			// this module wraps both the stamp path and the error extraction
+			// in quoted(); escaping the carrier would double-escape.
+			"cause",
+			"recovery",
+		],
+	},
+	// The command spine composes no message text: the rung-1 commands hand
+	// fixed literals to the dispatcher and report its causes unrephrased.
+	{ file: "gitjig/commands/index.ts", allow: [] },
+	{ file: "gitjig/commands/review.ts", allow: [] },
+	{ file: "gitjig/commands/ship.ts", allow: [] },
+	// Admission and the delegate child compose no interpolated text; every
+	// refusal they surface is a fixed content-free literal.
+	{ file: "gitjig/dispatch/admit.ts", allow: [] },
+	{ file: "gitjig/dispatch/executor.ts", allow: [] },
+	{
+		file: "gitjig/dispatch/index.ts",
+		allow: [
+			// A boolean and a closed verdict union; neither carries a byte an
+			// actor names.
+			"outcome.ok",
+			"outcome.compare",
+			// The verdict clause composed from the two above.
+			"compareClause",
+			// The admitted return's summary is the payload this surface
+			// exists to deliver. It is bounded, closed-schema, and operand-
+			// scanned at admission; quoting it here would mangle the prose
+			// the dispatch went and fetched.
+			"outcome.summary",
+		],
+		allowErrorReads: [
+			// Read only to COMPARE against the closed provision-cause set —
+			// the raw message reaches a surface on the one branch where it is
+			// a member of that set, and the generic cause is used otherwise.
+			'const thrown = error instanceof Error ? error.message : "";',
+		],
+	},
+	{
+		file: "gitjig/dispatch/provision.ts",
+		allow: [
+			// Not a message. This composes a git revision operand passed as a
+			// single argv element after --end-of-options; argv safety is a
+			// different class from line-forging on an operator surface, and
+			// quoting here would corrupt the revision.
+			'options.expectedRef ?? "HEAD"',
+		],
+	},
+	{
+		file: "gitjig/publish/executor.ts",
+		allow: [
+			// A numeric module constant.
+			"CHILD_TIMEOUT_MS",
+			// The child's numeric exit status, and the signal NAME the
+			// platform reports — neither is actor-named text.
+			"code !== null ? `exit status ${code",
+			'signal ?? "unknown"',
+		],
+	},
+	{
+		file: "gitjig/publish/index.ts",
+		allow: [
+			// Carriers of this module's own fixed causes.
+			"cause",
+			"outcome.cause",
+			// The URL is validated WHOLE against the comment-URL shape before
+			// it crosses, which is §3.10's output-validity direction: the
+			// shape admits no byte that could forge a line.
+			"outcome.url",
+			// Format-checked lowercase-hyphen pattern ids and numeric line
+			// locators — the refuse-match composition carries no body byte,
+			// which is the property that lets a refusal name where it matched
+			// without quoting the match.
+			'scan.patternIds.join(", ")',
+			'scan.lines.join(", ")',
+		],
+		allowErrorReads: [
+			// Admitted only for PatternSourceError, whose messages are fixed
+			// content-free literals; every other throw takes this module's
+			// own fixed cause.
+			"? error.message",
+		],
+	},
+	{
+		file: "gitjig/publish/neutralize.ts",
+		allow: [
+			// Not a message surface. This is the neutralizer composing its
+			// own PRODUCT — the wrap delimiter, the matched span it is
+			// wrapping, and the separators that keep the wrap from merging
+			// with a body backtick run. Escaping the match here would defeat
+			// the function, whose whole job is to return the body's own bytes
+			// rendered inert.
+			"delimiter",
+			"match",
+			"separatorBefore",
+			"separatorAfter",
+		],
+	},
+	// The scanner composes no interpolated text; its refusals are fixed.
+	{ file: "gitjig/publish/scan.ts", allow: [] },
 ];
 
 function read(file: string): string {
@@ -182,7 +318,7 @@ function rosterDisposition(
 }
 
 /**
- * The comment-free view. The headers of all four sources NAME the tokens
+ * The comment-free view. Rostered headers NAME the tokens
  * the scans below turn on — `${`, `error.message`, `JSON.stringify` —
  * while explaining the decisions behind them, so a scan over the raw text
  * would report the commentary as the code. Block comments are removed
@@ -284,8 +420,11 @@ describe("warning-surface escaping lock (§3.10, issue #47)", () => {
 
 	it("no raw error extraction flows to a warn/throw surface in any shipped source", () => {
 		const offenders: string[] = [];
-		for (const { file } of SOURCES) {
+		for (const { file, allowErrorReads = [] } of SOURCES) {
 			for (const line of rawErrorReads(read(file))) {
+				if (allowErrorReads.includes(line)) {
+					continue;
+				}
 				offenders.push(`${file}: ${line}`);
 			}
 		}
