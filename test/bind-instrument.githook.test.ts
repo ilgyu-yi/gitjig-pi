@@ -985,23 +985,46 @@ describe("a sourced file's own `exit` folds the hook to allow (issue #68, SPEC �
 });
 
 // ---------------------------------------------------------------------------
-// The fold's arming record is reachable from the files it guards (issue #71).
-// A sourced file executes in the hook's OWN shell, so the bookkeeping the fold
-// consults is addressable by the very code whose failure it exists to catch.
-// Both arms below corrupt it with ONE appended line in a committed helper, and
-// each measures the fold's own contract rather than the corruption: the tier
-// never carries a helper's status to git (§3.2, §5.2), and a run in which every
-// source completed never records one that did not.
+// The retired counter stays retired (issue #71).
+//
+// The fold once decided its window from `_GH_SRC_DEPTH`, a shell variable the
+// sourced file could assign to because it executes in the hook's own shell.
+// Corrupting it in either direction moved the fold: driven below its floor the
+// next window armed no trap, driven above it the window never closed and the
+// trap outlived the function, firing at the adapter's exit where its `exit 0`
+// overwrote a refusal already in the sink.
+//
+// What each arm pins is measured, not assumed, and the arms differ.
+//
+// The two counter arms detect the retired name: at the counter's last commit
+// both are red, and removing their appended corruption turns each green there,
+// so the corruption is what they react to. Reintroducing a helper-assignable
+// counter under this name reds them again.
+//
+// The raised-counter arm and the FUNCNAME arm additionally pin the live
+// mechanism, in the one direction that forges an allow. The probe that
+// establishes this is asymmetric — arm the trap, then delete the exit-half
+// clear — because that is the only shape that leaves a trap outliving the
+// function it armed in. Against it, the nested arm above, the raised-counter
+// arm and the FUNCNAME arm all red; the unset-counter arm stays green and is
+// a regression check alone.
+//
+// A constant mutant of `_gh_src_outermost` is NOT a probe for this guard, and
+// is recorded here so it is not mistaken for one: a constant removes arming
+// and clearing together, so no trap ever outlives anything and the failure
+// these arms guard cannot occur — every arm here stays green against both
+// constants while pinning the mechanism perfectly well. A guard whose failure
+// a mutant cannot produce is not measured by that mutant.
 // ---------------------------------------------------------------------------
 
-describe("the source fold's arming record is unreachable from a sourced file (issue #71, SPEC §3.2, §5.2)", { skip: IS_WINDOWS }, () => {
-	it("a helper that UNSETS the arming record leaves the NEXT source window unguarded", () => {
+describe("the retired arming counter is no longer consulted (issue #71, SPEC §3.2, §5.2)", { skip: IS_WINDOWS }, () => {
+	it("a helper that UNSETS the retired counter no longer disarms the next source window", () => {
 		const fixture = buildArmedScanFixture();
 		try {
 			// `pre-commit` sources branch_guard.sh first and secret_scan.sh second.
-			// Clearing the record inside the first source makes the decrement land
-			// below zero, so the second window's arming test never matches and the
-			// window opens with no trap behind it.
+			// Under the retired counter, clearing it inside the first source drove
+			// the decrement below zero and the second window's arming test stopped
+			// matching, so that window opened with no trap behind it.
 			appendFileSync(join(fixture.root, ".githooks", "helpers", "branch_guard.sh"), "\nunset _GH_SRC_DEPTH\n");
 			// The failure the fold exists to absorb, in the now-unguarded window.
 			appendFileSync(join(fixture.root, ".githooks", "helpers", "secret_scan.sh"), "\nexit 9\n");
@@ -1010,34 +1033,35 @@ describe("the source fold's arming record is unreachable from a sourced file (is
 			assert.equal(
 				attempt.status,
 				0,
-				`unset arming record: the commit was refused on machinery the actor did not cause — the one ` +
-					`direction §5.2 states this tier never takes; status ${attempt.status}, stderr: ` +
-					`${JSON.stringify(attempt.stderr)}`,
+				`retired counter, unset: the commit was refused on machinery the actor did not cause — the one ` +
+					`direction §5.2 states this tier never takes, which is what a live counter under this name ` +
+					`produces; status ${attempt.status}, stderr: ${JSON.stringify(attempt.stderr)}`,
 			);
 			assert.match(
 				attempt.stderr,
 				/not enforced: a helper did not finish sourcing/,
-				`unset arming record: the fold left no notice, so the operator cannot tell a disarmed allow from ` +
-					`an enforced one (§3.9); stderr: ${JSON.stringify(attempt.stderr)}`,
+				`retired counter, unset: the fold left no notice, so the operator cannot tell a disarmed allow ` +
+					`from an enforced one (§3.9); stderr: ${JSON.stringify(attempt.stderr)}`,
 			);
 			assert.match(
 				attempt.auditDelta,
 				/source-incomplete/,
-				`unset arming record: the fold left no record either, so nothing durable says the tier ran none ` +
-					`of its remaining checks (§3.9, §5.5); auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
+				`retired counter, unset: the fold left no record either, so nothing durable says the tier ran ` +
+					`none of its remaining checks (§3.9, §5.5); auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
 		} finally {
 			removeGithookFixture(fixture);
 		}
 	});
 
-	it("a helper that RAISES the arming record leaves the trap armed past the sourcing function", () => {
+	it("a helper that RAISES the retired counter no longer leaves the trap armed past the function", () => {
 		const fixture = buildArmedScanFixture();
 		try {
-			// `commit-msg` sources conventional_commit.sh. Raising the record inside
-			// that source leaves the decrement above zero, so the window is never
-			// closed and the EXIT trap outlives the function that armed it — firing
-			// at the adapter's own exit, where its `exit 0` overwrites the refusal.
+			// `commit-msg` sources conventional_commit.sh. Under the retired
+			// counter, raising it inside that source left the decrement above zero,
+			// the window was never closed, and the EXIT trap outlived the function
+			// that armed it — firing at the adapter's own exit, where its `exit 0`
+			// overwrote the refusal that had already reached the sink.
 			appendFileSync(
 				join(fixture.root, ".githooks", "helpers", "conventional_commit.sh"),
 				"\n_GH_SRC_DEPTH=$(( ${_GH_SRC_DEPTH:-0} + 1 ))\n",
@@ -1047,15 +1071,42 @@ describe("the source fold's arming record is unreachable from a sourced file (is
 			assert.notEqual(
 				attempt.status,
 				0,
-				`raised arming record: the commit was CREATED while the grammar refusal stood in the record ` +
-					`sink — the artifact says allowed and the trail says blocked; auditDelta: ` +
-					`${JSON.stringify(attempt.auditDelta)}`,
+				`retired counter, raised: the commit was CREATED while the grammar refusal stood in the record ` +
+					`sink — the artifact says allowed and the trail says blocked, which is what a live counter ` +
+					`under this name produces; auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
 			assert.doesNotMatch(
 				attempt.auditDelta,
 				/source-incomplete/,
-				`raised arming record: every source in this run completed, yet the trail names one that did not ` +
-					`finish — a record of a failure that never happened; auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
+				`retired counter, raised: every source in this run completed, yet the trail names one that did ` +
+					`not finish — a record of a failure that never happened; auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a helper that disables FUNCNAME degrades toward a refusal, never toward a forged allow", () => {
+		const fixture = buildArmedScanFixture();
+		try {
+			// The residual `_lib.sh`'s header enumerates, exercised rather than only
+			// asserted in prose: `FUNCNAME` is unsettable, and a sourced file that
+			// unsets it leaves an empty array, so every frame answers OUTERMOST.
+			// The header states which way that falls, and this is the arm that
+			// holds it to it — what must never happen is the forged allow the
+			// retired counter could produce: a created commit standing over a block
+			// record already in the sink.
+			appendFileSync(join(fixture.root, ".githooks", "helpers", "conventional_commit.sh"), "\nunset FUNCNAME\n");
+
+			const attempt = commitWithMessage(fixture, "no type here, just prose\n");
+			const forgedAllow = attempt.status === 0 && /"action":"block"/.test(attempt.auditDelta);
+			assert.equal(
+				forgedAllow,
+				false,
+				`funcname-disabled: the commit was created while a block record stood in the sink — the ` +
+					`residual the header enumerates fell toward a forged allow, which is the direction it ` +
+					`states it does not take; status ${attempt.status}, auditDelta: ` +
+					`${JSON.stringify(attempt.auditDelta)}`,
 			);
 		} finally {
 			removeGithookFixture(fixture);
