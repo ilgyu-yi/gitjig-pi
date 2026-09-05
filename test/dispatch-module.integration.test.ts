@@ -1269,6 +1269,30 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 		return registered;
 	}
 
+	/**
+	 * The admissible domain's edge, READ from the executor rather than restated
+	 * here, so the boundary arms bind to the constant the guard consults. The
+	 * value is then held against the platform fact it encodes: `setTimeout`
+	 * clamps past the 32-bit signed ceiling, so a constant that drifts off it
+	 * moves the guard's edge away from the timer's without any arm noticing.
+	 */
+	async function executorCeiling(arm: string): Promise<number> {
+		const executor = await requireModule<{ MAX_RUN_BOUND_MS?: unknown }>("executor.ts", arm);
+		assert.equal(
+			typeof executor.MAX_RUN_BOUND_MS,
+			"number",
+			`${arm}: the executor exports no run-bound ceiling, so no surface can refuse past it and the ` +
+				`arm measuring the edge is vacuous: ${JSON.stringify(executor.MAX_RUN_BOUND_MS)}`,
+		);
+		assert.equal(
+			executor.MAX_RUN_BOUND_MS,
+			2_147_483_647,
+			`${arm}: the ceiling is not the timer's 32-bit signed edge — the guard's domain has drifted off ` +
+				`the primitive's, which is the defect the ceiling exists to close: ${String(executor.MAX_RUN_BOUND_MS)}`,
+		);
+		return executor.MAX_RUN_BOUND_MS as number;
+	}
+
 	it("the advertised schema carries the bound, so a caller can supply one at all", async () => {
 		const index = await requireModule<IndexModule>("index.ts", "bound-schema");
 		const tool = register("bound-schema", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
@@ -1374,15 +1398,60 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 			// oversize delay to 1 ms, the delegate is killed and the dispatch refuses
 			// on bound-exceeded. Only the guard's own record separates a value the
 			// surface rejected from one it accepted and then failed to run.
-			assert.ok(
-				dispatchAuditLines(sink)
-					.slice(before)
-					.some((line) => line.includes('"action":"refuse-timeout-ms"')),
-				`bound-nonpositive: ${String(value)} landed no refuse-timeout-ms record — it was not rejected at ` +
+			const landed = dispatchAuditLines(sink).slice(before);
+			// The guard's OWN record and nothing after it. Asserting only that the
+			// record appears leaves the arm green when the guard records and then
+			// dispatches anyway -- exactly the state this message claims to exclude.
+			assert.deepEqual(
+				landed.map((line) => JSON.parse(line).action),
+				["refuse-timeout-ms"],
+				`bound-nonpositive: ${String(value)} did not stop at the guard — it was not rejected at ` +
 					`the surface but provisioned and run, and the refusal the caller sees is the bound-exceeded ` +
-					`class of a dispatch that should never have started (§5.5): ${JSON.stringify(dispatchAuditLines(sink).slice(before))}`,
+					`class of a dispatch that should never have started (§5.5): ${JSON.stringify(landed)}`,
 			);
 		}
+	});
+
+	it("the timer's ceiling is the admissible domain's edge, and it is honored AT the edge", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-ceiling");
+		const tool = register("bound-ceiling", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			timeoutMs: await executorCeiling("bound-ceiling"),
+		});
+		assert.equal(
+			result.details.disposition,
+			"admitted",
+			"bound-ceiling: the largest bound the timer can honor was refused — the guard's edge is drawn " +
+				`inside the admissible domain and a legal bound is unreachable: ${JSON.stringify(result)}`,
+		);
+	});
+
+	it("ONE past the ceiling is refused at the surface, never run and misreported", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-past-ceiling");
+		const sink = mintStateRoot();
+		const tool = register("bound-past-ceiling", index, mintRepo(PAYLOADS), sink.stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			timeoutMs: (await executorCeiling("bound-past-ceiling")) + 1,
+		});
+		assert.equal(
+			result.details.disposition,
+			"refused",
+			"bound-past-ceiling: a bound past the timer's ceiling was admitted — the timer clamps it to 1 ms, " +
+				`so the caller's longest bound becomes an immediate kill: ${JSON.stringify(result)}`,
+		);
+		// WHICH refusal decides whether the trail is honest: past the ceiling the
+		// run is killed at 1 ms and reported as bound-exceeded, an outcome class a
+		// delegate that outlived nothing did not produce.
+		assert.deepEqual(
+			dispatchAuditLines(sink).map((line) => JSON.parse(line).action),
+			["refuse-timeout-ms"],
+			"bound-past-ceiling: the refusal is not the guard's — the dispatch was provisioned and run, and " +
+				`the trail records a bound-exceeded run for a delegate that outlived nothing (§5.5): ${JSON.stringify(dispatchAuditLines(sink))}`,
+		);
 	});
 
 	it("an absent bound stays legal and runs at the default", async () => {
