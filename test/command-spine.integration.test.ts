@@ -50,8 +50,10 @@
  *
  * AUTHORED PHASE-C CONTRACT (what the arms bind):
  *   - `review` is an extension command registered from the gitjig entry;
- *     its argument string is `<expectedRef> <delegateArgv…>`, whitespace-
- *     split; the handler dispatches through the ONE dispatcher (§4.9's
+ *     its argument string is `[timeoutMs=<n>] <expectedRef> <delegateArgv…>`,
+ *     whitespace-split, the leading bound optional and recognized in FIRST
+ *     POSITION ONLY (issue #94); the handler dispatches through the ONE
+ *     dispatcher (§4.9's
  *     one home, many call sites) and appends a session entry
  *     `customType: "gitjig-review"` whose data carries the disposition,
  *     the compare VALIDITY token (`confirmed`/`invalid`), and the admitted
@@ -95,11 +97,13 @@ import {
 	copyFileSync,
 	existsSync,
 	mkdirSync,
+	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
 	writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -802,5 +806,183 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 
 	it("stays silent on an unrelated hex run", () => {
 		assert.deepEqual(heldOperandRuns("alongside deadbee7 inert", HELD), []);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// /review's positional bound grammar (issue #94). The surrounding suite drives
+// the command through a real pi session, which prices one arm per session and
+// cannot vary an argument string cheaply. These arms drive the REGISTERED
+// HANDLER directly instead: the grammar is a pure function of the argument
+// string, and what must be pinned is which token the parser consumes and what
+// consequently reaches the delegate. Round 2 found this surface pinned by
+// nothing at all -- the parser was new and no arm anywhere drove it.
+// ---------------------------------------------------------------------------
+
+describe("/review's bound token is consumed from first position only (issue #94, SPEC §4.8, §4.9)", () => {
+	/** The shape the command module registers through. */
+	interface ReviewDrive {
+		entries: Array<Record<string, unknown>>;
+		run(args: string): Promise<void>;
+	}
+
+	/**
+	 * A fixture repository whose committed delegate REPORTS THE ARGV ELEMENT it
+	 * received as `$1`. That report is the only way to tell an argv element that
+	 * survived the parse from one the parser ate: a dispatch that merely admits
+	 * proves nothing about which tokens the delegate was handed.
+	 */
+	function mintCallerRepo(): string {
+		const dir = mkdtempSync(join(tmpdir(), "zq-review-grammar-"));
+		const git = (...args: string[]): void => {
+			execFileSync("git", ["-C", dir, ...GIT_FLAGS, ...args], { encoding: "utf8" });
+		};
+		execFileSync("git", ["init", "-q", "-b", "main", dir], { encoding: "utf8" });
+		writeFileSync(
+			join(dir, "zq-report-argv.sh"),
+			`printf '{"ok":true,"summary":"delegate-saw-arg=%s","reviewedHead":"none"}' "$1" > ../return.json\n`,
+		);
+		// A delegate slow enough that the BOUND decides its fate rather than the
+		// machine -- the liveness pair's whole subject.
+		writeFileSync(
+			join(dir, "zq-slow.sh"),
+			`sleep 3\nprintf '{"ok":true,"summary":"delegate-saw-arg=slow-finished","reviewedHead":"none"}' > ../return.json\n`,
+		);
+		git("add", "-A");
+		git("commit", "-qm", "seed");
+		return dir;
+	}
+
+	async function drive(arm: string): Promise<ReviewDrive> {
+		const module = await import(join(repoRoot(), ".pi/extensions/gitjig/commands/review.ts")).catch(
+			(error: unknown) => {
+				assert.fail(`${arm}: the review command module did not load, so the arm is vacuous: ${String(error)}`);
+			},
+		);
+		const entries: Array<Record<string, unknown>> = [];
+		let handler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+		const pi = {
+			registerCommand: (_name: string, spec: { handler: (args: string, ctx: unknown) => Promise<void> }) => {
+				handler = spec.handler;
+			},
+			appendEntry: (_channel: string, entry: Record<string, unknown>) => entries.push(entry),
+			sendMessage: () => {},
+		};
+		(module as { registerReviewCommand: (pi: unknown, repo: string, state: string) => void }).registerReviewCommand(
+			pi,
+			mintCallerRepo(),
+			mkdtempSync(join(tmpdir(), "zq-review-state-")),
+		);
+		assert.ok(handler !== undefined, `${arm}: the module registered no review command — the arm is vacuous`);
+		return {
+			entries,
+			run: async (args: string) => {
+				entries.length = 0;
+				await handler(args, { waitForIdle: async () => {} });
+			},
+		};
+	}
+
+	/** The delegate's own report of the argv element it was handed. */
+	const DELEGATE = ["sh", "zq-report-argv.sh"];
+
+	it("a delegate argv element spelled like the bound reaches the delegate intact", async () => {
+		const review = await drive("grammar-argv-untouched");
+		for (const leading of [[], ["timeoutMs=60000"]]) {
+			await review.run([...leading, "HEAD", ...DELEGATE, "timeoutMs=9"].join(" "));
+			assert.ok(
+				JSON.stringify(review.entries).includes("delegate-saw-arg=timeoutMs=9"),
+				`grammar-argv-untouched: with leading bound ${JSON.stringify(leading)} the delegate did not ` +
+					`report the argv element it was handed — a parser that consumes a bound-shaped token past ` +
+					`first position silently changes what the delegate runs (§4.9): ${JSON.stringify(review.entries)}`,
+			);
+		}
+	});
+
+	it("an inadmissible leading bound refuses with nothing dispatched", async () => {
+		const review = await drive("grammar-bound-refused");
+		// Admissible/inadmissible is the split, NOT numeric/non-numeric: a zero
+		// and a negative are numeric and still cannot bound a run, and a value
+		// past the timer's ceiling would invert into an immediate kill.
+		for (const token of ["timeoutMs=abc", "timeoutMs=0", "timeoutMs=-1", "timeoutMs=2147483648", "timeoutMs="]) {
+			await review.run([token, "HEAD", ...DELEGATE, "plain"].join(" "));
+			const serialized = JSON.stringify(review.entries);
+			assert.ok(
+				serialized.includes("the leading timeoutMs= token is not an admissible positive number"),
+				`grammar-bound-refused: ${token} did not refuse on the bound cause — an inadmissible bound that ` +
+					`falls through runs the caller under one they never named (§3.9): ${serialized}`,
+			);
+			assert.ok(
+				!serialized.includes("delegate-saw-arg="),
+				`grammar-bound-refused: ${token} refused and yet a delegate ran — the refusal is stated to ` +
+					`dispatch nothing (§3.9): ${serialized}`,
+			);
+		}
+	});
+
+	it("an admissible leading bound is consumed, so the ref is read from the next token", async () => {
+		const review = await drive("grammar-bound-consumed");
+		await review.run(["timeoutMs=60000", "HEAD", ...DELEGATE, "plain"].join(" "));
+		assert.ok(
+			JSON.stringify(review.entries).includes("delegate-saw-arg=plain"),
+			`grammar-bound-consumed: the dispatch did not reach the delegate with the bound consumed — the ` +
+				`token must be eaten and HEAD read as the ref: ${JSON.stringify(review.entries)}`,
+		);
+	});
+
+	// The LIVENESS pair, mirroring the tool surface's. Consuming the token and
+	// reading the ref correctly says nothing about the parsed value reaching the
+	// run: a bound accepted and then dropped satisfies every grammar arm above
+	// while leaving the caller on the fallback -- which is issue #94's own defect
+	// one layer up. Either arm alone is worthless; the pair is the evidence.
+	const SLOW = ["sh", "zq-slow.sh"];
+
+	it("a leading bound BELOW the delegate's own duration terminates it", async () => {
+		const review = await drive("grammar-bound-live-low");
+		await review.run(["timeoutMs=400", "HEAD", ...SLOW].join(" "));
+		const serialized = JSON.stringify(review.entries);
+		assert.ok(
+			serialized.includes("exceeded its run bound"),
+			`grammar-bound-live-low: a bound well under the delegate's own duration did not terminate it — ` +
+				`the command parsed the caller's bound and the run never saw it, so the caller ran under the ` +
+				`fallback they never named (§4.9): ${serialized}`,
+		);
+		assert.ok(
+			!serialized.includes("slow-finished"),
+			`grammar-bound-live-low: the delegate ran to completion under a bound far below its duration: ${serialized}`,
+		);
+	});
+
+	it("the SAME delegate admits under a raised leading bound — live in both directions", async () => {
+		const review = await drive("grammar-bound-live-high");
+		await review.run(["timeoutMs=30000", "HEAD", ...SLOW].join(" "));
+		assert.ok(
+			JSON.stringify(review.entries).includes("slow-finished"),
+			`grammar-bound-live-high: the same delegate the low bound terminated did not admit under a raised ` +
+				`one — a bound that is ignored in both directions passes the low arm by accident, so only the ` +
+				`pair shows the value is live: ${JSON.stringify(review.entries)}`,
+		);
+	});
+
+	it("the ceiling itself is admitted here too, so the two entry points draw ONE line", async () => {
+		// The command's own comment claims it draws the line the tool entry point
+		// draws rather than a second one. Only the refusing side of that line was
+		// held here: with the comparison weakened to `>=`, every other arm stays
+		// green while the two entry points disagree by exactly one value.
+		const executor = await import(join(repoRoot(), ".pi/extensions/gitjig/dispatch/executor.ts"));
+		const ceiling = (executor as { MAX_RUN_BOUND_MS?: unknown }).MAX_RUN_BOUND_MS;
+		assert.equal(
+			typeof ceiling,
+			"number",
+			`grammar-bound-ceiling: the executor exports no run-bound ceiling, so the arm is vacuous: ${JSON.stringify(ceiling)}`,
+		);
+		const review = await drive("grammar-bound-ceiling");
+		await review.run([`timeoutMs=${String(ceiling)}`, "HEAD", ...DELEGATE, "at-the-edge"].join(" "));
+		assert.ok(
+			JSON.stringify(review.entries).includes("delegate-saw-arg=at-the-edge"),
+			`grammar-bound-ceiling: the largest bound the timer can honor was refused at this entry point ` +
+				`while the tool entry point admits it — the two surfaces draw different lines and a legal bound ` +
+				`is unreachable through the command: ${JSON.stringify(review.entries)}`,
+		);
 	});
 });

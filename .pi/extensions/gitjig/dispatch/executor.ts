@@ -45,6 +45,17 @@ const STREAM_GRACE_MS = 2_000;
 /** The run bound when the caller names none. */
 export const DEFAULT_RUN_BOUND_MS = 120_000;
 
+/**
+ * The largest bound this timer can honor. `setTimeout` clamps any delay past
+ * the 32-bit signed ceiling to 1 ms, so a bound above it does not run long —
+ * it inverts into an immediate kill, and the run is then reported under the
+ * bound-exceeded class for a delegate that outlived nothing. The admissible
+ * domain is therefore the CONSUMING PRIMITIVE's, not a category list: a caller
+ * surface that refuses non-finite values while admitting a value the timer
+ * treats identically is drawing the line in the wrong place (issue #94).
+ */
+export const MAX_RUN_BOUND_MS = 2_147_483_647;
+
 export interface DelegateRunOutcome {
 	exitCode: number | null;
 	timedOut: boolean;

@@ -1249,6 +1249,227 @@ describe("the blind compare and the operand scan (issue #88, SPEC §4.9, §1.6)"
 // Tool surface: no parameter is coerced — present-but-wrong-typed refuses.
 // ---------------------------------------------------------------------------
 
+describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.9, §3.10)", () => {
+	/** The registered tool's execute shape plus the schema it advertises. */
+	interface BoundTool {
+		parameters: { properties: Record<string, unknown> };
+		execute(
+			toolCallId: string,
+			params: Record<string, unknown>,
+		): Promise<{ content: Array<{ type: string; text: string }>; details: Record<string, unknown> }>;
+	}
+
+	/** One delegate, slow enough that the bound decides its fate rather than the machine. */
+	const SLOW = `sleep 3; ${COPY("payload-valid.json")}`;
+
+	function register(arm: string, index: IndexModule, repo: string, stateRoot: string): BoundTool {
+		let registered: BoundTool | undefined;
+		index.registerDispatchTool({ registerTool: (spec: unknown) => (registered = spec as BoundTool) }, repo, stateRoot);
+		assert.ok(registered !== undefined, `${arm}: registerDispatchTool registered no tool — the arm is vacuous`);
+		return registered;
+	}
+
+	/**
+	 * The admissible domain's edge, READ from the executor rather than restated
+	 * here, so the boundary arms bind to the constant the guard consults. The
+	 * value is then held against the platform fact it encodes: `setTimeout`
+	 * clamps past the 32-bit signed ceiling, so a constant that drifts off it
+	 * moves the guard's edge away from the timer's without any arm noticing.
+	 */
+	async function executorCeiling(arm: string): Promise<number> {
+		const executor = await requireModule<{ MAX_RUN_BOUND_MS?: unknown }>("executor.ts", arm);
+		assert.equal(
+			typeof executor.MAX_RUN_BOUND_MS,
+			"number",
+			`${arm}: the executor exports no run-bound ceiling, so no surface can refuse past it and the ` +
+				`arm measuring the edge is vacuous: ${JSON.stringify(executor.MAX_RUN_BOUND_MS)}`,
+		);
+		assert.equal(
+			executor.MAX_RUN_BOUND_MS,
+			2_147_483_647,
+			`${arm}: the ceiling is not the timer's 32-bit signed edge — the guard's domain has drifted off ` +
+				`the primitive's, which is the defect the ceiling exists to close: ${String(executor.MAX_RUN_BOUND_MS)}`,
+		);
+		return executor.MAX_RUN_BOUND_MS as number;
+	}
+
+	it("the advertised schema carries the bound, so a caller can supply one at all", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-schema");
+		const tool = register("bound-schema", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
+		assert.ok(
+			Object.prototype.hasOwnProperty.call(tool.parameters.properties, "timeoutMs"),
+			"bound-schema: the tool advertises no run bound, so the option the executor already honors is " +
+				`reachable by nobody and every dispatch runs at the default (§4.9): ${JSON.stringify(tool.parameters.properties)}`,
+		);
+		// The ADVERTISED TYPE, not merely the key: a bound advertised as anything
+		// but a number is rejected at the substrate's argument validation before
+		// any code here runs, so the key alone leaves the surface unreachable.
+		assert.equal(
+			(tool.parameters.properties.timeoutMs as { type?: unknown }).type,
+			"number",
+			"bound-schema: the bound is advertised under a type that is not number — every caller's numeric " +
+				`bound is refused by the substrate and the parameter is reachable by nobody (§4.9): ${JSON.stringify(tool.parameters.properties.timeoutMs)}`,
+		);
+	});
+
+	it("a caller-supplied bound BELOW the delegate's own duration terminates it", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-low");
+		const sink = mintStateRoot();
+		const tool = register("bound-low", index, mintRepo(PAYLOADS), sink.stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", SLOW],
+			timeoutMs: 400,
+		});
+		assert.equal(
+			result.details.disposition,
+			"refused",
+			"bound-low: a bound well under the delegate's own duration admitted anyway — the supplied value " +
+				`reached nothing and the default decided the run (§4.9): ${JSON.stringify(result)}`,
+		);
+		assert.ok(
+			dispatchAuditLines(sink).some((line) => line.includes('"action":"refuse-bound-exceeded"')),
+			"bound-low: the refusal did not land the bound-exceeded record, so the outcome class the caller's " +
+				`own bound produced is not readable from the trail (§5.5): ${JSON.stringify(dispatchAuditLines(sink))}`,
+		);
+	});
+
+	it("the SAME delegate admits under a raised bound — the parameter is live in both directions", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-high");
+		const tool = register("bound-high", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", SLOW],
+			timeoutMs: 30_000,
+		});
+		assert.equal(
+			result.details.disposition,
+			"admitted",
+			"bound-high: the same delegate that the low bound terminated was refused under a raised one too — " +
+				`a bound accepted and ignored passes the schema arm while changing nothing: ${JSON.stringify(result)}`,
+		);
+	});
+
+	it("a present-but-non-numeric bound refuses on a fixed cause, never a coerced run", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-type");
+		const sink = mintStateRoot();
+		const tool = register("bound-type", index, mintRepo(PAYLOADS), sink.stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			timeoutMs: "600000",
+		});
+		assert.equal(
+			result.details.disposition,
+			"refused",
+			"bound-type: a string bound was not refused — the sibling expectedRef guard refuses rather than " +
+				`coercing, and one surface does not carry two rules (§2.7, §3.11): ${JSON.stringify(result)}`,
+		);
+		assert.ok(
+			!JSON.stringify(result).includes("600000"),
+			"bound-type: the refusal names the rejected value — the cause is a fixed content-free literal (§3.9)",
+		);
+		assert.ok(
+			dispatchAuditLines(sink).some((line) => line.includes('"action":"refuse-timeout-ms"')),
+			`bound-type: no dispatch refuse-timeout-ms record landed (§5.5): ${JSON.stringify(dispatchAuditLines(sink))}`,
+		);
+	});
+
+	it("a non-positive bound is refused too — zero is not a bound, it is an unrunnable dispatch", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-nonpositive");
+		const sink = mintStateRoot();
+		const tool = register("bound-nonpositive", index, mintRepo(PAYLOADS), sink.stateRoot);
+		for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+			const before = dispatchAuditLines(sink).length;
+			const result = await tool.execute("zq-toolcall", {
+				brief: BRIEF,
+				delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+				timeoutMs: value,
+			});
+			assert.equal(
+				result.details.disposition,
+				"refused",
+				`bound-nonpositive: ${String(value)} was accepted as a bound — a value that cannot bound a run is ` +
+					`the actor's own input and refuses rather than resolving to something they did not ask for ` +
+					`(§3.9): ${JSON.stringify(result)}`,
+			);
+			// WHICH refusal, not merely that one happened. Every one of these values
+			// also reaches a refusal by running: the timer clamps a sub-1, NaN or
+			// oversize delay to 1 ms, the delegate is killed and the dispatch refuses
+			// on bound-exceeded. Only the guard's own record separates a value the
+			// surface rejected from one it accepted and then failed to run.
+			const landed = dispatchAuditLines(sink).slice(before);
+			// The guard's OWN record and nothing after it. Asserting only that the
+			// record appears leaves the arm green when the guard records and then
+			// dispatches anyway -- exactly the state this message claims to exclude.
+			assert.deepEqual(
+				landed.map((line) => JSON.parse(line).action),
+				["refuse-timeout-ms"],
+				`bound-nonpositive: ${String(value)} did not stop at the guard — it was not rejected at ` +
+					`the surface but provisioned and run, and the refusal the caller sees is the bound-exceeded ` +
+					`class of a dispatch that should never have started (§5.5): ${JSON.stringify(landed)}`,
+			);
+		}
+	});
+
+	it("the timer's ceiling is the admissible domain's edge, and it is honored AT the edge", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-ceiling");
+		const tool = register("bound-ceiling", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			timeoutMs: await executorCeiling("bound-ceiling"),
+		});
+		assert.equal(
+			result.details.disposition,
+			"admitted",
+			"bound-ceiling: the largest bound the timer can honor was refused — the guard's edge is drawn " +
+				`inside the admissible domain and a legal bound is unreachable: ${JSON.stringify(result)}`,
+		);
+	});
+
+	it("ONE past the ceiling is refused at the surface, never run and misreported", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-past-ceiling");
+		const sink = mintStateRoot();
+		const tool = register("bound-past-ceiling", index, mintRepo(PAYLOADS), sink.stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			timeoutMs: (await executorCeiling("bound-past-ceiling")) + 1,
+		});
+		assert.equal(
+			result.details.disposition,
+			"refused",
+			"bound-past-ceiling: a bound past the timer's ceiling was admitted — the timer clamps it to 1 ms, " +
+				`so the caller's longest bound becomes an immediate kill: ${JSON.stringify(result)}`,
+		);
+		// WHICH refusal decides whether the trail is honest: past the ceiling the
+		// run is killed at 1 ms and reported as bound-exceeded, an outcome class a
+		// delegate that outlived nothing did not produce.
+		assert.deepEqual(
+			dispatchAuditLines(sink).map((line) => JSON.parse(line).action),
+			["refuse-timeout-ms"],
+			"bound-past-ceiling: the refusal is not the guard's — the dispatch was provisioned and run, and " +
+				`the trail records a bound-exceeded run for a delegate that outlived nothing (§5.5): ${JSON.stringify(dispatchAuditLines(sink))}`,
+		);
+	});
+
+	it("an absent bound stays legal and runs at the default", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "bound-absent");
+		const tool = register("bound-absent", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
+		const result = await tool.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+		});
+		assert.equal(
+			result.details.disposition,
+			"admitted",
+			"bound-absent: omitting the bound stopped being legal — the fix is reach, never a new requirement " +
+				`on callers that were fine (§4.9): ${JSON.stringify(result)}`,
+		);
+	});
+});
+
 describe("the tool surface refuses a present-but-non-string expectedRef (issue #88, SPEC §4.9)", () => {
 	/** The registered tool's execute shape, captured through a fake pi. */
 	interface RegisteredTool {

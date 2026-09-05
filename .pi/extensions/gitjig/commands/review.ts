@@ -4,7 +4,10 @@
  * blind compare and the caller-derived round count are acts that must not
  * be contingent on a model's cooperation).
  *
- * Argument string: `<expectedRef> <delegateArgv…>`, whitespace-split. The
+ * Argument string: `[timeoutMs=<n>] <expectedRef> <delegateArgv…>`,
+ * whitespace-split, the bound optional and recognized in first position only
+ * (issue #94 — a positional grammar cannot tell a bound token from a delegate
+ * argv element anywhere else). The
  * handler resolves no ref itself: `expectedRef` crosses to the dispatcher,
  * which resolves it exactly once at provision and holds the hash (§4.9
  * pin-at-provision). What this command returns to the session is its own
@@ -30,6 +33,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runDispatch } from "../dispatch/index.ts";
+import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 
 /**
  * The fixed dispatch brief (§1.5's dispatch-facts carrier): fixed text by
@@ -42,19 +46,50 @@ const REVIEW_BRIEF =
 
 /** Fixed content-free refusal for an inadmissible argument string. */
 const REFUSE_ARGS =
-	"review refused: the argument string must be `<expectedRef> <delegateArgv…>` — at least two " +
-	"whitespace-split tokens; nothing was dispatched";
+	"review refused: the argument string must be `[timeoutMs=<n>] <expectedRef> <delegateArgv…>` — at " +
+	"least two whitespace-split tokens after the optional bound; nothing was dispatched";
+
+/**
+ * An inadmissible bound on the optional leading token. Refused rather than
+ * dropped: a caller who spelled a bound and got the default silently ran under
+ * one they did not ask for. The token is recognized only in first position, so
+ * a delegate argv element of the same shape is never eaten (issue #94).
+ *
+ * Admissible is the executor timer's own domain — positive and no greater than
+ * MAX_RUN_BOUND_MS. One surface carries one rule (§2.7), so this command draws
+ * the line the tool surface draws rather than a second one.
+ */
+const REFUSE_BOUND =
+	"review refused: the leading timeoutMs= token is not an admissible positive number of " +
+	"milliseconds; nothing was dispatched";
 
 export function registerReviewCommand(pi: ExtensionAPI, repoRoot: string, stateRoot: string): void {
 	pi.registerCommand("review", {
 		description:
 			"Dispatch a review delegate into an isolated clone pinned at a once-resolved expected head: " +
-			"/review <expectedRef> <delegateArgv…>. Only the bounded return crosses back, and the compare " +
-			"surfaces as validity alone. The delegate runs in the caller's trust domain and inherits its " +
-			"environment, credentials included: remote reach through inherited credentials is not confined.",
+			"/review [timeoutMs=<n>] <expectedRef> <delegateArgv…>. Only the bounded return crosses back, and " +
+			"the compare surfaces as validity alone. The delegate runs in the caller's trust domain and " +
+			"inherits its environment, credentials included: remote reach through inherited credentials is " +
+			"not confined.",
 		handler: async (args: string, ctx) => {
 			const tokens = args.split(/\s+/).filter((token) => token !== "");
-			if (tokens.length < 2) {
+			// The bound is read from FIRST POSITION ONLY. A positional grammar
+			// cannot tell a bound token from a delegate argv element anywhere else,
+			// and eating one would change what the delegate runs.
+			let timeoutMs: number | undefined;
+			let boundRefused = false;
+			if (tokens.length > 0 && tokens[0].startsWith("timeoutMs=")) {
+				const raw = Number(tokens[0].slice("timeoutMs=".length));
+				if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_RUN_BOUND_MS) {
+					boundRefused = true;
+				} else {
+					timeoutMs = raw;
+				}
+				tokens.shift();
+			}
+			if (boundRefused) {
+				pi.appendEntry("gitjig-review", { disposition: "refused", cause: REFUSE_BOUND });
+			} else if (tokens.length < 2) {
 				pi.appendEntry("gitjig-review", { disposition: "refused", cause: REFUSE_ARGS });
 			} else {
 				const [expectedRef, ...delegateArgv] = tokens;
@@ -64,6 +99,7 @@ export function registerReviewCommand(pi: ExtensionAPI, repoRoot: string, stateR
 					brief: REVIEW_BRIEF,
 					delegateArgv,
 					expectedRef,
+					timeoutMs,
 				});
 				if (outcome.disposition === "refused") {
 					// The cause is one of the dispatcher's fixed content-free
