@@ -58,6 +58,20 @@
  * non-bidi invisible format characters — ZERO WIDTH SPACE (U+200B) and
  * its class — pass through raw: a concealment-only residual this
  * contract discloses and declines to close (§3.11).
+ *
+ * A second residual, on the SHELL delimiter alone (§3.11, issue #65).
+ * Shell mode never escapes backslash — POSIX single quotes make every byte
+ * inside them literal, backslash included, so escaping it would put a
+ * second backslash into the pasted path. The consequence is a spelling
+ * AMBIGUITY, not an injection: a component literally named with a
+ * backslash-u spelling renders identically to this module's own escape of
+ * the real codepoint, so a reader cannot tell the two apart from the
+ * rendering. JSON mode keeps them distinguishable, because it escapes the
+ * backslash. No control byte lands either way and the paste stays
+ * substitution-dead either way, so what is lost is a reader's ability to
+ * say which of two paths was named — disclosed here rather than closed,
+ * because closing it would corrupt the operand the clause exists to hand
+ * to an act.
  */
 
 /**
