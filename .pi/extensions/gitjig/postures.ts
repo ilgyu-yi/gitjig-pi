@@ -107,6 +107,14 @@ export const POSTURES: readonly PostureRow[] = [
 			"Enforcement-chain degradation, same carve-out (§3.9): a source that does not hand control back cleanly is machinery, not the actor's input; `exit` inside a sourced helper terminates the hook shell itself and would carry its status out to git, so the fold turns that into an allow for this arm and every arm after it (§3.2's arm ordering). The fold is not silent: one stderr line plus exactly one warn record naming the helper (§3.9's degradation-signal rule). What the fold COVERS (§3.11) is a helper's own error path that ends in `exit` or in a non-zero return, with the tier's EXIT slot and its source-depth counter untouched and the shell alive — the terms it runs on, not exceptions to a wider claim, since a sourced file executes in the hook's own shell and can reach any of them. Outside those terms the outcome is not this tier's to decide and the fold's line and record may not run — measured on a sourced helper, `trap ':' EXIT; exit 5` refuses the commit and `trap 'exit 0' EXIT; exit 5` creates it, both with no tier bytes on either stream and no record — so in the allow direction this tier's surfaces carry exactly what an enforced pass carries.",
 	},
 	{
+		dependency: "commit-format-subject",
+		failureShape:
+			"the adapter is invoked with no message path, or with a path that is not a regular file, so the arm has no subject to measure (.githooks/commit-msg's subject guard)",
+		posture: "open",
+		justification:
+			"Enforcement-chain degradation, not the actor's input (§3.9's machinery carve-out): git supplies that path as a regular file on every invocation of this hook, so an adapter reaching this shape was invoked outside the chain the tier defines and the acting party cannot repair it from inside a block; the advice tier no-ops rather than wedging git (§3.2). It is not silent — one audit warn record names the arm as not evaluated, so an allow the arm never measured is distinguishable at the trail from one it did (§3.9's degradation-signal rule). NOT the same shape as the sibling detached-HEAD fold in .githooks/pre-commit, which is a SCOPE boundary rather than a dependency miss and is grounded at SPEC §3.3's commit-arm paragraph, so it declares no posture and owes no row here.",
+	},
+	{
 		dependency: "commit-format-measurement",
 		failureShape:
 			"live predicate handed a subject it cannot measure — a non-multibyte-capable measuring charmap or no capable counting tool with non-ASCII input (degraded environment), or subject bytes invalid in the measuring charmap (out-of-domain input)",
