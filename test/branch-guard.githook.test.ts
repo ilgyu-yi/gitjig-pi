@@ -588,8 +588,10 @@ describe("current_branch detached-HEAD contract (issue #59, SPEC §3.9)", { skip
  * discharged by ONE audit record — audit-only, since a scope boundary must
  * not borrow §3.9's degradation wording and misattribute a cause.
  *
- * ARMED-CHAIN ASSERTIONS: red by design until the adapter observes
- * `current_branch`'s status.
+ * THE INVARIANT THESE ARMS PIN: the adapter observes `current_branch`'s
+ * status and never compares its unvalidated output against the protected
+ * identity, so the three outcomes — refusal, ordinary allow, and an allow
+ * the arm never evaluated — stay distinguishable at the observable.
  */
 describe("the commit arm's subject and the detached-HEAD scope (issue #113)", { skip: IS_WINDOWS }, () => {
 	/** Records this arm writes when it has no subject — the §5.9 observable. */
