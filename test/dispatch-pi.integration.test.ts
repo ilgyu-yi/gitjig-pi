@@ -54,8 +54,8 @@
  * delegate's quality: the child is a scripted echo, and a green run says
  * nothing about what a real delegate would do with the brief. The
  * operand-absence sweep is LEXICAL — case-folded hex runs held against the
- * held operand on the implementation's own rule: containment from six
- * characters, the held 7-prefix at any length (issue #104) — on the
+ * held operand on the implementation's own rule: containment from the
+ * runtime's exported floor, the held 7-prefix at any length (#104) — on the
  * surfaces read here: the tool's result entries, the audit
  * trail, and the session transcript with the assistant
  * toolCall-arguments field excluded BY NAME (the sibling suites'

@@ -140,8 +140,22 @@ export type DispatchOutcome =
  * spelling of the head that satisfies neither branch now and did satisfy
  * containment before. That is the enumerated cost of this bound (§3.11),
  * and it is a configured-abbreviation case rather than the stock one.
- * What such a slice conveys is 16 to 20 bits, which identifies no commit;
- * and a deliberate leaker was never bounded here at all, since runs of 3
+ *
+ * What crosses in that case is a RESOLVABLE NAME, not a harmless
+ * remainder, and the residual is stated that way rather than minimized:
+ * git emits a short spelling only where it is unambiguous in the
+ * repository it came from — it lengthens the output instead of printing an
+ * ambiguous one — so such a token expands straight back to the held
+ * operand through `rev-parse` for whoever holds that repository. Measured
+ * in this repository at 268 commits: 39 of the last 40 heads abbreviate to
+ * 4 characters, one lengthens to 5, and the 4-character token round-trips
+ * to the full hash. So this is §1.6's echo exposure narrowed, never
+ * eliminated.
+ *
+ * The trade rests on what it actually rests on: the coincidence it
+ * replaces was measured and terminal, while the disclosure it admits needs
+ * both a shortened `core.abbrev` and possession of the repository to
+ * resolve. A deliberate leaker was never bounded here at all — runs of 3
  * are below the match width entirely and ride §4.9's injectable-context
  * residual. So the bound narrows accident detection to git's stock
  * abbreviation range and leaves the adversary's reach where it was.

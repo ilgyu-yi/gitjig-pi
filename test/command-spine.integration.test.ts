@@ -85,8 +85,8 @@
  * `.pi/` (none exists in this repository) is outside the governed-home
  * filter by the conjunct's own `baseDir` limb. The operand sweep is
  * LEXICAL — case-folded hex runs held against the held operand on the
- * dispatcher's own rule: containment from six characters, the held
- * 7-prefix at any length (issue #104) — over each caller fixture's
+ * dispatcher's own rule: containment from the runtime's exported floor,
+ * the held 7-prefix at any length (issue #104) — over each caller fixture's
  * session entries, audit trail, and run output; a paraphrased or
  * re-encoded operand is §4.9's injectable-context residual. A green
  * `review` round trip says nothing about any delegate's quality: the
@@ -834,6 +834,18 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 
 	it("stays silent on an unrelated hex run", () => {
 		assert.deepEqual(heldOperandRuns("alongside deadbee7 inert", HELD), []);
+	});
+
+	it("flags a slice AT the floor and stays silent one character below it (issue #104)", () => {
+		// The direction this sweep newly took, pinned HERE and not only in the
+		// sibling suite: a mirrored rule whose inverted half is measured one
+		// file over is a rule this file does not actually hold. Both slices
+		// are genuine substrings of HELD, so the only thing separating them
+		// is the floor.
+		const atFloor = HELD.slice(0, MIN_CONTAINED_RUN);
+		const belowFloor = HELD.slice(0, MIN_CONTAINED_RUN - 1);
+		assert.deepEqual(heldOperandRuns(`shorty ${atFloor} rides`, HELD), [atFloor]);
+		assert.deepEqual(heldOperandRuns(`tiny ${belowFloor} rides`, HELD), []);
 	});
 });
 
