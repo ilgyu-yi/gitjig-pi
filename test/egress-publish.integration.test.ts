@@ -592,10 +592,21 @@ describe("a published URL carrying a control byte cannot land it raw on the resu
 				"shape closes line-forging and nothing else, and this is the second harm of that class one surface " +
 				`over from the dispatcher's (§3.10's uniform mitigation): ${JSON.stringify(text)}`,
 		);
+		// The locator WHOLE, not a tail substring: the delimited group is
+		// decoded and compared against the URL the shim actually printed, so
+		// the two spellings of that value cannot drift apart unnoticed and a
+		// rendering that truncated the locator could not pass on a suffix.
+		const group = /^published: (".*")$/.exec(text);
 		assert.ok(
-			text.includes("zqerased#issuecomment-987654321"),
-			"control-url-esc: the URL's own bytes are gone from the result — rendering it inert must not discard " +
-				`the locator the operator needs to reach the comment: ${JSON.stringify(text)}`,
+			group !== null,
+			"control-url-esc: the result text does not compose as the fixed frame plus one delimited locator, so " +
+				`the operator cannot tell the instrument's own word from the child's: ${JSON.stringify(text)}`,
+		);
+		assert.equal(
+			JSON.parse((group as RegExpExecArray)[1]),
+			HOSTILE_URL,
+			"control-url-esc: the delimited locator does not decode back to the URL the child printed — rendering " +
+				`it inert must not discard or alter the locator the operator needs to reach the comment: ${JSON.stringify(text)}`,
 		);
 	});
 });

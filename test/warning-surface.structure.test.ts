@@ -216,8 +216,7 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"compareClause",
 			// `outcome.summary` is NOT here: it is externally written text —
 			// a delegate controls it byte for byte — and it now crosses the
-			// composition through quoted() like every other actor-influenced
-			// value on an operator surface (issue #97). The behavioural
+			// composition through quoted() (issue #97). The behavioural
 			// contract that replaced this entry lives in the dispatch module
 			// suite, which measures the composed text rather than its
 			// spelling: one line, no raw control byte, an attributable frame.
@@ -263,9 +262,11 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"outcome.cause",
 			// `outcome.url` is NOT here either. The comment-URL shape closes
 			// the LINE-FORGING half of this class — anchored at both ends,
-			// body class excluding whitespace — and closes nothing else:
-			// `[^\s]` admits C0, DEL and C1, the ESC byte among them, and the
-			// value is the `gh` child's own stdout. §3.10 asks for uniform
+			// body class excluding whitespace — and leaves the rest: `[^\s]`
+			// admits the NON-whitespace C0 controls, DEL and the C1 range,
+			// the ESC byte among them (JS `\s` excludes tab, LF, VT, FF, CR
+			// and the separators, so those five C0 members it does close),
+			// and the value is the `gh` child's own stdout. §3.10 asks for uniform
 			// mitigation with an EMPTY exemption set, so the result text
 			// escapes it rather than carrying the one exception (issue #97).
 			// Format-checked lowercase-hyphen pattern ids and numeric line

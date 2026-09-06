@@ -20,8 +20,10 @@
  * The published URL crosses onto the result THROUGH `quoted()` (issue
  * #97). It is validated whole against the comment-URL shape, which is
  * anchored at both ends and excludes whitespace from its body class — that
- * closes line-forging outright, and closes nothing else: `[^\s]` admits
- * the C0 controls, DEL and the C1 range, the ESC byte among them, and the
+ * closes line-forging outright, and with it the five C0 members JS `\s`
+ * covers (tab, LF, VT, FF, CR) and the line/paragraph separators. What it
+ * leaves open is the rest of the class: `[^\s]` admits the NON-whitespace
+ * C0 controls, DEL and the C1 range, the ESC byte among them, and the
  * value is the `gh` child's own stdout. §3.10 asks for this class's
  * mitigation UNIFORMLY with an empty exemption set, so the surface where
  * a child's bytes reach the operator is escaped on the same terms as the
