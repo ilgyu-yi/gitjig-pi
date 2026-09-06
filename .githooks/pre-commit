@@ -34,8 +34,10 @@ else
   # feature branch. The state is still a state under 5.9's disarm bar, so it
   # is discharged by one record rather than left traceless. Audit-only and
   # deliberately NOT 3.9's "not enforced" wording: a scope boundary is not
-  # machinery degradation, and a rebase would otherwise speak once per
-  # replayed commit.
+  # machinery degradation, and borrowing that wording would misattribute a
+  # cause the tier did not suffer. Note the wider residual this does NOT
+  # cover, recorded at SPEC 3.3: git runs no pre-commit for a commit a
+  # rebase REPLAYS, so those never reach this arm at all.
   if command -v audit_log >/dev/null 2>&1; then
     ( audit_log warn branch not-evaluated 'protected-branch commit arm not evaluated: HEAD is on no branch, so the arm has no subject (a scope boundary, not a degraded gate)' ) </dev/null >/dev/null 2>&1 || true
   fi
