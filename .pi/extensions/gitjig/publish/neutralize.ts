@@ -46,14 +46,20 @@ const WRAP_PASSES: readonly RegExp[] = [
 	// adjacency stays a deliberate non-match (§3.3).
 	//
 	// The separator carries AT MOST ONE newline, which is what keeps it
-	// inside a single paragraph. `\s*` admitted a blank line, and a pair
+	// inside a single paragraph — and a bare line break IS one of its
+	// spellings, in all three alternatives: after a colon, on its own, or
+	// after horizontal space. A first cut required a colon or a space BEFORE
+	// the newline and so declined `fixes\n#4`, a same-paragraph pair this
+	// very comment says must still match — narrower than the paragraph rule
+	// it states, and in the wrong-allow direction. `\s*` admitted a blank
+	// line, and a pair
 	// whose separator crosses one is worse than an unmatched pair: the
 	// wrap still fires, but a fenced span cannot cross a blank line, so
 	// no code span forms and the reference is left live wearing backticks
 	// — matched-but-void (issue #86). A blank line is also a paragraph
 	// break, so the platform does not read the halves as one close pair
 	// either; declining to match there costs nothing and voids nothing.
-	/\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)(?::[^\S\n]*|[^\S\n]+)(?:\n[^\S\n]*)?#\d+/gi,
+	/\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)(?::[^\S\n]*(?:\n[^\S\n]*)?|[^\S\n]*\n[^\S\n]*|[^\S\n]+)#\d+/gi,
 	// Cross-repository references: owner/repo#N.
 	/\b[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#\d+/g,
 	// GH-N forms, case-insensitive: the platform autolinks the lowercase

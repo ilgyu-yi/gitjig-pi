@@ -381,18 +381,35 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		// points at the repair rather than letting the under-match ship. The
 		// repair is to strip a trailing CR per line in the reader before
 		// matching, at which point this arm is retired with that change.
+		// ANY unescaped `$` outside a bracket expression, not merely a trailing
+		// one: `secret$|other` anchors its first alternative in both engines
+		// and would under-match a CR-terminated line just as a trailing anchor
+		// does. A literal dollar must be written escaped or bracketed in both
+		// engines, so neither spelling can false-positive here.
 		const anchored = committedPatternRows().filter((row) => {
 			let escaped = false;
+			let inBracket = false;
 			for (let at = 0; at < row.ere.length; at += 1) {
+				const ch = row.ere[at];
 				if (escaped) {
 					escaped = false;
 					continue;
 				}
-				if (row.ere[at] === "\\") {
+				if (ch === "\\") {
 					escaped = true;
 					continue;
 				}
-				if (row.ere[at] === "$" && at === row.ere.length - 1) {
+				if (inBracket) {
+					if (ch === "]") {
+						inBracket = false;
+					}
+					continue;
+				}
+				if (ch === "[") {
+					inBracket = true;
+					continue;
+				}
+				if (ch === "$") {
 					return true;
 				}
 			}
@@ -422,6 +439,10 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			"\\d{4}", // a backslash-letter shorthand class
 			"\\wfoo",
 			"[[:alpha:]]+", // a POSIX bracket class RegExp reads literally
+			"[[=a=]]", // an equivalence class — the same divergence, sibling spelling
+			"[[.a.]]", // a collating symbol — likewise
+			"[\\-]", // a backslash inside a bracket expression: POSIX literal, RegExp escape
+			"[abc", // an unterminated bracket expression the engines never finish parsing
 		]) {
 			assert.equal(
 				inCommonSubset(outside),
@@ -431,14 +452,38 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			);
 		}
 		// Every committed pattern, and the shared punctuation escapes, stay in.
-		for (const inside of committedPatternRows().map((row) => row.ere).concat(["a\\.b", "x\\*y", "[A-Za-z0-9._~+/=-]{20,}"])) {
+		for (const inside of committedPatternRows().map((row) => row.ere).concat([
+			"a\\.b",
+			"x\\*y",
+			"[A-Za-z0-9._~+/=-]{20,}",
+			"[:]", // a bracket expression holding a literal colon — both engines agree
+			"[:a]x[b:]", // colons in two separate bracket expressions, neither a class
+			"[]]", // the leading-] literal spelling both engines hold
+		])) {
 			assert.equal(
 				inCommonSubset(inside),
 				true,
-				`${JSON.stringify(inside)} was refused though both readers hold it — the check is conservative in ` +
-					`the refusing direction, never in the admitting one`,
+				`${JSON.stringify(inside)} was refused though both readers hold it — a refusal here costs a future ` +
+					`author a puzzling load failure for a pattern both engines agree on`,
 			);
 		}
+	});
+
+	it("a same-paragraph close pair is neutralized in every separator spelling", () => {
+		// The blank-line repair overshot once: requiring a colon or a space
+		// BEFORE the newline dropped `fixes\n#4`, a same-paragraph pair the
+		// paragraph rule says must still match, in the wrong-allow direction.
+		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		for (const body of ["fixes #4", "fixes: #4", "fixes:#4", "fixes\n#4", "fixes\n   #4", "fixes:\n#4", "fixes \n#4"]) {
+			assert.notEqual(
+				neutralizeBody(body),
+				body,
+				`${JSON.stringify(body)} is a close pair inside one paragraph and was not neutralized — the ` +
+					`separator rule is at most one newline, not a colon-or-space requirement before it (issue #86)`,
+			);
+		}
+		// The deliberate non-match is unchanged.
+		assert.equal(neutralizeBody("fixes#4"), "fixes#4", "bare adjacency stays a deliberate non-match (§3.3)");
 	});
 
 	it("a close pair whose separator crosses a blank line is not matched at all", () => {
@@ -456,7 +501,11 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		);
 		// The single-newline form stays inside one paragraph and is still a
 		// close pair to the platform, so it is still neutralized.
-		assert.notEqual(neutralizeBody("Fixes:\n#4"), "Fixes:\n#4", "a same-paragraph close pair must still be neutralized");
+		assert.equal(
+			neutralizeBody("Fixes\n\n#4"),
+			"Fixes\n\n#4",
+			"the no-colon blank-line form must decline too",
+		);
 	});
 
 	it("the GH-N form is neutralized in either case", () => {

@@ -104,6 +104,39 @@ function loadCommittedPatterns(): CompiledPattern[] {
 }
 
 /**
+ * The index of the `]` closing the bracket expression opened at `at`, or -1.
+ * POSIX and RegExp agree on the two literal-`]` spellings: a `]` in first
+ * position (after an optional negation) is the literal, not the close.
+ */
+function closingBracket(ere: string, at: number): number {
+	let cursor = at + 1;
+	if (ere[cursor] === "^") {
+		cursor += 1;
+	}
+	if (ere[cursor] === "]") {
+		cursor += 1;
+	}
+	for (; cursor < ere.length; cursor += 1) {
+		// A POSIX class, equivalence class or collating symbol carries its own
+		// `]`, which does not close the bracket expression around it — stepping
+		// over the whole span is what keeps `[[=a=]]` from looking closed at
+		// its inner bracket.
+		const kind = ere[cursor] === "[" ? ere[cursor + 1] : undefined;
+		if (kind === ":" || kind === "=" || kind === ".") {
+			const end = ere.indexOf(kind + "]", cursor + 2);
+			if (end !== -1) {
+				cursor = end + 1;
+				continue;
+			}
+		}
+		if (ere[cursor] === "]") {
+			return cursor;
+		}
+	}
+	return -1;
+}
+
+/**
  * True iff `ere` uses only constructs the POSIX-ERE and RegExp readers both
  * hold. The committed pattern file states the contract this enforces — no
  * backreferences or lookarounds, no backslash-letter classes, no POSIX
@@ -142,10 +175,34 @@ export function inCommonSubset(ere: string): boolean {
 		if (ere[at] === "(" && ere[at + 1] === "?") {
 			return false;
 		}
-		// A POSIX bracket class inside a bracket expression: RegExp reads the
-		// characters literally, so the two engines disagree on the same bytes.
-		if (ere.startsWith("[:", at) && ere.indexOf(":]", at) !== -1) {
-			return false;
+		// Inside a BRACKET EXPRESSION the two engines diverge on three POSIX
+		// constructs — the character class `[: :]`, the equivalence class
+		// `[= =]` and the collating symbol `[. .]` — which RegExp reads as
+		// ordinary characters, and on a backslash, which POSIX ERE reads
+		// literally and RegExp reads as an escape. So the whole bracket
+		// expression is examined rather than its opening two bytes.
+		if (ere[at] === "[") {
+			const close = closingBracket(ere, at);
+			if (close === -1) {
+				// An unterminated bracket expression: the engines cannot agree
+				// on what they never finish parsing.
+				return false;
+			}
+			const inside = ere.slice(at + 1, close);
+			if (inside.includes("\\")) {
+				return false;
+			}
+			for (const opener of ["[:", "[=", "[."]) {
+				const closer = opener[1] + "]";
+				const opened = inside.indexOf(opener);
+				// Bounded by THIS bracket expression: an unbounded search
+				// refused `[:]`, which both engines hold as a literal colon.
+				if (opened !== -1 && inside.indexOf(closer, opened + 2) !== -1) {
+					return false;
+				}
+			}
+			at = close;
+			continue;
 		}
 	}
 	return true;
