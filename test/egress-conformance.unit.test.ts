@@ -76,13 +76,27 @@ type EgressScanOutcome =
 	| { disposition: "refuse-match"; patternIds: string[] };
 
 let scanBody: ((body: string) => EgressScanOutcome) | undefined;
+/** The neutralizer, loaded the same guarded way as the scanner above. */
+const NEUTRALIZE_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "neutralize.ts");
+let neutralizeBody: ((body: string) => string) | undefined;
+/** The loader's subset predicate, loaded the same guarded way. */
+let inCommonSubset: ((ere: string) => boolean) | undefined;
 
 before(async () => {
 	// Guarded dynamic import: while the module is absent the arms below red
 	// on `requireScanner`'s authored message instead of a loader crash that
 	// would take the oracle and tier-2 arms down with it (header note).
+	if (existsSync(NEUTRALIZE_MODULE_PATH)) {
+		const mod = (await import(NEUTRALIZE_MODULE_PATH)) as Record<string, unknown>;
+		if (typeof mod.neutralizeBody === "function") {
+			neutralizeBody = mod.neutralizeBody as (body: string) => string;
+		}
+	}
 	if (existsSync(SCAN_MODULE_PATH)) {
 		const mod = (await import(SCAN_MODULE_PATH)) as Record<string, unknown>;
+		if (typeof mod.inCommonSubset === "function") {
+			inCommonSubset = mod.inCommonSubset as (ere: string) => boolean;
+		}
 		if (typeof mod.scanBody === "function") {
 			scanBody = mod.scanBody as (body: string) => EgressScanOutcome;
 		}
@@ -347,4 +361,117 @@ describe("egress-reader arm: publish/scan.ts against the same case set (issue #8
 			}
 		});
 	}
+});
+
+// ---------------------------------------------------------------------------
+// Latent edges the readers carry, pinned so arming one fails loud rather than
+// under-matching or diverging in silence (issue #86).
+// ---------------------------------------------------------------------------
+
+describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3)", () => {
+	it("no committed pattern is `$`-anchored while body lines keep their CR", () => {
+		// The egress reader strips Unicode format characters and splits on
+		// "\n", so a CRLF-composed line reaches the match with its CR still
+		// on it. A `$`-anchored pattern would therefore UNDER-MATCH exactly
+		// those lines — the wrong-allow direction, at the boundary that is the
+		// only safety net for its class, with nothing beneath it.
+		//
+		// No committed pattern is anchored today, so this arm is the guard on
+		// ARMING one: it fails loud the moment somebody adds an anchor, and
+		// points at the repair rather than letting the under-match ship. The
+		// repair is to strip a trailing CR per line in the reader before
+		// matching, at which point this arm is retired with that change.
+		const anchored = committedPatternRows().filter((row) => {
+			let escaped = false;
+			for (let at = 0; at < row.ere.length; at += 1) {
+				if (escaped) {
+					escaped = false;
+					continue;
+				}
+				if (row.ere[at] === "\\") {
+					escaped = true;
+					continue;
+				}
+				if (row.ere[at] === "$" && at === row.ere.length - 1) {
+					return true;
+				}
+			}
+			return false;
+		});
+		assert.deepEqual(
+			anchored.map((row) => row.id),
+			[],
+			`a committed pattern is '$'-anchored while the egress reader leaves a trailing CR on every ` +
+				`CRLF-composed body line, so that pattern silently under-matches exactly those lines and the ` +
+				`boundary admits what it was armed to refuse. Strip the trailing CR per line in the reader ` +
+				`before matching, then retire this arm with that change (§3.3, issue #86)`,
+		);
+	});
+
+	it("the loader refuses each construct class outside the common subset", () => {
+		// The loader measured ID shape and RegExp compilability and called the
+		// second one a subset check, so a JS-only construct compiled here and
+		// diverged at the tier-2 matcher — caught only where the shared case
+		// set happened to look. The three classes the committed pattern file's
+		// own contract forbids are now measured before compilation.
+		assert.ok(inCommonSubset !== undefined, "red until publish/scan.ts exports inCommonSubset");
+		for (const outside of [
+			"(?=lookahead)x", // group extensions: POSIX ERE has none at all
+			"(?:group)x",
+			"(a)\\1", // a backreference
+			"\\d{4}", // a backslash-letter shorthand class
+			"\\wfoo",
+			"[[:alpha:]]+", // a POSIX bracket class RegExp reads literally
+		]) {
+			assert.equal(
+				inCommonSubset(outside),
+				false,
+				`${JSON.stringify(outside)} was admitted to the common subset — it compiles at this reader and ` +
+					`diverges at the tier-2 one, which is the hazard the check exists for (issue #86)`,
+			);
+		}
+		// Every committed pattern, and the shared punctuation escapes, stay in.
+		for (const inside of committedPatternRows().map((row) => row.ere).concat(["a\\.b", "x\\*y", "[A-Za-z0-9._~+/=-]{20,}"])) {
+			assert.equal(
+				inCommonSubset(inside),
+				true,
+				`${JSON.stringify(inside)} was refused though both readers hold it — the check is conservative in ` +
+					`the refusing direction, never in the admitting one`,
+			);
+		}
+	});
+
+	it("a close pair whose separator crosses a blank line is not matched at all", () => {
+		// Matched-but-void is worse than unmatched: the wrap fires, but a code
+		// span cannot cross a blank line, so no span forms and the reference
+		// ships live wearing backticks. A blank line is a paragraph break, so
+		// the platform reads no close pair across it either.
+		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		const crossed = neutralizeBody("Fixes:\n\n#4");
+		assert.equal(
+			crossed,
+			"Fixes:\n\n#4",
+			`a close pair whose separator crosses a blank line was transformed — the wrap cannot form a code ` +
+				`span across a paragraph break, so what ships is a live reference wearing backticks (issue #86)`,
+		);
+		// The single-newline form stays inside one paragraph and is still a
+		// close pair to the platform, so it is still neutralized.
+		assert.notEqual(neutralizeBody("Fixes:\n#4"), "Fixes:\n#4", "a same-paragraph close pair must still be neutralized");
+	});
+
+	it("the GH-N form is neutralized in either case", () => {
+		// The platform autolinks the lowercase spelling too, so a
+		// case-sensitive pass left `gh-4` live while wrapping `GH-4` — a
+		// neutralization that depends on how the author capitalized.
+		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		for (const spelling of ["GH-4", "gh-4", "Gh-4"]) {
+			assert.notEqual(
+				neutralizeBody(spelling),
+				spelling,
+				`${spelling} passed through un-neutralized — the platform autolinks it whatever the case (issue #86)`,
+			);
+		}
+		// The digits are what make it a reference; `gh-pages` is not one.
+		assert.equal(neutralizeBody("gh-pages"), "gh-pages", "gh-pages is not a reference and must not be wrapped");
+	});
 });
