@@ -1,9 +1,77 @@
 #!/usr/bin/env bash
-# .githooks/commit-msg — local-tier adapter. Reads line 1 (the first
-# non-blank, non-comment line) of the message file git passes as $1 and calls
-# check_commit_subject on it — it copies NO check logic (single-source). It
+# .githooks/commit-msg — local-tier adapter. Reads the message file git
+# passes as $1 and calls check_commit_subject on every line that could become
+# the committed subject — it copies NO check logic (single-source). It
 # deliberately does NOT reuse the command-string subject parser: at the git
 # layer there is no command string, only the message file git hands us.
+#
+# WHY EVERY LINE THAT COULD LAND, AND NOT "THE SUBJECT" (issue #58). This
+# hook receives ONE argument, the message path. It does not receive the
+# cleanup mode and cannot derive it: `--cleanup=` is a command-line flag no
+# hook sees, `commit.cleanup` may be unset, and git's default DIFFERS BY
+# INVOCATION — `strip` for an editor commit, `whitespace` for `-m`/`-F`.
+# Under `strip` git removes comment lines after this hook returns and the
+# first NON-COMMENT line becomes the subject; under `whitespace` and
+# `verbatim` nothing is removed and the first line does.
+#
+# A single reading is wrong under one mode or the other. Reading past
+# comments was a silent WRONG ALLOW, measured: `#comment` on line 1 with a
+# conforming subject on line 2 was approved on line 2 while line 1 landed as
+# the subject, with no refusal and no record.
+#
+# The repair needs no mode. Both readings are computed, and a subject is
+# approved only if EVERY candidate conforms — whichever line git keeps, the
+# gate has vouched for it. Where the two readings agree there is one
+# candidate and the behaviour is exactly what it was, which is every ordinary
+# editor commit: the subject is line 1 and git's template comments follow it.
+#
+# THE MARKER IS GIT'S OWN, and reading it is load-bearing rather than
+# defensive. A first attempt at this repair dropped the marker entirely,
+# arguing that a line git strips as a comment can never be a conforming
+# subject because no comment marker begins a valid `<type>`. That is FALSE: a
+# marker is not restricted to punctuation. Measured — with
+# `core.commentChar=f`, the line `feat(#2): looks conforming but is a comment`
+# IS a comment, git strips it under `strip`, and the line beneath it landed
+# unchecked at status 0; `core.commentString=feat` reproduces it exactly. The
+# marker-aware second reading is what refuses both.
+#
+# Enumerated in place (§3.11), and NOT closed here:
+#   - `core.commentChar=auto` is read as `#`. Under `auto` git picks a marker
+#     that does not already begin a line, so a message leading with `#` makes
+#     git choose something else and keep that line. Both readings are then
+#     computed against the wrong marker; they diverge and the message is
+#     refused, which is the safe direction but is not the rule git ran.
+#   - THE FALSE BLOCK THIS BUYS. Under `strip` a leading comment IS removed,
+#     so a `commit.template` opening with comments is refused although the
+#     conforming subject beneath it would have landed. The refusal says which
+#     two lines differ and why, and `--no-verify` is live on it.
+#   - TRAILING WHITESPACE cuts BOTH ways, so both forms are candidates. On
+#     the editor path git trims after this hook returns, so the trimmed line
+#     is what lands under `strip` and `whitespace` while the untrimmed line
+#     lands under `verbatim`. Checking only the untrimmed form approved
+#     `feat(#N):` followed by spaces — grammatical untrimmed, no description
+#     at all once trimmed (measured). Checking only the trimmed form would
+#     APPROVE a 72-codepoint subject with trailing spaces under `verbatim`,
+#     where the untrimmed line is what lands and measures 75 — a wrong allow,
+#     not a false block. What survives is the length
+#     edge under the OTHER mode: a subject whose two forms differ in length
+#     is refused if either form is out of range, which is stricter than any
+#     single mode requires.
+#   - HOOK-LESS CHANNELS. `git cherry-pick` never fires `commit-msg`, and
+#     `git am` applies mail-formatted patches on the same footing. Those
+#     channels bypass this predicate structurally, not by a gap in it, and no
+#     adapter here can reach them. No arm in this tree measures them; the
+#     cherry-pick bypass was confirmed by hand against an armed chain.
+#   - THE PARAGRAPH FOLD. What this hook vouches for is every line that
+#     could be the recorded message's FIRST line. Git's `%s` folds the whole
+#     first paragraph into one string, so a conforming first line followed
+#     immediately by more text renders a subject longer than either line.
+#     That is a grammar question, not a line-selection one, and it is not
+#     decided here.
+#   - THE MERGE EDGE. `git merge` does fire `commit-msg`, and git's default
+#     merge message violates this grammar; enumerated (not pinned) in
+#     `test/commit-format.githook.test.ts`'s residual block.
+# The tier's own door (§3.8's declared deferral) stands beneath all of these.
 # shellcheck source=/dev/null
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
@@ -13,18 +81,57 @@ githook_require check_commit_subject commit-format
 _gh_msgfile="${1:-}"
 [ -n "$_gh_msgfile" ] && [ -f "$_gh_msgfile" ] || exit 0
 
-# First non-blank, non-comment line = the subject.
+# git's own comment marker, never a hard-coded one. `core.commentString`
+# takes precedence over `core.commentChar` where both are set, matching git.
+_gh_marker="$(git config --get core.commentString 2>/dev/null)" || _gh_marker=""
+[ -n "$_gh_marker" ] || { _gh_marker="$(git config --get core.commentChar 2>/dev/null)" || _gh_marker=""; }
+[ -n "$_gh_marker" ] || _gh_marker='#'
+[ "$_gh_marker" = "auto" ] && _gh_marker='#'
+
+# The two readings. `_gh_first` is the first non-blank line, which lands under
+# a comment-preserving cleanup; `_gh_subject` is the first non-blank
+# non-comment line, which lands under `strip`. A line that is whitespace only
+# counts as BLANK for both: git's cleanup drops it, so it is never the
+# subject, and treating it as content refuses a message git would have
+# accepted (measured on the editor path, where git hands the file over
+# untouched and `strip` trims it afterwards).
+# BYTE SEMANTICS FOR THE SELECTION, because git's is byte semantics. Git's
+# cleanup uses an ASCII-only isspace; a shell `[:space:]` under the
+# operator's locale is wider, and the difference is a wrong allow: a first
+# line holding one NO-BREAK SPACE is blank to a UTF-8 locale and content to
+# git, so it landed as the subject without ever entering the candidate set
+# (measured). The trimmer has the mirror fault, manufacturing a candidate
+# with its trailing non-ASCII space removed where git removes nothing. Both
+# run under LC_ALL=C; the caller's locale is restored before
+# check_commit_subject, which captures it to choose a measuring charmap.
+_gh_lc_was_set=0
+[ "${LC_ALL+x}" = "x" ] && { _gh_lc_was_set=1; _gh_lc_saved="$LC_ALL"; }
+LC_ALL=C
+
+_gh_first=""
 _gh_subject=""
 while IFS= read -r _gh_line || [ -n "$_gh_line" ]; do
   case "$_gh_line" in
-    ''|'#'*) continue ;;
+    *[![:space:]]*) ;;
+    *) continue ;;
+  esac
+  [ -n "$_gh_first" ] || _gh_first="$_gh_line"
+  case "$_gh_line" in
+    "$_gh_marker"*) continue ;;
   esac
   _gh_subject="$_gh_line"
   break
 done < "$_gh_msgfile"
 
-# Empty message → let git's own empty-message handling deal with it (fail-open).
-[ -n "$_gh_subject" ] || exit 0
+_gh_first_trimmed="${_gh_first%"${_gh_first##*[![:space:]]}"}"
+_gh_subject_trimmed="${_gh_subject%"${_gh_subject##*[![:space:]]}"}"
+
+if [ "$_gh_lc_was_set" -eq 1 ]; then LC_ALL="$_gh_lc_saved"; else unset LC_ALL; fi
+
+# Empty message -> let git's own empty-message handling deal with it
+# (fail-open). The test is the PHYSICAL reading: a message that is entirely
+# comments is not empty under a comment-preserving cleanup.
+[ -n "$_gh_first" ] || exit 0
 
 # check_commit_subject writes the CAUSE to stderr itself (format violation, an
 # out-of-range length, or a length it could not measure at all). This
@@ -33,9 +140,52 @@ done < "$_gh_msgfile"
 # recovery live at THIS tier: the git-hook tier is advice and
 # folds to --no-verify. The SKIP_HOOKS env-prefix escape form is deliberately
 # absent — should_skip is never reached from here, so it would name a dead escape.
-if ! check_commit_subject "$_gh_subject"; then
-  githook_block commit-format "commit-msg: subject rejected — see the reason above. Expected <type>(#<N>)[!]: <subject> with a subject of 1..72 codepoints; a length that cannot be measured is refused, not approved. Fix the message, or re-run with --no-verify (this tier is advice)."
-  exit 1
+#
+# The divergence note is appended only where the two readings differ, so an
+# ordinary refusal is worded exactly as it always was and no operator reads
+# about a cleanup mode that had no bearing on their message.
+_gh_note=""
+if [ "$_gh_first" != "$_gh_subject" ]; then
+  _gh_note=" This message's first line and its first non-comment line differ, and which of them becomes the subject depends on a cleanup mode this hook cannot observe, so both were checked and one failed."
+fi
+
+_gh_check_one() {
+  if ! check_commit_subject "$1"; then
+    githook_block commit-format "commit-msg: subject rejected — see the reason above.${_gh_note} Expected <type>(#<N>)[!]: <subject> with a subject of 1..72 codepoints; a length that cannot be measured is refused, not approved. Fix the message, or re-run with --no-verify (this tier is advice)."
+    return 1
+  fi
+  return 0
+}
+
+# Trailing whitespace is the third axis a candidate varies on. Under
+# `verbatim` git keeps it and the untrimmed line lands; under `strip` and
+# `whitespace` git trims it AFTER this hook returns and the trimmed line
+# lands. Both are therefore candidates, and the trimmed one is not
+# cosmetic: `feat(#N):` followed by spaces satisfies the grammar untrimmed
+# and does not once trimmed, so checking only the untrimmed form approved a
+# subject with no description at all (measured on the editor path). The
+# trimmed forms were computed above, under git's own space set.
+# Each DISTINCT candidate once. The comparison is direct rather than through
+# a sentinel-delimited seen-list: a candidate is arbitrary operator bytes, so
+# any in-band separator is injectable, and a planted separator forged a
+# "already checked" entry for a string the predicate never saw — measured, a
+# non-conforming subject landed at status 0. Four candidates take six
+# comparisons; a seen-list buys nothing at this size and costs that hole.
+_gh_check_one "$_gh_first" || exit 1
+
+if [ "$_gh_first_trimmed" != "$_gh_first" ]; then
+  _gh_check_one "$_gh_first_trimmed" || exit 1
+fi
+
+if [ -n "$_gh_subject" ] && [ "$_gh_subject" != "$_gh_first" ] && [ "$_gh_subject" != "$_gh_first_trimmed" ]; then
+  _gh_check_one "$_gh_subject" || exit 1
+fi
+
+if [ -n "$_gh_subject_trimmed" ] &&
+  [ "$_gh_subject_trimmed" != "$_gh_first" ] &&
+  [ "$_gh_subject_trimmed" != "$_gh_first_trimmed" ] &&
+  [ "$_gh_subject_trimmed" != "$_gh_subject" ]; then
+  _gh_check_one "$_gh_subject_trimmed" || exit 1
 fi
 
 exit 0

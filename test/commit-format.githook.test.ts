@@ -48,9 +48,18 @@
  * either the strict refusal or a merge-message carve-out would decide
  * contract the criteria do not cover. A later change that settles merge
  * messages owns its own arm.
+ *
+ * THE ROSTER FOR THIS FAMILY IS THE ADAPTER'S OWN HEADER, not this block
+ * (issue #58). `.githooks/commit-msg` enumerates the merge edge above
+ * alongside the hook-less channels that never fire it (`git cherry-pick`,
+ * `git am`) and the `core.commentChar=auto` reading — one decision, read in
+ * one place, at the site that states the
+ * selection rule they are residuals of. This paragraph stays because the
+ * merge edge is what an arm here would touch; it is not a second roster.
  */
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { appendFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -61,6 +70,7 @@ import {
 	type GithookFixture,
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
+import { repoRoot } from "./harness/run-pi.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -210,6 +220,23 @@ describe("unmeasurable input refuses, distinctly (issue #55, SPEC §3.9)", { ski
 		assertRefusedThroughAdapter(environmentRefusal, "unmeasurable (environment shape)");
 	});
 
+	it("the environment-shape cause names UTF-8, the property actually tested (issue #58)", () => {
+		// The accepted set is the UTF-8 spellings and nothing else, so a cause
+		// saying "not multibyte-capable" names a property the check does not
+		// test: EUC-KR is multibyte-capable and is refused here too, and its
+		// operator would be sent to fix the wrong thing (§3.11).
+		assert.match(
+			environmentRefusal.cause,
+			/not UTF-8/,
+			`the unmeasurable cause does not name UTF-8: ${JSON.stringify(environmentRefusal.cause)}`,
+		);
+		assert.doesNotMatch(
+			environmentRefusal.cause,
+			/multibyte-capable/,
+			`the unmeasurable cause still claims a multibyte-capability test it does not perform: ${JSON.stringify(environmentRefusal.cause)}`,
+		);
+	});
+
 	it("the environment-shape refusal is distinct from both the grammar cause and the length cause", () => {
 		assert.notEqual(environmentRefusal.cause, "", "an unmeasurable refusal owes its own cause line");
 		assert.notEqual(
@@ -297,6 +324,39 @@ describe("refusal surfaces are content-free (issue #55, SPEC §3.9, §3.11)", { 
 		assert.equal(hostileRefusal.auditDelta.includes(SENTINEL), false, "subject text reached the audit record");
 		assert.equal(hostileRefusal.auditDelta.includes(ESC), false, "a raw ESC byte reached the audit record");
 	});
+
+	// The arms above drive the GRAMMAR refusal only. The length refusal is a
+	// second cause on a second path, and a surface that echoed the subject
+	// there would be equally undetected — so it gets the same pin rather than
+	// inheriting a guarantee measured elsewhere (issue #58).
+	it("the LENGTH cause is content-free too — a conforming, over-long subject", () => {
+		// Conforming grammar so the length arm is what refuses, and 73
+		// codepoints so it is out of range by exactly one.
+		const prefix = "feat(#58): ";
+		const body = `${SENTINEL}${ESC}[31m`;
+		const overLong = `${prefix}${body}${"x".repeat(73 - body.length)}\n`;
+		const attempt = commitWithMessage(fixture, overLong);
+		assert.notEqual(attempt.status, 0, `length sentinel: the over-long subject was not refused: ${attempt.stderr}`);
+		assert.equal(
+			attempt.stderr.includes(SENTINEL),
+			false,
+			`length sentinel: subject text surfaced on stderr from the LENGTH path: ${JSON.stringify(attempt.stderr)}`,
+		);
+		assert.equal(attempt.stderr.includes(ESC), false, "length sentinel: a raw ESC byte surfaced on stderr");
+		// Without this the arm stays green if a regression turns the refusal
+		// into a GRAMMAR one — the length path would go unmeasured while the
+		// arm still claimed to cover it.
+		assert.match(
+			attempt.cause,
+			/codepoints, outside 1\.\.72/,
+			`length sentinel: the refusal did not come from the LENGTH path: ${JSON.stringify(attempt.cause)}`,
+		);
+		assert.equal(
+			attempt.auditDelta.includes(SENTINEL),
+			false,
+			"length sentinel: subject text reached the audit record from the LENGTH path",
+		);
+	});
 });
 
 describe("chain degradation stays fail-open (issue #55 AC9)", { skip: IS_WINDOWS }, () => {
@@ -366,5 +426,334 @@ describe("chain degradation stays fail-open (issue #55 AC9)", { skip: IS_WINDOWS
 		} finally {
 			removeGithookFixture(fixture);
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The checked line versus the landed subject (issue #58, SPEC §3.11).
+//
+// `commit-msg` receives ONE argument: the path to the message file. It does
+// not receive the cleanup mode, and cannot derive it — `--cleanup=` is a
+// command-line flag no hook sees, `commit.cleanup` may be unset, and git's
+// DEFAULT differs by invocation (`strip` for an editor commit, `whitespace`
+// for `-m`/`-F`). So the adapter cannot know whether comment lines will be
+// stripped after it runs, and therefore cannot know which line becomes the
+// subject.
+//
+// That is why the repair is not "mirror git's cleanup". It is: compute both
+// readings — the first non-blank line, and the first non-blank non-comment
+// line — and approve only if every candidate conforms. Where the two agree
+// there is one candidate and the behaviour is what it always was, which is
+// every ordinary editor commit: the subject is line 1 and git's template
+// comments follow it.
+//
+// The comment marker is read from git (`core.commentString`, else
+// `core.commentChar`, else `#`) and that read is LOAD-BEARING, not defensive.
+// An earlier attempt dropped it, arguing no comment marker can begin a valid
+// `<type>`. A marker is not restricted to punctuation, and the arms below
+// carry the counterexample: under `core.commentChar=f` the line
+// `feat(#N): …` IS a comment, and git strips it.
+// ---------------------------------------------------------------------------
+
+describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
+	let fixture: GithookFixture;
+
+	before(() => {
+		fixture = buildGithookFixture();
+	});
+	after(() => removeGithookFixture(fixture));
+
+	/** What actually landed, which is the only thing the wrong-allow is about. */
+	function landedSubject(): string {
+		return spawnSync("git", ["log", "-1", "--format=%s"], {
+			cwd: fixture.root,
+			env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home") },
+		})
+			.stdout.toString("utf8")
+			.trim();
+	}
+
+	it("a comment-led message is refused — the gate vouched for line 2 while line 1 landed", () => {
+		// The wrong allow this issue was filed for. Under `-F` the default
+		// cleanup is `whitespace`, which keeps the `#` line, so the adapter
+		// approved `feat(#58): …` while `#zqcomment …` became the subject.
+		const attempt = commitWithMessage(fixture, "#zqcomment leading the message\nfeat(#58): a conforming subject\n");
+		assertRefusedThroughAdapter(attempt, `comment-led: the adapter approved the first non-comment line while the comment above it landed; subject: ${JSON.stringify(landedSubject())}`);
+	});
+
+	it("the same shape under an explicit --cleanup=verbatim is refused too", () => {
+		const attempt = commitWithMessage(fixture, "#zqverbatim leading\nfeat(#58): a conforming subject\n", {
+			gitArgs: ["--cleanup=verbatim"],
+		});
+		assertRefusedThroughAdapter(attempt, `verbatim: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("a comment-led message separated by a blank line is refused", () => {
+		// Here the landed subject is the comment ALONE — the sharpest form,
+		// since the approved line is not even part of what git records.
+		const attempt = commitWithMessage(fixture, "#zqspaced comment\n\nfeat(#58): a conforming subject\n");
+		assertRefusedThroughAdapter(attempt, `spaced: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("an all-comment message is refused rather than fail-open", () => {
+		// Under a comment-preserving cleanup the comments ARE the subject, and
+		// they conform to nothing. Under `strip` git aborts on the empty
+		// message anyway, so refusing is right in both worlds.
+		const attempt = commitWithMessage(fixture, "#zqonly a comment\n#zqand another\n");
+		assertRefusedThroughAdapter(attempt, `all-comment: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("the refusal names WHY, not just that the subject failed", () => {
+		const attempt = commitWithMessage(fixture, "#zqcause check\nfeat(#58): a conforming subject\n");
+		assert.match(
+			attempt.stderr,
+			/cleanup/i,
+			"cause: the refusal does not tell the operator that the message's first line and its first " +
+				"non-comment line differ and that which one lands depends on a cleanup mode this hook cannot " +
+				`observe — without that, the refusal reads as a false block (§3.11): ${JSON.stringify(attempt.stderr)}`,
+		);
+	});
+
+	it("a `#`-led line git KEEPS is checked, where `;` is the configured marker", () => {
+		// `core.commentChar=';'` makes `;` the marker and `#` an ordinary
+		// character, so this `#`-led line is text git keeps and the subject it
+		// lands. It must be checked.
+		const attempt = commitWithMessage(fixture, "#zqhash is not a comment here\nfeat(#58): a conforming subject\n", {
+			env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.commentChar", GIT_CONFIG_VALUE_0: ";" },
+		});
+		assertRefusedThroughAdapter(attempt, "commentChar: the commit SUCCEEDED. With `;` as git's comment marker a `#`-led line is ordinary " +
+				`text that lands as the subject, and the adapter skipped it as a comment; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("a `;`-led message is checked too, not skipped", () => {
+		// Prior behaviour, pinned rather than newly bought: the old loop
+		// skipped `#` only, so this already refused. It is here because it is
+		// the other direction of the marker axis, and a marker-aware read
+		// must not start skipping it.
+		const attempt = commitWithMessage(fixture, ";zqsemicolon is ordinary here\nfeat(#58): a conforming subject\n");
+		assertRefusedThroughAdapter(attempt, `semicolon: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("the ordinary editor shape is unchanged: subject first, comments after", () => {
+		// The regression guard that keeps this repair from becoming a false
+		// block. One candidate, so the behaviour is exactly what it was.
+		const attempt = commitWithMessage(
+			fixture,
+			"feat(#58): a conforming subject\n\n# Please enter the commit message for your changes.\n# with '#' will be ignored.\n",
+		);
+		assert.equal(
+			attempt.status,
+			0,
+			`editor shape: an ordinary commit was refused — the repair over-blocks the common case: ${attempt.stderr}`,
+		);
+	});
+
+	it("under --cleanup=verbatim the UNTRIMMED length is what lands, and is refused", () => {
+		// The other half of the trailing-whitespace axis. Under `verbatim` git
+		// keeps the trailing spaces, so a 72-codepoint subject plus spaces
+		// lands over the limit. Checking only the trimmed form would approve
+		// it — this arm is what makes the untrimmed candidate load-bearing.
+		// The grammar bounds the DESCRIPTION after `<type>(#N): `, so the two
+		// forms are built to straddle that boundary: 72 description
+		// characters trimmed, 75 untrimmed. The trimmed form conforms and the
+		// untrimmed one does not, which is exactly the discriminator.
+		const attempt = commitWithMessage(fixture, `feat(#58): ${"x".repeat(72)}   \n`, {
+			gitArgs: ["--cleanup=verbatim"],
+		});
+		assertRefusedThroughAdapter(attempt, "verbatim length: under verbatim the untrimmed line is what lands, and its description is over the " +
+				`limit, but the commit was approved: ${attempt.stderr}`,
+		);
+	});
+
+	it("a conforming subject with no comments at all still passes", () => {
+		const attempt = commitWithMessage(fixture, "feat(#58): plain conforming subject\n");
+		assert.equal(attempt.status, 0, `plain: ${attempt.stderr}`);
+	});
+});
+
+describe("the delegated helper's mode matches its stated use (issue #58)", { skip: IS_WINDOWS }, () => {
+	it("conventional_commit.sh is not executable — its header says it is sourced, never executed", () => {
+		// Self-enforcing rather than self-contradicting: the file carries no
+		// shebang, so an exec bit advertises an entry point that does not
+		// exist. Dropping the bit is what makes the header's claim checkable.
+		const helper = join(repoRoot(), ".githooks", "helpers", "conventional_commit.sh");
+		const mode = statSync(helper).mode & 0o111;
+		assert.equal(
+			mode,
+			0,
+			`conventional_commit.sh carries an exec bit (mode ${mode.toString(8)}) while its header states it is ` +
+				"sourced and never executed, and it ships no shebang — one of the two has to give (§2.5)",
+		);
+		assert.doesNotMatch(
+			readFileSync(helper, "utf8").split("\n")[0],
+			/^#!/,
+			"conventional_commit.sh grew a shebang — then the exec bit is the right answer and this arm is inverted",
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Two shapes the `-F`-driven helper cannot reach (issue #58).
+//
+// `commitWithMessage` always uses `-F`, under which git applies whitespace
+// cleanup BEFORE the hook and never applies `strip` by default. Both shapes
+// below turn on that difference, so they drive `git commit` directly with a
+// scripted editor — which is the path where git hands the hook the file
+// untouched and cleans up afterwards.
+// ---------------------------------------------------------------------------
+
+describe("the editor path, where git cleans up after the hook (issue #58)", { skip: IS_WINDOWS }, () => {
+	let fixture: GithookFixture;
+
+	before(() => {
+		fixture = buildGithookFixture();
+	});
+	after(() => removeGithookFixture(fixture));
+
+	/** One commit through a scripted editor, with optional extra git config. */
+	function commitThroughEditor(
+		message: string,
+		config: Record<string, string> = {},
+	): { status: number | null; stderr: string } {
+		fixture.seq += 1;
+		appendFileSync(join(fixture.root, "work.txt"), `editor ${fixture.seq}\n`);
+		spawnSync("git", ["add", "work.txt"], { cwd: fixture.root, env: editorEnv(fixture) });
+		const messagePath = join(fixture.root, ".git", `GITJIG_EDITOR_MSG_${fixture.seq}`);
+		writeFileSync(messagePath, message);
+		const configArgs = Object.entries(config).flatMap(([key, value]) => ["-c", `${key}=${value}`]);
+		const run = spawnSync("git", [...configArgs, "commit", "-q"], {
+			cwd: fixture.root,
+			env: { ...editorEnv(fixture), GIT_EDITOR: `cp ${messagePath}` },
+		});
+		return { status: run.status, stderr: (run.stderr ?? Buffer.alloc(0)).toString("utf8") };
+	}
+
+	/**
+	 * A refusal that came from THIS adapter, not from any nonzero exit. Without
+	 * the recovery-line check a rejected config value or a failed editor would
+	 * pass a status-only assertion — the vacuous shape the rest of this file
+	 * avoids through `assertRefusedThroughAdapter`.
+	 */
+	function assertRefusedByAdapter(run: { status: number | null; stderr: string }, arm: string): void {
+		assert.notEqual(run.status, 0, `${arm}: the commit SUCCEEDED`);
+		assert.match(
+			run.stderr,
+			/--no-verify/,
+			`${arm}: the commit failed, but not through this adapter — no tier recovery line on stderr: ${JSON.stringify(run.stderr)}`,
+		);
+	}
+
+	function editorEnv(f: GithookFixture): Record<string, string> {
+		return {
+			PATH: process.env.PATH ?? "",
+			HOME: join(f.root, "home"),
+			GIT_CONFIG_NOSYSTEM: "1",
+			GIT_TERMINAL_PROMPT: "0",
+			LANG: "en_US.UTF-8",
+			LC_ALL: "en_US.UTF-8",
+			GITJIG_TEST_STATE_ROOT: join(f.root, ".gitjig", "state"),
+		};
+	}
+
+	it("a LETTER comment marker: `feat(#N):` is a comment git strips, and the line beneath is checked", () => {
+		// The counterexample that retired "no comment marker begins a valid
+		// <type>". With `core.commentChar=f`, line 1 IS a comment: git removes
+		// it under strip and the non-conforming line 2 lands. An adapter that
+		// checked only the first non-blank line would vouch for the comment
+		// and never see what landed.
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58): looks conforming but is a comment\nzqnot a conforming subject at all\n", {
+				"core.commentChar": "f",
+			}),
+			"letter marker: git stripped the `f`-led line as a comment and the unchecked line beneath it landed",
+		);
+	});
+
+	it("`core.commentString` takes precedence, and its marker is honoured too", () => {
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58): also a comment now\nzqbogus subject here\n", {
+				"core.commentString": "feat",
+			}),
+			"commentString: the marker was not read",
+		);
+	});
+
+	it("a whitespace-only first line is BLANK, not a subject — git drops it", () => {
+		// The false block the first-non-blank reading bought if it counted a
+		// space-only line as content: git's cleanup drops it, so the
+		// conforming line beneath is what lands and the commit must succeed.
+		const { status } = commitThroughEditor("   \nfeat(#58): fine after a blankish line\n");
+		assert.equal(
+			status,
+			0,
+			"blankish: an ordinary commit was refused because its first line held only spaces — git drops such " +
+				"a line, so the conforming subject beneath it is what lands (§3.11's false-block cost)",
+		);
+	});
+
+	it("a subject that is grammatical only UNTRIMMED is refused — git trims after the hook", () => {
+		// `feat(#N):` plus trailing spaces satisfies the grammar as the hook
+		// receives it and does not once git trims, so checking the untrimmed
+		// form alone approved a commit with no description at all. The trimmed
+		// form is a candidate for exactly this reason.
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58):   \n"),
+			"trailing space: the hook vouched for the untrimmed line while the trimmed one landed",
+		);
+	});
+
+	it("a conforming subject with ordinary trailing whitespace still passes", () => {
+		// The guard against over-correcting: trimming must not refuse a
+		// subject that conforms in BOTH forms.
+		const { status, stderr } = commitThroughEditor("feat(#58): a conforming subject with a trailing space \n");
+		assert.equal(status, 0, `trailing space (benign): an ordinary commit was refused: ${stderr}`);
+	});
+
+	it("a first line of one NO-BREAK SPACE is content to git, so it is checked", () => {
+		// git's cleanup uses an ASCII-only isspace; a shell `[:space:]` under
+		// a UTF-8 locale is wider. The line is blank to the locale and content
+		// to git, so it landed as the subject without entering the candidate
+		// set — a wrong allow found only by driving a non-ASCII space.
+		assertRefusedByAdapter(
+			commitThroughEditor("\u00a0\n\nfeat(#58): a conforming subject\n"),
+			"nbsp first line: git kept the no-break-space line as the subject and the hook never saw it",
+		);
+	});
+
+	it("a TRAILING no-break space is not trimmed away, because git does not trim it", () => {
+		// The mirror fault in the trimmer: trimming a non-ASCII space
+		// manufactures the candidate `feat(#N):`, which has no description, and
+		// refuses a line git would have landed intact.
+		const { status, stderr } = commitThroughEditor("feat(#58): \u00a0\n");
+		assert.equal(
+			status,
+			0,
+			`nbsp trailing: refused a subject whose trailing byte git does not treat as space: ${stderr}`,
+		);
+	});
+
+	it("a planted separator byte cannot forge an already-checked candidate", () => {
+		// The candidate set was deduplicated through a sentinel-delimited
+		// seen-list, and a candidate is arbitrary operator bytes: an SOH in
+		// line 1 planted extra delimiters, so the segment between them read as
+		// already checked and line 2 was skipped without ever reaching the
+		// predicate. A letter marker makes the two readings diverge, which is
+		// the same starting condition as the marker arms above.
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58): \u0001zq not conforming at all\nzq not conforming at all\n", {
+				"core.commentChar": "f",
+			}),
+			"planted separator: line 2 was skipped as already-checked and landed unvouched-for",
+		);
+	});
+
+	it("the ordinary editor commit still passes", () => {
+		const { status } = commitThroughEditor("feat(#58): a plain editor subject\n\n# a template comment\n");
+		assert.equal(status, 0, "editor baseline: an ordinary editor commit was refused");
 	});
 });
