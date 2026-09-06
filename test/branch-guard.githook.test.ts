@@ -45,7 +45,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -281,6 +281,126 @@ describe("derivation of the protected identity (issue #59, SPEC §3.3 stage 2, �
 				`P underivable is machinery degradation, never a refusal of the actor's input (§3.9); ` +
 					`delta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The gate's own repairs, pinned (issue #63, SPEC §3.12 — a surviving mutant
+// means no assertion pins that guard).
+//
+// These three arms are GREEN on the landed tree by construction: each pins a
+// repair that is already correct here, so none is red-first. Each is a
+// regression check whose teeth are demonstrated against a named mutant, and
+// the mutant is recorded beside the arm so a later reader can re-run it
+// rather than trust this sentence.
+// ---------------------------------------------------------------------------
+
+describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { skip: IS_WINDOWS }, () => {
+	it("a pre-seeded derivation cache in the push environment cannot decide the verdict", () => {
+		// git hands the PUSHER's environment to hooks, so an exported
+		// _GITJIG_BG_* pair would otherwise pre-seed the verdict three ways:
+		// a traceless disarm (state=disarmed, no warn record emitted), a decoy
+		// identity (P set to something that is not the protected ref), and a
+		// set -u abort. The helper's source-time `unset -v` discards them.
+		// MUTANT: delete that line from branch_guard.sh — the decoy P is then
+		// consulted, the push to the real P is allowed, and this arm reds.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			seedLocalCommit(fixture);
+			const attempt = pushRefs(fixture, [PROTECTED], {
+				env: { _GITJIG_BG_STATE: "armed", _GITJIG_BG_P: "aadecoyzq" },
+			});
+			assertPushRefused(attempt, "pre-seeded decoy identity");
+			assertRefnameContentFree(attempt, PROTECTED, "pre-seeded decoy identity");
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a pre-seeded disarmed state cannot disarm the gate tracelessly", () => {
+		// The seed's other direction: state=disarmed short-circuits derivation
+		// on the cache branch, which returns non-zero WITHOUT emitting the warn
+		// record — an allow indistinguishable from an ordinary one, which is
+		// exactly the observable §3.9 requires a disarmed gate to produce.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			seedLocalCommit(fixture);
+			const attempt = pushRefs(fixture, [PROTECTED], {
+				env: { _GITJIG_BG_STATE: "disarmed" },
+			});
+			assertPushRefused(attempt, "pre-seeded traceless disarm");
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("the disarmed gate lands exactly one not-enforced record for a MULTI-ref push", () => {
+		// The record count was asserted on single-ref pushes only, where a
+		// record-per-ref mutant is invisible: one ref, one record either way.
+		// The adapter calls its predicate once per ref line, so the cached
+		// disarmed state is what keeps the count at one across refs.
+		// MUTANT: emit the warn from the per-ref path instead of the cache
+		// miss — the count becomes two here while every single-ref arm stays
+		// green.
+		const fixture = buildGithookFixture({
+			remote: { defaultBranch: PROTECTED, omitHeadPointer: true, danglingRemoteHead: true },
+		});
+		try {
+			const companionCreate = pushRefs(fixture, [`${PROTECTED}:${COMPANION}`]);
+			assert.equal(companionCreate.status, 0, companionCreate.stderr);
+			seedLocalCommit(fixture);
+			const attempt = pushRefs(fixture, [`${PROTECTED}:${COMPANION}`, PROTECTED]);
+			assert.equal(attempt.status, 0, `disarmed gate must fail open, never block: ${attempt.stderr}`);
+			const notEnforced = attempt.auditDelta.split("\n").filter((line) => line.includes("not enforced"));
+			assert.equal(
+				notEnforced.length,
+				1,
+				`a multi-ref push through the disarmed gate landed ${notEnforced.length} not-enforced records; ` +
+					`the signal is one per RUN, not one per ref, or a reader counts machinery degradation by how ` +
+					`many refs a push happened to carry (§3.9): ${JSON.stringify(attempt.auditDelta)}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("the stage-2 remote measurement disables terminal prompting on its own call", () => {
+		// STRUCTURAL, and recorded as such (§1.5): the behavioural arm this
+		// substitutes for is not available offline. Nothing the fixture can
+		// reach prompts — the remote is a local path with no authentication —
+		// so no push through this harness can distinguish a helper that
+		// disables prompting from one that does not. What CAN be pinned is
+		// that the one remote-touching call carries the guard on itself rather
+		// than inheriting it from an ambient environment, which is the property
+		// the fixture's own base env was masking.
+		// MUTANT: delete GIT_TERMINAL_PROMPT=0 from the ls-remote call — this
+		// arm reds; before this arm existed, no arm did.
+		const helper = readFileSync(join(repoRoot(), ".githooks", "helpers", "branch_guard.sh"), "utf8");
+		const lsRemote = helper
+			.split("\n")
+			.filter((line) => !line.trimStart().startsWith("#"))
+			.filter((line) => line.includes("ls-remote"));
+		assert.equal(lsRemote.length, 1, `expected exactly one ls-remote call site: ${JSON.stringify(lsRemote)}`);
+		assert.match(
+			lsRemote[0],
+			/GIT_TERMINAL_PROMPT=0 git ls-remote/,
+			`the stage-2 measurement does not disable terminal prompting on its own call, so it prompts wherever ` +
+				`the invoking environment did not already disable it — and a hook that blocks on a prompt wedges ` +
+				`the push it was meant to decide (§3.3's stage-2 statement): ${JSON.stringify(lsRemote[0])}`,
+		);
+	});
+
+	it("the verdict is unchanged when the base environment stops supplying the prompt guard", () => {
+		// The fixture's base env set GIT_TERMINAL_PROMPT itself, masking the
+		// helper's copy. Stripped here so the hook path runs on its own guard.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED, omitHeadPointer: true } });
+		try {
+			seedLocalCommit(fixture);
+			const attempt = pushRefs(fixture, [PROTECTED], { stripEnv: ["GIT_TERMINAL_PROMPT"] });
+			assertPushRefused(attempt, "unmasked prompt guard");
 		} finally {
 			removeGithookFixture(fixture);
 		}
