@@ -431,10 +431,97 @@ do_bind() {
     # 128; the last means it could not answer, and refusing on an unanswered
     # question would turn this fix into a block on a clone this run has no
     # evidence against.
+    #
+    # WHAT CAN REACH THE REFUSAL BELOW, and why the recovery is an ORDERED,
+    # ITERATIVE procedure rather than a single named cause (issue #74).
+    #
+    # The census is derived from git's own precedence order (`git help
+    # gitignore`, highest first: command-line patterns; `.gitignore` from the
+    # path's directory up to the toplevel, deeper overriding higher;
+    # `$GIT_COMMON_DIR/info/exclude`; `core.excludesFile`) plus the index,
+    # which `check-ignore` consults unless `--no-index` is passed. Only a
+    # source that can OUTRANK the line just appended reaches here:
+    #
+    #   1. THE INDEX - the state sink ITSELF is tracked. Git never ignores a
+    #      tracked path. The condition is the sink, not the directory:
+    #      `check-ignore` consults the index only for the path it is asked
+    #      about, so a tracked SIBLING under `.gitjig/` leaves the sink
+    #      ignored and never reaches here.
+    #   2. info/exclude NEGATES ITSELF - `/.gitjig/` is already a line, so
+    #      this run appended nothing, and a later `!` line in the same file
+    #      wins on last-matching-pattern within one precedence level.
+    #   3. A `.gitignore` UN-EXCLUDES THE DIRECTORY, in any of the spellings
+    #      that match it - a trailing-slash pattern, a bare one, a glob.
+    #
+    # `core.excludesFile` is LOWER precedence and cannot outrank the append; a
+    # `.gitignore` below an excluded directory is never consulted, since git
+    # does not descend into one (which is also WHY shape 3 must un-exclude the
+    # directory first); and this instrument passes no command-line pattern.
+    # Those three are unreachable by construction.
+    #
+    # THE CAUSES COMPOSE, and that is what shapes the recovery. A clone can be
+    # BOTH tracked and negated at once, and then no single act clears the arm:
+    # removing the negation leaves the index, clearing the index leaves the
+    # negation. Any scheme that sorts a clone into one cause and names one act
+    # is therefore wrong on the overlap - measured, and the reason the message
+    # below prescribes steps in order and makes the RE-RUN the termination
+    # test. The re-run is what carries that weight, and it is deliberately not
+    # backed here by a claim that each step always removes a cause: step 1's
+    # act has one measured shape where it does not (below), and a warrant of
+    # that form would have to be true of every act on every clone, which
+    # nothing here establishes. What IS established is narrower and is what
+    # the arms measure: the procedure terminates on every shape in an
+    # enumerated space.
+    #
+    # THE INDEX IS ITS OWN QUESTION. `--no-index` deliberately hides the
+    # index, so no `check-ignore` spelling can tell a tracked sink from a
+    # negated one; asking one command about two independent things is what
+    # made the earlier attempts here wrong. Step 1 asks `ls-files` instead.
+    #
+    # STEP 1'S ACT HAS A SECOND SHAPE, keyed by OUTCOME rather than by cause
+    # (the same idiom the scan surfaces use). Where the sink's index entry
+    # carries `skip-worktree` - an ordinary consequence of a clone that
+    # tracked the state root and later turned on sparse checkout - a plain
+    # `git rm --cached` reports the path as outside the sparse-checkout
+    # definition and leaves the index UNCHANGED, so the arm is reached again
+    # and the procedure loops on step 1. `--sparse` clears it. The flag is not
+    # named unconditionally because it postdates git 2.36 and an unknown
+    # option would make step 1 dead for every older git instead - so the
+    # message keys it on what git itself prints, which is observable to the
+    # operator on the shape that needs it and silent on every shape that does
+    # not.
+    #
+    # THE DIRECTORY IS AN OPERAND in step 2. `/.gitjig/` and its negations can
+    # match the DIRECTORY, so where something un-excludes it no pattern need
+    # match the FILE path at all, and asking about the file alone can report
+    # nothing to act on. A negative-control arm pins that.
+    #
+    # STEP 3 IS THE HONEST LIMIT, and its GATE is "step 2 named no `!` rule" -
+    # never "step 2 printed nothing". Those differ, and the difference strands
+    # an operator: a directory-only pattern (one spelled with a trailing
+    # slash) cannot match a bare directory operand git cannot confirm IS a
+    # directory, so where `.gitjig/` is not on disk such a negation is
+    # invisible to the lookup - while an ORDINARY pattern that does match the
+    # bare operand still prints. The operator then sees output naming a rule,
+    # none of it a negation, and a step 3 gated on silence would shut them
+    # out with the real cause unnamed. Gating on the absence of a `!` rule
+    # covers both, so the acts are exhaustive over what step 2 can print.
+    #
+    # What step 3 gives is a bounded PLACE to look rather than a rule, and the
+    # census is what bounds it: only those files can outrank the exclusion.
+    #
+    # The issue-#74 arms in `test/bind-instrument.githook.test.ts` measure
+    # this, including one that enumerates a shape space over the axes named
+    # above - the negation's spelling and location, whether `.gitjig/` is on
+    # disk, whether the sink is tracked, and what competing ordinary pattern
+    # is present - runs this procedure on each shape that reaches the arm, and
+    # requires it to terminate with the sink ignored. That space is a
+    # constructed sample, not an exhaustive one: what it establishes is that
+    # the procedure terminates on every shape it contains.
     git check-ignore -q -- .gitjig/state/audit.jsonl </dev/null 2>/dev/null
     _bd_ci_rc=$?
     if [ "$_bd_ci_rc" -eq 1 ]; then
-      warn "bind_local_tier.sh: the exclusion line is present in '$_bd_excl_shown', but git still reports .gitjig/ as not ignored, so the shell's own state would be visible to version control here. This clone is NOT verified bound. Re-run from the repository root once git ignores that path: $RE_ARM"
+      warn "bind_local_tier.sh: the exclusion line is present in '$_bd_excl_shown', but git still reports .gitjig/ as not ignored, so the shell's own state would be visible to version control here. This clone is NOT verified bound. More than one rule can be in the way at once, so work through these in order, and re-run after each - the re-run is how you know you are done. (1) If 'git ls-files --error-unmatch -- .gitjig/state/audit.jsonl' succeeds, the sink is TRACKED and no exclude rule can override that; 'git rm -r --cached -f -- .gitjig/' clears the index without removing anything from disk, and if git answers that the paths are outside your sparse-checkout definition, run it again with --sparse added. (2) Otherwise ask 'git check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl': if it names a rule spelled with a leading '!', that negation is the cause, at the file and line printed. (3) If it names NO rule beginning with '!' - whether it printed other rules or nothing at all - then the negation is one git will not attribute here, and it is in info/exclude or in a .gitignore between the repository root and that path, the only places that can outrank the exclusion. Re-run from the repository root: $RE_ARM"
       return 2
     fi
     # The success line names the exclusion only where this re-ask ANSWERED.
