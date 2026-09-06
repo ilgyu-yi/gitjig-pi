@@ -44,11 +44,23 @@ const WRAP_PASSES: readonly RegExp[] = [
 	// separator spellings — whitespace and the colon trailer (`Fixes: #4`,
 	// `fixes:#4`). At least one separator is required: bare `fixes#4`
 	// adjacency stays a deliberate non-match (§3.3).
-	/\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)(?::\s*|\s+)#\d+/gi,
+	//
+	// The separator carries AT MOST ONE newline, which is what keeps it
+	// inside a single paragraph. `\s*` admitted a blank line, and a pair
+	// whose separator crosses one is worse than an unmatched pair: the
+	// wrap still fires, but a fenced span cannot cross a blank line, so
+	// no code span forms and the reference is left live wearing backticks
+	// — matched-but-void (issue #86). A blank line is also a paragraph
+	// break, so the platform does not read the halves as one close pair
+	// either; declining to match there costs nothing and voids nothing.
+	/\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)(?::[^\S\n]*|[^\S\n]+)(?:\n[^\S\n]*)?#\d+/gi,
 	// Cross-repository references: owner/repo#N.
 	/\b[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#\d+/g,
-	// GH-N forms.
-	/\bGH-\d+\b/g,
+	// GH-N forms, case-insensitive: the platform autolinks the lowercase
+	// spelling too, so a case-sensitive pass left `gh-4` live while wrapping
+	// `GH-4` — a neutralization that depends on how the author capitalized
+	// is not one (issue #86). `\d+` keeps `gh-pages` and its kin out.
+	/\bGH-\d+\b/gi,
 	// @-mentions. \B admits a mention after whitespace or punctuation and
 	// excludes an @ preceded by a word character (an address-shaped span).
 	/\B@[A-Za-z0-9-]+/g,
