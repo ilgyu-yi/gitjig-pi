@@ -52,8 +52,8 @@
  * THE ROSTER FOR THIS FAMILY IS THE ADAPTER'S OWN HEADER, not this block
  * (issue #58). `.githooks/commit-msg` enumerates the merge edge above
  * alongside the hook-less channels that never fire it (`git cherry-pick`,
- * `git am`), the `core.commentChar=auto` reading, and the glob-metacharacter
- * marker — one decision, read in one place, at the site that states the
+ * `git am`) and the `core.commentChar=auto` reading — one decision, read in
+ * one place, at the site that states the
  * selection rule they are residuals of. This paragraph stays because the
  * merge edge is what an arm here would touch; it is not a second roster.
  */

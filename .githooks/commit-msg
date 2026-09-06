@@ -51,8 +51,9 @@
 #     lands under `verbatim`. Checking only the untrimmed form approved
 #     `feat(#N):` followed by spaces — grammatical untrimmed, no description
 #     at all once trimmed (measured). Checking only the trimmed form would
-#     refuse a 72-codepoint subject with trailing spaces under `verbatim`,
-#     where the untrimmed line is what lands. What survives is the length
+#     APPROVE a 72-codepoint subject with trailing spaces under `verbatim`,
+#     where the untrimmed line is what lands and measures 75 — a wrong allow,
+#     not a false block. What survives is the length
 #     edge under the OTHER mode: a subject whose two forms differ in length
 #     is refused if either form is out of range, which is stricter than any
 #     single mode requires.
@@ -168,7 +169,7 @@ _gh_check_one() {
 # a sentinel-delimited seen-list: a candidate is arbitrary operator bytes, so
 # any in-band separator is injectable, and a planted separator forged a
 # "already checked" entry for a string the predicate never saw — measured, a
-# non-conforming subject landed at status 0. Four candidates compare in three
+# non-conforming subject landed at status 0. Four candidates take six
 # comparisons; a seen-list buys nothing at this size and costs that hole.
 _gh_check_one "$_gh_first" || exit 1
 
