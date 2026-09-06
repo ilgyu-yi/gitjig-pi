@@ -86,6 +86,83 @@ export type ScanOutcome =
 	| { disposition: "refuse-out-of-domain" }
 	| { disposition: "refuse-match"; patternIds: string[]; lines: number[] };
 
+/**
+ * Which published operand a verdict came from. A closed literal union, not
+ * `string`: the labels reach a refusal message, and the property that keeps
+ * that safe — no operand BYTE ever rides the composition — should rest on
+ * the type rather than on review (issue #120).
+ */
+export type PublishOperand = "body" | "title";
+
+/** One operand's own located spans, so a locator is attributable. */
+export interface OperandMatch {
+	operand: PublishOperand;
+	patternIds: string[];
+	lines: number[];
+}
+
+export interface MergedScan {
+	scan: ScanOutcome;
+	/** Every operand whose own scan was not clean. */
+	operands: PublishOperand[];
+	/** Per-operand attribution; empty unless the merged disposition is a match. */
+	matches: OperandMatch[];
+}
+
+/**
+ * Combine the per-operand scans into one verdict (issue #120).
+ *
+ * EXPORTED because it is a rule, and a rule an arm re-implements is a rule
+ * nothing pins: the first draft of this lived inside the tool's `execute`
+ * and its arms tested a copy, so reverting the whole merge left the suite
+ * green.
+ *
+ * Two orderings matter and both are decisions rather than conveniences:
+ *
+ *  - **Out-of-domain outranks a match.** An unmeasurable operand was never
+ *    scanned, so reporting a match verdict over it would claim a span was
+ *    located in text nothing measured — and would discard the stricter
+ *    statement. §3.9's measurement rule: what did not measure does not
+ *    vouch, in either direction.
+ *  - **`operands` names every dirty operand**, independently of which
+ *    verdict won, so an actor repairs both in one pass. It is derived from
+ *    the per-operand dispositions here rather than pushed at call sites,
+ *    which is what let it drift out of step with the verdict before.
+ */
+export function mergeScanOutcomes(body: ScanOutcome, title?: ScanOutcome): MergedScan {
+	const operands: PublishOperand[] = [];
+	const matches: OperandMatch[] = [];
+	if (body.disposition !== "clean") {
+		operands.push("body");
+	}
+	if (body.disposition === "refuse-match") {
+		matches.push({ operand: "body", patternIds: body.patternIds, lines: body.lines });
+	}
+	if (title !== undefined && title.disposition !== "clean") {
+		operands.push("title");
+	}
+	if (title?.disposition === "refuse-match") {
+		matches.push({ operand: "title", patternIds: title.patternIds, lines: title.lines });
+	}
+
+	if (body.disposition === "refuse-out-of-domain" || title?.disposition === "refuse-out-of-domain") {
+		// Attribution still travels, but no located span is claimed.
+		return { scan: { disposition: "refuse-out-of-domain" }, operands, matches: [] };
+	}
+	if (matches.length === 0) {
+		return { scan: { disposition: "clean" }, operands, matches };
+	}
+	return {
+		scan: {
+			disposition: "refuse-match",
+			patternIds: [...new Set(matches.flatMap((m) => m.patternIds))],
+			lines: [...new Set(matches.flatMap((m) => m.lines))],
+		},
+		operands,
+		matches,
+	};
+}
+
 interface CompiledPattern {
 	id: string;
 	regexp: RegExp;

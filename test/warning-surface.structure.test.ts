@@ -275,12 +275,20 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// without quoting the match.
 			'scan.patternIds.join(", ")',
 			'scan.lines.join(", ")',
-			// The operand LABELS, on exactly the terms above: the array holds
-			// only this module's own two fixed literals ("body", "title"),
-			// pushed at the scan sites and never derived from a value, so the
-			// composition carries no operand byte — the same property that lets
-			// a refusal name where it matched without quoting the match.
-			'operands.join(" and ")',
+			// Per-operand attribution (issue #120), on exactly the terms above.
+			// Every token is a fixed literal, a format-checked pattern id, or a
+			// number: `operand` is the closed union `"body" | "title"` declared
+			// in scan.ts, so the no-operand-byte property rests on the TYPE and
+			// not on review — a future push of a derived value stops compiling
+			// rather than quietly widening these entries. `located` is the
+			// composition of the three beneath it and carries nothing they do
+			// not. Materially unlike the round-1 entries that were withdrawn:
+			// those admitted the published body itself.
+			'merged.operands.join(" and ")',
+			"m.operand",
+			'm.patternIds.join(", ")',
+			'm.lines.join(", ")',
+			"located",
 			// NOTHING for the published operands (issue #120). An earlier draft
 			// joined the title and body with a template and allowlisted both,
 			// arguing the entry was a visible decision. The entry was avoidable

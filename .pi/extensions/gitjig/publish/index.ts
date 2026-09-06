@@ -53,7 +53,7 @@ import {
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
-import { PatternSourceError, scanBody } from "./scan.ts";
+import { mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
 
 /** The tool name §3.3's egress row records, verbatim. */
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
@@ -116,15 +116,7 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// would refuse a send over text that was never going anywhere.
 			const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
 
-			// Which published operand(s) the verdict came from. A bare line
-			// locator is unattributable between two operands — "lines 1" reads
-			// identically for a title match and a first-line body match — and an
-			// operator cannot repair what the refusal does not name. The labels
-			// are this module's own fixed literals, so they carry no operand
-			// byte (§3.8's refusal-record rule).
-			const operands: string[] = [];
-
-			let scan;
+			let merged;
 			try {
 				// Every byte this call publishes is scanned — a create kind's
 				// title lands on the same public surface and a secret in it leaks
@@ -133,28 +125,17 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// implementation, not a second call). Joining them into one text
 				// shifted every body line number by the title's line, so a
 				// refusal pointed the operator at a neighbouring line.
-				scan = scanBody(params.body);
-				if (scan.disposition !== "clean") {
-					operands.push("body");
-				}
-				if (publishedTitle !== undefined) {
-					const titleScan = scanBody(publishedTitle);
-					if (titleScan.disposition !== "clean") {
-						operands.push("title");
-						// A body verdict is not overwritten silently: where BOTH
-						// operands are dirty the refusal names both, so the actor
-						// repairs them in one pass instead of learning about the
-						// second only after retrying the first.
-						scan =
-							scan.disposition === "refuse-match" && titleScan.disposition === "refuse-match"
-								? {
-										disposition: "refuse-match",
-										patternIds: [...new Set([...scan.patternIds, ...titleScan.patternIds])],
-										lines: [...scan.lines, ...titleScan.lines],
-									}
-								: titleScan;
-					}
-				}
+				// Every byte this call publishes is scanned — a create kind's
+				// title lands on the same public surface and a secret in it leaks
+				// exactly as far. The operands are scanned SEPARATELY, as two call
+				// sites of the one predicate (§3.11 forbids a second
+				// implementation, not a second call), and combined by the one
+				// exported merge rule rather than by logic living here — a rule
+				// inside this closure is a rule no arm can bind to.
+				merged = mergeScanOutcomes(
+					scanBody(params.body),
+					publishedTitle === undefined ? undefined : scanBody(publishedTitle),
+				);
 			} catch (error) {
 				// Fail closed on scan machinery (§3.9 egress-publish-patterns):
 				// PatternSourceError messages are fixed content-free literals;
@@ -167,10 +148,12 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				return result(text, { disposition: "refuse-machinery" });
 			}
 
+			const scan = merged.scan;
 			if (scan.disposition === "refuse-out-of-domain") {
 				const text =
-					"publish refused: disposition refuse-out-of-domain; the body is outside the " +
-					"line-and-pattern measurement domain; no pattern was consulted — recompose the body and call again";
+					"publish refused: disposition refuse-out-of-domain; " +
+					`in ${merged.operands.join(" and ")}; outside the line-and-pattern measurement ` +
+					"domain; no pattern was consulted — recompose and call again";
 				record("refuse-out-of-domain", text);
 				return result(text, { disposition: "refuse-out-of-domain" });
 			}
@@ -178,15 +161,23 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			if (scan.disposition === "refuse-match") {
 				// Pattern IDs are format-checked lowercase-hyphen tokens and the
 				// locators are numbers, so this composition carries no body byte.
+				// Per-operand attribution: a flat locator list cannot say which
+				// line belongs to which operand, and a title is always line 1, so
+				// a body match on its own first line would otherwise read
+				// "lines 1, 1". Every token here is a fixed literal or a
+				// format-checked pattern id or a number — no operand byte.
+				const located = merged.matches
+					.map((m) => `${m.operand} patterns ${m.patternIds.join(", ")} lines ${m.lines.join(", ")}`)
+					.join("; ");
 				const text =
 					"publish refused: disposition refuse-match; " +
-					`in ${operands.join(" and ")}; ` +
-					`patterns ${scan.patternIds.join(", ")}; lines ${scan.lines.join(", ")} — ` +
+					`${located} — ` +
 					"respell or remove the located spans and call again";
 				record("refuse-match", text);
 				return result(text, {
 					disposition: "refuse-match",
-					operands,
+					operands: merged.operands,
+					matches: merged.matches,
 					patternIds: scan.patternIds,
 					lines: scan.lines,
 				});

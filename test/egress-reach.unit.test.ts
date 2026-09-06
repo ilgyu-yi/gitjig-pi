@@ -21,6 +21,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { mergeScanOutcomes } from "../.pi/extensions/gitjig/publish/scan.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
@@ -187,38 +188,76 @@ describe("a refusal names which operand it came from (issue #120, review round 2
 	// replaced the body's, so the actor repaired one, retried, and only then
 	// learned of the other.
 	//
-	// The composition is lifted here rather than driven through the tool,
-	// which needs a registered runtime; the sibling integration suite owns
-	// the end-to-end path. What is pinned is the COMPOSITION rule.
-	function compose(bodyDirty: boolean, titleDirty: boolean): { operands: string[]; lines: number[] } {
-		const operands: string[] = [];
-		let lines: number[] = [];
-		if (bodyDirty) {
-			operands.push("body");
-			lines = [4];
-		}
-		if (titleDirty) {
-			operands.push("title");
-			lines = bodyDirty ? [...lines, 1] : [1];
-		}
-		return { operands, lines };
-	}
+	// These arms drive the EXPORTED rule. An earlier draft re-implemented
+	// the composition in a local helper, and reverting the whole production
+	// merge left the suite green — an arm that re-implements a rule pins
+	// nothing. The rule is exported for exactly this reason.
+	const clean = { disposition: "clean" } as const;
+	const ood = { disposition: "refuse-out-of-domain" } as const;
+	const bodyHit = { disposition: "refuse-match", patternIds: ["github-token"], lines: [4] } as const;
+	const titleHit = { disposition: "refuse-match", patternIds: ["aws-access-key-id"], lines: [1] } as const;
 
-	it("names both operands when both matched, and keeps both locators", () => {
-		const both = compose(true, true);
-		assert.deepEqual(both.operands, ["body", "title"]);
-		assert.deepEqual(both.lines, [4, 1], "a locator was dropped, so one match would be learned only after a retry");
+	it("names both operands when both matched, and attributes each locator", () => {
+		const m = mergeScanOutcomes(bodyHit, titleHit);
+		assert.equal(m.scan.disposition, "refuse-match");
+		assert.deepEqual(m.operands, ["body", "title"]);
+		assert.deepEqual(
+			m.matches.map((x) => [x.operand, x.lines]),
+			[
+				["body", [4]],
+				["title", [1]],
+			],
+			"a match was dropped, so one would be learned only after a retry",
+		);
 	});
 
 	it("names exactly the operand that matched when only one did", () => {
-		assert.deepEqual(compose(true, false).operands, ["body"]);
-		assert.deepEqual(compose(false, true).operands, ["title"]);
+		assert.deepEqual(mergeScanOutcomes(bodyHit, clean).operands, ["body"]);
+		assert.deepEqual(mergeScanOutcomes(clean, titleHit).operands, ["title"]);
+		assert.deepEqual(mergeScanOutcomes(bodyHit, undefined).operands, ["body"]);
+	});
+
+	it("an out-of-domain operand OUTRANKS a match on the other", () => {
+		// Review round 3, finding 1. `operands` used to be pushed independently
+		// of the winning verdict, so a NUL-bearing body plus a matching title
+		// reported `refuse-match ... in body and title` — claiming a located
+		// span in text no pattern was ever consulted for, and discarding the
+		// stricter out-of-domain statement. What did not measure does not
+		// vouch, in either direction (§3.9).
+		const m = mergeScanOutcomes(ood, titleHit);
+		assert.equal(m.scan.disposition, "refuse-out-of-domain");
+		assert.deepEqual(m.operands, ["body", "title"], "attribution must still name both dirty operands");
+		assert.deepEqual(m.matches, [], "an out-of-domain verdict must claim no located span");
+	});
+
+	it("clean on both operands stays clean, and names nothing", () => {
+		const m = mergeScanOutcomes(clean, clean);
+		assert.equal(m.scan.disposition, "clean");
+		assert.deepEqual(m.operands, []);
+		assert.deepEqual(m.matches, []);
+		assert.deepEqual(mergeScanOutcomes(clean, undefined).operands, []);
+	});
+
+	it("merged pattern ids and lines are de-duplicated on the same rule", () => {
+		// Round-3 nit: ids were de-duplicated through a Set while lines were
+		// concatenated raw, so two operands matching on line 1 printed
+		// "lines 1, 1". Attribution now lives per operand, and the flat
+		// summary fields are joined on one rule rather than two.
+		const same = { disposition: "refuse-match", patternIds: ["github-token"], lines: [1] } as const;
+		const m = mergeScanOutcomes(same, same);
+		assert.equal(m.scan.disposition, "refuse-match");
+		if (m.scan.disposition === "refuse-match") {
+			assert.deepEqual(m.scan.patternIds, ["github-token"]);
+			assert.deepEqual(m.scan.lines, [1]);
+		}
+		assert.equal(m.matches.length, 2, "per-operand attribution must survive de-duplication of the summary");
 	});
 
 	it("the operand labels are fixed literals, so a refusal carries no operand byte", () => {
 		// §3.8's refusal-record rule: what makes it safe to name where a match
 		// landed is that nothing about the matched text reaches the message.
-		for (const label of compose(true, true).operands) {
+		const m = mergeScanOutcomes(bodyHit, titleHit);
+		for (const label of m.operands) {
 			assert.ok(["body", "title"].includes(label), `an operand label is not a fixed literal: ${label}`);
 		}
 	});
