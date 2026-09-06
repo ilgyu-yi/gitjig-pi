@@ -228,39 +228,68 @@ safe_source() {
 # out would leave the outer source unguarded, and an `exit` there would carry
 # its status to git — a wedged hook with nothing printed.
 #
-# That question is answered from the shell's OWN CALL STACK, RECOMPUTED at
-# each decision point rather than carried across the source. THAT is what the
-# counter could not do. A counter is carried: this tier writes it before
-# handing control to the helper and reads it back afterward, so anything that
-# goes wrong while the helper holds control — an error path ending in `exit`,
-# a non-zero return, an unbalanced nesting — leaves the count wrong for every
-# window after it. Driven below its floor, the next window's arming test stops
-# matching and that window opens with no trap behind it; driven above, the
-# window is never closed and the trap outlives the function that armed it,
-# firing at the adapter's own exit where its `exit 0` overwrites a refusal
-# that already reached the record sink. A counter cannot be clamped out of
-# this: clamping closes one direction and leaves the other byte-identical.
-# Counting live `githook_source` frames derives the answer from what is
-# actually on the stack at the moment it is asked, so no ACCIDENT during the
-# source can move it.
+# That question is answered from the shell's OWN CALL STACK, recomputed at
+# each decision point rather than carried across the source.
+#
+# WHAT THAT BUYS, stated narrowly because a wider claim here was measured
+# false. It does NOT buy resistance to accident: the retired counter was not
+# corruptible by accident either. Measured against a reconstruction of it —
+# every call site is `githook_source … || exit 0`, so no window follows a
+# non-zero return; an `exit` inside a helper terminates the shell in the trap,
+# so no window follows that either; and a completed nested source balances, so
+# the count returns to its floor. The only thing that moved the counter was a
+# helper ASSIGNING its name.
+#
+# What it buys is that there is no name to assign to. Moving the counter cost
+# one assignment; moving a frame count costs an `unset` and a refill. That is
+# a price on the DELIBERATE axis, which the paragraph below places outside
+# this fold's object — so the honest summary is that this is a structural
+# simplification, carrying no state across the point where a helper holds
+# control, rather than a fix for a reachable failure.
+#
+# What the counter's two directions were, kept because they say why any such
+# record is a hazard once it moves at all: driven below its floor, the next
+# window's arming test stops matching and that window opens with no trap
+# behind it; driven above, the window is never closed and the trap outlives
+# the function that armed it, firing at the adapter's own exit where its
+# `exit 0` overwrites a refusal that already reached the record sink. A
+# counter cannot be clamped out of this: clamping closes one direction and
+# leaves the other byte-identical.
 #
 # WHAT THIS FOLD IS FOR, stated so the residuals below read as decisions
 # rather than gaps. The helper it absorbs is one that fails by ACCIDENT, with
-# this tier's EXIT slot untouched and the shell still alive. A DELIBERATELY
-# hostile helper is not this fold's object and could not be: the helpers are
-# this repository's own committed files, resolved from this file's installed
-# position, and planting a hostile one needs write access to `.githooks/` —
-# at which point this file and the adapters are equally writable and no fold
-# living inside them defends anything. Outside those terms the outcome is not
-# this tier's to decide, and the fold's line and record may not run.
+# this tier's EXIT slot untouched and the shell still alive.
+#
+# A DELIBERATELY hostile helper is not this fold's object, and the reason is
+# that whoever controls the helper's bytes already owns the fold: a sourced
+# file runs in this shell and can supply its own `_gh_src_outermost`, or
+# redefine `githook_source`, `safe_source` or `audit_log` outright. Measured,
+# a helper defining `_gh_src_outermost` to return non-zero forges the same
+# allow one step more cheaply than any FUNCNAME tampering.
+#
+# That argument deliberately makes no claim about WHO can write where, because
+# an earlier revision here did and was wrong. It said the helpers are this
+# repository's own committed files and that planting a hostile one needs write
+# access to `.githooks/`. Neither holds: SPEC §3.2 has the tier sourcing what
+# stands at the derived position in the working tree, COMMITTED OR NOT, and
+# `safe_source` tests only that the file exists; and SPEC enumerates a
+# `helpers` component linked out of the repository as sourced with no refusal
+# taken anywhere — measured, hostile bytes written only at such a link target
+# forge the allow with this file untouched. The conclusion stands on the
+# ownership leg above, which holds however those bytes arrived.
+#
+# Outside those terms the outcome is not this tier's to decide, and the fold's
+# line and record may not run.
 #
 # Enumerated residuals, in place (SPEC §3.11). `FUNCNAME` is not beyond a
 # determined helper's reach, and an earlier claim here that it was is
-# WITHDRAWN as measured false: `unset FUNCNAME` neither refuses nor leaves an
-# empty array — it strips the name's special attribute and leaves an ordinary
-# assignable array, after which a helper can refill it with as many
-# `githook_source` frames as it likes and force the trap to outlive its
-# window. That is the forged-allow direction, reached by deliberate tampering,
+# WITHDRAWN as measured false. `unset FUNCNAME` does not refuse: the name goes
+# away entirely — `declare -p` reports it not found — and is thereafter an
+# ordinary assignable name, so a helper can refill it with as many
+# `githook_source` entries as it likes and force the clearing test to read
+# NESTED, leaving the trap to outlive its window. (The shell's own push and
+# pop on function entry and return survive the refill, so the special
+# behaviour is not fully gone; the refill does not need it to be.) That is the forged-allow direction, reached by deliberate tampering,
 # which the threat model above places outside this fold rather than inside it.
 # It sits beside the standing exposure that a sourced file can redefine any
 # function in this shell, this one included — `_gh_src_outermost` among them,
