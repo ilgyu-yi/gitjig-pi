@@ -48,9 +48,18 @@
  * either the strict refusal or a merge-message carve-out would decide
  * contract the criteria do not cover. A later change that settles merge
  * messages owns its own arm.
+ *
+ * THE ROSTER FOR THIS FAMILY IS THE ADAPTER'S OWN HEADER, not this block
+ * (issue #58). `.githooks/commit-msg` enumerates the merge edge above
+ * alongside the hook-less channels that never fire it (`git cherry-pick`,
+ * `git am`), the `core.commentChar=auto` reading, and the glob-metacharacter
+ * marker — one decision, read in one place, at the site that states the
+ * selection rule they are residuals of. This paragraph stays because the
+ * merge edge is what an arm here would touch; it is not a second roster.
  */
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -61,6 +70,7 @@ import {
 	type GithookFixture,
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
+import { repoRoot } from "./harness/run-pi.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -210,6 +220,23 @@ describe("unmeasurable input refuses, distinctly (issue #55, SPEC §3.9)", { ski
 		assertRefusedThroughAdapter(environmentRefusal, "unmeasurable (environment shape)");
 	});
 
+	it("the environment-shape cause names UTF-8, the property actually tested (issue #58)", () => {
+		// The accepted set is the UTF-8 spellings and nothing else, so a cause
+		// saying "not multibyte-capable" names a property the check does not
+		// test: EUC-KR is multibyte-capable and is refused here too, and its
+		// operator would be sent to fix the wrong thing (§3.11).
+		assert.match(
+			environmentRefusal.cause,
+			/not UTF-8/,
+			`the unmeasurable cause does not name UTF-8: ${JSON.stringify(environmentRefusal.cause)}`,
+		);
+		assert.doesNotMatch(
+			environmentRefusal.cause,
+			/multibyte-capable/,
+			`the unmeasurable cause still claims a multibyte-capability test it does not perform: ${JSON.stringify(environmentRefusal.cause)}`,
+		);
+	});
+
 	it("the environment-shape refusal is distinct from both the grammar cause and the length cause", () => {
 		assert.notEqual(environmentRefusal.cause, "", "an unmeasurable refusal owes its own cause line");
 		assert.notEqual(
@@ -297,6 +324,31 @@ describe("refusal surfaces are content-free (issue #55, SPEC §3.9, §3.11)", { 
 		assert.equal(hostileRefusal.auditDelta.includes(SENTINEL), false, "subject text reached the audit record");
 		assert.equal(hostileRefusal.auditDelta.includes(ESC), false, "a raw ESC byte reached the audit record");
 	});
+
+	// The arms above drive the GRAMMAR refusal only. The length refusal is a
+	// second cause on a second path, and a surface that echoed the subject
+	// there would be equally undetected — so it gets the same pin rather than
+	// inheriting a guarantee measured elsewhere (issue #58).
+	it("the LENGTH cause is content-free too — a conforming, over-long subject", () => {
+		// Conforming grammar so the length arm is what refuses, and 73
+		// codepoints so it is out of range by exactly one.
+		const prefix = "feat(#58): ";
+		const body = `${SENTINEL}${ESC}[31m`;
+		const overLong = `${prefix}${body}${"x".repeat(73 - body.length)}\n`;
+		const attempt = commitWithMessage(fixture, overLong);
+		assert.notEqual(attempt.status, 0, `length sentinel: the over-long subject was not refused: ${attempt.stderr}`);
+		assert.equal(
+			attempt.stderr.includes(SENTINEL),
+			false,
+			`length sentinel: subject text surfaced on stderr from the LENGTH path: ${JSON.stringify(attempt.stderr)}`,
+		);
+		assert.equal(attempt.stderr.includes(ESC), false, "length sentinel: a raw ESC byte surfaced on stderr");
+		assert.equal(
+			attempt.auditDelta.includes(SENTINEL),
+			false,
+			"length sentinel: subject text reached the audit record from the LENGTH path",
+		);
+	});
 });
 
 describe("chain degradation stays fail-open (issue #55 AC9)", { skip: IS_WINDOWS }, () => {
@@ -366,5 +418,173 @@ describe("chain degradation stays fail-open (issue #55 AC9)", { skip: IS_WINDOWS
 		} finally {
 			removeGithookFixture(fixture);
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The checked line versus the landed subject (issue #58, SPEC §3.11).
+//
+// `commit-msg` receives ONE argument: the path to the message file. It does
+// not receive the cleanup mode, and cannot derive it — `--cleanup=` is a
+// command-line flag no hook sees, `commit.cleanup` may be unset, and git's
+// DEFAULT differs by invocation (`strip` for an editor commit, `whitespace`
+// for `-m`/`-F`). So the adapter cannot know whether comment lines will be
+// stripped after it runs, and therefore cannot know which line becomes the
+// subject.
+//
+// That is why the repair is not "mirror git's cleanup". It is: enumerate the
+// lines that COULD land, and approve only if every one of them conforms. When
+// the two readings agree — the overwhelmingly common case, including every
+// ordinary editor commit, where the subject is line 1 and git's template
+// comments follow it — there is exactly one candidate and the behaviour is
+// what it always was.
+// ---------------------------------------------------------------------------
+
+describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
+	let fixture: GithookFixture;
+
+	before(() => {
+		fixture = buildGithookFixture();
+	});
+	after(() => removeGithookFixture(fixture));
+
+	/** What actually landed, which is the only thing the wrong-allow is about. */
+	function landedSubject(): string {
+		return spawnSync("git", ["log", "-1", "--format=%s"], {
+			cwd: fixture.root,
+			env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home") },
+		})
+			.stdout.toString("utf8")
+			.trim();
+	}
+
+	it("a comment-led message is refused — the gate vouched for line 2 while line 1 landed", () => {
+		// The wrong allow this issue was filed for. Under `-F` the default
+		// cleanup is `whitespace`, which keeps the `#` line, so the adapter
+		// approved `feat(#58): …` while `#zqcomment …` became the subject.
+		const attempt = commitWithMessage(fixture, "#zqcomment leading the message\nfeat(#58): a conforming subject\n");
+		assert.notEqual(
+			attempt.status,
+			0,
+			"comment-led: the commit SUCCEEDED. The adapter checked the first non-comment line and approved it, " +
+				`while the line that landed as the subject was the comment above it — a silent wrong allow at a ` +
+				`gate (§3.11). Landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("the same shape under an explicit --cleanup=verbatim is refused too", () => {
+		const attempt = commitWithMessage(fixture, "#zqverbatim leading\nfeat(#58): a conforming subject\n", {
+			gitArgs: ["--cleanup=verbatim"],
+		});
+		assert.notEqual(
+			attempt.status,
+			0,
+			`verbatim: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("a comment-led message separated by a blank line is refused", () => {
+		// Here the landed subject is the comment ALONE — the sharpest form,
+		// since the approved line is not even part of what git records.
+		const attempt = commitWithMessage(fixture, "#zqspaced comment\n\nfeat(#58): a conforming subject\n");
+		assert.notEqual(
+			attempt.status,
+			0,
+			`spaced: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("an all-comment message is refused rather than fail-open", () => {
+		// Under a comment-preserving cleanup the comments ARE the subject, and
+		// they conform to nothing. Under `strip` git aborts on the empty
+		// message anyway, so refusing is right in both worlds.
+		const attempt = commitWithMessage(fixture, "#zqonly a comment\n#zqand another\n");
+		assert.notEqual(
+			attempt.status,
+			0,
+			`all-comment: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("the refusal names WHY, not just that the subject failed", () => {
+		const attempt = commitWithMessage(fixture, "#zqcause check\nfeat(#58): a conforming subject\n");
+		assert.match(
+			attempt.stderr,
+			/cleanup/i,
+			"cause: the refusal does not tell the operator that the message's first line and its first " +
+				"non-comment line differ and that which one lands depends on a cleanup mode this hook cannot " +
+				`observe — without that, the refusal reads as a false block (§3.11): ${JSON.stringify(attempt.stderr)}`,
+		);
+	});
+
+	it("the verdict does not depend on git's comment-marker configuration", () => {
+		// `core.commentChar=';'` makes `;` the marker and `#` an ordinary
+		// character, so this `#`-led line is text git keeps and the subject it
+		// lands. The adapter reads no marker at all and still refuses it,
+		// which is the property that replaced the marker-aware reading: a line
+		// git would strip as a comment can never be a conforming subject, so
+		// checking the first non-blank line is right under every marker.
+		const attempt = commitWithMessage(fixture, "#zqhash is not a comment here\nfeat(#58): a conforming subject\n", {
+			env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.commentChar", GIT_CONFIG_VALUE_0: ";" },
+		});
+		assert.notEqual(
+			attempt.status,
+			0,
+			"commentChar: the commit SUCCEEDED. With `;` as git's comment marker a `#`-led line is ordinary " +
+				`text that lands as the subject, and the adapter skipped it as a comment; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("a `;`-led message is checked too, not skipped", () => {
+		// The other direction of the same axis, and the reason no marker is
+		// consulted: whatever git's marker is, the first non-blank line is
+		// what this hook can vouch for, and a conforming subject beneath it
+		// does not rescue it.
+		const attempt = commitWithMessage(fixture, ";zqsemicolon is ordinary here\nfeat(#58): a conforming subject\n");
+		assert.notEqual(
+			attempt.status,
+			0,
+			`semicolon: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		);
+	});
+
+	it("the ordinary editor shape is unchanged: subject first, comments after", () => {
+		// The regression guard that keeps this repair from becoming a false
+		// block. One candidate, so the behaviour is exactly what it was.
+		const attempt = commitWithMessage(
+			fixture,
+			"feat(#58): a conforming subject\n\n# Please enter the commit message for your changes.\n# with '#' will be ignored.\n",
+		);
+		assert.equal(
+			attempt.status,
+			0,
+			`editor shape: an ordinary commit was refused — the repair over-blocks the common case: ${attempt.stderr}`,
+		);
+	});
+
+	it("a conforming subject with no comments at all still passes", () => {
+		const attempt = commitWithMessage(fixture, "feat(#58): plain conforming subject\n");
+		assert.equal(attempt.status, 0, `plain: ${attempt.stderr}`);
+	});
+});
+
+describe("the delegated helper's mode matches its stated use (issue #58)", { skip: IS_WINDOWS }, () => {
+	it("conventional_commit.sh is not executable — its header says it is sourced, never executed", () => {
+		// Self-enforcing rather than self-contradicting: the file carries no
+		// shebang, so an exec bit advertises an entry point that does not
+		// exist. Dropping the bit is what makes the header's claim checkable.
+		const helper = join(repoRoot(), ".githooks", "helpers", "conventional_commit.sh");
+		const mode = statSync(helper).mode & 0o111;
+		assert.equal(
+			mode,
+			0,
+			`conventional_commit.sh carries an exec bit (mode ${mode.toString(8)}) while its header states it is ` +
+				"sourced and never executed, and it ships no shebang — one of the two has to give (§2.5)",
+		);
+		assert.doesNotMatch(
+			readFileSync(helper, "utf8").split("\n")[0],
+			/^#!/,
+			"conventional_commit.sh grew a shebang — then the exec bit is the right answer and this arm is inverted",
+		);
 	});
 });

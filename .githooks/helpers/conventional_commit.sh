@@ -13,7 +13,7 @@
 # decimal, or a refusal — no consumer reads an unvalidated value. The domain
 # is validated BEFORE counting: pure-ASCII input is exact in any charmap
 # (codepoints == bytes), so a degraded environment refuses only the inputs
-# it would mis-measure; non-ASCII input needs a multibyte-capable measuring
+# it would mis-measure; non-ASCII input needs a UTF-8 measuring
 # charmap (the locale's, verified — a byte count over multibyte input is a
 # confident wrong decimal, not a measurement) AND bytes valid in that
 # charmap (invalid bytes have no codepoint count). Either miss refuses with
@@ -91,13 +91,18 @@ _gitjig_cc_measure() {
 		;;
 	esac
 
-	# Non-ASCII: the measuring charmap must be multibyte-capable. Under any
-	# other charmap the bytes' decoding is a guess, and a per-byte count is
-	# a confident wrong decimal — refuse, never approve (§3.9).
+	# Non-ASCII: the measuring charmap must be UTF-8. The accepted set below
+	# is the UTF-8 spellings and nothing else, so the refusal says "not
+	# UTF-8" rather than "not multibyte-capable": EUC-KR and Shift_JIS ARE
+	# multibyte-capable and are refused here too, and a cause naming a
+	# property the check does not test sends its reader to fix the wrong
+	# thing (issue #58). Under any other charmap the bytes' decoding is a
+	# guess and a per-byte count is a confident wrong decimal — refuse,
+	# never approve (§3.9).
 	case "$_cc_charmap" in
 	UTF-8 | utf-8 | UTF8 | utf8) ;;
 	*)
-		printf '%s\n' 'commit-format: measurement environment cannot count codepoints (charmap not multibyte-capable) — subject length unmeasured, refusing' >&2
+		printf '%s\n' 'commit-format: measurement environment cannot count codepoints (charmap is not UTF-8) — subject length unmeasured, refusing' >&2
 		return 1
 		;;
 	esac
