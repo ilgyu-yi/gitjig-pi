@@ -385,7 +385,8 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		// one: `secret$|other` anchors its first alternative in both engines
 		// and would under-match a CR-terminated line just as a trailing anchor
 		// does. A literal dollar must be written escaped or bracketed in both
-		// engines, so neither spelling can false-positive here.
+		// engines, so neither spelling can false-positive here — including the
+		// leading-`]` spellings, whose first `]` is an ordinary member.
 		const anchored = committedPatternRows().filter((row) => {
 			let escaped = false;
 			let inBracket = false;
@@ -407,6 +408,14 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 				}
 				if (ch === "[") {
 					inBracket = true;
+					// A `]` in first position (after an optional negation) is an
+					// ordinary member, not the close — so `[]$]` holds a literal
+					// dollar and must not be read as an anchor.
+					if (row.ere[at + 1] === "^" && row.ere[at + 2] === "]") {
+						at += 2;
+					} else if (row.ere[at + 1] === "]") {
+						at += 1;
+					}
 					continue;
 				}
 				if (ch === "$") {
@@ -441,6 +450,12 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			"[[:alpha:]]+", // a POSIX bracket class RegExp reads literally
 			"[[=a=]]", // an equivalence class — the same divergence, sibling spelling
 			"[[.a.]]", // a collating symbol — likewise
+			"[[:]", // a TRUNCATED span: POSIX refuses to compile it, RegExp does not
+			"[[=]",
+			"[[:alpha]",
+			"[]]", // the leading-] family: POSIX reads a literal ], RegExp an empty class
+			"[]a]",
+			"[^]]",
 			"[\\-]", // a backslash inside a bracket expression: POSIX literal, RegExp escape
 			"[abc", // an unterminated bracket expression the engines never finish parsing
 		]) {
@@ -458,7 +473,6 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			"[A-Za-z0-9._~+/=-]{20,}",
 			"[:]", // a bracket expression holding a literal colon — both engines agree
 			"[:a]x[b:]", // colons in two separate bracket expressions, neither a class
-			"[]]", // the leading-] literal spelling both engines hold
 		])) {
 			assert.equal(
 				inCommonSubset(inside),

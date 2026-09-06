@@ -9,13 +9,21 @@
  * lowercase-hyphen IDs, EREs constrained to the POSIX-ERE ∩ RegExp common
  * subset so `new RegExp` compiles what the tier-2 engine compiles. That
  * subset is now MEASURED at the loader rather than assumed of the committed
- * file: the three construct classes the pattern file's own contract forbids
- * — backslash-letter escapes and backreferences, `(?` group extensions, and
- * POSIX bracket classes — refuse the load. The check is lexical and
- * conservative in the refusing direction, so a divergence spelled none of
- * those three ways still passes here; the conformance lock's shared case set
- * is what bounds that residual, by running both readers over the same
- * cases (§3.11, issue #86).
+ * file. Five things refuse the load: the three construct classes the pattern
+ * file's own contract forbids — backslash-letter escapes and backreferences,
+ * `(?` group extensions, and the POSIX bracket constructs (class, equivalence
+ * class and collating symbol, whole or truncated) — plus two the two engines
+ * were measured to split on, a backslash anywhere inside a bracket expression
+ * and the leading-`]` bracket spellings, and one neither engine agrees to
+ * parse, an unterminated bracket expression. The check is lexical and
+ * conservative in the refusing direction, and that is MEASURED rather than
+ * asserted: swept over every spelling up to length four across a
+ * bracket-oriented alphabet — 11,110 of them — against both engines, it
+ * admits NOTHING the two disagree on, and refuses 417 spellings they agree
+ * on, each a consequence of the two deliberate refusals above. A divergence
+ * spelled outside that sweep still passes here; the conformance lock's
+ * shared case set is what bounds that residual, by running both readers over
+ * the same cases (§3.11, issue #86).
  *
  * Fail posture (§3.9 `egress-publish-patterns`, closed): an unusable rule
  * source — file unreadable, a row failing the format contract, a pattern
@@ -105,15 +113,12 @@ function loadCommittedPatterns(): CompiledPattern[] {
 
 /**
  * The index of the `]` closing the bracket expression opened at `at`, or -1.
- * POSIX and RegExp agree on the two literal-`]` spellings: a `]` in first
- * position (after an optional negation) is the literal, not the close.
+ * The caller has already refused the leading-`]` spellings, on which the two
+ * engines do NOT agree, so this scan never meets one.
  */
 function closingBracket(ere: string, at: number): number {
 	let cursor = at + 1;
 	if (ere[cursor] === "^") {
-		cursor += 1;
-	}
-	if (ere[cursor] === "]") {
 		cursor += 1;
 	}
 	for (; cursor < ere.length; cursor += 1) {
@@ -182,6 +187,16 @@ export function inCommonSubset(ere: string): boolean {
 		// literally and RegExp reads as an escape. So the whole bracket
 		// expression is examined rather than its opening two bytes.
 		if (ere[at] === "[") {
+			// The leading-`]` family is a MEASURED divergence, not an agreement:
+			// POSIX reads `[]]` as a bracket holding one literal `]`, while
+			// RegExp reads `[]` as an empty class that matches nothing and the
+			// trailing `]` as a literal. A row spelled this way arms at commit
+			// time and is inert here — an under-match, and §3.3 records this
+			// gate's backstop as none.
+			const afterNegation = ere[at + 1] === "^" ? at + 2 : at + 1;
+			if (ere[afterNegation] === "]") {
+				return false;
+			}
 			const close = closingBracket(ere, at);
 			if (close === -1) {
 				// An unterminated bracket expression: the engines cannot agree
@@ -193,11 +208,16 @@ export function inCommonSubset(ere: string): boolean {
 				return false;
 			}
 			for (const opener of ["[:", "[=", "[."]) {
-				const closer = opener[1] + "]";
-				const opened = inside.indexOf(opener);
-				// Bounded by THIS bracket expression: an unbounded search
-				// refused `[:]`, which both engines hold as a literal colon.
-				if (opened !== -1 && inside.indexOf(closer, opened + 2) !== -1) {
+				// The OPENER alone is enough, and looking for its closer was a
+				// measured mistake: POSIX refuses to compile a truncated span
+				// like `[[:]` outright, while RegExp reads it as ordinary
+				// bytes — and a committed row POSIX cannot compile disarms the
+				// whole tier-2 scan through its up-front validation probe, for
+				// every path and every commit. There is nothing in the
+				// truncated spelling to preserve. Scoping the search to THIS
+				// bracket expression is what keeps `[:]`, a literal colon both
+				// engines hold, admitted.
+				if (inside.includes(opener)) {
 					return false;
 				}
 			}
