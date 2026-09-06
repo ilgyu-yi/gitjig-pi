@@ -603,6 +603,42 @@ describe("the commit arm's subject and the detached-HEAD scope (issue #113)", { 
 		return attempt.auditDelta.split("\n").filter((line) => line.includes('"block"'));
 	}
 
+	function unevaluatedIn(delta: string): string[] {
+		return delta.split("\n").filter((line) => line.includes("not evaluated") && line.includes("branch"));
+	}
+
+	function auditLength(fixture: GithookFixture): number {
+		return existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8").length : 0;
+	}
+
+	function auditSince(fixture: GithookFixture, before: number): string {
+		return existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8").slice(before) : "";
+	}
+
+	function revParse(fixture: GithookFixture, ref: string): string {
+		const out = spawnSync("git", ["rev-parse", ref], {
+			cwd: fixture.root,
+			env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home"), GIT_CONFIG_NOSYSTEM: "1" },
+		});
+		return (out.stdout ?? Buffer.alloc(0)).toString("utf8").trim();
+	}
+
+	/** Two commits on P, made with the tier unbound so the seeding writes no records. */
+	function seedReplayableHistory(fixture: GithookFixture): void {
+		for (let i = 0; i < 2; i += 1) {
+			writeFileSync(join(fixture.root, `r${i}.txt`), `r${i}\n`);
+			fixtureGit(fixture, ["add", `r${i}.txt`]);
+			fixtureGit(fixture, ["-c", "core.hooksPath=", "commit", "-q", "-m", `feat(#113): r${i}`]);
+		}
+	}
+
+	function rebaseWithExec(fixture: GithookFixture, exec: string) {
+		return spawnSync("git", ["rebase", "-f", "HEAD~2", "--exec", exec], {
+			cwd: fixture.root,
+			env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home"), GIT_CONFIG_NOSYSTEM: "1" },
+		});
+	}
+
 	it("a commit ON the protected identity refuses — the arm has its subject", () => {
 		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
 		try {
@@ -679,34 +715,147 @@ describe("the commit arm's subject and the detached-HEAD scope (issue #113)", { 
 		}
 	});
 
-	it("a rebase of the protected identity: every replayed commit is recorded as unevaluated", () => {
-		// The residual SPEC §3.3 enumerates, driven end to end. A rebase
-		// creates its commits detached and then moves P to them, so these
-		// commits reach the protected branch without the arm evaluating one.
-		// What the arm owes is not a refusal but a trail that does not read
-		// like an ordinary allow.
+	it("a commit MADE during a rebase of P (an --exec commit) is recorded as unevaluated", () => {
+		// What this arm measures, named exactly: commits the rebase's own
+		// `--exec` CREATES, which run pre-commit on a detached HEAD. It does
+		// NOT measure the commits the rebase REPLAYS — git runs no pre-commit
+		// for those, which the residual arm below drives separately.
+		//
+		// The count is pinned to exactly 2, one per exec invocation, and the
+		// arm is held honest by varying ONLY the exec payload against a fixed
+		// rebase in the sibling arm below.
 		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
 		try {
-			for (let i = 0; i < 2; i += 1) {
-				writeFileSync(join(fixture.root, `r${i}.txt`), `r${i}\n`);
-				fixtureGit(fixture, ["add", `r${i}.txt`]);
-				fixtureGit(fixture, ["-c", "core.hooksPath=", "commit", "-q", "-m", `feat(#113): r${i}`]);
-			}
-			const before = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8").length : 0;
-			const rebase = spawnSync(
-				"git",
-				["rebase", "HEAD~2", "--exec", "git commit -q --allow-empty -m 'feat(#113): replayed'"],
-				{
-					cwd: fixture.root,
-					env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home"), GIT_CONFIG_NOSYSTEM: "1" },
-				},
-			);
+			seedReplayableHistory(fixture);
+			const before = auditLength(fixture);
+			const rebase = rebaseWithExec(fixture, "git commit -q --allow-empty -m 'feat(#113): made during rebase'");
 			assert.equal(rebase.status, 0, `the rebase itself failed: ${(rebase.stderr ?? Buffer.alloc(0)).toString()}`);
-			const delta = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8").slice(before) : "";
-			const records = delta.split("\n").filter((l) => l.includes("not evaluated") && l.includes("branch"));
-			assert.ok(
-				records.length >= 2,
-				`a rebase of P replayed commits with no unevaluated record; delta: ${JSON.stringify(delta)}`,
+			assert.equal(
+				unevaluatedIn(auditSince(fixture, before)).length,
+				2,
+				"expected one not-evaluated record per exec-created commit",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("CONTROL: the same rebase with an exec that creates no commit records nothing", () => {
+		// The discriminator for the arm above. Fixture and rebase are held
+		// fixed and ONLY the exec payload varies, so the records above are
+		// attributable to the created commits and to nothing else. Without
+		// this control the arm above would pass while measuring the replayed
+		// commits it does not in fact measure.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			seedReplayableHistory(fixture);
+			const before = auditLength(fixture);
+			const rebase = rebaseWithExec(fixture, "true");
+			assert.equal(rebase.status, 0, `the rebase itself failed: ${(rebase.stderr ?? Buffer.alloc(0)).toString()}`);
+			assert.equal(
+				unevaluatedIn(auditSince(fixture, before)).length,
+				0,
+				"records appeared with no exec-created commit — the sibling arm is measuring something else",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("the enumerated residual: REPLAYED commits reach P with the tier never running", () => {
+		// SPEC §3.3's rebase residual, driven rather than asserted. git runs no
+		// pre-commit for a commit a rebase replays, so the arm does not fold —
+		// it is never reached. P moves and the trail is silent. This arm exists
+		// so the residual's SHAPE is pinned: if a future git or a future
+		// adapter made the tier see replayed commits, this arm reds and the
+		// residual is re-adjudicated rather than silently outliving its ground.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			seedReplayableHistory(fixture);
+			// Rebase ONTO a divergent base rather than `-f` in place: replaying
+			// onto the same parent within the same committer second reproduces
+			// identical hashes and P would not move, making the arm vacuous.
+			// A different parent forces different commits deterministically.
+			fixtureGit(fixture, ["branch", "zqbase", "HEAD~2"]);
+			fixtureGit(fixture, ["-c", "core.hooksPath=", "checkout", "-q", "zqbase"]);
+			writeFileSync(join(fixture.root, "base.txt"), "divergent\n");
+			fixtureGit(fixture, ["add", "base.txt"]);
+			fixtureGit(fixture, ["-c", "core.hooksPath=", "commit", "-q", "-m", "feat(#113): divergent base"]);
+			fixtureGit(fixture, ["-c", "core.hooksPath=", "checkout", "-q", PROTECTED]);
+			const headBefore = revParse(fixture, PROTECTED);
+			const before = auditLength(fixture);
+			const rebase = spawnSync("git", ["rebase", "--onto", "zqbase", "HEAD~2"], {
+				cwd: fixture.root,
+				env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home"), GIT_CONFIG_NOSYSTEM: "1" },
+			});
+			assert.equal(rebase.status, 0, `the rebase itself failed: ${(rebase.stderr ?? Buffer.alloc(0)).toString()}`);
+			assert.notEqual(revParse(fixture, PROTECTED), headBefore, "the rebase did not move P; the arm proves nothing");
+			const delta = auditSince(fixture, before);
+			assert.equal(
+				unevaluatedIn(delta).length,
+				0,
+				`the tier spoke for a replayed commit — SPEC §3.3's residual describes the wrong shape; delta: ${JSON.stringify(delta)}`,
+			);
+			assert.equal(
+				delta.split("\n").filter((l) => l.includes('"block"')).length,
+				0,
+				"a replayed commit produced a block record",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a tag shadowing P does not disarm the arm: the branch's own name is read", () => {
+		// The axis the first round's arms held fixed: what else lives under
+		// `refs/`. `git symbolic-ref --short HEAD` prints the shortest
+		// UNAMBIGUOUS spelling, so `git tag <P>` makes it print `heads/<P>`,
+		// which misses both comparison arms and answers not-P — a traceless
+		// disarm one innocuous command away. The predicate reads the full
+		// refname instead, so the tag changes nothing.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			const control = commitWithMessage(fixture, `feat(#113): control on ${PROTECTED}\n`);
+			assert.notEqual(control.status, 0, "control: a commit on P was created");
+
+			fixtureGit(fixture, ["tag", PROTECTED, "HEAD"]);
+			const headBefore = revParse(fixture, `refs/heads/${PROTECTED}`);
+			const attempt = commitWithMessage(fixture, `feat(#113): shadowed by a tag\n`);
+			assert.notEqual(
+				attempt.status,
+				0,
+				"a tag named P disarmed the commit arm: the commit was created on the protected branch",
+			);
+			assert.equal(
+				revParse(fixture, `refs/heads/${PROTECTED}`),
+				headBefore,
+				"the protected branch moved while a tag shadowed its name",
+			);
+			assert.equal(
+				blockRecords(attempt).length,
+				1,
+				`expected the ordinary block record; delta: ${JSON.stringify(attempt.auditDelta)}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a HEAD resolving outside refs/heads/ has no branch name and folds to the no-subject arm", () => {
+		// The other half of reading the full refname: a symbolic HEAD pointing
+		// somewhere other than refs/heads/ is not a branch, so it must reach
+		// the no-subject fold rather than be reported under a spelling that is
+		// not a branch identity.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			fixtureGit(fixture, ["update-ref", "refs/other/zqodd", "HEAD"]);
+			fixtureGit(fixture, ["symbolic-ref", "HEAD", "refs/other/zqodd"]);
+			const attempt = commitWithMessage(fixture, "feat(#113): head outside refs/heads\n");
+			assert.equal(attempt.status, 0, `the advice tier refused: ${attempt.stderr}`);
+			assert.equal(
+				unevaluatedRecords(attempt).length,
+				1,
+				`expected one not-evaluated record; delta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
 		} finally {
 			removeGithookFixture(fixture);

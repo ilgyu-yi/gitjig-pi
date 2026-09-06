@@ -1393,6 +1393,7 @@ describe("fail-posture inventory (§3.9)", () => {
 			"commit-format-helper → open",
 			"commit-format-helper → open",
 			"commit-format-measurement → closed",
+			"commit-format-subject → open",
 			"egress-publish-executor → closed",
 			"egress-publish-measurement → closed",
 			"egress-publish-outcome → closed",
