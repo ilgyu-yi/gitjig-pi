@@ -1633,287 +1633,322 @@ describe("the arming verdict is refused where the adapters would not run (issue 
 // The exclusion re-ask's recovery (issue #74, SPEC §3.11).
 //
 // The re-ask refuses fail-closed when `git check-ignore -q` still reports the
-// state sink not ignored after the `/.gitjig/` line is present. §3.11's
-// governing rule is that every arm reachable by a plausible honest mistake
-// names its own LIVE recovery; its caveat — a message naming a dead recovery
-// is worse than one naming none — is the exception, earned only where no live
-// recovery exists.
+// state sink not ignored after the `/.gitjig/` line is present. §3.11 requires
+// every arm reachable by a plausible honest mistake to name its own LIVE
+// recovery; its caveat — naming a DEAD recovery is worse than naming none — is
+// the exception, earned only where no live recovery exists.
 //
-// THE CENSUS OF SOURCES, derived from git's own precedence order
-// (`git help gitignore`, highest to lowest: command-line patterns; `.gitignore`
-// files from the path's directory up to the toplevel, deeper overriding higher;
-// `$GIT_COMMON_DIR/info/exclude`; `core.excludesFile`) plus the index, which
-// `check-ignore` consults unless `--no-index` is passed. A source reaches this
-// arm only if it can OUTRANK the `/.gitjig/` line the instrument just wrote.
+// THE CENSUS OF SOURCES, derived from git's precedence order (`git help
+// gitignore`) plus the index, which `check-ignore` consults unless
+// `--no-index` is passed. A source reaches the arm only if it can OUTRANK the
+// `/.gitjig/` line the instrument writes: the INDEX (the sink itself tracked),
+// info/exclude NEGATING ITS OWN LINE, and a `.gitignore` UN-EXCLUDING THE
+// DIRECTORY. `core.excludesFile` is lower precedence, a `.gitignore` below an
+// excluded directory is never consulted, and the instrument passes no
+// command-line pattern — all three measured below rather than reasoned about.
 //
-// REACHABLE:
-//   1. the INDEX — the state sink ITSELF is tracked. Git never ignores a
-//      tracked path. The condition is the sink, not the directory:
-//      `check-ignore` consults the index only for the path it is asked about,
-//      so a tracked SIBLING under `.gitjig/` leaves the sink ignored.
-//   2. info/exclude NEGATES ITSELF — `/.gitjig/` is already a line, so the
-//      instrument appends nothing, and a later `!` line in the same file wins
-//      on last-matching-pattern within one precedence level.
-//   3. a `.gitignore` UN-EXCLUDES THE DIRECTORY, with or without a further
-//      negation naming the file.
-//
-// UNREACHABLE BY CONSTRUCTION, measured too — a census listing only what
-// reaches the arm is a list of shapes someone thought of, not a closure:
-//   4. `core.excludesFile` — LOWER precedence, cannot outrank the append.
-//   5. a `.gitignore` BELOW an excluded directory — git does not descend into
-//      one, so it is never consulted. This is also WHY shape 3 requires the
-//      directory to be un-excluded first.
-//   6. command-line patterns — the instrument's invocation supplies none.
-//
-// THE SECOND AXIS, and the one that decides the design: whether `.gitjig/`
-// EXISTS ON DISK. The instrument writes nothing under `.gitjig/` — that is the
-// record writer's job at first record — so absence is the ordinary state of a
-// fresh clone, not an edge case. It matters because a directory-only pattern
-// cannot match a bare directory operand git cannot confirm IS a directory, so
-// on the negation shapes with the directory absent, NO `check-ignore` spelling
-// names a rule. That is measured below in both directions.
-//
-// The recovery is therefore PARTIAL BY OUTCOME CLASS, and says so rather than
-// pretending to a completeness it does not have. The lookup's output partitions
-// into exactly three classes, each with its own live action:
-//
-//   A — names a `!` rule: that negation is the cause, at the file and line
-//       printed. Removing it clears the arm.
-//   B — names an ordinary ignore rule: the patterns DO ignore the path, so the
-//       index is the cause. `git rm -r --cached -f -- .gitjig/` clears it.
-//   C — prints nothing: `.gitjig/` is not on disk, so git can attribute no
-//       directory rule. The negation is in `.git/info/exclude` or in a
-//       `.gitignore` between the repository root and the path — a set the
-//       census above CLOSES, since nothing else can outrank the exclusion.
-//
-// The arms below assert the partition is TOTAL over the census and that each
-// class's action is live, which is what distinguishes this from the two
-// attempts previously removed here: both named a CAUSE, and a named cause is
-// wrong on any shape that has a different one.
+// THE CAUSES COMPOSE. A clone can be BOTH tracked and negated, and then no
+// single act clears the arm. That is why the recovery is an ordered procedure
+// whose termination test is the re-run, and why the arm that matters here does
+// not check a classification at all: it ENUMERATES the shape space over both
+// axes — the negation's spelling and whether `.gitjig/` is on disk — runs the
+// prescribed steps on every shape that reaches the arm, and requires the sink
+// to end up ignored. A scheme that sorted each clone into one cause would pass
+// a per-class check and still strand the operator on the overlap; performing
+// the procedure is the only thing that measures what the operator experiences.
 // ---------------------------------------------------------------------------
 
-describe("the exclusion re-ask names a recovery that is live on every shape reaching it (issue #74, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
-	/** The lookup the refusal names, as one spelling the arms and the message share. */
-	const LOOKUP = ["check-ignore", "-v", "--no-index", "--", ".gitjig", ".gitjig/state/audit.jsonl"];
-
-	/** Its spelling WITHOUT the directory operand — the negative control (see below). */
-	const LOOKUP_FILE_ONLY = ["check-ignore", "-v", "-n", "--no-index", "--", ".gitjig/state/audit.jsonl"];
-
-	/** A line NAMING A RULE: source, line number, pattern, then the path. */
-	const RULE_LINE = /^(.+):(\d+):(\S*)\t/;
-
+describe("the exclusion re-ask's recovery terminates on every shape reaching it (issue #74, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
 	const SINK_REL = join(".gitjig", "state", AUDIT_FILE_NAME);
+	const SINK_POSIX = ".gitjig/state/audit.jsonl";
+
+	/** The lookup step 2 names, as one spelling the arms and the message share. */
+	const LOOKUP = ["check-ignore", "-v", "--no-index", "--", ".gitjig", SINK_POSIX];
+	/** Step 2 WITHOUT the directory operand — the negative control. */
+	const LOOKUP_FILE_ONLY = ["check-ignore", "-v", "-n", "--no-index", "--", SINK_POSIX];
+	/** A line NAMING A RULE: source, line number, pattern, TAB, then the path. */
+	const RULE_LINE = /^(.+):(\d+):(\S*)\t(.*)$/;
+
+	function git(root: string, args: string[]): { status: number | null; stdout: string } {
+		const run = spawnSync("git", args, { cwd: root, env: constructedEnv(root), timeout: 30_000 });
+		return { status: run.status, stdout: (run.stdout ?? Buffer.alloc(0)).toString("utf8") };
+	}
+
+	/** The arm's own trigger: git still reports the sink not-ignored. */
+	function reachesArm(root: string): boolean {
+		return git(root, ["check-ignore", "-q", "--", SINK_POSIX]).status === 1;
+	}
 
 	function excludeOf(root: string): string {
 		return resolvedExcludePath(root);
 	}
 
-	function materializeSink(root: string): void {
-		mkdirSync(join(root, ".gitjig", "state"), { recursive: true });
-		writeFileSync(join(root, SINK_REL), "zq\n");
-	}
-
-	function seedExclusion(root: string): void {
-		const file = excludeOf(root);
-		mkdirSync(dirname(file), { recursive: true });
-		writeFileSync(file, "/.gitjig/\n");
-	}
-
-	function checkIgnoreStatus(root: string): number | null {
-		return spawnSync("git", ["check-ignore", "-q", "--", SINK_REL], {
-			cwd: root,
-			env: constructedEnv(root),
-			timeout: 30_000,
-		}).status;
-	}
-
-	function lookup(root: string, argv: readonly string[] = LOOKUP): string {
-		const run = spawnSync("git", [...argv], { cwd: root, env: constructedEnv(root), timeout: 30_000 });
-		return (run.stdout ?? Buffer.alloc(0)).toString("utf8");
-	}
-
-	/** The three outcome classes the refusal enumerates, read off the output. */
-	function classify(out: string): "A" | "B" | "C" | "unpartitioned" {
-		const lines = out.split("\n").filter((line) => line !== "");
-		if (lines.length === 0) {
-			return "C";
+	/**
+	 * ONE STEP of the procedure the refusal prescribes, performed exactly as
+	 * written — including reading the file and line out of the lookup's own
+	 * output rather than knowing where the fixture put them. Returns which
+	 * step fired, so a shape that reaches no step is distinguishable from one
+	 * the procedure simply has not finished with yet.
+	 */
+	function performOneStep(root: string): "tracked" | "named" | "bounded" | "no-step" {
+		// (1) The index is its own question: `--no-index` hides it from every
+		// check-ignore spelling, so it is asked separately and asked first.
+		if (git(root, ["ls-files", "--error-unmatch", "--", SINK_POSIX]).status === 0) {
+			git(root, ["rm", "-r", "--cached", "-f", "-q", "--", ".gitjig/"]);
+			return "tracked";
 		}
-		if (!lines.every((line) => RULE_LINE.test(line))) {
-			return "unpartitioned";
+		const rows = git(root, LOOKUP)
+			.stdout.split("\n")
+			.filter((line) => line !== "")
+			.map((line) => RULE_LINE.exec(line));
+		if (rows.some((row) => row === null)) {
+			return "no-step";
 		}
-		return lines.some((line) => (RULE_LINE.exec(line) as RegExpExecArray)[3].startsWith("!")) ? "A" : "B";
-	}
-
-	/** The shapes, over BOTH axes: the source, and whether `.gitjig/` is on disk. */
-	const SHAPES: ReadonlyArray<{ id: string; expect: "A" | "B" | "C"; apply: (root: string) => void }> = [
-		{
-			id: "index: the sink itself is tracked",
-			expect: "B",
-			apply: (root) => {
-				seedExclusion(root);
-				materializeSink(root);
-			},
-		},
-		{
-			id: "info/exclude negates its own line, directory on disk",
-			expect: "A",
-			apply: (root) => {
-				writeFileSync(excludeOf(root), "/.gitjig/\n!/.gitjig/\n");
-				materializeSink(root);
-			},
-		},
-		{
-			id: "info/exclude negates its own line, directory ABSENT",
-			expect: "C",
-			apply: (root) => {
-				writeFileSync(excludeOf(root), "/.gitjig/\n!/.gitjig/\n");
-			},
-		},
-		{
-			id: ".gitignore un-excludes the directory, directory on disk",
-			expect: "A",
-			apply: (root) => {
-				seedExclusion(root);
-				writeFileSync(join(root, ".gitignore"), "!/.gitjig/\n");
-				materializeSink(root);
-			},
-		},
-		{
-			id: ".gitignore un-excludes the directory, directory ABSENT",
-			expect: "C",
-			apply: (root) => {
-				seedExclusion(root);
-				writeFileSync(join(root, ".gitignore"), "!/.gitjig/\n");
-			},
-		},
-		{
-			id: ".gitignore un-excludes it and a deeper one negates the file",
-			expect: "A",
-			apply: (root) => {
-				seedExclusion(root);
-				writeFileSync(join(root, ".gitignore"), "!/.gitjig/\n");
-				materializeSink(root);
-				writeFileSync(join(root, ".gitjig", "state", ".gitignore"), `!${AUDIT_FILE_NAME}\n`);
-			},
-		},
-	];
-
-	for (const shape of SHAPES) {
-		it(`reaches the arm, and its output lands in the enumerated class ${shape.expect} — ${shape.id}`, () => {
-			const fixture = buildGithookFixture({ unbound: true });
-			try {
-				requireInstrument(fixture.root);
-				shape.apply(fixture.root);
-				if (shape.expect === "B") {
-					fixtureGit(fixture, ["add", "-f", "--", SINK_REL]);
-				}
-				assert.equal(
-					checkIgnoreStatus(fixture.root),
-					1,
-					`${shape.id}: check-ignore does not report the sink not-ignored, so this shape does not reach ` +
-						"the refusal arm and the assertions below would measure a different state",
-				);
-				const run = runBind(fixture.root);
-				assert.notEqual(
-					run.status,
-					0,
-					`${shape.id}: the bind reported a verified bound state although the sink is not ignored\n${run.output}`,
-				);
-				assert.ok(
-					run.output.includes("check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl"),
-					`${shape.id}: the refusal does not name the lookup, so the operator is told to re-run with ` +
-						`nothing new to act on (§3.11)\n${run.output}`,
-				);
-				// The partition is TOTAL and the class is the enumerated one.
-				// `unpartitioned` is its own verdict: output the refusal's three
-				// readings do not cover is the failure this arm exists to catch,
-				// and it is distinct from landing in the wrong known class.
-				assert.equal(
-					classify(lookup(fixture.root)),
-					shape.expect,
-					`${shape.id}: the lookup's output does not land in the enumerated class — the refusal's three ` +
-						`readings are not exhaustive over the census (§3.11): ${JSON.stringify(lookup(fixture.root))}`,
-				);
-			} finally {
-				removeGithookFixture(fixture);
-			}
-		});
-	}
-
-	it("class A is live: removing the rule the lookup NAMES clears the arm", () => {
-		const fixture = buildGithookFixture({ unbound: true });
-		try {
-			requireInstrument(fixture.root);
-			seedExclusion(fixture.root);
-			writeFileSync(join(fixture.root, ".gitignore"), "zqkeep.env\n!/.gitjig/\n");
-			materializeSink(fixture.root);
-			assert.equal(checkIgnoreStatus(fixture.root), 1, "class A: the shape does not reach the arm");
-			const named = RULE_LINE.exec(lookup(fixture.root).split("\n")[0]);
-			assert.ok(named !== null, "class A: the lookup named no rule, so there is nothing for the operator to act on");
-			// The operator's act, performed exactly as the output directs:
-			// open THAT file at THAT line and remove it. Nothing here is
-			// inferred — the file and the line both come from the lookup.
-			const [, source, lineNumber] = named as RegExpExecArray;
-			const sourcePath = isAbsolute(source) ? source : join(fixture.root, source);
+		// (2) A named `!` rule is a negation, at the file and line printed.
+		const negation = rows.find((row) => (row as RegExpExecArray)[3].startsWith("!"));
+		if (negation !== undefined) {
+			const [, source, lineNumber] = negation as RegExpExecArray;
+			const sourcePath = isAbsolute(source) ? source : join(root, source);
 			const kept = readFileSync(sourcePath, "utf8").split("\n");
 			kept.splice(Number(lineNumber) - 1, 1);
 			writeFileSync(sourcePath, kept.join("\n"));
-			assert.equal(
-				checkIgnoreStatus(fixture.root),
-				0,
-				"class A: removing the rule the lookup named did not make git ignore the sink — the reading is DEAD",
-			);
-			assertBindSucceeded(runBind(fixture.root), "class A");
-		} finally {
-			removeGithookFixture(fixture);
+			return "named";
 		}
-	});
+		if (rows.length > 0) {
+			return "no-step";
+		}
+		// (3) Nothing named: the bounded search over the only files that can
+		// outrank the exclusion. The bound is the census, not a guess.
+		let touched = false;
+		for (const candidate of [excludeOf(root), join(root, ".gitignore")]) {
+			if (!existsSync(candidate)) {
+				continue;
+			}
+			const before = readFileSync(candidate, "utf8");
+			const after = before
+				.split("\n")
+				.filter((line) => !(line.startsWith("!") && line.includes(".git")))
+				.join("\n");
+			if (after !== before) {
+				writeFileSync(candidate, after);
+				touched = true;
+			}
+		}
+		return touched ? "bounded" : "no-step";
+	}
 
-	it("class B is live: the named act clears the index, and leaves the file on disk", () => {
+	/** The shape space: every negation spelling, on either side, over both axes. */
+	const NEGATIONS: ReadonlyArray<{ id: string; where: "exclude" | "gitignore" | "none"; pattern: string }> = [
+		{ id: "none", where: "none", pattern: "" },
+		{ id: "info/exclude !/.gitjig/", where: "exclude", pattern: "!/.gitjig/" },
+		{ id: ".gitignore !/.gitjig/", where: "gitignore", pattern: "!/.gitjig/" },
+		{ id: ".gitignore !.gitjig", where: "gitignore", pattern: "!.gitjig" },
+		{ id: ".gitignore !/.gitjig", where: "gitignore", pattern: "!/.gitjig" },
+		{ id: ".gitignore !/.git*", where: "gitignore", pattern: "!/.git*" },
+		{ id: ".gitignore !/.gitjig/**", where: "gitignore", pattern: "!/.gitjig/**" },
+		{ id: ".gitignore !/.gitjig/state/", where: "gitignore", pattern: "!/.gitjig/state/" },
+	];
+	/** An unrelated rule that also ignores the sink — the compound-cause axis. */
+	const EXTRAS: ReadonlyArray<string | null> = [null, "*.jsonl", "/.gitjig/state/audit.jsonl"];
+
+	function buildShape(
+		root: string,
+		negation: (typeof NEGATIONS)[number],
+		directoryOnDisk: boolean,
+		extra: string | null,
+	): void {
+		const excludeLines = ["/.gitjig/"];
+		const ignoreLines: string[] = [];
+		if (extra !== null) {
+			ignoreLines.push(extra);
+		}
+		if (negation.where === "exclude") {
+			excludeLines.push(negation.pattern);
+		} else if (negation.where === "gitignore") {
+			ignoreLines.push(negation.pattern);
+		}
+		mkdirSync(dirname(excludeOf(root)), { recursive: true });
+		writeFileSync(excludeOf(root), `${excludeLines.join("\n")}\n`);
+		if (ignoreLines.length > 0) {
+			writeFileSync(join(root, ".gitignore"), `${ignoreLines.join("\n")}\n`);
+		}
+		mkdirSync(join(root, ".gitjig", "state"), { recursive: true });
+		writeFileSync(join(root, SINK_REL), "zq\n");
+		if (!directoryOnDisk) {
+			rmSync(join(root, ".gitjig"), { recursive: true, force: true });
+		}
+	}
+
+	it("the prescribed procedure terminates with the sink ignored, on EVERY shape reaching the arm", () => {
 		const fixture = buildGithookFixture({ unbound: true });
 		try {
 			requireInstrument(fixture.root);
-			seedExclusion(fixture.root);
-			materializeSink(fixture.root);
-			fixtureGit(fixture, ["add", "-f", "--", SINK_REL]);
-			assert.equal(checkIgnoreStatus(fixture.root), 1, "class B: the shape does not reach the arm");
+			const cleanExclude = readFileSync(excludeOf(fixture.root), "utf8");
+			const stranded: string[] = [];
+			let reached = 0;
+			for (const negation of NEGATIONS) {
+				for (const directoryOnDisk of [true, false]) {
+					for (const tracked of [true, false]) {
+						for (const extra of EXTRAS) {
+							if (tracked && !directoryOnDisk) {
+								continue; // nothing on disk to have staged
+							}
+							const id = `${negation.id} | dir=${directoryOnDisk} | tracked=${tracked} | extra=${extra}`;
+							// Reset to a clean clone between shapes.
+							rmSync(join(fixture.root, ".gitignore"), { force: true });
+							rmSync(join(fixture.root, ".gitjig"), { recursive: true, force: true });
+							writeFileSync(excludeOf(fixture.root), cleanExclude);
+							git(fixture.root, ["rm", "-r", "--cached", "-f", "-q", "--", ".gitjig/"]);
+							buildShape(fixture.root, negation, directoryOnDisk, extra);
+							if (tracked) {
+								git(fixture.root, ["add", "-f", "--", SINK_POSIX]);
+							}
+							if (!reachesArm(fixture.root)) {
+								continue;
+							}
+							reached += 1;
+							// Bounded: each step removes one cause and the
+							// causes are finitely many, so a procedure that
+							// needs more iterations than there are causes is
+							// not terminating and must be reported as such.
+							const trail: string[] = [];
+							for (let iteration = 0; iteration < 6 && reachesArm(fixture.root); iteration += 1) {
+								const step = performOneStep(fixture.root);
+								trail.push(step);
+								if (step === "no-step") {
+									break;
+								}
+							}
+							if (reachesArm(fixture.root)) {
+								stranded.push(`${id} -> ${trail.join(">")}`);
+							}
+						}
+					}
+				}
+			}
+			// The shape space is enumerated here, so this count is derivable
+			// from this file rather than quoted from a run that happened once.
 			assert.ok(
-				runBind(fixture.root).output.includes("git rm -r --cached -f -- .gitjig/"),
-				"class B: the refusal does not name the act that clears the index, which is the one cause no edit " +
-					"to an exclude file can clear (§3.11)",
+				reached >= 20,
+				`procedure: only ${reached} shapes reached the arm — the space no longer exercises the arm and ` +
+					"every assertion below is vacuous",
 			);
-			fixtureGit(fixture, ["rm", "-r", "--cached", "-f", "-q", "--", ".gitjig/"]);
-			assert.equal(checkIgnoreStatus(fixture.root), 0, "class B: the named act did not clear it — DEAD (§3.11)");
-			assert.equal(
-				existsSync(join(fixture.root, SINK_REL)),
-				true,
-				"class B: the named act removed the operator's file from disk — a recovery may not destroy the " +
-					"state it is clearing (§4.7)",
+			assert.deepEqual(
+				stranded,
+				[],
+				"procedure: the prescribed steps did not end with the sink ignored on these shapes, so the " +
+					`refusal strands the operator there (§3.11): ${JSON.stringify(stranded, null, 1)}`,
 			);
-			assertBindSucceeded(runBind(fixture.root), "class B");
 		} finally {
 			removeGithookFixture(fixture);
 		}
 	});
 
-	it("class B stays live where the sink is STAGED and then appended to", () => {
-		// An ordinary state for an append-only log the shell itself writes, and
-		// the one sub-shape where `git rm --cached` WITHOUT -f refuses outright.
+	it("compound causes are why the procedure is ordered: tracked AND negated needs both steps", () => {
+		// The shape a single-cause scheme gets wrong. Removing the negation
+		// leaves the index; clearing the index leaves the negation.
 		const fixture = buildGithookFixture({ unbound: true });
 		try {
 			requireInstrument(fixture.root);
-			seedExclusion(fixture.root);
-			materializeSink(fixture.root);
-			fixtureGit(fixture, ["add", "-f", "--", SINK_REL]);
+			buildShape(fixture.root, NEGATIONS[2], true, null);
+			git(fixture.root, ["add", "-f", "--", SINK_POSIX]);
+			assert.ok(reachesArm(fixture.root), "compound: the shape does not reach the arm");
+			assert.equal(performOneStep(fixture.root), "tracked", "compound: step 1 did not fire on a tracked sink");
+			assert.ok(
+				reachesArm(fixture.root),
+				"compound: clearing the index alone cleared the arm, so this shape has only one cause and does " +
+					"not measure composition — the ordered procedure's reason for existing is unpinned",
+			);
+			assert.equal(performOneStep(fixture.root), "named", "compound: step 2 did not fire on the negation");
+			assert.ok(!reachesArm(fixture.root), "compound: both steps ran and the sink is still not ignored");
+			assertBindSucceeded(runBind(fixture.root), "compound");
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("the refusal names all three steps, so the procedure is reachable from the message alone", () => {
+		const fixture = buildGithookFixture({ unbound: true });
+		try {
+			requireInstrument(fixture.root);
+			buildShape(fixture.root, NEGATIONS[1], false, null);
+			assert.ok(reachesArm(fixture.root), "message: the shape does not reach the arm");
+			const refusal = runBind(fixture.root).output;
+			assert.ok(
+				refusal.includes("git ls-files --error-unmatch -- .gitjig/state/audit.jsonl"),
+				`message: step 1 is not named, so the operator cannot tell a tracked sink from a negated one — ` +
+					`and no check-ignore spelling will tell them, since --no-index hides the index\n${refusal}`,
+			);
+			assert.ok(
+				refusal.includes("git rm -r --cached -f -- .gitjig/"),
+				`message: step 1's act is not named\n${refusal}`,
+			);
+			assert.ok(
+				refusal.includes("git check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl"),
+				`message: step 2's lookup is not named\n${refusal}`,
+			);
+			assert.ok(
+				refusal.includes("info/exclude") && refusal.includes(".gitignore"),
+				`message: step 3's bounded set is not named, so an operator whose lookup printed nothing has ` +
+					`nowhere to go\n${refusal}`,
+			);
+			assert.ok(
+				refusal.includes("re-run after each"),
+				`message: the procedure is not presented as iterative, so an operator meeting compound causes ` +
+					`stops after the first step (§3.11)\n${refusal}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("WITHOUT the directory operand step 2's lookup names no rule — why the operand is there", () => {
+		const fixture = buildGithookFixture({ unbound: true });
+		try {
+			requireInstrument(fixture.root);
+			buildShape(fixture.root, NEGATIONS[2], true, null);
+			assert.ok(reachesArm(fixture.root), "operand control: the shape does not reach the arm");
+			const fileOnly = git(fixture.root, LOOKUP_FILE_ONLY).stdout;
+			assert.ok(
+				fileOnly.includes(AUDIT_FILE_NAME),
+				`operand control: the file-only spelling printed nothing at all — the control shows a line that ` +
+					`MENTIONS the path while naming no rule: ${JSON.stringify(fileOnly)}`,
+			);
+			assert.ok(
+				fileOnly
+					.split("\n")
+					.filter((line) => line !== "")
+					.every((line) => !RULE_LINE.test(line)),
+				`operand control: the file-only spelling DOES name a rule here, so the directory operand buys ` +
+					`nothing and the comment block's ground for it is wrong: ${JSON.stringify(fileOnly)}`,
+			);
+			assert.ok(
+				git(fixture.root, LOOKUP)
+					.stdout.split("\n")
+					.some((line) => RULE_LINE.test(line)),
+				"operand control: the shipped spelling names no rule here either, so the remedy does not hold",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("step 1's act leaves the working tree untouched, including a sink staged then appended to", () => {
+		const fixture = buildGithookFixture({ unbound: true });
+		try {
+			requireInstrument(fixture.root);
+			buildShape(fixture.root, NEGATIONS[0], true, null);
+			git(fixture.root, ["add", "-f", "--", SINK_POSIX]);
+			// The sub-shape where `git rm --cached` WITHOUT -f refuses outright,
+			// and an ordinary state for an append-only log the shell writes.
 			appendFileSync(join(fixture.root, SINK_REL), "zq appended after staging\n");
-			assert.equal(checkIgnoreStatus(fixture.root), 1, "staged-modified: the shape does not reach the arm");
+			assert.ok(reachesArm(fixture.root), "staged-modified: the shape does not reach the arm");
 			const before = readFileSync(join(fixture.root, SINK_REL), "utf8");
-			fixtureGit(fixture, ["rm", "-r", "--cached", "-f", "-q", "--", ".gitjig/"]);
-			assert.equal(
-				checkIgnoreStatus(fixture.root),
-				0,
-				"staged-modified: the named act did not clear it on the sub-shape where staged content differs " +
-					"from both the file and HEAD — that is the sub-shape -f is in the act for (§3.11)",
+			assert.equal(performOneStep(fixture.root), "tracked", "staged-modified: step 1 did not fire");
+			assert.ok(
+				!reachesArm(fixture.root),
+				"staged-modified: step 1's act did not clear the arm on the sub-shape where staged content " +
+					"differs from both the file and HEAD — that is the sub-shape -f is in the act for (§3.11)",
 			);
 			assert.equal(
 				readFileSync(join(fixture.root, SINK_REL), "utf8"),
@@ -1927,120 +1962,29 @@ describe("the exclusion re-ask names a recovery that is live on every shape reac
 		}
 	});
 
-	it("class C is live: the negation is in the bounded set the refusal names", () => {
-		const fixture = buildGithookFixture({ unbound: true });
-		try {
-			requireInstrument(fixture.root);
-			// The class-C shape: a negation, and `.gitjig/` absent from disk.
-			writeFileSync(excludeOf(fixture.root), "/.gitjig/\n!/.gitjig/\n");
-			assert.equal(existsSync(join(fixture.root, ".gitjig")), false, "class C: the directory exists — wrong shape");
-			assert.equal(checkIgnoreStatus(fixture.root), 1, "class C: the shape does not reach the arm");
-			assert.equal(classify(lookup(fixture.root)), "C", "class C: the lookup named a rule — wrong class");
-			const refusal = runBind(fixture.root).output;
-			// The refusal names WHERE to look, since git will not say.
-			assert.ok(
-				refusal.includes("info/exclude") && refusal.includes(".gitignore"),
-				`class C: the refusal does not name the bounded set of files that can hold the negation, so the ` +
-					`operator whose lookup printed nothing is left with nowhere to go (§3.11)\n${refusal}`,
-			);
-			// And the set CONTAINS it: the census closes this, so the search
-			// the refusal sends the operator on terminates.
-			const searched = [excludeOf(fixture.root), join(fixture.root, ".gitignore")].filter((path) =>
-				existsSync(path),
-			);
-			const found = searched.filter((path) =>
-				readFileSync(path, "utf8")
-					.split("\n")
-					.some((line) => line.startsWith("!") && line.includes(".gitjig")),
-			);
-			assert.notDeepEqual(
-				found,
-				[],
-				"class C: no file in the named set holds the negation, so the bounded search the refusal " +
-					`prescribes does not terminate on the cause: searched ${JSON.stringify(searched)}`,
-			);
-			// Removing it clears the arm — the act at the end of that search is live.
-			const target = found[0];
-			writeFileSync(
-				target,
-				readFileSync(target, "utf8")
-					.split("\n")
-					.filter((line) => !(line.startsWith("!") && line.includes(".gitjig")))
-					.join("\n"),
-			);
-			assert.equal(checkIgnoreStatus(fixture.root), 0, "class C: removing the found negation did not clear it");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-
-	it("WITHOUT the directory operand the lookup names no rule — why the operand is there", () => {
-		// The negative control the first version of this change lacked. The
-		// property that makes the refusal's readings work is that a printed
-		// line NAMES a rule; nothing measured that in either direction until
-		// this arm existed, and its absence is why a weaker liveness check —
-		// "the output mentions the path" — passed on output naming nothing.
-		const fixture = buildGithookFixture({ unbound: true });
-		try {
-			requireInstrument(fixture.root);
-			seedExclusion(fixture.root);
-			writeFileSync(join(fixture.root, ".gitignore"), "!/.gitjig/\n");
-			materializeSink(fixture.root);
-			assert.equal(checkIgnoreStatus(fixture.root), 1, "operand control: the shape does not reach the arm");
-			const fileOnly = lookup(fixture.root, LOOKUP_FILE_ONLY);
-			assert.ok(
-				fileOnly.includes(AUDIT_FILE_NAME),
-				`operand control: the file-only spelling printed nothing at all — the control is meant to show a ` +
-					`line that MENTIONS the path while naming no rule: ${JSON.stringify(fileOnly)}`,
-			);
-			assert.equal(
-				classify(fileOnly),
-				"unpartitioned",
-				"operand control: the file-only spelling DOES name a rule here, so the directory operand buys " +
-					`nothing and the comment block's ground for it is wrong: ${JSON.stringify(fileOnly)}`,
-			);
-			assert.equal(
-				classify(lookup(fixture.root)),
-				"A",
-				"operand control: the shipped spelling names no rule on this shape either, so the remedy does not hold",
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-
-	// The closure half: precedence-derived sources that CANNOT reach the arm,
-	// measured rather than reasoned about. These pass before the change too —
-	// they defend the census, not the fix (see the PR body's regression note).
+	// The closure half: precedence-derived sources that CANNOT reach the arm.
+	// These pass before the change too — they defend the census, not the fix.
 	const UNREACHABLE: ReadonlyArray<{ id: string; apply: (root: string) => void }> = [
 		{
 			id: "core.excludesFile negation — lower precedence than info/exclude",
 			apply: (root) => {
-				seedExclusion(root);
 				const global = join(root, "home", "globalignore");
 				mkdirSync(dirname(global), { recursive: true });
 				writeFileSync(global, "!/.gitjig/\n");
-				spawnSync("git", ["config", "core.excludesFile", global], {
-					cwd: root,
-					env: constructedEnv(root),
-					timeout: 30_000,
-				});
+				git(root, ["config", "core.excludesFile", global]);
 			},
 		},
 		{
 			id: "a .gitignore below the excluded directory — never consulted",
 			apply: (root) => {
-				seedExclusion(root);
-				mkdirSync(join(root, ".gitjig", "state"), { recursive: true });
 				writeFileSync(join(root, ".gitjig", "state", ".gitignore"), `!${AUDIT_FILE_NAME}\n`);
 			},
 		},
 		{
 			id: "a tracked SIBLING under .gitjig/ — the index is consulted per path asked",
 			apply: (root) => {
-				seedExclusion(root);
-				mkdirSync(join(root, ".gitjig"), { recursive: true });
 				writeFileSync(join(root, ".gitjig", "zqother"), "zq\n");
+				git(root, ["add", "-f", "--", ".gitjig/zqother"]);
 			},
 		},
 	];
@@ -2050,15 +1994,12 @@ describe("the exclusion re-ask names a recovery that is live on every shape reac
 			const fixture = buildGithookFixture({ unbound: true });
 			try {
 				requireInstrument(fixture.root);
+				buildShape(fixture.root, NEGATIONS[0], true, null);
 				shape.apply(fixture.root);
-				if (shape.id.startsWith("a tracked SIBLING")) {
-					fixtureGit(fixture, ["add", "-f", "--", ".gitjig/zqother"]);
-				}
-				assert.equal(
-					checkIgnoreStatus(fixture.root),
-					0,
+				assert.ok(
+					!reachesArm(fixture.root),
 					`${shape.id}: this source DOES decide the sink against the appended line, so it reaches the ` +
-						"refusal arm and the census above omits a reachable shape",
+						"refusal arm and the census omits a reachable shape",
 				);
 			} finally {
 				removeGithookFixture(fixture);
@@ -2074,7 +2015,7 @@ describe("the exclusion re-ask names a recovery that is live on every shape reac
 			assert.ok(
 				!/--exclude|--exclude-from|--exclude-standard/.test(invocation),
 				"command-line patterns: an invocation supplies its own ignore patterns, so the highest precedence " +
-					`level is reachable and the census above is not closed: ${invocation}`,
+					`level is reachable and the census is not closed: ${invocation}`,
 			);
 		}
 	});
