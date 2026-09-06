@@ -275,6 +275,19 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// without quoting the match.
 			'scan.patternIds.join(", ")',
 			'scan.lines.join(", ")',
+			// The two PUBLISHED operands, joined to form the scanned domain
+			// (issue #120). These are not a warning surface and reach no
+			// operator-facing message: the join builds the exact bytes the scan
+			// reads and the child then sends. Escaping them would corrupt the
+			// subject of the measurement — a `quoted()` body is not the body
+			// that publishes — which is the one case where this lock's remedy
+			// is not available and its allowlist is the right route. Neither
+			// carries a path: both are actor-supplied published text, whose
+			// hazard is the secret scan's and the neutralizer's subject, not
+			// this lock's. Per the header's own framing, this entry is a
+			// decision about a hole rather than a demonstration there is none.
+			"destination.title",
+			"params.body",
 		],
 		allowErrorReads: [
 			// Admitted only for PatternSourceError, whose messages are fixed

@@ -45,7 +45,12 @@ import { Type } from "typebox";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import { neutralizeBody } from "./neutralize.ts";
-import { ghCommentArgv, isPublishDestination, runPublishChild } from "./executor.ts";
+import {
+	ghPublishArgv,
+	isPublishDestination,
+	PUBLISH_DESTINATION_KINDS,
+	runPublishChild,
+} from "./executor.ts";
 import { PatternSourceError, scanBody } from "./scan.ts";
 
 /** The tool name §3.3's egress row records, verbatim. */
@@ -54,8 +59,19 @@ export const PUBLISH_TOOL_NAME = "gitjig_publish";
 const PublishParams = Type.Object({
 	body: Type.String({ description: "The exact text to publish; scanned and neutralized before any send." }),
 	destination: Type.Object({
-		kind: Type.Union([Type.Literal("issue-comment"), Type.Literal("pr-comment")]),
-		number: Type.Number({ description: "The issue or pull request number the comment lands on." }),
+		kind: Type.Union(PUBLISH_DESTINATION_KINDS.map((k) => Type.Literal(k))),
+		number: Type.Optional(
+			Type.Number({
+				description: "The issue or pull request number acted on. Required for the comment and body kinds.",
+			}),
+		),
+		title: Type.Optional(
+			Type.String({
+				description:
+					"The title of the issue or pull request being created. Required for the create kinds, and " +
+					"scanned as published text in its own right.",
+			}),
+		),
 	}),
 });
 
@@ -77,9 +93,10 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 		name: PUBLISH_TOOL_NAME,
 		label: "Publish",
 		description:
-			"Publish repository-derived text to the platform (issue or PR comment). " +
-			"The body is scanned against the committed secret patterns and refused on a match; " +
-			"relayed mentions and actionable references are neutralized to inert spellings before the send.",
+			"Publish repository-derived text to the platform: comment on an issue or PR, edit an issue or " +
+			"PR body, or create an issue or PR. The body — and, for the create kinds, the title — is scanned " +
+			"against the committed secret patterns and refused on a match; relayed mentions and actionable " +
+			"references are neutralized to inert spellings before the send.",
 		parameters: PublishParams,
 		async execute(_toolCallId, params) {
 			// The destination is the actor's explicit structured target; an
@@ -91,9 +108,17 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				return result(text, { disposition: "refuse-destination" });
 			}
 
+			const publishedText = destination.title ? `${destination.title}\n${params.body}` : params.body;
+
 			let scan;
 			try {
-				scan = scanBody(params.body);
+				// The scanned domain is EVERY byte this call publishes, not the
+				// body alone: a create kind's title lands on the same public
+				// surface and a secret in it leaks exactly as far. They are
+				// joined by a newline and scanned in ONE call, so this stays a
+				// single call site of the one predicate rather than a second
+				// scan with its own verdict (§3.11).
+				scan = scanBody(publishedText);
 			} catch (error) {
 				// Fail closed on scan machinery (§3.9 egress-publish-patterns):
 				// PatternSourceError messages are fixed content-free literals;
@@ -129,7 +154,18 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				});
 			}
 
-			const outcome = await runPublishChild(ghCommentArgv(destination), neutralizeBody(params.body), repoRoot);
+			// Both published operands cross through the neutralizer: the title
+			// carries mentions as readily as the body, and it rides argv where
+			// the body rides stdin, so neither can be neutralized by the other's
+			// treatment.
+			const sendDestination = destination.title
+				? { ...destination, title: neutralizeBody(destination.title) }
+				: destination;
+			const outcome = await runPublishChild(
+				ghPublishArgv(sendDestination),
+				neutralizeBody(params.body),
+				repoRoot,
+			);
 			if (outcome.outcome === "published") {
 				// The one surface child bytes may cross: the URL validated whole
 				// against the comment-URL shape (§3.10's output validity), and

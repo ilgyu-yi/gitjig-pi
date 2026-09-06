@@ -71,10 +71,56 @@
  */
 import { spawn } from "node:child_process";
 
+/**
+ * Every publication kind this gate reaches (issue #120). The list is
+ * EXPORTED and the suite enumerates it, so a kind added here without an
+ * admission rule or an argv spelling reds rather than publishing unchecked.
+ *
+ * Comments were once the whole union while the shell also created issues
+ * and pull requests and edited their bodies — the same guarded act, with no
+ * reach, publishing unscanned past a class whose backstop §3.3 records as
+ * structurally unavailable.
+ */
+export const PUBLISH_DESTINATION_KINDS = [
+	"issue-comment",
+	"pr-comment",
+	"issue-body",
+	"pr-body",
+	"issue-create",
+	"pr-create",
+] as const;
+
+export type PublishDestinationKind = (typeof PUBLISH_DESTINATION_KINDS)[number];
+
+/** Kinds that act on an existing numbered surface. */
+const NUMBERED_KINDS = new Set<string>(["issue-comment", "pr-comment", "issue-body", "pr-body"]);
+/** Kinds that mint a new surface and carry a title. */
+const CREATE_KINDS = new Set<string>(["issue-create", "pr-create"]);
+
 /** The structured publish target — the actor names it, nothing infers it (§3.3). */
 export interface PublishDestination {
-	kind: "issue-comment" | "pr-comment";
-	number: number;
+	kind: PublishDestinationKind;
+	/** Required for the numbered kinds; absent on the create kinds. */
+	number?: number;
+	/** Required for the create kinds; absent on the numbered kinds. */
+	title?: string;
+}
+
+/**
+ * A title is published text in ARGUMENT position, unlike the body, which
+ * reaches `gh` on stdin. Three refusals follow from that difference and
+ * from nothing else: an option-shaped title would be parsed as a flag
+ * rather than a value; a newline makes it not a title; and a NUL cannot
+ * cross the exec boundary intact. Each costs a spelling nobody needs and
+ * fails toward the block (§3.9's ambiguity rule).
+ */
+function isAdmissibleTitle(title: unknown): title is string {
+	return (
+		typeof title === "string" &&
+		title.trim().length > 0 &&
+		!title.startsWith("-") &&
+		!/[\n\r\0]/.test(title)
+	);
 }
 
 /** Structural admission for a destination that arrived untyped. */
@@ -82,20 +128,41 @@ export function isPublishDestination(value: unknown): value is PublishDestinatio
 	if (typeof value !== "object" || value === null) {
 		return false;
 	}
-	const { kind, number } = value as { kind?: unknown; number?: unknown };
-	return (
-		(kind === "issue-comment" || kind === "pr-comment") &&
-		typeof number === "number" &&
-		Number.isSafeInteger(number) &&
-		number > 0
-	);
+	const { kind, number, title } = value as { kind?: unknown; number?: unknown; title?: unknown };
+	if (typeof kind !== "string") {
+		return false;
+	}
+	if (NUMBERED_KINDS.has(kind)) {
+		return typeof number === "number" && Number.isSafeInteger(number) && number > 0;
+	}
+	if (CREATE_KINDS.has(kind)) {
+		return isAdmissibleTitle(title);
+	}
+	// An unknown kind is inadmissible rather than defaulted: a gate that
+	// guessed a surface would publish somewhere the actor did not name.
+	return false;
 }
 
-/** The destination union's pinned argv spelling (§3.3's measurement domain). */
-export function ghCommentArgv(destination: PublishDestination): string[] {
-	const surface = destination.kind === "issue-comment" ? "issue" : "pr";
-	return [surface, "comment", String(destination.number), "--body-file", "-"];
+/**
+ * The destination union's pinned argv spelling (§3.3's measurement domain).
+ *
+ * Every spelling ends `--body-file -`, so the body reaches `gh` on stdin
+ * and never in argv: an argv-borne body is visible in the process table and
+ * can exceed the argument limit. The title has no such route — `gh` takes
+ * it as an argument — which is why admission constrains its shape above.
+ */
+export function ghPublishArgv(destination: PublishDestination): string[] {
+	const surface = destination.kind.startsWith("issue") ? "issue" : "pr";
+	const tail = ["--body-file", "-"];
+	if (CREATE_KINDS.has(destination.kind)) {
+		return [surface, "create", "--title", String(destination.title), ...tail];
+	}
+	const verb = destination.kind.endsWith("-body") ? "edit" : "comment";
+	return [surface, verb, String(destination.number), ...tail];
 }
+
+/** @deprecated Retained call-site spelling; `ghPublishArgv` is the one predicate. */
+export const ghCommentArgv = ghPublishArgv;
 
 /** The child's bound — well under any caller's own backstop (§3.3). */
 export const CHILD_TIMEOUT_MS = 10_000;
