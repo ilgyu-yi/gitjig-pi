@@ -17,7 +17,7 @@
  * measured to split on (a backslash inside a bracket expression, and the
  * leading-`]` bracket family); and four spellings aimed at the asymmetry
  * that matters — an unterminated bracket expression, an unterminated `{`
- * interval, an empty alternation branch, and a lazy quantifier suffix.
+ * interval, an empty alternation branch, and a lazy `*`/`+`/`?` suffix.
  *
  * That asymmetry, because it decides what is worth catching here: a row
  * RegExp refuses is caught one statement below by the compile step, so it
@@ -27,6 +27,14 @@
  * are its likeliest spellings — `[A-Z]{16` is one keystroke from a committed
  * row. Two of the four also refuse spellings POSIX accepts as literals;
  * that costs an author a puzzling refusal and never an admission.
+ *
+ * A named residual of the lazy-suffix arm: it covers the `*`/`+`/`?`
+ * spellings and NOT the interval one, so `{16}?` is admitted — one character
+ * from a committed row, and in the disarm direction. Left to the bound
+ * rather than closed here, because tightening it would refuse `a}?`, which
+ * both engines hold; that is a design choice, not an obvious repair. The
+ * lock catches this spelling: the tier-2 probe refuses to compile it, so the
+ * oracle assertion fails and the suite reds before such a row could land.
  *
  * THIS CHECK IS PARTIAL BY CONSTRUCTION and makes no completeness claim. It
  * is a lexical scanner over a grammar, not the grammar; three review rounds

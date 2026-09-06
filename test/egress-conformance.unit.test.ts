@@ -466,8 +466,10 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			"a|", // an empty alternation branch, as an appended alternative leaves
 			"|a",
 			"(|a)",
-			"a*?", // a lazy quantifier suffix: a RegExp habit POSIX has no form for
-			"a+?"
+			"a*?", // a lazy `*`/`+`/`?` suffix: a RegExp habit POSIX has no form for.
+			"a+?" // The interval spelling `{16}?` is NOT covered — a residual the
+			// module note records, left to the conformance lock, whose tier-2
+			// probe refuses to compile it.
 		]) {
 			assert.equal(
 				inCommonSubset(outside),
