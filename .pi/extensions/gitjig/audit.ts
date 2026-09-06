@@ -378,13 +378,20 @@ function componentKind(path: string): "directory" | "other" | "absent" {
  */
 export function recoveryFor(error: unknown, stateRoot: string, writePath: string): string {
 	const code = (error as { code?: string } | null)?.code;
+	// The ACTING clauses below delimit for a SHELL PASTE. Each names an act
+	// and hands the operand to it, so the operand is what the operator pastes
+	// into a command — and POSIX double quotes leave dollar, backtick and
+	// backslash live, so a path component carrying a substitution shape would
+	// EXECUTE on the paste. Measured on exactly that shape. The referential
+	// clauses further down keep the JSON delimiter, and say why.
 	if (code === "ENOENT") {
-		return `create the state directory ${quoted(stateRoot)} (mkdir -p), then re-run.`;
+		return `create the state directory ${quoted(stateRoot, "shell")} (mkdir -p), then re-run.`;
 	}
 	if (code === "ENOTDIR") {
 		return (
-			`replace ${quoted(nonDirectoryAncestor(writePath) ?? stateRoot)} with a directory — it is not one, ` +
-			`and nothing can be created beneath a plain file — then create ${quoted(stateRoot)} (mkdir -p) and re-run.`
+			`replace ${quoted(nonDirectoryAncestor(writePath) ?? stateRoot, "shell")} with a directory — it is ` +
+			`not one, and nothing can be created beneath a plain file — then create ` +
+			`${quoted(stateRoot, "shell")} (mkdir -p) and re-run.`
 		);
 	}
 	// The guard is what keeps this arm's own recovery live: it prescribes an
@@ -399,10 +406,18 @@ export function recoveryFor(error: unknown, stateRoot: string, writePath: string
 	if (code === "EACCES" && !existsSync(writePath) && componentKind(stateRoot) === "directory") {
 		return (
 			`grant this account write and search permission on the state directory ` +
-			`${quoted(stateRoot)} (chmod u+wx), then re-run — until its mode admits this account the file there ` +
+			`${quoted(stateRoot, "shell")} (chmod u+wx), then re-run — until its mode admits this account the file there ` +
 			`can be neither opened nor created, and cannot even be measured to say which.`
 		);
 	}
+	// The three clauses below are REFERENTIAL, and keep the JSON delimiter by
+	// decision rather than by omission (§3.11). Each names a path to identify
+	// WHICH filesystem or object is meant, and prescribes no act upon that
+	// path: the act is on the filesystem (free space, raise a quota, remount)
+	// or there is no act at all (EIO). Nothing here is offered for a paste, so
+	// the shell delimiter would buy no substitution-deadness and would spend
+	// the reader's trust on a rendering that suggests a command line where the
+	// clause deliberately names none.
 	if (code === "ENOSPC" || code === "EDQUOT") {
 		return (
 			`free space on the filesystem holding ${quoted(writePath)}, or raise this account's quota on it, ` +
@@ -425,7 +440,7 @@ export function recoveryFor(error: unknown, stateRoot: string, writePath: string
 		);
 	}
 	return (
-		`make ${quoted(writePath)} a plain file writable by this account, then re-run — ` +
+		`make ${quoted(writePath, "shell")} a plain file writable by this account, then re-run — ` +
 		`a directory, a FIFO, a symlink, or another account's file at that path all refuse the write ` +
 		`(a symlink at that final component is refused rather than followed, and a reader-less FIFO raises ENXIO at ` +
 		`the open; a symlink at a PARENT is still followed — that ancestor policy belongs to the state-root seam (§5.5)).`
