@@ -112,7 +112,7 @@ export const POSTURES: readonly PostureRow[] = [
 			"the adapter is invoked with no message path, or with a path that is not a regular file, so the arm has no subject to measure (.githooks/commit-msg's subject guard; record constant not-evaluated)",
 		posture: "open",
 		justification:
-			"Enforcement-chain degradation, not the actor's input (§3.9's machinery carve-out): git supplies that path as a regular file on every invocation of this hook, so an adapter reaching this shape was invoked outside the chain the tier defines and the acting party cannot repair it from inside a block; the advice tier no-ops rather than wedging git (§3.2). It is not silent — one audit warn record names the arm as not evaluated, so an allow the arm never measured is distinguishable at the trail from one it did (§3.9's degradation-signal rule). NOT the same shape as the sibling detached-HEAD fold in .githooks/pre-commit, which is a SCOPE boundary rather than a dependency miss and is grounded at SPEC §3.3's commit-arm paragraph, so it declares no posture and owes no row here.",
+			"Enforcement-chain degradation, not the actor's input (§3.9's machinery carve-out): git supplies that path as a regular file on every invocation of this hook, so an adapter reaching this shape was invoked outside the chain the tier defines and the acting party cannot repair it from inside a block; the advice tier no-ops rather than wedging git (§3.2). It is not silent — one audit warn record names the arm as not evaluated, so an allow the arm never measured is distinguishable at the trail from one it did (§3.9's degradation-signal rule). NOT the same shape as the sibling detached-HEAD fold in .githooks/pre-commit, whose record constant is also not-evaluated, which is a SCOPE boundary rather than a dependency miss and is grounded at SPEC §3.3's commit-arm paragraph, so it declares no posture and owes no row here.",
 	},
 	{
 		dependency: "commit-format-measurement",
@@ -149,7 +149,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "branch-guard-derivation",
 		failureShape:
-			"protected identity P underivable — stage 1 (local refs/remotes/origin/HEAD pointer) and stage 2 (ls-remote measurement, push surface only) both fail, stage-2 failure keyed by outcome: non-zero exit or empty/unparseable output (SPEC §3.3; record constant not-enforced)",
+			"protected identity P underivable — stage 1 (local refs/remotes/origin/HEAD pointer) and stage 2 (ls-remote measurement, push surface only) both fail, stage-2 failure keyed by outcome: non-zero exit or empty/unparseable output (SPEC §3.3; .githooks/helpers/branch_guard.sh, record constant not-enforced)",
 		posture: "open",
 		justification:
 			"Machinery degradation on §3.9's absent-dependency side: an absent pointer is clone-configuration state the acting party's push did not cause; the gate disarms for the run and says so plainly — one audit warn record stating the gate is not enforced (§3.9's degradation-signal rule), the observable separating a disarmed allow from an ordinary allow.",
@@ -197,7 +197,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "secret-scan-patterns",
 		failureShape:
-			"pattern rule source unusable for the run — disarm literals 'pattern file absent or unreadable' (beside the helper that reads it), 'pattern file failed up-front validation' (format or ERE compile, probed before any path is scanned), and 'pattern set empty after stripping comments and blanks' (SPEC §3.3's machinery outcome; wrapper record constant not-enforced)",
+			"pattern rule source unusable for the run — disarm literals 'pattern file absent or unreadable' (beside the helper that reads it), 'pattern file failed up-front validation' (format or ERE compile, probed before any path is scanned), and 'pattern set empty after stripping comments and blanks' (SPEC §3.3's machinery outcome; .githooks/helpers/secret_scan.sh, wrapper record constant not-enforced)",
 		posture: "open",
 		justification:
 			"Machinery degradation, none of it the actor's staged input (§3.9's machinery carve-out): the scan disarms for the run with exactly one audit warn record stating it is not enforced (§3.9's degradation-signal rule) — §3.10's valid-AND-non-empty rule makes a scan that checks nothing say so plainly rather than pass as all-clear, and a partial scan over the valid neighbour rows would be a second, weaker predicate (§3.10's lossy-fallback rule).",
@@ -208,7 +208,7 @@ export const POSTURES: readonly PostureRow[] = [
 			"the scan's own resolution of the repository top fails at scan time — disarm literal 'repository toplevel unresolvable' (.githooks/helpers/secret_scan.sh, scan_staged_secrets' prelude)",
 		posture: "open",
 		justification:
-			"Machinery degradation, not the actor's staged input (§3.9's machinery carve-out): the scan disarms for the run with one not-enforced warn record (§3.9's degradation-signal rule). Distinct from the local-tier-derivation row that governs the PRELUDE's resolution of the same fact, and not covered by it: that row's shape is constitutively 'neither the record sink nor the containment test can be formed at all' and its justification states no record is owed, whereas the prelude has already resolved the top and formed the sink by the time this site runs — so this shape is reachable only if the top stops resolving BETWEEN the prelude and the helper, and its whole observable is a record. One dependency resolved at two sites with two observables is two failure shapes, which §3.9 keys rows on.",
+			"Machinery degradation, not the actor's staged input (§3.9's machinery carve-out): the scan disarms for the run with one not-enforced warn record (§3.9's degradation-signal rule). Distinct from the local-tier-derivation row that governs the PRELUDE's resolution of the same fact, and not covered by it: that row's shape is constitutively 'neither the record sink nor the containment test can be formed at all' and its justification states no record is owed, whereas the prelude has already resolved the top and formed the sink by the time this site runs — so this shape is reachable only if the top stops resolving BETWEEN the prelude and the helper, and unlike the prelude it leaves a record (with a stderr line beside it, as every disarm here does). One dependency resolved at two sites, one of which writes a record where the other writes none, is two failure shapes, which §3.9 keys rows on."
 	},
 	{
 		dependency: "secret-scan-diff-base",
@@ -221,7 +221,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "secret-scan-enumeration",
 		failureShape:
-			"the single-read staged-path enumeration cannot be produced — disarm literals 'staged-path enumeration spool unavailable' (no writable spool in the git dir or the ambient temp dir) and 'staged path enumeration failed' (the enumerating diff exits non-zero); .githooks/helpers/secret_scan.sh",
+			"the single-read staged-path enumeration cannot be produced — disarm literals 'staged-path enumeration spool unavailable' (no writable spool in the git dir or the ambient temp dir) and 'staged path enumeration failed' (the enumerating diff exits non-zero); .githooks/helpers/secret_scan.sh. Two literals, ONE shape: both are the same dependency failing at the same point of the run with the same observable and the same repair, and the literals differ only to name which half failed — unlike the toplevel row above, whose sibling site differs in whether a record is written at all. Grouped on that test, the same one the pattern row groups its three literals on.",
 		posture: "open",
 		justification:
 			"Machinery degradation (§3.9's machinery carve-out): the scan disarms for the run with one not-enforced warn record. The exit status is checked BEFORE any of the spooled bytes feed the scan, because a re-read could fail invisibly and stream an empty list — an allow with no record, the silent shape §3.9's degradation-signal rule forbids. Enumerated as an open residual in place (§3.11): a spool this account cannot create is a disarm any actor holding one file could mint, which is accepted here because the alternative is an advice tier that wedges git over its own temp-file failure (§3.2).",

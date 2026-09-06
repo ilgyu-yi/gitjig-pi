@@ -18,18 +18,23 @@
  * recognized, over a view with whole-line `#` comments stripped:
  *
  *   1. `audit_log warn <category> <constant>` — the reason constant of a
- *      fail-open record. `block` records are refusals, not postures, and
- *      are deliberately not collected.
+ *      fail-open record. `block` records are NOT collected, and the ground
+ *      is a limitation rather than a principle: see residual 6.
  *   2. `_gitjig_ss_disarm '<literal>'` — the staged-secret scan's
  *      per-cause disarm literals, which are sub-causes of one wrapper
  *      record and so never appear as their own `audit_log` constant.
  *
- * The assertion is VERBATIM containment in the inventory's source text.
- * Verbatim rather than by-concept on purpose: it binds the inventory to
- * the exact strings the code uses, so renaming a cause in a helper without
- * touching the row reds this suite. A row that merely paraphrases its
- * cause satisfies a reader and not this check — which is the point, since
- * the paraphrase is where drift hides.
+ * The assertion is VERBATIM containment, scoped to ONE ROW and qualified
+ * by the emitting SITE: a cause is accounted for when some single row
+ * carries both the cause string and the basename of the source that emits
+ * it. Verbatim rather than by-concept binds the inventory to the exact
+ * strings the code uses, so renaming a cause without touching its row reds
+ * this suite. Row-scoped-and-site-qualified rather than whole-file is what
+ * makes the match mean something: reason constants are SHARED by design —
+ * `not-enforced` spans five shapes and `not-evaluated` is emitted at two
+ * different sites — so "this string occurs somewhere in the file" is not
+ * the question being asked. A whole-file matcher certified one site's
+ * cause against a row whose own text disclaims that very site.
  *
  * WHAT THIS SUITE DOES NOT ESTABLISH (§3.11's report-only rule — a check
  * names the property it does not establish). These are disclosed because
@@ -54,6 +59,25 @@
  *   5. Causes emitted by tier-1 or tier-3 sources are out of scope. The
  *      idioms above are properties of the shell tier; generalizing the
  *      shape is #30's.
+ *   6. FAIL-OPEN ONLY. Every cause collected here is a fail-open one. The
+ *      inventory's fail-CLOSED rows are checked for completeness by
+ *      nothing: a refusal on a machinery or measurement miss is genuinely
+ *      a posture — `secret-scan-measurement` is a `closed` row whose whole
+ *      shell-tier observable is an `audit_log block` record — but every
+ *      block site spells the same content-free constant `blocked`, so
+ *      there is nothing to key a per-shape match on. The exclusion is a
+ *      limitation, not a principle.
+ *   7. Accounting is not the same as declaring a posture. A row may
+ *      account for a site by explicitly DISCLAIMING it, with its ground,
+ *      as `commit-format-subject` does for `.githooks/pre-commit`'s scope
+ *      fold. This suite does not distinguish "has a posture row" from "is
+ *      disclaimed with a ground"; both read as accounted for.
+ *   8. Recognition is lexical and quoting-sensitive in ways it cannot
+ *      close: a record written by a direct `printf` to the sink rather
+ *      than through `audit_log`, an `audit_log` reached through a variable
+ *      or alias, and a constant split across a backslash continuation are
+ *      all invisible. Chasing indirection needs a reader of control flow,
+ *      which residual 1 already says does not exist here.
  *
  * The recognizer's own teeth are pinned by synthetic-mutant arms at the
  * bottom (§3.12): a green real-tree arm proves nothing unless a source
@@ -66,6 +90,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { POSTURES } from "../.pi/extensions/gitjig/postures.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 /** The walked root: the local tier's shipped sources. */
@@ -115,15 +140,15 @@ export function collectCauses(relPath: string, source: string): DeclaredCause[] 
 	// 1) audit_log warn <category> <constant> — category may be a shell
 	//    expansion, so it is matched loosely; the constant must be a bare
 	//    token, since a computed constant has no fixed string to inventory.
-	const warnRe = /audit_log\s+warn\s+(?:"[^"]*"|'[^']*'|\S+)\s+([A-Za-z][A-Za-z0-9_-]*)/g;
+	const warnRe = /audit_log\s+warn\s+(?:"[^"]*"|'[^']*'|\S+)\s+(?:"([A-Za-z][A-Za-z0-9_-]*)"|'([A-Za-z][A-Za-z0-9_-]*)'|([A-Za-z][A-Za-z0-9_-]*))/g;
 	for (const m of text.matchAll(warnRe)) {
-		found.push({ cause: m[1], where: relPath });
+		found.push({ cause: m[1] ?? m[2] ?? m[3], where: relPath });
 	}
 
 	// 2) _gitjig_ss_disarm '<literal>' — single-quoted sub-causes.
-	const disarmRe = /_gitjig_ss_disarm\s+'([^']+)'/g;
+	const disarmRe = /_gitjig_ss_disarm\s+(?:'([^']+)'|"([^"]+)")/g;
 	for (const m of text.matchAll(disarmRe)) {
-		found.push({ cause: m[1], where: relPath });
+		found.push({ cause: m[1] ?? m[2], where: relPath });
 	}
 
 	return found;
@@ -135,28 +160,63 @@ function realTreeCauses(): DeclaredCause[] {
 	return sources.flatMap((s) => collectCauses(s.rel, s.text));
 }
 
+/** One row's full searchable text — the unit a match is scoped to. */
+export function rowText(row: { dependency: string; failureShape: string; justification: string }): string {
+	return `${row.dependency} ${row.failureShape} ${row.justification}`;
+}
+
+/**
+ * A cause is accounted for when ONE row carries both the cause string and
+ * the basename of the source that emits it. Exported so the teeth arms
+ * drive this predicate rather than a copy (§3.11).
+ */
+export function accountedFor(
+	cause: DeclaredCause,
+	rows: readonly { dependency: string; failureShape: string; justification: string }[] = POSTURES,
+): boolean {
+	const site = cause.where.split(/[\\/]/).pop() ?? cause.where;
+	return rows.some((row) => {
+		const text = rowText(row);
+		return text.includes(cause.cause) && text.includes(site);
+	});
+}
+
 describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", () => {
-	it("the walked tier yields a non-vacuous cause set", () => {
+	it("the walked tier yields causes from several distinct sources", () => {
 		// A recognizer that collects nothing passes every containment
-		// assertion below. This arm is what stops a green run from meaning
-		// "the walk found no sources".
+		// assertion below vacuously. A bare total is a weak floor: the scan
+		// helper alone clears any small number, so deleting the prelude and
+		// all three adapters would leave a total-only guard green. The floor
+		// is therefore on the number of distinct SOURCES that yielded a
+		// cause, which no single file can clear.
 		const causes = realTreeCauses();
+		const sources = new Set(causes.map((c) => c.where));
 		assert.ok(
-			causes.length >= 8,
-			`the walk collected ${causes.length} causes — too few to be the real tier; the recognizer or the walk is broken`,
+			sources.size >= 4,
+			`causes came from only ${sources.size} source(s) (${[...sources].sort().join(", ")}) — the walk or the recognizer is broken`,
+		);
+		assert.ok(
+			causes.length >= 12,
+			`the walk collected ${causes.length} causes — too few to be the real tier`,
 		);
 	});
 
-	it("every declared fail-open cause in the local tier appears verbatim in the one inventory", () => {
-		const inventory = readFileSync(join(repoRoot(), INVENTORY_HOME), "utf8");
-		const missing = realTreeCauses()
-			.filter((c) => !inventory.includes(c.cause))
+	it("every declared fail-open cause is accounted for by a row that names its own site", () => {
+		// Site-qualified and ROW-scoped, never whole-file substring. A reason
+		// constant is shared by design — `not-enforced` spans five shapes and
+		// `not-evaluated` is emitted at two different sites — so "this string
+		// occurs somewhere in the file" is not the question. The question is
+		// whether some ONE row carries both the cause and the site that emits
+		// it. Whole-file matching let `.githooks/pre-commit`'s cause be
+		// certified by a row whose own text disclaims that very site.
+		const unmatched = realTreeCauses()
+			.filter((c) => !accountedFor(c))
 			.map((c) => `${c.where}: ${JSON.stringify(c.cause)}`);
-		const unique = [...new Set(missing)].sort();
+		const unique = [...new Set(unmatched)].sort();
 		assert.deepEqual(
 			unique,
 			[],
-			`these declared causes have no row in ${INVENTORY_HOME} (SPEC §3.9's one-inventory rule):\n  ${unique.join("\n  ")}`,
+			`these declared causes have no row in ${INVENTORY_HOME} naming both the cause and their site (SPEC §3.9's one-inventory rule):\n  ${unique.join("\n  ")}`,
 		);
 	});
 
@@ -203,6 +263,47 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 		it("does not collect from a commented-out line", () => {
 			const collected = collectCauses(".githooks/x.sh", "# audit_log warn secret zqcommentedzq 'x'\n");
 			assert.deepEqual(collected, []);
+		});
+
+		it("DISCRIMINATION: a shared constant is not satisfied by another site's row", () => {
+			// The axis every other teeth arm holds fixed. Those arms all invent
+			// a UNIQUE constant, so they establish only that an ABSENT cause is
+			// caught — never that the matcher can tell two sites sharing one
+			// constant apart. Reason constants are shared by design, and a
+			// whole-file substring matcher passed exactly this case: it
+			// certified `.githooks/pre-commit`'s cause against a row that names
+			// a different site. This arm is that regression, pinned.
+			const rows = [
+				{
+					dependency: "zq-other-site",
+					failureShape: "a shape at .githooks/commit-msg; record constant zqsharedzq",
+					justification: "names one site only",
+				},
+			];
+			assert.equal(
+				accountedFor({ cause: "zqsharedzq", where: ".githooks/commit-msg" }, rows),
+				true,
+				"the site the row names must be accounted for",
+			);
+			assert.equal(
+				accountedFor({ cause: "zqsharedzq", where: ".githooks/pre-commit" }, rows),
+				false,
+				"a DIFFERENT site sharing the constant was certified by that row — the matcher cannot discriminate",
+			);
+		});
+
+		it("collects a double-quoted constant and a double-quoted disarm literal", () => {
+			// The bare-token rule's ground is that a COMPUTED constant has no
+			// fixed string to inventory. A double-quoted literal has one, so
+			// the ground does not reach it and it is collected.
+			assert.deepEqual(
+				collectCauses(".githooks/x.sh", 'audit_log warn secret "zqdqzq" \'m\'\n').map((c) => c.cause),
+				["zqdqzq"],
+			);
+			assert.deepEqual(
+				collectCauses(".githooks/x.sh", '_gitjig_ss_disarm "zq dq literal zq"\n').map((c) => c.cause),
+				["zq dq literal zq"],
+			);
 		});
 
 		it("collects a cause whose category is a shell expansion", () => {
