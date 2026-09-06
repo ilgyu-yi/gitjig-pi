@@ -1651,9 +1651,10 @@ describe("the arming verdict is refused where the adapters would not run (issue 
 // single act clears the arm. That is why the recovery is an ordered procedure
 // whose termination test is the re-run, and why the arm that matters here does
 // not check a classification at all: it enumerates a shape space over four
-// named axes — the negation's spelling, its location, whether `.gitjig/` is on
-// disk, whether the sink is tracked, and what competing ordinary pattern is
-// present — runs the prescribed steps on every shape that reaches the arm, and
+// named axes — the negation's spelling and location, whether `.gitjig/` is on
+// disk, how the sink is tracked (untracked, tracked, or tracked with
+// skip-worktree), and what competing ordinary pattern is present — runs the
+// prescribed steps on every shape that reaches the arm, and
 // requires the sink to end up ignored. A scheme that sorted each clone into one
 // cause would pass a per-class check and still strand the operator on the
 // overlap; performing the procedure is the only thing that measures what the
@@ -1701,8 +1702,17 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 	function performOneStep(root: string): "tracked" | "named" | "bounded" | "no-step" {
 		// (1) The index is its own question: `--no-index` hides it from every
 		// check-ignore spelling, so it is asked separately and asked first.
-		if (git(root, ["ls-files", "--error-unmatch", "--", SINK_POSIX]).status === 0) {
+		const isTracked = (): boolean =>
+			git(root, ["ls-files", "--error-unmatch", "--", SINK_POSIX]).status === 0;
+		if (isTracked()) {
 			git(root, ["rm", "-r", "--cached", "-f", "-q", "--", ".gitjig/"]);
+			// The message's second shape, keyed by OUTCOME: where the entry
+			// carries skip-worktree, the plain act reports the path as outside
+			// the sparse-checkout definition and leaves the index unchanged.
+			// The operator following the message adds --sparse and runs again.
+			if (isTracked()) {
+				git(root, ["rm", "-r", "--cached", "-f", "--sparse", "-q", "--", ".gitjig/"]);
+			}
 			return "tracked";
 		}
 		const rows = git(root, LOOKUP)
@@ -1818,9 +1828,9 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 			let reached = 0;
 			for (const negation of NEGATIONS) {
 				for (const directoryOnDisk of [true, false]) {
-					for (const tracked of [true, false]) {
+					for (const tracked of ["plain", "skip-worktree", "no"] as const) {
 						for (const extra of EXTRAS) {
-							if (tracked && !directoryOnDisk) {
+							if (tracked !== "no" && !directoryOnDisk) {
 								continue; // nothing on disk to have staged
 							}
 							const id = `${negation.id} | dir=${directoryOnDisk} | tracked=${tracked} | extra=${extra}`;
@@ -1828,10 +1838,17 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 							rmSync(join(fixture.root, ".gitignore"), { force: true });
 							rmSync(join(fixture.root, ".gitjig"), { recursive: true, force: true });
 							writeFileSync(excludeOf(fixture.root), cleanExclude);
-							git(fixture.root, ["rm", "-r", "--cached", "-f", "-q", "--", ".gitjig/"]);
+							git(fixture.root, ["rm", "-r", "--cached", "-f", "--sparse", "-q", "--", ".gitjig/"]);
 							buildShape(fixture.root, negation, directoryOnDisk, extra);
-							if (tracked) {
+							if (tracked !== "no") {
 								git(fixture.root, ["add", "-f", "--", SINK_POSIX]);
+							}
+							if (tracked === "skip-worktree") {
+								// An ordinary consequence of a clone that tracked
+								// the state root and later turned on sparse
+								// checkout — and the shape where step 1's plain
+								// act is inert and the procedure would loop.
+								git(fixture.root, ["update-index", "--skip-worktree", "--", SINK_POSIX]);
 							}
 							if (!reachesArm(fixture.root)) {
 								continue;
@@ -1858,11 +1875,10 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 			}
 			// The shape space is enumerated here, so this count is derivable
 			// from this file rather than quoted from a run that happened once.
-			// A floor, not a fixed count: the space is enumerated above, so the
-			// number is derivable from this file, and a floor lets a shape be
-			// added without a bookkeeping edit while still failing loudly if an
-			// edit empties the space and makes the assertion below vacuous.
-			// 66 reach the arm at the head that introduced this axis set.
+			// A floor rather than a fixed count: the space is enumerated above,
+			// so a shape can be added without a bookkeeping edit here, while an
+			// edit that empties the space still fails loudly instead of making
+			// the assertion below pass vacuously.
 			assert.ok(
 				reached >= 50,
 				`procedure: only ${reached} shapes reached the arm — the space no longer exercises the arm and ` +
@@ -1917,6 +1933,11 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 			assert.ok(
 				refusal.includes("git rm -r --cached -f -- .gitjig/"),
 				`message: step 1's act is not named\n${refusal}`,
+			);
+			assert.ok(
+				refusal.includes("--sparse"),
+				"message: step 1's act names no second shape, so an operator whose index entry carries " +
+					`skip-worktree loops on a step that leaves the index unchanged (§3.11)\n${refusal}`,
 			);
 			assert.ok(
 				refusal.includes("git check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl"),
