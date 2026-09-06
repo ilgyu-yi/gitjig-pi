@@ -9,7 +9,8 @@
  * run needs except gh — the minimal symlink set pi/git/node/sh/bash/env,
  * measured sufficient on this substrate 2026-09-05), a failed run, junk
  * output, a hostile stdin-echoing child, the payload on the wrong stream,
- * and a hanging child. Every instrument arm is RED until the Code phase
+ * a hanging child, an orphan holding the pipes past a late in-bound exit,
+ * and a child that spawns a grandchild of its own (issue #85). Every instrument arm is RED until the Code phase
  * registers `gitjig_publish` — each arm's first assertion is the authored
  * subject-absence anchor (the substrate's "Tool … not found" stand-in).
  *
@@ -32,13 +33,24 @@
  * toolResult entries; the assistant toolCall-args entry is §3.3's
  * enumerated residual and excluded. The five §3.10 classes are staged by
  * outcome shape, not by cause: which syscall failed inside the shim is not
- * measured, only what the executor admitted.
+ * measured, only what the executor admitted. And the backstop that bounds
+ * an unreapable child is not established at all here: its arm is lexical,
+ * so a module spelling the timer while defeating it another way passes.
  *
- * Mutants, both directions: the success direction (valid URL on stdout →
- * published) is pinned by the sibling suite's AC3 arm; every arm here is
- * the refuse direction, so an executor keyed on exit status alone reddens
- * at the junk/echo/wrong-stream arms and one keyed on presence alone
- * reddens at the absent arm.
+ * Mutants, both directions: the ordinary success direction (valid URL on
+ * stdout → published) is pinned by the sibling suite's AC3 arm, and every
+ * arm here is the refuse direction WITH ONE EXCEPTION — the orphan-late arm
+ * asserts `published`, because the regression it guards is a refusal
+ * wrongly claimed for a send that landed, and only the allow direction
+ * catches that. So an executor keyed on exit status alone reddens at the
+ * junk/echo/wrong-stream arms, one keyed on presence alone reddens at the
+ * absent arm, and one whose bound outlives the child's exit reddens at the
+ * orphan-late arm.
+ *
+ * ONE ARM HERE IS STRUCTURAL, not behavioral, and is marked so at its own
+ * site: the unreapable-child backstop. A child in an uninterruptible wait
+ * is not portably arrangeable from a test, so that arm reads the module's
+ * text where every other bound in it is staged and run.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -385,6 +397,17 @@ describe("the bound's kill reaches the child's process group (issue #85)", () =>
 		const ticks = join(groupKillRun.sinkDir, "ticks");
 		assert.ok(existsSync(ticks), `group-kill: the grandchild never ran, so the arm measures nothing`);
 		const before = readFileSync(ticks, "utf8").length;
+		// A FLOOR, so the arm cannot pass by measuring a grandchild that died
+		// early for some other reason: a short non-growing file would satisfy
+		// the equality below having proven nothing. One tick per 0.2s against
+		// a 10s bound expects roughly 50; the observed mutant runs sampled 55
+		// and 56, so 20 sits far below any live shape and far above an early
+		// death.
+		assert.ok(
+			before >= 20,
+			`group-kill: only ${before} tick(s) before sampling — the grandchild was not alive when the bound ` +
+				`fired, so the equality below would hold without measuring the kill's reach`,
+		);
 		await new Promise((r) => setTimeout(r, 3_000));
 		const after = readFileSync(ticks, "utf8").length;
 		assert.equal(
@@ -397,8 +420,8 @@ describe("the bound's kill reaches the child's process group (issue #85)", () =>
 	});
 });
 
-describe("the call is bounded even when the child cannot be reaped (issue #85)", () => {
-	it("a backstop settles the call when SIGKILL produces no exit", () => {
+describe("the unreapable-child backstop is armed and cleared (issue #85)", () => {
+	it("STRUCTURAL: the kill path arms a backstop timer and the settle path clears it", () => {
 		// STRUCTURAL, and recorded as such (§1.5), naming what it substitutes
 		// for: an arm staging a child in an uninterruptible wait. SIGKILL is
 		// delivered but not guaranteed to be REAPED, and such a child emits no
@@ -411,7 +434,11 @@ describe("the call is bounded even when the child cannot be reaped (issue #85)",
 			join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts"),
 			"utf8",
 		);
-		const body = executor.replace(/\/\*[\s\S]*?\*\//g, "");
+		const body = executor
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.split("\n")
+			.filter((line) => !line.trimStart().startsWith("//"))
+			.join("\n");
 		assert.match(
 			body,
 			/unkillableTimer\s*=\s*setTimeout\(/,

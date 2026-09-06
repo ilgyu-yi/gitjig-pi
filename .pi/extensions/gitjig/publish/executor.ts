@@ -47,9 +47,26 @@
  *   - SIGKILL is delivered, never guaranteed to be REAPED: a child in an
  *     uninterruptible wait emits no `exit`. The outer backstop bounds the
  *     CALL in that case rather than the child — the promise settles on the
- *     bound-exceeded cause and this side of the pipes is released, and the
- *     unreaped child outlives the session. So the bounded-refusal claim
- *     above is a claim about this tool call, never about the child.
+ *     bound-exceeded cause, this side of the pipes is released, and the
+ *     handle is unref'd so the unreaped child cannot hold this process open
+ *     either. It outlives the call, and outlives the session if the session
+ *     ends first. So the bounded-refusal claim above is a claim about this
+ *     tool call, never about the child.
+ *
+ *   - Detaching runs the OTHER WAY too, and this residual is on that axis
+ *     rather than on how far the kill reaches. `detached` starts a new
+ *     session with no controlling terminal, so terminal-generated signals —
+ *     an operator's interrupt, a hangup when the terminal closes — no longer
+ *     reach the child; before it, they did. An operator interrupting a
+ *     publish used to take `gh` down with the parent, usually before the
+ *     request left the machine. Now the parent dies and the child runs to
+ *     completion, so the comment can land after the operator tried to stop
+ *     it, with the parent gone and nothing left to record it. The window for
+ *     an unrecorded send widens from the in-flight moment to the child's
+ *     whole lifetime. Not closed here: an in-flight send cannot be unsent,
+ *     and a parent-side handler that group-kills on every signal is a
+ *     larger decision than this bound. Named so the reach this change added
+ *     is not read as strictly more containment than before.
  */
 import { spawn } from "node:child_process";
 
@@ -125,6 +142,15 @@ export function runPublishChild(argv: string[], body: string, repoRoot: string):
 			child.stdin.destroy();
 			child.stdout.destroy();
 			child.stderr.destroy();
+			// Destroying this side of the pipes does NOT release the child
+			// handle: it holds this process's event loop open until the child
+			// exits. Measured — a settled call still held the loop for the
+			// child's full remaining 30s. In the one case the backstop below
+			// exists for, that child never exits, so without this the wedge
+			// would move from the tool call to the session's own exit rather
+			// than being closed. The exit and close handlers still run if the
+			// child ever dies; decide no-ops behind the settled guard.
+			child.unref();
 			resolve(outcome);
 		};
 		let unkillableTimer: ReturnType<typeof setTimeout> | undefined;
@@ -179,6 +205,12 @@ export function runPublishChild(argv: string[], body: string, repoRoot: string):
 		};
 		child.on("error", () => {
 			clearTimeout(killTimer);
+			if (graceTimer !== undefined) {
+				clearTimeout(graceTimer);
+			}
+			if (unkillableTimer !== undefined) {
+				clearTimeout(unkillableTimer);
+			}
 			settle({
 				outcome: "refused",
 				cause: "the publish delegate could not be run from this session's environment; the send never started",
@@ -200,6 +232,11 @@ export function runPublishChild(argv: string[], body: string, repoRoot: string):
 			// mark an in-bound run timed out. A child that never exits still
 			// trips the kill timer. From here the grace timer bounds the flush.
 			clearTimeout(killTimer);
+			// A late exit after the backstop already settled the call must not
+			// arm a fresh timer on a finished call.
+			if (settled) {
+				return;
+			}
 			// Streams may still be flushing; "close" decides as soon as they
 			// end, and the grace decides when an orphan never lets them end.
 			graceTimer = setTimeout(() => decide(code, signal), STREAM_GRACE_MS);
