@@ -198,14 +198,23 @@ function isAbsentError(error: unknown): boolean {
  * record producer, asked here of the containers a landing would traverse.
  * Absent containers are not a fault: they are what a landing creates.
  */
-function containerIsLink(destRoot: string, rel: string): boolean {
+type ContainerVerdict = "ok" | "link" | "unmeasurable";
+
+/**
+ * Judge the containers a landing would traverse. THREE outcomes, not two:
+ * a container that is a LINK and one that cannot be MEASURED both refuse,
+ * but for different reasons, and an operator repairing the second must not
+ * be told the first. Collapsing them was a real defect — an ENOTDIR or
+ * ENAMETOOLONG container reported "is a symbolic link".
+ */
+function containerVerdict(destRoot: string, rel: string): ContainerVerdict {
 	const parts = rel.split("/").slice(0, -1);
 	let cursor = destRoot;
 	for (const part of parts) {
 		cursor = join(cursor, part);
 		try {
 			if (lstatSync(cursor).isSymbolicLink()) {
-				return true;
+				return "link";
 			}
 		} catch (error) {
 			// Absent from here down is nothing to traverse — it is what a
@@ -213,10 +222,10 @@ function containerIsLink(destRoot: string, rel: string): boolean {
 			// could not measure (ENOTDIR where a container is a regular file,
 			// an argument error on a NUL-bearing member), and an unmeasurable
 			// container fails toward the block (§3.9), never toward a landing.
-			return !isAbsentError(error);
+			return isAbsentError(error) ? "ok" : "unmeasurable";
 		}
 	}
-	return false;
+	return "ok";
 }
 
 function sameBytes(a: string, b: string): boolean {
@@ -253,12 +262,21 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				reason: "destination falls outside the shell-owned namespaces §4.1 states, or names a namespace root rather than a member beneath one; nothing is landed",
 			};
 		}
-		if (containerIsLink(destRoot, rel)) {
+		const container = containerVerdict(destRoot, rel);
+		if (container === "link") {
 			return {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
 				reason: "a destination container is a symbolic link; a landing would write through it to wherever it points",
+			};
+		}
+		if (container === "unmeasurable") {
+			return {
+				source: raw,
+				dest: null,
+				action: "refuse" as const,
+				reason: "a destination container could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
 			};
 		}
 

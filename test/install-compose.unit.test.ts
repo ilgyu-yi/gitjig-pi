@@ -368,12 +368,58 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 			"an unmeasurable container was landed into",
 		);
 
-		// (b) a NUL-bearing member — the probe throws an argument error.
+		// (b) a NUL in a CONTAINER component.
 		const nul = ".pi/x\0/y.ts";
 		assert.equal(
 			decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [nul] }), nul)?.action,
 			"refuse",
 			"a NUL-bearing member was landed",
+		);
+
+		// Both of the above are decided at the CONTAINER walk, so they carry
+		// the container's reason and leave the LEAF probe's refuse branch
+		// unexercised. That is what the arm below is for.
+		assert.match(
+			decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [nul] }), nul)?.reason ?? "",
+			/container/,
+			"the container walk's refusal no longer names the container",
+		);
+	});
+
+	it("an unmeasurable LEAF refuses — the branch the container walk short-circuits past", () => {
+		// Round-3 nit: the arm above never reached the leaf `lstat` catch,
+		// because both of its shapes are decided at the container walk. A
+		// mutant reverting that catch to an unconditional land left the suite
+		// fully green, so the branch was shipped unpinned. These two shapes
+		// put the fault in the LEAF component, where the container walk has
+		// nothing to say.
+		const { src, dest } = sandbox();
+		mkdirSync(join(dest, ".pi"), { recursive: true });
+
+		for (const leaf of [".pi/y\0.ts", `.pi/${"n".repeat(4096)}.ts`]) {
+			const decision = decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [leaf] }), leaf);
+			assert.equal(decision?.action, "refuse", "an unmeasurable leaf was landed");
+			assert.match(
+				decision?.reason ?? "",
+				/destination could not be measured/,
+				"the leaf refusal did not carry the leaf probe's own reason",
+			);
+		}
+	});
+
+	it("an unmeasurable container is not reported as a symbolic link", () => {
+		// Round-3 nit: both container refusals shared one literal, so an
+		// operator repairing an ENOTDIR container was told it was a link.
+		const { src, dest } = sandbox();
+		writeFileSync(join(dest, ".pi"), "a regular file where the namespace belongs\n");
+		const decision = decisionFor(
+			composeSubstrate({ sourceRoot: src, destRoot: dest, members: [".pi/deep/x.ts"] }),
+			".pi/deep/x.ts",
+		);
+		assert.equal(decision?.action, "refuse");
+		assert.ok(
+			!/symbolic link/.test(decision?.reason ?? ""),
+			`an unmeasurable container was reported as a symbolic link: ${JSON.stringify(decision?.reason)}`,
 		);
 	});
 
