@@ -478,23 +478,14 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// cleanup is `whitespace`, which keeps the `#` line, so the adapter
 		// approved `feat(#58): â€¦` while `#zqcomment â€¦` became the subject.
 		const attempt = commitWithMessage(fixture, "#zqcomment leading the message\nfeat(#58): a conforming subject\n");
-		assert.notEqual(
-			attempt.status,
-			0,
-			"comment-led: the commit SUCCEEDED. The adapter checked the first non-comment line and approved it, " +
-				`while the line that landed as the subject was the comment above it â€” a silent wrong allow at a ` +
-				`gate (Â§3.11). Landed subject: ${JSON.stringify(landedSubject())}`,
-		);
+		assertRefusedThroughAdapter(attempt, `comment-led: the adapter approved the first non-comment line while the comment above it landed; subject: ${JSON.stringify(landedSubject())}`);
 	});
 
 	it("the same shape under an explicit --cleanup=verbatim is refused too", () => {
 		const attempt = commitWithMessage(fixture, "#zqverbatim leading\nfeat(#58): a conforming subject\n", {
 			gitArgs: ["--cleanup=verbatim"],
 		});
-		assert.notEqual(
-			attempt.status,
-			0,
-			`verbatim: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(attempt, `verbatim: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -502,10 +493,7 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// Here the landed subject is the comment ALONE â€” the sharpest form,
 		// since the approved line is not even part of what git records.
 		const attempt = commitWithMessage(fixture, "#zqspaced comment\n\nfeat(#58): a conforming subject\n");
-		assert.notEqual(
-			attempt.status,
-			0,
-			`spaced: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(attempt, `spaced: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -514,10 +502,7 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// they conform to nothing. Under `strip` git aborts on the empty
 		// message anyway, so refusing is right in both worlds.
 		const attempt = commitWithMessage(fixture, "#zqonly a comment\n#zqand another\n");
-		assert.notEqual(
-			attempt.status,
-			0,
-			`all-comment: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(attempt, `all-comment: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -539,10 +524,7 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		const attempt = commitWithMessage(fixture, "#zqhash is not a comment here\nfeat(#58): a conforming subject\n", {
 			env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.commentChar", GIT_CONFIG_VALUE_0: ";" },
 		});
-		assert.notEqual(
-			attempt.status,
-			0,
-			"commentChar: the commit SUCCEEDED. With `;` as git's comment marker a `#`-led line is ordinary " +
+		assertRefusedThroughAdapter(attempt, "commentChar: the commit SUCCEEDED. With `;` as git's comment marker a `#`-led line is ordinary " +
 				`text that lands as the subject, and the adapter skipped it as a comment; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
@@ -553,10 +535,7 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// the other direction of the marker axis, and a marker-aware read
 		// must not start skipping it.
 		const attempt = commitWithMessage(fixture, ";zqsemicolon is ordinary here\nfeat(#58): a conforming subject\n");
-		assert.notEqual(
-			attempt.status,
-			0,
-			`semicolon: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(attempt, `semicolon: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -586,10 +565,7 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		const attempt = commitWithMessage(fixture, `feat(#58): ${"x".repeat(72)}   \n`, {
 			gitArgs: ["--cleanup=verbatim"],
 		});
-		assert.notEqual(
-			attempt.status,
-			0,
-			"verbatim length: under verbatim the untrimmed line is what lands, and its description is over the " +
+		assertRefusedThroughAdapter(attempt, "verbatim length: under verbatim the untrimmed line is what lands, and its description is over the " +
 				`limit, but the commit was approved: ${attempt.stderr}`,
 		);
 	});
@@ -736,6 +712,29 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 		// subject that conforms in BOTH forms.
 		const { status, stderr } = commitThroughEditor("feat(#58): a conforming subject with a trailing space \n");
 		assert.equal(status, 0, `trailing space (benign): an ordinary commit was refused: ${stderr}`);
+	});
+
+	it("a first line of one NO-BREAK SPACE is content to git, so it is checked", () => {
+		// git's cleanup uses an ASCII-only isspace; a shell `[:space:]` under
+		// a UTF-8 locale is wider. The line is blank to the locale and content
+		// to git, so it landed as the subject without entering the candidate
+		// set â€” a wrong allow found only by driving a non-ASCII space.
+		assertRefusedByAdapter(
+			commitThroughEditor("\u00a0\n\nfeat(#58): a conforming subject\n"),
+			"nbsp first line: git kept the no-break-space line as the subject and the hook never saw it",
+		);
+	});
+
+	it("a TRAILING no-break space is not trimmed away, because git does not trim it", () => {
+		// The mirror fault in the trimmer: trimming a non-ASCII space
+		// manufactures the candidate `feat(#N):`, which has no description, and
+		// refuses a line git would have landed intact.
+		const { status, stderr } = commitThroughEditor("feat(#58): \u00a0\n");
+		assert.equal(
+			status,
+			0,
+			`nbsp trailing: refused a subject whose trailing byte git does not treat as space: ${stderr}`,
+		);
 	});
 
 	it("the ordinary editor commit still passes", () => {

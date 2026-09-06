@@ -41,8 +41,6 @@
 #     git choose something else and keep that line. Both readings are then
 #     computed against the wrong marker; they diverge and the message is
 #     refused, which is the safe direction but is not the rule git ran.
-#   - A marker containing shell pattern metacharacters is matched as a glob
-#     by the `case` above rather than literally.
 #   - THE FALSE BLOCK THIS BUYS. Under `strip` a leading comment IS removed,
 #     so a `commit.template` opening with comments is refused although the
 #     conforming subject beneath it would have landed. The refusal says which
@@ -63,6 +61,12 @@
 #     channels bypass this predicate structurally, not by a gap in it, and no
 #     adapter here can reach them. No arm in this tree measures them; the
 #     cherry-pick bypass was confirmed by hand against an armed chain.
+#   - THE PARAGRAPH FOLD. What this hook vouches for is every line that
+#     could be the recorded message's FIRST line. Git's `%s` folds the whole
+#     first paragraph into one string, so a conforming first line followed
+#     immediately by more text renders a subject longer than either line.
+#     That is a grammar question, not a line-selection one, and it is not
+#     decided here.
 #   - THE MERGE EDGE. `git merge` does fire `commit-msg`, and git's default
 #     merge message violates this grammar; enumerated (not pinned) in
 #     `test/commit-format.githook.test.ts`'s residual block.
@@ -90,6 +94,19 @@ _gh_marker="$(git config --get core.commentString 2>/dev/null)" || _gh_marker=""
 # subject, and treating it as content refuses a message git would have
 # accepted (measured on the editor path, where git hands the file over
 # untouched and `strip` trims it afterwards).
+# BYTE SEMANTICS FOR THE SELECTION, because git's is byte semantics. Git's
+# cleanup uses an ASCII-only isspace; a shell `[:space:]` under the
+# operator's locale is wider, and the difference is a wrong allow: a first
+# line holding one NO-BREAK SPACE is blank to a UTF-8 locale and content to
+# git, so it landed as the subject without ever entering the candidate set
+# (measured). The trimmer has the mirror fault, manufacturing a candidate
+# with its trailing non-ASCII space removed where git removes nothing. Both
+# run under LC_ALL=C; the caller's locale is restored before
+# check_commit_subject, which captures it to choose a measuring charmap.
+_gh_lc_was_set=0
+[ "${LC_ALL+x}" = "x" ] && { _gh_lc_was_set=1; _gh_lc_saved="$LC_ALL"; }
+LC_ALL=C
+
 _gh_first=""
 _gh_subject=""
 while IFS= read -r _gh_line || [ -n "$_gh_line" ]; do
@@ -104,6 +121,11 @@ while IFS= read -r _gh_line || [ -n "$_gh_line" ]; do
   _gh_subject="$_gh_line"
   break
 done < "$_gh_msgfile"
+
+_gh_first_trimmed="${_gh_first%"${_gh_first##*[![:space:]]}"}"
+_gh_subject_trimmed="${_gh_subject%"${_gh_subject##*[![:space:]]}"}"
+
+if [ "$_gh_lc_was_set" -eq 1 ]; then LC_ALL="$_gh_lc_saved"; else unset LC_ALL; fi
 
 # Empty message -> let git's own empty-message handling deal with it
 # (fail-open). The test is the PHYSICAL reading: a message that is entirely
@@ -140,15 +162,8 @@ _gh_check_one() {
 # lands. Both are therefore candidates, and the trimmed one is not
 # cosmetic: `feat(#N):` followed by spaces satisfies the grammar untrimmed
 # and does not once trimmed, so checking only the untrimmed form approved a
-# subject with no description at all (measured on the editor path).
-_gh_trim_trailing() {
-  _gh_t="$1"
-  case "$_gh_t" in
-    *[![:space:]]*) printf '%s' "${_gh_t%"${_gh_t##*[![:space:]]}"}" ;;
-    *) printf '%s' "" ;;
-  esac
-}
-
+# subject with no description at all (measured on the editor path). The
+# trimmed forms were computed above, under git's own space set.
 _gh_checked=""
 _gh_check_candidate() {
   [ -n "$1" ] || return 0
@@ -161,7 +176,7 @@ _gh_check_candidate() {
   _gh_check_one "$1"
 }
 
-for _gh_candidate in "$_gh_first" "$(_gh_trim_trailing "$_gh_first")" "$_gh_subject" "$(_gh_trim_trailing "$_gh_subject")"; do
+for _gh_candidate in "$_gh_first" "$_gh_first_trimmed" "$_gh_subject" "$_gh_subject_trimmed"; do
   _gh_check_candidate "$_gh_candidate" || exit 1
 done
 
