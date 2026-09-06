@@ -22,7 +22,7 @@
  * roster arm below pins.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -194,6 +194,94 @@ describe("destinations stay inside shell-owned namespaces (issue #116, §4.1)", 
 		});
 		assert.equal(decisionFor(composed, ".githooks/good.sh")?.action, "land");
 		assert.equal(decisionFor(composed, "../bad.sh")?.action, "refuse");
+	});
+});
+
+/**
+ * The arm class that catches what verdict-only arms cannot (issue #116,
+ * review round 1). Both round-1 findings were wrong `land` verdicts whose
+ * wrongness is only visible in the ACT the verdict authorizes: a decision
+ * arm reads `land` and is satisfied, while performing that landing writes
+ * the shell's bytes outside every shell-owned namespace.
+ *
+ * So these arms perform a naive delivery — exactly what a delivery layer
+ * would do with a `land` — and then assert containment over the RESULT.
+ * The invariant is a property of the outcome, not of the verdict: after
+ * acting on a whole composition, nothing exists outside the destination
+ * root's shell-owned namespaces.
+ */
+describe("acting on the composition writes nothing outside the namespaces (issue #116)", () => {
+	/** What a delivery layer would naively do with each decision. */
+	function performLandings(sourceRoot: string, destRoot: string, composed: readonly ComposedMember[]): void {
+		for (const m of composed) {
+			if (m.action !== "land" || m.dest === null) {
+				continue;
+			}
+			const target = join(destRoot, m.dest);
+			mkdirSync(dirname(target), { recursive: true });
+			writeFileSync(target, readFileSync(join(sourceRoot, m.dest)));
+		}
+	}
+
+	it("a DANGLING symlink at the leaf destination does not become a write outside the tree", () => {
+		// Round-1 finding 1. `existsSync` follows links, so a symlink pointing
+		// at a not-yet-existing path read as absent and was landed — through
+		// the link. The member here is exactly what the walk produces; nothing
+		// hostile is passed in.
+		const src = mkdtempSync(join(root, "src-"));
+		write(join(src, ".githooks/pre-commit").slice(root.length + 1), "SHELL BYTES\n");
+		const dest = mkdtempSync(join(root, "dest-"));
+		const outside = join(root, `pwned-${Date.now()}.txt`);
+		mkdirSync(join(dest, ".githooks"), { recursive: true });
+		symlinkSync(outside, join(dest, ".githooks", "pre-commit"));
+
+		const composed = composeSubstrate({ sourceRoot: src, destRoot: dest, members: deriveSubstrateSet(src) });
+		assert.equal(decisionFor(composed, ".githooks/pre-commit")?.action, "refuse");
+		performLandings(src, dest, composed);
+		assert.ok(!existsSync(outside), "the shell's bytes were written through a dangling symlink, outside every namespace");
+	});
+
+	it("a spelling that traverses an ABSENT component into a real symlinked container is refused", () => {
+		// Round-1 finding 2. Containment was judged on the canonical path
+		// while the link walk used the raw spelling, so the walk gave up at
+		// the absent component and `join` resolved straight through the link.
+		const src = mkdtempSync(join(root, "src-"));
+		write(join(src, ".pi/link/x.ts").slice(root.length + 1), "SHELL BYTES\n");
+		const dest = mkdtempSync(join(root, "dest-"));
+		const elsewhere = mkdtempSync(join(root, "elsewhere-"));
+		mkdirSync(join(dest, ".pi"), { recursive: true });
+		symlinkSync(elsewhere, join(dest, ".pi", "link"));
+
+		const sneaky = ".githooks/absent/../../.pi/link/x.ts";
+		const composed = composeSubstrate({ sourceRoot: src, destRoot: dest, members: [sneaky] });
+		assert.equal(decisionFor(composed, sneaky)?.action, "refuse", "the sneaky spelling was admitted");
+		performLandings(src, dest, composed);
+		assert.ok(
+			!existsSync(join(elsewhere, "x.ts")),
+			"bytes were written through a symlinked container reached by a `..` spelling",
+		);
+	});
+
+	it("a namespace ROOT is not a landable member", () => {
+		const src = mkdtempSync(join(root, "src-"));
+		const dest = mkdtempSync(join(root, "dest-"));
+		for (const ns of SHELL_NAMESPACES) {
+			assert.equal(
+				decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [ns] }), ns)?.action,
+				"refuse",
+				`the namespace root ${ns} was treated as a landable member; a landing would put a file where the directory belongs`,
+			);
+		}
+	});
+
+	it("the emitted dest is canonical, so a delivery cannot re-derive a different path", () => {
+		const src = mkdtempSync(join(root, "src-"));
+		write(join(src, ".github/workflows/w.yml").slice(root.length + 1), "w\n");
+		const dest = mkdtempSync(join(root, "dest-"));
+		const raw = ".pi/../.github/workflows/w.yml";
+		const decision = decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [raw] }), raw);
+		assert.equal(decision?.action, "land");
+		assert.equal(decision?.dest, ".github/workflows/w.yml", "dest carried the raw spelling, not the canonical one");
 	});
 });
 

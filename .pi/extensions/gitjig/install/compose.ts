@@ -132,8 +132,9 @@ export function deriveSubstrateSet(sourceRoot: string): string[] {
 }
 
 /**
- * True when `rel` is a normalized, relative path inside a shell-owned
- * namespace.
+ * True when an ALREADY-CANONICAL `rel` names a member inside a shell-owned
+ * namespace. Canonicalization happens once, at the boundary, in
+ * `composeSubstrate`.
  *
  * WHICH TEST IS LOAD-BEARING, measured rather than assumed. The final
  * namespace-prefix test carries the containment on its own: with BOTH
@@ -153,15 +154,21 @@ export function deriveSubstrateSet(sourceRoot: string): string[] {
  * `.githooks/../../x` normalizes out of the tree and is refused. Both
  * directions are pinned.
  */
-function insideNamespace(rel: string): boolean {
-	if (isAbsolute(rel)) {
+function insideNamespace(normalized: string): boolean {
+	if (isAbsolute(normalized)) {
 		return false;
 	}
-	const normalized = toPosix(normalize(rel));
 	if (normalized.startsWith("../") || normalized === ".." || normalized.startsWith("/")) {
 		return false;
 	}
-	return SHELL_NAMESPACES.some((ns) => normalized === ns || normalized.startsWith(`${ns}/`));
+	// A namespace ROOT is not a landable member: landing it would put a
+	// regular file where the namespace directory belongs.
+	return SHELL_NAMESPACES.some((ns) => normalized.startsWith(`${ns}/`) && normalized.length > ns.length + 1);
+}
+
+/** Canonical form: POSIX separators, `.`/`..` resolved. Decided ONCE (§3.11). */
+export function canonicalize(rel: string): string {
+	return toPosix(normalize(rel));
 }
 
 /**
@@ -203,18 +210,27 @@ function sameBytes(a: string, b: string): boolean {
  */
 export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 	const { sourceRoot, destRoot, members } = input;
-	return members.map((rel) => {
+	return members.map((raw) => {
+		// CANONICALIZE ONCE (§3.11's one-home rule, applied to a path). Every
+		// step below — containment, the link walk, the existence probe, the
+		// emitted dest — reads this one value. Two representations of one path
+		// is a divergence surface: judging containment on the canonical form
+		// while walking the RAW spelling let `.githooks/absent/../../.pi/link/x`
+		// pass containment, abandon the link walk at the absent component, and
+		// then have `join` resolve straight through the link.
+		const rel = canonicalize(raw);
+
 		if (!insideNamespace(rel)) {
 			return {
-				source: rel,
+				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "destination falls outside the shell-owned namespaces §4.1 states; nothing is landed for this member",
+				reason: "destination falls outside the shell-owned namespaces §4.1 states, or names a namespace root rather than a member beneath one; nothing is landed",
 			};
 		}
 		if (containerIsLink(destRoot, rel)) {
 			return {
-				source: rel,
+				source: raw,
 				dest: null,
 				action: "refuse" as const,
 				reason: "a destination container is a symbolic link; a landing would write through it to wherever it points",
@@ -222,12 +238,27 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 		}
 
 		const destAbs = join(destRoot, rel);
-		if (!existsSync(destAbs)) {
-			return { source: rel, dest: rel, action: "land" as const, reason: "" };
+		// lstat, never existsSync: existsSync FOLLOWS links, so a destination
+		// that is a symlink to a path which does not yet exist reads as absent
+		// and would be landed — putting the shell's bytes wherever it points,
+		// outside every namespace, with no refusal and no warning.
+		let st;
+		try {
+			st = lstatSync(destAbs);
+		} catch {
+			return { source: raw, dest: rel, action: "land" as const, reason: "" };
 		}
-		if (!statSync(destAbs).isFile()) {
+		if (st.isSymbolicLink()) {
 			return {
-				source: rel,
+				source: raw,
+				dest: null,
+				action: "refuse" as const,
+				reason: "the destination itself is a symbolic link; a landing would write through it, and what it points at is not a same-named asset this instrument may reason about",
+			};
+		}
+		if (!st.isFile()) {
+			return {
+				source: raw,
 				dest: null,
 				action: "refuse" as const,
 				reason: "the destination exists and is not a regular file; it is not a same-named asset this instrument may reason about",
@@ -235,14 +266,14 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 		}
 		if (sameBytes(join(sourceRoot, rel), destAbs)) {
 			return {
-				source: rel,
+				source: raw,
 				dest: rel,
 				action: "converged" as const,
 				reason: "the destination already holds identical bytes; left unchanged (no-op)",
 			};
 		}
 		return {
-			source: rel,
+			source: raw,
 			dest: rel,
 			action: "skip" as const,
 			reason: "a pre-existing same-named asset differs from the substrate; skipped with a warning and left untouched (§4.7 never overwrites)",
