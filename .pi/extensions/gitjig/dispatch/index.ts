@@ -147,10 +147,12 @@ export type DispatchOutcome =
  * repository it came from — it lengthens the output instead of printing an
  * ambiguous one — so such a token expands straight back to the held
  * operand through `rev-parse` for whoever holds that repository. Measured
- * in this repository at 268 commits: 39 of the last 40 heads abbreviate to
- * 4 characters, one lengthens to 5, and the 4-character token round-trips
- * to the full hash. So this is §1.6's echo exposure narrowed, never
- * eliminated.
+ * in this repository: 39 of the last 40 heads abbreviate to 4 characters,
+ * one lengthens to 5 — git's uniqueness expansion, visible — and the
+ * 4-character token round-trips to the full hash. No commit count is given
+ * here on purpose: it would be stale by the next commit, and this one was,
+ * while the ratio beside it re-derives at any head. So this is §1.6's echo
+ * exposure narrowed, never eliminated.
  *
  * The trade rests on what it actually rests on: the coincidence it
  * replaces was measured and terminal, while the disclosure it admits needs
