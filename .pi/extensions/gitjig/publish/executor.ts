@@ -71,10 +71,97 @@
  */
 import { spawn } from "node:child_process";
 
+/**
+ * Every publication kind this gate reaches (issue #120). The list is
+ * EXPORTED and the suite enumerates it, so a kind added here without an
+ * admission rule or an argv spelling reds rather than publishing unchecked.
+ *
+ * Comments were once the whole union while the shell also created issues
+ * and pull requests and edited their bodies — the same guarded act, with no
+ * reach, publishing unscanned past a class whose backstop §3.3 records as
+ * structurally unavailable.
+ */
+export const PUBLISH_DESTINATION_KINDS = [
+	"issue-comment",
+	"pr-comment",
+	"issue-body",
+	"pr-body",
+	"issue-create",
+	"pr-create",
+] as const;
+
+export type PublishDestinationKind = (typeof PUBLISH_DESTINATION_KINDS)[number];
+
+/** A comment's own url — the shape only the comment verbs print. */
+const COMMENT_URL_SHAPE = /^https:\/\/[^\s]+#issuecomment-\d+$/;
+/** An issue or pull-request url — what the create and edit verbs print. */
+const SURFACE_URL_SHAPE = /^https:\/\/[^\s]+\/(?:issues|pull)\/\d+$/;
+
+/**
+ * ONE table keyed by kind (§3.11's one-home rule). Every property that
+ * varies by kind lives here: which operand identifies the target, the `gh`
+ * noun and verb, and the shape a SUCCESSFUL run prints.
+ *
+ * Three separate lists — a numbered set, a create set, and a pair of
+ * derivations over the kind string — is three places to forget a kind. The
+ * derivation form was worse than redundant: reading the noun from a
+ * `startsWith` and the verb from an `endsWith` made the argv builder TOTAL
+ * over any string, so a future `issue-close` would fall through to the
+ * `comment` verb and silently post a comment instead of doing the act it
+ * names. An unmapped kind now has no entry and refuses.
+ */
+interface KindSpec {
+	noun: "issue" | "pr";
+	verb: "comment" | "edit" | "create";
+	/** Which operand names the target. */
+	target: "number" | "title";
+	/** Output validity for THIS kind — admitted on shape alone (§3.10). */
+	successShape: RegExp;
+}
+
+const KIND_SPECS: Readonly<Record<PublishDestinationKind, KindSpec>> = {
+	"issue-comment": { noun: "issue", verb: "comment", target: "number", successShape: COMMENT_URL_SHAPE },
+	"pr-comment": { noun: "pr", verb: "comment", target: "number", successShape: COMMENT_URL_SHAPE },
+	"issue-body": { noun: "issue", verb: "edit", target: "number", successShape: SURFACE_URL_SHAPE },
+	"pr-body": { noun: "pr", verb: "edit", target: "number", successShape: SURFACE_URL_SHAPE },
+	"issue-create": { noun: "issue", verb: "create", target: "title", successShape: SURFACE_URL_SHAPE },
+	"pr-create": { noun: "pr", verb: "create", target: "title", successShape: SURFACE_URL_SHAPE },
+};
+
+/** The spec for a kind, or `undefined` where the kind is unmapped. */
+export function specForKind(kind: string): KindSpec | undefined {
+	return Object.hasOwn(KIND_SPECS, kind) ? KIND_SPECS[kind as PublishDestinationKind] : undefined;
+}
+
+/** True where this kind's published operands include a title. */
+export function kindCarriesTitle(kind: string): boolean {
+	return specForKind(kind)?.target === "title";
+}
+
 /** The structured publish target — the actor names it, nothing infers it (§3.3). */
 export interface PublishDestination {
-	kind: "issue-comment" | "pr-comment";
-	number: number;
+	kind: PublishDestinationKind;
+	/** Required for the numbered kinds; absent on the create kinds. */
+	number?: number;
+	/** Required for the create kinds; absent on the numbered kinds. */
+	title?: string;
+}
+
+/**
+ * A title is published text in ARGUMENT position, unlike the body, which
+ * reaches `gh` on stdin. Three refusals follow from that difference and
+ * from nothing else: an option-shaped title would be parsed as a flag
+ * rather than a value; a newline makes it not a title; and a NUL cannot
+ * cross the exec boundary intact. Each costs a spelling nobody needs and
+ * fails toward the block (§3.9's ambiguity rule).
+ */
+function isAdmissibleTitle(title: unknown): title is string {
+	return (
+		typeof title === "string" &&
+		title.trim().length > 0 &&
+		!title.startsWith("-") &&
+		!/[\n\r\0]/.test(title)
+	);
 }
 
 /** Structural admission for a destination that arrived untyped. */
@@ -82,20 +169,47 @@ export function isPublishDestination(value: unknown): value is PublishDestinatio
 	if (typeof value !== "object" || value === null) {
 		return false;
 	}
-	const { kind, number } = value as { kind?: unknown; number?: unknown };
-	return (
-		(kind === "issue-comment" || kind === "pr-comment") &&
-		typeof number === "number" &&
-		Number.isSafeInteger(number) &&
-		number > 0
-	);
+	const { kind, number, title } = value as { kind?: unknown; number?: unknown; title?: unknown };
+	if (typeof kind !== "string") {
+		return false;
+	}
+	// An unmapped kind is inadmissible rather than defaulted: a gate that
+	// guessed a surface would publish somewhere the actor did not name.
+	const spec = specForKind(kind);
+	if (spec === undefined) {
+		return false;
+	}
+	if (spec.target === "number") {
+		return typeof number === "number" && Number.isSafeInteger(number) && number > 0;
+	}
+	return isAdmissibleTitle(title);
 }
 
-/** The destination union's pinned argv spelling (§3.3's measurement domain). */
-export function ghCommentArgv(destination: PublishDestination): string[] {
-	const surface = destination.kind === "issue-comment" ? "issue" : "pr";
-	return [surface, "comment", String(destination.number), "--body-file", "-"];
+/**
+ * The destination union's pinned argv spelling (§3.3's measurement domain).
+ *
+ * Every spelling ends `--body-file -`, so the body reaches `gh` on stdin
+ * and never in argv: an argv-borne body is visible in the process table and
+ * can exceed the argument limit. The title has no such route — `gh` takes
+ * it as an argument — which is why admission constrains its shape above.
+ */
+export function ghPublishArgv(destination: PublishDestination): string[] {
+	const spec = specForKind(destination.kind);
+	if (spec === undefined) {
+		// Unreachable through the tool, which admits first. Throwing rather
+		// than defaulting keeps the builder NON-total: a kind with no spec
+		// has no argv, instead of quietly acquiring the wrong verb.
+		throw new Error("publish: no argv spelling is mapped for this destination kind");
+	}
+	const tail = ["--body-file", "-"];
+	if (spec.target === "title") {
+		return [spec.noun, spec.verb, "--title", String(destination.title), ...tail];
+	}
+	return [spec.noun, spec.verb, String(destination.number), ...tail];
 }
+
+/** @deprecated Retained call-site spelling; `ghPublishArgv` is the one predicate. */
+export const ghCommentArgv = ghPublishArgv;
 
 /** The child's bound — well under any caller's own backstop (§3.3). */
 export const CHILD_TIMEOUT_MS = 10_000;
@@ -104,7 +218,6 @@ export const CHILD_TIMEOUT_MS = 10_000;
 const STREAM_GRACE_MS = 2_000;
 
 /** Output validity: one comment-URL, the whole of the trimmed stdout (§3.10). */
-const COMMENT_URL_SHAPE = /^https:\/\/[^\s]+#issuecomment-\d+$/;
 
 export type PublishChildOutcome =
 	| { outcome: "published"; url: string }
@@ -116,7 +229,12 @@ export type PublishChildOutcome =
  * Every returned `cause` is a fixed composition over numbers and signal
  * names — never a stream byte, never an error message.
  */
-export function runPublishChild(argv: string[], body: string, repoRoot: string): Promise<PublishChildOutcome> {
+export function runPublishChild(
+	argv: string[],
+	body: string,
+	repoRoot: string,
+	successShape: RegExp,
+): Promise<PublishChildOutcome> {
 	return new Promise((resolve) => {
 		let settled = false;
 		let timedOut = false;
@@ -192,7 +310,7 @@ export function runPublishChild(argv: string[], body: string, repoRoot: string):
 				});
 			} else if (code === 0) {
 				const line = stdout.trim();
-				if (COMMENT_URL_SHAPE.test(line)) {
+				if (successShape.test(line)) {
 					settle({ outcome: "published", url: line });
 				} else {
 					settle({ outcome: "outcome-unverified" });

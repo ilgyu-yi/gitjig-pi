@@ -45,8 +45,15 @@ import { Type } from "typebox";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import { neutralizeBody } from "./neutralize.ts";
-import { ghCommentArgv, isPublishDestination, runPublishChild } from "./executor.ts";
-import { PatternSourceError, scanBody } from "./scan.ts";
+import {
+	ghPublishArgv,
+	isPublishDestination,
+	kindCarriesTitle,
+	PUBLISH_DESTINATION_KINDS,
+	runPublishChild,
+	specForKind,
+} from "./executor.ts";
+import { mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
 
 /** The tool name §3.3's egress row records, verbatim. */
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
@@ -54,8 +61,19 @@ export const PUBLISH_TOOL_NAME = "gitjig_publish";
 const PublishParams = Type.Object({
 	body: Type.String({ description: "The exact text to publish; scanned and neutralized before any send." }),
 	destination: Type.Object({
-		kind: Type.Union([Type.Literal("issue-comment"), Type.Literal("pr-comment")]),
-		number: Type.Number({ description: "The issue or pull request number the comment lands on." }),
+		kind: Type.Union(PUBLISH_DESTINATION_KINDS.map((k) => Type.Literal(k))),
+		number: Type.Optional(
+			Type.Number({
+				description: "The issue or pull request number acted on. Required for the comment and body kinds.",
+			}),
+		),
+		title: Type.Optional(
+			Type.String({
+				description:
+					"The title of the issue or pull request being created. Required for the create kinds, and " +
+					"scanned as published text in its own right.",
+			}),
+		),
 	}),
 });
 
@@ -77,9 +95,10 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 		name: PUBLISH_TOOL_NAME,
 		label: "Publish",
 		description:
-			"Publish repository-derived text to the platform (issue or PR comment). " +
-			"The body is scanned against the committed secret patterns and refused on a match; " +
-			"relayed mentions and actionable references are neutralized to inert spellings before the send.",
+			"Publish repository-derived text to the platform: comment on an issue or PR, edit an issue or " +
+			"PR body, or create an issue or PR. The body — and, for the create kinds, the title — is scanned " +
+			"against the committed secret patterns and refused on a match; relayed mentions and actionable " +
+			"references are neutralized to inert spellings before the send.",
 		parameters: PublishParams,
 		async execute(_toolCallId, params) {
 			// The destination is the actor's explicit structured target; an
@@ -91,9 +110,25 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				return result(text, { disposition: "refuse-destination" });
 			}
 
-			let scan;
+			// The scanned domain is this KIND's own published operands, never
+			// whatever the caller happened to pass: a title on a comment kind is
+			// dropped by the argv builder and never publishes, so scanning it
+			// would refuse a send over text that was never going anywhere.
+			const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
+
+			let merged;
 			try {
-				scan = scanBody(params.body);
+				// Every byte this call publishes is scanned — a create kind's
+				// title lands on the same public surface and a secret in it leaks
+				// exactly as far. The operands are scanned SEPARATELY, as two call
+				// sites of the one predicate (§3.11 forbids a second
+				// implementation, not a second call), and combined by the one
+				// exported merge rule rather than by logic living here — a rule
+				// inside this closure is a rule no arm can bind to.
+				merged = mergeScanOutcomes(
+					scanBody(params.body),
+					publishedTitle === undefined ? undefined : scanBody(publishedTitle),
+				);
 			} catch (error) {
 				// Fail closed on scan machinery (§3.9 egress-publish-patterns):
 				// PatternSourceError messages are fixed content-free literals;
@@ -106,10 +141,12 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				return result(text, { disposition: "refuse-machinery" });
 			}
 
+			const scan = merged.scan;
 			if (scan.disposition === "refuse-out-of-domain") {
 				const text =
-					"publish refused: disposition refuse-out-of-domain; the body is outside the " +
-					"line-and-pattern measurement domain; no pattern was consulted — recompose the body and call again";
+					"publish refused: disposition refuse-out-of-domain; " +
+					`in ${merged.operands.join(" and ")}; outside the line-and-pattern measurement ` +
+					"domain; no pattern was consulted — recompose and call again";
 				record("refuse-out-of-domain", text);
 				return result(text, { disposition: "refuse-out-of-domain" });
 			}
@@ -117,19 +154,53 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			if (scan.disposition === "refuse-match") {
 				// Pattern IDs are format-checked lowercase-hyphen tokens and the
 				// locators are numbers, so this composition carries no body byte.
+				// Per-operand attribution: a flat locator list cannot say which
+				// line belongs to which operand, and a title is always line 1, so
+				// a body match on its own first line would otherwise read
+				// "lines 1, 1". Every token here is a fixed literal or a
+				// format-checked pattern id or a number — no operand byte.
+				const located = merged.matches
+					.map((m) => `${m.operand} patterns ${m.patternIds.join(", ")} lines ${m.lines.join(", ")}`)
+					.join("; ");
 				const text =
 					"publish refused: disposition refuse-match; " +
-					`patterns ${scan.patternIds.join(", ")}; lines ${scan.lines.join(", ")} — ` +
+					`${located} — ` +
 					"respell or remove the located spans and call again";
 				record("refuse-match", text);
 				return result(text, {
 					disposition: "refuse-match",
+					operands: merged.operands,
+					matches: merged.matches,
 					patternIds: scan.patternIds,
 					lines: scan.lines,
 				});
 			}
 
-			const outcome = await runPublishChild(ghCommentArgv(destination), neutralizeBody(params.body), repoRoot);
+			// Both published operands cross through the neutralizer: the title
+			// carries mentions as readily as the body, and it rides argv where
+			// the body rides stdin, so neither can be neutralized by the other's
+			// treatment.
+			const sendDestination =
+				publishedTitle !== undefined
+					? { ...destination, title: neutralizeBody(publishedTitle) }
+					: destination;
+			// The success shape is this kind's own: only the comment verbs print
+			// a comment url, so validating every kind against that shape made a
+			// successful create or body edit report outcome-unverified — which
+			// invites a retry, and a retried create mints a SECOND public
+			// surface (§3.10's output-validity rule, §5.6's direction).
+			const spec = specForKind(destination.kind);
+			if (spec === undefined) {
+				const text = "publish refused: the destination is not an admissible structured target";
+				record("refuse-destination", text);
+				return result(text, { disposition: "refuse-destination" });
+			}
+			const outcome = await runPublishChild(
+				ghPublishArgv(sendDestination),
+				neutralizeBody(params.body),
+				repoRoot,
+				spec.successShape,
+			);
 			if (outcome.outcome === "published") {
 				// The one surface child bytes may cross: the URL validated whole
 				// against the comment-URL shape (§3.10's output validity), and
