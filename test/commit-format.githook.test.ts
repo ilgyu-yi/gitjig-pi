@@ -574,6 +574,26 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC �
 		);
 	});
 
+	it("under --cleanup=verbatim the UNTRIMMED length is what lands, and is refused", () => {
+		// The other half of the trailing-whitespace axis. Under `verbatim` git
+		// keeps the trailing spaces, so a 72-codepoint subject plus spaces
+		// lands over the limit. Checking only the trimmed form would approve
+		// it — this arm is what makes the untrimmed candidate load-bearing.
+		// The grammar bounds the DESCRIPTION after `<type>(#N): `, so the two
+		// forms are built to straddle that boundary: 72 description
+		// characters trimmed, 75 untrimmed. The trimmed form conforms and the
+		// untrimmed one does not, which is exactly the discriminator.
+		const attempt = commitWithMessage(fixture, `feat(#58): ${"x".repeat(72)}   \n`, {
+			gitArgs: ["--cleanup=verbatim"],
+		});
+		assert.notEqual(
+			attempt.status,
+			0,
+			"verbatim length: under verbatim the untrimmed line is what lands, and its description is over the " +
+				`limit, but the commit was approved: ${attempt.stderr}`,
+		);
+	});
+
 	it("a conforming subject with no comments at all still passes", () => {
 		const attempt = commitWithMessage(fixture, "feat(#58): plain conforming subject\n");
 		assert.equal(attempt.status, 0, `plain: ${attempt.stderr}`);
@@ -620,7 +640,10 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 	after(() => removeGithookFixture(fixture));
 
 	/** One commit through a scripted editor, with optional extra git config. */
-	function commitThroughEditor(message: string, config: Record<string, string> = {}): { status: number | null } {
+	function commitThroughEditor(
+		message: string,
+		config: Record<string, string> = {},
+	): { status: number | null; stderr: string } {
 		fixture.seq += 1;
 		appendFileSync(join(fixture.root, "work.txt"), `editor ${fixture.seq}\n`);
 		spawnSync("git", ["add", "work.txt"], { cwd: fixture.root, env: editorEnv(fixture) });
@@ -631,7 +654,22 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 			cwd: fixture.root,
 			env: { ...editorEnv(fixture), GIT_EDITOR: `cp ${messagePath}` },
 		});
-		return { status: run.status };
+		return { status: run.status, stderr: (run.stderr ?? Buffer.alloc(0)).toString("utf8") };
+	}
+
+	/**
+	 * A refusal that came from THIS adapter, not from any nonzero exit. Without
+	 * the recovery-line check a rejected config value or a failed editor would
+	 * pass a status-only assertion — the vacuous shape the rest of this file
+	 * avoids through `assertRefusedThroughAdapter`.
+	 */
+	function assertRefusedByAdapter(run: { status: number | null; stderr: string }, arm: string): void {
+		assert.notEqual(run.status, 0, `${arm}: the commit SUCCEEDED`);
+		assert.match(
+			run.stderr,
+			/--no-verify/,
+			`${arm}: the commit failed, but not through this adapter — no tier recovery line on stderr: ${JSON.stringify(run.stderr)}`,
+		);
 	}
 
 	function editorEnv(f: GithookFixture): Record<string, string> {
@@ -652,31 +690,28 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 		// it under strip and the non-conforming line 2 lands. An adapter that
 		// checked only the first non-blank line would vouch for the comment
 		// and never see what landed.
-		const status = commitThroughEditor(
-			"feat(#58): looks conforming but is a comment\nzqnot a conforming subject at all\n",
-			{ "core.commentChar": "f" },
-		).status;
-		assert.notEqual(
-			status,
-			0,
-			"letter marker: the commit SUCCEEDED — git stripped the `f`-led line as a comment and the " +
-				"unchecked line beneath it landed as the subject, the same silent wrong allow in a marker the " +
-				"adapter did not read (§3.11)",
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58): looks conforming but is a comment\nzqnot a conforming subject at all\n", {
+				"core.commentChar": "f",
+			}),
+			"letter marker: git stripped the `f`-led line as a comment and the unchecked line beneath it landed",
 		);
 	});
 
 	it("`core.commentString` takes precedence, and its marker is honoured too", () => {
-		const status = commitThroughEditor("feat(#58): also a comment now\nzqbogus subject here\n", {
-			"core.commentString": "feat",
-		}).status;
-		assert.notEqual(status, 0, "commentString: the commit SUCCEEDED; the marker was not read");
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58): also a comment now\nzqbogus subject here\n", {
+				"core.commentString": "feat",
+			}),
+			"commentString: the marker was not read",
+		);
 	});
 
 	it("a whitespace-only first line is BLANK, not a subject — git drops it", () => {
 		// The false block the first-non-blank reading bought if it counted a
 		// space-only line as content: git's cleanup drops it, so the
 		// conforming line beneath is what lands and the commit must succeed.
-		const status = commitThroughEditor("   \nfeat(#58): fine after a blankish line\n").status;
+		const { status } = commitThroughEditor("   \nfeat(#58): fine after a blankish line\n");
 		assert.equal(
 			status,
 			0,
@@ -685,8 +720,26 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 		);
 	});
 
+	it("a subject that is grammatical only UNTRIMMED is refused — git trims after the hook", () => {
+		// `feat(#N):` plus trailing spaces satisfies the grammar as the hook
+		// receives it and does not once git trims, so checking the untrimmed
+		// form alone approved a commit with no description at all. The trimmed
+		// form is a candidate for exactly this reason.
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58):   \n"),
+			"trailing space: the hook vouched for the untrimmed line while the trimmed one landed",
+		);
+	});
+
+	it("a conforming subject with ordinary trailing whitespace still passes", () => {
+		// The guard against over-correcting: trimming must not refuse a
+		// subject that conforms in BOTH forms.
+		const { status, stderr } = commitThroughEditor("feat(#58): a conforming subject with a trailing space \n");
+		assert.equal(status, 0, `trailing space (benign): an ordinary commit was refused: ${stderr}`);
+	});
+
 	it("the ordinary editor commit still passes", () => {
-		const status = commitThroughEditor("feat(#58): a plain editor subject\n\n# a template comment\n").status;
+		const { status } = commitThroughEditor("feat(#58): a plain editor subject\n\n# a template comment\n");
 		assert.equal(status, 0, "editor baseline: an ordinary editor commit was refused");
 	});
 });
