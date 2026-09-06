@@ -231,21 +231,33 @@ safe_source() {
 # That question is answered from the shell's OWN CALL STACK, recomputed at
 # each decision point rather than carried across the source.
 #
-# WHAT THAT BUYS, stated narrowly because a wider claim here was measured
-# false. It does NOT buy resistance to accident: the retired counter was not
-# corruptible by accident either. Measured against a reconstruction of it —
-# every call site is `githook_source … || exit 0`, so no window follows a
-# non-zero return; an `exit` inside a helper terminates the shell in the trap,
-# so no window follows that either; and a completed nested source balances, so
-# the count returns to its floor. The only thing that moved the counter was a
-# helper ASSIGNING its name.
+# WHAT THAT BUYS, stated as the cases that were measured rather than as a
+# universal, because two wider claims here were measured false in turn.
 #
-# What it buys is that there is no name to assign to. Moving the counter cost
-# one assignment; moving a frame count costs an `unset` and a refill. That is
-# a price on the DELIBERATE axis, which the paragraph below places outside
-# this fold's object — so the honest summary is that this is a structural
-# simplification, carrying no state across the point where a helper holds
-# control, rather than a fix for a reachable failure.
+# It closes one ACCIDENTAL corruption, and this is the one that makes the
+# change a repair. `_GH_SRC_DEPTH` was initialized at FILE SCOPE with no
+# re-entry guard, so a helper that re-sources this prelude — an ordinary
+# idiom that never names the counter — reset it to zero INSIDE an open
+# window; the outer call's own decrement then drove it to minus one and the
+# next window's arming test stopped matching. Measured end to end against a
+# tree carrying the counter: with one helper re-sourcing the prelude and a
+# later helper exiting, the commit was REFUSED with no stderr line and no
+# source-incomplete record — the wedged hook with nothing printed that this
+# fold exists to prevent, and the refusal on machinery §5.2 says this tier
+# never takes. The frame count folds open there with its line and its record.
+#
+# Three other accidental shapes were measured NOT to move the counter, and
+# are recorded so the claim above is not read as wider than it is: every call
+# site short-circuits with `|| exit 0`, so no window follows a non-zero
+# return; an `exit` inside a helper terminates the shell in the trap, so none
+# follows that either; and a completed nested source balances, returning the
+# count to its floor.
+#
+# It also buys that there is no name to assign to at all. Moving the counter
+# deliberately cost one assignment; moving a frame count costs an `unset` and
+# a refill. That is a price on the DELIBERATE axis, which the paragraph below
+# places outside this fold's object — so it is the repair above, not this,
+# that carries the change.
 #
 # What the counter's two directions were, kept because they say why any such
 # record is a hazard once it moves at all: driven below its floor, the next
@@ -289,7 +301,9 @@ safe_source() {
 # `githook_source` entries as it likes and force the clearing test to read
 # NESTED, leaving the trap to outlive its window. (The shell's own push and
 # pop on function entry and return survive the refill, so the special
-# behaviour is not fully gone; the refill does not need it to be.) That is the forged-allow direction, reached by deliberate tampering,
+# behaviour is not fully gone; the refill does not need it to be.)
+#
+# That is the forged-allow direction, reached by deliberate tampering,
 # which the threat model above places outside this fold rather than inside it.
 # It sits beside the standing exposure that a sourced file can redefine any
 # function in this shell, this one included — `_gh_src_outermost` among them,

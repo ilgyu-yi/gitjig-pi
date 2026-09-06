@@ -1101,6 +1101,51 @@ describe("the retired arming counter is no longer consulted (issue #71, SPEC §3
 		}
 	});
 
+	it("a helper that RE-SOURCES the prelude no longer disarms the next window", () => {
+		// The accidental corruption the frame count actually removes, and the
+		// reason this change is a repair rather than only a simplification.
+		// The retired counter was initialized at FILE SCOPE with no re-entry
+		// guard, so re-sourcing the prelude — an ordinary idiom that never
+		// names the counter — reset it to zero inside an open window; the
+		// outer call's own decrement then drove it below its floor and the
+		// next window's arming test stopped matching. Measured against a tree
+		// carrying the counter, this shape refused the commit with NO stderr
+		// line and NO record: the wedged hook with nothing printed, which is
+		// the refusal on machinery §5.2 says this tier never takes.
+		const fixture = buildArmedScanFixture();
+		try {
+			// pre-commit sources branch_guard.sh first, secret_scan.sh second.
+			appendFileSync(
+				join(fixture.root, ".githooks", "helpers", "branch_guard.sh"),
+				'\n. "$(dirname "${BASH_SOURCE[0]}")/../_lib.sh"\n',
+			);
+			// The failure the fold exists to absorb, in the window after it.
+			appendFileSync(join(fixture.root, ".githooks", "helpers", "secret_scan.sh"), "\nexit 9\n");
+
+			const attempt = commitWithMessage(fixture, "chore: prelude re-entry probe\n");
+			assert.equal(
+				attempt.status,
+				0,
+				`prelude-reentry: the commit was refused — a helper re-sourcing the prelude disarmed the next ` +
+					`window, so a later helper's exit carried out to git as a refusal on machinery, the one ` +
+					`direction §5.2 says this tier never takes; stderr: ${JSON.stringify(attempt.stderr)}`,
+			);
+			assert.match(
+				attempt.stderr,
+				/not enforced/,
+				`prelude-reentry: the fold folded with no stderr line — a disarmed allow that reads like an ` +
+					`enforced one (§3.9); stderr: ${JSON.stringify(attempt.stderr)}`,
+			);
+			assert.match(
+				attempt.auditDelta,
+				/source-incomplete/,
+				`prelude-reentry: the fold folded with no record; auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
 	it("a helper that only UNSETS FUNCNAME does not forge an allow", () => {
 		const fixture = buildArmedScanFixture();
 		try {
