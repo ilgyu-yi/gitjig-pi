@@ -199,17 +199,67 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 	}
 
 	/**
+	 * A shell single-quoted production starting at `at`, decoded — the fold
+	 * `'\''` (close, escaped quote, reopen) collapsing back to one quote.
+	 * Any other `'` closes the production.
+	 */
+	function readShellQuoted(clause: string, at: number): string | undefined {
+		let decoded = "";
+		let cursor = at + 1;
+		while (cursor < clause.length) {
+			if (clause[cursor] !== "'") {
+				decoded += clause[cursor];
+				cursor += 1;
+				continue;
+			}
+			if (clause.startsWith("'\\''", cursor)) {
+				decoded += "'";
+				cursor += 4;
+				continue;
+			}
+			return decoded;
+		}
+		return undefined;
+	}
+
+	/**
 	 * The object a recovery clause names. An arm that RUNS the recovery
 	 * rather than matching its prose needs one machine-readable handle on
 	 * it, and a clause naming the wrong object is exactly what these arms
 	 * are for: the handle is read raw, never repaired toward whatever the
-	 * arm was hoping for. Every clause delimits the path it names as a
-	 * JSON string (`quoted()` at the source, issue #47), so the handle is
-	 * the clause's first JSON-string production, decoded — the quotes say
-	 * exactly where the path ends, which is what lets these arms run on a
-	 * host whose temporary directory carries whitespace.
+	 * arm was hoping for.
+	 *
+	 * Clauses now delimit in TWO styles and the reader reads both, because
+	 * the style is a decision the clause makes about its own operand
+	 * (issue #65): a clause whose operand is the object of a NAMED ACT
+	 * delimits for a shell paste, since POSIX double quotes leave a
+	 * substitution live; a REFERENTIAL clause, which names a path only to
+	 * say which filesystem is meant, keeps the JSON delimiter. So the
+	 * handle is the clause's first delimited production in whichever style
+	 * opens first, decoded. Either way the delimiters say exactly where the
+	 * path ends, which is what lets these arms run on a host whose
+	 * temporary directory carries whitespace.
+	 *
+	 * The shell decode does not undo the `\uXXXX` escaping both styles
+	 * apply to control and bidi classes; no path these arms construct
+	 * carries one, and a clause that named such a path would fail the arm
+	 * loudly rather than silently mis-decode.
+	 *
+	 * THE INVARIANT THIS BRANCH DEPENDS ON, stated so a later author writing
+	 * clause prose knows it: no clause carries a single or double quote in
+	 * its prose AHEAD of its operand. Every apostrophe that exists today —
+	 * `this account's quota`, `another account's file` — sits after it. A
+	 * clause that broke this would silently flip the branch and yield a
+	 * truncated path; most call sites would red loudly on their containment
+	 * guard, but the arm asserting only that the named path is NOT the state
+	 * root would be satisfied vacuously by the truncation.
 	 */
 	function pathNamedIn(clause: string): string | undefined {
+		const jsonAt = clause.search(/"/);
+		const shellAt = clause.search(/'/);
+		if (shellAt !== -1 && (jsonAt === -1 || shellAt < jsonAt)) {
+			return readShellQuoted(clause, shellAt);
+		}
 		const found = /"(?:[^"\\]|\\.)*"/.exec(clause)?.[0];
 		return found === undefined ? undefined : (JSON.parse(found) as string);
 	}
@@ -1786,6 +1836,8 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 	// through nothing else — every path here is composed with join(), never
 	// spliced into a shell string by this suite.
 	const SUBSTITUTION = "$(touch substitution-ran)";
+	/** Carries a single quote AND a substitution — the fold's own killing shape. */
+	const QUOTE_SUBSTITUTION = "'$(touch substitution-ran)'";
 	const MARKER = "substitution-ran";
 	// Constructed, not inherited: the paste must behave the same on any
 	// host, and the standard tool directories cover chmod, touch and rm.
@@ -1860,6 +1912,169 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 		} finally {
 			rmSync(base, { recursive: true, force: true });
 		}
+	});
+
+	/** Runs `command` under bash in the fixture and returns its stdout. */
+	function pasteCapture(command: string, fixture: string): string {
+		return execFileSync("bash", ["-c", command], { cwd: fixture, env: PASTE_ENV, encoding: "utf8" });
+	}
+
+	/**
+	 * EVERY shell single-quoted operand in the clause, in both the forms
+	 * these arms need: `production` is the delimited text verbatim — what
+	 * the operator actually pastes — and `value` is what a shell decodes it
+	 * to, which is the literal path the act must land on.
+	 *
+	 * All of them, not the first: one clause carries TWO operands (replace
+	 * the non-directory ancestor, THEN create the state root), and a reader
+	 * that stopped at the first left the second pinned by nothing — measured,
+	 * reverting that second operand's delimiter alone shipped the whole suite
+	 * green (issue #65).
+	 *
+	 * THE INVARIANT THIS SCANNER DEPENDS ON is wider than the one on
+	 * `pathNamedIn`, which only needs no quote AHEAD of an operand: no clause
+	 * may carry a quote in prose ahead of OR BETWEEN its operands, and any
+	 * prose quote after the last operand must be unpaired. Break either and
+	 * the scanner returns a SPURIOUS production — the gap between two
+	 * operands, or the span between two trailing apostrophes — rather than
+	 * missing a real one. Both red today rather than passing, but the
+	 * assertion that fires blames an operand left in the JSON delimiter,
+	 * which would not be the cause, so a later author would be pointed at
+	 * the wrong repair.
+	 */
+	function shellOperandsIn(clause: string): { production: string; value: string }[] {
+		const found: { production: string; value: string }[] = [];
+		let at = clause.indexOf("'");
+		while (at !== -1) {
+			let value = "";
+			let cursor = at + 1;
+			let closed = -1;
+			while (cursor < clause.length) {
+				if (clause[cursor] !== "'") {
+					value += clause[cursor];
+					cursor += 1;
+					continue;
+				}
+				// The fold: close, escaped quote, reopen — one literal quote.
+				if (clause.startsWith("'\\''", cursor)) {
+					value += "'";
+					cursor += 4;
+					continue;
+				}
+				closed = cursor;
+				break;
+			}
+			if (closed === -1) {
+				return found;
+			}
+			found.push({ production: clause.slice(at, closed + 1), value });
+			at = clause.indexOf("'", closed + 1);
+		}
+		return found;
+	}
+
+	/**
+	 * The ACTING recoveryFor clauses, each rendered for paths whose component
+	 * carries `component`, then PASTED. Both halves are judged for EVERY
+	 * operand the clause carries: the substitution must not run, and each
+	 * operand must denote the literal path its act is aimed at — a clause
+	 * that arrives inert but names something else prescribes a dead act.
+	 * `printf` is the consumer because the property under test is the
+	 * OPERAND, not any one of the four different repairs the clauses name.
+	 *
+	 * The not-a-directory arm gets its own fixture shape, with a real plain
+	 * file at the ancestor, because only there do its two operands differ:
+	 * against a directory state root that arm falls back to naming the state
+	 * root twice, and its distinctive operand is never rendered at all.
+	 *
+	 * THE CASES TABLE IS HAND-KEPT, and there is no walk that could replace
+	 * it: `recoveryFor` keys on an open set of error codes, so its acting
+	 * arms cannot be enumerated the way files under a directory can. A fifth
+	 * acting arm therefore joins uncovered unless it is listed here, and
+	 * nothing reds to say so — the same silent-omission shape a roster
+	 * carries whenever its domain cannot be walked.
+	 */
+	function assertActingClausesPasteDead(component: string, label: string): void {
+		const base = mkdtempSync(join(tmpdir(), "gitjig-paste-recovery-"));
+		try {
+			// Shape A — the state root is a real directory and the sink inside
+			// it does not exist: what selects the permission-refused arm rather
+			// than dropping to the general one.
+			const rootA = join(base, "zq-a");
+			const stateRootA = join(rootA, component);
+			const writePathA = join(stateRootA, AUDIT_FILE_NAME);
+			mkdirSync(rootA);
+			mkdirSync(stateRootA);
+			// Shape B — a PLAIN FILE stands where a directory must be, so the
+			// not-a-directory arm names that ancestor and the state root below
+			// it as two distinct operands.
+			const rootB = join(base, "zq-b");
+			const ancestorB = join(rootB, component);
+			const stateRootB = join(ancestorB, "zq-under");
+			const writePathB = join(stateRootB, AUDIT_FILE_NAME);
+			mkdirSync(rootB);
+			writeFileSync(ancestorB, "");
+			const cases: { code: string; stateRoot: string; writePath: string; objects: string[] }[] = [
+				{ code: "ENOENT", stateRoot: stateRootA, writePath: writePathA, objects: [stateRootA] },
+				{ code: "ENOTDIR", stateRoot: stateRootB, writePath: writePathB, objects: [ancestorB, stateRootB] },
+				{ code: "EACCES", stateRoot: stateRootA, writePath: writePathA, objects: [stateRootA] },
+				{ code: "ZQNOTAROUTEDCODE", stateRoot: stateRootA, writePath: writePathA, objects: [writePathA] },
+			];
+			for (const { code, stateRoot, writePath, objects } of cases) {
+				const clause = recoveryFor({ code }, stateRoot, writePath);
+				const operands = shellOperandsIn(clause);
+				assert.deepEqual(
+					operands.map((operand) => operand.value),
+					objects,
+					`${label}/${code}: the clause's shell-delimited operands are not the objects its acts are aimed ` +
+						`at. Every operand a clause hands to a named act must be delimited for the paste, and an ` +
+						`operand left in the JSON delimiter is missing from this list entirely (issue #65): ${clause}`,
+				);
+				for (const operand of operands) {
+					assertOperandInside(operand.production, base);
+					const printed = pasteCapture(`printf '%s' ${operand.production}`, base);
+					assert.ok(
+						!existsSync(join(base, MARKER)),
+						`${label}/${code}: pasting an operand executed the command substitution inside it — the ` +
+							`marker appeared. A clause that hands its operand to a named act must arrive ` +
+							`substitution-dead (issue #65): ${clause}`,
+					);
+					assert.equal(
+						printed,
+						operand.value,
+						`${label}/${code}: the operand did not paste back as itself: ${clause}`,
+					);
+				}
+			}
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	}
+
+	it("every acting recoveryFor clause pastes substitution-dead onto its literal object", {
+		skip: process.platform === "win32" ? "POSIX shell paste" : false,
+	}, () => {
+		assertActingClausesPasteDead(SUBSTITUTION, "acting");
+	});
+
+	it("the single-quote fold holds a substitution that rides inside a quote-carrying component", {
+		skip: process.platform === "win32" ? "POSIX shell paste" : false,
+	}, () => {
+		// The fold's own killing case. Every hostile shape staged above carries
+		// no single quote, so an identity fold — the shell branch returning its
+		// input unfolded — ships green against all of them; measured, the arm
+		// above stays green under exactly that mutant while this one reds.
+		//
+		// This component closes the delimiter itself. Under an identity fold
+		// the rendering becomes `'<prefix>'$(…)''`, which a shell reads as a
+		// quoted prefix followed by a BARE substitution — measured separately,
+		// pasting that whole operand runs the substitution and creates the
+		// marker, so live paste injection is genuinely reopened. What THIS arm
+		// reds on is one step earlier: the rendering is malformed, so reading
+		// its first delimited production yields a truncated operand that no
+		// longer denotes the path — a clause whose repair misses its own
+		// object. Either way the mutant dies here and nowhere else.
+		assertActingClausesPasteDead(QUOTE_SUBSTITUTION, "quote-fold");
 	});
 
 	it("the general arm's remove clause deletes its literal object without executing a substitution-shaped component", {
