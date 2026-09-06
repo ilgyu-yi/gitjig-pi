@@ -67,6 +67,17 @@
  *      the reason being sound — a module can exempt itself with a bad
  *      argument, which is why the exemption is one file and its reason is
  *      the structural circularity of escaping the escaper.
+ *   6. That an allowlisted expression carries no EXTERNALLY WRITTEN text.
+ *      Residual 3 covers an allowlisted spelling reused for a path-bearing
+ *      variable; this is the other shape — an entry whose value is written
+ *      by another party outright. `outcome.summary` in `dispatch/index.ts`
+ *      is one, measured: a delegate controls it byte for byte and can spell
+ *      a second dispatch verdict inside the clause reporting the real one.
+ *      It is admitted here because escaping it would mangle the payload the
+ *      dispatch exists to deliver; the forging is filed as its own defect.
+ *      An allowlist entry over external text is a decision about a hole,
+ *      never a demonstration there is none.
+ *
  *   5. That a raw error read wrapped LATER on the same line is really
  *      escaped: the raw-extraction arm is same-line lexical, so
  *      `quoted(x) + error.message` would be admitted.
@@ -186,10 +197,20 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"outcome.compare",
 			// The verdict clause composed from the two above.
 			"compareClause",
-			// The admitted return's summary is the payload this surface
-			// exists to deliver. It is bounded, closed-schema, and operand-
-			// scanned at admission; quoting it here would mangle the prose
-			// the dispatch went and fetched.
+			// EXTERNALLY WRITTEN TEXT, admitted with the hole stated rather
+			// than argued away. It is bounded, closed-schema and operand-
+			// scanned at admission — and not one of those three constrains a
+			// BYTE of it: admission demands only that it be a string, and the
+			// operand scan looks for runs naming the held operand, not for
+			// line breaks or control characters. Measured: a delegate whose
+			// summary opens with a newline and then spells a verdict of its
+			// own produces a second, well-formed "dispatch admitted" line
+			// inside the text reporting the real outcome. It is allowlisted
+			// because escaping it here would mangle the prose the dispatch
+			// exists to fetch, and because what the runtime emits is outside
+			// this change (issue #72's stated scope). The forging itself is
+			// filed as its own defect, not carried inside this change (§0.3),
+			// and residual 6 below names the class.
 			"outcome.summary",
 		],
 		allowErrorReads: [
@@ -215,8 +236,13 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// A numeric module constant.
 			"CHILD_TIMEOUT_MS",
 			// The child's numeric exit status, and the signal NAME the
-			// platform reports — neither is actor-named text.
-			"code !== null ? `exit status ${code",
+			// platform reports — neither is actor-named text. The whole
+			// ternary is one entry now that the capture balances braces; the
+			// nested template's own interpolations are listed beside it,
+			// because the scan reaches them too rather than stopping at the
+			// outer expression.
+			'code !== null ? `exit status ${code}` : `signal ${signal ?? "unknown"}`',
+			"code",
 			'signal ?? "unknown"',
 		],
 	},
@@ -227,8 +253,13 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"cause",
 			"outcome.cause",
 			// The URL is validated WHOLE against the comment-URL shape before
-			// it crosses, which is §3.10's output-validity direction: the
-			// shape admits no byte that could forge a line.
+			// it crosses (§3.10's output-validity direction). That shape is
+			// anchored at both ends and its body class excludes whitespace,
+			// so it closes the LINE-FORGING half of this class outright.
+			// It does not close the other half: the class excludes only
+			// whitespace, so C0 and C1 control bytes — the ESC byte among
+			// them — pass it, and this value is the child's own stdout. The
+			// entry is that bounded decision, not a claim the value is inert.
 			"outcome.url",
 			// Format-checked lowercase-hyphen pattern ids and numeric line
 			// locators — the refuse-match composition carries no body byte,
@@ -240,8 +271,10 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		allowErrorReads: [
 			// Admitted only for PatternSourceError, whose messages are fixed
 			// content-free literals; every other throw takes this module's
-			// own fixed cause.
-			"? error.message",
+			// own fixed cause. The allowance is the WHOLE line including that
+			// guard, so it cannot silently admit some other ternary raw read
+			// that happens to trim to the same few tokens.
+			'error instanceof PatternSourceError ? error.message : "the scan machinery failed before a verdict";',
 		],
 	},
 	{
@@ -299,6 +332,21 @@ function walkExtensionFiles(dir: string = EXTENSIONS_DIR, prefix = ""): string[]
 const EXEMPT_MARKER = /Warning-surface roster:\s*EXEMPT\s*—\s*[A-Za-z][^\n]*/;
 
 /**
+ * The module's leading block comment, and nothing after it. The marker is
+ * read only from here: matched over the whole file it counts anywhere, so a
+ * module could exempt itself with a mid-file comment — including prose
+ * merely describing this lock — which is not a disposition.
+ */
+function leadingBlockComment(source: string): string {
+	const opened = source.indexOf("/*");
+	if (opened === -1) {
+		return "";
+	}
+	const closed = source.indexOf("*/", opened);
+	return closed === -1 ? "" : source.slice(opened, closed + 2);
+}
+
+/**
  * A walked file is in exactly one of two states. `undecided` is the third
  * outcome the lock exists to make impossible: a module that joined the tree
  * and was never ruled on either way.
@@ -314,7 +362,7 @@ function rosterDisposition(
 	if (roster.includes(file)) {
 		return "locked";
 	}
-	return EXEMPT_MARKER.test(source) ? "exempt" : "undecided";
+	return EXEMPT_MARKER.test(leadingBlockComment(source)) ? "exempt" : "undecided";
 }
 
 /**
@@ -334,6 +382,61 @@ function stripComments(source: string): string {
 }
 
 /**
+ * Every interpolation's expression, captured WHOLE. A `[^}]*` capture stops
+ * at the first inner brace, and rostered modules do write brace-bearing
+ * expressions — `JSON.stringify({ … })` among them — so a truncating
+ * capture hands the admit test a fragment. Braces are balanced from the
+ * opening `${` instead; an interpolation whose braces never balance is
+ * returned as the empty-string expression, which no allowlist carries and
+ * no escaping prefix matches, so it fails closed rather than vanishing.
+ */
+function interpolationExpressions(source: string): string[] {
+	const found: string[] = [];
+	for (let at = source.indexOf("${"); at !== -1; at = source.indexOf("${", at + 2)) {
+		let depth = 1;
+		let cursor = at + 2;
+		while (cursor < source.length && depth > 0) {
+			if (source[cursor] === "{") {
+				depth += 1;
+			} else if (source[cursor] === "}") {
+				depth -= 1;
+			}
+			cursor += 1;
+		}
+		found.push(depth === 0 ? source.slice(at + 2, cursor - 1).trim() : "");
+	}
+	return found;
+}
+
+/**
+ * True iff the expression is WHOLLY one escaping call. A `startsWith` test
+ * admits `JSON.stringify({ … }) + rawPath`, whose tail is then never
+ * scanned: the escaper's name at the front is not the same claim as the
+ * value being escaped. So the call must open at the first character and its
+ * parenthesis must close on the last.
+ */
+function isEscapedWhole(expression: string): boolean {
+	const opener = ["quoted(", "JSON.stringify("].find((name) => expression.startsWith(name));
+	if (opener === undefined || !expression.endsWith(")")) {
+		return false;
+	}
+	let depth = 0;
+	for (let at = opener.length - 1; at < expression.length; at += 1) {
+		if (expression[at] === "(") {
+			depth += 1;
+		} else if (expression[at] === ")") {
+			depth -= 1;
+			// The opening parenthesis closed before the end, so whatever
+			// follows is outside the escaping call.
+			if (depth === 0) {
+				return at === expression.length - 1;
+			}
+		}
+	}
+	return false;
+}
+
+/**
  * Every `${…}` whose expression is neither escaped where it stands nor on
  * the file's allowlist. Exported to the mutant arms below by being the one
  * verdict function both the roster arms and the self-tests call — one
@@ -341,9 +444,8 @@ function stripComments(source: string): string {
  */
 function interpolationViolations(source: string, allow: readonly string[]): string[] {
 	const violations: string[] = [];
-	for (const match of stripComments(source).matchAll(/\$\{([^}]*)\}/g)) {
-		const expression = match[1].trim();
-		if (expression.startsWith("quoted(") || expression.startsWith("JSON.stringify(")) {
+	for (const expression of interpolationExpressions(stripComments(source))) {
+		if (isEscapedWhole(expression)) {
 			continue;
 		}
 		if (allow.includes(expression)) {
@@ -451,6 +553,34 @@ describe("the lock's own teeth (§3.12 — a guard the suite never measures is d
 		assert.deepEqual(interpolationViolations("console.warn(`${cause} at ${sinkPath}`);", ["cause"]), [
 			"sinkPath",
 		]);
+	});
+
+	it("captures a brace-bearing expression WHOLE, not up to its first inner brace", () => {
+		assert.deepEqual(interpolationExpressions("`${JSON.stringify({ a: 1 })}`"), ["JSON.stringify({ a: 1 })"]);
+	});
+
+	it("reports a raw tail concatenated behind an escaping call", () => {
+		// The prefix test admitted this: the escaper's name at the front is
+		// not the same claim as the value being escaped.
+		assert.deepEqual(interpolationViolations("`${JSON.stringify({ a: 1 }) + rawPath}`", []), [
+			"JSON.stringify({ a: 1 }) + rawPath",
+		]);
+	});
+
+	it("admits an escaping call that spans the whole expression", () => {
+		assert.deepEqual(interpolationViolations("`${quoted(somePath)}`", []), []);
+		assert.deepEqual(interpolationViolations("`${quoted(a) }`", []), []);
+	});
+
+	it("an interpolation whose braces never balance fails closed", () => {
+		assert.deepEqual(interpolationViolations('"${quoted(x"', []), [""]);
+	});
+
+	it("reads the exemption marker from the leading block comment only", () => {
+		const inHeader = "/** Warning-surface roster: EXEMPT — it is the escaper. */\nexport const x = 1;";
+		const midModule = "/** ordinary header */\n// Warning-surface roster: EXEMPT — prose describing the rule.\n";
+		assert.equal(rosterDisposition("m.ts", [], inHeader), "exempt");
+		assert.equal(rosterDisposition("m.ts", [], midModule), "undecided");
 	});
 
 	it("reports an undecided module — on no roster and carrying no recorded reason", () => {
