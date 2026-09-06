@@ -40,7 +40,7 @@
  * — within `changelog_unreleased/`, only the top-level contract ships —
  * never as a list of the fragments that happen to exist today.
  */
-import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 
 /**
@@ -166,9 +166,29 @@ function insideNamespace(normalized: string): boolean {
 	return SHELL_NAMESPACES.some((ns) => normalized.startsWith(`${ns}/`) && normalized.length > ns.length + 1);
 }
 
-/** Canonical form: POSIX separators, `.`/`..` resolved. Decided ONCE (§3.11). */
+/**
+ * Canonical form: POSIX separators, `.`/`..` resolved, no trailing slash.
+ * Decided ONCE (§3.11). The trailing slash matters because the canonical
+ * value becomes the emitted `dest`, and a delivery joining a
+ * slash-terminated member would name a directory where a file belongs.
+ */
 export function canonicalize(rel: string): string {
-	return toPosix(normalize(rel));
+	const normalized = toPosix(normalize(rel));
+	return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+}
+
+/**
+ * Did this probe fail because the object is absent, or because it could not
+ * be measured at all? §3.9 splits exactly here: absent is a state the
+ * composition understands and lands into, while anything else is an
+ * unmeasurable input, and an unmeasurable input refuses — it never
+ * approves. Reading every error as "absent" is the fail-open shape that
+ * rule exists to forbid: a NUL-bearing member makes `lstat` throw an
+ * argument error, and a member whose container is a regular file throws
+ * ENOTDIR; both would otherwise decide `land`.
+ */
+function isAbsentError(error: unknown): boolean {
+	return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }
 
 /**
@@ -187,8 +207,13 @@ function containerIsLink(destRoot: string, rel: string): boolean {
 			if (lstatSync(cursor).isSymbolicLink()) {
 				return true;
 			}
-		} catch {
-			return false; // absent from here down — nothing to traverse
+		} catch (error) {
+			// Absent from here down is nothing to traverse — it is what a
+			// landing creates. Any OTHER failure is a container this walk
+			// could not measure (ENOTDIR where a container is a regular file,
+			// an argument error on a NUL-bearing member), and an unmeasurable
+			// container fails toward the block (§3.9), never toward a landing.
+			return !isAbsentError(error);
 		}
 	}
 	return false;
@@ -245,8 +270,16 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 		let st;
 		try {
 			st = lstatSync(destAbs);
-		} catch {
-			return { source: raw, dest: rel, action: "land" as const, reason: "" };
+		} catch (error) {
+			if (isAbsentError(error)) {
+				return { source: raw, dest: rel, action: "land" as const, reason: "" };
+			}
+			return {
+				source: raw,
+				dest: null,
+				action: "refuse" as const,
+				reason: "the destination could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
+			};
 		}
 		if (st.isSymbolicLink()) {
 			return {

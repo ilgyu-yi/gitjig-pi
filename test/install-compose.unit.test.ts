@@ -22,7 +22,17 @@
  * roster arm below pins.
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -211,6 +221,9 @@ describe("destinations stay inside shell-owned namespaces (issue #116, §4.1)", 
  * root's shell-owned namespaces.
  */
 describe("acting on the composition writes nothing outside the namespaces (issue #116)", () => {
+	/** The bytes every arm here plants, so an escape is findable by content. */
+	const MARKER = "SHELL BYTES\n";
+
 	/** What a delivery layer would naively do with each decision. */
 	function performLandings(sourceRoot: string, destRoot: string, composed: readonly ComposedMember[]): void {
 		for (const m of composed) {
@@ -223,21 +236,87 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 		}
 	}
 
+	/**
+	 * Scan the WHOLE temp root for the marker and return every hit that is
+	 * not under one of `destRoot`'s shell-owned namespaces. Asserting a
+	 * single known-bad path only catches the escape you already imagined;
+	 * this catches any escape that put the bytes somewhere.
+	 */
+	function escapedPaths(box: string, sourceRoot: string, destRoot: string): string[] {
+		const hits: string[] = [];
+		// The source tree legitimately holds the marker — it is what is being
+		// installed FROM. Only the destination side is under judgement.
+		const permitted = [...SHELL_NAMESPACES.map((ns) => join(destRoot, ns)), sourceRoot];
+		const visit = (dir: string): void => {
+			for (const entry of readdirSync(dir)) {
+				const abs = join(dir, entry);
+				let st;
+				try {
+					st = lstatSync(abs);
+				} catch {
+					continue;
+				}
+				if (st.isSymbolicLink()) {
+					continue; // judge the link, never follow it
+				}
+				if (st.isDirectory()) {
+					visit(abs);
+				} else if (st.isFile() && readFileSync(abs, "utf8") === MARKER) {
+					if (!permitted.some((p) => abs === p || abs.startsWith(`${p}/`))) {
+						hits.push(abs);
+					}
+				}
+			}
+		};
+		visit(box);
+		return hits;
+	}
+
+	/**
+	 * One isolated sandbox per arm. Each arm gets its own `box` so the scan
+	 * sees only what that arm created: sharing a root would let one arm's
+	 * source tree read as another arm's escape, and the arms would then be
+	 * measuring each other rather than the module.
+	 */
+	function sandbox(): { box: string; src: string; dest: string } {
+		const box = mkdtempSync(join(root, "box-"));
+		const src = join(box, "src");
+		const dest = join(box, "dest");
+		mkdirSync(src, { recursive: true });
+		mkdirSync(dest, { recursive: true });
+		return { box, src, dest };
+	}
+
+	/** Compose, act, and assert containment over the RESULT rather than the verdict. */
+	function composeAndAct(
+		box: string,
+		src: string,
+		dest: string,
+		members: readonly string[],
+	): ComposedMember[] {
+		const composed = composeSubstrate({ sourceRoot: src, destRoot: dest, members });
+		performLandings(src, dest, composed);
+		assert.deepEqual(
+			escapedPaths(box, src, dest),
+			[],
+			"acting on this composition put the shell's bytes outside every shell-owned namespace",
+		);
+		return composed;
+	}
+
 	it("a DANGLING symlink at the leaf destination does not become a write outside the tree", () => {
 		// Round-1 finding 1. `existsSync` follows links, so a symlink pointing
 		// at a not-yet-existing path read as absent and was landed — through
 		// the link. The member here is exactly what the walk produces; nothing
 		// hostile is passed in.
-		const src = mkdtempSync(join(root, "src-"));
-		write(join(src, ".githooks/pre-commit").slice(root.length + 1), "SHELL BYTES\n");
-		const dest = mkdtempSync(join(root, "dest-"));
-		const outside = join(root, `pwned-${Date.now()}.txt`);
+		const { box, src, dest } = sandbox();
+		write(join(src, ".githooks/pre-commit").slice(root.length + 1), MARKER);
+		const outside = join(box, "pwned.txt");
 		mkdirSync(join(dest, ".githooks"), { recursive: true });
 		symlinkSync(outside, join(dest, ".githooks", "pre-commit"));
 
-		const composed = composeSubstrate({ sourceRoot: src, destRoot: dest, members: deriveSubstrateSet(src) });
+		const composed = composeAndAct(box, src, dest, deriveSubstrateSet(src));
 		assert.equal(decisionFor(composed, ".githooks/pre-commit")?.action, "refuse");
-		performLandings(src, dest, composed);
 		assert.ok(!existsSync(outside), "the shell's bytes were written through a dangling symlink, outside every namespace");
 	});
 
@@ -245,17 +324,16 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 		// Round-1 finding 2. Containment was judged on the canonical path
 		// while the link walk used the raw spelling, so the walk gave up at
 		// the absent component and `join` resolved straight through the link.
-		const src = mkdtempSync(join(root, "src-"));
-		write(join(src, ".pi/link/x.ts").slice(root.length + 1), "SHELL BYTES\n");
-		const dest = mkdtempSync(join(root, "dest-"));
-		const elsewhere = mkdtempSync(join(root, "elsewhere-"));
+		const { box, src, dest } = sandbox();
+		write(join(src, ".pi/link/x.ts").slice(root.length + 1), MARKER);
+		const elsewhere = join(box, "elsewhere");
+		mkdirSync(elsewhere, { recursive: true });
 		mkdirSync(join(dest, ".pi"), { recursive: true });
 		symlinkSync(elsewhere, join(dest, ".pi", "link"));
 
 		const sneaky = ".githooks/absent/../../.pi/link/x.ts";
-		const composed = composeSubstrate({ sourceRoot: src, destRoot: dest, members: [sneaky] });
+		const composed = composeAndAct(box, src, dest, [sneaky]);
 		assert.equal(decisionFor(composed, sneaky)?.action, "refuse", "the sneaky spelling was admitted");
-		performLandings(src, dest, composed);
 		assert.ok(
 			!existsSync(join(elsewhere, "x.ts")),
 			"bytes were written through a symlinked container reached by a `..` spelling",
@@ -263,25 +341,60 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	});
 
 	it("a namespace ROOT is not a landable member", () => {
-		const src = mkdtempSync(join(root, "src-"));
-		const dest = mkdtempSync(join(root, "dest-"));
+		const { box, src, dest } = sandbox();
 		for (const ns of SHELL_NAMESPACES) {
+			write(join(src, ns).slice(root.length + 1), MARKER);
 			assert.equal(
-				decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [ns] }), ns)?.action,
+				decisionFor(composeAndAct(box, src, dest, [ns]), ns)?.action,
 				"refuse",
 				`the namespace root ${ns} was treated as a landable member; a landing would put a file where the directory belongs`,
 			);
 		}
 	});
 
-	it("the emitted dest is canonical, so a delivery cannot re-derive a different path", () => {
-		const src = mkdtempSync(join(root, "src-"));
-		write(join(src, ".github/workflows/w.yml").slice(root.length + 1), "w\n");
-		const dest = mkdtempSync(join(root, "dest-"));
-		const raw = ".pi/../.github/workflows/w.yml";
+	it("a destination that cannot be measured refuses rather than being landed into (§3.9)", () => {
+		// The fail-open shape §3.9 forbids: reading EVERY probe error as
+		// "absent" turns an unmeasurable destination into a land. Two shapes,
+		// neither producible by the walk but both reachable through the
+		// exported entry point, which is where round 1's findings came from.
+		const { box, src, dest } = sandbox();
+
+		// (a) a container that is a regular FILE — the probe throws ENOTDIR.
+		write(join(src, ".pi/blocked/x.ts").slice(root.length + 1), MARKER);
+		writeFileSync(join(dest, ".pi"), "a file where the namespace belongs\n");
+		assert.equal(
+			decisionFor(composeAndAct(box, src, dest, [".pi/blocked/x.ts"]), ".pi/blocked/x.ts")?.action,
+			"refuse",
+			"an unmeasurable container was landed into",
+		);
+
+		// (b) a NUL-bearing member — the probe throws an argument error.
+		const nul = ".pi/x\0/y.ts";
+		assert.equal(
+			decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [nul] }), nul)?.action,
+			"refuse",
+			"a NUL-bearing member was landed",
+		);
+	});
+
+	it("a trailing slash does not survive into the emitted dest", () => {
+		// The dest is what a delivery joins. A slash-terminated member would
+		// name a directory where a file belongs.
+		const { src, dest } = sandbox();
+		write(join(src, ".pi/f.ts").slice(root.length + 1), MARKER);
+		const raw = ".pi/f.ts/";
 		const decision = decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [raw] }), raw);
+		assert.equal(decision?.dest, ".pi/f.ts");
+	});
+
+	it("the emitted dest is canonical, so a delivery cannot re-derive a different path", () => {
+		const { box, src, dest } = sandbox();
+		write(join(src, ".github/workflows/w.yml").slice(root.length + 1), MARKER);
+		const raw = ".pi/../.github/workflows/w.yml";
+		const decision = decisionFor(composeAndAct(box, src, dest, [raw]), raw);
 		assert.equal(decision?.action, "land");
 		assert.equal(decision?.dest, ".github/workflows/w.yml", "dest carried the raw spelling, not the canonical one");
+		assert.equal(readFileSync(join(dest, ".github/workflows/w.yml"), "utf8"), MARKER, "the landing did not occur");
 	});
 });
 
