@@ -78,6 +78,24 @@
  *      or alias, and a constant split across a backslash continuation are
  *      all invisible. Chasing indirection needs a reader of control flow,
  *      which residual 1 already says does not exist here.
+ *   9. QUALIFICATION IS BY SOURCE FILE, NOT BY SHAPE. `accountedFor`
+ *      matches a row carrying the cause and the emitting FILE's basename,
+ *      so it discriminates between files and not between shapes within
+ *      one file. A SECOND shape emitted from an already-named file under
+ *      an already-inventoried constant therefore reads as accounted for,
+ *      even though no row governs it — and `not-enforced` already fronts
+ *      five shapes. Residual 1 must not be read as the wider assurance
+ *      that any site naming a constant is visible: it is not, whenever
+ *      that file already carries that constant. The disarm-literal idiom
+ *      is the only within-file discrimination this suite has, which is why
+ *      the staged-secret scan's seven sub-causes are collected
+ *      individually. What bounds the gap rather than closing it is the
+ *      emission-census arm below: a NEW emission site under an existing
+ *      constant reds, so the shape cannot enter silently. The same
+ *      mechanism is why `commit-format-subject`'s disclaimer is
+ *      load-bearing — a future genuine dependency miss at
+ *      `.githooks/pre-commit` spelling `not-evaluated` would read as
+ *      accounted for until the census forced it into view.
  *
  * The recognizer's own teeth are pinned by synthetic-mutant arms at the
  * bottom (§3.12): a green real-tree arm proves nothing unless a source
@@ -126,6 +144,12 @@ export interface DeclaredCause {
 	cause: string;
 	/** Where it was found — reported so a failure names its own repair site. */
 	where: string;
+	/**
+	 * `constant` — an `audit_log warn` reason constant, which carries no
+	 * within-file discrimination: one constant may front several shapes.
+	 * `literal` — a disarm sub-cause, which names its own shape.
+	 */
+	kind: "constant" | "literal";
 }
 
 /**
@@ -142,13 +166,13 @@ export function collectCauses(relPath: string, source: string): DeclaredCause[] 
 	//    token, since a computed constant has no fixed string to inventory.
 	const warnRe = /audit_log\s+warn\s+(?:"[^"]*"|'[^']*'|\S+)\s+(?:"([A-Za-z][A-Za-z0-9_-]*)"|'([A-Za-z][A-Za-z0-9_-]*)'|([A-Za-z][A-Za-z0-9_-]*))/g;
 	for (const m of text.matchAll(warnRe)) {
-		found.push({ cause: m[1] ?? m[2] ?? m[3], where: relPath });
+		found.push({ cause: m[1] ?? m[2] ?? m[3], where: relPath, kind: "constant" });
 	}
 
 	// 2) _gitjig_ss_disarm '<literal>' — single-quoted sub-causes.
 	const disarmRe = /_gitjig_ss_disarm\s+(?:'([^']+)'|"([^"]+)")/g;
 	for (const m of text.matchAll(disarmRe)) {
-		found.push({ cause: m[1] ?? m[2], where: relPath });
+		found.push({ cause: m[1] ?? m[2], where: relPath, kind: "literal" });
 	}
 
 	return found;
@@ -171,7 +195,7 @@ export function rowText(row: { dependency: string; failureShape: string; justifi
  * drive this predicate rather than a copy (§3.11).
  */
 export function accountedFor(
-	cause: DeclaredCause,
+	cause: Pick<DeclaredCause, "cause" | "where">,
 	rows: readonly { dependency: string; failureShape: string; justification: string }[] = POSTURES,
 ): boolean {
 	const site = cause.where.split(/[\\/]/).pop() ?? cause.where;
@@ -217,6 +241,34 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 			unique,
 			[],
 			`these declared causes have no row in ${INVENTORY_HOME} naming both the cause and their site (SPEC §3.9's one-inventory rule):\n  ${unique.join("\n  ")}`,
+		);
+	});
+
+	it("pins the emission census: a new site under an existing constant must be adjudicated", () => {
+		// The limit residual 9 names, converted from an invisible gap into a
+		// red that demands a human decision. Site qualification is per FILE,
+		// so a SECOND shape emitted from an already-named file under an
+		// already-inventoried constant would otherwise read as accounted for
+		// — `not-enforced` already fronts five shapes. This census pins every
+		// (file, constant) emission count, so adding an emission site reds
+		// here and forces the author to say which shape it is and whether it
+		// owes a row. Repeated counts below are repeated code paths of ONE
+		// inventoried shape, which is why they are allowed to be > 1.
+		const census = realTreeCauses()
+			.filter((c) => c.kind === "constant")
+			.reduce<Map<string, number>>((acc, c) => acc.set(`${c.where} :: ${c.cause}`, (acc.get(`${c.where} :: ${c.cause}`) ?? 0) + 1), new Map());
+		assert.deepEqual(
+			[...census.entries()].map(([k, n]) => `${k} ×${n}`).sort(),
+			[
+				".githooks/_lib.sh :: helper-missing ×1",
+				".githooks/_lib.sh :: require-missing ×1",
+				".githooks/_lib.sh :: source-incomplete ×2",
+				".githooks/commit-msg :: not-evaluated ×1",
+				".githooks/helpers/branch_guard.sh :: not-enforced ×1",
+				".githooks/helpers/secret_scan.sh :: allowlist-unreadable ×1",
+				".githooks/helpers/secret_scan.sh :: not-enforced ×1",
+				".githooks/pre-commit :: not-evaluated ×1",
+			].sort(),
 		);
 	});
 
