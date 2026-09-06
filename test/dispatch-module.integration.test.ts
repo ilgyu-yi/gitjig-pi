@@ -62,9 +62,11 @@
  *       hash, else `"invalid"` — and the return/failure channels stay
  *       content-free with respect to the caller-held operands: every hex
  *       run of ≥ 4 chars in the summary is lowercased, and a summary
- *       carrying a run the held hash contains, or a run containing the
- *       held 7-prefix, is REFUSED whole (the mechanical scan §4.9 grounds
- *       in §3.9's content-free idiom).
+ *       carrying a run the held hash contains AND at least
+ *       `MIN_CONTAINED_RUN` long, or a run containing the held 7-prefix
+ *       at any length, is REFUSED whole (the mechanical scan §4.9 grounds
+ *       in §3.9's content-free idiom; the floor is issue #104's, and
+ *       below it a containment match is a coincidence).
  *     - every refusal lands at least one `"category":"dispatch"` audit
  *       record through the landed writer (`audit.ts`), itself content-free.
  *
@@ -1801,6 +1803,7 @@ describe("the operand scan admits a coincidental short hex run (issue #104, SPEC
 		const random = mulberry32(0x104ba5e);
 		let admittedFour = 0;
 		let admittedFive = 0;
+		let admittedInterior = 0;
 		for (let trial = 0; trial < 2_000; trial += 1) {
 			const held = hex(random, 40);
 			if (!namesHeldOperand(`zq at ${held.slice(0, 4)} now`, held)) {
@@ -1809,13 +1812,22 @@ describe("the operand scan admits a coincidental short hex run (issue #104, SPEC
 			if (!namesHeldOperand(`zq at ${held.slice(0, 5)} now`, held)) {
 				admittedFive += 1;
 			}
+			// The residual has an INTERIOR half too: a short slice taken from
+			// the middle of the operand, not only a leading one. Pinning the
+			// leading case alone would leave half of what the bound admits
+			// described in prose and unmeasured.
+			if (!namesHeldOperand(`zq at ${held.slice(17, 22)} now`, held)) {
+				admittedInterior += 1;
+			}
 		}
 		// This is the residual the change creates, stated as an arm so it
 		// cannot drift: a GENUINE four- or five-character slice of the held
-		// operand now crosses. It is enumerated in the runtime header, and it
-		// is bounded — a deliberate leaker already evaded at three characters,
-		// which no run length reaches, so what changed is the accident
-		// threshold and not the adversary's reach.
+		// operand now crosses, leading or interior. It is enumerated in the
+		// runtime header, where its non-coincidental source is named too —
+		// git's minimum abbreviation is 4, so a clone with `core.abbrev=4` or
+		// a delegate running `--short=4` produces such a slice on purpose.
+		// A deliberate leaker was never bounded here at all: runs of 3 fall
+		// below the match width entirely.
 		assert.equal(
 			admittedFour,
 			2_000,
@@ -1826,6 +1838,12 @@ describe("the operand scan admits a coincidental short hex run (issue #104, SPEC
 			admittedFive,
 			2_000,
 			`residual-pinned: a genuine five-character slice was refused in ${2_000 - admittedFive} of 2000 trials`,
+		);
+		assert.equal(
+			admittedInterior,
+			2_000,
+			`residual-pinned: a genuine five-character INTERIOR slice was refused in ${2_000 - admittedInterior} ` +
+				"of 2000 trials — the residual's interior half does not match what the code does",
 		);
 	});
 });

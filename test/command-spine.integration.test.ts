@@ -284,27 +284,43 @@ function diagnostics(run: PiRunResult): string {
 // ---------------------------------------------------------------------------
 
 /**
-* Every hex run of ≥ 4 chars in `text`, either case, that touches the held
+ * The runtime's own containment floor, READ from the shipped module rather
+ * than spelled again here (issue #104). The sweep below mirrors the
+ * dispatcher's rule, and a mirrored rule that hardcodes its own constant is
+ * the divergence §3.11 names: the two would drift apart silently and this
+ * suite would keep passing while measuring a rule the runtime no longer
+ * applies.
+ */
+const MIN_CONTAINED_RUN = Number(
+	/export const MIN_CONTAINED_RUN = (\d+);/.exec(
+		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "index.ts"), "utf8"),
+	)?.[1] ?? Number.NaN,
+);
+assert.ok(
+	Number.isInteger(MIN_CONTAINED_RUN) && MIN_CONTAINED_RUN > 0,
+	"the runtime exports no MIN_CONTAINED_RUN this sweep can bind to, so the sweep below would silently " +
+		"mirror a rule of its own rather than the dispatcher's (§3.11)",
+);
+
+/**
+ * Every hex run of ≥ 4 chars in `text`, either case, that touches the held
  * operand: each run is lowercased and flagged iff the held hash contains it
- * AND it is at least six characters, or it contains the held 7-prefix at any
- * length. Unrelated hex — session UUIDs, other hashes — is left alone: the
- * sweep pins the operand, not hex at large. Teeth pinned in-suite below
- * (§3.12).
+ * AND it is at least `MIN_CONTAINED_RUN` long, or it contains the held
+ * 7-prefix at any length. Unrelated hex — session UUIDs, other hashes — is
+ * left alone: the sweep pins the operand, not hex at large. Teeth pinned
+ * in-suite below (§3.12).
  *
- * The six-character floor mirrors the runtime's `MIN_CONTAINED_RUN`
- * (issue #104) and is not a loosening of this sweep's own standard. Below it
- * a containment match is a coincidence: this arm reds at random otherwise,
- * measured — it failed once on a four-character run out of a temp path that
- * happened to sit inside the held hash. A guard's own test that reds on a
- * coincidence trains its reader to re-run rather than to investigate, which
- * costs more than the four-character window it was buying.
+ * Below the floor a containment match is a coincidence. The sibling dispatch
+ * suite is where that was observed — this sweep inherits the same rule and the
+ * same exposure, and mirrors the floor for the same reason rather than on its
+ * own incident.
  */
 function heldOperandRuns(text: string, held: string): string[] {
 	const runs = text.match(/[0-9a-fA-F]{4,}/g) ?? [];
 	const prefix = held.slice(0, 7);
 	return runs
 		.map((run) => run.toLowerCase())
-		.filter((run) => (run.length >= 6 && held.includes(run)) || run.includes(prefix));
+		.filter((run) => (run.length >= MIN_CONTAINED_RUN && held.includes(run)) || run.includes(prefix));
 }
 
 // ---------------------------------------------------------------------------

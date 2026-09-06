@@ -128,17 +128,25 @@ export type DispatchOutcome =
  *
  * The bound costs the containment branch genuine 4- and 5-character
  * slices, and that is the trade taken deliberately (§3.6's false-block
- * cost, named where the gate is stated). What it does NOT cost: the
- * accident this scan actually catches. A delegate that writes the head by
- * mistake writes it whole or as `--short`, and every such spelling of 7 or
- * more is caught by the PREFIX branch regardless of this bound; 6 stays
- * inside containment. What a 4- or 5-character slice conveys is 16 to 20
- * bits, which identifies no commit — and a deliberate leaker was never
- * bounded here at all, since runs of 3 are below the match width entirely
- * and ride §4.9's injectable-context residual. So the bound moves the
- * ACCIDENT threshold and leaves the adversary's reach where it already was.
+ * cost, named where the gate is stated). What it costs in DETECTION is
+ * bounded but not nil, and the boundary is git's own abbreviation floor:
+ * `core.abbrev` defaults to `auto`, which never abbreviates below 7, so
+ * an ordinary accidental spelling — the head written whole, or through a
+ * default `--short` — still contains the held 7-prefix and is caught by
+ * the PREFIX branch regardless of this bound, and 6 stays inside
+ * containment. But git's MINIMUM abbreviation is 4, not 7: a clone
+ * configured `core.abbrev=4` or `=5`, or a delegate running
+ * `git rev-parse --short=4`, produces a genuine 4- or 5-character
+ * spelling of the head that satisfies neither branch now and did satisfy
+ * containment before. That is the enumerated cost of this bound (§3.11),
+ * and it is a configured-abbreviation case rather than the stock one.
+ * What such a slice conveys is 16 to 20 bits, which identifies no commit;
+ * and a deliberate leaker was never bounded here at all, since runs of 3
+ * are below the match width entirely and ride §4.9's injectable-context
+ * residual. So the bound narrows accident detection to git's stock
+ * abbreviation range and leaves the adversary's reach where it was.
  */
-const MIN_CONTAINED_RUN = 6;
+export const MIN_CONTAINED_RUN = 6;
 
 /**
  * The single ruled scan contract: hex runs in `text` match
