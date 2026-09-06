@@ -96,6 +96,15 @@
  *      load-bearing — a future genuine dependency miss at
  *      `.githooks/pre-commit` spelling `not-evaluated` would read as
  *      accounted for until the census forced it into view.
+ *      What the census bounds is monotone growth in the per-(file,
+ *      constant) emission COUNT, never site identity, and two measured
+ *      shapes slip that bound: an equal-count SUBSTITUTION — removing one
+ *      code path and adding a different, uninventoried shape under the
+ *      same constant — and a new `_gitjig_ss_disarm` site reusing an
+ *      existing literal, which the census never counts because it filters
+ *      to `kind === "constant"`. Both were probed and both leave the suite
+ *      green. They are recorded here rather than closed: closing them
+ *      needs identity per site, which is a different instrument.
  *
  * The recognizer's own teeth are pinned by synthetic-mutant arms at the
  * bottom (§3.12): a green real-tree arm proves nothing unless a source
@@ -269,6 +278,10 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 				".githooks/helpers/secret_scan.sh :: not-enforced ×1",
 				".githooks/pre-commit :: not-evaluated ×1",
 			].sort(),
+			"the tier's fail-open emission census moved. An entry that GAINED a count is a new " +
+				"emission site: say which failure shape it is, and give it a row in postures.ts unless it " +
+				"is a further code path of a shape already inventoried — then bump the count here. An entry " +
+				"that vanished means a site was removed or its constant renamed; its row may now be stale.",
 		);
 	});
 
