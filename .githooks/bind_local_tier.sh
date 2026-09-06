@@ -441,10 +441,13 @@ do_bind() {
     # passed. Only a source that can OUTRANK the line just appended reaches
     # here, which leaves three shapes:
     #
-    #   1. THE INDEX - a path under `.gitjig/` is tracked. Git never ignores a
+    #   1. THE INDEX - the state sink ITSELF is tracked. Git never ignores a
     #      tracked path, so no edit to any exclude file clears it and the
     #      prescribed re-run alone loops forever. This is the cause nothing at
-    #      this site named before, and it is why the act is named below.
+    #      this site named before, and it is why the act is named below. The
+    #      condition is the sink, not the directory: `check-ignore` consults
+    #      the index only for the path it is asked about, so a tracked SIBLING
+    #      under `.gitjig/` leaves the sink ignored and never reaches here.
     #   2. info/exclude NEGATES ITSELF - `/.gitjig/` was already a line, so
     #      this run appended nothing, and a later `!` line in the same file
     #      wins on last-matching-pattern.
@@ -456,21 +459,47 @@ do_bind() {
     # does not descend into one; and this instrument passes no command-line
     # pattern. Those three are unreachable by construction, and the census is
     # closed on that ground rather than on the shapes anyone happened to name.
-    # Every claim in this block is measured by the issue-#74 arms in
-    # `test/bind-instrument.githook.test.ts`, reachable and unreachable alike.
+    # The issue-#74 arms in `test/bind-instrument.githook.test.ts` measure
+    # each shape above, reachable and unreachable alike.
     #
     # The recovery is a REPORT, never a guess at which of the three holds.
     # §3.11's caveat - a message naming a dead recovery is worse than one
     # naming none - is what removed two earlier attempts here, both of which
     # named a CAUSE and were wrong on some shape. A lookup that asks git which
     # rule decides the path cannot be dead that way: it reports whatever is
-    # actually there. `-n` is load-bearing and is the reason a single spelling
-    # answers everywhere - without it `check-ignore` prints nothing at all
-    # when no pattern ignores the path, which is exactly shapes 2 and 3.
+    # actually there.
+    #
+    # THE DIRECTORY IS AN OPERAND. `/.gitjig/` and its negations match the
+    # DIRECTORY, so where something un-excludes it no pattern matches the FILE
+    # path at all and asking about the file alone reports nothing an operator
+    # can act on. A negative control arm pins that: without the directory
+    # operand the lookup names no rule on the negation shapes.
+    #
+    # THE RECOVERY IS PARTIAL, BY OUTCOME CLASS, and says so. A second axis
+    # decides that: whether `.gitjig/` EXISTS ON DISK. This run writes nothing
+    # under it - that is the record writer's job at first record - so absence
+    # is the ordinary state of a fresh clone. A directory-only pattern cannot
+    # match a bare directory operand git cannot confirm IS a directory, so on
+    # the negation shapes with the directory absent NO check-ignore spelling
+    # names a rule. Claiming otherwise would be the completeness this site has
+    # twice been burnt by; the message enumerates three outcome classes
+    # instead, each with its own live act, and the arms assert the partition
+    # is TOTAL over the census:
+    #
+    #   A - names a `!` rule: that negation is the cause, at the printed file
+    #       and line. Removing it clears the arm.
+    #   B - names an ordinary ignore rule: the patterns DO ignore the path, so
+    #       the index is the cause.
+    #   C - prints nothing: `.gitjig/` is not on disk and git can attribute no
+    #       directory rule. The negation is in info/exclude or in a
+    #       `.gitignore` between the repository root and the path - a set the
+    #       census CLOSES, since nothing else can outrank the exclusion. What
+    #       is named there is a bounded place to look, not a rule, and that is
+    #       the honest limit of what git will answer here.
     git check-ignore -q -- .gitjig/state/audit.jsonl </dev/null 2>/dev/null
     _bd_ci_rc=$?
     if [ "$_bd_ci_rc" -eq 1 ]; then
-      warn "bind_local_tier.sh: the exclusion line is present in '$_bd_excl_shown', but git still reports .gitjig/ as not ignored, so the shell's own state would be visible to version control here. This clone is NOT verified bound. Ask git which rule decides that path: git check-ignore -v -n --no-index -- .gitjig/state/audit.jsonl - an answer naming a '!' rule points at the negation to remove, and an answer naming an ordinary ignore rule means the patterns DO ignore the path and it is tracked in the index instead, which 'git rm -r --cached -- .gitjig/' clears without touching the files on disk. Then re-run from the repository root: $RE_ARM"
+      warn "bind_local_tier.sh: the exclusion line is present in '$_bd_excl_shown', but git still reports .gitjig/ as not ignored, so the shell's own state would be visible to version control here. This clone is NOT verified bound. Ask git which rule decides it: git check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl - if it names a rule spelled with a leading '!', that negation is the cause, at the file and line printed; if it names an ordinary ignore rule, the patterns DO ignore the path and the sink is tracked in the index instead, which 'git rm -r --cached -f -- .gitjig/' clears without removing anything from disk; and if it prints nothing, .gitjig/ does not exist here yet, so git can name no rule for it - the negation is then in info/exclude or in a .gitignore between the repository root and that path, which are the only places that can outrank the exclusion. Then re-run from the repository root: $RE_ARM"
       return 2
     fi
     # The success line names the exclusion only where this re-ask ANSWERED.
