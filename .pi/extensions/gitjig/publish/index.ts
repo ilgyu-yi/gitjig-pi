@@ -16,10 +16,34 @@
  * `egress-publish-patterns`) — never the out-of-domain disposition, and
  * never a publish. The audit sink itself fails open (§3.9
  * `audit-append`): a refusal stands whether or not its record landed.
+ *
+ * The published URL crosses onto the result THROUGH `quoted()` (issue
+ * #97). It is validated whole against the comment-URL shape, which is
+ * anchored at both ends and excludes whitespace from its body class — that
+ * closes line-forging outright, and with it the five C0 members JS `\s`
+ * covers (tab, LF, VT, FF, CR) and the line/paragraph separators. What it
+ * leaves open is the rest of the class: `[^\s]` admits the NON-whitespace
+ * C0 controls, DEL and the C1 range, the ESC byte among them, and the
+ * value is the `gh` child's own stdout. §3.10 asks for this class's
+ * mitigation UNIFORMLY with an empty exemption set, so the surface where
+ * a child's bytes reach the operator is escaped on the same terms as the
+ * dispatcher's delegate summary rather than left as the one exception.
+ * Enumerated in place (§3.11): the escape covers the RESULT TEXT only.
+ * The structured `details.url` stays raw, deliberately — it is the
+ * machine's copy of the locator, and escaping it would hand a programmatic
+ * consumer a string that no longer denotes the comment it names. That
+ * boundary is stated on its own terms rather than under the empty-
+ * exemption-set clause above, because the raw field rides the SAME result
+ * object this header's refusal rule is grounded on: a registered tool's
+ * result enters the run's transcript. What the escape buys is that the
+ * operator-read text carries no control byte; a renderer that displays
+ * `details.url` instead is choosing a surface this module does not
+ * escape, and that choice is the renderer's boundary, not this one's.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { appendAuditRecord } from "../audit.ts";
+import { quoted } from "../quote.ts";
 import { neutralizeBody } from "./neutralize.ts";
 import { ghCommentArgv, isPublishDestination, runPublishChild } from "./executor.ts";
 import { PatternSourceError, scanBody } from "./scan.ts";
@@ -108,8 +132,9 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			const outcome = await runPublishChild(ghCommentArgv(destination), neutralizeBody(params.body), repoRoot);
 			if (outcome.outcome === "published") {
 				// The one surface child bytes may cross: the URL validated whole
-				// against the comment-URL shape (§3.10's output validity).
-				return result(`published: ${outcome.url}`, { disposition: "published", url: outcome.url });
+				// against the comment-URL shape (§3.10's output validity), and
+				// escaped on the way out because that shape admits control bytes.
+				return result(`published: ${quoted(outcome.url)}`, { disposition: "published", url: outcome.url });
 			}
 			if (outcome.outcome === "outcome-unverified") {
 				const text =

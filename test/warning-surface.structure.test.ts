@@ -79,13 +79,21 @@
  *   6. That an allowlisted expression carries no EXTERNALLY WRITTEN text.
  *      Residual 3 covers an allowlisted spelling reused for a path-bearing
  *      variable; this is the other shape — an entry whose value is written
- *      by another party outright. `outcome.summary` in `dispatch/index.ts`
- *      is one, measured: a delegate controls it byte for byte and can spell
- *      a second dispatch verdict inside the clause reporting the real one.
- *      It is admitted here because escaping it would mangle the payload the
- *      dispatch exists to deliver; the forging is filed as issue #97.
- *      An allowlist entry over external text is a decision about a hole,
- *      never a demonstration there is none.
+ *      by another party outright. The scan cannot tell the two apart: an
+ *      allowlist entry is exact TEXT, and nothing about that text says who
+ *      wrote the value it names. This residual is a statement about the
+ *      SCANNER, so it stands whether or not any entry currently sits in it,
+ *      and this header states NO COUNT of entries that do — a residual whose
+ *      subject is an unmeasurable property cannot also report a census of
+ *      it. The instance that named this residual is closed rather than
+ *      allowlisted: `outcome.summary` in `dispatch/index.ts` was admitted
+ *      here while a delegate could spell a second dispatch verdict inside
+ *      the clause reporting the real one; issue #97 routed it through
+ *      `quoted()`, and the sibling `outcome.url` in `publish/index.ts` with
+ *      it. Closing one instance narrows nothing about the scanner: an
+ *      allowlist entry over external text is a decision about a hole, never
+ *      a demonstration there is none, and no arm here would report the next
+ *      one.
  *
  *
  * The scanner's own teeth are pinned by the synthetic-mutant arms at the
@@ -108,9 +116,10 @@ const EXTENSIONS_DIR = join(repoRoot(), ".pi", "extensions");
 
 /**
  * The roster and each file's exact-text allowlist. Every entry names why
- * it is admitted — for most, that it carries no path; for the one entry
- * over externally written text, that it is a recorded hole (residual 6).
- * An expression not on the list
+ * it is admitted, in its own comment beside it. The grounds differ by
+ * entry and are deliberately NOT summarized here: a ground stated once in
+ * this header is a claim over every entry, and the entries do not share
+ * one. An expression not on the list
  * and not escaped where it stands is a violation, so the exemption set
  * stays enumerated here rather than accreting inline (§3.10).
  */
@@ -205,21 +214,12 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"outcome.compare",
 			// The verdict clause composed from the two above.
 			"compareClause",
-			// EXTERNALLY WRITTEN TEXT, admitted with the hole stated rather
-			// than argued away. It is bounded, closed-schema and operand-
-			// scanned at admission — and not one of those three constrains a
-			// BYTE of it: admission demands only that it be a string, and the
-			// operand scan looks for runs naming the held operand, not for
-			// line breaks or control characters. Measured: a delegate whose
-			// summary opens with a newline and then spells a verdict of its
-			// own produces a second, well-formed "dispatch admitted" line
-			// inside the text reporting the real outcome. It is allowlisted
-			// because escaping it here would mangle the prose the dispatch
-			// exists to fetch, and because what the runtime emits is outside
-			// this change (issue #72's stated scope). The forging itself is
-			// filed as its own defect (issue #97), not carried inside this
-			// change (§0.3); residual 6 below names the class.
-			"outcome.summary",
+			// `outcome.summary` is NOT here: it is externally written text —
+			// a delegate controls it byte for byte — and it now crosses the
+			// composition through quoted() (issue #97). The behavioural
+			// contract that replaced this entry lives in the dispatch module
+			// suite, which measures the composed text rather than its
+			// spelling: one line, no raw control byte, an attributable frame.
 		],
 		allowErrorReads: [
 			// Read only to COMPARE against the closed provision-cause set —
@@ -260,15 +260,15 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// Carriers of this module's own fixed causes.
 			"cause",
 			"outcome.cause",
-			// The URL is validated WHOLE against the comment-URL shape before
-			// it crosses (§3.10's output-validity direction). That shape is
-			// anchored at both ends and its body class excludes whitespace,
-			// so it closes the LINE-FORGING half of this class outright.
-			// It does not close the other half: the class excludes only
-			// whitespace, so C0 and C1 control bytes — the ESC byte among
-			// them — pass it, and this value is the child's own stdout. The
-			// entry is that bounded decision, not a claim the value is inert.
-			"outcome.url",
+			// `outcome.url` is NOT here either. The comment-URL shape closes
+			// the LINE-FORGING half of this class — anchored at both ends,
+			// body class excluding whitespace — and leaves the rest: `[^\s]`
+			// admits the NON-whitespace C0 controls, DEL and the C1 range,
+			// the ESC byte among them (JS `\s` covers tab, LF, VT, FF and CR,
+			// so those five C0 members the body class does close),
+			// and the value is the `gh` child's own stdout. §3.10 asks for uniform
+			// mitigation with an EMPTY exemption set, so the result text
+			// escapes it rather than carrying the one exception (issue #97).
 			// Format-checked lowercase-hyphen pattern ids and numeric line
 			// locators — the refuse-match composition carries no body byte,
 			// which is the property that lets a refusal name where it matched

@@ -32,9 +32,39 @@
  * stands whether or not its record landed). Cleanup degrades OPEN: an
  * unremovable scratch warns on the audit trail and never converts a
  * decided outcome into a failure (§3.9).
+ *
+ * The composed tool result is a FRAME plus a DELIMITED PAYLOAD (issue
+ * #97). The dispatcher's own verdict tokens are composed from its own
+ * bytes — a boolean and a closed verdict union — and the delegate's
+ * summary crosses back through `quoted()`, the tree's shared escaper for
+ * actor-influenced text on an operator surface. Admission bounds the size
+ * and its schema and scans it for the held operand; none of those
+ * constrains a BYTE of it, so before the escape a summary opening with a
+ * line break spelled a second, well-formed `dispatch admitted … compare
+ * confirmed` line inside the text reporting the real outcome — §3.10's
+ * own sentence, that a write the guard permits must not be able to forge
+ * the guard's decisions, applied to the guard whose decision is the
+ * compare. Escaped, the payload is one line, carries no control byte, and
+ * sits inside quotes that mark its exact extent, so a reader separates
+ * what the dispatcher said from what the delegate did. The rendering is
+ * reversible — the payload group decodes back to the delegate's bytes —
+ * because the contract is inertness, not concealment.
+ *
+ * What that leaves unmodeled (§3.11). The escape closes line-forging and
+ * the control classes `quoted()` enumerates; the classes that escaper
+ * knowingly passes raw are disclosed in its own header and are inherited
+ * here unchanged — the zero-width invisible-format characters among them,
+ * which start no line and land no control byte but can conceal bytes
+ * inside the payload. And it closes nothing about the summary's CONTENT.
+ * A delegate can still write false prose — a summary
+ * claiming a review passed, spelled without a line break, is admitted and
+ * rendered faithfully, because it is a claim and not a forged frame. The
+ * frame is what this closes; the claim inside the payload is the reader's
+ * to weigh, and §4.9's injectable-context residual already carries it.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendAuditRecord } from "../audit.ts";
+import { quoted } from "../quote.ts";
 import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
 import { MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import {
@@ -283,7 +313,7 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 				return result(outcome.cause, { disposition: "refused" });
 			}
 			const compareClause = outcome.compare === undefined ? "" : `; compare ${outcome.compare}`;
-			return result(`dispatch admitted (ok: ${outcome.ok})${compareClause}: ${outcome.summary}`, {
+			return result(`dispatch admitted (ok: ${outcome.ok})${compareClause}: ${quoted(outcome.summary)}`, {
 				disposition: "admitted",
 				ok: outcome.ok,
 				...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
