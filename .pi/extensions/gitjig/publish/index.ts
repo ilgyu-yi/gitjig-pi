@@ -76,9 +76,7 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// any other throw is refused on a fixed cause of this module's
 				// own — a raw message could embed paths or content.
 				const cause =
-					error instanceof PatternSourceError
-						? error.message
-						: "the scan machinery failed before a verdict";
+					error instanceof PatternSourceError ? error.message : "the scan machinery failed before a verdict";
 				const text = `publish refused (fail closed): ${cause}`;
 				record("refuse-machinery", text);
 				return result(text, { disposition: "refuse-machinery" });

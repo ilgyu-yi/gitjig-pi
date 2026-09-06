@@ -36,6 +36,19 @@
  *     as bytes, not as an execution (issue #53). Both delimiters run
  *     the same escape classes; only the extent-marking differs.
  *
+ * Warning-surface roster: EXEMPT — this module IS the escaper, so it is
+ * the one file the lock cannot range over without regress. Its two
+ * interpolations are the escaping itself: `escapeRaw` composes the
+ * `\uXXXX` form from the codepoint it is escaping, and the shell
+ * delimiter folds an embedded single quote through the
+ * quote-backslash-quote-quote idiom. Rendering either through `quoted()`
+ * would call this function on its own output and escape the escapes. The
+ * exemption is structural and bounded to that circularity: it is not a
+ * statement that text here is safe by inspection, and every OTHER module
+ * that interpolates is on the roster. What this module owes instead is the
+ * behavioural pinning of its own contract, which lives in
+ * `test/primitives.unit.test.ts` rather than in the lexical lock.
+ *
  * One named helper rather than `JSON.stringify` at each site because the
  * structural lock (`test/warning-surface.structure.test.ts`) needs one
  * greppable admit-rule, and because the contract above needs one place to
