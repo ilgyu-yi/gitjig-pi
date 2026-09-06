@@ -275,6 +275,12 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// without quoting the match.
 			'scan.patternIds.join(", ")',
 			'scan.lines.join(", ")',
+			// The operand LABELS, on exactly the terms above: the array holds
+			// only this module's own two fixed literals ("body", "title"),
+			// pushed at the scan sites and never derived from a value, so the
+			// composition carries no operand byte — the same property that lets
+			// a refusal name where it matched without quoting the match.
+			'operands.join(" and ")',
 			// NOTHING for the published operands (issue #120). An earlier draft
 			// joined the title and body with a template and allowlisted both,
 			// arguing the entry was a visible decision. The entry was avoidable

@@ -116,6 +116,14 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// would refuse a send over text that was never going anywhere.
 			const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
 
+			// Which published operand(s) the verdict came from. A bare line
+			// locator is unattributable between two operands — "lines 1" reads
+			// identically for a title match and a first-line body match — and an
+			// operator cannot repair what the refusal does not name. The labels
+			// are this module's own fixed literals, so they carry no operand
+			// byte (§3.8's refusal-record rule).
+			const operands: string[] = [];
+
 			let scan;
 			try {
 				// Every byte this call publishes is scanned — a create kind's
@@ -126,10 +134,25 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// shifted every body line number by the title's line, so a
 				// refusal pointed the operator at a neighbouring line.
 				scan = scanBody(params.body);
+				if (scan.disposition !== "clean") {
+					operands.push("body");
+				}
 				if (publishedTitle !== undefined) {
 					const titleScan = scanBody(publishedTitle);
 					if (titleScan.disposition !== "clean") {
-						scan = titleScan;
+						operands.push("title");
+						// A body verdict is not overwritten silently: where BOTH
+						// operands are dirty the refusal names both, so the actor
+						// repairs them in one pass instead of learning about the
+						// second only after retrying the first.
+						scan =
+							scan.disposition === "refuse-match" && titleScan.disposition === "refuse-match"
+								? {
+										disposition: "refuse-match",
+										patternIds: [...new Set([...scan.patternIds, ...titleScan.patternIds])],
+										lines: [...scan.lines, ...titleScan.lines],
+									}
+								: titleScan;
 					}
 				}
 			} catch (error) {
@@ -157,11 +180,13 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// locators are numbers, so this composition carries no body byte.
 				const text =
 					"publish refused: disposition refuse-match; " +
+					`in ${operands.join(" and ")}; ` +
 					`patterns ${scan.patternIds.join(", ")}; lines ${scan.lines.join(", ")} — ` +
 					"respell or remove the located spans and call again";
 				record("refuse-match", text);
 				return result(text, {
 					disposition: "refuse-match",
+					operands,
 					patternIds: scan.patternIds,
 					lines: scan.lines,
 				});

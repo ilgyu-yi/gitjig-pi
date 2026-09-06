@@ -180,6 +180,50 @@ describe("success is recognized for every kind, not just the comment kinds (issu
 	});
 });
 
+describe("a refusal names which operand it came from (issue #120, review round 2)", () => {
+	// Round-2 nit: a bare line locator is unattributable between two
+	// operands — "lines 1" reads identically for a title match and a
+	// first-line body match — and where BOTH matched, the title verdict
+	// replaced the body's, so the actor repaired one, retried, and only then
+	// learned of the other.
+	//
+	// The composition is lifted here rather than driven through the tool,
+	// which needs a registered runtime; the sibling integration suite owns
+	// the end-to-end path. What is pinned is the COMPOSITION rule.
+	function compose(bodyDirty: boolean, titleDirty: boolean): { operands: string[]; lines: number[] } {
+		const operands: string[] = [];
+		let lines: number[] = [];
+		if (bodyDirty) {
+			operands.push("body");
+			lines = [4];
+		}
+		if (titleDirty) {
+			operands.push("title");
+			lines = bodyDirty ? [...lines, 1] : [1];
+		}
+		return { operands, lines };
+	}
+
+	it("names both operands when both matched, and keeps both locators", () => {
+		const both = compose(true, true);
+		assert.deepEqual(both.operands, ["body", "title"]);
+		assert.deepEqual(both.lines, [4, 1], "a locator was dropped, so one match would be learned only after a retry");
+	});
+
+	it("names exactly the operand that matched when only one did", () => {
+		assert.deepEqual(compose(true, false).operands, ["body"]);
+		assert.deepEqual(compose(false, true).operands, ["title"]);
+	});
+
+	it("the operand labels are fixed literals, so a refusal carries no operand byte", () => {
+		// §3.8's refusal-record rule: what makes it safe to name where a match
+		// landed is that nothing about the matched text reaches the message.
+		for (const label of compose(true, true).operands) {
+			assert.ok(["body", "title"].includes(label), `an operand label is not a fixed literal: ${label}`);
+		}
+	});
+});
+
 describe("the scanned domain is the kind's own published operands (issue #120)", () => {
 	it("only the create kinds carry a title", () => {
 		for (const kind of PUBLISH_DESTINATION_KINDS) {
