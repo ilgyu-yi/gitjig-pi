@@ -85,7 +85,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "commit-format-helper",
 		failureShape:
-			"helper file absent from the bound helper dir at commit time (githook_source's fail-open miss in .githooks/_lib.sh)",
+			"helper file absent from the bound helper dir at commit time (githook_source's fail-open miss in .githooks/_lib.sh; record constant helper-missing)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation: absent means never installed here, which the acting party did not cause and cannot repair from inside a block (§3.9's machinery carve-out); the advice tier no-ops rather than wedging git (§3.2).",
@@ -93,7 +93,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "commit-format-helper",
 		failureShape:
-			"helper file sources cleanly but does not define check_commit_subject (githook_require's guard in .githooks/_lib.sh)",
+			"helper file sources cleanly but does not define check_commit_subject (githook_require's guard in .githooks/_lib.sh; record constant require-missing)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation, same carve-out (§3.9): a present-but-incomplete helper degrades to allow, never to a false block under a wrong cause (§3.2).",
@@ -101,7 +101,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "commit-format-helper",
 		failureShape:
-			"conventional_commit.sh present but its source does not complete — it exits while being sourced, fails to parse, or returns a non-zero status (githook_source's EXIT-trap fold and safe_source's non-zero-return record in .githooks/_lib.sh)",
+			"conventional_commit.sh present but its source does not complete — it exits while being sourced, fails to parse, or returns a non-zero status (githook_source's EXIT-trap fold and safe_source's non-zero-return record in .githooks/_lib.sh; record constant source-incomplete)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation, same carve-out (§3.9): a source that does not hand control back cleanly is machinery, not the actor's input; `exit` inside a sourced helper terminates the hook shell itself and would carry its status out to git, so the fold turns that into an allow for this arm and every arm after it (§3.2's arm ordering). The fold is not silent: one stderr line plus exactly one warn record naming the helper (§3.9's degradation-signal rule). What the fold COVERS (§3.11) is a helper's own error path that ends in `exit` or in a non-zero return, with the tier's EXIT slot and its source-depth counter untouched and the shell alive — the terms it runs on, not exceptions to a wider claim, since a sourced file executes in the hook's own shell and can reach any of them. Outside those terms the outcome is not this tier's to decide and the fold's line and record may not run — measured on a sourced helper, `trap ':' EXIT; exit 5` refuses the commit and `trap 'exit 0' EXIT; exit 5` creates it, both with no tier bytes on either stream and no record — so in the allow direction this tier's surfaces carry exactly what an enforced pass carries.",
@@ -109,10 +109,10 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "commit-format-subject",
 		failureShape:
-			"the adapter is invoked with no message path, or with a path that is not a regular file, so the arm has no subject to measure (.githooks/commit-msg's subject guard)",
+			"the adapter is invoked with no message path, or with a path that is not a regular file, so the arm has no subject to measure (.githooks/commit-msg's subject guard; record constant not-evaluated)",
 		posture: "open",
 		justification:
-			"Enforcement-chain degradation, not the actor's input (§3.9's machinery carve-out): git supplies that path as a regular file on every invocation of this hook, so an adapter reaching this shape was invoked outside the chain the tier defines and the acting party cannot repair it from inside a block; the advice tier no-ops rather than wedging git (§3.2). It is not silent — one audit warn record names the arm as not evaluated, so an allow the arm never measured is distinguishable at the trail from one it did (§3.9's degradation-signal rule). NOT the same shape as the sibling detached-HEAD fold in .githooks/pre-commit, which is a SCOPE boundary rather than a dependency miss and is grounded at SPEC §3.3's commit-arm paragraph, so it declares no posture and owes no row here.",
+			"Enforcement-chain degradation, not the actor's input (§3.9's machinery carve-out): git supplies that path as a regular file on every invocation of this hook, so an adapter reaching this shape was invoked outside the chain the tier defines and the acting party cannot repair it from inside a block; the advice tier no-ops rather than wedging git (§3.2). It is not silent — one audit warn record names the arm as not evaluated, so an allow the arm never measured is distinguishable at the trail from one it did (§3.9's degradation-signal rule). NOT the same shape as the sibling detached-HEAD fold in .githooks/pre-commit, whose record constant is also not-evaluated, which is a SCOPE boundary rather than a dependency miss and is grounded at SPEC §3.3's commit-arm paragraph, so it declares no posture and owes no row here.",
 	},
 	{
 		dependency: "commit-format-measurement",
@@ -125,7 +125,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "branch-guard-helper",
 		failureShape:
-			"helper file absent from the bound helper dir at push time (githook_source's fail-open miss in .githooks/_lib.sh)",
+			"helper file absent from the bound helper dir at push time (githook_source's fail-open miss in .githooks/_lib.sh; record constant helper-missing)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation: absent means never installed here, which the acting party did not cause and cannot repair from inside a block (§3.9's machinery carve-out); the advice tier no-ops rather than wedging git (§3.2).",
@@ -133,7 +133,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "branch-guard-helper",
 		failureShape:
-			"helper file sources cleanly but does not define is_protected_branch (githook_require's guard in .githooks/_lib.sh)",
+			"helper file sources cleanly but does not define is_protected_branch (githook_require's guard in .githooks/_lib.sh; record constant require-missing)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation, same carve-out (§3.9): a present-but-incomplete helper degrades to allow, never to a false block under a wrong cause (§3.2).",
@@ -141,7 +141,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "branch-guard-helper",
 		failureShape:
-			"branch_guard.sh present but its source does not complete — it exits while being sourced, fails to parse, or returns a non-zero status (githook_source's EXIT-trap fold and safe_source's non-zero-return record in .githooks/_lib.sh)",
+			"branch_guard.sh present but its source does not complete — it exits while being sourced, fails to parse, or returns a non-zero status (githook_source's EXIT-trap fold and safe_source's non-zero-return record in .githooks/_lib.sh; record constant source-incomplete)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation, same carve-out (§3.9): a source that does not hand control back cleanly is machinery, not the actor's input; the fold turns that into an allow for this arm and every arm after it (§3.2's arm ordering), with one stderr line plus exactly one warn record naming the helper (§3.9's degradation-signal rule). The scope condition stated on the commit-format-helper source row — and what holds outside its terms — holds here too.",
@@ -149,7 +149,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "branch-guard-derivation",
 		failureShape:
-			"protected identity P underivable — stage 1 (local refs/remotes/origin/HEAD pointer) and stage 2 (ls-remote measurement, push surface only) both fail, stage-2 failure keyed by outcome: non-zero exit or empty/unparseable output (SPEC §3.3)",
+			"protected identity P underivable — stage 1 (local refs/remotes/origin/HEAD pointer) and stage 2 (ls-remote measurement, push surface only) both fail, stage-2 failure keyed by outcome: non-zero exit or empty/unparseable output (SPEC §3.3; .githooks/helpers/branch_guard.sh, record constant not-enforced)",
 		posture: "open",
 		justification:
 			"Machinery degradation on §3.9's absent-dependency side: an absent pointer is clone-configuration state the acting party's push did not cause; the gate disarms for the run and says so plainly — one audit warn record stating the gate is not enforced (§3.9's degradation-signal rule), the observable separating a disarmed allow from an ordinary allow.",
@@ -173,7 +173,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "secret-scan-helper",
 		failureShape:
-			"secret_scan.sh absent from the bound helper dir at commit time (githook_source's fail-open miss in .githooks/_lib.sh)",
+			"secret_scan.sh absent from the bound helper dir at commit time (githook_source's fail-open miss in .githooks/_lib.sh; record constant helper-missing)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation: absent means never installed here, which the acting party did not cause and cannot repair from inside a block (§3.9's machinery carve-out); the advice tier no-ops rather than wedging git (§3.2).",
@@ -181,7 +181,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "secret-scan-helper",
 		failureShape:
-			"helper file sources cleanly but does not define scan_staged_secrets (githook_require's guard in .githooks/_lib.sh)",
+			"helper file sources cleanly but does not define scan_staged_secrets (githook_require's guard in .githooks/_lib.sh; record constant require-missing)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation, same carve-out (§3.9): a present-but-incomplete helper degrades to allow, never to a false block under a wrong cause (§3.2).",
@@ -189,7 +189,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "secret-scan-helper",
 		failureShape:
-			"secret_scan.sh present but its source does not complete — it exits while being sourced, fails to parse, or returns a non-zero status (githook_source's EXIT-trap fold and safe_source's non-zero-return record in .githooks/_lib.sh)",
+			"secret_scan.sh present but its source does not complete — it exits while being sourced, fails to parse, or returns a non-zero status (githook_source's EXIT-trap fold and safe_source's non-zero-return record in .githooks/_lib.sh; record constant source-incomplete)",
 		posture: "open",
 		justification:
 			"Enforcement-chain degradation, same carve-out (§3.9): a source that does not hand control back cleanly is machinery, not the actor's input; the fold turns that into an allow for this arm and every arm after it (§3.2's arm ordering), with one stderr line plus exactly one warn record naming the helper (§3.9's degradation-signal rule). The scope condition stated on the commit-format-helper source row — and what holds outside its terms — holds here too.",
@@ -197,10 +197,42 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "secret-scan-patterns",
 		failureShape:
-			"pattern rule source unusable for the run — the committed pattern file absent or unreadable beside the helper that reads it, an up-front pattern-validation failure (format or ERE compile, probed before any path is scanned), or a set empty after stripping comments and blanks (SPEC §3.3's machinery outcome)",
+			"pattern rule source unusable for the run — disarm literals 'pattern file absent or unreadable' (beside the helper that reads it), 'pattern file failed up-front validation' (format or ERE compile, probed before any path is scanned), and 'pattern set empty after stripping comments and blanks' (SPEC §3.3's machinery outcome; .githooks/helpers/secret_scan.sh, wrapper record constant not-enforced)",
 		posture: "open",
 		justification:
 			"Machinery degradation, none of it the actor's staged input (§3.9's machinery carve-out): the scan disarms for the run with exactly one audit warn record stating it is not enforced (§3.9's degradation-signal rule) — §3.10's valid-AND-non-empty rule makes a scan that checks nothing say so plainly rather than pass as all-clear, and a partial scan over the valid neighbour rows would be a second, weaker predicate (§3.10's lossy-fallback rule).",
+	},
+	{
+		dependency: "secret-scan-toplevel",
+		failureShape:
+			"the scan's own resolution of the repository top fails at scan time — disarm literal 'repository toplevel unresolvable' (.githooks/helpers/secret_scan.sh, scan_staged_secrets' prelude)",
+		posture: "open",
+		justification:
+			"Machinery degradation, not the actor's staged input (§3.9's machinery carve-out): the scan disarms for the run with one not-enforced warn record (§3.9's degradation-signal rule). Distinct from the local-tier-derivation row that governs the PRELUDE's resolution of the same fact, and not covered by it: that row's shape is constitutively 'the repository top is unresolvable, so neither the record sink nor the containment test can be formed at all', whereas the prelude has already resolved the top and formed the sink by the time this site runs — so this shape is reachable only if the top stops resolving BETWEEN the prelude and the helper. The prelude writes no record when it folds (it has no sink to write to, which is what its shape says); this site writes one, with a stderr line beside it as every disarm here does. One dependency resolved at two sites, one of which writes a record where the other writes none, is two failure shapes, which §3.9 keys rows on.",
+	},
+	{
+		dependency: "secret-scan-diff-base",
+		failureShape:
+			"the base the staged diff is taken against cannot be formed — disarm literal 'staged-diff base unresolvable' (an unborn HEAD whose empty-tree hash cannot be computed; .githooks/helpers/secret_scan.sh)",
+		posture: "open",
+		justification:
+			"Machinery degradation on §3.9's absent-dependency side: the diff base is clone state the acting party's commit did not cause and cannot repair from inside a block, so the scan disarms for the run with one not-enforced warn record rather than blocking. Not the measurement row's shape: that row is per-INPUT and fails closed, while this is per-RUN and precedes any input being read — a scan that never formed a base measured nothing, and §3.10's valid-AND-non-empty rule makes it say so rather than pass as all-clear.",
+	},
+	{
+		dependency: "secret-scan-enumeration",
+		failureShape:
+			"the single-read staged-path enumeration cannot be produced — disarm literals 'staged-path enumeration spool unavailable' (no writable spool in the git dir or the ambient temp dir) and 'staged path enumeration failed' (the enumerating diff exits non-zero); .githooks/helpers/secret_scan.sh. Two literals, ONE shape: both are the same dependency failing at the same point of the run with the same observable and the same repair, and the literals differ only to name which half failed — unlike the toplevel row above, whose sibling site differs in whether a record is written at all. Grouped on that test, the same one the pattern row groups its three literals on.",
+		posture: "open",
+		justification:
+			"Machinery degradation (§3.9's machinery carve-out): the scan disarms for the run with one not-enforced warn record. The exit status is checked BEFORE any of the spooled bytes feed the scan, because a re-read could fail invisibly and stream an empty list — an allow with no record, the silent shape §3.9's degradation-signal rule forbids. Enumerated as an open residual in place (§3.11): a spool this account cannot create is a disarm any actor holding one file could mint, which is accepted here because the alternative is an advice tier that wedges git over its own temp-file failure (§3.2).",
+	},
+	{
+		dependency: "secret-scan-allowlist",
+		failureShape:
+			"the repo-root .shellsecretignore is present but this account cannot read it — record constant allowlist-unreadable (.githooks/helpers/secret_scan.sh)",
+		posture: "open",
+		justification:
+			"The only row here whose fail-open direction is STRICTER rather than weaker, and it is not a disarm: the scan proceeds with NO exclusions and refuses the listed path's secret, emitting one warn record. §3.3's allow-list clause is the ground — the list fails to excuse, it never approves unmeasured, so unreadability of the EXCUSING artifact must not widen the excused set. Reading an unreadable allow-list as empty is therefore the safe direction, and the record exists so an operator whose exclusions silently stopped applying can see why (§3.9's degradation-signal rule).",
 	},
 	{
 		dependency: "secret-scan-measurement",

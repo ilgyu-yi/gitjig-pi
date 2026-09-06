@@ -45,6 +45,13 @@
  *      warning-surface suite's strippers disclose.
  *   5. Enforcement sources outside the three walked roots (none exist
  *      today) are not scanned; a fourth root joins ROOTS by being named.
+ *   6. COMPLETENESS IS NOT THIS SUITE'S PROPERTY. This suite establishes
+ *      that no SECOND home exists; it says nothing about whether the one
+ *      home carries a row for every cause the shipped code declares. A
+ *      tree can pass every arm here while the inventory omits shapes the
+ *      helpers disarm on — which is what issue #112 measured. That
+ *      direction is `posture-completeness.structure.test.ts`; a green run
+ *      here must not be read as a complete inventory.
  *
  * The recognizer's own teeth are pinned by the synthetic-mutant arms at
  * the bottom (§3.12): a green real-tree arm proves nothing unless an
