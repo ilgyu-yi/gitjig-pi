@@ -10,9 +10,17 @@
  * measured sufficient on this substrate 2026-09-05), a failed run, junk
  * output, a hostile stdin-echoing child, the payload on the wrong stream,
  * a hanging child, an orphan holding the pipes past a late in-bound exit,
- * and a child that spawns a grandchild of its own (issue #85). Every instrument arm is RED until the Code phase
- * registers `gitjig_publish` — each arm's first assertion is the authored
+ * and a child that spawns a grandchild of its own (issue #85).
+ *
+ * Every instrument arm is RED until the Code phase registers
+ * `gitjig_publish` — each arm's first assertion is the authored
  * subject-absence anchor (the substrate's "Tool … not found" stand-in).
+ * Three arms stand outside that sentence on purpose: the hanging-child arm
+ * measures its bound first, because a wedged run is its own failure
+ * whatever the tool answered; the group-kill arm's first assertion is a
+ * floor on the grandchild's own liveness, without which it would pass
+ * having measured nothing; and the backstop arm is structural and asserts
+ * nothing about the instrument at all.
  *
  * AUTHORED PHASE-C CONTRACT (beyond the sibling suite's): success is keyed
  * on output VALIDITY — a comment-URL shape on the child's stdout — never

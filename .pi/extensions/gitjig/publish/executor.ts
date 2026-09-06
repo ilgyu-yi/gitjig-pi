@@ -36,8 +36,9 @@
  * The kill reaches the child's whole process GROUP, so a gh-spawned
  * grandchild dies with it rather than surviving to hold the pipes.
  *
- * Named residuals, in place (§3.11), each a consequence of how far the kill
- * reaches rather than a claim it reaches everywhere:
+ * Named residuals, in place (§3.11). The first three are consequences of how
+ * far the kill reaches, rather than a claim it reaches everywhere; the last
+ * runs the other way, and is a reach this change GAVE UP:
  *
  *   - A double-forked, re-setsid'd grandchild leaves the group and survives
  *     any group kill on this platform. Named, not claimed closed.
