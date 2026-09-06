@@ -44,10 +44,16 @@
  *      parser would. There is no TS parser in this dependency-free tree
  *      (no `package.json` exists), so the readers below are narrow text
  *      scanners over a comment-stripped view. They can be fooled by shapes
- *      these files do not write: a nested template literal, an
- *      interpolation whose expression itself contains `{`…`}`, a `${` in a
- *      plain quoted string, a trailing `//` comment sharing a line with
- *      code, a `/*` inside a string.
+ *      these files do not write. A nested template literal and an
+ *      expression containing braces are NO LONGER among them — both are
+ *      written in this tree and the balanced capture handles both. What
+ *      fools it now: a brace or parenthesis inside a string literal or a
+ *      regex within an interpolation, which truncates or over-runs the
+ *      capture; a `${` in a plain quoted string; a trailing `//` comment
+ *      sharing a line with code; a `/*` inside a string. Every one of
+ *      those miscaptures lands on REPORT, never on admit — the scanner's
+ *      error directions are both fail-closed, at the cost of a misleading
+ *      "escape this" message for what is a scanner limit.
  *   2. That `quoted(` resolves to the escaping helper. The scan verifies
  *      the SPELLING, not the callee: a local function named `quoted` that
  *      does not escape would pass. The helper's own contract is pinned
@@ -67,6 +73,9 @@
  *      the reason being sound — a module can exempt itself with a bad
  *      argument, which is why the exemption is one file and its reason is
  *      the structural circularity of escaping the escaper.
+ *   5. That a raw error read wrapped LATER on the same line is really
+ *      escaped: the raw-extraction arm is same-line lexical, so
+ *      `quoted(x) + error.message` would be admitted.
  *   6. That an allowlisted expression carries no EXTERNALLY WRITTEN text.
  *      Residual 3 covers an allowlisted spelling reused for a path-bearing
  *      variable; this is the other shape — an entry whose value is written
@@ -74,13 +83,10 @@
  *      is one, measured: a delegate controls it byte for byte and can spell
  *      a second dispatch verdict inside the clause reporting the real one.
  *      It is admitted here because escaping it would mangle the payload the
- *      dispatch exists to deliver; the forging is filed as its own defect.
+ *      dispatch exists to deliver; the forging is filed as issue #97.
  *      An allowlist entry over external text is a decision about a hole,
  *      never a demonstration there is none.
  *
- *   5. That a raw error read wrapped LATER on the same line is really
- *      escaped: the raw-extraction arm is same-line lexical, so
- *      `quoted(x) + error.message` would be admitted.
  *
  * The scanner's own teeth are pinned by the synthetic-mutant arms at the
  * bottom (§3.12 — a guard the suite never measures is decoration): a raw
@@ -101,8 +107,10 @@ import { repoRoot } from "./harness/run-pi.ts";
 const EXTENSIONS_DIR = join(repoRoot(), ".pi", "extensions");
 
 /**
- * The roster and each file's exact-text allowlist of non-path expressions.
- * Every entry names why it carries no path; an expression not on the list
+ * The roster and each file's exact-text allowlist. Every entry names why
+ * it is admitted — for most, that it carries no path; for the one entry
+ * over externally written text, that it is a recorded hole (residual 6).
+ * An expression not on the list
  * and not escaped where it stands is a violation, so the exemption set
  * stays enumerated here rather than accreting inline (§3.10).
  */
@@ -209,8 +217,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// because escaping it here would mangle the prose the dispatch
 			// exists to fetch, and because what the runtime emits is outside
 			// this change (issue #72's stated scope). The forging itself is
-			// filed as its own defect, not carried inside this change (§0.3),
-			// and residual 6 below names the class.
+			// filed as its own defect (issue #97), not carried inside this
+			// change (§0.3); residual 6 below names the class.
 			"outcome.summary",
 		],
 		allowErrorReads: [
@@ -338,10 +346,14 @@ const EXEMPT_MARKER = /Warning-surface roster:\s*EXEMPT\s*—\s*[A-Za-z][^\n]*/;
  * merely describing this lock — which is not a disposition.
  */
 function leadingBlockComment(source: string): string {
-	const opened = source.indexOf("/*");
-	if (opened === -1) {
+	// Anchored at the FIRST NON-WHITESPACE character. Taking the first block
+	// comment wherever it sits would make a mid-module comment the "leading"
+	// one in any module that opens with code, which is the same accidental
+	// self-exemption one layer in.
+	if (!/^\s*\/\*/.test(source)) {
 		return "";
 	}
+	const opened = source.indexOf("/*");
 	const closed = source.indexOf("*/", opened);
 	return closed === -1 ? "" : source.slice(opened, closed + 2);
 }
@@ -570,6 +582,9 @@ describe("the lock's own teeth (§3.12 — a guard the suite never measures is d
 	it("admits an escaping call that spans the whole expression", () => {
 		assert.deepEqual(interpolationViolations("`${quoted(somePath)}`", []), []);
 		assert.deepEqual(interpolationViolations("`${quoted(a) }`", []), []);
+		// The whole-JSON.stringify shape two rostered modules depend on, pinned
+		// here rather than only by those modules' arms over today's tree.
+		assert.deepEqual(interpolationViolations("`${JSON.stringify({ a: 1 })}`", []), []);
 	});
 
 	it("an interpolation whose braces never balance fails closed", () => {
@@ -578,9 +593,13 @@ describe("the lock's own teeth (§3.12 — a guard the suite never measures is d
 
 	it("reads the exemption marker from the leading block comment only", () => {
 		const inHeader = "/** Warning-surface roster: EXEMPT — it is the escaper. */\nexport const x = 1;";
-		const midModule = "/** ordinary header */\n// Warning-surface roster: EXEMPT — prose describing the rule.\n";
+		const midLine = "/** ordinary header */\n// Warning-surface roster: EXEMPT — prose describing the rule.\n";
+		// A module that opens with CODE has no leading block comment at all,
+		// so a block comment further down is not its header.
+		const midBlock = "export const x = 1;\n/* Warning-surface roster: EXEMPT — prose describing the rule. */\n";
 		assert.equal(rosterDisposition("m.ts", [], inHeader), "exempt");
-		assert.equal(rosterDisposition("m.ts", [], midModule), "undecided");
+		assert.equal(rosterDisposition("m.ts", [], midLine), "undecided");
+		assert.equal(rosterDisposition("m.ts", [], midBlock), "undecided");
 	});
 
 	it("reports an undecided module — on no roster and carrying no recorded reason", () => {
