@@ -264,8 +264,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// the LINE-FORGING half of this class — anchored at both ends,
 			// body class excluding whitespace — and leaves the rest: `[^\s]`
 			// admits the NON-whitespace C0 controls, DEL and the C1 range,
-			// the ESC byte among them (JS `\s` excludes tab, LF, VT, FF, CR
-			// and the separators, so those five C0 members it does close),
+			// the ESC byte among them (JS `\s` covers tab, LF, VT, FF and CR,
+			// so those five C0 members the body class does close),
 			// and the value is the `gh` child's own stdout. §3.10 asks for uniform
 			// mitigation with an EMPTY exemption set, so the result text
 			// escapes it rather than carrying the one exception (issue #97).
