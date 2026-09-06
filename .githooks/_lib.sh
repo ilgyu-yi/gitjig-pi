@@ -238,13 +238,23 @@ safe_source() {
 # change a repair. `_GH_SRC_DEPTH` was initialized at FILE SCOPE with no
 # re-entry guard, so a helper that re-sources this prelude — an ordinary
 # idiom that never names the counter — reset it to zero INSIDE an open
-# window; the outer call's own decrement then drove it to minus one and the
-# next window's arming test stopped matching. Measured end to end against a
-# tree carrying the counter: with one helper re-sourcing the prelude and a
-# later helper exiting, the commit was REFUSED with no stderr line and no
-# source-incomplete record — the wedged hook with nothing printed that this
-# fold exists to prevent, and the refusal on machinery §5.2 says this tier
-# never takes. The frame count folds open there with its line and its record.
+# window. Directly, transitively (the helper sources a sibling that sources
+# the prelude), or from a nested `githook_source`, which crosses the floor at
+# the INNER return and clears the still-open OUTER window's trap mid-window.
+#
+# Both directions of harm follow, and both were measured end to end against a
+# tree carrying the counter, with one helper re-sourcing the prelude:
+#
+#   later helper exits NON-ZERO → the commit is REFUSED with no stderr line
+#     and no source-incomplete record: the wedged hook with nothing printed
+#     that this fold exists to prevent, and the refusal on machinery §5.2
+#     says this tier never takes.
+#   later helper exits ZERO → the commit is CREATED with no line and no
+#     record: that helper's arm never ran and nothing says so, which is the
+#     disarmed allow §3.9 forbids to read like an enforced one. Worse than
+#     the first, and the one a passing helper reaches.
+#
+# The frame count folds open in both, with its line and its record.
 #
 # Three other accidental shapes were measured NOT to move the counter, and
 # are recorded so the claim above is not read as wider than it is: every call

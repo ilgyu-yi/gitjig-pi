@@ -1023,13 +1023,14 @@ describe("a sourced file's own `exit` folds the hook to allow (issue #68, SPEC �
 // earlier revision of this paragraph claimed every arm stayed green against
 // both constants, and that is false three ways. The always-true constant reds
 // the nested arm and the FUNCNAME-refill arm. The always-false constant reds
-// those two AND the unset-counter arm — with arming gone everywhere, the
-// appended `exit` carries out to git, which is the refusal-on-machinery that
-// arm names. The refill arm reds under either because a constant leaves no
-// trap to outlive anything, so the residual it pins open stops reproducing;
-// that is the arm doing its job, not a guard failing. So the unset-counter arm
-// live-pins the arming half, and is a regression check against the asymmetric
-// probe rather than against everything.
+// FOUR: those two, the unset-counter arm, and the prelude-re-entry arm — with
+// arming gone everywhere, an appended `exit` carries out to git, which is the
+// refusal-on-machinery those two arms name. The refill arm reds under either
+// because a constant leaves no trap to outlive anything, so the residual it
+// pins open stops reproducing; that is the arm doing its job, not a guard
+// failing. So the unset-counter arm and the prelude-re-entry arm both
+// live-pin the arming half, and the first is a regression check against the
+// asymmetric probe rather than against everything.
 // ---------------------------------------------------------------------------
 
 describe("the retired arming counter is no longer consulted (issue #71, SPEC §3.2, §5.2)", { skip: IS_WINDOWS }, () => {
@@ -1132,14 +1133,18 @@ describe("the retired arming counter is no longer consulted (issue #71, SPEC §3
 			);
 			assert.match(
 				attempt.stderr,
-				/not enforced/,
+				/not enforced: a helper did not finish sourcing/,
 				`prelude-reentry: the fold folded with no stderr line — a disarmed allow that reads like an ` +
 					`enforced one (§3.9); stderr: ${JSON.stringify(attempt.stderr)}`,
 			);
+			// The record must name the SECOND window's helper. A looser match
+			// passes when the first window simply dies, which is neither the
+			// re-entry nor the window this arm is about.
 			assert.match(
 				attempt.auditDelta,
-				/source-incomplete/,
-				`prelude-reentry: the fold folded with no record; auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
+				/source-incomplete secret_scan\.sh/,
+				`prelude-reentry: the fold's record does not name the second window's helper, so the arm has ` +
+					`not measured the window it is about; auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
 		} finally {
 			removeGithookFixture(fixture);
