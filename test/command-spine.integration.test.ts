@@ -84,8 +84,9 @@
  * `.pi/` surfaces the fixture mirrors; a project-skill home outside
  * `.pi/` (none exists in this repository) is outside the governed-home
  * filter by the conjunct's own `baseDir` limb. The operand sweep is
- * LEXICAL — case-folded ≥ 4-char hex runs held to containment against the
- * held operand, the dispatcher's own rule — over each caller fixture's
+ * LEXICAL — case-folded hex runs held against the held operand on the
+ * dispatcher's own rule: containment from the runtime's exported floor,
+ * the held 7-prefix at any length (issue #104) — over each caller fixture's
  * session entries, audit trail, and run output; a paraphrased or
  * re-encoded operand is §4.9's injectable-context residual. A green
  * `review` round trip says nothing about any delegate's quality: the
@@ -283,16 +284,43 @@ function diagnostics(run: PiRunResult): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * The runtime's own containment floor, READ from the shipped module rather
+ * than spelled again here (issue #104). The sweep below mirrors the
+ * dispatcher's rule, and a mirrored rule that hardcodes its own constant is
+ * the divergence §3.11 names: the two would drift apart silently and this
+ * suite would keep passing while measuring a rule the runtime no longer
+ * applies.
+ */
+const MIN_CONTAINED_RUN = Number(
+	/export const MIN_CONTAINED_RUN = (\d+);/.exec(
+		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "index.ts"), "utf8"),
+	)?.[1] ?? Number.NaN,
+);
+assert.ok(
+	Number.isInteger(MIN_CONTAINED_RUN) && MIN_CONTAINED_RUN > 0,
+	"the runtime exports no MIN_CONTAINED_RUN this sweep can bind to, so the sweep below would silently " +
+		"mirror a rule of its own rather than the dispatcher's (§3.11)",
+);
+
+/**
  * Every hex run of ≥ 4 chars in `text`, either case, that touches the held
- * operand: each run is lowercased and flagged iff the held hash contains
- * it or it contains the held 7-prefix. Unrelated hex — session UUIDs,
- * other hashes — is left alone: the sweep pins the operand, not hex at
- * large. Teeth pinned in-suite below (§3.12).
+ * operand: each run is lowercased and flagged iff the held hash contains it
+ * AND it is at least `MIN_CONTAINED_RUN` long, or it contains the held
+ * 7-prefix at any length. Unrelated hex — session UUIDs, other hashes — is
+ * left alone: the sweep pins the operand, not hex at large. Teeth pinned
+ * in-suite below (§3.12).
+ *
+ * Below the floor a containment match is a coincidence. The sibling dispatch
+ * suite is where that was observed — this sweep inherits the same rule and the
+ * same exposure, and mirrors the floor for the same reason rather than on its
+ * own incident.
  */
 function heldOperandRuns(text: string, held: string): string[] {
 	const runs = text.match(/[0-9a-fA-F]{4,}/g) ?? [];
 	const prefix = held.slice(0, 7);
-	return runs.map((run) => run.toLowerCase()).filter((run) => held.includes(run) || run.includes(prefix));
+	return runs
+		.map((run) => run.toLowerCase())
+		.filter((run) => (run.length >= MIN_CONTAINED_RUN && held.includes(run)) || run.includes(prefix));
 }
 
 // ---------------------------------------------------------------------------
@@ -806,6 +834,25 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 
 	it("stays silent on an unrelated hex run", () => {
 		assert.deepEqual(heldOperandRuns("alongside deadbee7 inert", HELD), []);
+	});
+
+	it("flags a slice AT the floor and stays silent one character below it (issue #104)", () => {
+		// The direction this sweep newly took, pinned HERE and not only in the
+		// sibling suite: a mirrored rule whose inverted half is measured one
+		// file over is a rule this file does not actually hold. Both slices
+		// are genuine substrings of HELD, so the only thing separating them
+		// is the floor.
+		const atFloor = HELD.slice(0, MIN_CONTAINED_RUN);
+		const belowFloor = HELD.slice(0, MIN_CONTAINED_RUN - 1);
+		assert.deepEqual(heldOperandRuns(`shorty ${atFloor} rides`, HELD), [atFloor]);
+		assert.deepEqual(heldOperandRuns(`tiny ${belowFloor} rides`, HELD), []);
+		// And an ABSOLUTE assertion beside the relative pair. Both lines above
+		// are expressed in terms of the constant, so they hold whatever it is
+		// — which is right for a mirror but blind to the constant MOVING. A
+		// genuine four-character slice is the length this issue was filed
+		// about, so it is named outright: if the floor is ever walked back to
+		// where the coincidence lived, this reds and the relative pair does not.
+		assert.deepEqual(heldOperandRuns(`tiny ${HELD.slice(0, 4)} rides`, HELD), []);
 	});
 });
 

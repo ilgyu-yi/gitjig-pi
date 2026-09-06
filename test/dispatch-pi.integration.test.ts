@@ -53,9 +53,10 @@
  * DISPATCHER's provision → child-session → bounded-return path, never any
  * delegate's quality: the child is a scripted echo, and a green run says
  * nothing about what a real delegate would do with the brief. The
- * operand-absence sweep is LEXICAL — case-folded ≥ 4-char hex runs held
- * to containment against the held operand, the implementation's own
- * rule — on the surfaces read here: the tool's result entries, the audit
+ * operand-absence sweep is LEXICAL — case-folded hex runs held against the
+ * held operand on the implementation's own rule: containment from the
+ * runtime's exported floor, the held 7-prefix at any length (#104) — on the
+ * surfaces read here: the tool's result entries, the audit
  * trail, and the session transcript with the assistant
  * toolCall-arguments field excluded BY NAME (the sibling suites'
  * measured residual: the assistant message persists the call's own
@@ -236,18 +237,44 @@ function dispatchAuditLines(): string[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Every hex run of ≥ 4 chars in `text`, either case, that touches the
- * held operand — `namesHeldOperand`'s rule, mirrored: each run is
- * lowercased and flagged iff the held hash contains it (a slice crossed
- * the surface, prefix or interior) or it contains the held 7-prefix (the
- * operand embedded in a longer run). Anything else — session UUIDs,
- * unrelated hashes — is left alone: the sweep pins the operand, not hex
- * at large.
+ * The runtime's own containment floor, READ from the shipped module rather
+ * than spelled again here (issue #104). The sweep below mirrors the
+ * dispatcher's rule, and a mirrored rule that hardcodes its own constant is
+ * the divergence §3.11 names: the two would drift apart silently and this
+ * suite would keep passing while measuring a rule the runtime no longer
+ * applies.
+ */
+const MIN_CONTAINED_RUN = Number(
+	/export const MIN_CONTAINED_RUN = (\d+);/.exec(
+		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "index.ts"), "utf8"),
+	)?.[1] ?? Number.NaN,
+);
+assert.ok(
+	Number.isInteger(MIN_CONTAINED_RUN) && MIN_CONTAINED_RUN > 0,
+	"the runtime exports no MIN_CONTAINED_RUN this sweep can bind to, so the sweep below would silently " +
+		"mirror a rule of its own rather than the dispatcher's (§3.11)",
+);
+
+/**
+ * Every hex run of ≥ 4 chars in `text`, either case, that touches the held
+ * operand: each run is lowercased and flagged iff the held hash contains it
+ * AND it is at least `MIN_CONTAINED_RUN` long, or it contains the held
+ * 7-prefix at any length. Unrelated hex — session UUIDs, other hashes — is
+ * left alone: the sweep pins the operand, not hex at large. Teeth pinned
+ * in-suite below (§3.12).
+ *
+ * Below the floor a containment match is a coincidence: this sweep reded at
+ * random before it, measured — it failed once on a four-character run out of
+ * a temp path that happened to sit inside the held hash. A guard's own test
+ * that reds on a coincidence trains its reader to re-run rather than to
+ * investigate, which costs more than the four-character window it was buying.
  */
 function heldOperandRuns(text: string, held: string): string[] {
 	const runs = text.match(/[0-9a-fA-F]{4,}/g) ?? [];
 	const prefix = held.slice(0, 7);
-	return runs.map((run) => run.toLowerCase()).filter((run) => held.includes(run) || run.includes(prefix));
+	return runs
+		.map((run) => run.toLowerCase())
+		.filter((run) => (run.length >= MIN_CONTAINED_RUN && held.includes(run)) || run.includes(prefix));
 }
 
 /**
@@ -369,12 +396,21 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 		assert.deepEqual(heldOperandRuns("alongside deadbee7 inert", HELD), []);
 	});
 
-	it("flags a 6-char prefix — the sweep's floor is 4, mirroring the implementation's rule", () => {
+	it("flags a 6-char prefix — the containment floor itself, mirroring the implementation's rule", () => {
 		assert.deepEqual(heldOperandRuns("shorty 012345 rides", HELD), ["012345"]);
 	});
 
-	it("flags a 4-char slice — the floor itself", () => {
-		assert.deepEqual(heldOperandRuns("tiny 89ab rides", HELD), ["89ab"]);
+	it("stays SILENT on a 4-char slice — below the containment floor (issue #104)", () => {
+		// The direction this arm measures inverted with the floor, so the arm
+		// moved with it rather than being left asserting the old rule under a
+		// name that still said "the floor is 4". Below six characters a
+		// containment match is a coincidence, and the refusal it drove
+		// discarded a whole verdict.
+		assert.deepEqual(heldOperandRuns("tiny 89ab rides", HELD), []);
+	});
+
+	it("stays SILENT on a 5-char slice — the other length the floor newly admits", () => {
+		assert.deepEqual(heldOperandRuns("tiny 89abc rides", HELD), []);
 	});
 
 	it("flags an interior slice of the held hash", () => {

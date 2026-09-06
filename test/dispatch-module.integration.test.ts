@@ -62,9 +62,11 @@
  *       hash, else `"invalid"` — and the return/failure channels stay
  *       content-free with respect to the caller-held operands: every hex
  *       run of ≥ 4 chars in the summary is lowercased, and a summary
- *       carrying a run the held hash contains, or a run containing the
- *       held 7-prefix, is REFUSED whole (the mechanical scan §4.9 grounds
- *       in §3.9's content-free idiom).
+ *       carrying a run the held hash contains AND at least
+ *       `MIN_CONTAINED_RUN` long, or a run containing the held 7-prefix
+ *       at any length, is REFUSED whole (the mechanical scan §4.9 grounds
+ *       in §3.9's content-free idiom; the floor is issue #104's, and
+ *       below it a containment match is a coincidence).
  *     - every refusal lands at least one `"category":"dispatch"` audit
  *       record through the landed writer (`audit.ts`), itself content-free.
  *
@@ -168,6 +170,8 @@ interface IndexModule {
 	}): Promise<DispatchOutcome>;
 	registerDispatchTool(pi: unknown, repoRoot: string, stateRoot: string): void;
 	DISPATCH_TOOL_NAME: string;
+	/** The shipped operand-scan predicate (issue #104), read rather than copied. */
+	namesHeldOperand?: (text: string, heldHash: string) => boolean;
 }
 
 type Imported<T> = { module: T } | { failure: string };
@@ -1675,6 +1679,171 @@ describe("a delegate's summary cannot forge a dispatch verdict in the composed t
 			(decoded as string).startsWith(`${FORGE_MARKER}\n`),
 			"forge-frame: the decoded payload is not the delegate's summary byte for byte — the frame delimits " +
 				`something other than what crossed back: ${JSON.stringify(decoded)}`,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The operand scan's over-refusal direction (issue #104, SPEC §3.11, §4.9).
+//
+// The scan refuses a return whole when a hex run in the summary names the held
+// operand. Its containment branch — `heldHash.includes(run)` — is the one that
+// can fire on a COINCIDENCE: a 40-character hash offers 37 overlapping
+// four-character windows, so an unrelated four-character run collides by
+// chance. The consequence is a wrong refusal at an enforcement surface, and it
+// is terminal: the whole verdict is discarded on a fixed content-free cause,
+// with nothing the delegate could have done differently.
+//
+// These arms bind to the SHIPPED predicate rather than a copy of its rule
+// (§3.11 — a second evaluation is a divergence engine). They are DETERMINISTIC:
+// the corpus comes from a seeded generator, and the property asserted is not a
+// rate but an absolute — under the landed bound a run shorter than the
+// containment minimum cannot satisfy either branch, so the count of refusals
+// over a colliding corpus is exactly zero rather than "small enough".
+// ---------------------------------------------------------------------------
+
+describe("the operand scan admits a coincidental short hex run (issue #104, SPEC §3.11)", () => {
+	/** Seeded generator: the corpus is a fixture, so the numbers below re-derive. */
+	function mulberry32(seed: number): () => number {
+		let state = seed >>> 0;
+		return () => {
+			state = (state + 0x6d2b79f5) >>> 0;
+			let drawn = Math.imul(state ^ (state >>> 15), 1 | state);
+			drawn = (drawn + Math.imul(drawn ^ (drawn >>> 7), 61 | drawn)) ^ drawn;
+			return ((drawn ^ (drawn >>> 14)) >>> 0) / 4294967296;
+		};
+	}
+
+	function hex(random: () => number, length: number): string {
+		let out = "";
+		for (let index = 0; index < length; index += 1) {
+			out += "0123456789abcdef"[Math.floor(random() * 16)];
+		}
+		return out;
+	}
+
+	async function scan(arm: string): Promise<(text: string, heldHash: string) => boolean> {
+		const index = await requireModule<IndexModule>("index.ts", arm);
+		assert.equal(
+			typeof index.namesHeldOperand,
+			"function",
+			`${arm}: the runtime exports no operand-scan predicate, so these arms would have to re-implement the ` +
+				"rule they measure — which is the divergence this suite must not create (§3.11)",
+		);
+		return index.namesHeldOperand as (text: string, heldHash: string) => boolean;
+	}
+
+	const TRIALS = 200_000;
+
+	it("over a corpus that DOES collide, not one short run is refused", async () => {
+		const namesHeldOperand = await scan("short-run-admitted");
+		const random = mulberry32(0x104c0de);
+		let collisions = 0;
+		let refused = 0;
+		for (let trial = 0; trial < TRIALS; trial += 1) {
+			const held = hex(random, 40);
+			const run = hex(random, 4);
+			// A CORPUS FACT, not a second copy of the guard: how often the run
+			// happens to be a substring of the hash. This is what makes the
+			// assertion below non-vacuous — without it, zero refusals would be
+			// equally consistent with a corpus that never collides at all.
+			if (held.includes(run)) {
+				collisions += 1;
+			}
+			if (namesHeldOperand(`zq review of ${run} complete`, held)) {
+				refused += 1;
+			}
+		}
+		assert.ok(
+			collisions > 50,
+			`short-run-admitted: the corpus produced only ${collisions} coincidental substrings in ${TRIALS} ` +
+				"trials, so it does not exercise the collision and the refusal count below proves nothing",
+		);
+		assert.equal(
+			refused,
+			0,
+			`short-run-admitted: ${refused} of ${TRIALS} returns were refused on a four-character run that ` +
+				`merely collides with the held hash (${collisions} such collisions in the corpus). Each is a whole ` +
+				"verdict discarded for a coincidence, at an enforcement surface, with nothing the delegate could " +
+				"have done differently (§3.11's false-block cost)",
+		);
+	});
+
+	it("a genuine slice of the held operand is STILL refused at six characters and above", async () => {
+		const namesHeldOperand = await scan("genuine-slice-refused");
+		const random = mulberry32(0x104feed);
+		const missed: string[] = [];
+		for (let trial = 0; trial < 2_000; trial += 1) {
+			const held = hex(random, 40);
+			const slices: Array<[string, string]> = [
+				["whole", held],
+				["prefix-6", held.slice(0, 6)],
+				["prefix-7", held.slice(0, 7)],
+				["prefix-8", held.slice(0, 8)],
+				["interior-6", held.slice(14, 20)],
+				["interior-12", held.slice(14, 26)],
+				["upper-whole", held.toUpperCase()],
+			];
+			for (const [label, slice] of slices) {
+				if (!namesHeldOperand(`zq landed at ${slice} today`, held)) {
+					missed.push(`${label}: ${slice}`);
+				}
+			}
+		}
+		assert.deepEqual(
+			missed.slice(0, 5),
+			[],
+			"genuine-slice-refused: a real slice of the held operand crossed the scan — the change bought its " +
+				`false-block reduction by opening the direction the scan exists for (§4.9): ${JSON.stringify(missed.slice(0, 5))}`,
+		);
+	});
+
+	it("what the bound newly admits, pinned rather than only described (§3.11)", async () => {
+		const namesHeldOperand = await scan("residual-pinned");
+		const random = mulberry32(0x104ba5e);
+		let admittedFour = 0;
+		let admittedFive = 0;
+		let admittedInterior = 0;
+		for (let trial = 0; trial < 2_000; trial += 1) {
+			const held = hex(random, 40);
+			if (!namesHeldOperand(`zq at ${held.slice(0, 4)} now`, held)) {
+				admittedFour += 1;
+			}
+			if (!namesHeldOperand(`zq at ${held.slice(0, 5)} now`, held)) {
+				admittedFive += 1;
+			}
+			// The residual has an INTERIOR half too: a short slice taken from
+			// the middle of the operand, not only a leading one. Pinning the
+			// leading case alone would leave half of what the bound admits
+			// described in prose and unmeasured.
+			if (!namesHeldOperand(`zq at ${held.slice(17, 22)} now`, held)) {
+				admittedInterior += 1;
+			}
+		}
+		// This is the residual the change creates, stated as an arm so it
+		// cannot drift: a GENUINE four- or five-character slice of the held
+		// operand now crosses, leading or interior. It is enumerated in the
+		// runtime header, where its non-coincidental source is named too —
+		// git's minimum abbreviation is 4, so a clone with `core.abbrev=4` or
+		// a delegate running `--short=4` produces such a slice on purpose.
+		// A deliberate leaker was never bounded here at all: runs of 3 fall
+		// below the match width entirely.
+		assert.equal(
+			admittedFour,
+			2_000,
+			`residual-pinned: a genuine four-character slice was refused in ${2_000 - admittedFour} of 2000 ` +
+				"trials — the residual the header enumerates does not match what the code does",
+		);
+		assert.equal(
+			admittedFive,
+			2_000,
+			`residual-pinned: a genuine five-character slice was refused in ${2_000 - admittedFive} of 2000 trials`,
+		);
+		assert.equal(
+			admittedInterior,
+			2_000,
+			`residual-pinned: a genuine five-character INTERIOR slice was refused in ${2_000 - admittedInterior} ` +
+				"of 2000 trials — the residual's interior half does not match what the code does",
 		);
 	});
 });
