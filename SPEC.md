@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 322 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 329 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 337 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 422 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 426 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 430 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 440 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 452 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 465 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 479 |
-| &nbsp;&nbsp;§3.11 | Gate design | 489 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 511 |
-| §4 | Substrate and install contract | 521 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 525 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 531 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 535 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 539 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 543 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 549 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 559 |
-| &nbsp;&nbsp;§4.8 | The command layer | 567 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 624 |
-| §5 | Cross-cutting contracts | 666 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 670 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 674 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 678 |
-| &nbsp;&nbsp;§5.4 | Work language | 682 |
-| &nbsp;&nbsp;§5.5 | State boundary | 686 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 692 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 702 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 712 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 720 |
-| §6 | Self-governance milestone | 728 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 739 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 424 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 428 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 432 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 442 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 454 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 467 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 481 |
+| &nbsp;&nbsp;§3.11 | Gate design | 491 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 513 |
+| §4 | Substrate and install contract | 523 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 527 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 533 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 537 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 541 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 545 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 551 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 561 |
+| &nbsp;&nbsp;§4.8 | The command layer | 569 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 626 |
+| §5 | Cross-cutting contracts | 668 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 672 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 676 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 680 |
+| &nbsp;&nbsp;§5.4 | Work language | 684 |
+| &nbsp;&nbsp;§5.5 | State boundary | 688 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 694 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 704 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 714 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 722 |
+| §6 | Self-governance milestone | 730 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 741 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -369,12 +369,14 @@ A row whose `home:` slot records that no instrument holds that home yet is a com
 
 **`protected-branch` ref-identity semantics.** §3.11 binds this class's protection to what a ref **is**, never its literal spelling; what establishes that identity is recorded here, the prose home the column-shape rule routes slot-sized derivations to. The rule source is **one derived identity P** — the branch this repository's own remote pointer names as its default — derived in two stages. Stage 1 reads the local pointer: `git symbolic-ref -q refs/remotes/origin/HEAD`, with the `refs/remotes/origin/` prefix stripped. Stage 2, only where stage 1 fails, measures the remote's advertised default directly: `git ls-remote --symref origin HEAD` with terminal prompts disabled (`GIT_TERMINAL_PROMPT=0`) — a measurement, never a guess, because §3.9's loader rule forbids a guessing fallback (`init.defaultBranch`, the local `HEAD`): a resolver that guesses erodes its own degradation signal until a warning no longer implies its condition. Stage 2 is reachable only from the push surface, where the push's own ref advertisement has already contacted the remote; the commit surface never reaches it, because an offline commit must not open a network connection. The residual that reachability carries is enumerated in place: no portable timeout instrument exists on the host class the tier binds at, so the second connection can hang — accepted with prompts disabled and only on a surface whose own advertisement has just succeeded against the same remote. `GIT_TERMINAL_PROMPT=0` disables git's own terminal prompting and does not reach an agent outside git: an ssh transport whose key is passphrase-protected and whose agent holds no decrypted copy re-prompts on this second connection, and an askpass program the environment supplies is likewise unaffected. That re-prompt is a member of the same accepted hang class, named here rather than left to read as excluded by the disabled prompts. Stage-2 failure is keyed by outcome, not cause (§3.10): a non-zero exit, or empty or unparseable output — a dangling remote `HEAD` yields empty output with exit 0. Where both stages fail, P is underivable and the gate is **disarmed for that run and says so plainly**: one audit warn record stating the gate is not enforced (§3.9's degradation-signal rule) — the observable that separates a disarmed allow from an ordinary allow. Stage 2 repairs the absent-pointer case only: a present-but-stale local pointer satisfies stage 1 and never reaches stage 2, so the migration shape — the remote's default moved while the fetched local pointer stayed — is unmodeled, enumerated below.
 
-With P in hand, the boundary is total over what the adapter hands the predicate — the stdin remote-ref column with one `refs/heads/` prefix stripped — in four dispositions:
+With P in hand, the boundary is total over what the adapter hands the predicate. The two surfaces hand it different subjects and the split is stated rather than left to the reader: the **push** surface hands the stdin remote-ref column with one `refs/heads/` prefix stripped, in the four dispositions below; the **commit** surface hands the branch `HEAD` is on, whose own disposition follows them.
 
 - **Byte-equal to P** → refused: the ordinary block. A deletion push of P arrives with the real refname in the remote-ref column and is refused the same way.
 - **ASCII-case-fold-equal to P but byte-unequal** → refused, on §3.9's unverifiable-destination clause: refnames are byte strings on the wire, but whether a case-variant lands on the same ref is decided by the remote's filesystem semantics, which the client-side hook cannot observe — the destination is ambiguous, and ambiguity fails toward the block. The named false-block cost (§3.6): a genuinely distinct case-variant branch is over-blocked — reversible, with the tier's escape standing beneath the refusal.
 - **Anything else** → identity established as **not P** → the ordinary allow. The new-branch case lives here: establishability keys on the rule source, not on whether the remote has seen the name before. Non-branch refs (tags) arrive without the stripped prefix and can never byte- or fold-equal a branch name, so they land here too.
 - **P underivable** → the disarmed arm above: machinery degradation on §3.9's absent-dependency side — never the actor's input, so never the measurement-rule refusal.
+
+**The commit surface's subject, and where it does not exist.** That arm's deciding information is the branch `HEAD` is on, which the tier measures as a total function: the branch's **own name**, or nothing plus a failure. The measurement reads the full refname and strips one `refs/heads/` prefix, never git's shortest-unambiguous spelling — that spelling is a property of what else lives under `refs/` rather than of the branch, so a tag named P would render the branch as `heads/P`, miss both comparison arms, and disarm this arm tracelessly one innocuous command away. A `HEAD` resolving outside `refs/heads/` has no branch name and takes the no-subject arm below. Where `HEAD` is on no branch the subject does not exist, and the arm reaches neither a refusal nor an established not-P — the class has no reading to take. That is a **scope** decision and is recorded as one: this row guards a commit made *on* a protected branch, and a detached `HEAD` is outside what it claims to guard. The alternative was measured and rejected — refusing on a detached `HEAD` would block `git bisect`, any `git checkout` of a commit, and **every** rebase including a rebase of an ordinary feature branch, none of which approaches P; §3.6's cost asymmetry does not carry a false block that wide. Two things follow, and neither is optional. First, the adapter never reads the unvalidated value: an empty subject compared against P answers "not protected" by accident, and accidental correctness is not a disposition (§3.9's total-function rule — an out-of-domain value that errors both sides of a comparison must not collapse the check to "valid"). Second, the state is scored against **§5.9's disarm bar** rather than passed over. It is a state by that bar's test — `git checkout --detach` puts one clone into it and leaves another without, and a reader cannot see it from the gate's own text — and it is enforcement-disabling for this arm, so it is **discharged by an observable rather than placed outside the bar**: one audit record naming the arm as not evaluated for want of a subject, written where the trail would otherwise show an ordinary allow. The record is audit-only, with no stderr line: the fold is a scope boundary and not machinery degradation, so it must not borrow §3.9's degradation-signal wording and misattribute a cause the tier did not suffer. The residual the scope leaves is enumerated in place (§3.11) rather than closed, and it is **wider than this arm**: git runs no `pre-commit` at all for a commit a rebase REPLAYS, so a rebase of P moves P to commits the tier never saw — the arm does not fold there, it is never reached, and no record of any kind is owed or written. What the no-subject fold above covers is the narrower case of a commit *created* while `HEAD` is detached, which a rebase's `--exec` and a conflict resolution both reach. What holds that is not this arm but the landing arm and the tier-3 ruleset beneath it — the row's `backstop:` slot already reads `none (reversible before publication)`, and the push of a rebased P is refused at the push surface, which takes its target from git's streamed ref lines and never depends on this subject. What would close the residual rather than bound it: an instrument that determines at commit time whether a detached commit is destined for P. Rebase state is readable, so the question is cost, not possibility.
 
 §3.11's aliased-spelling essential is discharged client-side by git's own refspec resolution: the remote-ref column carries the resolved right-hand side of the push refspec, so an aliased push of P reaches the byte-equal arm carrying P's real refname. Enumerated unmodeled, in place (§3.11): `master` and `release/*` (no second protected-ref rule is minted); remotes not named `origin`; Unicode case-pairs beyond ASCII folding; Unicode **normalization** pairs — a byte-unequal NFC/NFD alias of P is the same collision family as a case-pair, and reaches neither the byte-equal arm nor the ASCII-fold arm; a branch literally named with a doubled `refs/heads/` prefix; and the stale-pointer shape above. Every member of that list is scored against **§5.9's disarm bar**, none left silent, since silence in a list where some members are placed outside it would read as a decision never taken. Placed outside the bar here: the stale pointer; a normalization alias; a Unicode case-pair beyond ASCII folding, which the same sentence calls the same collision family and which reaches neither the byte-equal arm nor the ASCII-fold arm; and a push to a remote not named `origin` **while an `origin` still resolves**. In each, both arms take the ORDINARY-ALLOW path and, stage 1 having passed, no warn record is written — so the observable this section names two paragraphs above as "the observable that separates a disarmed allow from an ordinary allow" is exactly what is absent. The route there differs by member, and the ground is given per state rather than shared: for the stale pointer and for a push to another remote, P resolves to a branch other than the one the rule means to guard; for a normalization alias and a Unicode case-pair, P resolves correctly and it is the COMPARISON that misses, the pushed spelling reaching neither the byte-equal arm nor the ASCII-fold arm. Not of that shape, and named so rather than left silent: `master`, a scope decision about a ref this row never claims to guard; a branch literally named with a doubled `refs/heads/` prefix, a differently named ref rather than a disarming state; and a clone whose ONLY remote is named otherwise, where stage 1 and stage 2 both fail and the gate is disarmed loudly with its one warn record — instrumented, not traceless, and so DISCHARGING the bar rather than sitting outside it. `release/*` is a SCOPE decision too, though not `master`'s: this row names push to a release branch as a guarded act and then leaves release branches unmodeled, so what is uncovered is real rather than out of the norm's reach. It is still not a disarmed STATE under §5.9's test — the ruleset covers the same refs in every clone, and no act moves a clone in or out of it — so it is answerable by widening this row's home, never by an observable. `force-push`'s shared-branch gap is the same shape and the same answer.
 

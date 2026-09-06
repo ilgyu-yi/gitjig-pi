@@ -78,8 +78,19 @@
 githook_source conventional_commit.sh commit-format || exit 0
 githook_require check_commit_subject commit-format
 
+# The subject arrives as the message path git passes as $1. Where it is
+# missing or is not a regular file this arm has nothing to measure, so it
+# allows — but it says so rather than allowing silently, the same correction
+# the pre-commit protected-branch arm takes on the same idiom (SPEC 3.9's
+# total-function rule). Git supplies that path as a regular file on every
+# invocation, so no ordinary operation reaches this branch.
 _gh_msgfile="${1:-}"
-[ -n "$_gh_msgfile" ] && [ -f "$_gh_msgfile" ] || exit 0
+if [ -z "$_gh_msgfile" ] || [ ! -f "$_gh_msgfile" ]; then
+  if command -v audit_log >/dev/null 2>&1; then
+    ( audit_log warn commit-format not-evaluated 'commit-format arm not evaluated: no regular message file was supplied, so the arm has no subject' ) </dev/null >/dev/null 2>&1 || true
+  fi
+  exit 0
+fi
 
 # git's own comment marker, never a hard-coded one. `core.commentString`
 # takes precedence over `core.commentChar` where both are set, matching git.

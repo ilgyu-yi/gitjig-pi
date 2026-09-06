@@ -14,10 +14,33 @@
 githook_source branch_guard.sh branch || exit 0
 githook_require current_branch branch
 githook_require is_protected_branch branch
-_gh_branch="$(current_branch)"
-if is_protected_branch "$_gh_branch"; then
-  githook_block branch "pre-commit: direct commit to the protected branch is blocked. Commit on a feature branch and open a PR."
-  exit 1
+# current_branch is a TOTAL function: a valid short branch name, or nothing
+# plus a failure. Its status is observed rather than discarded — an empty
+# subject compared against P answers "not protected" by accident, and
+# accidental correctness is not a disposition (SPEC 3.9's total-function
+# rule: an out-of-domain value that errors both sides of a comparison must
+# not collapse the check to "valid").
+_gh_branch=""
+if _gh_branch="$(current_branch)"; then
+  if is_protected_branch "$_gh_branch"; then
+    githook_block branch "pre-commit: direct commit to the protected branch is blocked. Commit on a feature branch and open a PR."
+    exit 1
+  fi
+else
+  # HEAD is on no branch, so this arm has no subject. SPEC 3.3's commit-arm
+  # paragraph records that as a SCOPE boundary — the row guards a commit made
+  # ON a protected branch — and refusing here would block bisect, any
+  # checkout of a commit, and every rebase including one of an ordinary
+  # feature branch. The state is still a state under 5.9's disarm bar, so it
+  # is discharged by one record rather than left traceless. Audit-only and
+  # deliberately NOT 3.9's "not enforced" wording: a scope boundary is not
+  # machinery degradation, and borrowing that wording would misattribute a
+  # cause the tier did not suffer. Note the wider residual this does NOT
+  # cover, recorded at SPEC 3.3: git runs no pre-commit for a commit a
+  # rebase REPLAYS, so those never reach this arm at all.
+  if command -v audit_log >/dev/null 2>&1; then
+    ( audit_log warn branch not-evaluated 'protected-branch commit arm not evaluated: HEAD is on no branch, so the arm has no subject (a scope boundary, not a degraded gate)' ) </dev/null >/dev/null 2>&1 || true
+  fi
 fi
 
 # 2) Staged secret (scan_staged_secrets reads git diff --cached).

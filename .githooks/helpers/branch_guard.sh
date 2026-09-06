@@ -56,14 +56,27 @@
 # values here preserves the per-invocation cache while closing the seed.
 unset -v _GITJIG_BG_STATE _GITJIG_BG_P
 
-# current_branch — total function (§3.9): prints the valid short branch
-# name, or prints nothing and fails on a detached HEAD — no consumer reads
-# an unvalidated value.
+# current_branch — total function (§3.9): prints the branch's own name, or
+# prints nothing and fails — no consumer reads an unvalidated value.
+#
+# The FULL refname is read and one `refs/heads/` prefix stripped, never
+# `--short`. `--short` prints the shortest UNAMBIGUOUS spelling, which is a
+# property of what else lives under `refs/` rather than of the branch: one
+# `git tag <P>` makes it print `heads/<P>`, which compares unequal to P on
+# both the byte-equal and the ASCII-fold arm and answers not-P — a traceless
+# disarm of this arm, one innocuous command away. A HEAD resolving outside
+# `refs/heads/` has no branch name and fails here rather than being reported
+# under a spelling that is not its identity. This mirrors how the identity P
+# itself is derived below: full refname, one prefix stripped.
 current_branch() {
-	local _bg_name
-	_bg_name="$(git symbolic-ref -q --short HEAD 2>/dev/null </dev/null)" || return 1
-	[ -n "$_bg_name" ] || return 1
-	printf '%s\n' "$_bg_name"
+	local _bg_ref
+	_bg_ref="$(git symbolic-ref -q HEAD 2>/dev/null </dev/null)" || return 1
+	[ -n "$_bg_ref" ] || return 1
+	case "$_bg_ref" in
+	refs/heads/?*) ;;
+	*) return 1 ;;
+	esac
+	printf '%s\n' "${_bg_ref#refs/heads/}"
 	return 0
 }
 
