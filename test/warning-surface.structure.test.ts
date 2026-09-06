@@ -269,12 +269,12 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// and the value is the `gh` child's own stdout. §3.10 asks for uniform
 			// mitigation with an EMPTY exemption set, so the result text
 			// escapes it rather than carrying the one exception (issue #97).
-			// Format-checked lowercase-hyphen pattern ids and numeric line
-			// locators — the refuse-match composition carries no body byte,
-			// which is the property that lets a refusal name where it matched
-			// without quoting the match.
-			'scan.patternIds.join(", ")',
-			'scan.lines.join(", ")',
+			// NOTE: `scan.patternIds.join(", ")` and `scan.lines.join(", ")`
+			// were removed rather than kept once the refusal composed per
+			// operand and those spellings matched no expression here (issue
+			// #120). A stale allowlist entry is pre-authorisation for a future
+			// interpolation that would otherwise have to be argued for, which
+			// is the one thing an exemption set must not become.
 			// Per-operand attribution (issue #120), on exactly the terms above.
 			// Every token is a fixed literal, a format-checked pattern id, or a
 			// number: `operand` is the closed union `"body" | "title"` declared

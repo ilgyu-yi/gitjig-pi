@@ -120,13 +120,6 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			try {
 				// Every byte this call publishes is scanned — a create kind's
 				// title lands on the same public surface and a secret in it leaks
-				// exactly as far. The two operands are scanned SEPARATELY, as two
-				// call sites of the one predicate (§3.11 forbids a second
-				// implementation, not a second call). Joining them into one text
-				// shifted every body line number by the title's line, so a
-				// refusal pointed the operator at a neighbouring line.
-				// Every byte this call publishes is scanned — a create kind's
-				// title lands on the same public surface and a secret in it leaks
 				// exactly as far. The operands are scanned SEPARATELY, as two call
 				// sites of the one predicate (§3.11 forbids a second
 				// implementation, not a second call), and combined by the one
