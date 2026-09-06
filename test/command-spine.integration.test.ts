@@ -84,8 +84,9 @@
  * `.pi/` surfaces the fixture mirrors; a project-skill home outside
  * `.pi/` (none exists in this repository) is outside the governed-home
  * filter by the conjunct's own `baseDir` limb. The operand sweep is
- * LEXICAL — case-folded ≥ 4-char hex runs held to containment against the
- * held operand, the dispatcher's own rule — over each caller fixture's
+ * LEXICAL — case-folded hex runs held against the held operand on the
+ * dispatcher's own rule: containment from six characters, the held
+ * 7-prefix at any length (issue #104) — over each caller fixture's
  * session entries, audit trail, and run output; a paraphrased or
  * re-encoded operand is §4.9's injectable-context residual. A green
  * `review` round trip says nothing about any delegate's quality: the
@@ -283,16 +284,27 @@ function diagnostics(run: PiRunResult): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Every hex run of ≥ 4 chars in `text`, either case, that touches the held
- * operand: each run is lowercased and flagged iff the held hash contains
- * it or it contains the held 7-prefix. Unrelated hex — session UUIDs,
- * other hashes — is left alone: the sweep pins the operand, not hex at
- * large. Teeth pinned in-suite below (§3.12).
+* Every hex run of ≥ 4 chars in `text`, either case, that touches the held
+ * operand: each run is lowercased and flagged iff the held hash contains it
+ * AND it is at least six characters, or it contains the held 7-prefix at any
+ * length. Unrelated hex — session UUIDs, other hashes — is left alone: the
+ * sweep pins the operand, not hex at large. Teeth pinned in-suite below
+ * (§3.12).
+ *
+ * The six-character floor mirrors the runtime's `MIN_CONTAINED_RUN`
+ * (issue #104) and is not a loosening of this sweep's own standard. Below it
+ * a containment match is a coincidence: this arm reds at random otherwise,
+ * measured — it failed once on a four-character run out of a temp path that
+ * happened to sit inside the held hash. A guard's own test that reds on a
+ * coincidence trains its reader to re-run rather than to investigate, which
+ * costs more than the four-character window it was buying.
  */
 function heldOperandRuns(text: string, held: string): string[] {
 	const runs = text.match(/[0-9a-fA-F]{4,}/g) ?? [];
 	const prefix = held.slice(0, 7);
-	return runs.map((run) => run.toLowerCase()).filter((run) => held.includes(run) || run.includes(prefix));
+	return runs
+		.map((run) => run.toLowerCase())
+		.filter((run) => (run.length >= 6 && held.includes(run)) || run.includes(prefix));
 }
 
 // ---------------------------------------------------------------------------

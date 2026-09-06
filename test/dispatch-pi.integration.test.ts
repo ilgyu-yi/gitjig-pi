@@ -53,9 +53,10 @@
  * DISPATCHER's provision → child-session → bounded-return path, never any
  * delegate's quality: the child is a scripted echo, and a green run says
  * nothing about what a real delegate would do with the brief. The
- * operand-absence sweep is LEXICAL — case-folded ≥ 4-char hex runs held
- * to containment against the held operand, the implementation's own
- * rule — on the surfaces read here: the tool's result entries, the audit
+ * operand-absence sweep is LEXICAL — case-folded hex runs held against the
+ * held operand on the implementation's own rule: containment from six
+ * characters, the held 7-prefix at any length (issue #104) — on the
+ * surfaces read here: the tool's result entries, the audit
  * trail, and the session transcript with the assistant
  * toolCall-arguments field excluded BY NAME (the sibling suites'
  * measured residual: the assistant message persists the call's own
@@ -236,18 +237,27 @@ function dispatchAuditLines(): string[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Every hex run of ≥ 4 chars in `text`, either case, that touches the
- * held operand — `namesHeldOperand`'s rule, mirrored: each run is
- * lowercased and flagged iff the held hash contains it (a slice crossed
- * the surface, prefix or interior) or it contains the held 7-prefix (the
- * operand embedded in a longer run). Anything else — session UUIDs,
- * unrelated hashes — is left alone: the sweep pins the operand, not hex
- * at large.
+* Every hex run of ≥ 4 chars in `text`, either case, that touches the held
+ * operand: each run is lowercased and flagged iff the held hash contains it
+ * AND it is at least six characters, or it contains the held 7-prefix at any
+ * length. Unrelated hex — session UUIDs, other hashes — is left alone: the
+ * sweep pins the operand, not hex at large. Teeth pinned in-suite below
+ * (§3.12).
+ *
+ * The six-character floor mirrors the runtime's `MIN_CONTAINED_RUN`
+ * (issue #104) and is not a loosening of this sweep's own standard. Below it
+ * a containment match is a coincidence: this arm reds at random otherwise,
+ * measured — it failed once on a four-character run out of a temp path that
+ * happened to sit inside the held hash. A guard's own test that reds on a
+ * coincidence trains its reader to re-run rather than to investigate, which
+ * costs more than the four-character window it was buying.
  */
 function heldOperandRuns(text: string, held: string): string[] {
 	const runs = text.match(/[0-9a-fA-F]{4,}/g) ?? [];
 	const prefix = held.slice(0, 7);
-	return runs.map((run) => run.toLowerCase()).filter((run) => held.includes(run) || run.includes(prefix));
+	return runs
+		.map((run) => run.toLowerCase())
+		.filter((run) => (run.length >= 6 && held.includes(run)) || run.includes(prefix));
 }
 
 /**
@@ -369,12 +379,21 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 		assert.deepEqual(heldOperandRuns("alongside deadbee7 inert", HELD), []);
 	});
 
-	it("flags a 6-char prefix — the sweep's floor is 4, mirroring the implementation's rule", () => {
+	it("flags a 6-char prefix — the containment floor itself, mirroring the implementation's rule", () => {
 		assert.deepEqual(heldOperandRuns("shorty 012345 rides", HELD), ["012345"]);
 	});
 
-	it("flags a 4-char slice — the floor itself", () => {
-		assert.deepEqual(heldOperandRuns("tiny 89ab rides", HELD), ["89ab"]);
+	it("stays SILENT on a 4-char slice — below the containment floor (issue #104)", () => {
+		// The direction this arm measures inverted with the floor, so the arm
+		// moved with it rather than being left asserting the old rule under a
+		// name that still said "the floor is 4". Below six characters a
+		// containment match is a coincidence, and the refusal it drove
+		// discarded a whole verdict.
+		assert.deepEqual(heldOperandRuns("tiny 89ab rides", HELD), []);
+	});
+
+	it("stays SILENT on a 5-char slice — the other length the floor newly admits", () => {
+		assert.deepEqual(heldOperandRuns("tiny 89abc rides", HELD), []);
 	});
 
 	it("flags an interior slice of the held hash", () => {
