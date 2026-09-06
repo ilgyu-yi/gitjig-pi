@@ -477,24 +477,32 @@ do_bind() {
     # match the FILE path at all, and asking about the file alone can report
     # nothing to act on. A negative-control arm pins that.
     #
-    # STEP 3 IS THE HONEST LIMIT. A directory-only pattern - one spelled with
-    # a trailing slash - cannot match a bare directory operand git cannot
-    # confirm IS a directory, so where `.gitjig/` is not yet on disk (the
-    # ordinary state of a fresh clone: this run creates nothing there) that
-    # spelling leaves git naming no rule at all. Other negation spellings do
-    # still name one, so this is a property of the spelling and not of the
-    # absent directory as such. Where nothing is named, what step 3 gives is a
-    # bounded PLACE to look rather than a rule - and the census is what bounds
-    # it, since only those files can outrank the exclusion.
+    # STEP 3 IS THE HONEST LIMIT, and its GATE is "step 2 named no `!` rule" -
+    # never "step 2 printed nothing". Those differ, and the difference strands
+    # an operator: a directory-only pattern (one spelled with a trailing
+    # slash) cannot match a bare directory operand git cannot confirm IS a
+    # directory, so where `.gitjig/` is not on disk such a negation is
+    # invisible to the lookup - while an ORDINARY pattern that does match the
+    # bare operand still prints. The operator then sees output naming a rule,
+    # none of it a negation, and a step 3 gated on silence would shut them
+    # out with the real cause unnamed. Gating on the absence of a `!` rule
+    # covers both, so the acts are exhaustive over what step 2 can print.
     #
-    # Every claim above is measured by the issue-#74 arms in
-    # `test/bind-instrument.githook.test.ts`, including one that enumerates
-    # the shape space over both axes, runs this procedure on each shape that
-    # reaches the arm, and requires it to terminate with the sink ignored.
+    # What step 3 gives is a bounded PLACE to look rather than a rule, and the
+    # census is what bounds it: only those files can outrank the exclusion.
+    #
+    # The issue-#74 arms in `test/bind-instrument.githook.test.ts` measure
+    # this, including one that enumerates a shape space over the axes named
+    # above - the negation's spelling and location, whether `.gitjig/` is on
+    # disk, whether the sink is tracked, and what competing ordinary pattern
+    # is present - runs this procedure on each shape that reaches the arm, and
+    # requires it to terminate with the sink ignored. That space is a
+    # constructed sample, not an exhaustive one: what it establishes is that
+    # the procedure terminates on every shape it contains.
     git check-ignore -q -- .gitjig/state/audit.jsonl </dev/null 2>/dev/null
     _bd_ci_rc=$?
     if [ "$_bd_ci_rc" -eq 1 ]; then
-      warn "bind_local_tier.sh: the exclusion line is present in '$_bd_excl_shown', but git still reports .gitjig/ as not ignored, so the shell's own state would be visible to version control here. This clone is NOT verified bound. More than one rule can be in the way at once, so work through these in order, and re-run after each - the re-run is how you know you are done. (1) If 'git ls-files --error-unmatch -- .gitjig/state/audit.jsonl' succeeds, the sink is TRACKED and no exclude rule can override that; 'git rm -r --cached -f -- .gitjig/' clears the index without removing anything from disk. (2) Otherwise ask 'git check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl': a rule it names spelled with a leading '!' is a negation to remove, at the file and line printed. (3) If that prints nothing, .gitjig/ does not exist here yet and git can name no rule for it - the negation is then in info/exclude or in a .gitignore between the repository root and that path, the only places that can outrank the exclusion. Re-run from the repository root: $RE_ARM"
+      warn "bind_local_tier.sh: the exclusion line is present in '$_bd_excl_shown', but git still reports .gitjig/ as not ignored, so the shell's own state would be visible to version control here. This clone is NOT verified bound. More than one rule can be in the way at once, so work through these in order, and re-run after each - the re-run is how you know you are done. (1) If 'git ls-files --error-unmatch -- .gitjig/state/audit.jsonl' succeeds, the sink is TRACKED and no exclude rule can override that; 'git rm -r --cached -f -- .gitjig/' clears the index without removing anything from disk. (2) Otherwise ask 'git check-ignore -v --no-index -- .gitjig .gitjig/state/audit.jsonl': if it names a rule spelled with a leading '!', that negation is the cause, at the file and line printed. (3) If it names NO rule beginning with '!' - whether it printed other rules or nothing at all - then the negation is one git will not attribute here, and it is in info/exclude or in a .gitignore between the repository root and that path, the only places that can outrank the exclusion. Re-run from the repository root: $RE_ARM"
       return 2
     fi
     # The success line names the exclusion only where this re-ask ANSWERED.

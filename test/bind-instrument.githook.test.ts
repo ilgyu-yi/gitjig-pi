@@ -1650,12 +1650,20 @@ describe("the arming verdict is refused where the adapters would not run (issue 
 // THE CAUSES COMPOSE. A clone can be BOTH tracked and negated, and then no
 // single act clears the arm. That is why the recovery is an ordered procedure
 // whose termination test is the re-run, and why the arm that matters here does
-// not check a classification at all: it ENUMERATES the shape space over both
-// axes — the negation's spelling and whether `.gitjig/` is on disk — runs the
-// prescribed steps on every shape that reaches the arm, and requires the sink
-// to end up ignored. A scheme that sorted each clone into one cause would pass
-// a per-class check and still strand the operator on the overlap; performing
-// the procedure is the only thing that measures what the operator experiences.
+// not check a classification at all: it enumerates a shape space over four
+// named axes — the negation's spelling, its location, whether `.gitjig/` is on
+// disk, whether the sink is tracked, and what competing ordinary pattern is
+// present — runs the prescribed steps on every shape that reaches the arm, and
+// requires the sink to end up ignored. A scheme that sorted each clone into one
+// cause would pass a per-class check and still strand the operator on the
+// overlap; performing the procedure is the only thing that measures what the
+// operator experiences.
+//
+// THAT SPACE IS A CONSTRUCTED SAMPLE, not an exhaustive one, and what the arm
+// establishes is bounded accordingly: the procedure terminates on every shape
+// the space contains. Twice now a shape outside the then-current space has
+// stranded the operator, so the axes are named above rather than left implicit
+// — a reader adding a shape should be able to see which axis it varies.
 // ---------------------------------------------------------------------------
 
 describe("the exclusion re-ask's recovery terminates on every shape reaching it (issue #74, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
@@ -1714,13 +1722,21 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 			writeFileSync(sourcePath, kept.join("\n"));
 			return "named";
 		}
-		if (rows.length > 0) {
-			return "no-step";
-		}
-		// (3) Nothing named: the bounded search over the only files that can
-		// outrank the exclusion. The bound is the census, not a guess.
+		// (3) NO `!` RULE NAMED — whether step 2 printed other rules or
+		// nothing at all. Gating this on silence instead strands an operator:
+		// an ordinary pattern matching the bare directory operand still
+		// prints while a trailing-slash negation stays invisible, so the
+		// output names a rule, none of it a negation, and the real cause goes
+		// unaddressed. The bounded search is the census, not a guess, and it
+		// walks EVERY .gitignore between the root and the path, as the
+		// message's own bound says.
 		let touched = false;
-		for (const candidate of [excludeOf(root), join(root, ".gitignore")]) {
+		const candidates = [excludeOf(root)];
+		const segments = SINK_POSIX.split("/").slice(0, -1);
+		for (let depth = 0; depth <= segments.length; depth += 1) {
+			candidates.push(join(root, ...segments.slice(0, depth), ".gitignore"));
+		}
+		for (const candidate of candidates) {
 			if (!existsSync(candidate)) {
 				continue;
 			}
@@ -1748,8 +1764,22 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 		{ id: ".gitignore !/.gitjig/**", where: "gitignore", pattern: "!/.gitjig/**" },
 		{ id: ".gitignore !/.gitjig/state/", where: "gitignore", pattern: "!/.gitjig/state/" },
 	];
-	/** An unrelated rule that also ignores the sink — the compound-cause axis. */
-	const EXTRAS: ReadonlyArray<string | null> = [null, "*.jsonl", "/.gitjig/state/audit.jsonl"];
+	/**
+	 * A competing ORDINARY rule present alongside the negation. Two kinds, and
+	 * the distinction is load-bearing: patterns that ignore the SINK, and
+	 * patterns that match the bare DIRECTORY operand. The second kind is what
+	 * makes step 2 print a non-negated line while a trailing-slash negation
+	 * stays invisible to it — the shape that strands an operator when step 3
+	 * is gated on silence. A space holding only the first kind cannot contain
+	 * that shape, and its green would be an artifact of the omission.
+	 */
+	const EXTRAS: ReadonlyArray<string | null> = [
+		null,
+		"*.jsonl",
+		"/.gitjig/state/audit.jsonl",
+		".gitjig",
+		"/.git*",
+	];
 
 	function buildShape(
 		root: string,
@@ -1828,10 +1858,15 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 			}
 			// The shape space is enumerated here, so this count is derivable
 			// from this file rather than quoted from a run that happened once.
+			// A floor, not a fixed count: the space is enumerated above, so the
+			// number is derivable from this file, and a floor lets a shape be
+			// added without a bookkeeping edit while still failing loudly if an
+			// edit empties the space and makes the assertion below vacuous.
+			// 66 reach the arm at the head that introduced this axis set.
 			assert.ok(
-				reached >= 20,
+				reached >= 50,
 				`procedure: only ${reached} shapes reached the arm — the space no longer exercises the arm and ` +
-					"every assertion below is vacuous",
+					"the assertion below is vacuous",
 			);
 			assert.deepEqual(
 				stranded,
