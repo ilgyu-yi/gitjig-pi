@@ -273,9 +273,17 @@ githook_require() {
 # githook_block <category> <message> — emit a clear stderr line, best-effort
 # audit_log (a subshell so any audit misbehavior cannot abort the hook), and
 # return non-zero so git aborts the op on the non-zero hook exit.
+#
+# The subshell reads stdin from /dev/null like every other child on the hook
+# path. The pre-push adapter iterates the ref lines git streams on stdin, so
+# a child that inherits and gulps that stream removes ref lines from the
+# iteration: the arm then measures fewer refs than the push carries, with
+# nothing to show for the difference. This is the shared prelude every
+# adapter calls, so the starvation would sit beneath all of them; it is
+# latent only until some binding's `audit_log` reads stdin (issue #63).
 githook_block() {
   local category="$1" msg="$2"
   printf '[dev-shell] %s\n' "$msg" >&2
-  ( audit_log block "$category" blocked "$msg" ) >/dev/null 2>&1 || true
+  ( audit_log block "$category" blocked "$msg" ) </dev/null >/dev/null 2>&1 || true
   return 1
 }
