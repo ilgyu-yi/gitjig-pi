@@ -1732,7 +1732,12 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 			writeFileSync(sourcePath, kept.join("\n"));
 			return "named";
 		}
-		// (3) NO `!` RULE NAMED — whether step 2 printed other rules or
+		// (3) NO `!` RULE NAMED. The line filter below keys on the tool's own
+		// prefix rather than on every `!` line, which is narrower than the
+		// message's bound — the message sends the operator to the FILES and
+		// leaves finding the negation to them. No negation in the enumerated
+		// space escapes the narrower filter, so it masks nothing here; it is
+		// a harness convenience, not a restatement of the message. — whether step 2 printed other rules or
 		// nothing at all. Gating this on silence instead strands an operator:
 		// an ordinary pattern matching the bare directory operand still
 		// prints while a trailing-slash negation stays invisible, so the
@@ -1830,16 +1835,19 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 				for (const directoryOnDisk of [true, false]) {
 					for (const tracked of ["plain", "skip-worktree", "no"] as const) {
 						for (const extra of EXTRAS) {
-							if (tracked !== "no" && !directoryOnDisk) {
-								continue; // nothing on disk to have staged
-							}
 							const id = `${negation.id} | dir=${directoryOnDisk} | tracked=${tracked} | extra=${extra}`;
 							// Reset to a clean clone between shapes.
 							rmSync(join(fixture.root, ".gitignore"), { force: true });
 							rmSync(join(fixture.root, ".gitjig"), { recursive: true, force: true });
 							writeFileSync(excludeOf(fixture.root), cleanExclude);
 							git(fixture.root, ["rm", "-r", "--cached", "-f", "--sparse", "-q", "--", ".gitjig/"]);
-							buildShape(fixture.root, negation, directoryOnDisk, extra);
+							// Always build the directory, stage through it, and only
+							// THEN remove it where the shape wants it gone. Skipping
+							// tracked+absent instead would exclude the working-tree
+							// state a sparse checkout normally leaves — an index
+							// entry whose file is not there — which is the very
+							// state the skip-worktree axis exists for.
+							buildShape(fixture.root, negation, true, extra);
 							if (tracked !== "no") {
 								git(fixture.root, ["add", "-f", "--", SINK_POSIX]);
 							}
@@ -1849,6 +1857,9 @@ describe("the exclusion re-ask's recovery terminates on every shape reaching it 
 								// checkout — and the shape where step 1's plain
 								// act is inert and the procedure would loop.
 								git(fixture.root, ["update-index", "--skip-worktree", "--", SINK_POSIX]);
+							}
+							if (!directoryOnDisk) {
+								rmSync(join(fixture.root, ".gitjig"), { recursive: true, force: true });
 							}
 							if (!reachesArm(fixture.root)) {
 								continue;
