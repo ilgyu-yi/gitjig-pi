@@ -82,16 +82,18 @@
  *      by another party outright. The scan cannot tell the two apart: an
  *      allowlist entry is exact TEXT, and nothing about that text says who
  *      wrote the value it names. This residual is a statement about the
- *      SCANNER, so it stands whether or not any entry currently sits in it.
- *      The instance that named it is now CLOSED rather than allowlisted:
- *      `outcome.summary` in `dispatch/index.ts` was admitted here while a
- *      delegate could spell a second dispatch verdict inside the clause
- *      reporting the real one; issue #97 routed it through `quoted()`, and
- *      the sibling `outcome.url` in `publish/index.ts` with it, so no entry
- *      on this roster is knowingly over externally written text today.
- *      "Knowingly" is the whole residual: an allowlist entry over external
- *      text is a decision about a hole, never a demonstration there is none,
- *      and no arm here would report the next one.
+ *      SCANNER, so it stands whether or not any entry currently sits in it,
+ *      and this header states NO COUNT of entries that do — a residual whose
+ *      subject is an unmeasurable property cannot also report a census of
+ *      it. The instance that named this residual is closed rather than
+ *      allowlisted: `outcome.summary` in `dispatch/index.ts` was admitted
+ *      here while a delegate could spell a second dispatch verdict inside
+ *      the clause reporting the real one; issue #97 routed it through
+ *      `quoted()`, and the sibling `outcome.url` in `publish/index.ts` with
+ *      it. Closing one instance narrows nothing about the scanner: an
+ *      allowlist entry over external text is a decision about a hole, never
+ *      a demonstration there is none, and no arm here would report the next
+ *      one.
  *
  *
  * The scanner's own teeth are pinned by the synthetic-mutant arms at the
@@ -114,9 +116,10 @@ const EXTENSIONS_DIR = join(repoRoot(), ".pi", "extensions");
 
 /**
  * The roster and each file's exact-text allowlist. Every entry names why
- * it is admitted — that it carries no path, or that its path content is
- * escaped at its own leaf so escaping the carrier would double-escape.
- * An expression not on the list
+ * it is admitted, in its own comment beside it. The grounds differ by
+ * entry and are deliberately NOT summarized here: a ground stated once in
+ * this header is a claim over every entry, and the entries do not share
+ * one. An expression not on the list
  * and not escaped where it stands is a violation, so the exemption set
  * stays enumerated here rather than accreting inline (§3.10).
  */

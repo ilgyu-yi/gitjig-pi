@@ -26,11 +26,17 @@
  * mitigation UNIFORMLY with an empty exemption set, so the surface where
  * a child's bytes reach the operator is escaped on the same terms as the
  * dispatcher's delegate summary rather than left as the one exception.
- * Enumerated in place (§3.11): the escape covers the RESULT TEXT. The
- * structured `details.url` stays raw, deliberately — it is the machine's
- * copy of the locator, and escaping it would hand a programmatic consumer
- * a string that no longer denotes the comment it names. What a renderer
- * does with that field is that renderer's boundary, not this one's.
+ * Enumerated in place (§3.11): the escape covers the RESULT TEXT only.
+ * The structured `details.url` stays raw, deliberately — it is the
+ * machine's copy of the locator, and escaping it would hand a programmatic
+ * consumer a string that no longer denotes the comment it names. That
+ * boundary is stated on its own terms rather than under the empty-
+ * exemption-set clause above, because the raw field rides the SAME result
+ * object this header's refusal rule is grounded on: a registered tool's
+ * result enters the run's transcript. What the escape buys is that the
+ * operator-read text carries no control byte; a renderer that displays
+ * `details.url` instead is choosing a surface this module does not
+ * escape, and that choice is the renderer's boundary, not this one's.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";

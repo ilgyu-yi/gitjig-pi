@@ -36,8 +36,8 @@
  * The composed tool result is a FRAME plus a DELIMITED PAYLOAD (issue
  * #97). The dispatcher's own verdict tokens are composed from its own
  * bytes — a boolean and a closed verdict union — and the delegate's
- * summary crosses back through `quoted()`, the same escaper every other
- * operator surface in this tree uses. Admission bounds the summary's size
+ * summary crosses back through `quoted()`, the tree's shared escaper for
+ * actor-influenced text on an operator surface. Admission bounds the size
  * and its schema and scans it for the held operand; none of those
  * constrains a BYTE of it, so before the escape a summary opening with a
  * line break spelled a second, well-formed `dispatch admitted … compare
@@ -50,9 +50,13 @@
  * reversible — the payload group decodes back to the delegate's bytes —
  * because the contract is inertness, not concealment.
  *
- * What that leaves unmodeled (§3.11): the escape closes line-forging and
- * the control classes `quoted()` enumerates, and closes nothing about the
- * summary's CONTENT. A delegate can still write false prose — a summary
+ * What that leaves unmodeled (§3.11). The escape closes line-forging and
+ * the control classes `quoted()` enumerates; the classes that escaper
+ * knowingly passes raw are disclosed in its own header and are inherited
+ * here unchanged — the zero-width invisible-format characters among them,
+ * which start no line and land no control byte but can conceal bytes
+ * inside the payload. And it closes nothing about the summary's CONTENT.
+ * A delegate can still write false prose — a summary
  * claiming a review passed, spelled without a line break, is admitted and
  * rendered faithfully, because it is a claim and not a forged frame. The
  * frame is what this closes; the claim inside the payload is the reader's
