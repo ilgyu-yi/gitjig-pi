@@ -21,7 +21,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeScanOutcomes } from "../.pi/extensions/gitjig/publish/scan.ts";
+import { mergeScanOutcomes, type ScanOutcome } from "../.pi/extensions/gitjig/publish/scan.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
@@ -192,10 +192,13 @@ describe("a refusal names which operand it came from (issue #120, review round 2
 	// the composition in a local helper, and reverting the whole production
 	// merge left the suite green — an arm that re-implements a rule pins
 	// nothing. The rule is exported for exactly this reason.
-	const clean = { disposition: "clean" } as const;
-	const ood = { disposition: "refuse-out-of-domain" } as const;
-	const bodyHit = { disposition: "refuse-match", patternIds: ["github-token"], lines: [4] } as const;
-	const titleHit = { disposition: "refuse-match", patternIds: ["aws-access-key-id"], lines: [1] } as const;
+	// Typed as ScanOutcome rather than `as const`: `as const` makes the
+	// arrays `readonly`, which the parameter type does not accept, and a
+	// tree with no type-check step ships that silently (issue #121).
+	const clean: ScanOutcome = { disposition: "clean" };
+	const ood: ScanOutcome = { disposition: "refuse-out-of-domain" };
+	const bodyHit: ScanOutcome = { disposition: "refuse-match", patternIds: ["github-token"], lines: [4] };
+	const titleHit: ScanOutcome = { disposition: "refuse-match", patternIds: ["aws-access-key-id"], lines: [1] };
 
 	it("names both operands when both matched, and attributes each locator", () => {
 		const m = mergeScanOutcomes(bodyHit, titleHit);
@@ -243,7 +246,7 @@ describe("a refusal names which operand it came from (issue #120, review round 2
 		// concatenated raw, so two operands matching on line 1 printed
 		// "lines 1, 1". Attribution now lives per operand, and the flat
 		// summary fields are joined on one rule rather than two.
-		const same = { disposition: "refuse-match", patternIds: ["github-token"], lines: [1] } as const;
+		const same: ScanOutcome = { disposition: "refuse-match", patternIds: ["github-token"], lines: [1] };
 		const m = mergeScanOutcomes(same, same);
 		assert.equal(m.scan.disposition, "refuse-match");
 		if (m.scan.disposition === "refuse-match") {
