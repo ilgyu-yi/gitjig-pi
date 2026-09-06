@@ -372,10 +372,14 @@ export function pushRefs(
 	options: PushOptions = {},
 ): CommitAttempt {
 	const auditBefore = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8") : "";
-	const env: Record<string, string> = { ...baseEnv(fixture), ...(options.env ?? {}) };
+	// Stripped from the BASE, then the caller's overrides land on top: an
+	// explicitly supplied value wins over a strip of the same name, which is
+	// what "deleted from the constructed base" means.
+	const stripped: Record<string, string> = baseEnv(fixture);
 	for (const name of options.stripEnv ?? []) {
-		delete env[name];
+		delete stripped[name];
 	}
+	const env: Record<string, string> = { ...stripped, ...(options.env ?? {}) };
 	const result = spawnSync("git", ["push", ...(options.gitArgs ?? []), "origin", ...refspecs], {
 		cwd: fixture.root,
 		env,

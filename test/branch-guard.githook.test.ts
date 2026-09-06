@@ -354,6 +354,18 @@ describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { sk
 			seedLocalCommit(fixture);
 			const attempt = pushRefs(fixture, [`${PROTECTED}:${COMPANION}`, PROTECTED]);
 			assert.equal(attempt.status, 0, `disarmed gate must fail open, never block: ${attempt.stderr}`);
+			// The arm's own premise, asserted rather than assumed: TWO refs
+			// reached the hook. If a fixture change ever made either refspec
+			// up to date, this would silently become a single-ref arm — green
+			// for a reason other than the one it names, with the record-per-ref
+			// mutant surviving it.
+			const refLines = attempt.stderr.split("\n").filter((line) => /^ [ *+=!-]\s/.test(line));
+			assert.equal(
+				refLines.length,
+				2,
+				`the push carried ${refLines.length} ref update(s), not 2 — this arm measures a MULTI-ref push ` +
+					`and cannot discriminate per-run from per-ref on one ref: ${JSON.stringify(attempt.stderr)}`,
+			);
 			const notEnforced = attempt.auditDelta.split("\n").filter((line) => line.includes("not enforced"));
 			assert.equal(
 				notEnforced.length,
@@ -367,12 +379,38 @@ describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { sk
 		}
 	});
 
+	it("the block helper's audit subshell is stdin-starved on the ref-iterating path", () => {
+		// STRUCTURAL, same instrument and same reason as the prompt-guard arm
+		// below: the property is unobservable today because nothing inside
+		// that subshell reads stdin, so a behavioural arm would pass with and
+		// without the redirect. Pinned here rather than left unpinned, so the
+		// token cannot be dropped silently the moment some binding's audit_log
+		// grows a stdin read (issue #63 item 6).
+		const lib = readFileSync(join(repoRoot(), ".githooks", "_lib.sh"), "utf8");
+		const blockAudit = lib
+			.split("\n")
+			.filter((line) => !line.trimStart().startsWith("#"))
+			.filter((line) => line.includes("audit_log block"));
+		assert.equal(blockAudit.length, 1, `expected exactly one block audit site: ${JSON.stringify(blockAudit)}`);
+		assert.match(
+			blockAudit[0],
+			/<\/dev\/null/,
+			`githook_block's audit subshell inherits the hook's stdin — on the push surface that stream is the ` +
+				`ref lines the adapter iterates, so a child reading it removes refs from the iteration and the ` +
+				`arm measures fewer than the push carries: ${JSON.stringify(blockAudit[0])}`,
+		);
+	});
+
 	it("the stage-2 remote measurement disables terminal prompting on its own call", () => {
-		// STRUCTURAL, and recorded as such (§1.5): the behavioural arm this
-		// substitutes for is not available offline. Nothing the fixture can
-		// reach prompts — the remote is a local path with no authentication —
-		// so no push through this harness can distinguish a helper that
-		// disables prompting from one that does not. What CAN be pinned is
+		// STRUCTURAL, and recorded as such (§1.5), naming what it substitutes
+		// for: a behavioural arm observing that no prompt appears. Nothing
+		// this fixture can reach prompts — the remote is a local path with no
+		// authentication — so no push through this harness distinguishes a
+		// helper that disables prompting from one that does not. (A prompting
+		// remote is constructible without network egress, so the ground is
+		// this fixture's shape, not offline-ness; what disqualifies building
+		// one here is that the negative branch reads the operator's terminal
+		// and can wedge the suite.) What CAN be pinned is
 		// that the one remote-touching call carries the guard on itself rather
 		// than inheriting it from an ambient environment, which is the property
 		// the fixture's own base env was masking.
@@ -393,9 +431,14 @@ describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { sk
 		);
 	});
 
-	it("the verdict is unchanged when the base environment stops supplying the prompt guard", () => {
-		// The fixture's base env set GIT_TERMINAL_PROMPT itself, masking the
-		// helper's copy. Stripped here so the hook path runs on its own guard.
+	it("CONTROL: the verdict is unchanged when the base stops supplying the prompt guard", () => {
+		// A CONTROL, not a pin. The fixture's base env set GIT_TERMINAL_PROMPT
+		// itself, masking the helper's copy; this shows the strip works and the
+		// hook path runs unchanged on the helper's own guard. It reds under no
+		// mutant of that guard — the fixture's remote is a local path, so the
+		// deletion mutant leaves this green — and it adds no discrimination
+		// over the stage-2 arm above. The pin is the structural arm; this arm
+		// exists so the mask's removal is itself exercised.
 		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED, omitHeadPointer: true } });
 		try {
 			seedLocalCommit(fixture);

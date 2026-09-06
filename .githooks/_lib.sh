@@ -274,13 +274,20 @@ githook_require() {
 # audit_log (a subshell so any audit misbehavior cannot abort the hook), and
 # return non-zero so git aborts the op on the non-zero hook exit.
 #
-# The subshell reads stdin from /dev/null like every other child on the hook
-# path. The pre-push adapter iterates the ref lines git streams on stdin, so
-# a child that inherits and gulps that stream removes ref lines from the
-# iteration: the arm then measures fewer refs than the push carries, with
-# nothing to show for the difference. This is the shared prelude every
-# adapter calls, so the starvation would sit beneath all of them; it is
-# latent only until some binding's `audit_log` reads stdin (issue #63).
+# The subshell reads stdin from /dev/null. The pre-push adapter iterates the
+# ref lines git streams on stdin, so a child that inherits and gulps that
+# stream removes ref lines from the iteration: the arm then measures fewer
+# refs than the push carries, with nothing to show for the difference. This
+# is the shared prelude every adapter calls, so the starvation would sit
+# beneath all of them; it is latent only until some binding's `audit_log`
+# reads stdin (issue #63).
+#
+# The two sibling audit subshells in this file — the source-fold trap and
+# githook_require's — deliberately do NOT carry this redirect, and the
+# absence is recorded rather than left to read as an oversight: neither can
+# starve the ref loop, because both run ahead of it and githook_require
+# exits the hook when it fires. This one is on the iterating path, which is
+# what earns it the token.
 githook_block() {
   local category="$1" msg="$2"
   printf '[dev-shell] %s\n' "$msg" >&2
