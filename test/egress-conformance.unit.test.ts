@@ -458,6 +458,16 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			"[^]]",
 			"[\\-]", // a backslash inside a bracket expression: POSIX literal, RegExp escape
 			"[abc", // an unterminated bracket expression the engines never finish parsing
+			// POSIX refuses to compile each of these while RegExp accepts it, so
+			// a committed row spelled this way arms the publish reader and
+			// disarms the tier-2 scan through its up-front validation probe.
+			"a{1", // an unterminated interval — one keystroke from a committed row
+			"[A-Z]{16",
+			"a|", // an empty alternation branch, as an appended alternative leaves
+			"|a",
+			"(|a)",
+			"a*?", // a lazy quantifier suffix: a RegExp habit POSIX has no form for
+			"a+?"
 		]) {
 			assert.equal(
 				inCommonSubset(outside),

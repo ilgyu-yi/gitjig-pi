@@ -8,22 +8,37 @@
  * a trailing CR stripped per row, blank and `#`-leading lines ignored,
  * lowercase-hyphen IDs, EREs constrained to the POSIX-ERE ∩ RegExp common
  * subset so `new RegExp` compiles what the tier-2 engine compiles. That
- * subset is now MEASURED at the loader rather than assumed of the committed
- * file. Five things refuse the load: the three construct classes the pattern
- * file's own contract forbids — backslash-letter escapes and backreferences,
- * `(?` group extensions, and the POSIX bracket constructs (class, equivalence
- * class and collating symbol, whole or truncated) — plus two the two engines
- * were measured to split on, a backslash anywhere inside a bracket expression
- * and the leading-`]` bracket spellings, and one neither engine agrees to
- * parse, an unterminated bracket expression. The check is lexical and
- * conservative in the refusing direction, and that is MEASURED rather than
- * asserted: swept over every spelling up to length four across a
- * bracket-oriented alphabet — 11,110 of them — against both engines, it
- * admits NOTHING the two disagree on, and refuses 417 spellings they agree
- * on, each a consequence of the two deliberate refusals above. A divergence
- * spelled outside that sweep still passes here; the conformance lock's
- * shared case set is what bounds that residual, by running both readers over
- * the same cases (§3.11, issue #86).
+ * subset is now measured at the loader rather than assumed of the committed
+ * file — PARTIALLY, and the partiality is the point of the next paragraph.
+ * These refuse the load: the three construct classes the pattern file's own
+ * contract forbids (backslash-letter escapes and backreferences, `(?` group
+ * extensions, and the POSIX bracket constructs — class, equivalence class
+ * and collating symbol, whole or truncated); two spellings the engines were
+ * measured to split on (a backslash inside a bracket expression, and the
+ * leading-`]` bracket family); and four spellings aimed at the asymmetry
+ * that matters — an unterminated bracket expression, an unterminated `{`
+ * interval, an empty alternation branch, and a lazy quantifier suffix.
+ *
+ * That asymmetry, because it decides what is worth catching here: a row
+ * RegExp refuses is caught one statement below by the compile step, so it
+ * fails closed on its own. A row POSIX refuses arms HERE and disarms the
+ * tier-2 scan wholesale, through that scanner's up-front validation probe.
+ * Only the second direction needs catching at this loader, and those four
+ * are its likeliest spellings — `[A-Z]{16` is one keystroke from a committed
+ * row. Two of the four also refuse spellings POSIX accepts as literals;
+ * that costs an author a puzzling refusal and never an admission.
+ *
+ * THIS CHECK IS PARTIAL BY CONSTRUCTION and makes no completeness claim. It
+ * is a lexical scanner over a grammar, not the grammar; three review rounds
+ * each widened the measuring alphabet and each found another construct class
+ * it did not hold, which is what a second implementation of a contract does
+ * (§3.11). What it buys is that the likeliest spellings fail at the loader
+ * rather than silently. What BOUNDS it is the conformance lock, which is the
+ * real check: its oracle asserts the tier-2 probe compiles every committed
+ * row, and its ID closure forces a case per row, so a committed pattern the
+ * tier-2 engine cannot compile reds the suite whatever this scanner thought
+ * of it. A construct class found later is a residual against that bound, not
+ * a hole in a claim made here (§3.11, issue #86).
  *
  * Fail posture (§3.9 `egress-publish-patterns`, closed): an unusable rule
  * source — file unreadable, a row failing the format contract, a pattern
@@ -150,11 +165,11 @@ function closingBracket(ere: string, at: number): number {
  * construct compiled here and diverged at the tier-2 matcher, caught only
  * where the shared case set happened to look (issue #86).
  *
- * Lexical and CONSERVATIVE in the refusing direction: it rejects the three
- * construct classes the contract names rather than deciding the full
- * grammar, so a construct outside the subset that spells itself none of
- * these ways still passes. That residual is the conformance lock's to bound,
- * and it is named in this module's header rather than left implied.
+ * Lexical and PARTIAL: it rejects the construct classes the module note
+ * enumerates rather than deciding the full grammar, so a construct outside
+ * the subset that spells itself none of those ways still passes. That
+ * residual is the conformance lock's to bound — see the note — and this
+ * function claims no more than the list it implements.
  *
  * Exported for the measurement (§3.12): the loader reads the committed file
  * from the repository root and takes no path, so the only way to stage an
@@ -178,6 +193,29 @@ export function inCommonSubset(ere: string): boolean {
 		// `(?` opens every RegExp group extension — lookaround, non-capturing,
 		// named. POSIX ERE has no group extension at all.
 		if (ere[at] === "(" && ere[at + 1] === "?") {
+			return false;
+		}
+		// A LAZY quantifier suffix. RegExp compiles `a*?`; POSIX refuses it.
+		if ("*+?".includes(ere[at]) && ere[at + 1] === "?") {
+			return false;
+		}
+		// An EMPTY alternation branch — leading, trailing, or against a group
+		// edge. RegExp compiles `a|`; POSIX refuses it. A trailing `|` is what
+		// an appended alternative leaves behind when its right half is lost.
+		if (ere[at] === "|") {
+			const before = ere[at - 1];
+			const after = ere[at + 1];
+			if (before === undefined || before === "(" || before === "|") {
+				return false;
+			}
+			if (after === undefined || after === ")" || after === "|") {
+				return false;
+			}
+		}
+		// An UNTERMINATED interval. RegExp compiles `a{1`; POSIX refuses it,
+		// and a dropped brace on a committed row is the likeliest way to
+		// arrive here — `[A-Z]{16` is one keystroke from a committed pattern.
+		if (ere[at] === "{" && ere.indexOf("}", at) === -1) {
 			return false;
 		}
 		// Inside a BRACKET EXPRESSION the two engines diverge on three POSIX
