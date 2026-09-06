@@ -9,9 +9,18 @@
  * run needs except gh — the minimal symlink set pi/git/node/sh/bash/env,
  * measured sufficient on this substrate 2026-09-05), a failed run, junk
  * output, a hostile stdin-echoing child, the payload on the wrong stream,
- * and a hanging child. Every instrument arm is RED until the Code phase
- * registers `gitjig_publish` — each arm's first assertion is the authored
+ * a hanging child, an orphan holding the pipes past a late in-bound exit,
+ * and a child that spawns a grandchild of its own (issue #85).
+ *
+ * Every instrument arm is RED until the Code phase registers
+ * `gitjig_publish` — each arm's first assertion is the authored
  * subject-absence anchor (the substrate's "Tool … not found" stand-in).
+ * Three arms stand outside that sentence on purpose: the hanging-child arm
+ * measures its bound first, because a wedged run is its own failure
+ * whatever the tool answered; the group-kill arm's first assertion is a
+ * floor on the grandchild's own liveness, without which it would pass
+ * having measured nothing; and the backstop arm is structural and asserts
+ * nothing about the instrument at all.
  *
  * AUTHORED PHASE-C CONTRACT (beyond the sibling suite's): success is keyed
  * on output VALIDITY — a comment-URL shape on the child's stdout — never
@@ -32,13 +41,24 @@
  * toolResult entries; the assistant toolCall-args entry is §3.3's
  * enumerated residual and excluded. The five §3.10 classes are staged by
  * outcome shape, not by cause: which syscall failed inside the shim is not
- * measured, only what the executor admitted.
+ * measured, only what the executor admitted. And the backstop that bounds
+ * an unreapable child is not established at all here: its arm is lexical,
+ * so a module spelling the timer while defeating it another way passes.
  *
- * Mutants, both directions: the success direction (valid URL on stdout →
- * published) is pinned by the sibling suite's AC3 arm; every arm here is
- * the refuse direction, so an executor keyed on exit status alone reddens
- * at the junk/echo/wrong-stream arms and one keyed on presence alone
- * reddens at the absent arm.
+ * Mutants, both directions: the ordinary success direction (valid URL on
+ * stdout → published) is pinned by the sibling suite's AC3 arm, and every
+ * arm here is the refuse direction WITH ONE EXCEPTION — the orphan-late arm
+ * asserts `published`, because the regression it guards is a refusal
+ * wrongly claimed for a send that landed, and only the allow direction
+ * catches that. So an executor keyed on exit status alone reddens at the
+ * junk/echo/wrong-stream arms, one keyed on presence alone reddens at the
+ * absent arm, and one whose bound outlives the child's exit reddens at the
+ * orphan-late arm.
+ *
+ * ONE ARM HERE IS STRUCTURAL, not behavioral, and is marked so at its own
+ * site: the unreapable-child backstop. A child in an uninterruptible wait
+ * is not portably arrangeable from a test, so that arm reads the module's
+ * text where every other bound in it is staged and run.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -203,6 +223,8 @@ let junkRun: ExecutorRun;
 let echoRun: ExecutorRun;
 let wrongStreamRun: ExecutorRun;
 let hangingRun: ExecutorRun;
+let orphanLateRun: ExecutorRun;
+let groupKillRun: ExecutorRun;
 
 before(async () => {
 	absentRun = await runWithoutGh();
@@ -225,10 +247,31 @@ before(async () => {
 	// The arm's own 60s timeout is the backstop that turns a wedge into a
 	// measured failure instead of a wedged suite.
 	hangingRun = await runWithShim("sleep 120\n", 60_000);
+	// The race the exit-handler's timer clear repairs. The child exits WELL
+	// INSIDE its bound but LATE — past (bound - flush grace) — while an
+	// orphaned grandchild holds the pipes open past that exit, so "close"
+	// never comes and the outcome is decided by the flush grace. With the
+	// kill timer still armed across that grace, the bound elapses before the
+	// grace decides and an in-bound run is marked timed out: a refusal for a
+	// send that succeeded, which is the false-withholding direction §5.6
+	// forbids. The URL is on stdout, so the only correct outcome is published.
+	orphanLateRun = await runWithShim(
+		"sleep 30 &\n" + "sleep 9\n" + `printf '${SHIM_URL}\\n'\n` + "exit 0\n",
+		90_000,
+	);
+	// Kill REACH. The shim spawns a grandchild that keeps ticking a file, then
+	// hangs past its own bound. Killing the direct child alone leaves that
+	// grandchild running; killing the process group takes it too. The ticks
+	// are the observable — the run's own outcome is identical either way,
+	// which is exactly why the reach needed its own arm (issue #85).
+	groupKillRun = await runWithShim(
+		'( while : ; do printf t >> "$SINK/ticks"; sleep 0.2; done ) &\n' + "sleep 120\n",
+		60_000,
+	);
 });
 
 after(() => {
-	for (const run of [absentRun, failedRun, junkRun, echoRun, wrongStreamRun, hangingRun]) {
+	for (const run of [absentRun, failedRun, junkRun, echoRun, wrongStreamRun, hangingRun, orphanLateRun, groupKillRun]) {
 		if (run !== undefined) {
 			removeFixture(run.fixture);
 		}
@@ -318,6 +361,103 @@ describe("the payload on the wrong stream refuses admission (issue #83)", () => 
 	it("a URL on stderr is not output validity: no success claim, URL in no record", () => {
 		assert.ok(egressAuditLines(wrongStreamRun).length >= 1, redUntilRegistered("wrong-stream record"));
 		assertNoSuccessClaim(wrongStreamRun, "wrong-stream");
+	});
+});
+
+describe("a late in-bound exit behind an orphan-held pipe publishes (issue #85, SPEC §5.6)", () => {
+	it("the run completes and the tool answers for itself", () => {
+		assert.equal(
+			orphanLateRun.result.timedOut,
+			false,
+			"orphan-late: the session wedged — an in-bound exit behind a held pipe must still decide inside the " +
+				"flush grace\n" + diagnostics(orphanLateRun.result),
+		);
+		assert.equal(orphanLateRun.result.exitCode, 0, diagnostics(orphanLateRun.result));
+		requireOwnResult(orphanLateRun, "orphan-late");
+	});
+
+	it("the in-bound send is reported PUBLISHED, never refused as bound-exceeded", () => {
+		// The regression direction is the one §5.6 forbids: withholding claimed
+		// for a send that succeeded. The child exited at 9s against a 10s bound
+		// with the URL on stdout; only a kill timer left armed across the flush
+		// grace can turn that into a timeout refusal.
+		const results = publishResults(orphanLateRun.fixture).map((message) => textOf(message));
+		assert.ok(results.length >= 1, redUntilRegistered("orphan-late result"));
+		const joined = results.join("\n");
+		assert.ok(
+			joined.includes(SUCCESS_URL_TOKEN),
+			`orphan-late: an in-bound exit whose stdout carried the comment-URL shape was not reported published — ` +
+				`the run is inside its bound and the send landed, so a refusal here claims withholding for a send ` +
+				`that succeeded (§5.6): ${JSON.stringify(results)}`,
+		);
+		assert.ok(
+			!joined.includes("exceeded its"),
+			`orphan-late: the run was refused as bound-exceeded though the child exited inside its bound — the ` +
+				`orphan held the pipes, not the child: ${JSON.stringify(results)}`,
+		);
+	});
+});
+
+describe("the bound's kill reaches the child's process group (issue #85)", () => {
+	it("a grandchild the child spawned stops ticking once the bound fires", async () => {
+		// Sampled AFTER the run settled: the direct child is gone either way,
+		// so a still-growing tick file means the grandchild outlived the kill.
+		const ticks = join(groupKillRun.sinkDir, "ticks");
+		assert.ok(existsSync(ticks), `group-kill: the grandchild never ran, so the arm measures nothing`);
+		const before = readFileSync(ticks, "utf8").length;
+		// A FLOOR, so the arm cannot pass by measuring a grandchild that died
+		// early for some other reason: a short non-growing file would satisfy
+		// the equality below having proven nothing. One tick per 0.2s against
+		// a 10s bound expects roughly 50; the observed mutant runs sampled 55
+		// and 56, so 20 sits far below any live shape and far above an early
+		// death.
+		assert.ok(
+			before >= 20,
+			`group-kill: only ${before} tick(s) before sampling — the grandchild was not alive when the bound ` +
+				`fired, so the equality below would hold without measuring the kill's reach`,
+		);
+		await new Promise((r) => setTimeout(r, 3_000));
+		const after = readFileSync(ticks, "utf8").length;
+		assert.equal(
+			after,
+			before,
+			`group-kill: the grandchild kept ticking (${before} -> ${after}) for 3s after the run settled — the ` +
+				`bound's kill reached the direct child only, so a gh-spawned child survives it and holds the pipes ` +
+				`the executor was bounded against (§3.3's bounded child)`,
+		);
+	});
+});
+
+describe("the unreapable-child backstop is armed and cleared (issue #85)", () => {
+	it("STRUCTURAL: the kill path arms a backstop timer and the settle path clears it", () => {
+		// STRUCTURAL, and recorded as such (§1.5), naming what it substitutes
+		// for: an arm staging a child in an uninterruptible wait. SIGKILL is
+		// delivered but not guaranteed to be REAPED, and such a child emits no
+		// `exit` — the promise would never settle and the tool call would
+		// wedge. No portable way exists to put a child into that state from a
+		// test (it needs a blocking kernel path this suite cannot arrange), so
+		// what is pinned is that the kill path arms a backstop at all. Every
+		// OTHER bound in this module is pinned behaviourally above.
+		const executor = readFileSync(
+			join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts"),
+			"utf8",
+		);
+		const body = executor
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.split("\n")
+			.filter((line) => !line.trimStart().startsWith("//"))
+			.join("\n");
+		assert.match(
+			body,
+			/unkillableTimer\s*=\s*setTimeout\(/,
+			"the kill path arms no backstop, so a child that never emits `exit` leaves the awaited promise " +
+				"unsettled and wedges the tool call — against this module's own bounded-refusal claim (§5.9)",
+		);
+		assert.match(
+			body,
+			/clearTimeout\(unkillableTimer\)/,
+			"the backstop is armed and never cleared, so it outlives a settled call",
+		);
 	});
 });
 
