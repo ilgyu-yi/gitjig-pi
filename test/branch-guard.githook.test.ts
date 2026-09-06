@@ -51,6 +51,7 @@ import { after, before, describe, it } from "node:test";
 import {
 	buildGithookFixture,
 	type CommitAttempt,
+	commitWithMessage,
 	removeDelegatedHelpers,
 	fixtureGit,
 	type GithookFixture,
@@ -568,6 +569,144 @@ describe("current_branch detached-HEAD contract (issue #59, SPEC §3.9)", { skip
 				(probe.stdout ?? Buffer.alloc(0)).toString("utf8"),
 				"",
 				"current_branch printed output on a detached HEAD — no consumer may read an unvalidated value (§3.9)",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+});
+
+/**
+ * The COMMIT surface's subject (issue #113; SPEC §3.3's commit-arm
+ * paragraph, §3.9's total-function rule, §5.9's disarm bar).
+ *
+ * Subject under test: `.githooks/pre-commit`'s protected-branch arm driven
+ * through `git commit`, never by calling the predicate. The axis these arms
+ * hold that the sibling describe above does not: what the ADAPTER does with
+ * a total function that failed. A detached `HEAD` has no branch, so the arm
+ * has no subject; the scope decision is that it allows, and §5.9's bar is
+ * discharged by ONE audit record — audit-only, since a scope boundary must
+ * not borrow §3.9's degradation wording and misattribute a cause.
+ *
+ * ARMED-CHAIN ASSERTIONS: red by design until the adapter observes
+ * `current_branch`'s status.
+ */
+describe("the commit arm's subject and the detached-HEAD scope (issue #113)", { skip: IS_WINDOWS }, () => {
+	/** Records this arm writes when it has no subject — the §5.9 observable. */
+	function unevaluatedRecords(attempt: CommitAttempt): string[] {
+		return attempt.auditDelta
+			.split("\n")
+			.filter((line) => line.includes("not evaluated") && line.includes("branch"));
+	}
+
+	function blockRecords(attempt: CommitAttempt): string[] {
+		return attempt.auditDelta.split("\n").filter((line) => line.includes('"block"'));
+	}
+
+	it("a commit ON the protected identity refuses — the arm has its subject", () => {
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			const attempt = commitWithMessage(fixture, `feat(#113): on ${PROTECTED}\n`);
+			assert.notEqual(attempt.status, 0, "a commit on the protected identity was created");
+			assert.equal(
+				blockRecords(attempt).length,
+				1,
+				`expected one block record; delta: ${JSON.stringify(attempt.auditDelta)}`,
+			);
+			assert.equal(
+				unevaluatedRecords(attempt).length,
+				0,
+				"an arm that evaluated its subject wrote a not-evaluated record",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a commit on a FEATURE branch allows with no record — the ordinary allow", () => {
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			fixtureGit(fixture, ["checkout", "-q", "-b", "zqfeaturezq"]);
+			const attempt = commitWithMessage(fixture, "feat(#113): on a feature branch\n");
+			assert.equal(attempt.status, 0, `an ordinary feature-branch commit was refused: ${attempt.stderr}`);
+			assert.equal(blockRecords(attempt).length, 0, "an ordinary allow wrote a block record");
+			assert.equal(
+				unevaluatedRecords(attempt).length,
+				0,
+				"an ordinary allow wrote a not-evaluated record — the two must stay distinct",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a commit on a DETACHED HEAD allows and writes exactly one not-evaluated record", () => {
+		// The three-way separation this describe exists for: refusal, ordinary
+		// allow, and an allow the arm never evaluated are distinguishable at
+		// the observable. Without the record the third collapses into the
+		// second, which is the state §5.9's bar refuses to leave traceless.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			fixtureGit(fixture, ["checkout", "-q", "--detach"]);
+			const attempt = commitWithMessage(fixture, "feat(#113): detached\n");
+			assert.equal(attempt.status, 0, `the scope decision is to allow; the commit was refused: ${attempt.stderr}`);
+			assert.equal(
+				unevaluatedRecords(attempt).length,
+				1,
+				`expected exactly one not-evaluated record; delta: ${JSON.stringify(attempt.auditDelta)}`,
+			);
+			assert.equal(blockRecords(attempt).length, 0, "the scope fold wrote a block record");
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("the detached fold is audit-only: no stderr line borrows the degradation wording", () => {
+		// A scope boundary is not machinery degradation. Printing §3.9's
+		// "not enforced" line here would misattribute a cause the tier did not
+		// suffer, and a rebase would print once per replayed commit.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			fixtureGit(fixture, ["checkout", "-q", "--detach"]);
+			const attempt = commitWithMessage(fixture, "feat(#113): detached, quiet\n");
+			assert.equal(attempt.cause, "", `the scope fold spoke on stderr: ${JSON.stringify(attempt.cause)}`);
+			assert.ok(
+				!attempt.stderr.includes("not enforced"),
+				"the scope fold borrowed §3.9's degradation wording",
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a rebase of the protected identity: every replayed commit is recorded as unevaluated", () => {
+		// The residual SPEC §3.3 enumerates, driven end to end. A rebase
+		// creates its commits detached and then moves P to them, so these
+		// commits reach the protected branch without the arm evaluating one.
+		// What the arm owes is not a refusal but a trail that does not read
+		// like an ordinary allow.
+		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+		try {
+			for (let i = 0; i < 2; i += 1) {
+				writeFileSync(join(fixture.root, `r${i}.txt`), `r${i}\n`);
+				fixtureGit(fixture, ["add", `r${i}.txt`]);
+				fixtureGit(fixture, ["-c", "core.hooksPath=", "commit", "-q", "-m", `feat(#113): r${i}`]);
+			}
+			const before = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8").length : 0;
+			const rebase = spawnSync(
+				"git",
+				["rebase", "HEAD~2", "--exec", "git commit -q --allow-empty -m 'feat(#113): replayed'"],
+				{
+					cwd: fixture.root,
+					env: { PATH: process.env.PATH ?? "", HOME: join(fixture.root, "home"), GIT_CONFIG_NOSYSTEM: "1" },
+				},
+			);
+			assert.equal(rebase.status, 0, `the rebase itself failed: ${(rebase.stderr ?? Buffer.alloc(0)).toString()}`);
+			const delta = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8").slice(before) : "";
+			const records = delta.split("\n").filter((l) => l.includes("not evaluated") && l.includes("branch"));
+			assert.ok(
+				records.length >= 2,
+				`a rebase of P replayed commits with no unevaluated record; delta: ${JSON.stringify(delta)}`,
 			);
 		} finally {
 			removeGithookFixture(fixture);

@@ -59,7 +59,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -755,5 +755,47 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 	it("the ordinary editor commit still passes", () => {
 		const { status } = commitThroughEditor("feat(#58): a plain editor subject\n\n# a template comment\n");
 		assert.equal(status, 0, "editor baseline: an ordinary editor commit was refused");
+	});
+});
+
+/**
+ * The adapter's own subject (issue #113, finding 2; SPEC §3.9's
+ * total-function rule).
+ *
+ * `.githooks/commit-msg` takes its subject from the message path git passes
+ * as `$1`. Where that path is missing or is not a regular file the arm has
+ * nothing to measure, and it allowed with no record.
+ *
+ * DIRECT INVOCATION, deliberate and stated: git supplies that path as a
+ * regular file on EVERY invocation of this hook, so no `git commit` can
+ * produce this state and no through-git arm could reach it. That is also why
+ * the finding is ruled a nit — the correction is the same one the sibling
+ * pre-commit arm takes, applied to the same idiom, not a reachable defect.
+ */
+describe("commit-msg with no measurable message path (issue #113)", { skip: IS_WINDOWS }, () => {
+	it("allowing with no subject leaves exactly one not-evaluated record", () => {
+		const fixture = buildGithookFixture();
+		try {
+			const run = spawnSync("bash", [join(fixture.root, ".githooks", "commit-msg")], {
+				cwd: fixture.root,
+				env: {
+					PATH: process.env.PATH ?? "",
+					HOME: join(fixture.root, "home"),
+					GIT_CONFIG_NOSYSTEM: "1",
+				},
+			});
+			assert.equal(run.status, 0, "the arm must still fail open: an adapter with no subject never blocks");
+			const audit = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8") : "";
+			const records = audit
+				.split("\n")
+				.filter((l) => l.includes("not evaluated") && l.includes("commit-format"));
+			assert.equal(
+				records.length,
+				1,
+				`expected exactly one not-evaluated record; audit: ${JSON.stringify(audit)}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
 	});
 });
