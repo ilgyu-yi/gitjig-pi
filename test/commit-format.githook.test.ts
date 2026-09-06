@@ -59,7 +59,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -343,6 +343,14 @@ describe("refusal surfaces are content-free (issue #55, SPEC §3.9, §3.11)", { 
 			`length sentinel: subject text surfaced on stderr from the LENGTH path: ${JSON.stringify(attempt.stderr)}`,
 		);
 		assert.equal(attempt.stderr.includes(ESC), false, "length sentinel: a raw ESC byte surfaced on stderr");
+		// Without this the arm stays green if a regression turns the refusal
+		// into a GRAMMAR one — the length path would go unmeasured while the
+		// arm still claimed to cover it.
+		assert.match(
+			attempt.cause,
+			/codepoints, outside 1\.\.72/,
+			`length sentinel: the refusal did not come from the LENGTH path: ${JSON.stringify(attempt.cause)}`,
+		);
 		assert.equal(
 			attempt.auditDelta.includes(SENTINEL),
 			false,
@@ -432,12 +440,19 @@ describe("chain degradation stays fail-open (issue #55 AC9)", { skip: IS_WINDOWS
 // stripped after it runs, and therefore cannot know which line becomes the
 // subject.
 //
-// That is why the repair is not "mirror git's cleanup". It is: enumerate the
-// lines that COULD land, and approve only if every one of them conforms. When
-// the two readings agree — the overwhelmingly common case, including every
-// ordinary editor commit, where the subject is line 1 and git's template
-// comments follow it — there is exactly one candidate and the behaviour is
-// what it always was.
+// That is why the repair is not "mirror git's cleanup". It is: compute both
+// readings — the first non-blank line, and the first non-blank non-comment
+// line — and approve only if every candidate conforms. Where the two agree
+// there is one candidate and the behaviour is what it always was, which is
+// every ordinary editor commit: the subject is line 1 and git's template
+// comments follow it.
+//
+// The comment marker is read from git (`core.commentString`, else
+// `core.commentChar`, else `#`) and that read is LOAD-BEARING, not defensive.
+// An earlier attempt dropped it, arguing no comment marker can begin a valid
+// `<type>`. A marker is not restricted to punctuation, and the arms below
+// carry the counterexample: under `core.commentChar=f` the line
+// `feat(#N): …` IS a comment, and git strips it.
 // ---------------------------------------------------------------------------
 
 describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
@@ -517,13 +532,10 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC �
 		);
 	});
 
-	it("the verdict does not depend on git's comment-marker configuration", () => {
+	it("a `#`-led line git KEEPS is checked, where `;` is the configured marker", () => {
 		// `core.commentChar=';'` makes `;` the marker and `#` an ordinary
 		// character, so this `#`-led line is text git keeps and the subject it
-		// lands. The adapter reads no marker at all and still refuses it,
-		// which is the property that replaced the marker-aware reading: a line
-		// git would strip as a comment can never be a conforming subject, so
-		// checking the first non-blank line is right under every marker.
+		// lands. It must be checked.
 		const attempt = commitWithMessage(fixture, "#zqhash is not a comment here\nfeat(#58): a conforming subject\n", {
 			env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.commentChar", GIT_CONFIG_VALUE_0: ";" },
 		});
@@ -536,10 +548,10 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC �
 	});
 
 	it("a `;`-led message is checked too, not skipped", () => {
-		// The other direction of the same axis, and the reason no marker is
-		// consulted: whatever git's marker is, the first non-blank line is
-		// what this hook can vouch for, and a conforming subject beneath it
-		// does not rescue it.
+		// Prior behaviour, pinned rather than newly bought: the old loop
+		// skipped `#` only, so this already refused. It is here because it is
+		// the other direction of the marker axis, and a marker-aware read
+		// must not start skipping it.
 		const attempt = commitWithMessage(fixture, ";zqsemicolon is ordinary here\nfeat(#58): a conforming subject\n");
 		assert.notEqual(
 			attempt.status,
@@ -586,5 +598,95 @@ describe("the delegated helper's mode matches its stated use (issue #58)", { ski
 			/^#!/,
 			"conventional_commit.sh grew a shebang — then the exec bit is the right answer and this arm is inverted",
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Two shapes the `-F`-driven helper cannot reach (issue #58).
+//
+// `commitWithMessage` always uses `-F`, under which git applies whitespace
+// cleanup BEFORE the hook and never applies `strip` by default. Both shapes
+// below turn on that difference, so they drive `git commit` directly with a
+// scripted editor — which is the path where git hands the hook the file
+// untouched and cleans up afterwards.
+// ---------------------------------------------------------------------------
+
+describe("the editor path, where git cleans up after the hook (issue #58)", { skip: IS_WINDOWS }, () => {
+	let fixture: GithookFixture;
+
+	before(() => {
+		fixture = buildGithookFixture();
+	});
+	after(() => removeGithookFixture(fixture));
+
+	/** One commit through a scripted editor, with optional extra git config. */
+	function commitThroughEditor(message: string, config: Record<string, string> = {}): { status: number | null } {
+		fixture.seq += 1;
+		appendFileSync(join(fixture.root, "work.txt"), `editor ${fixture.seq}\n`);
+		spawnSync("git", ["add", "work.txt"], { cwd: fixture.root, env: editorEnv(fixture) });
+		const messagePath = join(fixture.root, ".git", `GITJIG_EDITOR_MSG_${fixture.seq}`);
+		writeFileSync(messagePath, message);
+		const configArgs = Object.entries(config).flatMap(([key, value]) => ["-c", `${key}=${value}`]);
+		const run = spawnSync("git", [...configArgs, "commit", "-q"], {
+			cwd: fixture.root,
+			env: { ...editorEnv(fixture), GIT_EDITOR: `cp ${messagePath}` },
+		});
+		return { status: run.status };
+	}
+
+	function editorEnv(f: GithookFixture): Record<string, string> {
+		return {
+			PATH: process.env.PATH ?? "",
+			HOME: join(f.root, "home"),
+			GIT_CONFIG_NOSYSTEM: "1",
+			GIT_TERMINAL_PROMPT: "0",
+			LANG: "en_US.UTF-8",
+			LC_ALL: "en_US.UTF-8",
+			GITJIG_TEST_STATE_ROOT: join(f.root, ".gitjig", "state"),
+		};
+	}
+
+	it("a LETTER comment marker: `feat(#N):` is a comment git strips, and the line beneath is checked", () => {
+		// The counterexample that retired "no comment marker begins a valid
+		// <type>". With `core.commentChar=f`, line 1 IS a comment: git removes
+		// it under strip and the non-conforming line 2 lands. An adapter that
+		// checked only the first non-blank line would vouch for the comment
+		// and never see what landed.
+		const status = commitThroughEditor(
+			"feat(#58): looks conforming but is a comment\nzqnot a conforming subject at all\n",
+			{ "core.commentChar": "f" },
+		).status;
+		assert.notEqual(
+			status,
+			0,
+			"letter marker: the commit SUCCEEDED — git stripped the `f`-led line as a comment and the " +
+				"unchecked line beneath it landed as the subject, the same silent wrong allow in a marker the " +
+				"adapter did not read (§3.11)",
+		);
+	});
+
+	it("`core.commentString` takes precedence, and its marker is honoured too", () => {
+		const status = commitThroughEditor("feat(#58): also a comment now\nzqbogus subject here\n", {
+			"core.commentString": "feat",
+		}).status;
+		assert.notEqual(status, 0, "commentString: the commit SUCCEEDED; the marker was not read");
+	});
+
+	it("a whitespace-only first line is BLANK, not a subject — git drops it", () => {
+		// The false block the first-non-blank reading bought if it counted a
+		// space-only line as content: git's cleanup drops it, so the
+		// conforming line beneath is what lands and the commit must succeed.
+		const status = commitThroughEditor("   \nfeat(#58): fine after a blankish line\n").status;
+		assert.equal(
+			status,
+			0,
+			"blankish: an ordinary commit was refused because its first line held only spaces — git drops such " +
+				"a line, so the conforming subject beneath it is what lands (§3.11's false-block cost)",
+		);
+	});
+
+	it("the ordinary editor commit still passes", () => {
+		const status = commitThroughEditor("feat(#58): a plain editor subject\n\n# a template comment\n").status;
+		assert.equal(status, 0, "editor baseline: an ordinary editor commit was refused");
 	});
 });
