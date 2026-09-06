@@ -846,6 +846,13 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 		const belowFloor = HELD.slice(0, MIN_CONTAINED_RUN - 1);
 		assert.deepEqual(heldOperandRuns(`shorty ${atFloor} rides`, HELD), [atFloor]);
 		assert.deepEqual(heldOperandRuns(`tiny ${belowFloor} rides`, HELD), []);
+		// And an ABSOLUTE assertion beside the relative pair. Both lines above
+		// are expressed in terms of the constant, so they hold whatever it is
+		// — which is right for a mirror but blind to the constant MOVING. A
+		// genuine four-character slice is the length this issue was filed
+		// about, so it is named outright: if the floor is ever walked back to
+		// where the coincidence lived, this reds and the relative pair does not.
+		assert.deepEqual(heldOperandRuns(`tiny ${HELD.slice(0, 4)} rides`, HELD), []);
 	});
 });
 
