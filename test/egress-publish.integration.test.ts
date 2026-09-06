@@ -151,8 +151,14 @@ interface PublishRun {
  * The well-behaved shim: tee argv, cwd, and stdin into the sink, then
  * print the promised comment URL on stdout and exit 0. Sink paths carry no
  * quote (mkdtemp shapes), so the single-quoted interpolation is exact.
+ *
+ * `successPrintf` is the shim's final line — the success output itself — so
+ * an arm can hand the child a URL the well-behaved shim would never print.
+ * It is a printf INVOCATION rather than a value because the hostile shape
+ * this exists for is a control byte, which only the format string can spell
+ * (issue #97).
  */
-async function runPublish(body: string): Promise<PublishRun> {
+async function runPublish(body: string, successPrintf = `printf '%s\\n' '${SHIM_URL}'`): Promise<PublishRun> {
 	const fixture = buildFixture({
 		script: [
 			{ kind: "toolCall", name: TOOL, arguments: { body, destination: { kind: "issue-comment", number: 5 } } },
@@ -171,7 +177,7 @@ async function runPublish(body: string): Promise<PublishRun> {
 			`printf '%s\\n' "$@" >> "$SINK/gh-argv"\n` +
 			`pwd >> "$SINK/gh-cwd"\n` +
 			`cat >> "$SINK/gh-stdin"\n` +
-			`printf '%s\\n' '${SHIM_URL}'\n`,
+			`${successPrintf}\n`,
 	);
 	chmodSync(shimPath, 0o755);
 	const result = await runPi(fixture, {
@@ -540,5 +546,56 @@ describe("AC1: a Cf-split secret is refused naming the pattern (issue #83)", () 
 		assert.ok(egressAuditLines(cfRun).length >= 1, redUntilRegistered("cf-split leak domain"));
 		assertOffEgressSurfaces(cfRun, (cfCase as { body: string }).body.trim(), "the Cf-split span's raw bytes", "cf-split");
 		assertOffEgressSurfaces(cfRun, AWS_JOINED, "the joined (stripped) spelling", "cf-split");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The child's own stdout on the operator surface (issue #97, SPEC §3.10).
+// ---------------------------------------------------------------------------
+
+describe("a published URL carrying a control byte cannot land it raw on the result (issue #97, SPEC §3.10)", () => {
+	/**
+	 * A URL that PASSES the comment-URL shape and still carries the ESC byte.
+	 * The shape is anchored at both ends and its body class excludes only
+	 * whitespace — `[^\s]` admits ESC, C0 and C1 — so this value is what the
+	 * shape's own validity leaves open, not a value that defeats it. The erase
+	 * sequence is the harm made concrete: on a terminal it erases the line
+	 * reporting the outcome.
+	 */
+	const ESC = "\u001b";
+	const HOSTILE_URL = `https://github.com/zqowner/zqrepo/issues/5${ESC}[2Kzqerased#issuecomment-987654321`;
+	const HOSTILE_PRINTF =
+		"printf 'https://github.com/zqowner/zqrepo/issues/5\\033[2Kzqerased#issuecomment-987654321\\n'";
+
+	let run: PublishRun;
+
+	before(async () => {
+		run = await runPublish("zqcontrol url body line\n", HOSTILE_PRINTF);
+	});
+
+	after(() => removeFixture(run.fixture));
+
+	it("the send still succeeds — the arm measures the composition, not a refusal", () => {
+		const own = requireOwnResult(run, "control-url");
+		assert.ok(
+			textOf(own).startsWith("published:"),
+			"control-url: the hostile URL did not publish, so nothing composed it onto the result surface and " +
+				`the arm is vacuous — the shape admits this value and the defect is downstream of it: ${JSON.stringify(textOf(own))}\n${diagnostics(run.result)}`,
+		);
+	});
+
+	it("no ESC byte reaches the result text, and the URL stays legible", () => {
+		const text = textOf(requireOwnResult(run, "control-url-esc"));
+		assert.ok(
+			!text.includes(ESC),
+			"control-url-esc: the child's own stdout put a raw ESC byte on the operator surface — the comment-URL " +
+				"shape closes line-forging and nothing else, and this is the second harm of that class one surface " +
+				`over from the dispatcher's (§3.10's uniform mitigation): ${JSON.stringify(text)}`,
+		);
+		assert.ok(
+			text.includes("zqerased#issuecomment-987654321"),
+			"control-url-esc: the URL's own bytes are gone from the result — rendering it inert must not discard " +
+				`the locator the operator needs to reach the comment: ${JSON.stringify(text)}`,
+		);
 	});
 });
