@@ -1930,6 +1930,17 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 	 * that stopped at the first left the second pinned by nothing — measured,
 	 * reverting that second operand's delimiter alone shipped the whole suite
 	 * green (issue #65).
+	 *
+	 * THE INVARIANT THIS SCANNER DEPENDS ON is wider than the one on
+	 * `pathNamedIn`, which only needs no quote AHEAD of an operand: no clause
+	 * may carry a quote in prose ahead of OR BETWEEN its operands, and any
+	 * prose quote after the last operand must be unpaired. Break either and
+	 * the scanner returns a SPURIOUS production — the gap between two
+	 * operands, or the span between two trailing apostrophes — rather than
+	 * missing a real one. Both red today rather than passing, but the
+	 * assertion that fires blames an operand left in the JSON delimiter,
+	 * which would not be the cause, so a later author would be pointed at
+	 * the wrong repair.
 	 */
 	function shellOperandsIn(clause: string): { production: string; value: string }[] {
 		const found: { production: string; value: string }[] = [];
@@ -1975,6 +1986,13 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 	 * file at the ancestor, because only there do its two operands differ:
 	 * against a directory state root that arm falls back to naming the state
 	 * root twice, and its distinctive operand is never rendered at all.
+	 *
+	 * THE CASES TABLE IS HAND-KEPT, and there is no walk that could replace
+	 * it: `recoveryFor` keys on an open set of error codes, so its acting
+	 * arms cannot be enumerated the way files under a directory can. A fifth
+	 * acting arm therefore joins uncovered unless it is listed here, and
+	 * nothing reds to say so — the same silent-omission shape a roster
+	 * carries whenever its domain cannot be walked.
 	 */
 	function assertActingClausesPasteDead(component: string, label: string): void {
 		const base = mkdtempSync(join(tmpdir(), "gitjig-paste-recovery-"));
