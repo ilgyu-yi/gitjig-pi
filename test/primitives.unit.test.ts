@@ -244,6 +244,15 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 	 * apply to control and bidi classes; no path these arms construct
 	 * carries one, and a clause that named such a path would fail the arm
 	 * loudly rather than silently mis-decode.
+	 *
+	 * THE INVARIANT THIS BRANCH DEPENDS ON, stated so a later author writing
+	 * clause prose knows it: no clause carries a single or double quote in
+	 * its prose AHEAD of its operand. Every apostrophe that exists today —
+	 * `this account's quota`, `another account's file` — sits after it. A
+	 * clause that broke this would silently flip the branch and yield a
+	 * truncated path; most call sites would red loudly on their containment
+	 * guard, but the arm asserting only that the named path is NOT the state
+	 * root would be satisfied vacuously by the truncation.
 	 */
 	function pathNamedIn(clause: string): string | undefined {
 		const jsonAt = clause.search(/"/);
@@ -1911,79 +1920,113 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 	}
 
 	/**
-	 * The clause's first shell single-quoted operand, in both the forms these
-	 * arms need: `production` is the delimited text verbatim — what the
-	 * operator actually pastes — and `value` is what a shell decodes it to,
-	 * which is the literal path the act must land on.
+	 * EVERY shell single-quoted operand in the clause, in both the forms
+	 * these arms need: `production` is the delimited text verbatim — what
+	 * the operator actually pastes — and `value` is what a shell decodes it
+	 * to, which is the literal path the act must land on.
+	 *
+	 * All of them, not the first: one clause carries TWO operands (replace
+	 * the non-directory ancestor, THEN create the state root), and a reader
+	 * that stopped at the first left the second pinned by nothing — measured,
+	 * reverting that second operand's delimiter alone shipped the whole suite
+	 * green (issue #65).
 	 */
-	function shellOperandIn(clause: string): { production: string; value: string } | undefined {
-		const at = clause.indexOf("'");
-		if (at === -1) {
-			return undefined;
-		}
-		let value = "";
-		let cursor = at + 1;
-		while (cursor < clause.length) {
-			if (clause[cursor] !== "'") {
-				value += clause[cursor];
-				cursor += 1;
-				continue;
+	function shellOperandsIn(clause: string): { production: string; value: string }[] {
+		const found: { production: string; value: string }[] = [];
+		let at = clause.indexOf("'");
+		while (at !== -1) {
+			let value = "";
+			let cursor = at + 1;
+			let closed = -1;
+			while (cursor < clause.length) {
+				if (clause[cursor] !== "'") {
+					value += clause[cursor];
+					cursor += 1;
+					continue;
+				}
+				// The fold: close, escaped quote, reopen — one literal quote.
+				if (clause.startsWith("'\\''", cursor)) {
+					value += "'";
+					cursor += 4;
+					continue;
+				}
+				closed = cursor;
+				break;
 			}
-			// The fold: close, escaped quote, reopen — one literal quote.
-			if (clause.startsWith("'\\''", cursor)) {
-				value += "'";
-				cursor += 4;
-				continue;
+			if (closed === -1) {
+				return found;
 			}
-			return { production: clause.slice(at, cursor + 1), value };
+			found.push({ production: clause.slice(at, closed + 1), value });
+			at = clause.indexOf("'", closed + 1);
 		}
-		return undefined;
+		return found;
 	}
 
 	/**
-	 * The ACTING recoveryFor clauses, each rendered for a state root whose
-	 * component carries `component`, then PASTED. Both halves are judged:
-	 * the substitution must not run, and the operand must denote the literal
-	 * path — a clause that arrives inert but names something else prescribes
-	 * a dead act. `printf` is the consumer because the property under test is
-	 * the OPERAND, not any one of the four different repairs the clauses name.
+	 * The ACTING recoveryFor clauses, each rendered for paths whose component
+	 * carries `component`, then PASTED. Both halves are judged for EVERY
+	 * operand the clause carries: the substitution must not run, and each
+	 * operand must denote the literal path its act is aimed at — a clause
+	 * that arrives inert but names something else prescribes a dead act.
+	 * `printf` is the consumer because the property under test is the
+	 * OPERAND, not any one of the four different repairs the clauses name.
+	 *
+	 * The not-a-directory arm gets its own fixture shape, with a real plain
+	 * file at the ancestor, because only there do its two operands differ:
+	 * against a directory state root that arm falls back to naming the state
+	 * root twice, and its distinctive operand is never rendered at all.
 	 */
 	function assertActingClausesPasteDead(component: string, label: string): void {
 		const base = mkdtempSync(join(tmpdir(), "gitjig-paste-recovery-"));
 		try {
-			const stateRoot = join(base, component);
-			const writePath = join(stateRoot, AUDIT_FILE_NAME);
-			// The directory exists and the sink inside it does not: the shape
-			// that selects the EACCES arm rather than dropping to the general
-			// one, and leaves every other acting clause on its own branch.
-			mkdirSync(stateRoot);
-			const cases: { code: string; object: string }[] = [
-				{ code: "ENOENT", object: stateRoot },
-				{ code: "ENOTDIR", object: stateRoot },
-				{ code: "EACCES", object: stateRoot },
-				{ code: "ZQNOTAROUTEDCODE", object: writePath },
+			// Shape A — the state root is a real directory and the sink inside
+			// it does not exist: what selects the permission-refused arm rather
+			// than dropping to the general one.
+			const rootA = join(base, "zq-a");
+			const stateRootA = join(rootA, component);
+			const writePathA = join(stateRootA, AUDIT_FILE_NAME);
+			mkdirSync(rootA);
+			mkdirSync(stateRootA);
+			// Shape B — a PLAIN FILE stands where a directory must be, so the
+			// not-a-directory arm names that ancestor and the state root below
+			// it as two distinct operands.
+			const rootB = join(base, "zq-b");
+			const ancestorB = join(rootB, component);
+			const stateRootB = join(ancestorB, "zq-under");
+			const writePathB = join(stateRootB, AUDIT_FILE_NAME);
+			mkdirSync(rootB);
+			writeFileSync(ancestorB, "");
+			const cases: { code: string; stateRoot: string; writePath: string; objects: string[] }[] = [
+				{ code: "ENOENT", stateRoot: stateRootA, writePath: writePathA, objects: [stateRootA] },
+				{ code: "ENOTDIR", stateRoot: stateRootB, writePath: writePathB, objects: [ancestorB, stateRootB] },
+				{ code: "EACCES", stateRoot: stateRootA, writePath: writePathA, objects: [stateRootA] },
+				{ code: "ZQNOTAROUTEDCODE", stateRoot: stateRootA, writePath: writePathA, objects: [writePathA] },
 			];
-			for (const { code, object } of cases) {
+			for (const { code, stateRoot, writePath, objects } of cases) {
 				const clause = recoveryFor({ code }, stateRoot, writePath);
-				const operand = shellOperandIn(clause);
-				assert.ok(
-					operand !== undefined,
-					`${label}/${code}: the clause carries no shell-delimited operand, so this arm measures nothing: ${clause}`,
+				const operands = shellOperandsIn(clause);
+				assert.deepEqual(
+					operands.map((operand) => operand.value),
+					objects,
+					`${label}/${code}: the clause's shell-delimited operands are not the objects its acts are aimed ` +
+						`at. Every operand a clause hands to a named act must be delimited for the paste, and an ` +
+						`operand left in the JSON delimiter is missing from this list entirely (issue #65): ${clause}`,
 				);
-				assertOperandInside(operand.production, base);
-				const printed = pasteCapture(`printf '%s' ${operand.production}`, base);
-				assert.ok(
-					!existsSync(join(base, MARKER)),
-					`${label}/${code}: pasting the clause's operand executed the command substitution inside it — ` +
-						`the marker appeared. A clause that hands its operand to a named act must arrive ` +
-						`substitution-dead (issue #65): ${clause}`,
-				);
-				assert.equal(
-					printed,
-					object,
-					`${label}/${code}: the operand did not denote the literal object — a clause whose repair misses ` +
-						`its own object names a dead act: ${clause}`,
-				);
+				for (const operand of operands) {
+					assertOperandInside(operand.production, base);
+					const printed = pasteCapture(`printf '%s' ${operand.production}`, base);
+					assert.ok(
+						!existsSync(join(base, MARKER)),
+						`${label}/${code}: pasting an operand executed the command substitution inside it — the ` +
+							`marker appeared. A clause that hands its operand to a named act must arrive ` +
+							`substitution-dead (issue #65): ${clause}`,
+					);
+					assert.equal(
+						printed,
+						operand.value,
+						`${label}/${code}: the operand did not paste back as itself: ${clause}`,
+					);
+				}
 			}
 		} finally {
 			rmSync(base, { recursive: true, force: true });

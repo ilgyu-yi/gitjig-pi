@@ -415,9 +415,17 @@ export function recoveryFor(error: unknown, stateRoot: string, writePath: string
 	// WHICH filesystem or object is meant, and prescribes no act upon that
 	// path: the act is on the filesystem (free space, raise a quota, remount)
 	// or there is no act at all (EIO). Nothing here is offered for a paste, so
-	// the shell delimiter would buy no substitution-deadness and would spend
-	// the reader's trust on a rendering that suggests a command line where the
-	// clause deliberately names none.
+	// the shell delimiter would buy no inertness for any act THESE CLAUSES
+	// NAME, and would spend the reader's trust on a rendering that suggests a
+	// command line where the clause deliberately names none.
+	//
+	// The residual that split knowingly carries (§3.11): an operator told to
+	// free room on, or remount, the filesystem holding a path may well paste
+	// that path into an improvised `df` or `mount` to find out which
+	// filesystem is meant — and inside the JSON delimiter a
+	// substitution-shaped component is live there. The clause invites no such
+	// act, so the delimiter follows what the clause says rather than what a
+	// reader might improvise; naming it here is what keeps that a decision.
 	if (code === "ENOSPC" || code === "EDQUOT") {
 		return (
 			`free space on the filesystem holding ${quoted(writePath)}, or raise this account's quota on it, ` +

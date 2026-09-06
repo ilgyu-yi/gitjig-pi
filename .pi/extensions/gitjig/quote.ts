@@ -72,6 +72,16 @@
  * say which of two paths was named — disclosed here rather than closed,
  * because closing it would corrupt the operand the clause exists to hand
  * to an act.
+ *
+ * The escaped classes cost more than spelling on the SHELL delimiter, and
+ * the same paragraph owes it: the control, separator and bidi classes are
+ * rewritten to `\uXXXX` text INSIDE the single quotes, so for a component
+ * carrying one of those bytes the operand no longer DENOTES the path it
+ * names — a pasted `mkdir -p` would create a directory named with the
+ * escape text. JSON mode mis-denotes the same shapes, so this is not new
+ * with the shell delimiter; what is new is that four more clauses now hand
+ * their operand to an act, which is what makes operand identity, and not
+ * only legibility, the thing at stake.
  */
 
 /**
