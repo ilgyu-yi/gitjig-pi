@@ -164,20 +164,27 @@ _gh_check_one() {
 # and does not once trimmed, so checking only the untrimmed form approved a
 # subject with no description at all (measured on the editor path). The
 # trimmed forms were computed above, under git's own space set.
-_gh_checked=""
-_gh_check_candidate() {
-  [ -n "$1" ] || return 0
-  # Each distinct candidate once: the readings collapse on an ordinary
-  # message, and a repeated cause would read as two separate faults.
-  case "$_gh_checked" in
-    *"$(printf '\001')$1$(printf '\001')"*) return 0 ;;
-  esac
-  _gh_checked="$_gh_checked$(printf '\001')$1$(printf '\001')"
-  _gh_check_one "$1"
-}
+# Each DISTINCT candidate once. The comparison is direct rather than through
+# a sentinel-delimited seen-list: a candidate is arbitrary operator bytes, so
+# any in-band separator is injectable, and a planted separator forged a
+# "already checked" entry for a string the predicate never saw — measured, a
+# non-conforming subject landed at status 0. Four candidates compare in three
+# comparisons; a seen-list buys nothing at this size and costs that hole.
+_gh_check_one "$_gh_first" || exit 1
 
-for _gh_candidate in "$_gh_first" "$_gh_first_trimmed" "$_gh_subject" "$_gh_subject_trimmed"; do
-  _gh_check_candidate "$_gh_candidate" || exit 1
-done
+if [ "$_gh_first_trimmed" != "$_gh_first" ]; then
+  _gh_check_one "$_gh_first_trimmed" || exit 1
+fi
+
+if [ -n "$_gh_subject" ] && [ "$_gh_subject" != "$_gh_first" ] && [ "$_gh_subject" != "$_gh_first_trimmed" ]; then
+  _gh_check_one "$_gh_subject" || exit 1
+fi
+
+if [ -n "$_gh_subject_trimmed" ] &&
+  [ "$_gh_subject_trimmed" != "$_gh_first" ] &&
+  [ "$_gh_subject_trimmed" != "$_gh_first_trimmed" ] &&
+  [ "$_gh_subject_trimmed" != "$_gh_subject" ]; then
+  _gh_check_one "$_gh_subject_trimmed" || exit 1
+fi
 
 exit 0

@@ -737,6 +737,21 @@ describe("the editor path, where git cleans up after the hook (issue #58)", { sk
 		);
 	});
 
+	it("a planted separator byte cannot forge an already-checked candidate", () => {
+		// The candidate set was deduplicated through a sentinel-delimited
+		// seen-list, and a candidate is arbitrary operator bytes: an SOH in
+		// line 1 planted extra delimiters, so the segment between them read as
+		// already checked and line 2 was skipped without ever reaching the
+		// predicate. A letter marker makes the two readings diverge, which is
+		// the same starting condition as the marker arms above.
+		assertRefusedByAdapter(
+			commitThroughEditor("feat(#58): \u0001zq not conforming at all\nzq not conforming at all\n", {
+				"core.commentChar": "f",
+			}),
+			"planted separator: line 2 was skipped as already-checked and landed unvouched-for",
+		);
+	});
+
 	it("the ordinary editor commit still passes", () => {
 		const { status } = commitThroughEditor("feat(#58): a plain editor subject\n\n# a template comment\n");
 		assert.equal(status, 0, "editor baseline: an ordinary editor commit was refused");
