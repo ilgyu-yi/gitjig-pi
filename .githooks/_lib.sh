@@ -228,36 +228,45 @@ safe_source() {
 # out would leave the outer source unguarded, and an `exit` there would carry
 # its status to git — a wedged hook with nothing printed.
 #
-# That question is answered from the shell's OWN CALL STACK and never from
-# bookkeeping this tier keeps. A sourced file executes in THIS shell, so any
-# variable this function holds is addressable by the very code whose failure
-# the fold exists to absorb — and a record it can shift moves the fold in both
-# directions: driven below its floor, the next window's arming test stops
+# That question is answered from the shell's OWN CALL STACK, RECOMPUTED at
+# each decision point rather than carried across the source. THAT is what the
+# counter could not do. A counter is carried: this tier writes it before
+# handing control to the helper and reads it back afterward, so anything that
+# goes wrong while the helper holds control — an error path ending in `exit`,
+# a non-zero return, an unbalanced nesting — leaves the count wrong for every
+# window after it. Driven below its floor, the next window's arming test stops
 # matching and that window opens with no trap behind it; driven above, the
 # window is never closed and the trap outlives the function that armed it,
 # firing at the adapter's own exit where its `exit 0` overwrites a refusal
 # that already reached the record sink. A counter cannot be clamped out of
 # this: clamping closes one direction and leaves the other byte-identical.
-# `FUNCNAME` carries one frame per live call, and a sourced file cannot
-# rewrite its caller's frames, so counting this function's own frames decides
-# the window with nothing for a helper to assign to.
+# Counting live `githook_source` frames derives the answer from what is
+# actually on the stack at the moment it is asked, so no ACCIDENT during the
+# source can move it.
 #
-# What the fold COVERS is a helper's own error path that ends in `exit` or in
-# a non-zero return, with this tier's EXIT slot untouched and the shell still
-# alive. Those are the terms it runs on, not exceptions to a wider claim:
-# a sourced file executes in THIS shell, so it can reach any of them. Outside
-# those terms the outcome is not this tier's to decide, and the fold's line
-# and record may not run.
+# WHAT THIS FOLD IS FOR, stated so the residuals below read as decisions
+# rather than gaps. The helper it absorbs is one that fails by ACCIDENT, with
+# this tier's EXIT slot untouched and the shell still alive. A DELIBERATELY
+# hostile helper is not this fold's object and could not be: the helpers are
+# this repository's own committed files, resolved from this file's installed
+# position, and planting a hostile one needs write access to `.githooks/` —
+# at which point this file and the adapters are equally writable and no fold
+# living inside them defends anything. Outside those terms the outcome is not
+# this tier's to decide, and the fold's line and record may not run.
 #
-# Enumerated residuals, in place (SPEC §3.11). `FUNCNAME` is itself unsettable
-# in bash, and a sourced file that unsets it leaves an empty array: the count
-# then reads zero, every frame answers OUTERMOST, and a nested window loses
-# the outer's guard. That is the direction chosen deliberately — the opposite
-# answer would leave the trap armed at the adapter's exit, which is a forged
-# allow, while this one is at worst a visible refusal on machinery. And a
-# sourced file can redefine any function in this shell, this one included;
-# that exposure is the tier's own and is not narrowed here, since it stands
-# equally over `safe_source` and `audit_log`.
+# Enumerated residuals, in place (SPEC §3.11). `FUNCNAME` is not beyond a
+# determined helper's reach, and an earlier claim here that it was is
+# WITHDRAWN as measured false: `unset FUNCNAME` neither refuses nor leaves an
+# empty array — it strips the name's special attribute and leaves an ordinary
+# assignable array, after which a helper can refill it with as many
+# `githook_source` frames as it likes and force the trap to outlive its
+# window. That is the forged-allow direction, reached by deliberate tampering,
+# which the threat model above places outside this fold rather than inside it.
+# It sits beside the standing exposure that a sourced file can redefine any
+# function in this shell, this one included — `_gh_src_outermost` among them,
+# which forges the same allow one step more cheaply. Neither is narrowed here;
+# both stand equally over `safe_source` and `audit_log` and are the tier's
+# own.
 
 # _gh_src_outermost — true iff no githook_source frame encloses this one.
 _gh_src_outermost() {

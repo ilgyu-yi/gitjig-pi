@@ -1001,20 +1001,35 @@ describe("a sourced file's own `exit` folds the hook to allow (issue #68, SPEC �
 // so the corruption is what they react to. Reintroducing a helper-assignable
 // counter under this name reds them again.
 //
-// The raised-counter arm and the FUNCNAME arm additionally pin the live
+// The raised-counter arm and the FUNCNAME-unset arm additionally pin the live
 // mechanism, in the one direction that forges an allow. The probe that
 // establishes this is asymmetric — arm the trap, then delete the exit-half
 // clear — because that is the only shape that leaves a trap outliving the
 // function it armed in. Against it, the nested arm above, the raised-counter
-// arm and the FUNCNAME arm all red; the unset-counter arm stays green and is
-// a regression check alone.
+// arm and the FUNCNAME-unset arm all red; the unset-counter arm stays green
+// against THAT probe and is a regression check there.
 //
-// A constant mutant of `_gh_src_outermost` is NOT a probe for this guard, and
-// is recorded here so it is not mistaken for one: a constant removes arming
-// and clearing together, so no trap ever outlives anything and the failure
-// these arms guard cannot occur — every arm here stays green against both
-// constants while pinning the mechanism perfectly well. A guard whose failure
-// a mutant cannot produce is not measured by that mutant.
+// The FUNCNAME-REFILL arm is a different animal and is labelled so at its own
+// site: it pins an enumerated residual OPEN rather than a guard closed, so it
+// reds when the residual stops reproducing.
+//
+// A constant mutant of `_gh_src_outermost` is NOT a probe for the forged-allow
+// guard, and is recorded here so it is not mistaken for one: a constant
+// removes arming and clearing together, so no trap ever outlives anything and
+// the failure those arms guard cannot occur. A guard whose failure a mutant
+// cannot produce is not measured by that mutant.
+//
+// What a constant DOES reach is measured rather than assumed, because an
+// earlier revision of this paragraph claimed every arm stayed green against
+// both constants, and that is false three ways. The always-true constant reds
+// the nested arm and the FUNCNAME-refill arm. The always-false constant reds
+// those two AND the unset-counter arm — with arming gone everywhere, the
+// appended `exit` carries out to git, which is the refusal-on-machinery that
+// arm names. The refill arm reds under either because a constant leaves no
+// trap to outlive anything, so the residual it pins open stops reproducing;
+// that is the arm doing its job, not a guard failing. So the unset-counter arm
+// live-pins the arming half, and is a regression check against the asymmetric
+// probe rather than against everything.
 // ---------------------------------------------------------------------------
 
 describe("the retired arming counter is no longer consulted (issue #71, SPEC §3.2, §5.2)", { skip: IS_WINDOWS }, () => {
@@ -1086,16 +1101,16 @@ describe("the retired arming counter is no longer consulted (issue #71, SPEC §3
 		}
 	});
 
-	it("a helper that disables FUNCNAME degrades toward a refusal, never toward a forged allow", () => {
+	it("a helper that only UNSETS FUNCNAME does not forge an allow", () => {
 		const fixture = buildArmedScanFixture();
 		try {
-			// The residual `_lib.sh`'s header enumerates, exercised rather than only
-			// asserted in prose: `FUNCNAME` is unsettable, and a sourced file that
-			// unsets it leaves an empty array, so every frame answers OUTERMOST.
-			// The header states which way that falls, and this is the arm that
-			// holds it to it — what must never happen is the forged allow the
-			// retired counter could produce: a created commit standing over a block
-			// record already in the sink.
+			// Unsetting alone strips the name and leaves nothing to count, so every
+			// frame answers OUTERMOST and a nested window would lose the outer's
+			// guard — the benign direction, a guard not set rather than a refusal
+			// overwritten. What must not happen is the forged allow the retired
+			// counter could produce: a created commit standing over a block record
+			// already in the sink. This is the spelling an ACCIDENT could reach;
+			// the arm below carries the one it could not.
 			appendFileSync(join(fixture.root, ".githooks", "helpers", "conventional_commit.sh"), "\nunset FUNCNAME\n");
 
 			const attempt = commitWithMessage(fixture, "no type here, just prose\n");
@@ -1103,10 +1118,43 @@ describe("the retired arming counter is no longer consulted (issue #71, SPEC §3
 			assert.equal(
 				forgedAllow,
 				false,
-				`funcname-disabled: the commit was created while a block record stood in the sink — the ` +
-					`residual the header enumerates fell toward a forged allow, which is the direction it ` +
-					`states it does not take; status ${attempt.status}, auditDelta: ` +
-					`${JSON.stringify(attempt.auditDelta)}`,
+				`funcname-unset: the commit was created while a block record stood in the sink — unsetting ` +
+					`alone reached the forged allow, which is worse than the header states; status ` +
+					`${attempt.status}, auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
+			);
+		} finally {
+			removeGithookFixture(fixture);
+		}
+	});
+
+	it("a helper that unsets AND REFILLS FUNCNAME does forge one — the residual, pinned", () => {
+		const fixture = buildArmedScanFixture();
+		try {
+			// The enumerated residual, held to its own text rather than left as
+			// prose. `unset FUNCNAME` neither refuses nor leaves the name special:
+			// it becomes an ordinary assignable array, and a helper that refills it
+			// with two source frames makes the clearing test read NESTED, so the
+			// trap outlives its window and its `exit 0` overwrites the refusal.
+			//
+			// This arm asserts that the hole is OPEN, which is deliberate. The
+			// header places it outside this fold — reaching it needs deliberate
+			// tampering, and a helper able to do that can equally redefine any
+			// function here, including the one under test. If this arm ever reds,
+			// the residual has been closed and the header must stop enumerating it.
+			appendFileSync(
+				join(fixture.root, ".githooks", "helpers", "conventional_commit.sh"),
+				"\nunset FUNCNAME\nFUNCNAME=(githook_source githook_source)\n",
+			);
+
+			const attempt = commitWithMessage(fixture, "no type here, just prose\n");
+			const forgedAllow = attempt.status === 0 && /"action":"block"/.test(attempt.auditDelta);
+			assert.equal(
+				forgedAllow,
+				true,
+				`funcname-refilled: the residual the header enumerates did not reproduce — deliberate ` +
+					`tampering with FUNCNAME no longer forges an allow. That is good news, and it means the ` +
+					`header's residual paragraph is now false and must be retired; status ${attempt.status}, ` +
+					`auditDelta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
 		} finally {
 			removeGithookFixture(fixture);
