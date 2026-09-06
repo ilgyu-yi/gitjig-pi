@@ -341,6 +341,14 @@ export function commitWithMessage(
 export interface PushOptions {
 	/** Per-push environment overrides, merged over the constructed base. */
 	env?: Record<string, string>;
+	/**
+	 * Names DELETED from the constructed base before the push runs. The base
+	 * sets some of the same variables the hook path sets for itself, and a
+	 * base copy MASKS the hook's own: a mutant deleting the hook-local one
+	 * stays green while the base supplies it. An arm that means to pin the
+	 * hook's copy strips the base's here (issue #63).
+	 */
+	stripEnv?: string[];
 	/** Extra `git push` arguments, inserted before the remote name (e.g. `--force`). */
 	gitArgs?: string[];
 }
@@ -364,9 +372,17 @@ export function pushRefs(
 	options: PushOptions = {},
 ): CommitAttempt {
 	const auditBefore = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8") : "";
+	// Stripped from the BASE, then the caller's overrides land on top: an
+	// explicitly supplied value wins over a strip of the same name, which is
+	// what "deleted from the constructed base" means.
+	const stripped: Record<string, string> = baseEnv(fixture);
+	for (const name of options.stripEnv ?? []) {
+		delete stripped[name];
+	}
+	const env: Record<string, string> = { ...stripped, ...(options.env ?? {}) };
 	const result = spawnSync("git", ["push", ...(options.gitArgs ?? []), "origin", ...refspecs], {
 		cwd: fixture.root,
-		env: { ...baseEnv(fixture), ...(options.env ?? {}) },
+		env,
 	});
 	const auditAfter = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8") : "";
 
