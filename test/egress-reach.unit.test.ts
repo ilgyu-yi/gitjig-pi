@@ -24,8 +24,10 @@ import { describe, it } from "node:test";
 import {
 	ghPublishArgv,
 	isPublishDestination,
+	kindCarriesTitle,
 	PUBLISH_DESTINATION_KINDS,
 	type PublishDestination,
+	specForKind,
 } from "../.pi/extensions/gitjig/publish/executor.ts";
 
 /** A minimal admissible destination for each kind — the population, derived. */
@@ -120,6 +122,80 @@ describe("every publication kind is reachable by the gate (issue #120)", () => {
 			assert.ok(argv.includes("--title"), `${kind}: no --title in ${JSON.stringify(argv)}`);
 			assert.ok(argv.includes("zqtitlezq"), `${kind}: the title did not reach the argv`);
 		}
+	});
+});
+
+describe("success is recognized for every kind, not just the comment kinds (issue #120)", () => {
+	// Review round 1, finding 1. Widening the INPUT union without widening
+	// the OUTPUT contract left four of six kinds unable to report success:
+	// only the comment verbs print a comment url, and every kind was
+	// validated against that one shape. A successful create then reported
+	// outcome-unverified — "neither publication nor withholding is claimed"
+	// — which invites a retry, and a retried create mints a SECOND public
+	// issue or pull request. That is the unretractable-publication hazard
+	// this gate exists to prevent, arriving through the outcome path.
+	//
+	// These arms drive the shape predicate directly rather than spawning a
+	// child: the property is which output each kind ACCEPTS as success.
+	const COMMENT_URL = "https://github.com/o/r/issues/5#issuecomment-123456";
+	const ISSUE_URL = "https://github.com/o/r/issues/5";
+	const PR_URL = "https://github.com/o/r/pull/5";
+
+	it("every kind accepts the url its own gh verb actually prints", () => {
+		const printed: Record<string, string> = {
+			"issue-comment": COMMENT_URL,
+			"pr-comment": COMMENT_URL,
+			"issue-body": ISSUE_URL,
+			"pr-body": PR_URL,
+			"issue-create": ISSUE_URL,
+			"pr-create": PR_URL,
+		};
+		for (const kind of PUBLISH_DESTINATION_KINDS) {
+			const spec = specForKind(kind);
+			assert.ok(spec !== undefined, `${kind} has no spec`);
+			assert.ok(
+				spec.successShape.test(printed[kind]),
+				`${kind}: a SUCCESSFUL run's own output is not recognized as success, so the actor is told neither ` +
+					`publication nor withholding and has every reason to retry: ${printed[kind]}`,
+			);
+		}
+	});
+
+	it("a comment kind does not accept a bare surface url as success", () => {
+		// The widening must not become a loosening: a comment that printed an
+		// issue url did not land where the actor asked.
+		for (const kind of ["issue-comment", "pr-comment"]) {
+			assert.equal(specForKind(kind)?.successShape.test(ISSUE_URL), false, `${kind} accepted a bare issue url`);
+		}
+	});
+
+	it("no kind accepts junk, an empty line, or a url-shaped prefix with trailing content", () => {
+		for (const kind of PUBLISH_DESTINATION_KINDS) {
+			const shape = specForKind(kind)?.successShape;
+			assert.ok(shape !== undefined);
+			for (const junk of ["", "ok", "error: something", `${ISSUE_URL} and more`, `x ${COMMENT_URL}`]) {
+				assert.equal(shape.test(junk), false, `${kind} accepted junk as success: ${JSON.stringify(junk)}`);
+			}
+		}
+	});
+});
+
+describe("the scanned domain is the kind's own published operands (issue #120)", () => {
+	it("only the create kinds carry a title", () => {
+		for (const kind of PUBLISH_DESTINATION_KINDS) {
+			assert.equal(
+				kindCarriesTitle(kind),
+				kind.endsWith("-create"),
+				`${kind}: a title is scanned for a kind that never sends one, or not scanned for one that does`,
+			);
+		}
+	});
+
+	it("an unmapped kind has no spec and no argv", () => {
+		// The argv builder must stay NON-total: a future `issue-close` that
+		// fell through to the `comment` verb would silently post a comment.
+		assert.equal(specForKind("issue-close"), undefined);
+		assert.throws(() => ghPublishArgv({ kind: "issue-close", number: 1 } as unknown as PublishDestination));
 	});
 });
 

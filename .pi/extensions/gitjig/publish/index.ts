@@ -48,8 +48,10 @@ import { neutralizeBody } from "./neutralize.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
+	kindCarriesTitle,
 	PUBLISH_DESTINATION_KINDS,
 	runPublishChild,
+	specForKind,
 } from "./executor.ts";
 import { PatternSourceError, scanBody } from "./scan.ts";
 
@@ -108,17 +110,28 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				return result(text, { disposition: "refuse-destination" });
 			}
 
-			const publishedText = destination.title ? `${destination.title}\n${params.body}` : params.body;
+			// The scanned domain is this KIND's own published operands, never
+			// whatever the caller happened to pass: a title on a comment kind is
+			// dropped by the argv builder and never publishes, so scanning it
+			// would refuse a send over text that was never going anywhere.
+			const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
 
 			let scan;
 			try {
-				// The scanned domain is EVERY byte this call publishes, not the
-				// body alone: a create kind's title lands on the same public
-				// surface and a secret in it leaks exactly as far. They are
-				// joined by a newline and scanned in ONE call, so this stays a
-				// single call site of the one predicate rather than a second
-				// scan with its own verdict (§3.11).
-				scan = scanBody(publishedText);
+				// Every byte this call publishes is scanned — a create kind's
+				// title lands on the same public surface and a secret in it leaks
+				// exactly as far. The two operands are scanned SEPARATELY, as two
+				// call sites of the one predicate (§3.11 forbids a second
+				// implementation, not a second call). Joining them into one text
+				// shifted every body line number by the title's line, so a
+				// refusal pointed the operator at a neighbouring line.
+				scan = scanBody(params.body);
+				if (publishedTitle !== undefined) {
+					const titleScan = scanBody(publishedTitle);
+					if (titleScan.disposition !== "clean") {
+						scan = titleScan;
+					}
+				}
 			} catch (error) {
 				// Fail closed on scan machinery (§3.9 egress-publish-patterns):
 				// PatternSourceError messages are fixed content-free literals;
@@ -158,13 +171,26 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// carries mentions as readily as the body, and it rides argv where
 			// the body rides stdin, so neither can be neutralized by the other's
 			// treatment.
-			const sendDestination = destination.title
-				? { ...destination, title: neutralizeBody(destination.title) }
-				: destination;
+			const sendDestination =
+				publishedTitle !== undefined
+					? { ...destination, title: neutralizeBody(publishedTitle) }
+					: destination;
+			// The success shape is this kind's own: only the comment verbs print
+			// a comment url, so validating every kind against that shape made a
+			// successful create or body edit report outcome-unverified — which
+			// invites a retry, and a retried create mints a SECOND public
+			// surface (§3.10's output-validity rule, §5.6's direction).
+			const spec = specForKind(destination.kind);
+			if (spec === undefined) {
+				const text = "publish refused: the destination is not an admissible structured target";
+				record("refuse-destination", text);
+				return result(text, { disposition: "refuse-destination" });
+			}
 			const outcome = await runPublishChild(
 				ghPublishArgv(sendDestination),
 				neutralizeBody(params.body),
 				repoRoot,
+				spec.successShape,
 			);
 			if (outcome.outcome === "published") {
 				// The one surface child bytes may cross: the URL validated whole

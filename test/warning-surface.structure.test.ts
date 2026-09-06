@@ -275,19 +275,14 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// without quoting the match.
 			'scan.patternIds.join(", ")',
 			'scan.lines.join(", ")',
-			// The two PUBLISHED operands, joined to form the scanned domain
-			// (issue #120). These are not a warning surface and reach no
-			// operator-facing message: the join builds the exact bytes the scan
-			// reads and the child then sends. Escaping them would corrupt the
-			// subject of the measurement — a `quoted()` body is not the body
-			// that publishes — which is the one case where this lock's remedy
-			// is not available and its allowlist is the right route. Neither
-			// carries a path: both are actor-supplied published text, whose
-			// hazard is the secret scan's and the neutralizer's subject, not
-			// this lock's. Per the header's own framing, this entry is a
-			// decision about a hole rather than a demonstration there is none.
-			"destination.title",
-			"params.body",
+			// NOTHING for the published operands (issue #120). An earlier draft
+			// joined the title and body with a template and allowlisted both,
+			// arguing the entry was a visible decision. The entry was avoidable
+			// at no cost — the operands are now scanned separately, so the
+			// template never existed — and admitting `params.body` permanently
+			// in the ONE file whose §3.8 doctrine is that a refusal must never
+			// carry the body would have retired the only check that catches
+			// such an interpolation drifting into a refusal message later.
 		],
 		allowErrorReads: [
 			// Admitted only for PatternSourceError, whose messages are fixed
