@@ -56,11 +56,7 @@ import {
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
 import { repoRoot } from "./harness/run-pi.ts";
-import {
-	BODY_MEASUREMENT_CASES,
-	committedPatternRows,
-	CONFORMANCE_CASES,
-} from "./harness/secret-pattern-cases.ts";
+import { BODY_MEASUREMENT_CASES, CONFORMANCE_CASES, committedPatternRows } from "./harness/secret-pattern-cases.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -196,8 +192,7 @@ describe("case-set integrity: ID closure and oracle agreement (issue #83 AC4)", 
 				bodyCase.tier2.disposition === "allow"
 					? bodyCase.egress.disposition === "clean"
 					: bodyCase.tier2.disposition === "refuse-match"
-						? bodyCase.egress.disposition === "refuse-match" &&
-							bodyCase.egress.patternId === bodyCase.tier2.patternId
+						? bodyCase.egress.disposition === "refuse-match" && bodyCase.egress.patternId === bodyCase.tier2.patternId
 						: bodyCase.egress.disposition === "refuse-out-of-domain";
 			assert.equal(
 				corresponds,
@@ -206,7 +201,9 @@ describe("case-set integrity: ID closure and oracle agreement (issue #83 AC4)", 
 					`a reader divergence must be declared, never incidental (SPEC §3.3's enumerated divergences)`,
 			);
 		}
-		const divergent = BODY_MEASUREMENT_CASES.filter((c) => c.divergent).map((c) => c.name).sort();
+		const divergent = BODY_MEASUREMENT_CASES.filter((c) => c.divergent)
+			.map((c) => c.name)
+			.sort();
 		assert.deepEqual(
 			divergent,
 			["cf-split", "nul-join"],
@@ -241,9 +238,16 @@ function stageAndCommit(name: string, content: Buffer): CommitAttempt {
 describe("tier-2 arm: the committed chain honors every applicable case (issue #83 AC4)", { skip: IS_WINDOWS }, () => {
 	for (const conformanceCase of CONFORMANCE_CASES) {
 		it(`match sample '${conformanceCase.id}': refused naming the pattern ID`, () => {
-			const attempt = stageAndCommit(`zqlock-${conformanceCase.id}.txt`, Buffer.from(conformanceCase.match + "\n", "utf8"));
+			const attempt = stageAndCommit(
+				`zqlock-${conformanceCase.id}.txt`,
+				Buffer.from(conformanceCase.match + "\n", "utf8"),
+			);
 			assert.notEqual(attempt.status, 0, `tier-2 '${conformanceCase.id}': the staged match COMMITTED`);
-			assert.match(attempt.auditDelta, /\bblock\b.*\bsecret\b/, `tier-2 '${conformanceCase.id}': no secret block record`);
+			assert.match(
+				attempt.auditDelta,
+				/\bblock\b.*\bsecret\b/,
+				`tier-2 '${conformanceCase.id}': no secret block record`,
+			);
 			assert.ok(
 				attempt.auditDelta.includes(conformanceCase.id),
 				`tier-2 '${conformanceCase.id}': the refusal record does not name the pattern ID (§3.3)`,
@@ -251,7 +255,10 @@ describe("tier-2 arm: the committed chain honors every applicable case (issue #8
 		});
 
 		it(`near-miss '${conformanceCase.id}': allowed with no block record`, () => {
-			const attempt = stageAndCommit(`zqlock-nm-${conformanceCase.id}.txt`, Buffer.from(conformanceCase.nearMiss + "\n", "utf8"));
+			const attempt = stageAndCommit(
+				`zqlock-nm-${conformanceCase.id}.txt`,
+				Buffer.from(conformanceCase.nearMiss + "\n", "utf8"),
+			);
 			assert.equal(attempt.status, 0, `tier-2 near-miss '${conformanceCase.id}': ${attempt.stderr}`);
 			assert.doesNotMatch(
 				attempt.auditDelta,
@@ -268,7 +275,11 @@ describe("tier-2 arm: the committed chain honors every applicable case (issue #8
 			switch (bodyCase.tier2.disposition) {
 				case "refuse-match": {
 					assert.notEqual(attempt.status, 0, `tier-2 '${bodyCase.name}': the staged body COMMITTED`);
-					assert.match(attempt.auditDelta, /\bblock\b.*\bsecret\b/, `tier-2 '${bodyCase.name}': no secret block record`);
+					assert.match(
+						attempt.auditDelta,
+						/\bblock\b.*\bsecret\b/,
+						`tier-2 '${bodyCase.name}': no secret block record`,
+					);
 					assert.ok(
 						attempt.auditDelta.includes(bodyCase.tier2.patternId as string),
 						`tier-2 '${bodyCase.name}': the record does not name '${bodyCase.tier2.patternId}' — for nul-join ` +
@@ -278,7 +289,11 @@ describe("tier-2 arm: the committed chain honors every applicable case (issue #8
 				}
 				case "refuse-unmeasurable": {
 					assert.notEqual(attempt.status, 0, `tier-2 '${bodyCase.name}': the staged body COMMITTED`);
-					assert.match(attempt.auditDelta, /\bblock\b.*\bsecret\b/, `tier-2 '${bodyCase.name}': no secret block record`);
+					assert.match(
+						attempt.auditDelta,
+						/\bblock\b.*\bsecret\b/,
+						`tier-2 '${bodyCase.name}': no secret block record`,
+					);
 					for (const id of committedIds) {
 						assert.ok(
 							!attempt.auditDelta.includes(id),
@@ -467,7 +482,7 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			"|a",
 			"(|a)",
 			"a*?", // a lazy `*`/`+`/`?` suffix: a RegExp habit POSIX has no form for.
-			"a+?" // The interval spelling `{16}?` is NOT covered — a residual the
+			"a+?", // The interval spelling `{16}?` is NOT covered — a residual the
 			// module note records, left to the conformance lock, whose tier-2
 			// probe refuses to compile it.
 		]) {
@@ -479,13 +494,15 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 			);
 		}
 		// Every committed pattern, and the shared punctuation escapes, stay in.
-		for (const inside of committedPatternRows().map((row) => row.ere).concat([
-			"a\\.b",
-			"x\\*y",
-			"[A-Za-z0-9._~+/=-]{20,}",
-			"[:]", // a bracket expression holding a literal colon — both engines agree
-			"[:a]x[b:]", // colons in two separate bracket expressions, neither a class
-		])) {
+		for (const inside of committedPatternRows()
+			.map((row) => row.ere)
+			.concat([
+				"a\\.b",
+				"x\\*y",
+				"[A-Za-z0-9._~+/=-]{20,}",
+				"[:]", // a bracket expression holding a literal colon — both engines agree
+				"[:a]x[b:]", // colons in two separate bracket expressions, neither a class
+			])) {
 			assert.equal(
 				inCommonSubset(inside),
 				true,
@@ -527,11 +544,7 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		);
 		// The single-newline form stays inside one paragraph and is still a
 		// close pair to the platform, so it is still neutralized.
-		assert.equal(
-			neutralizeBody("Fixes\n\n#4"),
-			"Fixes\n\n#4",
-			"the no-colon blank-line form must decline too",
-		);
+		assert.equal(neutralizeBody("Fixes\n\n#4"), "Fixes\n\n#4", "the no-colon blank-line form must decline too");
 	});
 
 	it("the GH-N form is neutralized in either case", () => {

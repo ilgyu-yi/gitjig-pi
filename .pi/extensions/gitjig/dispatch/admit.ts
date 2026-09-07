@@ -96,7 +96,5 @@ export function admitReturn(returnPath: string): ReturnAdmission {
 	if (reviewedHead !== undefined && typeof reviewedHead !== "string") {
 		return { admitted: false, cause: REFUSAL_CAUSES.malformedReturn };
 	}
-	return reviewedHead === undefined
-		? { admitted: true, ok, summary }
-		: { admitted: true, ok, summary, reviewedHead };
+	return reviewedHead === undefined ? { admitted: true, ok, summary } : { admitted: true, ok, summary, reviewedHead };
 }

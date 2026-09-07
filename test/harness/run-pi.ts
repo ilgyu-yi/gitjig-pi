@@ -263,7 +263,9 @@ export function readSessionEntries(fixture: Fixture): Array<Record<string, unkno
 
 /** Raw lines of the audit file under the fixture's seam root. */
 export function readAuditLines(fixture: Fixture): string[] {
-	return readFileSync(fixture.auditFile, "utf8").split("\n").filter((line) => line !== "");
+	return readFileSync(fixture.auditFile, "utf8")
+		.split("\n")
+		.filter((line) => line !== "");
 }
 
 /**

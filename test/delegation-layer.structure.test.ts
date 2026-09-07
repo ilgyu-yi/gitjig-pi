@@ -231,8 +231,7 @@ function substrateVersionTokens(text: string): string[] {
 function contentFreeReturnParagraph(span: string): string {
 	return (
 		bodyParagraphs(span).find(
-			(paragraph) =>
-				/content[ \t-]free/i.test(paragraph) && /\bcompar\w*[ \t-]+operands?\b/i.test(paragraph),
+			(paragraph) => /content[ \t-]free/i.test(paragraph) && /\bcompar\w*[ \t-]+operands?\b/i.test(paragraph),
 		) ?? ""
 	);
 }
@@ -382,9 +381,7 @@ describe("the suite's own teeth (§3.12 — both directions on synthetic documen
 	].join("\n");
 
 	it("finds a §4.9 TOC row that is there", () => {
-		assert.deepEqual(tocRowsFor(tocBlock(SYNTHETIC), "4.9"), [
-			"| &nbsp;&nbsp;§4.9 | The delegation layer | 600 |",
-		]);
+		assert.deepEqual(tocRowsFor(tocBlock(SYNTHETIC), "4.9"), ["| &nbsp;&nbsp;§4.9 | The delegation layer | 600 |"]);
 	});
 
 	it("finds no §4.9 TOC row on a contents that lacks one", () => {
@@ -459,16 +456,11 @@ describe("the suite's own teeth (§3.12 — both directions on synthetic documen
 	});
 
 	it("stays silent on a §4.9 pointer that sits in a paragraph the arm does not bind", () => {
-		assert.equal(
-			carriesPointer(paragraphWith(sectionSpan(SYNTHETIC, "1.5"), "names no deferral"), "4.9"),
-			false,
-		);
+		assert.equal(carriesPointer(paragraphWith(sectionSpan(SYNTHETIC, "1.5"), "names no deferral"), "4.9"), false);
 	});
 
 	it("reports a substrate version recorded beside the substrate's name", () => {
-		assert.deepEqual(substrateVersionTokens("the surfaces were measured against pi 0.84.3 on 2026-09-05"), [
-			"0.84.3",
-		]);
+		assert.deepEqual(substrateVersionTokens("the surfaces were measured against pi 0.84.3 on 2026-09-05"), ["0.84.3"]);
 	});
 
 	it("reports a backticked and a v-prefixed version", () => {

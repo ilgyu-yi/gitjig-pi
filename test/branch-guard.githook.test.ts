@@ -52,10 +52,10 @@ import {
 	buildGithookFixture,
 	type CommitAttempt,
 	commitWithMessage,
-	removeDelegatedHelpers,
 	fixtureGit,
 	type GithookFixture,
 	pushRefs,
+	removeDelegatedHelpers,
 	removeGithookFixture,
 	seedLocalCommit,
 } from "./harness/githook-fixture.ts";
@@ -85,11 +85,7 @@ function causeShape(cause: string): string {
  * While the helper is absent these arms fail HERE, at the record assertion:
  * the push falls through fail-open and appends no block record.
  */
-function assertPushRefused(
-	attempt: CommitAttempt,
-	arm: string,
-	opts: { checkExit?: boolean } = {},
-): void {
+function assertPushRefused(attempt: CommitAttempt, arm: string, opts: { checkExit?: boolean } = {}): void {
 	assert.match(
 		attempt.auditDelta,
 		/\bblock\b.*\bbranch\b/,
@@ -203,44 +199,48 @@ describe("pushes targeting the derived protected identity refuse (issue #59)", {
 	});
 });
 
-describe("a case-variant of the protected identity refuses as ambiguous (issue #59, SPEC §3.9)", { skip: IS_WINDOWS }, () => {
-	let fixture: GithookFixture;
-	let byteEqualRefusal: CommitAttempt;
-	let variantRefusal: CommitAttempt;
+describe(
+	"a case-variant of the protected identity refuses as ambiguous (issue #59, SPEC §3.9)",
+	{ skip: IS_WINDOWS },
+	() => {
+		let fixture: GithookFixture;
+		let byteEqualRefusal: CommitAttempt;
+		let variantRefusal: CommitAttempt;
 
-	before(() => {
-		fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
-		seedLocalCommit(fixture);
-		byteEqualRefusal = pushRefs(fixture, [PROTECTED]);
-		variantRefusal = pushRefs(fixture, [`${PROTECTED}:${PROTECTED_VARIANT}`]);
-	});
-	after(() => removeGithookFixture(fixture));
+		before(() => {
+			fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+			seedLocalCommit(fixture);
+			byteEqualRefusal = pushRefs(fixture, [PROTECTED]);
+			variantRefusal = pushRefs(fixture, [`${PROTECTED}:${PROTECTED_VARIANT}`]);
+		});
+		after(() => removeGithookFixture(fixture));
 
-	it("the case-variant push lands a block record (exit status is not the observable — header note)", () => {
-		assertPushRefused(variantRefusal, "case-variant of P", { checkExit: false });
-	});
+		it("the case-variant push lands a block record (exit status is not the observable — header note)", () => {
+			assertPushRefused(variantRefusal, "case-variant of P", { checkExit: false });
+		});
 
-	it("the ambiguous-destination cause is distinct from the byte-equal cause", () => {
-		// The refusal preconditions repeat on purpose: on a tree where the
-		// pushes still fall through fail-open, git's own transport lines would
-		// green a bare shape comparison vacuously.
-		assertPushRefused(byteEqualRefusal, "push to P (reference refusal)");
-		assertPushRefused(variantRefusal, "case-variant of P", { checkExit: false });
-		assert.notEqual(variantRefusal.cause, "", "an ambiguity refusal owes its own cause line");
-		assert.notEqual(
-			causeShape(variantRefusal.cause),
-			causeShape(byteEqualRefusal.cause),
-			"the ambiguous-destination cause reuses the byte-equal shape — the two §3.3 arms must stay " +
-				"distinguishable at the observable",
-		);
-	});
+		it("the ambiguous-destination cause is distinct from the byte-equal cause", () => {
+			// The refusal preconditions repeat on purpose: on a tree where the
+			// pushes still fall through fail-open, git's own transport lines would
+			// green a bare shape comparison vacuously.
+			assertPushRefused(byteEqualRefusal, "push to P (reference refusal)");
+			assertPushRefused(variantRefusal, "case-variant of P", { checkExit: false });
+			assert.notEqual(variantRefusal.cause, "", "an ambiguity refusal owes its own cause line");
+			assert.notEqual(
+				causeShape(variantRefusal.cause),
+				causeShape(byteEqualRefusal.cause),
+				"the ambiguous-destination cause reuses the byte-equal shape — the two §3.3 arms must stay " +
+					"distinguishable at the observable",
+			);
+		});
 
-	it("neither spelling's bytes surface on the refusal record", () => {
-		assertPushRefused(variantRefusal, "case-variant of P", { checkExit: false });
-		assertRefnameContentFree(variantRefusal, PROTECTED_VARIANT, "case-variant of P");
-		assertRefnameContentFree(variantRefusal, PROTECTED, "case-variant of P");
-	});
-});
+		it("neither spelling's bytes surface on the refusal record", () => {
+			assertPushRefused(variantRefusal, "case-variant of P", { checkExit: false });
+			assertRefnameContentFree(variantRefusal, PROTECTED_VARIANT, "case-variant of P");
+			assertRefnameContentFree(variantRefusal, PROTECTED, "case-variant of P");
+		});
+	},
+);
 
 describe("derivation of the protected identity (issue #59, SPEC §3.3 stage 2, §3.9)", { skip: IS_WINDOWS }, () => {
 	it("pointer absent, remote reachable: stage 2 derives P and the push is still refused", () => {
@@ -523,7 +523,6 @@ describe("boundary pins — green in both tree states (issue #59)", { skip: IS_W
 			removeGithookFixture(fixture);
 		}
 	});
-
 });
 
 describe("current_branch detached-HEAD contract (issue #59, SPEC §3.9)", { skip: IS_WINDOWS }, () => {
@@ -596,9 +595,7 @@ describe("current_branch detached-HEAD contract (issue #59, SPEC §3.9)", { skip
 describe("the commit arm's subject and the detached-HEAD scope (issue #113)", { skip: IS_WINDOWS }, () => {
 	/** Records this arm writes when it has no subject — the §5.9 observable. */
 	function unevaluatedRecords(attempt: CommitAttempt): string[] {
-		return attempt.auditDelta
-			.split("\n")
-			.filter((line) => line.includes("not evaluated") && line.includes("branch"));
+		return attempt.auditDelta.split("\n").filter((line) => line.includes("not evaluated") && line.includes("branch"));
 	}
 
 	function blockRecords(attempt: CommitAttempt): string[] {
@@ -708,10 +705,7 @@ describe("the commit arm's subject and the detached-HEAD scope (issue #113)", { 
 			fixtureGit(fixture, ["checkout", "-q", "--detach"]);
 			const attempt = commitWithMessage(fixture, "feat(#113): detached, quiet\n");
 			assert.equal(attempt.cause, "", `the scope fold spoke on stderr: ${JSON.stringify(attempt.cause)}`);
-			assert.ok(
-				!attempt.stderr.includes("not enforced"),
-				"the scope fold borrowed §3.9's degradation wording",
-			);
+			assert.ok(!attempt.stderr.includes("not enforced"), "the scope fold borrowed §3.9's degradation wording");
 		} finally {
 			removeGithookFixture(fixture);
 		}

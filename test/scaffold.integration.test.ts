@@ -230,9 +230,7 @@ describe("AC1: extension loads from the repository tree and registers at session
 	});
 
 	it("leaves load evidence: audit marker ordering ext-load → session-start", () => {
-		const actions = requireAudit(cleanFixture, cleanRun).map(
-			(line) => (JSON.parse(line) as { action: string }).action,
-		);
+		const actions = requireAudit(cleanFixture, cleanRun).map((line) => (JSON.parse(line) as { action: string }).action);
 		const loadIndex = actions.indexOf("ext-load");
 		const startIndex = actions.indexOf("session-start");
 		assert.ok(
@@ -243,11 +241,7 @@ describe("AC1: extension loads from the repository tree and registers at session
 
 	it("appends the registration entry to the session JSONL after session_start", () => {
 		const entries = registrationEntries(cleanFixture);
-		assert.equal(
-			entries.length,
-			1,
-			`expected exactly one gitjig-registration session entry\n${diagnostics(cleanRun)}`,
-		);
+		assert.equal(entries.length, 1, `expected exactly one gitjig-registration session entry\n${diagnostics(cleanRun)}`);
 	});
 
 	it("runs no action method at extension load (D1-calibrated check)", () => {
@@ -269,9 +263,7 @@ describe("AC2/AC4: seam-scoped state with self-announcing override (§5.5, §4.6
 	});
 
 	it("announces the active seam in the audit file", () => {
-		const actions = requireAudit(cleanFixture, cleanRun).map(
-			(line) => (JSON.parse(line) as { action: string }).action,
-		);
+		const actions = requireAudit(cleanFixture, cleanRun).map((line) => (JSON.parse(line) as { action: string }).action);
 		assert.ok(actions.includes("seam-active"), `actions: ${JSON.stringify(actions)}`);
 	});
 

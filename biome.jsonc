@@ -1,0 +1,53 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+	// `.jsonc` rather than `.json` so a disabled rule can carry its ground
+	// where the disabling happens. Biome refuses comments in `biome.json`.
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"includes": ["**/*.ts", "**/*.json", "**/*.jsonc", "!**/node_modules"]
+	},
+	"formatter": {
+		"enabled": true,
+		// Measured, not preferred — and measured AT THE BASE of the change
+		// that set it, which is the only tree on which the comparison means
+		// anything: over the 27,087 tracked `.ts` lines the formatter was
+		// about to rewrite, p95 was 100, p99 119, max 1,174. At 120 it
+		// rewrote 37 files; at the default 80 it would have rewritten 49.
+		// The formatted tree necessarily reads differently: re-measuring here
+		// tells you what this setting produced, never what chose it.
+		"indentStyle": "tab",
+		"lineWidth": 120
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"suspicious": {
+				// OFF, and the premise is what fails rather than the sites.
+				// The rule reads `${...}` inside a plain string as a template
+				// literal someone forgot to mark. This tree writes shell text,
+				// hook source and workflow expressions AS DATA — the `${...}`
+				// is the fixture under test, and a suite that asserts how a
+				// hook interpolates cannot spell its subject any other way.
+				// Measured: all 18 reports sit in `test/`, every one of them a
+				// fixture string. Site suppressions would be 18 comments
+				// asserting the same one fact.
+				"noTemplateCurlyInString": "off"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			// Set to what the tree already wrote, on the same base as the line
+			// width above — 18,527 tab-indented lines against 0 two-space, and
+			// 7,968 double-quoted strings against 379 single — so the one-time
+			// reformat was a line-width pass and not a house-style change.
+			"quoteStyle": "double",
+			"semicolons": "always"
+		}
+	}
+}

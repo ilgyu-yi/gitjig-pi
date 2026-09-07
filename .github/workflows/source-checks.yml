@@ -1,0 +1,91 @@
+name: source-checks
+
+# DEVELOPMENT AND CI ONLY. This workflow drives tools that exist for the
+# people and agents developing THIS repository. It is not substrate: an
+# adopting repository is not meant to receive it, and nothing it installs
+# reaches one.
+#
+# That statement is a header and not yet an instrument, which is the whole
+# reason it is written here. `deriveSubstrateSet` walks all of `.github/`,
+# so as of this commit this file IS a member of the set a composition
+# would carry. Nothing delivers today (#118 is unimplemented), so the
+# membership is inert; #134's Execution is what turns this comment into an
+# arm that proves the file never enters the set. Until then, a reader of a
+# composed tree has this paragraph and nothing else.
+#
+# The two gates and their contract are homed in SPEC §3.3 (`source-style`,
+# `type-check`) and are not restated here. Job ids are the required-check
+# contexts §4.3 records; renaming one without amending both SPEC sentences
+# reds test/source-checks-workflow.structure.test.ts.
+#
+# The runtime stays buildless: `tsc` runs with --noEmit and nothing in the
+# run path consumes either job's output. The verification suite is NOT run
+# here and takes no dependency on the install below — it runs unchanged in
+# a clone that never installs.
+#
+# No third-party Actions; actions/checkout and actions/setup-node are
+# GitHub-shipped.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  source-style:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # `npm ci` and never `npm install`: only the former is bounded by the
+      # committed lockfile, so the tools that decide this gate are the ones
+      # the repository named rather than whatever the registry resolves today.
+      - name: Install the pinned dev tools
+        run: npm ci
+
+      # Formatter and linter in one pass, reporting only — the gate never
+      # rewrites the tree it is judging. Warnings are fatal: a reported-but-
+      # unenforced tier is the state #121 was filed about.
+      - name: Format and lint
+        run: |
+          set -euo pipefail
+          if ! npx --no-install biome ci --error-on-warnings .; then
+            echo "::error::Formatting or lint errors. Run 'npm run check' locally to see them, and 'npm run format' to apply the formatter's own fixes. Rule grounds are in biome.jsonc beside each setting." >&2
+            exit 1
+          fi
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install the pinned dev tools
+        run: npm ci
+
+      # --noEmit: this gate checks the annotations node's type stripping
+      # erases, and produces no artifact. Nothing may come to depend on its
+      # output (SPEC §3.3).
+      - name: Type check
+        run: |
+          set -euo pipefail
+          if ! npx --no-install tsc --noEmit; then
+            echo "::error::Type errors. Run 'npm run typecheck' locally to reproduce. node --test strips types rather than checking them, so a green suite does not clear this gate." >&2
+            exit 1
+          fi

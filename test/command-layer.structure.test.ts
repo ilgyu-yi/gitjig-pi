@@ -384,9 +384,7 @@ describe("the suite's own teeth (§3.12 — both directions on synthetic documen
 	});
 
 	it("reports a substrate version recorded beside the substrate's name", () => {
-		assert.deepEqual(substrateVersionTokens("the surfaces were measured against pi 0.84.3 on 2026-09-04"), [
-			"0.84.3",
-		]);
+		assert.deepEqual(substrateVersionTokens("the surfaces were measured against pi 0.84.3 on 2026-09-04"), ["0.84.3"]);
 	});
 
 	it("reports a backticked and a v-prefixed version", () => {

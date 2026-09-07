@@ -153,9 +153,7 @@ function baseEnv(fixture: GithookFixture): Record<string, string> {
 function git(fixture: GithookFixture, args: string[]): void {
 	const result = spawnSync("git", args, { cwd: fixture.root, env: baseEnv(fixture) });
 	if (result.status !== 0) {
-		throw new Error(
-			`fixture setup: git ${args.join(" ")} exited ${result.status}: ${result.stderr?.toString("utf8")}`,
-		);
+		throw new Error(`fixture setup: git ${args.join(" ")} exited ${result.status}: ${result.stderr?.toString("utf8")}`);
 	}
 }
 
@@ -167,9 +165,7 @@ function git(fixture: GithookFixture, args: string[]): void {
  */
 function assertTreesIdentical(sourceDir: string, copyDir: string): void {
 	const listFiles = (dir: string, prefix: string, out: string[]): void => {
-		for (const item of [...readdirSync(dir, { withFileTypes: true })].sort((a, b) =>
-			a.name.localeCompare(b.name),
-		)) {
+		for (const item of [...readdirSync(dir, { withFileTypes: true })].sort((a, b) => a.name.localeCompare(b.name))) {
 			const rel = prefix === "" ? item.name : `${prefix}/${item.name}`;
 			if (item.isDirectory()) {
 				listFiles(join(dir, item.name), rel, out);
@@ -366,11 +362,7 @@ export interface PushOptions {
  *     never echoed by git itself, so byte-level "this refname reached no
  *     surface" assertions measure the hook chain's emissions alone.
  */
-export function pushRefs(
-	fixture: GithookFixture,
-	refspecs: string[],
-	options: PushOptions = {},
-): CommitAttempt {
+export function pushRefs(fixture: GithookFixture, refspecs: string[], options: PushOptions = {}): CommitAttempt {
 	const auditBefore = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8") : "";
 	// Stripped from the BASE, then the caller's overrides land on top: an
 	// explicitly supplied value wins over a strip of the same name, which is

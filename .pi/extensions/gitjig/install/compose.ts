@@ -40,7 +40,7 @@
  * — within `changelog_unreleased/`, only the top-level contract ships —
  * never as a list of the fragments that happen to exist today.
  */
-import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, type Stats } from "node:fs";
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 
 /**
@@ -93,7 +93,7 @@ function walk(dir: string, rootForRelative: string, out: string[]): void {
 	}
 	for (const entry of entries) {
 		const abs = join(dir, entry);
-		let st;
+		let st: Stats;
 		try {
 			st = lstatSync(abs);
 		} catch {
@@ -259,7 +259,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "destination falls outside the shell-owned namespaces §4.1 states, or names a namespace root rather than a member beneath one; nothing is landed",
+				reason:
+					"destination falls outside the shell-owned namespaces §4.1 states, or names a namespace root rather than a member beneath one; nothing is landed",
 			};
 		}
 		const container = containerVerdict(destRoot, rel);
@@ -276,7 +277,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "a destination container could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
+				reason:
+					"a destination container could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
 			};
 		}
 
@@ -285,7 +287,7 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 		// that is a symlink to a path which does not yet exist reads as absent
 		// and would be landed — putting the shell's bytes wherever it points,
 		// outside every namespace, with no refusal and no warning.
-		let st;
+		let st: Stats;
 		try {
 			st = lstatSync(destAbs);
 		} catch (error) {
@@ -296,7 +298,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "the destination could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
+				reason:
+					"the destination could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
 			};
 		}
 		if (st.isSymbolicLink()) {
@@ -304,7 +307,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "the destination itself is a symbolic link; a landing would write through it, and what it points at is not a same-named asset this instrument may reason about",
+				reason:
+					"the destination itself is a symbolic link; a landing would write through it, and what it points at is not a same-named asset this instrument may reason about",
 			};
 		}
 		if (!st.isFile()) {
@@ -312,7 +316,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "the destination exists and is not a regular file; it is not a same-named asset this instrument may reason about",
+				reason:
+					"the destination exists and is not a regular file; it is not a same-named asset this instrument may reason about",
 			};
 		}
 		if (sameBytes(join(sourceRoot, rel), destAbs)) {
@@ -327,7 +332,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 			source: raw,
 			dest: rel,
 			action: "skip" as const,
-			reason: "a pre-existing same-named asset differs from the substrate; skipped with a warning and left untouched (§4.7 never overwrites)",
+			reason:
+				"a pre-existing same-named asset differs from the substrate; skipped with a warning and left untouched (§4.7 never overwrites)",
 		};
 	});
 }

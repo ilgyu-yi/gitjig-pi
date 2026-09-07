@@ -44,6 +44,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import type { Stats } from "node:fs";
 import {
 	chmodSync,
 	closeSync,
@@ -62,7 +63,6 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
-import type { Stats } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
@@ -71,8 +71,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // or reads a mode has to address exactly the path the runtime appends to, so a
 // rename there moves the arm with it instead of quietly aiming it elsewhere.
 import {
-	appendAuditRecord,
 	AUDIT_FILE_NAME,
+	appendAuditRecord,
 	recoveryFor,
 	sinkRefusal,
 	writeRecordLine,
@@ -369,11 +369,11 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 			const precious = join(outside, "precious");
 			writeFileSync(precious, "a file no arm of this suite may reach");
 			symlinkSync(outside, join(fixture, "link"));
-			const escape = join(fixture, "link", "precious");
+			const escapingPath = join(fixture, "link", "precious");
 			assert.throws(
-				() => assertInsideFixture(escape, fixture),
+				() => assertInsideFixture(escapingPath, fixture),
 				/does not own/,
-				`the guard admits ${escape}, which really resolves to ${precious}: an arm performing what a clause names would delete or chmod outside the fixture it is contained to, and the fixture holding no link is not a property the guard may rest on`,
+				`the guard admits ${escapingPath}, which really resolves to ${precious}: an arm performing what a clause names would delete or chmod outside the fixture it is contained to, and the fixture holding no link is not a property the guard may rest on`,
 			);
 			assert.doesNotThrow(
 				() => assertInsideFixture(join(fixture, "no-such-dir", "deeper"), fixture),
@@ -475,248 +475,270 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 		}
 	});
 
-	it("refuses a FIFO at the sink path instead of hanging the factory that appends at load (§3.9, §5.9)", {
-		skip: process.platform === "win32" ? "POSIX FIFO" : false,
-	}, () => {
-		// `O_NOFOLLOW` refuses a symlink, not a named pipe, and `openSync` on
-		// a FIFO with no reader blocks before any verdict can run: the append
-		// neither returns nor throws, so the extension factory calling it at
-		// load hangs where the `audit-append` posture row promises a warning
-		// and a `false` (issue #44). The append therefore runs in a child
-		// process under this arm's OWN bound — the issue's AC has the arm
-		// carry its bound rather than lean on the suite's — so the red run
-		// terminates: red is the child killed at the bound, no verdict printed.
-		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-fifo-"));
-		execFileSync("mkfifo", [join(stateRoot, AUDIT_FILE_NAME)]);
-		const boundMs = 4000;
-		const script = [
-			"const { appendAuditRecord } = await import(process.argv[2]);",
-			'const value = appendAuditRecord(process.argv[1], { category: "test", action: "fifo", text: "evidence" });',
-			"console.log(`verdict=${value}`);",
-		].join("\n");
-		let killedBy: string | undefined;
-		let stdout = "";
-		try {
-			stdout = execFileSync(
-				process.execPath,
-				[
-					"--input-type=module",
-					"-e",
-					script,
-					stateRoot,
-					pathToFileURL(join(REPO_ROOT, ".pi", "extensions", "gitjig", "audit.ts")).href,
-				],
-				{ timeout: boundMs, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-			);
-		} catch (error) {
-			const failure = error as { signal?: string | null; status?: number | null; stdout?: string };
-			killedBy = failure.signal ?? `exit status ${failure.status}`;
-			stdout = failure.stdout ?? "";
-		} finally {
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-		assert.equal(
-			killedBy,
-			undefined,
-			`the append against a reader-less FIFO did not return a verdict within this arm's ${boundMs}ms bound ` +
-				`(child ended by ${killedBy}; stdout: ${JSON.stringify(stdout)}): the extension factory calling it at ` +
-				`load hangs with no verdict and no signal a reader can act on, where the audit-append row degrades open`,
-		);
-		assert.match(
-			stdout,
-			/verdict=false/,
-			`the append accepted a FIFO at the sink path: a process holding the read end takes the evidence and the ` +
-				`gate reads nothing — the same write/read divergence #40 closed for symlinks (§4.6). child stdout: ${JSON.stringify(stdout)}`,
-		);
-	});
-
-	it("creates the sink readable only by the account that writes it (§5.5)", {
-		// POSIX permission bits. On a host that does not carry them the mode
-		// says nothing about who may read the file, so the arm measures nothing
-		// rather than reporting a result it cannot support.
-		skip: process.platform === "win32" ? "POSIX permission bits" : false,
-	}, () => {
-		// The umask is normalised to 0 for the measurement. Left at the host's
-		// default this arm would pass on any machine whose umask already masks
-		// group and other, without the writer ever declaring a mode — the
-		// vacuous pass the mode contract exists to rule out.
-		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-mode-"));
-		const savedUmask = process.umask(0o000);
-		try {
-			appendAuditRecord(stateRoot, INPUT);
-			assert.equal(
-				(statSync(join(stateRoot, AUDIT_FILE_NAME)).mode & 0o777).toString(8),
-				"600",
-				"the audit sink is created under the ambient umask: an audit record names what a repository's work touched, and a host may carry accounts that work never concerned",
-			);
-		} finally {
-			process.umask(savedUmask);
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-	});
-
-	it("refuses a sink whose mode admits group or other accounts, naming the chmod that restores it (§5.5, §3.11)", {
-		// POSIX permission bits. No superuser skip: the refusal under test is a
-		// verdict on the measured mode, not a permission failure the kernel
-		// waives for root.
-		skip: process.platform === "win32" ? "POSIX permission bits" : false,
-	}, () => {
-		// The `0600` create mode binds only at creation: a sink pre-created
-		// `0644` or `0666` keeps those bits, and today's append lands the
-		// record in it silently — the §5.5 owner-only read scope is off with
-		// no signal on any surface (issue #44 comment 1's named member). This
-		// shape is honest-mistake-reachable (a `touch` before first run
-		// suffices), so the refusal is owed a live recovery naming the exact
-		// act: `chmod 600` on the sink.
-		for (const mode of [0o644, 0o666]) {
-			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-loose-mode-"));
+	it(
+		"refuses a FIFO at the sink path instead of hanging the factory that appends at load (§3.9, §5.9)",
+		{
+			skip: process.platform === "win32" ? "POSIX FIFO" : false,
+		},
+		() => {
+			// `O_NOFOLLOW` refuses a symlink, not a named pipe, and `openSync` on
+			// a FIFO with no reader blocks before any verdict can run: the append
+			// neither returns nor throws, so the extension factory calling it at
+			// load hangs where the `audit-append` posture row promises a warning
+			// and a `false` (issue #44). The append therefore runs in a child
+			// process under this arm's OWN bound — the issue's AC has the arm
+			// carry its bound rather than lean on the suite's — so the red run
+			// terminates: red is the child killed at the bound, no verdict printed.
+			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-fifo-"));
+			execFileSync("mkfifo", [join(stateRoot, AUDIT_FILE_NAME)]);
+			const boundMs = 4000;
+			const script = [
+				"const { appendAuditRecord } = await import(process.argv[2]);",
+				'const value = appendAuditRecord(process.argv[1], { category: "test", action: "fifo", text: "evidence" });',
+				"console.log(`verdict=${value}`);",
+			].join("\n");
+			let killedBy: string | undefined;
+			let stdout = "";
 			try {
-				const sinkPath = join(stateRoot, AUDIT_FILE_NAME);
-				writeFileSync(sinkPath, "");
-				chmodSync(sinkPath, mode);
+				stdout = execFileSync(
+					process.execPath,
+					[
+						"--input-type=module",
+						"-e",
+						script,
+						stateRoot,
+						pathToFileURL(join(REPO_ROOT, ".pi", "extensions", "gitjig", "audit.ts")).href,
+					],
+					{ timeout: boundMs, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+				);
+			} catch (error) {
+				const failure = error as { signal?: string | null; status?: number | null; stdout?: string };
+				killedBy = failure.signal ?? `exit status ${failure.status}`;
+				stdout = failure.stdout ?? "";
+			} finally {
+				rmSync(stateRoot, { recursive: true, force: true });
+			}
+			assert.equal(
+				killedBy,
+				undefined,
+				`the append against a reader-less FIFO did not return a verdict within this arm's ${boundMs}ms bound ` +
+					`(child ended by ${killedBy}; stdout: ${JSON.stringify(stdout)}): the extension factory calling it at ` +
+					`load hangs with no verdict and no signal a reader can act on, where the audit-append row degrades open`,
+			);
+			assert.match(
+				stdout,
+				/verdict=false/,
+				`the append accepted a FIFO at the sink path: a process holding the read end takes the evidence and the ` +
+					`gate reads nothing — the same write/read divergence #40 closed for symlinks (§4.6). child stdout: ${JSON.stringify(stdout)}`,
+			);
+		},
+	);
+
+	it(
+		"creates the sink readable only by the account that writes it (§5.5)",
+		{
+			// POSIX permission bits. On a host that does not carry them the mode
+			// says nothing about who may read the file, so the arm measures nothing
+			// rather than reporting a result it cannot support.
+			skip: process.platform === "win32" ? "POSIX permission bits" : false,
+		},
+		() => {
+			// The umask is normalised to 0 for the measurement. Left at the host's
+			// default this arm would pass on any machine whose umask already masks
+			// group and other, without the writer ever declaring a mode — the
+			// vacuous pass the mode contract exists to rule out.
+			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-mode-"));
+			const savedUmask = process.umask(0o000);
+			try {
+				appendAuditRecord(stateRoot, INPUT);
+				assert.equal(
+					(statSync(join(stateRoot, AUDIT_FILE_NAME)).mode & 0o777).toString(8),
+					"600",
+					"the audit sink is created under the ambient umask: an audit record names what a repository's work touched, and a host may carry accounts that work never concerned",
+				);
+			} finally {
+				process.umask(savedUmask);
+				rmSync(stateRoot, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it(
+		"refuses a sink whose mode admits group or other accounts, naming the chmod that restores it (§5.5, §3.11)",
+		{
+			// POSIX permission bits. No superuser skip: the refusal under test is a
+			// verdict on the measured mode, not a permission failure the kernel
+			// waives for root.
+			skip: process.platform === "win32" ? "POSIX permission bits" : false,
+		},
+		() => {
+			// The `0600` create mode binds only at creation: a sink pre-created
+			// `0644` or `0666` keeps those bits, and today's append lands the
+			// record in it silently — the §5.5 owner-only read scope is off with
+			// no signal on any surface (issue #44 comment 1's named member). This
+			// shape is honest-mistake-reachable (a `touch` before first run
+			// suffices), so the refusal is owed a live recovery naming the exact
+			// act: `chmod 600` on the sink.
+			for (const mode of [0o644, 0o666]) {
+				const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-loose-mode-"));
+				try {
+					const sinkPath = join(stateRoot, AUDIT_FILE_NAME);
+					writeFileSync(sinkPath, "");
+					chmodSync(sinkPath, mode);
+					const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
+					assert.equal(
+						value,
+						false,
+						`a sink at mode ${mode.toString(8)} was appended into silently: the record at rest is readable by accounts the repository's work never concerned, and nothing on any surface says so`,
+					);
+					assert.match(
+						recoveryClause(warnings[0] ?? "") ?? "",
+						/chmod 600/,
+						`the refusal names no \`chmod 600\` on the sink — the one act that restores the trail here — so the signal leaves the operator without the live recovery this honest-mistake shape is owed (§3.11). warnings: ${JSON.stringify(warnings)}`,
+					);
+					assert.equal(
+						readFileSync(sinkPath, "utf8"),
+						"",
+						`the record landed in the group/other-readable sink despite the refusal: the verdict must bind before the write, not after it`,
+					);
+				} finally {
+					rmSync(stateRoot, { recursive: true, force: true });
+				}
+			}
+		},
+	);
+
+	it(
+		"refuses a hard link whose every other dimension passes: the link count alone is the verdict (§3.12, §4.6)",
+		{
+			skip: process.platform === "win32" ? "POSIX permission bits" : false,
+		},
+		() => {
+			// The hard-link arm above stages its victim at the umask's default
+			// mode, so a verdict that lost its link-count check is still refused
+			// there — by the mode dimension — and the arm stays green (measured:
+			// deleting the `nlink` check left the whole suite passing). This arm
+			// is the one the mutation priority owes the link count: the victim is
+			// a regular 0600 file owned by this account, so the opened inode
+			// fails nothing but `nlink`, and a green here with the check deleted
+			// is impossible.
+			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-hardlink-0600-"));
+			try {
+				const elsewhere = join(stateRoot, "elsewhere");
+				mkdirSync(elsewhere);
+				const victim = join(elsewhere, "captured.log");
+				writeFileSync(victim, "");
+				chmodSync(victim, 0o600);
+				linkSync(victim, join(stateRoot, AUDIT_FILE_NAME));
 				const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
 				assert.equal(
 					value,
 					false,
-					`a sink at mode ${mode.toString(8)} was appended into silently: the record at rest is readable by accounts the repository's work never concerned, and nothing on any surface says so`,
+					"a hard-linked sink passing every dimension but the link count was appended into: the verdict rests on mode or type, and a planter links an owner-0600 file precisely to pass them",
 				);
 				assert.match(
-					recoveryClause(warnings[0] ?? "") ?? "",
-					/chmod 600/,
-					`the refusal names no \`chmod 600\` on the sink — the one act that restores the trail here — so the signal leaves the operator without the live recovery this honest-mistake shape is owed (§3.11). warnings: ${JSON.stringify(warnings)}`,
+					warnings[0] ?? "",
+					/2 names/,
+					`the refusal does not name the link count, the only dimension that failed here. warnings: ${JSON.stringify(warnings)}`,
 				);
 				assert.equal(
-					readFileSync(sinkPath, "utf8"),
+					readFileSync(victim, "utf8"),
 					"",
-					`the record landed in the group/other-readable sink despite the refusal: the verdict must bind before the write, not after it`,
+					"the audit record landed in the victim inode despite the refusal: the verdict must bind before the write",
 				);
 			} finally {
 				rmSync(stateRoot, { recursive: true, force: true });
 			}
-		}
-	});
+		},
+	);
 
-	it("refuses a hard link whose every other dimension passes: the link count alone is the verdict (§3.12, §4.6)", {
-		skip: process.platform === "win32" ? "POSIX permission bits" : false,
-	}, () => {
-		// The hard-link arm above stages its victim at the umask's default
-		// mode, so a verdict that lost its link-count check is still refused
-		// there — by the mode dimension — and the arm stays green (measured:
-		// deleting the `nlink` check left the whole suite passing). This arm
-		// is the one the mutation priority owes the link count: the victim is
-		// a regular 0600 file owned by this account, so the opened inode
-		// fails nothing but `nlink`, and a green here with the check deleted
-		// is impossible.
-		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-hardlink-0600-"));
-		try {
-			const elsewhere = join(stateRoot, "elsewhere");
-			mkdirSync(elsewhere);
-			const victim = join(elsewhere, "captured.log");
-			writeFileSync(victim, "");
-			chmodSync(victim, 0o600);
-			linkSync(victim, join(stateRoot, AUDIT_FILE_NAME));
-			const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
-			assert.equal(
-				value,
-				false,
-				"a hard-linked sink passing every dimension but the link count was appended into: the verdict rests on mode or type, and a planter links an owner-0600 file precisely to pass them",
-			);
-			assert.match(
-				warnings[0] ?? "",
-				/2 names/,
-				`the refusal does not name the link count, the only dimension that failed here. warnings: ${JSON.stringify(warnings)}`,
-			);
-			assert.equal(
-				readFileSync(victim, "utf8"),
-				"",
-				"the audit record landed in the victim inode despite the refusal: the verdict must bind before the write",
-			);
-		} finally {
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-	});
-
-	it("refuses a character device and another account's inode, pinned at the seam against real /dev/null Stats (§3.12, §4.6, §5.5)", {
-		skip: process.platform === "win32" ? "POSIX device nodes and ownership" : false,
-	}, () => {
-		// The owner and character-device dimensions of the sink verdict are
-		// not stageable AT THE SINK PATH without root: chown to another
-		// account and mknod both need root, and link(2) from devfs into a
-		// fixture is cross-device (§3.12). So they are pinned at the seam the
-		// append calls — the exported verdict — against real `fstat` Stats of
-		// one real kernel object, /dev/null: a character device, owned by
-		// root, mode 0666, exercising the type, owner, and mode dimensions in
-		// one Stats object. The verdict enumerates every failing dimension
-		// rather than stopping at the first, which is what lets this one
-		// unforgeable object discriminate a dropped check in any of the three.
-		const fd = openSync("/dev/null", constants.O_RDONLY);
-		let stats;
-		try {
-			stats = fstatSync(fd);
-		} finally {
-			closeSync(fd);
-		}
-		const refusal = sinkRefusal(stats, "/dev/null");
-		assert.ok(
-			refusal !== undefined,
-			"the verdict admits /dev/null — a character device readable and writable by every account on the host: evidence appended there is world-readable and never at rest",
-		);
-		assert.match(
-			refusal.cause,
-			/not a regular file/,
-			`the refusal does not carry the type dimension: a character device at the sink path is refused for its mode alone, so a 0600 device would be admitted. cause: ${refusal.cause}`,
-		);
-		assert.match(
-			refusal.cause,
-			/admits group or other/,
-			`the refusal does not carry the mode dimension measured off the same Stats. cause: ${refusal.cause}`,
-		);
-		if (process.geteuid?.() !== 0 && stats.uid === 0) {
-			assert.match(
-				refusal.cause,
-				/owned by uid 0/,
-				`the refusal does not carry the owner dimension: root's inode at the sink path is refused for its type alone, so another account's regular file would be admitted. cause: ${refusal.cause}`,
-			);
-		}
-		assert.doesNotMatch(
-			refusal.recovery,
-			/chmod 600/,
-			`the recovery names \`chmod 600\` on a path whose type dimension also failed — a dead act where the object to repair is the device itself (§3.11). recovery: ${refusal.recovery}`,
-		);
-	});
-
-	it("admits through the verdict exactly the sink the append itself creates (§3.12)", {
-		skip: process.platform === "win32" ? "POSIX permission bits" : false,
-	}, () => {
-		// A verdict that refuses everything contains nothing: the counterpart
-		// of the /dev/null pin is that the Stats of a sink the append just
-		// created — regular, one name, 0600, this account — pass it.
-		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-verdict-pass-"));
-		try {
-			assert.equal(captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value, true);
-			const fd = openSync(join(stateRoot, AUDIT_FILE_NAME), constants.O_RDONLY);
-			let stats;
+	it(
+		"refuses a character device and another account's inode, pinned at the seam against real /dev/null Stats (§3.12, §4.6, §5.5)",
+		{
+			skip: process.platform === "win32" ? "POSIX device nodes and ownership" : false,
+		},
+		() => {
+			// The owner and character-device dimensions of the sink verdict are
+			// not stageable AT THE SINK PATH without root: chown to another
+			// account and mknod both need root, and link(2) from devfs into a
+			// fixture is cross-device (§3.12). So they are pinned at the seam the
+			// append calls — the exported verdict — against real `fstat` Stats of
+			// one real kernel object, /dev/null: a character device, owned by
+			// root, mode 0666, exercising the type, owner, and mode dimensions in
+			// one Stats object. The verdict enumerates every failing dimension
+			// rather than stopping at the first, which is what lets this one
+			// unforgeable object discriminate a dropped check in any of the three.
+			const fd = openSync("/dev/null", constants.O_RDONLY);
+			let stats: Stats;
 			try {
 				stats = fstatSync(fd);
 			} finally {
 				closeSync(fd);
 			}
-			assert.equal(
-				sinkRefusal(stats, join(stateRoot, AUDIT_FILE_NAME)),
-				undefined,
-				"the verdict refuses the very sink the append creates: every append after the first degrades open",
+			const refusal = sinkRefusal(stats, "/dev/null");
+			assert.ok(
+				refusal !== undefined,
+				"the verdict admits /dev/null — a character device readable and writable by every account on the host: evidence appended there is world-readable and never at rest",
 			);
-		} finally {
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-	});
+			assert.match(
+				refusal.cause,
+				/not a regular file/,
+				`the refusal does not carry the type dimension: a character device at the sink path is refused for its mode alone, so a 0600 device would be admitted. cause: ${refusal.cause}`,
+			);
+			assert.match(
+				refusal.cause,
+				/admits group or other/,
+				`the refusal does not carry the mode dimension measured off the same Stats. cause: ${refusal.cause}`,
+			);
+			if (process.geteuid?.() !== 0 && stats.uid === 0) {
+				assert.match(
+					refusal.cause,
+					/owned by uid 0/,
+					`the refusal does not carry the owner dimension: root's inode at the sink path is refused for its type alone, so another account's regular file would be admitted. cause: ${refusal.cause}`,
+				);
+			}
+			assert.doesNotMatch(
+				refusal.recovery,
+				/chmod 600/,
+				`the recovery names \`chmod 600\` on a path whose type dimension also failed — a dead act where the object to repair is the device itself (§3.11). recovery: ${refusal.recovery}`,
+			);
+		},
+	);
+
+	it(
+		"admits through the verdict exactly the sink the append itself creates (§3.12)",
+		{
+			skip: process.platform === "win32" ? "POSIX permission bits" : false,
+		},
+		() => {
+			// A verdict that refuses everything contains nothing: the counterpart
+			// of the /dev/null pin is that the Stats of a sink the append just
+			// created — regular, one name, 0600, this account — pass it.
+			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-verdict-pass-"));
+			try {
+				assert.equal(captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value, true);
+				const fd = openSync(join(stateRoot, AUDIT_FILE_NAME), constants.O_RDONLY);
+				let stats: Stats;
+				try {
+					stats = fstatSync(fd);
+				} finally {
+					closeSync(fd);
+				}
+				assert.equal(
+					sinkRefusal(stats, join(stateRoot, AUDIT_FILE_NAME)),
+					undefined,
+					"the verdict refuses the very sink the append creates: every append after the first degrades open",
+				);
+			} finally {
+				rmSync(stateRoot, { recursive: true, force: true });
+			}
+		},
+	);
 
 	it("names a recovery in the degraded-append signal (§3.11)", () => {
 		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-signal-"));
 		try {
-			const { warnings } = captureWarnings(() =>
-				appendAuditRecord(join(stateRoot, "no-such-dir", "deeper"), INPUT),
-			);
+			const { warnings } = captureWarnings(() => appendAuditRecord(join(stateRoot, "no-such-dir", "deeper"), INPUT));
 			assert.ok(
 				recoveryClause(warnings[0] ?? "") !== undefined,
 				`the degradation signal states cause and consequence but no way to restore the trail: ${JSON.stringify(warnings)}`,
@@ -792,124 +814,134 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 		}
 	});
 
-	it("names a live recovery when the destination directory refuses the create (§3.11)", {
-		// POSIX permission bits, and an account the mode actually binds: for a
-		// superuser the directory refuses nothing, so the arm would measure the
-		// message against a failure that never occurred.
-		skip:
-			process.platform === "win32"
-				? "POSIX permission bits"
-				: process.getuid?.() === 0
-					? "the directory mode refuses nothing for this account"
-					: false,
-	}, () => {
-		// `.gitjig/state` created with restrictive permissions is an honest
-		// mistake. The sink does not exist and cannot be created, so a clause
-		// naming the sink prescribes an act on an object that is not there; the
-		// live object is the directory's mode.
-		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-refuse-"));
-		try {
-			chmodSync(stateRoot, 0o500);
-			const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
-			assert.equal(value, false, "the arm measures nothing unless the directory mode refuses the create");
-			const clause = recoveryClause(warnings[0] ?? "");
-			const named = clause === undefined ? undefined : pathNamedIn(clause);
-			if (named !== undefined) {
-				assertInsideFixture(named, stateRoot);
-			}
-			const performed =
-				named === undefined
-					? "no path named"
-					: perform(`granted this account write and search permission on ${named}`, () =>
-							chmodSync(named, 0o700),
-						);
-			assert.equal(
-				captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value,
-				true,
-				`the signal names a recovery that is dead where it is emitted. signal: ${JSON.stringify(warnings[0])}; recovery clause: ${JSON.stringify(clause)}; performing it: ${performed}`,
-			);
-		} finally {
-			chmodSync(stateRoot, 0o700);
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-	});
-
-	it("keeps the destination-mode recovery off the unsearchable-ancestor shape (§3.11)", {
-		skip:
-			process.platform === "win32"
-				? "POSIX permission bits"
-				: process.getuid?.() === 0
-					? "the directory mode refuses nothing for this account"
-					: false,
-	}, () => {
-		// An ANCESTOR of the destination refuses the search, so the destination
-		// cannot be measured at all — and its own mode already admits this
-		// account. A clause naming it prescribes a chmod that changes nothing:
-		// this shape is unmodelled and belongs to the general arm. Without the
-		// guard that keeps the destination-mode arm off it, the EACCES code
-		// alone would select the dead clause.
-		const base = mkdtempSync(join(tmpdir(), "gitjig-audit-unsearchable-"));
-		const blocked = join(base, "blocked");
-		mkdirSync(blocked);
-		const stateRoot = join(blocked, "state");
-		mkdirSync(stateRoot);
-		try {
-			chmodSync(blocked, 0o000);
-			const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
-			assert.equal(value, false, "the arm measures nothing unless the unsearchable ancestor refuses the open");
-			const clause = recoveryClause(warnings[0] ?? "");
-			assert.notEqual(
-				clause === undefined ? undefined : pathNamedIn(clause),
-				stateRoot,
-				`the signal prescribes an act on ${stateRoot}, whose own mode already admits this account: the refusal came from an ancestor that cannot be searched, so performing the clause changes nothing. signal: ${JSON.stringify(warnings[0])}`,
-			);
-		} finally {
-			chmodSync(blocked, 0o700);
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
-
-	it("names a live recovery when the sink's own mode refuses the append (§3.11)", {
-		skip:
-			process.platform === "win32"
-				? "POSIX permission bits"
-				: process.getuid?.() === 0
-					? "the sink mode refuses nothing for this account"
-					: false,
-	}, () => {
-		// The destination directory admits this account and the sink is there:
-		// only the sink's own mode refuses. The live object is that file, and a
-		// clause naming the directory would prescribe a chmod that changes
-		// nothing — while asserting an absence the file sitting there denies.
-		const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-sinkmode-"));
-		const sinkPath = join(stateRoot, AUDIT_FILE_NAME);
-		try {
-			writeFileSync(sinkPath, "");
-			chmodSync(sinkPath, 0o000);
-			const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
-			assert.equal(value, false, "the arm measures nothing unless the sink's own mode refuses the append");
-			const clause = recoveryClause(warnings[0] ?? "");
-			const named = clause === undefined ? undefined : pathNamedIn(clause);
-			if (named !== undefined) {
-				assertInsideFixture(named, stateRoot);
-			}
-			const performed =
-				named === undefined
-					? "no path named"
-					: perform(`made ${named} writable by this account`, () => chmodSync(named, 0o600));
-			assert.equal(
-				captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value,
-				true,
-				`the signal names a recovery that is dead where it is emitted. signal: ${JSON.stringify(warnings[0])}; recovery clause: ${JSON.stringify(clause)}; performing it: ${performed}`,
-			);
-		} finally {
-			perform("restored the fixture modes", () => {
+	it(
+		"names a live recovery when the destination directory refuses the create (§3.11)",
+		{
+			// POSIX permission bits, and an account the mode actually binds: for a
+			// superuser the directory refuses nothing, so the arm would measure the
+			// message against a failure that never occurred.
+			skip:
+				process.platform === "win32"
+					? "POSIX permission bits"
+					: process.getuid?.() === 0
+						? "the directory mode refuses nothing for this account"
+						: false,
+		},
+		() => {
+			// `.gitjig/state` created with restrictive permissions is an honest
+			// mistake. The sink does not exist and cannot be created, so a clause
+			// naming the sink prescribes an act on an object that is not there; the
+			// live object is the directory's mode.
+			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-refuse-"));
+			try {
+				chmodSync(stateRoot, 0o500);
+				const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
+				assert.equal(value, false, "the arm measures nothing unless the directory mode refuses the create");
+				const clause = recoveryClause(warnings[0] ?? "");
+				const named = clause === undefined ? undefined : pathNamedIn(clause);
+				if (named !== undefined) {
+					assertInsideFixture(named, stateRoot);
+				}
+				const performed =
+					named === undefined
+						? "no path named"
+						: perform(`granted this account write and search permission on ${named}`, () => chmodSync(named, 0o700));
+				assert.equal(
+					captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value,
+					true,
+					`the signal names a recovery that is dead where it is emitted. signal: ${JSON.stringify(warnings[0])}; recovery clause: ${JSON.stringify(clause)}; performing it: ${performed}`,
+				);
+			} finally {
 				chmodSync(stateRoot, 0o700);
-				chmodSync(sinkPath, 0o600);
-			});
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-	});
+				rmSync(stateRoot, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it(
+		"keeps the destination-mode recovery off the unsearchable-ancestor shape (§3.11)",
+		{
+			skip:
+				process.platform === "win32"
+					? "POSIX permission bits"
+					: process.getuid?.() === 0
+						? "the directory mode refuses nothing for this account"
+						: false,
+		},
+		() => {
+			// An ANCESTOR of the destination refuses the search, so the destination
+			// cannot be measured at all — and its own mode already admits this
+			// account. A clause naming it prescribes a chmod that changes nothing:
+			// this shape is unmodelled and belongs to the general arm. Without the
+			// guard that keeps the destination-mode arm off it, the EACCES code
+			// alone would select the dead clause.
+			const base = mkdtempSync(join(tmpdir(), "gitjig-audit-unsearchable-"));
+			const blocked = join(base, "blocked");
+			mkdirSync(blocked);
+			const stateRoot = join(blocked, "state");
+			mkdirSync(stateRoot);
+			try {
+				chmodSync(blocked, 0o000);
+				const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
+				assert.equal(value, false, "the arm measures nothing unless the unsearchable ancestor refuses the open");
+				const clause = recoveryClause(warnings[0] ?? "");
+				assert.notEqual(
+					clause === undefined ? undefined : pathNamedIn(clause),
+					stateRoot,
+					`the signal prescribes an act on ${stateRoot}, whose own mode already admits this account: the refusal came from an ancestor that cannot be searched, so performing the clause changes nothing. signal: ${JSON.stringify(warnings[0])}`,
+				);
+			} finally {
+				chmodSync(blocked, 0o700);
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it(
+		"names a live recovery when the sink's own mode refuses the append (§3.11)",
+		{
+			skip:
+				process.platform === "win32"
+					? "POSIX permission bits"
+					: process.getuid?.() === 0
+						? "the sink mode refuses nothing for this account"
+						: false,
+		},
+		() => {
+			// The destination directory admits this account and the sink is there:
+			// only the sink's own mode refuses. The live object is that file, and a
+			// clause naming the directory would prescribe a chmod that changes
+			// nothing — while asserting an absence the file sitting there denies.
+			const stateRoot = mkdtempSync(join(tmpdir(), "gitjig-audit-sinkmode-"));
+			const sinkPath = join(stateRoot, AUDIT_FILE_NAME);
+			try {
+				writeFileSync(sinkPath, "");
+				chmodSync(sinkPath, 0o000);
+				const { value, warnings } = captureWarnings(() => appendAuditRecord(stateRoot, INPUT));
+				assert.equal(value, false, "the arm measures nothing unless the sink's own mode refuses the append");
+				const clause = recoveryClause(warnings[0] ?? "");
+				const named = clause === undefined ? undefined : pathNamedIn(clause);
+				if (named !== undefined) {
+					assertInsideFixture(named, stateRoot);
+				}
+				const performed =
+					named === undefined
+						? "no path named"
+						: perform(`made ${named} writable by this account`, () => chmodSync(named, 0o600));
+				assert.equal(
+					captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value,
+					true,
+					`the signal names a recovery that is dead where it is emitted. signal: ${JSON.stringify(warnings[0])}; recovery clause: ${JSON.stringify(clause)}; performing it: ${performed}`,
+				);
+			} finally {
+				perform("restored the fixture modes", () => {
+					chmodSync(stateRoot, 0o700);
+					chmodSync(sinkPath, 0o600);
+				});
+				rmSync(stateRoot, { recursive: true, force: true });
+			}
+		},
+	);
 
 	it("routes the delayed-write shapes away from the sink-path recovery (§3.11)", () => {
 		// ENOSPC, EDQUOT, EROFS and EIO reach the selector from the close as
@@ -987,66 +1019,70 @@ describe("audit primitive: the record write is all-or-raise (§3.12)", () => {
 		}
 	}
 
-	it("never returns having written only part of the record", {
-		skip: process.platform === "win32" ? "POSIX FIFO" : false,
-	}, () => {
-		// The property is "cannot return without writing everything". Through
-		// appendAuditRecord it is unstageable — only a regular file survives
-		// the sink verdict, `O_NONBLOCK` has no effect on regular-file
-		// write(2), and no test host fills a filesystem mid-write (§3.12) — so
-		// it is measured at the seam the append calls, on a non-blocking
-		// PIPE descriptor, where a short write is one call away. One `write(2)` in
-		// place of the fd form returns the short count as a success; the fd
-		// form raises instead, and that raise is the whole difference.
-		//
-		// Nothing here can park: both ends are opened O_NONBLOCK, the reader
-		// end first because a write-only open on a FIFO with no reader fails
-		// ENXIO, and no arm ever waits on the pipe.
-		const dir = mkdtempSync(join(tmpdir(), "gitjig-audit-writeall-"));
-		const fifo = join(dir, "sink.fifo");
-		execFileSync("mkfifo", [fifo]);
-		const reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK);
-		const writer = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
-		try {
-			// One byte past Linux's default `pipe-max-size`, the largest buffer a
-			// host is ordinarily configured with, so the write cannot complete in
-			// one call and a short write is reachable.
+	it(
+		"never returns having written only part of the record",
+		{
+			skip: process.platform === "win32" ? "POSIX FIFO" : false,
+		},
+		() => {
+			// The property is "cannot return without writing everything". Through
+			// appendAuditRecord it is unstageable — only a regular file survives
+			// the sink verdict, `O_NONBLOCK` has no effect on regular-file
+			// write(2), and no test host fills a filesystem mid-write (§3.12) — so
+			// it is measured at the seam the append calls, on a non-blocking
+			// PIPE descriptor, where a short write is one call away. One `write(2)` in
+			// place of the fd form returns the short count as a success; the fd
+			// form raises instead, and that raise is the whole difference.
 			//
-			// Reach: on a host whose pipe buffer is 1 MiB or larger the payload
-			// goes in whole, no short write occurs, and the arm measures nothing —
-			// both assertions are implications: the second holds vacuously,
-			// its antecedent being false, while the first holds by its
-			// consequent. Neither discriminates, so the `writeSync` mutant
-			// survives and the arm passes without having measured anything;
-			// raising the payload would only move the same limit to a larger
-			// number.
-			const line = `${"x".repeat(1024 * 1024)}\n`;
-			const size = Buffer.byteLength(line);
-			let returned = false;
+			// Nothing here can park: both ends are opened O_NONBLOCK, the reader
+			// end first because a write-only open on a FIFO with no reader fails
+			// ENXIO, and no arm ever waits on the pipe.
+			const dir = mkdtempSync(join(tmpdir(), "gitjig-audit-writeall-"));
+			const fifo = join(dir, "sink.fifo");
+			execFileSync("mkfifo", [fifo]);
+			const reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK);
+			const writer = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
 			try {
-				writeRecordLine(writer, line);
-				returned = true;
-			} catch {
-				// The raise is the reported failure; what landed is measured below.
+				// One byte past Linux's default `pipe-max-size`, the largest buffer a
+				// host is ordinarily configured with, so the write cannot complete in
+				// one call and a short write is reachable.
+				//
+				// Reach: on a host whose pipe buffer is 1 MiB or larger the payload
+				// goes in whole, no short write occurs, and the arm measures nothing —
+				// both assertions are implications: the second holds vacuously,
+				// its antecedent being false, while the first holds by its
+				// consequent. Neither discriminates, so the `writeSync` mutant
+				// survives and the arm passes without having measured anything;
+				// raising the payload would only move the same limit to a larger
+				// number.
+				const line = `${"x".repeat(1024 * 1024)}\n`;
+				const size = Buffer.byteLength(line);
+				let returned = false;
+				try {
+					writeRecordLine(writer, line);
+					returned = true;
+				} catch {
+					// The raise is the reported failure; what landed is measured below.
+				}
+				const landed = drainedBytes(reader);
+				assert.ok(
+					!returned || landed === size,
+					`the write returned normally with ${landed} of ${size} bytes at the destination: the caller is told the record was written when only a prefix of it was, and the append folds that partial line into a trail it reports as clean`,
+				);
+				// The residual the module enumerates: a failed write is not a
+				// no-op — a prefix is at rest at the destination — so what the
+				// raise removes is the false success, never the torn record.
+				assert.ok(
+					returned || (landed > 0 && landed < size),
+					`the raise left ${landed} of ${size} bytes at the destination, so the torn-record residual the module enumerates does not describe what happens here`,
+				);
+			} finally {
+				closeSync(writer);
+				closeSync(reader);
+				rmSync(dir, { recursive: true, force: true });
 			}
-			const landed = drainedBytes(reader);
-			assert.ok(
-				!returned || landed === size,
-				`the write returned normally with ${landed} of ${size} bytes at the destination: the caller is told the record was written when only a prefix of it was, and the append folds that partial line into a trail it reports as clean`,
-			);
-			// The residual the module enumerates: a failed write is not a
-			// no-op — a prefix is at rest at the destination — so what the
-			// raise removes is the false success, never the torn record.
-			assert.ok(
-				returned || (landed > 0 && landed < size),
-				`the raise left ${landed} of ${size} bytes at the destination, so the torn-record residual the module enumerates does not describe what happens here`,
-			);
-		} finally {
-			closeSync(writer);
-			closeSync(reader);
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
+		},
+	);
 });
 
 describe("state-root resolution matrix (§5.5, §4.6)", () => {
@@ -1111,48 +1147,52 @@ describe("state-root resolution matrix (§5.5, §4.6)", () => {
 		}
 	});
 
-	it("refuses a seam target this account cannot measure instead of falling back (§3.9)", {
-		// POSIX permission bits, and an account the mode actually binds: for a
-		// superuser the ancestor refuses nothing, the target measures as the
-		// directory it is, and the arm would report a refusal that never
-		// occurred.
-		skip:
-			process.platform === "win32"
-				? "POSIX permission bits"
-				: process.getuid?.() === 0
-					? "the directory mode refuses nothing for this account"
-					: false,
-	}, () => {
-		// The `seam-target` posture row names REFUSED alongside missing and
-		// not-a-directory, and refused is the one shape whose target IS a
-		// directory: only the probe is denied. Left unstaged the row asserts a
-		// behaviour nothing measures, so a resolution that treated an
-		// unmeasurable target as absent-and-fall-back — or that let the raw
-		// EACCES escape factory scope without this module's recovery — would
-		// keep the row green. The refusal is staged where §3.12 allows it to
-		// be: an unsearchable ancestor, the same device the audit side uses.
-		const base = mkdtempSync(join(tmpdir(), "gitjig-seam-refused-"));
-		const blocked = join(base, "blocked");
-		mkdirSync(blocked);
-		const target = join(blocked, "state");
-		mkdirSync(target);
-		try {
-			chmodSync(blocked, 0o000);
-			assert.throws(
-				() => statSync(target),
-				"the arm measures nothing unless the unsearchable ancestor refuses the probe on the seam target",
-			);
-			process.env[SEAM] = target;
-			assert.throws(
-				() => resolveStateRoot(),
-				/is set but unusable/,
-				"a seam target this account cannot measure must refuse with the seam's own message, not fall back to the operational state root and not escape as a raw filesystem error",
-			);
-		} finally {
-			chmodSync(blocked, 0o700);
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
+	it(
+		"refuses a seam target this account cannot measure instead of falling back (§3.9)",
+		{
+			// POSIX permission bits, and an account the mode actually binds: for a
+			// superuser the ancestor refuses nothing, the target measures as the
+			// directory it is, and the arm would report a refusal that never
+			// occurred.
+			skip:
+				process.platform === "win32"
+					? "POSIX permission bits"
+					: process.getuid?.() === 0
+						? "the directory mode refuses nothing for this account"
+						: false,
+		},
+		() => {
+			// The `seam-target` posture row names REFUSED alongside missing and
+			// not-a-directory, and refused is the one shape whose target IS a
+			// directory: only the probe is denied. Left unstaged the row asserts a
+			// behaviour nothing measures, so a resolution that treated an
+			// unmeasurable target as absent-and-fall-back — or that let the raw
+			// EACCES escape factory scope without this module's recovery — would
+			// keep the row green. The refusal is staged where §3.12 allows it to
+			// be: an unsearchable ancestor, the same device the audit side uses.
+			const base = mkdtempSync(join(tmpdir(), "gitjig-seam-refused-"));
+			const blocked = join(base, "blocked");
+			mkdirSync(blocked);
+			const target = join(blocked, "state");
+			mkdirSync(target);
+			try {
+				chmodSync(blocked, 0o000);
+				assert.throws(
+					() => statSync(target),
+					"the arm measures nothing unless the unsearchable ancestor refuses the probe on the seam target",
+				);
+				process.env[SEAM] = target;
+				assert.throws(
+					() => resolveStateRoot(),
+					/is set but unusable/,
+					"a seam target this account cannot measure must refuse with the seam's own message, not fall back to the operational state root and not escape as a raw filesystem error",
+				);
+			} finally {
+				chmodSync(blocked, 0o700);
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
 
 	it("creates nothing under the operational root on a refusal", () => {
 		const operational = join(REPO_ROOT, ".gitjig", "state");
@@ -1369,9 +1409,7 @@ describe("locate: probes answer rather than throw (§3.9 repo-root-discovery)", 
 		mkdirSync(join(blocked, ".pi"));
 		chmodSync(blocked, 0o000);
 		try {
-			assert.doesNotThrow(() =>
-				captureWarnings(() => locateRepoRootFrom(join(installDir, "locate.ts"))),
-			);
+			assert.doesNotThrow(() => captureWarnings(() => locateRepoRootFrom(join(installDir, "locate.ts"))));
 		} finally {
 			chmodSync(blocked, 0o755);
 			rmSync(root, { recursive: true, force: true });
@@ -1381,41 +1419,44 @@ describe("locate: probes answer rather than throw (§3.9 repo-root-discovery)", 
 
 describe("fail-posture inventory (§3.9)", () => {
 	it("declares exactly the shipped enforcement-layer rows, keyed on failure shape", () => {
-		assert.deepEqual(POSTURES.map((row) => `${row.dependency} → ${row.posture}`).sort(), [
-			"audit-append → open",
-			"branch-guard-derivation → open",
-			"branch-guard-derivation-fallback → closed",
-			"branch-guard-destination → closed",
-			"branch-guard-helper → open",
-			"branch-guard-helper → open",
-			"branch-guard-helper → open",
-			"commit-format-helper → open",
-			"commit-format-helper → open",
-			"commit-format-helper → open",
-			"commit-format-measurement → closed",
-			"commit-format-subject → open",
-			"egress-publish-executor → closed",
-			"egress-publish-measurement → closed",
-			"egress-publish-outcome → closed",
-			"egress-publish-patterns → closed",
-			"local-tier-derivation → open",
-			"local-tier-derivation → open",
-			"local-tier-derivation → open",
-			"local-tier-derivation → open",
-			"local-tier-derivation → open",
-			"local-tier-exclusion → closed",
-			"repo-root-discovery → open",
-			"seam-target → closed",
-			"secret-scan-helper → open",
-			"secret-scan-helper → open",
-			"secret-scan-helper → open",
-			"secret-scan-allowlist → open",
-			"secret-scan-diff-base → open",
-			"secret-scan-enumeration → open",
-			"secret-scan-measurement → closed",
-			"secret-scan-patterns → open",
-			"secret-scan-toplevel → open",
-		].sort());
+		assert.deepEqual(
+			POSTURES.map((row) => `${row.dependency} → ${row.posture}`).sort(),
+			[
+				"audit-append → open",
+				"branch-guard-derivation → open",
+				"branch-guard-derivation-fallback → closed",
+				"branch-guard-destination → closed",
+				"branch-guard-helper → open",
+				"branch-guard-helper → open",
+				"branch-guard-helper → open",
+				"commit-format-helper → open",
+				"commit-format-helper → open",
+				"commit-format-helper → open",
+				"commit-format-measurement → closed",
+				"commit-format-subject → open",
+				"egress-publish-executor → closed",
+				"egress-publish-measurement → closed",
+				"egress-publish-outcome → closed",
+				"egress-publish-patterns → closed",
+				"local-tier-derivation → open",
+				"local-tier-derivation → open",
+				"local-tier-derivation → open",
+				"local-tier-derivation → open",
+				"local-tier-derivation → open",
+				"local-tier-exclusion → closed",
+				"repo-root-discovery → open",
+				"seam-target → closed",
+				"secret-scan-helper → open",
+				"secret-scan-helper → open",
+				"secret-scan-helper → open",
+				"secret-scan-allowlist → open",
+				"secret-scan-diff-base → open",
+				"secret-scan-enumeration → open",
+				"secret-scan-measurement → closed",
+				"secret-scan-patterns → open",
+				"secret-scan-toplevel → open",
+			].sort(),
+		);
 		// One component may carry several rows — one posture per failure
 		// shape (§3.9) — but two rows never share a failure shape.
 		const shapes = POSTURES.map((row) => row.failureShape);
@@ -1436,20 +1477,20 @@ describe("fail-posture inventory (§3.9)", () => {
 		const source = readFileSync(join(REPO_ROOT, ".githooks", "_lib.sh"), "utf8").split("\n");
 		const start = source.findIndex((line) => line.startsWith("set -"));
 		assert.ok(start >= 0, "the _lib.sh prelude no longer has a recognizable start");
-		return source
-			.slice(start)
-			.filter((line) => !/^\s*#/.test(line))
-			.filter((line) => /\bexit 0\b/.test(line))
-			// The record writer's own subshell leaves a RECORD, not the hook:
-			// its `exit 0` lines are the ones naming the sink or its `_ga_`
-			// locals, and none of them decides whether a check runs.
-			.filter((line) => !/_ga_|GITJIG_AUDIT_SINK/.test(line));
+		return (
+			source
+				.slice(start)
+				.filter((line) => !/^\s*#/.test(line))
+				.filter((line) => /\bexit 0\b/.test(line))
+				// The record writer's own subshell leaves a RECORD, not the hook:
+				// its `exit 0` lines are the ones naming the sink or its `_ga_`
+				// locals, and none of them decides whether a check runs.
+				.filter((line) => !/_ga_|GITJIG_AUDIT_SINK/.test(line))
+		);
 	}
 
 	it("carries a local-tier-derivation row for every failure shape the prelude fails open on", () => {
-		const shapes = POSTURES.filter((row) => row.dependency === "local-tier-derivation").map(
-			(row) => row.failureShape,
-		);
+		const shapes = POSTURES.filter((row) => row.dependency === "local-tier-derivation").map((row) => row.failureShape);
 		// One regex per distinct shape in the prelude's census: an unresolvable
 		// repository top, an adapter position whose repository is not the one
 		// the operation runs against (the prelude's test is an EQUALITY over
@@ -1516,17 +1557,11 @@ describe("fail-posture inventory (§3.9)", () => {
 		// subcommand or a future git may do, and only the spelling can be
 		// pinned. Both files the push surface sources are covered: the prelude
 		// and the branch-guard helper it delegates to.
-		for (const relative of [
-			join(".githooks", "_lib.sh"),
-			join(".githooks", "helpers", "branch_guard.sh"),
-		]) {
+		for (const relative of [join(".githooks", "_lib.sh"), join(".githooks", "helpers", "branch_guard.sh")]) {
 			const children = readFileSync(join(REPO_ROOT, relative), "utf8")
 				.split("\n")
 				.filter((line) => !/^\s*#/.test(line) && /\bgit\s+[a-z-]/.test(line));
-			assert.ok(
-				children.length > 0,
-				`${relative} runs no git child at all — the arm below would hold vacuously`,
-			);
+			assert.ok(children.length > 0, `${relative} runs no git child at all — the arm below would hold vacuously`);
 			for (const line of children) {
 				assert.match(
 					line,
@@ -1635,6 +1670,7 @@ describe("degradation surfaces carry no forged line and no control byte (§3.9, 
 		);
 		assert.doesNotMatch(
 			text,
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: this arm asserts that NO control byte reaches the operator surface, so the class it names is the property under test. Suppressed at the site rather than disabled in the configuration, so an accidental one elsewhere is still reported.
 			/[\x00-\x08\x0a-\x1f\x7f-\x9f\u061c]/,
 			`a control byte from a path component reached the operator surface unescaped: ${JSON.stringify(text)}`,
 		);
@@ -1645,40 +1681,48 @@ describe("degradation surfaces carry no forged line and no control byte (§3.9, 
 		);
 	}
 
-	it("a line break in a state-root component cannot forge a line into the degraded-append warning (AC1)", {
-		skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
-	}, () => {
-		// The ENOENT arm carries the path twice — the open's own message as
-		// the cause, and the recovery clause — and both halves must refuse
-		// the forged line. Nothing is created at the hostile path: absent is
-		// the very state that selects this arm.
-		const base = mkdtempSync(join(tmpdir(), "gitjig-forge-lf-"));
-		try {
-			const { warnings } = captureWarnings(() => appendAuditRecord(join(base, FORGED, "state"), INPUT));
-			assert.equal(warnings.length, 1, `expected one degradation warning, got ${JSON.stringify(warnings)}`);
-			assert.match(warnings[0], /audit append failed/);
-			assertNoForgedLine(warnings[0]);
-		} finally {
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
+	it(
+		"a line break in a state-root component cannot forge a line into the degraded-append warning (AC1)",
+		{
+			skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
+		},
+		() => {
+			// The ENOENT arm carries the path twice — the open's own message as
+			// the cause, and the recovery clause — and both halves must refuse
+			// the forged line. Nothing is created at the hostile path: absent is
+			// the very state that selects this arm.
+			const base = mkdtempSync(join(tmpdir(), "gitjig-forge-lf-"));
+			try {
+				const { warnings } = captureWarnings(() => appendAuditRecord(join(base, FORGED, "state"), INPUT));
+				assert.equal(warnings.length, 1, `expected one degradation warning, got ${JSON.stringify(warnings)}`);
+				assert.match(warnings[0], /audit append failed/);
+				assertNoForgedLine(warnings[0]);
+			} finally {
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
 
-	it("control bytes in a state-root component cannot reach the degraded-append surface (AC2)", {
-		skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
-	}, () => {
-		// Same surface, the ANSI shape: measured on PR #42's head as the byte
-		// sequence [27,...] on the warning — enough to erase the disarmed-gate
-		// line on any terminal that renders it.
-		const base = mkdtempSync(join(tmpdir(), "gitjig-forge-ansi-"));
-		try {
-			const { warnings } = captureWarnings(() => appendAuditRecord(join(base, ANSI, "state"), INPUT));
-			assert.equal(warnings.length, 1, `expected one degradation warning, got ${JSON.stringify(warnings)}`);
-			assert.match(warnings[0], /audit append failed/);
-			assertNoForgedLine(warnings[0]);
-		} finally {
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
+	it(
+		"control bytes in a state-root component cannot reach the degraded-append surface (AC2)",
+		{
+			skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
+		},
+		() => {
+			// Same surface, the ANSI shape: measured on PR #42's head as the byte
+			// sequence [27,...] on the warning — enough to erase the disarmed-gate
+			// line on any terminal that renders it.
+			const base = mkdtempSync(join(tmpdir(), "gitjig-forge-ansi-"));
+			try {
+				const { warnings } = captureWarnings(() => appendAuditRecord(join(base, ANSI, "state"), INPUT));
+				assert.equal(warnings.length, 1, `expected one degradation warning, got ${JSON.stringify(warnings)}`);
+				assert.match(warnings[0], /audit append failed/);
+				assertNoForgedLine(warnings[0]);
+			} finally {
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
 
 	it("every recovery arm escapes the path it names, under both shapes (§3.11)", () => {
 		// Called at the export, the same device the delayed-write arms use:
@@ -1694,85 +1738,97 @@ describe("degradation surfaces carry no forged line and no control byte (§3.9, 
 		}
 	});
 
-	it("the destination-refuses-create arm escapes the directory it names (§3.11)", {
-		skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
-	}, () => {
-		// The EACCES arm fires only when the state root measures as a
-		// directory, so this is the one recovery arm whose hostile fixture
-		// must really exist on disk.
-		const base = mkdtempSync(join(tmpdir(), "gitjig-forge-eacces-"));
-		try {
-			for (const shape of SHAPES) {
-				const stateRoot = join(base, shape);
-				mkdirSync(stateRoot);
-				const clause = recoveryFor({ code: "EACCES" }, stateRoot, join(stateRoot, AUDIT_FILE_NAME));
-				assert.match(clause, /chmod u\+wx/, "the arm measures nothing unless the EACCES clause was selected");
-				assertNoForgedLine(clause);
-			}
-		} finally {
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
-
-	it("the sink-verdict refusal escapes the sink path in both cause and recovery (§4.6, §5.5)", {
-		skip: process.platform === "win32" ? "POSIX device nodes and permission bits" : false,
-	}, () => {
-		// Direct call at the export with a hostile sink-path STRING — the
-		// verdict never probes the path, so no hostile directory entry is
-		// needed. Both recovery branches are exercised: the remove branch off
-		// real /dev/null Stats (type, mode and owner all fail) and the
-		// chmod-600 branch off a real loose-mode file this account owns
-		// (mode is all that fails).
-		const base = mkdtempSync(join(tmpdir(), "gitjig-forge-verdict-"));
-		try {
-			const statsOf = (path: string): Stats => {
-				const fd = openSync(path, constants.O_RDONLY);
-				try {
-					return fstatSync(fd);
-				} finally {
-					closeSync(fd);
-				}
-			};
-			const loosePath = join(base, "loose");
-			writeFileSync(loosePath, "");
-			chmodSync(loosePath, 0o644);
-			for (const shape of SHAPES) {
-				const sinkPath = join(base, shape, AUDIT_FILE_NAME);
-				for (const stats of [statsOf("/dev/null"), statsOf(loosePath)]) {
-					const refusal = sinkRefusal(stats, sinkPath);
-					assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
-					assertNoForgedLine(refusal.cause);
-					assertNoForgedLine(refusal.recovery);
-				}
-			}
-		} finally {
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
-
-	it("the subproject-.pi rejection warning escapes the directory it rejects (§4.7)", {
-		skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
-	}, () => {
-		// This warning names a directory its own creator controls — the
-		// actor the bound defends against (issue #47) — so the fixture
-		// stages a hostile-named install root with a planted .pi below it.
-		for (const shape of SHAPES) {
-			const base = mkdtempSync(join(tmpdir(), "gitjig-forge-locate-"));
+	it(
+		"the destination-refuses-create arm escapes the directory it names (§3.11)",
+		{
+			skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
+		},
+		() => {
+			// The EACCES arm fires only when the state root measures as a
+			// directory, so this is the one recovery arm whose hostile fixture
+			// must really exist on disk.
+			const base = mkdtempSync(join(tmpdir(), "gitjig-forge-eacces-"));
 			try {
-				const installDir = join(base, shape, ".pi", "extensions", "gitjig");
-				mkdirSync(installDir, { recursive: true });
-				const moduleFile = join(installDir, "locate.ts");
-				writeFileSync(moduleFile, "// stand-in for the installed module\n");
-				mkdirSync(join(installDir, ".pi"));
-				const { warnings } = captureWarnings(() => locateRepoRootFrom(moduleFile));
-				assert.equal(warnings.length, 1, `expected one rejection warning, got ${JSON.stringify(warnings)}`);
-				assert.match(warnings[0], /it sits below the install root/);
-				assertNoForgedLine(warnings[0]);
+				for (const shape of SHAPES) {
+					const stateRoot = join(base, shape);
+					mkdirSync(stateRoot);
+					const clause = recoveryFor({ code: "EACCES" }, stateRoot, join(stateRoot, AUDIT_FILE_NAME));
+					assert.match(clause, /chmod u\+wx/, "the arm measures nothing unless the EACCES clause was selected");
+					assertNoForgedLine(clause);
+				}
 			} finally {
 				rmSync(base, { recursive: true, force: true });
 			}
-		}
-	});
+		},
+	);
+
+	it(
+		"the sink-verdict refusal escapes the sink path in both cause and recovery (§4.6, §5.5)",
+		{
+			skip: process.platform === "win32" ? "POSIX device nodes and permission bits" : false,
+		},
+		() => {
+			// Direct call at the export with a hostile sink-path STRING — the
+			// verdict never probes the path, so no hostile directory entry is
+			// needed. Both recovery branches are exercised: the remove branch off
+			// real /dev/null Stats (type, mode and owner all fail) and the
+			// chmod-600 branch off a real loose-mode file this account owns
+			// (mode is all that fails).
+			const base = mkdtempSync(join(tmpdir(), "gitjig-forge-verdict-"));
+			try {
+				const statsOf = (path: string): Stats => {
+					const fd = openSync(path, constants.O_RDONLY);
+					try {
+						return fstatSync(fd);
+					} finally {
+						closeSync(fd);
+					}
+				};
+				const loosePath = join(base, "loose");
+				writeFileSync(loosePath, "");
+				chmodSync(loosePath, 0o644);
+				for (const shape of SHAPES) {
+					const sinkPath = join(base, shape, AUDIT_FILE_NAME);
+					for (const stats of [statsOf("/dev/null"), statsOf(loosePath)]) {
+						const refusal = sinkRefusal(stats, sinkPath);
+						assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
+						assertNoForgedLine(refusal.cause);
+						assertNoForgedLine(refusal.recovery);
+					}
+				}
+			} finally {
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it(
+		"the subproject-.pi rejection warning escapes the directory it rejects (§4.7)",
+		{
+			skip: process.platform === "win32" ? "POSIX hostile bytes in path components" : false,
+		},
+		() => {
+			// This warning names a directory its own creator controls — the
+			// actor the bound defends against (issue #47) — so the fixture
+			// stages a hostile-named install root with a planted .pi below it.
+			for (const shape of SHAPES) {
+				const base = mkdtempSync(join(tmpdir(), "gitjig-forge-locate-"));
+				try {
+					const installDir = join(base, shape, ".pi", "extensions", "gitjig");
+					mkdirSync(installDir, { recursive: true });
+					const moduleFile = join(installDir, "locate.ts");
+					writeFileSync(moduleFile, "// stand-in for the installed module\n");
+					mkdirSync(join(installDir, ".pi"));
+					const { warnings } = captureWarnings(() => locateRepoRootFrom(moduleFile));
+					assert.equal(warnings.length, 1, `expected one rejection warning, got ${JSON.stringify(warnings)}`);
+					assert.match(warnings[0], /it sits below the install root/);
+					assertNoForgedLine(warnings[0]);
+				} finally {
+					rmSync(base, { recursive: true, force: true });
+				}
+			}
+		},
+	);
 
 	it("the discovery-failed warning escapes the module path it names (§3.9)", () => {
 		// Nothing on this fixture path exists: every probe on the walk
@@ -1884,40 +1940,45 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 		}
 	}
 
-	it("the mode arm's chmod clause repairs its literal object without executing a substitution-shaped component", {
-		skip: process.platform === "win32" ? "POSIX shell paste" : false,
-	}, () => {
-		const base = mkdtempSync(join(tmpdir(), "gitjig-paste-chmod-"));
-		try {
-			// The literal hostile path really exists — the fs calls take the
-			// name verbatim — with the loose mode that selects the chmod arm:
-			// a regular file, one name, this account, group/other bits set.
-			const sinkPath = join(base, SUBSTITUTION, AUDIT_FILE_NAME);
-			mkdirSync(dirname(sinkPath));
-			writeFileSync(sinkPath, "");
-			chmodSync(sinkPath, 0o644);
-			const refusal = sinkRefusal(statsOf(sinkPath), sinkPath);
-			assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
-			const command = /`([^`]+)`/.exec(refusal.recovery)?.[1];
-			assert.ok(
-				command !== undefined && command.startsWith("chmod 600 "),
-				`the arm measures nothing unless the backtick-quoted chmod command was selected: ${refusal.recovery}`,
-			);
-			assertOperandInside(command.slice("chmod 600 ".length), base);
-			const outcome = paste(command, base);
-			assert.ok(
-				!existsSync(join(base, MARKER)),
-				`pasting the clause executed the command substitution inside the path — the marker file appeared (${outcome}). The clause delimits the path for a shell paste, so the path must arrive substitution-dead`,
-			);
-			assert.equal(
-				statSync(sinkPath).mode & 0o777,
-				0o600,
-				`the pasted chmod did not land on the literal sink path (${outcome}) — a clause whose repair misses its own object names a dead act`,
-			);
-		} finally {
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
+	it(
+		"the mode arm's chmod clause repairs its literal object without executing a substitution-shaped component",
+		{
+			skip: process.platform === "win32" ? "POSIX shell paste" : false,
+		},
+		() => {
+			const base = mkdtempSync(join(tmpdir(), "gitjig-paste-chmod-"));
+			try {
+				// The literal hostile path really exists — the fs calls take the
+				// name verbatim — with the loose mode that selects the chmod arm:
+				// a regular file, one name, this account, group/other bits set.
+				const sinkPath = join(base, SUBSTITUTION, AUDIT_FILE_NAME);
+				mkdirSync(dirname(sinkPath));
+				writeFileSync(sinkPath, "");
+				chmodSync(sinkPath, 0o644);
+				const refusal = sinkRefusal(statsOf(sinkPath), sinkPath);
+				assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
+				const command = /`([^`]+)`/.exec(refusal.recovery)?.[1];
+				assert.ok(
+					// biome-ignore lint/complexity/useOptionalChain: the explicit `!== undefined` is load-bearing for the two lines below, which use `command` as a string. An optional chain reads the same here and drops the narrowing — taken once, and the type check reported both of those lines.
+					command !== undefined && command.startsWith("chmod 600 "),
+					`the arm measures nothing unless the backtick-quoted chmod command was selected: ${refusal.recovery}`,
+				);
+				assertOperandInside(command.slice("chmod 600 ".length), base);
+				const outcome = paste(command, base);
+				assert.ok(
+					!existsSync(join(base, MARKER)),
+					`pasting the clause executed the command substitution inside the path — the marker file appeared (${outcome}). The clause delimits the path for a shell paste, so the path must arrive substitution-dead`,
+				);
+				assert.equal(
+					statSync(sinkPath).mode & 0o777,
+					0o600,
+					`the pasted chmod did not land on the literal sink path (${outcome}) — a clause whose repair misses its own object names a dead act`,
+				);
+			} finally {
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
 
 	/** Runs `command` under bash in the fixture and returns its stdout. */
 	function pasteCapture(command: string, fixture: string): string {
@@ -2044,11 +2105,7 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 							`marker appeared. A clause that hands its operand to a named act must arrive ` +
 							`substitution-dead (issue #65): ${clause}`,
 					);
-					assert.equal(
-						printed,
-						operand.value,
-						`${label}/${code}: the operand did not paste back as itself: ${clause}`,
-					);
+					assert.equal(printed, operand.value, `${label}/${code}: the operand did not paste back as itself: ${clause}`);
 				}
 			}
 		} finally {
@@ -2056,66 +2113,78 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 		}
 	}
 
-	it("every acting recoveryFor clause pastes substitution-dead onto its literal object", {
-		skip: process.platform === "win32" ? "POSIX shell paste" : false,
-	}, () => {
-		assertActingClausesPasteDead(SUBSTITUTION, "acting");
-	});
+	it(
+		"every acting recoveryFor clause pastes substitution-dead onto its literal object",
+		{
+			skip: process.platform === "win32" ? "POSIX shell paste" : false,
+		},
+		() => {
+			assertActingClausesPasteDead(SUBSTITUTION, "acting");
+		},
+	);
 
-	it("the single-quote fold holds a substitution that rides inside a quote-carrying component", {
-		skip: process.platform === "win32" ? "POSIX shell paste" : false,
-	}, () => {
-		// The fold's own killing case. Every hostile shape staged above carries
-		// no single quote, so an identity fold — the shell branch returning its
-		// input unfolded — ships green against all of them; measured, the arm
-		// above stays green under exactly that mutant while this one reds.
-		//
-		// This component closes the delimiter itself. Under an identity fold
-		// the rendering becomes `'<prefix>'$(…)''`, which a shell reads as a
-		// quoted prefix followed by a BARE substitution — measured separately,
-		// pasting that whole operand runs the substitution and creates the
-		// marker, so live paste injection is genuinely reopened. What THIS arm
-		// reds on is one step earlier: the rendering is malformed, so reading
-		// its first delimited production yields a truncated operand that no
-		// longer denotes the path — a clause whose repair misses its own
-		// object. Either way the mutant dies here and nowhere else.
-		assertActingClausesPasteDead(QUOTE_SUBSTITUTION, "quote-fold");
-	});
+	it(
+		"the single-quote fold holds a substitution that rides inside a quote-carrying component",
+		{
+			skip: process.platform === "win32" ? "POSIX shell paste" : false,
+		},
+		() => {
+			// The fold's own killing case. Every hostile shape staged above carries
+			// no single quote, so an identity fold — the shell branch returning its
+			// input unfolded — ships green against all of them; measured, the arm
+			// above stays green under exactly that mutant while this one reds.
+			//
+			// This component closes the delimiter itself. Under an identity fold
+			// the rendering becomes `'<prefix>'$(…)''`, which a shell reads as a
+			// quoted prefix followed by a BARE substitution — measured separately,
+			// pasting that whole operand runs the substitution and creates the
+			// marker, so live paste injection is genuinely reopened. What THIS arm
+			// reds on is one step earlier: the rendering is malformed, so reading
+			// its first delimited production yields a truncated operand that no
+			// longer denotes the path — a clause whose repair misses its own
+			// object. Either way the mutant dies here and nowhere else.
+			assertActingClausesPasteDead(QUOTE_SUBSTITUTION, "quote-fold");
+		},
+	);
 
-	it("the general arm's remove clause deletes its literal object without executing a substitution-shaped component", {
-		skip: process.platform === "win32" ? "POSIX shell paste" : false,
-	}, () => {
-		// This clause carries no backtick-quoted command — "remove" is prose
-		// — so the pasteable unit under test is the delimited path operand,
-		// in argument position after the rm the prose tells the operator to
-		// run. That operand is exactly where the substitution rides.
-		const base = mkdtempSync(join(tmpdir(), "gitjig-paste-remove-"));
-		try {
-			const sinkPath = join(base, SUBSTITUTION, AUDIT_FILE_NAME);
-			mkdirSync(dirname(sinkPath));
-			writeFileSync(sinkPath, "");
-			// /dev/null Stats fail type, mode and owner at once, selecting
-			// the general remove clause — the same real-kernel-object device
-			// the sink-verdict arms use.
-			const refusal = sinkRefusal(statsOf("/dev/null"), sinkPath);
-			assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
-			const operand = /^remove (.+?), then re-run/.exec(refusal.recovery)?.[1];
-			assert.ok(
-				operand !== undefined,
-				`the arm measures nothing unless the remove clause was selected: ${refusal.recovery}`,
-			);
-			assertOperandInside(operand, base);
-			const outcome = paste(`rm -- ${operand}`, base);
-			assert.ok(
-				!existsSync(join(base, MARKER)),
-				`pasting the clause's path operand executed the command substitution inside it — the marker file appeared (${outcome}). The clause delimits the path for a shell paste, so the operand must arrive substitution-dead`,
-			);
-			assert.ok(
-				!existsSync(sinkPath),
-				`the pasted remove did not land on the literal sink path (${outcome}) — a clause whose repair misses its own object names a dead act`,
-			);
-		} finally {
-			rmSync(base, { recursive: true, force: true });
-		}
-	});
+	it(
+		"the general arm's remove clause deletes its literal object without executing a substitution-shaped component",
+		{
+			skip: process.platform === "win32" ? "POSIX shell paste" : false,
+		},
+		() => {
+			// This clause carries no backtick-quoted command — "remove" is prose
+			// — so the pasteable unit under test is the delimited path operand,
+			// in argument position after the rm the prose tells the operator to
+			// run. That operand is exactly where the substitution rides.
+			const base = mkdtempSync(join(tmpdir(), "gitjig-paste-remove-"));
+			try {
+				const sinkPath = join(base, SUBSTITUTION, AUDIT_FILE_NAME);
+				mkdirSync(dirname(sinkPath));
+				writeFileSync(sinkPath, "");
+				// /dev/null Stats fail type, mode and owner at once, selecting
+				// the general remove clause — the same real-kernel-object device
+				// the sink-verdict arms use.
+				const refusal = sinkRefusal(statsOf("/dev/null"), sinkPath);
+				assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
+				const operand = /^remove (.+?), then re-run/.exec(refusal.recovery)?.[1];
+				assert.ok(
+					operand !== undefined,
+					`the arm measures nothing unless the remove clause was selected: ${refusal.recovery}`,
+				);
+				assertOperandInside(operand, base);
+				const outcome = paste(`rm -- ${operand}`, base);
+				assert.ok(
+					!existsSync(join(base, MARKER)),
+					`pasting the clause's path operand executed the command substitution inside it — the marker file appeared (${outcome}). The clause delimits the path for a shell paste, so the operand must arrive substitution-dead`,
+				);
+				assert.ok(
+					!existsSync(sinkPath),
+					`the pasted remove did not land on the literal sink path (${outcome}) — a clause whose repair misses its own object names a dead act`,
+				);
+			} finally {
+				rmSync(base, { recursive: true, force: true });
+			}
+		},
+	);
 });

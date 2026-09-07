@@ -44,7 +44,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
-import { neutralizeBody } from "./neutralize.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
@@ -53,7 +52,8 @@ import {
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
-import { mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
+import { neutralizeBody } from "./neutralize.ts";
+import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
 
 /** The tool name §3.3's egress row records, verbatim. */
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
@@ -116,7 +116,7 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// would refuse a send over text that was never going anywhere.
 			const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
 
-			let merged;
+			let merged: MergedScan;
 			try {
 				// Every byte this call publishes is scanned — a create kind's
 				// title lands on the same public surface and a secret in it leaks
@@ -181,9 +181,7 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// the body rides stdin, so neither can be neutralized by the other's
 			// treatment.
 			const sendDestination =
-				publishedTitle !== undefined
-					? { ...destination, title: neutralizeBody(publishedTitle) }
-					: destination;
+				publishedTitle !== undefined ? { ...destination, title: neutralizeBody(publishedTitle) } : destination;
 			// The success shape is this kind's own: only the comment verbs print
 			// a comment url, so validating every kind against that shape made a
 			// successful create or body edit report outcome-unverified — which

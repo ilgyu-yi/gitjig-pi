@@ -66,8 +66,8 @@ import {
 	buildGithookFixture,
 	type CommitAttempt,
 	commitWithMessage,
-	removeDelegatedHelpers,
 	type GithookFixture,
+	removeDelegatedHelpers,
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -252,7 +252,11 @@ describe("unmeasurable input refuses, distinctly (issue #55, SPEC Â§3.9)", { ski
 	});
 
 	it("the environment-shape refusal lands an audit record (distinct from an allow's silence)", () => {
-		assert.match(environmentRefusal.auditDelta, /"category":"commit-format","action":"block"/, environmentRefusal.auditDelta);
+		assert.match(
+			environmentRefusal.auditDelta,
+			/"category":"commit-format","action":"block"/,
+			environmentRefusal.auditDelta,
+		);
 	});
 
 	it("a broken environment with pure-ASCII input still passes â€” degradation refuses only what it would mis-measure", () => {
@@ -478,14 +482,19 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// cleanup is `whitespace`, which keeps the `#` line, so the adapter
 		// approved `feat(#58): â€¦` while `#zqcomment â€¦` became the subject.
 		const attempt = commitWithMessage(fixture, "#zqcomment leading the message\nfeat(#58): a conforming subject\n");
-		assertRefusedThroughAdapter(attempt, `comment-led: the adapter approved the first non-comment line while the comment above it landed; subject: ${JSON.stringify(landedSubject())}`);
+		assertRefusedThroughAdapter(
+			attempt,
+			`comment-led: the adapter approved the first non-comment line while the comment above it landed; subject: ${JSON.stringify(landedSubject())}`,
+		);
 	});
 
 	it("the same shape under an explicit --cleanup=verbatim is refused too", () => {
 		const attempt = commitWithMessage(fixture, "#zqverbatim leading\nfeat(#58): a conforming subject\n", {
 			gitArgs: ["--cleanup=verbatim"],
 		});
-		assertRefusedThroughAdapter(attempt, `verbatim: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(
+			attempt,
+			`verbatim: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -493,7 +502,9 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// Here the landed subject is the comment ALONE â€” the sharpest form,
 		// since the approved line is not even part of what git records.
 		const attempt = commitWithMessage(fixture, "#zqspaced comment\n\nfeat(#58): a conforming subject\n");
-		assertRefusedThroughAdapter(attempt, `spaced: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(
+			attempt,
+			`spaced: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -502,7 +513,9 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// they conform to nothing. Under `strip` git aborts on the empty
 		// message anyway, so refusing is right in both worlds.
 		const attempt = commitWithMessage(fixture, "#zqonly a comment\n#zqand another\n");
-		assertRefusedThroughAdapter(attempt, `all-comment: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(
+			attempt,
+			`all-comment: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -524,7 +537,9 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		const attempt = commitWithMessage(fixture, "#zqhash is not a comment here\nfeat(#58): a conforming subject\n", {
 			env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.commentChar", GIT_CONFIG_VALUE_0: ";" },
 		});
-		assertRefusedThroughAdapter(attempt, "commentChar: the commit SUCCEEDED. With `;` as git's comment marker a `#`-led line is ordinary " +
+		assertRefusedThroughAdapter(
+			attempt,
+			"commentChar: the commit SUCCEEDED. With `;` as git's comment marker a `#`-led line is ordinary " +
 				`text that lands as the subject, and the adapter skipped it as a comment; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
@@ -535,7 +550,9 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		// the other direction of the marker axis, and a marker-aware read
 		// must not start skipping it.
 		const attempt = commitWithMessage(fixture, ";zqsemicolon is ordinary here\nfeat(#58): a conforming subject\n");
-		assertRefusedThroughAdapter(attempt, `semicolon: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
+		assertRefusedThroughAdapter(
+			attempt,
+			`semicolon: the commit SUCCEEDED; landed subject: ${JSON.stringify(landedSubject())}`,
 		);
 	});
 
@@ -565,7 +582,9 @@ describe("the adapter approves no subject it cannot vouch for (issue #58, SPEC Â
 		const attempt = commitWithMessage(fixture, `feat(#58): ${"x".repeat(72)}   \n`, {
 			gitArgs: ["--cleanup=verbatim"],
 		});
-		assertRefusedThroughAdapter(attempt, "verbatim length: under verbatim the untrimmed line is what lands, and its description is over the " +
+		assertRefusedThroughAdapter(
+			attempt,
+			"verbatim length: under verbatim the untrimmed line is what lands, and its description is over the " +
 				`limit, but the commit was approved: ${attempt.stderr}`,
 		);
 	});
@@ -786,14 +805,8 @@ describe("commit-msg with no measurable message path (issue #113)", { skip: IS_W
 			});
 			assert.equal(run.status, 0, "the arm must still fail open: an adapter with no subject never blocks");
 			const audit = existsSync(fixture.auditFile) ? readFileSync(fixture.auditFile, "utf8") : "";
-			const records = audit
-				.split("\n")
-				.filter((l) => l.includes("not evaluated") && l.includes("commit-format"));
-			assert.equal(
-				records.length,
-				1,
-				`expected exactly one not-evaluated record; audit: ${JSON.stringify(audit)}`,
-			);
+			const records = audit.split("\n").filter((l) => l.includes("not evaluated") && l.includes("commit-format"));
+			assert.equal(records.length, 1, `expected exactly one not-evaluated record; audit: ${JSON.stringify(audit)}`);
 		} finally {
 			removeGithookFixture(fixture);
 		}

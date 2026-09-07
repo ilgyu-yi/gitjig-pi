@@ -74,9 +74,9 @@ import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
 import { MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import {
 	cleanupDispatchContext,
+	type DispatchContext,
 	PROVISION_REFUSAL_CAUSES,
 	provisionDispatchContext,
-	type DispatchContext,
 } from "./provision.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
@@ -110,7 +110,8 @@ const REFUSE_EXPECTED_REF = "dispatch refused: the expected ref is present but n
  * reported under the bound-exceeded class, so admitting it would put a false
  * outcome class in the trail (§5.5).
  */
-const REFUSE_TIMEOUT_MS = "dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
+const REFUSE_TIMEOUT_MS =
+	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
 
 export type DispatchOutcome =
 	| { disposition: "admitted"; ok: boolean; summary: string; compare?: "confirmed" | "invalid" }
@@ -309,7 +310,13 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 			"is not confined. The only thing that crosses back is a bounded structured return, and a compare " +
 			"outcome surfaces as validity alone.",
 		parameters: DISPATCH_PARAMS as Parameters<ExtensionAPI["registerTool"]>[0]["parameters"],
-		async execute(_toolCallId, params) {
+		// `params` is annotated rather than inherited: the `parameters` cast
+		// above erases what the schema would otherwise infer, leaving it
+		// `unknown`, which cannot be indexed. The annotation states only what
+		// every line below already assumes — an object whose fields are
+		// unknown — and widens no field: each is read into an `unknown` local
+		// and admitted by its own predicate, exactly as before.
+		async execute(_toolCallId, params: Record<string, unknown>) {
 			const delegateArgv: unknown = params.delegateArgv;
 			if (
 				!Array.isArray(delegateArgv) ||
@@ -341,10 +348,7 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 			const timeoutMs: unknown = params.timeoutMs;
 			if (
 				timeoutMs !== undefined &&
-				(typeof timeoutMs !== "number" ||
-					!Number.isFinite(timeoutMs) ||
-					timeoutMs <= 0 ||
-					timeoutMs > MAX_RUN_BOUND_MS)
+				(typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_RUN_BOUND_MS)
 			) {
 				// The whole inadmissible set in one predicate, so no member falls
 				// through to a bound the caller did not name. Absent stays legal and

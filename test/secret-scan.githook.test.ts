@@ -56,8 +56,8 @@ import {
 	type CommitAttempt,
 	commitWithMessage,
 	fixtureGit,
-	removeDelegatedHelpers,
 	type GithookFixture,
+	removeDelegatedHelpers,
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -181,12 +181,7 @@ function causeShape(cause: string): string {
  * The §3.8 leak domain: a guarded value's bytes reach NONE of stderr,
  * stdout, or the audit delta — asserted at byte fidelity on all three.
  */
-function assertBytesReachNoSurface(
-	attempt: CommitAttempt,
-	guarded: string | Buffer,
-	what: string,
-	arm: string,
-): void {
+function assertBytesReachNoSurface(attempt: CommitAttempt, guarded: string | Buffer, what: string, arm: string): void {
 	const bytes = typeof guarded === "string" ? Buffer.from(guarded, "utf8") : guarded;
 	assert.equal(
 		attempt.stderrBytes.includes(bytes),
@@ -499,31 +494,35 @@ describe("the .shellsecretignore allow-list is domain exclusion (issue #66)", { 
 	});
 });
 
-describe("an unreadable allow-list never widens the excused set (issue #66, SPEC §3.9)", { skip: IS_WINDOWS || IS_ROOT }, () => {
-	it("present-but-unreadable .shellsecretignore: one degradation warn, and the scan refuses the listed path's secret", () => {
-		// The excusing artifact's unreadability must not excuse (§3.3's
-		// allow-list rule): the scan proceeds with NO exclusions and refuses
-		// the secret sitting in the path the unreadable list names.
-		const fixture = buildScanFixture();
-		try {
-			const ignorePath = join(fixture.root, ".shellsecretignore");
-			writeFileSync(ignorePath, "zqallowed.txt\n");
-			chmodSync(ignorePath, 0o000);
-			stageFile(fixture, "zqallowed.txt", AWS_SECRET + "\n");
-			const attempt = commitWithMessage(fixture, "chore: exercise the unreadable allow-list arm\n");
-			assertSecretRefused(attempt, "aws-access-key-id", "zqallowed.txt", AWS_SECRET, "unreadable allow-list");
-			const warns = attempt.auditDelta.split("\n").filter((line) => /"action":"warn"/.test(line));
-			assert.equal(
-				warns.length,
-				1,
-				`unreadable allow-list: expected exactly one degradation warn record beside the refusal; ` +
-					`delta: ${JSON.stringify(attempt.auditDelta)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+describe(
+	"an unreadable allow-list never widens the excused set (issue #66, SPEC §3.9)",
+	{ skip: IS_WINDOWS || IS_ROOT },
+	() => {
+		it("present-but-unreadable .shellsecretignore: one degradation warn, and the scan refuses the listed path's secret", () => {
+			// The excusing artifact's unreadability must not excuse (§3.3's
+			// allow-list rule): the scan proceeds with NO exclusions and refuses
+			// the secret sitting in the path the unreadable list names.
+			const fixture = buildScanFixture();
+			try {
+				const ignorePath = join(fixture.root, ".shellsecretignore");
+				writeFileSync(ignorePath, "zqallowed.txt\n");
+				chmodSync(ignorePath, 0o000);
+				stageFile(fixture, "zqallowed.txt", AWS_SECRET + "\n");
+				const attempt = commitWithMessage(fixture, "chore: exercise the unreadable allow-list arm\n");
+				assertSecretRefused(attempt, "aws-access-key-id", "zqallowed.txt", AWS_SECRET, "unreadable allow-list");
+				const warns = attempt.auditDelta.split("\n").filter((line) => /"action":"warn"/.test(line));
+				assert.equal(
+					warns.length,
+					1,
+					`unreadable allow-list: expected exactly one degradation warn record beside the refusal; ` +
+						`delta: ${JSON.stringify(attempt.auditDelta)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // Unmeasurable input refuses on its own cause (§3.9's measurement rule).
@@ -600,169 +599,169 @@ describe("an unmeasurable staged input refuses on its own cause (issue #66, SPEC
 // Machinery degradation fails open with exactly one warn (§3.9).
 // ---------------------------------------------------------------------------
 
-describe("scan machinery degradation disarms open with one warn (issue #66, SPEC §3.9, §3.10)", { skip: IS_WINDOWS }, () => {
-	it("pattern file absent: the commit passes — staged secret included — with exactly one not-enforced warn", () => {
-		// Substrate: the fixture copy of the pattern file is DELETED
-		// post-build (a no-op while nothing ships) — the arm's contract is
-		// the file's absence, so it never authors one.
-		const fixture = buildScanFixture();
-		try {
-			rmSync(fixturePatternsPath(fixture), { force: true });
-			stageFile(fixture, "zqleakopen.txt", AWS_SECRET + "\n");
-			const attempt = commitWithMessage(fixture, "chore: exercise the absent-pattern-file arm\n");
-			assertDisarmedOpen(attempt, "pattern file absent");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+describe(
+	"scan machinery degradation disarms open with one warn (issue #66, SPEC §3.9, §3.10)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("pattern file absent: the commit passes — staged secret included — with exactly one not-enforced warn", () => {
+			// Substrate: the fixture copy of the pattern file is DELETED
+			// post-build (a no-op while nothing ships) — the arm's contract is
+			// the file's absence, so it never authors one.
+			const fixture = buildScanFixture();
+			try {
+				rmSync(fixturePatternsPath(fixture), { force: true });
+				stageFile(fixture, "zqleakopen.txt", AWS_SECRET + "\n");
+				const attempt = commitWithMessage(fixture, "chore: exercise the absent-pattern-file arm\n");
+				assertDisarmedOpen(attempt, "pattern file absent");
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("an up-front-invalid pattern line disarms the WHOLE run (valid rows beside it check nothing)", () => {
-		// Substrate: a fixture-local authored file, unconditionally — the
-		// arm's contract IS the degenerate file (an unbalanced group fails
-		// ERE compile up front). A valid private-key row and a matching
-		// staged secret sit beside it so a per-line-skip implementation
-		// (refusing here) reddens: an up-front compile failure is machinery
-		// for the RUN (§3.10's valid-AND-non-empty rule), never a partial scan.
-		const fixture = buildScanFixture();
-		try {
-			writeFileSync(
-				fixturePatternsPath(fixture),
-				["zq-invalid\t(a|", PLANNED_PATTERNS[0].join("\t"), ""].join("\n"),
-			);
-			stageFile(fixture, "zqleakbadset.txt", PRIVATE_KEY_SECRET + "\n");
-			const attempt = commitWithMessage(fixture, "chore: exercise the invalid-pattern-line arm\n");
-			assertDisarmedOpen(attempt, "invalid pattern line");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+		it("an up-front-invalid pattern line disarms the WHOLE run (valid rows beside it check nothing)", () => {
+			// Substrate: a fixture-local authored file, unconditionally — the
+			// arm's contract IS the degenerate file (an unbalanced group fails
+			// ERE compile up front). A valid private-key row and a matching
+			// staged secret sit beside it so a per-line-skip implementation
+			// (refusing here) reddens: an up-front compile failure is machinery
+			// for the RUN (§3.10's valid-AND-non-empty rule), never a partial scan.
+			const fixture = buildScanFixture();
+			try {
+				writeFileSync(fixturePatternsPath(fixture), ["zq-invalid\t(a|", PLANNED_PATTERNS[0].join("\t"), ""].join("\n"));
+				stageFile(fixture, "zqleakbadset.txt", PRIVATE_KEY_SECRET + "\n");
+				const attempt = commitWithMessage(fixture, "chore: exercise the invalid-pattern-line arm\n");
+				assertDisarmedOpen(attempt, "invalid pattern line");
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("a pattern set empty after stripping comments and blanks disarms open with the same warn", () => {
-		// Substrate: fixture-local authored file of comments and blank lines
-		// only — a scan that checks nothing is indistinguishable from
-		// all-clear (§3.10), so it must say so rather than allow silently.
-		const fixture = buildScanFixture();
-		try {
-			writeFileSync(fixturePatternsPath(fixture), "# no rows yet\n\n# still none\n");
-			stageFile(fixture, "zqemptyset.txt", "ordinary text\n");
-			const attempt = commitWithMessage(fixture, "chore: exercise the empty-set arm\n");
-			assertDisarmedOpen(attempt, "empty pattern set");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+		it("a pattern set empty after stripping comments and blanks disarms open with the same warn", () => {
+			// Substrate: fixture-local authored file of comments and blank lines
+			// only — a scan that checks nothing is indistinguishable from
+			// all-clear (§3.10), so it must say so rather than allow silently.
+			const fixture = buildScanFixture();
+			try {
+				writeFileSync(fixturePatternsPath(fixture), "# no rows yet\n\n# still none\n");
+				stageFile(fixture, "zqemptyset.txt", "ordinary text\n");
+				const attempt = commitWithMessage(fixture, "chore: exercise the empty-set arm\n");
+				assertDisarmedOpen(attempt, "empty pattern set");
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // Hostile-path record integrity (§3.3 pattern-match outcome: sanitized path).
 // ---------------------------------------------------------------------------
 
-describe("a hostile-named path cannot split or forge a record (issue #66, SPEC §3.3, §3.8)", { skip: IS_WINDOWS }, () => {
-	it("a secret in a newline/ANSI-named file lands exactly one unsplit record, raw path bytes nowhere", () => {
-		const fixture = buildScanFixture();
-		try {
-			stageFile(fixture, HOSTILE_NAME, AWS_SECRET + "\n");
-			const attempt = commitWithMessage(fixture, "chore: exercise the hostile-path arm\n");
-			assert.match(
-				attempt.auditDelta,
-				/\bblock\b.*\bsecret\b/,
-				`hostile path: no block record was appended — the commit fell through the fail-open chain ` +
-					`(red until scan_staged_secrets lands); delta: ${JSON.stringify(attempt.auditDelta)}`,
-			);
-			assert.notEqual(attempt.status, 0, "hostile path: the guarded commit SUCCEEDED");
-			// Raw bytes reach no surface: the embedded newline (asserted as
-			// the head marker + LF sequence — a sanitized rendering keeps the
-			// marker but never a real LF after it) and the raw ESC byte.
-			assertBytesReachNoSurface(attempt, HOSTILE_HEAD + cp(0x0a), "the raw newline path bytes", "hostile path");
-			assertBytesReachNoSurface(attempt, Buffer.from([0x1b]), "the raw ESC byte", "hostile path");
-			assertBytesReachNoSurface(attempt, AWS_SECRET, "the planted secret's bytes", "hostile path");
-			// Every appended line is a well-formed record — a split record's
-			// continuation line would start with path bytes, not a verb.
-			const deltaLines = attempt.auditDelta.split("\n").filter((line) => line !== "");
-			for (const line of deltaLines) {
+describe(
+	"a hostile-named path cannot split or forge a record (issue #66, SPEC §3.3, §3.8)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a secret in a newline/ANSI-named file lands exactly one unsplit record, raw path bytes nowhere", () => {
+			const fixture = buildScanFixture();
+			try {
+				stageFile(fixture, HOSTILE_NAME, AWS_SECRET + "\n");
+				const attempt = commitWithMessage(fixture, "chore: exercise the hostile-path arm\n");
 				assert.match(
-					line,
-					/^\{"timestamp":"[^"]*","category":"[^"]*","action":"(block|warn)","text":"/,
-					`hostile path: a record line does not open a well-formed record — a path byte split or forged ` +
-						`a record: ${JSON.stringify(line)}`,
+					attempt.auditDelta,
+					/\bblock\b.*\bsecret\b/,
+					`hostile path: no block record was appended — the commit fell through the fail-open chain ` +
+						`(red until scan_staged_secrets lands); delta: ${JSON.stringify(attempt.auditDelta)}`,
 				);
+				assert.notEqual(attempt.status, 0, "hostile path: the guarded commit SUCCEEDED");
+				// Raw bytes reach no surface: the embedded newline (asserted as
+				// the head marker + LF sequence — a sanitized rendering keeps the
+				// marker but never a real LF after it) and the raw ESC byte.
+				assertBytesReachNoSurface(attempt, HOSTILE_HEAD + cp(0x0a), "the raw newline path bytes", "hostile path");
+				assertBytesReachNoSurface(attempt, Buffer.from([0x1b]), "the raw ESC byte", "hostile path");
+				assertBytesReachNoSurface(attempt, AWS_SECRET, "the planted secret's bytes", "hostile path");
+				// Every appended line is a well-formed record — a split record's
+				// continuation line would start with path bytes, not a verb.
+				const deltaLines = attempt.auditDelta.split("\n").filter((line) => line !== "");
+				for (const line of deltaLines) {
+					assert.match(
+						line,
+						/^\{"timestamp":"[^"]*","category":"[^"]*","action":"(block|warn)","text":"/,
+						`hostile path: a record line does not open a well-formed record — a path byte split or forged ` +
+							`a record: ${JSON.stringify(line)}`,
+					);
+				}
+				// Exactly ONE record names the (sanitized) path, and it holds
+				// both halves on one line.
+				const naming = deltaLines.filter((line) => line.includes(HOSTILE_HEAD));
+				assert.equal(
+					naming.length,
+					1,
+					`hostile path: expected exactly one record naming the sanitized path; ` +
+						`delta: ${JSON.stringify(attempt.auditDelta)}`,
+				);
+				assert.equal(
+					naming[0].includes(HOSTILE_TAIL),
+					true,
+					"hostile path: the record splits the path — its head and tail must sit on ONE record line",
+				);
+				assert.match(naming[0], /\bblock\b/, "hostile path: the path-naming record is the refusal's block record");
+				// The path's own quote renders as %27: a raw quote inside the
+				// quoted path field would terminate it early and forge the field
+				// for any quote-delimited reader.
+				assert.equal(
+					naming[0].includes(HOSTILE_HEAD + "%27"),
+					true,
+					`hostile path: the path's single quote is not percent-encoded on the record — a raw quote ` +
+						`forges the path field's boundary: ${JSON.stringify(naming[0])}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
 			}
-			// Exactly ONE record names the (sanitized) path, and it holds
-			// both halves on one line.
-			const naming = deltaLines.filter((line) => line.includes(HOSTILE_HEAD));
-			assert.equal(
-				naming.length,
-				1,
-				`hostile path: expected exactly one record naming the sanitized path; ` +
-					`delta: ${JSON.stringify(attempt.auditDelta)}`,
-			);
-			assert.equal(
-				naming[0].includes(HOSTILE_TAIL),
-				true,
-				"hostile path: the record splits the path — its head and tail must sit on ONE record line",
-			);
-			assert.match(naming[0], /\bblock\b/, "hostile path: the path-naming record is the refusal's block record");
-			// The path's own quote renders as %27: a raw quote inside the
-			// quoted path field would terminate it early and forge the field
-			// for any quote-delimited reader.
-			assert.equal(
-				naming[0].includes(HOSTILE_HEAD + "%27"),
-				true,
-				`hostile path: the path's single quote is not percent-encoded on the record — a raw quote ` +
-					`forges the path field's boundary: ${JSON.stringify(naming[0])}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+		});
 
-	it("a path byte ≥ 0x80 renders as its own uppercase two-hex-digit escape on the record (%XX fidelity)", () => {
-		// The sanitizer's stated rendering is one uppercase %XX per byte; a
-		// sign-extending renderer keeps the encoding injective but falsifies
-		// that contract for every non-ASCII path, so the pin is the positive
-		// rendering: the U+00E9 byte pair as exactly `%C3%A9` on both refusal
-		// surfaces, with the raw pair on neither.
-		const fixture = buildScanFixture();
-		try {
-			stageFile(fixture, HIGH_BYTE_NAME, AWS_SECRET + "\n");
-			const attempt = commitWithMessage(fixture, "chore: exercise the high-byte-path arm\n");
-			assert.match(
-				attempt.auditDelta,
-				/\bblock\b.*\bsecret\b/,
-				`high-byte path: no block record was appended — the commit fell through the chain; ` +
-					`delta: ${JSON.stringify(attempt.auditDelta)}`,
-			);
-			assert.notEqual(attempt.status, 0, "high-byte path: the guarded commit SUCCEEDED");
-			assertBytesReachNoSurface(
-				attempt,
-				Buffer.from([0xc3, 0xa9]),
-				"the raw ≥0x80 path byte pair",
-				"high-byte path",
-			);
-			assertBytesReachNoSurface(attempt, AWS_SECRET, "the planted secret's bytes", "high-byte path");
-			const naming = attempt.auditDelta.split("\n").filter((line) => line.includes(HIGH_BYTE_HEAD));
-			assert.equal(
-				naming.length,
-				1,
-				`high-byte path: expected exactly one record naming the sanitized path; ` +
-					`delta: ${JSON.stringify(attempt.auditDelta)}`,
-			);
-			assert.equal(
-				naming[0].includes("%C3%A9"),
-				true,
-				`high-byte path: the record's sanitized path does not render the ≥0x80 byte pair as %C3%A9 ` +
-					`(one uppercase %XX per byte — the stated §3.3 rendering): ${JSON.stringify(naming[0])}`,
-			);
-			assert.equal(
-				attempt.stderr.includes("%C3%A9"),
-				true,
-				"high-byte path: the refusal's stderr does not carry the %C3%A9 rendering of the offending path",
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+		it("a path byte ≥ 0x80 renders as its own uppercase two-hex-digit escape on the record (%XX fidelity)", () => {
+			// The sanitizer's stated rendering is one uppercase %XX per byte; a
+			// sign-extending renderer keeps the encoding injective but falsifies
+			// that contract for every non-ASCII path, so the pin is the positive
+			// rendering: the U+00E9 byte pair as exactly `%C3%A9` on both refusal
+			// surfaces, with the raw pair on neither.
+			const fixture = buildScanFixture();
+			try {
+				stageFile(fixture, HIGH_BYTE_NAME, AWS_SECRET + "\n");
+				const attempt = commitWithMessage(fixture, "chore: exercise the high-byte-path arm\n");
+				assert.match(
+					attempt.auditDelta,
+					/\bblock\b.*\bsecret\b/,
+					`high-byte path: no block record was appended — the commit fell through the chain; ` +
+						`delta: ${JSON.stringify(attempt.auditDelta)}`,
+				);
+				assert.notEqual(attempt.status, 0, "high-byte path: the guarded commit SUCCEEDED");
+				assertBytesReachNoSurface(attempt, Buffer.from([0xc3, 0xa9]), "the raw ≥0x80 path byte pair", "high-byte path");
+				assertBytesReachNoSurface(attempt, AWS_SECRET, "the planted secret's bytes", "high-byte path");
+				const naming = attempt.auditDelta.split("\n").filter((line) => line.includes(HIGH_BYTE_HEAD));
+				assert.equal(
+					naming.length,
+					1,
+					`high-byte path: expected exactly one record naming the sanitized path; ` +
+						`delta: ${JSON.stringify(attempt.auditDelta)}`,
+				);
+				assert.equal(
+					naming[0].includes("%C3%A9"),
+					true,
+					`high-byte path: the record's sanitized path does not render the ≥0x80 byte pair as %C3%A9 ` +
+						`(one uppercase %XX per byte — the stated §3.3 rendering): ${JSON.stringify(naming[0])}`,
+				);
+				assert.equal(
+					attempt.stderr.includes("%C3%A9"),
+					true,
+					"high-byte path: the refusal's stderr does not carry the %C3%A9 rendering of the offending path",
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // The protected-branch commit arm (armed by the same landing).
@@ -901,10 +900,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
 		removeDelegatedHelpers(fixture);
 		try {
-			cpSync(
-				join(repoRoot(), ".githooks", "helpers", "branch_guard.sh"),
-				join(fixture.helpersDir, "branch_guard.sh"),
-			);
+			cpSync(join(repoRoot(), ".githooks", "helpers", "branch_guard.sh"), join(fixture.helpersDir, "branch_guard.sh"));
 			writeFileSync(
 				join(fixture.helpersDir, "secret_scan.sh"),
 				"# stub helper: sources cleanly, defines everything except the delegated function\nunrelated_scan_function() { :; }\n",
@@ -945,10 +941,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 			// Every OTHER helper is the real one: the binding is complete but
 			// for the stubbed branch guard, so the one warn below is the
 			// require guard's own record, not a neighbouring hook's noise.
-			cpSync(
-				join(repoRoot(), ".githooks", "helpers", "secret_scan.sh"),
-				join(fixture.helpersDir, "secret_scan.sh"),
-			);
+			cpSync(join(repoRoot(), ".githooks", "helpers", "secret_scan.sh"), join(fixture.helpersDir, "secret_scan.sh"));
 			cpSync(
 				join(repoRoot(), ".githooks", "helpers", "conventional_commit.sh"),
 				join(fixture.helpersDir, "conventional_commit.sh"),

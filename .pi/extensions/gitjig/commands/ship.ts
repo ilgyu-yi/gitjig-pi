@@ -77,17 +77,18 @@ export function registerShipCommand(pi: ExtensionAPI, repoRoot: string): void {
 			}
 			const verdictHead = facts.get("verdict-head");
 			const verdictPinned =
-				localHead !== undefined && verdictHead !== undefined && verdictHead === localHead
-					? "confirmed"
-					: "unsatisfied";
+				localHead !== undefined && verdictHead !== undefined && verdictHead === localHead ? "confirmed" : "unsatisfied";
 			const acClosure = facts.get("ac") === "closed" ? "asserted" : "unsatisfied";
-			const composition =
-				verdictPinned === "confirmed" && acClosure === "asserted" ? "satisfied" : "unsatisfied";
+			const composition = verdictPinned === "confirmed" && acClosure === "asserted" ? "satisfied" : "unsatisfied";
 			pi.appendEntry("gitjig-ship", { composition, verdictPinned, acClosure });
 			// The durability turn (header): empty fixed content, so nothing
 			// caller-held can ride it; `triggerTurn` makes an assistant message
-			// land, which is what flushes the buffered entries to disk.
-			pi.sendMessage({ customType: "gitjig-spine-turn", content: [] }, { triggerTurn: true });
+			// land, which is what flushes the buffered entries to disk. `display`
+			// is required by the message type and stated rather than left absent:
+			// the turn exists to flush, and a turn with no content has nothing to
+			// show. Every consumer tests it for truth, so `false` and the absent
+			// value this line carried before are the same rendering.
+			pi.sendMessage({ customType: "gitjig-spine-turn", content: [], display: false }, { triggerTurn: true });
 			await ctx.waitForIdle();
 		},
 	});

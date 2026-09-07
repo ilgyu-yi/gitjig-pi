@@ -21,7 +21,6 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeScanOutcomes, type ScanOutcome } from "../.pi/extensions/gitjig/publish/scan.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
@@ -30,6 +29,7 @@ import {
 	type PublishDestination,
 	specForKind,
 } from "../.pi/extensions/gitjig/publish/executor.ts";
+import { mergeScanOutcomes, type ScanOutcome } from "../.pi/extensions/gitjig/publish/scan.ts";
 
 /** A minimal admissible destination for each kind — the population, derived. */
 function sampleFor(kind: string): Record<string, unknown> {
@@ -193,8 +193,10 @@ describe("a refusal names which operand it came from (issue #120, review round 2
 	// merge left the suite green — an arm that re-implements a rule pins
 	// nothing. The rule is exported for exactly this reason.
 	// Typed as ScanOutcome rather than `as const`: `as const` makes the
-	// arrays `readonly`, which the parameter type does not accept, and a
-	// tree with no type-check step ships that silently (issue #121).
+	// arrays `readonly`, which the parameter type does not accept. Seven
+	// instances of that shape once shipped green through node's type
+	// stripping, which erases annotations rather than checking them; the
+	// `type-check` gate is what reports the next one (issue #121).
 	const clean: ScanOutcome = { disposition: "clean" };
 	const ood: ScanOutcome = { disposition: "refuse-out-of-domain" };
 	const bodyHit: ScanOutcome = { disposition: "refuse-match", patternIds: ["github-token"], lines: [4] };

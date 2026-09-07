@@ -139,7 +139,7 @@ const CHILD_SCRIPT = `${JSON.stringify([{ kind: "text", text: CHILD_MARKER }], n
 const DELEGATE_SCRIPT = [
 	"#!/bin/sh",
 	"cp zq-child-script.json script.json",
-	'head=$(git rev-parse HEAD)',
+	"head=$(git rev-parse HEAD)",
 	"out=$(pi -p 'run the delegate script' -a --session-dir zq-child-sessions --provider scripted " +
 		"--model scripted-model < /dev/null 2> zq-child-stderr || printf '%s' PI_CHILD_FAILED)",
 	'case "$out" in',
@@ -287,9 +287,7 @@ function transcriptSansCallArguments(entries: Array<Record<string, unknown>>): s
 	const parts: string[] = [];
 	for (const entry of entries) {
 		const clone = JSON.parse(JSON.stringify(entry)) as Record<string, unknown>;
-		const message = clone.message as
-			| { role?: string; content?: Array<Record<string, unknown>> }
-			| undefined;
+		const message = clone.message as { role?: string; content?: Array<Record<string, unknown>> } | undefined;
 		if (message !== undefined && message.role === "assistant" && Array.isArray(message.content)) {
 			for (const part of message.content) {
 				if (part.type === "toolCall") {

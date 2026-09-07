@@ -64,8 +64,8 @@ import {
 import {
 	AWS_JOINED,
 	BODY_MEASUREMENT_CASES,
-	committedPatternRows,
 	CONFORMANCE_CASES,
+	committedPatternRows,
 } from "./harness/secret-pattern-cases.ts";
 
 const TOOL = "gitjig_publish";
@@ -83,7 +83,10 @@ function redUntilRegistered(arm: string): string {
 
 const awsCase = CONFORMANCE_CASES.find((c) => c.id === "aws-access-key-id");
 const githubCase = CONFORMANCE_CASES.find((c) => c.id === "github-token");
-assert.ok(awsCase !== undefined && githubCase !== undefined, "the case set lost a committed ID this suite builds bodies from");
+assert.ok(
+	awsCase !== undefined && githubCase !== undefined,
+	"the case set lost a committed ID this suite builds bodies from",
+);
 
 const SECRET_BODY = "zqrefusal context line\n" + (awsCase as { match: string }).match + "\nzqrefusal trailing line\n";
 
@@ -489,7 +492,9 @@ describe("AC6: the issue-comment destination becomes the pinned gh argv (issue #
 	it("the shim receives `issue comment 5 --body-file -` and the body on stdin", () => {
 		const argvPath = join(falseBlockRun.sinkDir, "gh-argv");
 		assert.ok(existsSync(argvPath), redUntilRegistered("destination argv capture"));
-		const argv = readFileSync(argvPath, "utf8").split("\n").filter((line) => line !== "");
+		const argv = readFileSync(argvPath, "utf8")
+			.split("\n")
+			.filter((line) => line !== "");
 		assert.deepEqual(
 			argv,
 			["issue", "comment", "5", "--body-file", "-"],
@@ -544,7 +549,12 @@ describe("AC1: a Cf-split secret is refused naming the pattern (issue #83)", () 
 
 	it("neither the split nor the joined spelling reaches any egress surface", () => {
 		assert.ok(egressAuditLines(cfRun).length >= 1, redUntilRegistered("cf-split leak domain"));
-		assertOffEgressSurfaces(cfRun, (cfCase as { body: string }).body.trim(), "the Cf-split span's raw bytes", "cf-split");
+		assertOffEgressSurfaces(
+			cfRun,
+			(cfCase as { body: string }).body.trim(),
+			"the Cf-split span's raw bytes",
+			"cf-split",
+		);
 		assertOffEgressSurfaces(cfRun, AWS_JOINED, "the joined (stripped) spelling", "cf-split");
 	});
 });
