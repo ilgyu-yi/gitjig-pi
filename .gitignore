@@ -4,3 +4,7 @@
 # because the runtime computes that path at the repository root and nowhere
 # else, so the exclusion covers exactly what the shell creates.
 /.gitjig/
+
+# Dev-and-CI dependency tree. Never committed, never part of the substrate an
+# adopting repository receives.
+/node_modules/
