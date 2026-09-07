@@ -989,7 +989,7 @@ describe("T21 — a rename whose previous path was never a fragment (clause 2)",
 		assert.match(
 			stderr,
 			/first line of the PR body/,
-			"the live remedy must say WHERE the closing keyword goes — the platform records it from the body's first line, and a remedy that omits the position is one an author can follow and still be refused",
+			"the live remedy must say WHERE the closing keyword goes — §1.1 fixes the body's first line and the publish instrument admits it there alone, so a remedy that omits the position is one an author can follow and still be refused",
 		);
 	});
 });

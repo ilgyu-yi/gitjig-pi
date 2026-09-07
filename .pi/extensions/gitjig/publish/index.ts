@@ -214,11 +214,17 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// operands and never the text it counted (§3.8's refusal-record
 				// rule); it is present at zero as well, so a caller can tell a
 				// clean send from one this field says nothing about.
+				// WRAPS APPLIED, not distinct references — the number says what this
+				// module can know. Two shapes make the two differ: a span that was
+				// already inert is wrapped again, because telling it from a live one
+				// needs a markdown parser this module must not grow; and one URL
+				// carrying a mention draws two passes. Both are pinned by arms, and
+				// the wording below is what keeps the report true of the number.
 				const neutralized = neutralizedBody.neutralized + (neutralizedTitle?.neutralized ?? 0);
 				const note =
 					neutralized === 0
 						? ""
-						: `; ${neutralized} actionable reference${neutralized === 1 ? "" : "s"} made inert before the send`;
+						: `; ${neutralized} span${neutralized === 1 ? "" : "s"} rewritten to an inert spelling before the send`;
 				// The one surface child bytes may cross: the URL validated whole
 				// against the comment-URL shape (§3.10's output validity), and
 				// escaped on the way out because that shape admits control bytes.

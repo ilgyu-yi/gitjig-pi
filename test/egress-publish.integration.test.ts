@@ -318,6 +318,7 @@ let nulRun: PublishRun;
 let cfRun: PublishRun;
 let linkageRun: PublishRun;
 let linkageCommentRun: PublishRun;
+let linkageTitleRun: PublishRun;
 
 before(async () => {
 	secretRun = await runPublish(SECRET_BODY);
@@ -337,10 +338,27 @@ before(async () => {
 		number: 5,
 	});
 	linkageCommentRun = await runPublish(LINKAGE_BODY, undefined, { kind: "pr-comment", number: 5 });
+	// The title bound, measured rather than asserted. A create kind is the
+	// only shape that publishes a title, and `pr-create` is the create kind
+	// the exemption would reach if the title took the body's route.
+	linkageTitleRun = await runPublish("nothing actionable in this body.\n", `printf '%s\\n' '${SURFACE_SHIM_URL}'`, {
+		kind: "pr-create",
+		title: "Closes #129",
+	});
 });
 
 after(() => {
-	for (const run of [secretRun, neutralRun, hostileRun, falseBlockRun, nulRun, cfRun, linkageRun, linkageCommentRun]) {
+	for (const run of [
+		secretRun,
+		neutralRun,
+		hostileRun,
+		falseBlockRun,
+		nulRun,
+		cfRun,
+		linkageRun,
+		linkageCommentRun,
+		linkageTitleRun,
+	]) {
 		if (run !== undefined) {
 			removeFixture(run.fixture);
 		}
@@ -701,14 +719,50 @@ describe("§1.1's linkage line reaches a pull request description live (issue #1
 		const text = textOf(requireOwnResult(linkageRun, "linkage report"));
 		assert.match(
 			text,
-			/1 actionable reference made inert/,
+			/1 span rewritten to an inert spelling/,
 			`the send reported success without saying a reference had been rewritten. That silence is the second half of #129: the loss was discoverable only by reading the published surface afterwards. Result text was: ${JSON.stringify(text)}`,
 		);
 		const commentText = textOf(requireOwnResult(linkageCommentRun, "comment report"));
 		assert.match(
 			commentText,
-			/2 actionable references made inert/,
+			/2 spans rewritten to an inert spelling/,
 			`the comment run made TWO shapes inert — the linkage line and the mention — and the count must say two. Result text was: ${JSON.stringify(commentText)}`,
+		);
+	});
+});
+
+describe("the linkage exemption never reaches a title (issue #129; SPEC §3.3)", () => {
+	it("the publish tool answers for itself", () => {
+		requireOwnResult(linkageTitleRun, "linkage title");
+	});
+
+	it("a pr-create title spelled exactly like §1.1's line publishes INERT", () => {
+		// The bound is stated in SPEC §3.3 ("never a title"), in
+		// neutralize.ts's header, and at the call site — and was measured
+		// nowhere until this arm. A reviewer's mutant routing the title
+		// through the boundary passed the entire suite.
+		//
+		// The input violates the title bound and NOTHING else: the kind is a
+		// description kind and the spelling is §1.1's exact grammar, so the
+		// only thing that can keep this title inert is the route the title
+		// takes. argv is the surface, because a title rides argv where the
+		// body rides stdin.
+		const argvPath = join(linkageTitleRun.sinkDir, "gh-argv");
+		assert.ok(existsSync(argvPath), redUntilRegistered("title argv capture"));
+		const argv = readFileSync(argvPath, "utf8");
+		assert.match(
+			argv,
+			/`+ Closes #129 `+/,
+			`the title reached gh live. §1.1 fixes a grammar for a pull request DESCRIPTION's first line and for no other field, so a title spelled like one is prose — and a title that takes the body's route would carry the exemption to a field the section says it never reaches. Captured argv: ${JSON.stringify(argv)}`,
+		);
+	});
+
+	it("the title's neutralization is counted in the report", () => {
+		const text = textOf(requireOwnResult(linkageTitleRun, "title report"));
+		assert.match(
+			text,
+			/1 span rewritten to an inert spelling/,
+			`the body carried nothing actionable and the title carried one shape, so the count must be 1 — a report that omitted the title would leave a caller believing their title crossed unchanged. Result text was: ${JSON.stringify(text)}`,
 		);
 	});
 });

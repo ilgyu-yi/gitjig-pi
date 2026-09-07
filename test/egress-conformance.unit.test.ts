@@ -657,22 +657,47 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		}
 	});
 
-	it("BY POSITION — a closing reference below the first line is relayed prose", () => {
+	it("BY POSITION — a line that violates POSITION AND NOTHING ELSE is neutralized", () => {
+		// The input is constructed so position is the ONLY bound it fails: the
+		// kind is a description kind, and the reference is §1.1's exact grammar
+		// on a line of its own. It simply is not line one.
+		//
+		// This arm replaces one that read the same and measured something else.
+		// Its below-the-line input was `and later, Closes #7 in a sentence`,
+		// which fails the GRAMMAR bound too — so grammar killed it and position
+		// was never exercised, and a mutant exempting the first MATCHING line
+		// wherever it sat survived the whole suite. An arm whose input violates
+		// two bounds is killed by the nearer one and measures neither.
 		const at = requireBoundary("position bound");
-		const body = `${LINKAGE}\n\nand later, Closes #7 in a sentence someone relayed\n`;
+		const body = `Some prose that opens the body.\nCloses #7\n`;
 		const out = at(body, "pr-body");
 		assert.ok(
-			out.text.startsWith(`${LINKAGE}\n`),
-			"the first line lost its exemption when the body carried a second reference — the two are decided independently",
+			out.text.startsWith("Some prose that opens the body.\n"),
+			"the opening prose line was rewritten — it carries no actionable shape and must cross untouched",
 		);
 		// The wrap's own shape is the subject: a backtick run, one space, the
 		// matched text, one space, the closing run (§3.3's padding rule).
 		assert.match(
+			out.text,
+			/`+ Closes #7 `+/,
+			"§1.1's exact grammar published LIVE off the first line. Position is a load-bearing bound on its own: §1.1 fixes line one and nothing else, so a reference anywhere below it is prose this instrument relays, however it is spelled",
+		);
+		assert.equal(out.neutralized, 1, "the below-the-line reference should be counted");
+	});
+
+	it("BY POSITION — an exempted first line does not exempt a second reference under it", () => {
+		const at = requireBoundary("position bound");
+		const out = at(`${LINKAGE}\nCloses #7\n`, "pr-body");
+		assert.ok(
+			out.text.startsWith(`${LINKAGE}\n`),
+			"the first line lost its exemption when the body carried a second reference — the two lines are decided independently",
+		);
+		assert.match(
 			out.text.slice(LINKAGE.length),
 			/`+ Closes #7 `+/,
-			"a closing reference BELOW the first line published live. Position is a load-bearing bound: only line one is the field §1.1 fixes a grammar for, and everything under it is prose this instrument relays",
+			"a second §1.1-shaped line published live: the exemption is one line, not every line matching the grammar",
 		);
-		assert.equal(out.neutralized, 1, "exactly the one below-the-line reference should be counted");
+		assert.equal(out.neutralized, 1, "exactly one of the two lines is neutralized");
 	});
 
 	it("BY GRAMMAR — a spelling §1.1 does not fix is neutralized rather than guessed at", () => {
@@ -715,5 +740,31 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		const out = at("ping @someone about GH-4", "pr-comment");
 		assert.equal(typeof out.neutralized, "number", "the report is a count, not a list");
 		assert.equal(out.neutralized, 2, "two shapes were made inert");
+	});
+
+	it("the count is WRAPS APPLIED, and the two shapes where that differs are pinned", () => {
+		// A DECISION, not an accident, and pinned here so it cannot drift into
+		// one. The number is transformations applied, never distinct references,
+		// because the two cases below can only be told apart by machinery this
+		// module deliberately does not have.
+		const at = requireBoundary("count semantics");
+		// (1) Already inert. The neutralizer does not parse markdown — by
+		// design, since a parser is a second reader of the body — so it cannot
+		// see that this span is a code span already, and wraps it again. The
+		// wrap is harmless; the count reports it.
+		assert.equal(
+			at("`Closes #4`", "issue-comment").neutralized,
+			1,
+			"an already-inert span stopped being counted: telling it from a live one needs a markdown parser, which this module does not have and must not grow",
+		);
+		// (2) One reference, two passes. The URL pass wraps the whole link, and
+		// the mention pass then matches the `@` inside that wrap. The module
+		// header already records this double wrap and its inert-erring result;
+		// what this arm fixes is that the COUNT says two.
+		assert.equal(
+			at("see https://github.com/@zqu/r/issues/4", "issue-comment").neutralized,
+			2,
+			"the nested-wrap count moved: one reference draws two passes, and the number is wraps applied",
+		);
 	});
 });
