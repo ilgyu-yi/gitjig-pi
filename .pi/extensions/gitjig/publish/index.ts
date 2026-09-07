@@ -215,11 +215,13 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// rule); it is present at zero as well, so a caller can tell a
 				// clean send from one this field says nothing about.
 				// WRAPS APPLIED, not distinct references — the number says what this
-				// module can know. Two shapes make the two differ: a span that was
+				// module can know. Two grounds make the two differ: a span that was
 				// already inert is wrapped again, because telling it from a live one
-				// needs a markdown parser this module must not grow; and one URL
-				// carrying a mention draws two passes. Both are pinned by arms, and
-				// the wording below is what keeps the report true of the number.
+				// needs a markdown parser this module must not grow; and any narrower
+				// pattern matching inside an already-wrapped span draws its own pass,
+				// so one URL form carrying a mention AND a GH-N draws three. Both are
+				// pinned by arms, and the wording below keeps the report true of the
+				// number rather than of an enumeration of the shapes that produce it.
 				const neutralized = neutralizedBody.neutralized + (neutralizedTitle?.neutralized ?? 0);
 				const note =
 					neutralized === 0
