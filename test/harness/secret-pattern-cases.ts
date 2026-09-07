@@ -202,7 +202,8 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 		divergent: false,
 		tier2: {
 			disposition: "refuse-unmeasurable",
-			ground: "a NUL inside git's sniff window marks the staged path binary — the unmeasurable-input outcome, no pattern ID (§3.3)",
+			ground:
+				"a NUL inside git's sniff window marks the staged path binary — the unmeasurable-input outcome, no pattern ID (§3.3)",
 		},
 		egress: {
 			disposition: "refuse-out-of-domain",
@@ -220,7 +221,8 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 		egress: {
 			disposition: "refuse-match",
 			patternId: "aws-access-key-id",
-			ground: "format characters strip before matching, so the joined span matches (§3.3 step 2 — the over-match closure)",
+			ground:
+				"format characters strip before matching, so the joined span matches (§3.3 step 2 — the over-match closure)",
 		},
 	},
 	{
@@ -233,7 +235,8 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 		},
 		egress: {
 			disposition: "clean",
-			ground: "the byte-domain reading agrees — a multibyte interruption breaks the span for both readers (§3.3 step 3 convergence)",
+			ground:
+				"the byte-domain reading agrees — a multibyte interruption breaks the span for both readers (§3.3 step 3 convergence)",
 		},
 	},
 	{

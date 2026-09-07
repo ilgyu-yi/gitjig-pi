@@ -233,42 +233,46 @@ function plantRetiredBinding(root: string): void {
 	);
 }
 
-describe("a file at the retired binding path cannot reach the hook's verdict (issue #68, SPEC §3.2, §4.2)", { skip: IS_WINDOWS }, () => {
-	it("a file there that satisfies the retired contract and defines its own `exit` leaves the staged-secret refusal standing", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			plantRetiredBinding(fixture.root);
-			stageFile(fixture, "zqinertleak.txt", `${AWS_SECRET}\n`);
-			const attempt = commitWithMessage(fixture, "chore: exercise the retired-binding inertness arm\n");
-			assertSecretRefused(attempt, "zqinertleak.txt", "retired binding");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+describe(
+	"a file at the retired binding path cannot reach the hook's verdict (issue #68, SPEC §3.2, §4.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a file there that satisfies the retired contract and defines its own `exit` leaves the staged-secret refusal standing", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				plantRetiredBinding(fixture.root);
+				stageFile(fixture, "zqinertleak.txt", `${AWS_SECRET}\n`);
+				const attempt = commitWithMessage(fixture, "chore: exercise the retired-binding inertness arm\n");
+				assertSecretRefused(attempt, "zqinertleak.txt", "retired binding");
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("the key such a file would have admitted does not reach HEAD", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			plantRetiredBinding(fixture.root);
-			stageFile(fixture, "zqinerthead.txt", `${AWS_SECRET}\n`);
-			commitWithMessage(fixture, "chore: exercise the retired-binding history arm\n");
-			const tree = spawnSync("git", ["ls-tree", "-r", "--name-only", "HEAD"], {
-				cwd: fixture.root,
-				env: constructedEnv(fixture.root),
-				timeout: 30_000,
-			});
-			const names = (tree.stdout ?? Buffer.alloc(0)).toString("utf8");
-			assert.equal(
-				names.split("\n").includes("zqinerthead.txt"),
-				false,
-				`retired binding: the guarded path is in HEAD — a printed refusal over a landed commit is the ` +
-					`one outcome this tier's face forbids (§3.2); HEAD carries: ${JSON.stringify(names)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+		it("the key such a file would have admitted does not reach HEAD", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				plantRetiredBinding(fixture.root);
+				stageFile(fixture, "zqinerthead.txt", `${AWS_SECRET}\n`);
+				commitWithMessage(fixture, "chore: exercise the retired-binding history arm\n");
+				const tree = spawnSync("git", ["ls-tree", "-r", "--name-only", "HEAD"], {
+					cwd: fixture.root,
+					env: constructedEnv(fixture.root),
+					timeout: 30_000,
+				});
+				const names = (tree.stdout ?? Buffer.alloc(0)).toString("utf8");
+				assert.equal(
+					names.split("\n").includes("zqinerthead.txt"),
+					false,
+					`retired binding: the guarded path is in HEAD — a printed refusal over a landed commit is the ` +
+						`one outcome this tier's face forbids (§3.2); HEAD carries: ${JSON.stringify(names)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // The derivation itself (SPEC §3.2, §4.1, §4.2).
@@ -349,119 +353,127 @@ describe("an activated hooks path is the whole binding (issue #68, SPEC §3.2, �
 // resolution).
 // ---------------------------------------------------------------------------
 
-describe("a linked worktree enforces with no binding step of its own (issue #68, SPEC §5.2)", { skip: IS_WINDOWS }, () => {
-	it("a staged secret inside a linked worktree of an activated clone is refused on that worktree's own record", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			fixtureGit(fixture, ["add", "--", ".githooks"]);
-			fixtureGit(fixture, ["commit", "--no-verify", "-q", "-m", "chore: seed the worktree checkout tree"]);
-			const wtRoot = join(fixture.root, "zqworktree");
-			fixtureGit(fixture, ["worktree", "add", "-q", "-b", "zqwtbranch", wtRoot]);
+describe(
+	"a linked worktree enforces with no binding step of its own (issue #68, SPEC §5.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a staged secret inside a linked worktree of an activated clone is refused on that worktree's own record", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				fixtureGit(fixture, ["add", "--", ".githooks"]);
+				fixtureGit(fixture, ["commit", "--no-verify", "-q", "-m", "chore: seed the worktree checkout tree"]);
+				const wtRoot = join(fixture.root, "zqworktree");
+				fixtureGit(fixture, ["worktree", "add", "-q", "-b", "zqwtbranch", wtRoot]);
 
-			writeFileSync(join(wtRoot, "zqwtleak.txt"), `${AWS_SECRET}\n`);
-			const env = constructedEnv(fixture.root);
-			const add = spawnSync("git", ["add", "--", "zqwtleak.txt"], { cwd: wtRoot, env, timeout: 30_000 });
-			assert.equal(add.status, 0, `linked worktree: staging failed: ${add.stderr?.toString("utf8")}`);
-			const attempt = spawnSync("git", ["commit", "-q", "-m", "chore: exercise the linked-worktree arm"], {
-				cwd: wtRoot,
-				env,
-				timeout: 60_000,
-			});
-			const stderr = (attempt.stderr ?? Buffer.alloc(0)).toString("utf8");
-			assert.notEqual(
-				attempt.status,
-				0,
-				`linked worktree: the staged key passed inside the worktree — a worktree of an activated clone ` +
-					`resolves the same committed adapters and needs no binding step of its own (§5.2); ` +
-					`stderr: ${JSON.stringify(stderr)}`,
-			);
-			assert.equal(
-				stderr.includes(AWS_PATTERN_ID),
-				true,
-				`linked worktree: the refusal does not name pattern '${AWS_PATTERN_ID}': ${JSON.stringify(stderr)}`,
-			);
-			const sink = opSink(wtRoot);
-			assert.equal(
-				existsSync(sink) && readFileSync(sink, "utf8").includes(AWS_PATTERN_ID),
-				true,
-				`linked worktree: no record naming the pattern reached the worktree's own sink at ${sink} — the ` +
-					`record sink derives from the repository top the hook runs against (§4.6)`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+				writeFileSync(join(wtRoot, "zqwtleak.txt"), `${AWS_SECRET}\n`);
+				const env = constructedEnv(fixture.root);
+				const add = spawnSync("git", ["add", "--", "zqwtleak.txt"], { cwd: wtRoot, env, timeout: 30_000 });
+				assert.equal(add.status, 0, `linked worktree: staging failed: ${add.stderr?.toString("utf8")}`);
+				const attempt = spawnSync("git", ["commit", "-q", "-m", "chore: exercise the linked-worktree arm"], {
+					cwd: wtRoot,
+					env,
+					timeout: 60_000,
+				});
+				const stderr = (attempt.stderr ?? Buffer.alloc(0)).toString("utf8");
+				assert.notEqual(
+					attempt.status,
+					0,
+					`linked worktree: the staged key passed inside the worktree — a worktree of an activated clone ` +
+						`resolves the same committed adapters and needs no binding step of its own (§5.2); ` +
+						`stderr: ${JSON.stringify(stderr)}`,
+				);
+				assert.equal(
+					stderr.includes(AWS_PATTERN_ID),
+					true,
+					`linked worktree: the refusal does not name pattern '${AWS_PATTERN_ID}': ${JSON.stringify(stderr)}`,
+				);
+				const sink = opSink(wtRoot);
+				assert.equal(
+					existsSync(sink) && readFileSync(sink, "utf8").includes(AWS_PATTERN_ID),
+					true,
+					`linked worktree: no record naming the pattern reached the worktree's own sink at ${sink} — the ` +
+						`record sink derives from the repository top the hook runs against (§4.6)`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // Degradation of the committed helper set (SPEC §3.2, §5.2, §3.9).
 // ---------------------------------------------------------------------------
 
-describe("an unresolvable helper set folds the tier to allow and says it is not enforced (issue #68 AC7, SPEC §5.2)", { skip: IS_WINDOWS }, () => {
-	it("an absent helper directory folds the commit to allow", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			assertFixtureArmed(fixture, "zqnohelpersctl.txt", "absent helper directory");
-			rmSync(join(fixture.root, ".githooks", "helpers"), { recursive: true, force: true });
-			stageFile(fixture, "zqnohelpersleak.txt", `${AWS_SECRET}\n`);
-			const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper-directory arm\n");
-			assert.equal(
-				attempt.status,
-				0,
-				`absent helper directory: the degraded tier blocked instead of folding open — an enforcement ` +
-					`chain the acting party did not break and cannot repair from inside a block fails open ` +
-					`(§4.5); stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+describe(
+	"an unresolvable helper set folds the tier to allow and says it is not enforced (issue #68 AC7, SPEC §5.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("an absent helper directory folds the commit to allow", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				assertFixtureArmed(fixture, "zqnohelpersctl.txt", "absent helper directory");
+				rmSync(join(fixture.root, ".githooks", "helpers"), { recursive: true, force: true });
+				stageFile(fixture, "zqnohelpersleak.txt", `${AWS_SECRET}\n`);
+				const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper-directory arm\n");
+				assert.equal(
+					attempt.status,
+					0,
+					`absent helper directory: the degraded tier blocked instead of folding open — an enforcement ` +
+						`chain the acting party did not break and cannot repair from inside a block fails open ` +
+						`(§4.5); stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("an absent helper directory says the tier is not enforced", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			assertFixtureArmed(fixture, "zqnohelperssayctl.txt", "absent helper directory signal");
-			rmSync(join(fixture.root, ".githooks", "helpers"), { recursive: true, force: true });
-			stageFile(fixture, "zqnohelperssayleak.txt", `${AWS_SECRET}\n`);
-			const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper-directory signal arm\n");
-			assert.notEqual(
-				notEnforcedLines(attempt).length,
-				0,
-				`absent helper directory: the fold left no "not enforced" line, so a disarmed allow is ` +
-					`indistinguishable from an enforced pass (§3.9's degradation-signal rule); ` +
-					`stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+		it("an absent helper directory says the tier is not enforced", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				assertFixtureArmed(fixture, "zqnohelperssayctl.txt", "absent helper directory signal");
+				rmSync(join(fixture.root, ".githooks", "helpers"), { recursive: true, force: true });
+				stageFile(fixture, "zqnohelperssayleak.txt", `${AWS_SECRET}\n`);
+				const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper-directory signal arm\n");
+				assert.notEqual(
+					notEnforcedLines(attempt).length,
+					0,
+					`absent helper directory: the fold left no "not enforced" line, so a disarmed allow is ` +
+						`indistinguishable from an enforced pass (§3.9's degradation-signal rule); ` +
+						`stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("one absent helper file folds its own arm to allow and leaves exactly one record naming that helper", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			assertFixtureArmed(fixture, "zqonehelperctl.txt", "absent helper file");
-			rmSync(helperPath(fixture.root, "secret_scan.sh"), { force: true });
-			stageFile(fixture, "zqonehelperleak.txt", `${AWS_SECRET}\n`);
-			const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper-file arm\n");
-			assert.equal(
-				attempt.status,
-				0,
-				`absent helper file: the degraded arm blocked instead of folding open (§3.2); ` +
-					`stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-			assert.equal(
-				recordsNaming(attempt, "secret_scan.sh").length,
-				1,
-				`absent helper file: expected exactly one record naming the missing helper — stderr is routinely ` +
-					`discarded in scripted git, so a fold whose only trace is a stderr line leaves the sink ` +
-					`byte-identical to an ordinary allow (§3.9's uniform channel); ` +
-					`delta: ${JSON.stringify(attempt.auditDelta)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+		it("one absent helper file folds its own arm to allow and leaves exactly one record naming that helper", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				assertFixtureArmed(fixture, "zqonehelperctl.txt", "absent helper file");
+				rmSync(helperPath(fixture.root, "secret_scan.sh"), { force: true });
+				stageFile(fixture, "zqonehelperleak.txt", `${AWS_SECRET}\n`);
+				const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper-file arm\n");
+				assert.equal(
+					attempt.status,
+					0,
+					`absent helper file: the degraded arm blocked instead of folding open (§3.2); ` +
+						`stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+				assert.equal(
+					recordsNaming(attempt, "secret_scan.sh").length,
+					1,
+					`absent helper file: expected exactly one record naming the missing helper — stderr is routinely ` +
+						`discarded in scripted git, so a fold whose only trace is a stderr line leaves the sink ` +
+						`byte-identical to an ordinary allow (§3.9's uniform channel); ` +
+						`delta: ${JSON.stringify(attempt.auditDelta)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // A sourced helper that does not complete (issue #68 AC7, SPEC §5.2's
@@ -482,71 +494,75 @@ const INCOMPLETE_SOURCE_SHAPES = [
 	{ label: "returns a non-zero status", suffix: "\nreturn 3\n" },
 ] as const;
 
-describe("a helper that does not finish sourcing folds its arm to allow and names the file (issue #68 AC7, SPEC §5.2)", { skip: IS_WINDOWS }, () => {
-	for (const shape of INCOMPLETE_SOURCE_SHAPES) {
-		it(`a helper that ${shape.label} while being sourced folds the commit to allow`, () => {
-			const fixture = buildDerivedFixture();
-			try {
-				assertFixtureArmed(fixture, `zqsrc-allow-${shape.label.split(" ")[0]}.txt`, `source ${shape.label}`);
-				appendFileSync(helperPath(fixture.root, "secret_scan.sh"), shape.suffix);
-				stageFile(fixture, "zqsrcleak.txt", `${AWS_SECRET}\n`);
-				const attempt = commitWithMessage(fixture, "chore: exercise the incomplete-source fold\n");
-				assert.equal(
-					attempt.status,
-					0,
-					`source ${shape.label}: the commit was refused because a sourced helper did not hand control ` +
-						`back cleanly — a refusal produced by machinery rather than by a check, in the direction ` +
-						`this advice tier never takes (§5.2); stderr: ${JSON.stringify(attempt.stderr)}`,
-				);
-			} finally {
-				removeGithookFixture(fixture);
-			}
-		});
+describe(
+	"a helper that does not finish sourcing folds its arm to allow and names the file (issue #68 AC7, SPEC §5.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		for (const shape of INCOMPLETE_SOURCE_SHAPES) {
+			it(`a helper that ${shape.label} while being sourced folds the commit to allow`, () => {
+				const fixture = buildDerivedFixture();
+				try {
+					assertFixtureArmed(fixture, `zqsrc-allow-${shape.label.split(" ")[0]}.txt`, `source ${shape.label}`);
+					appendFileSync(helperPath(fixture.root, "secret_scan.sh"), shape.suffix);
+					stageFile(fixture, "zqsrcleak.txt", `${AWS_SECRET}\n`);
+					const attempt = commitWithMessage(fixture, "chore: exercise the incomplete-source fold\n");
+					assert.equal(
+						attempt.status,
+						0,
+						`source ${shape.label}: the commit was refused because a sourced helper did not hand control ` +
+							`back cleanly — a refusal produced by machinery rather than by a check, in the direction ` +
+							`this advice tier never takes (§5.2); stderr: ${JSON.stringify(attempt.stderr)}`,
+					);
+				} finally {
+					removeGithookFixture(fixture);
+				}
+			});
 
-		it(`a helper that ${shape.label} while being sourced leaves exactly one record naming that file`, () => {
-			const fixture = buildDerivedFixture();
-			try {
-				assertFixtureArmed(fixture, `zqsrc-rec-${shape.label.split(" ")[0]}.txt`, `source ${shape.label} record`);
-				appendFileSync(helperPath(fixture.root, "secret_scan.sh"), shape.suffix);
-				stageFile(fixture, "zqsrcrecleak.txt", `${AWS_SECRET}\n`);
-				const attempt = commitWithMessage(fixture, "chore: exercise the incomplete-source record\n");
-				assert.equal(
-					recordsNaming(attempt, "secret_scan.sh").length,
-					1,
-					`source ${shape.label}: expected exactly one record naming the helper whose source did not ` +
-						`complete — the observable that separates this disarmed allow from an ordinary one ` +
-						`(§3.9); delta: ${JSON.stringify(attempt.auditDelta)}`,
-				);
-			} finally {
-				removeGithookFixture(fixture);
-			}
-		});
-	}
-
-	it("the fold leaves one stderr line per adapter that reaches it: a commit folding both adapters says so twice", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			assertFixtureArmed(fixture, "zqtwoadapterctl.txt", "two-adapter fold");
-			// pre-commit reaches branch_guard.sh; commit-msg reaches
-			// conventional_commit.sh. One `git commit` runs both adapters, and a
-			// shared degraded helper set never collapses two surfaces' signals
-			// into one (§5.2's per-adapter count).
-			appendFileSync(helperPath(fixture.root, "branch_guard.sh"), "\nexit 9\n");
-			appendFileSync(helperPath(fixture.root, "conventional_commit.sh"), "\nexit 9\n");
-			stageFile(fixture, "zqtwoadapterleak.txt", `${AWS_SECRET}\n`);
-			const attempt = commitWithMessage(fixture, "chore: exercise the two-adapter fold\n");
-			assert.equal(
-				notEnforcedLines(attempt).length,
-				2,
-				`two-adapter fold: expected one "not enforced" line per adapter that reached the fold ` +
-					`(pre-commit and commit-msg), so a fold on one surface is never read as a fold on both ` +
-					`(§5.2); stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
+			it(`a helper that ${shape.label} while being sourced leaves exactly one record naming that file`, () => {
+				const fixture = buildDerivedFixture();
+				try {
+					assertFixtureArmed(fixture, `zqsrc-rec-${shape.label.split(" ")[0]}.txt`, `source ${shape.label} record`);
+					appendFileSync(helperPath(fixture.root, "secret_scan.sh"), shape.suffix);
+					stageFile(fixture, "zqsrcrecleak.txt", `${AWS_SECRET}\n`);
+					const attempt = commitWithMessage(fixture, "chore: exercise the incomplete-source record\n");
+					assert.equal(
+						recordsNaming(attempt, "secret_scan.sh").length,
+						1,
+						`source ${shape.label}: expected exactly one record naming the helper whose source did not ` +
+							`complete — the observable that separates this disarmed allow from an ordinary one ` +
+							`(§3.9); delta: ${JSON.stringify(attempt.auditDelta)}`,
+					);
+				} finally {
+					removeGithookFixture(fixture);
+				}
+			});
 		}
-	});
-});
+
+		it("the fold leaves one stderr line per adapter that reaches it: a commit folding both adapters says so twice", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				assertFixtureArmed(fixture, "zqtwoadapterctl.txt", "two-adapter fold");
+				// pre-commit reaches branch_guard.sh; commit-msg reaches
+				// conventional_commit.sh. One `git commit` runs both adapters, and a
+				// shared degraded helper set never collapses two surfaces' signals
+				// into one (§5.2's per-adapter count).
+				appendFileSync(helperPath(fixture.root, "branch_guard.sh"), "\nexit 9\n");
+				appendFileSync(helperPath(fixture.root, "conventional_commit.sh"), "\nexit 9\n");
+				stageFile(fixture, "zqtwoadapterleak.txt", `${AWS_SECRET}\n`);
+				const attempt = commitWithMessage(fixture, "chore: exercise the two-adapter fold\n");
+				assert.equal(
+					notEnforcedLines(attempt).length,
+					2,
+					`two-adapter fold: expected one "not enforced" line per adapter that reached the fold ` +
+						`(pre-commit and commit-msg), so a fold on one surface is never read as a fold on both ` +
+						`(§5.2); stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // Out-of-top refusal (SPEC §5.5's boundary, §4.1's derivation bound).
@@ -631,47 +647,51 @@ function commitIn(root: string, name: string): { status: number | null; stderr: 
 	return { status: result.status, stderr: (result.stderr ?? Buffer.alloc(0)).toString("utf8") };
 }
 
-describe("a helper location outside the repository the hook runs against runs no check (issue #68, SPEC §5.5)", { skip: IS_WINDOWS }, () => {
-	it("the tier says it is not enforced there", () => {
-		const pair = buildCrossRepoPair();
-		try {
-			assertPairArmed(pair, "zqcrossctl.txt");
-			const attempt = commitIn(pair.ungoverned, "zqcrossleak.txt");
-			assert.equal(
-				attempt.stderr.split("\n").some((line) => line.includes("not enforced")),
-				true,
-				`cross-repository: the tier ran against a repository that does not contain the helpers it ` +
-					`resolved and said nothing — a gate that resolves its checks outside the repository it was ` +
-					`invoked in must run no check and say so (§5.5); stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			rmSync(pair.tmp, { recursive: true, force: true });
-		}
-	});
+describe(
+	"a helper location outside the repository the hook runs against runs no check (issue #68, SPEC §5.5)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("the tier says it is not enforced there", () => {
+			const pair = buildCrossRepoPair();
+			try {
+				assertPairArmed(pair, "zqcrossctl.txt");
+				const attempt = commitIn(pair.ungoverned, "zqcrossleak.txt");
+				assert.equal(
+					attempt.stderr.split("\n").some((line) => line.includes("not enforced")),
+					true,
+					`cross-repository: the tier ran against a repository that does not contain the helpers it ` +
+						`resolved and said nothing — a gate that resolves its checks outside the repository it was ` +
+						`invoked in must run no check and say so (§5.5); stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				rmSync(pair.tmp, { recursive: true, force: true });
+			}
+		});
 
-	it("no byte is written into the repository it was invoked in", () => {
-		const pair = buildCrossRepoPair();
-		try {
-			assertPairArmed(pair, "zqcrosswritectl.txt");
-			const governedBefore = listTreeSizes(pair.governed);
-			commitIn(pair.ungoverned, "zqcrosswriteleak.txt");
-			assert.equal(
-				existsSync(join(pair.ungoverned, ".gitjig")),
-				false,
-				`cross-repository: the tier created its own state namespace inside a repository that never ` +
-					`adopted it — shell state is written only inside governed repositories (§5.5)`,
-			);
-			assert.deepEqual(
-				listTreeSizes(pair.governed),
-				governedBefore,
-				"cross-repository: the governed repository's tree changed while the hook ran against another " +
-					"repository (§5.5's write scope)",
-			);
-		} finally {
-			rmSync(pair.tmp, { recursive: true, force: true });
-		}
-	});
-});
+		it("no byte is written into the repository it was invoked in", () => {
+			const pair = buildCrossRepoPair();
+			try {
+				assertPairArmed(pair, "zqcrosswritectl.txt");
+				const governedBefore = listTreeSizes(pair.governed);
+				commitIn(pair.ungoverned, "zqcrosswriteleak.txt");
+				assert.equal(
+					existsSync(join(pair.ungoverned, ".gitjig")),
+					false,
+					`cross-repository: the tier created its own state namespace inside a repository that never ` +
+						`adopted it — shell state is written only inside governed repositories (§5.5)`,
+				);
+				assert.deepEqual(
+					listTreeSizes(pair.governed),
+					governedBefore,
+					"cross-repository: the governed repository's tree changed while the hook ran against another " +
+						"repository (§5.5's write scope)",
+				);
+			} finally {
+				rmSync(pair.tmp, { recursive: true, force: true });
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // The record writer, moved rather than re-derived (SPEC §5.5).
@@ -684,8 +704,7 @@ describe("a helper location outside the repository the hook runs against runs no
  * the key, so one commit exercises the sanitizer and §3.8's content-free
  * refusal at the same time.
  */
-const HOSTILE_NAME =
-	`zqhost${cp(0x22)}q${cp(0x5c)}b${cp(0x09)}t${cp(0x0a)}n${cp(0x01)}c.txt`;
+const HOSTILE_NAME = `zqhost${cp(0x22)}q${cp(0x5c)}b${cp(0x09)}t${cp(0x0a)}n${cp(0x01)}c.txt`;
 
 describe("the record writer sanitizes free text at the write (issue #68, SPEC §5.5)", { skip: IS_WINDOWS }, () => {
 	it("a hostile staged path lands whole records only, each one well-formed JSON on its own line", () => {
@@ -747,7 +766,9 @@ describe("the record writer sanitizes free text at the write (issue #68, SPEC §
 		try {
 			const sink = opSink(fixture.root);
 			const before = existsSync(sink)
-				? readFileSync(sink, "utf8").split("\n").filter((line) => line !== "").length
+				? readFileSync(sink, "utf8")
+						.split("\n")
+						.filter((line) => line !== "").length
 				: 0;
 			// The tier's own record writer, driven directly: it is committed code
 			// of the prelude every adapter sources, and concurrency is not
@@ -775,9 +796,7 @@ describe("the record writer sanitizes free text at the write (issue #68, SPEC §
 						}),
 				),
 			);
-			const lines = (existsSync(sink) ? readFileSync(sink, "utf8") : "")
-				.split("\n")
-				.filter((line) => line !== "");
+			const lines = (existsSync(sink) ? readFileSync(sink, "utf8") : "").split("\n").filter((line) => line !== "");
 			assert.equal(
 				lines.length - before,
 				100,
@@ -810,67 +829,75 @@ const NAMESPACE_COMPONENTS = [
 	{ label: `.gitjig/state/${AUDIT_FILE_NAME}`, plant: join(".gitjig", "state", AUDIT_FILE_NAME) },
 ] as const;
 
-describe("the record writer refuses to write through a link at any component it creates (issue #68, SPEC §5.5)", { skip: IS_WINDOWS }, () => {
-	for (const component of NAMESPACE_COMPONENTS) {
-		it(`a symbolic link at ${component.label} gains no record and the refusal still stands`, () => {
-			const fixture = buildDerivedFixture();
-			try {
-				const victim = join(fixture.root, "zqvictim");
-				mkdirSync(victim);
-				const victimFile = join(victim, "zqvictim.txt");
-				writeFileSync(victimFile, "zqvictimbytes\n");
-				const plant = join(fixture.root, component.plant);
-				mkdirSync(join(plant, ".."), { recursive: true });
-				symlinkSync(component.plant.endsWith(AUDIT_FILE_NAME) ? victimFile : victim, plant);
-				const victimBefore = listTreeSizes(victim);
+describe(
+	"the record writer refuses to write through a link at any component it creates (issue #68, SPEC §5.5)",
+	{ skip: IS_WINDOWS },
+	() => {
+		for (const component of NAMESPACE_COMPONENTS) {
+			it(`a symbolic link at ${component.label} gains no record and the refusal still stands`, () => {
+				const fixture = buildDerivedFixture();
+				try {
+					const victim = join(fixture.root, "zqvictim");
+					mkdirSync(victim);
+					const victimFile = join(victim, "zqvictim.txt");
+					writeFileSync(victimFile, "zqvictimbytes\n");
+					const plant = join(fixture.root, component.plant);
+					mkdirSync(join(plant, ".."), { recursive: true });
+					symlinkSync(component.plant.endsWith(AUDIT_FILE_NAME) ? victimFile : victim, plant);
+					const victimBefore = listTreeSizes(victim);
 
-				stageFile(fixture, "zqlinkleak.txt", `${AWS_SECRET}\n`);
-				const attempt = commitWithMessage(fixture, "chore: exercise the linked-component arm\n");
-				assert.notEqual(
-					attempt.status,
-					0,
-					`${component.label} link: the staged key passed — enforcement stands whatever becomes of a ` +
-						`record, since a refusal prints and returns non-zero on its own (§5.2); ` +
-						`stderr: ${JSON.stringify(attempt.stderr)}`,
-				);
-				assert.deepEqual(
-					listTreeSizes(victim),
-					victimBefore,
-					`${component.label} link: the write followed the link and landed outside the shell's own ` +
-						`namespace (§5.5)`,
-				);
-			} finally {
-				removeGithookFixture(fixture);
-			}
-		});
-	}
-});
+					stageFile(fixture, "zqlinkleak.txt", `${AWS_SECRET}\n`);
+					const attempt = commitWithMessage(fixture, "chore: exercise the linked-component arm\n");
+					assert.notEqual(
+						attempt.status,
+						0,
+						`${component.label} link: the staged key passed — enforcement stands whatever becomes of a ` +
+							`record, since a refusal prints and returns non-zero on its own (§5.2); ` +
+							`stderr: ${JSON.stringify(attempt.stderr)}`,
+					);
+					assert.deepEqual(
+						listTreeSizes(victim),
+						victimBefore,
+						`${component.label} link: the write followed the link and landed outside the shell's own ` +
+							`namespace (§5.5)`,
+					);
+				} finally {
+					removeGithookFixture(fixture);
+				}
+			});
+		}
+	},
+);
 
 // ---------------------------------------------------------------------------
 // Push-surface stdin discipline (SPEC §3.2).
 // ---------------------------------------------------------------------------
 
-describe("the push adapter's ref iteration reads every line git streams (issue #68, SPEC §3.2)", { skip: IS_WINDOWS }, () => {
-	it("a multi-ref push carrying the protected ref on line 2 is refused", () => {
-		const fixture = buildDerivedFixture();
-		try {
-			const companion = "zqderivedcompanionzq";
-			const create = pushRefs(fixture, [`${FEATURE}:${companion}`]);
-			assert.equal(create.status, 0, `push stdin: the companion ref could not be created: ${create.stderr}`);
-			seedLocalCommit(fixture);
-			const attempt = pushRefs(fixture, [`${FEATURE}:${companion}`, `${FEATURE}:${PROTECTED}`]);
-			assert.notEqual(
-				attempt.status,
-				0,
-				`push stdin: a push whose protected ref arrives past line 1 was allowed — a check that consumes ` +
-					`stdin removes ref lines from the adapter's iteration, and the arm then measures fewer refs ` +
-					`than the push carries (§3.2); stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+describe(
+	"the push adapter's ref iteration reads every line git streams (issue #68, SPEC §3.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a multi-ref push carrying the protected ref on line 2 is refused", () => {
+			const fixture = buildDerivedFixture();
+			try {
+				const companion = "zqderivedcompanionzq";
+				const create = pushRefs(fixture, [`${FEATURE}:${companion}`]);
+				assert.equal(create.status, 0, `push stdin: the companion ref could not be created: ${create.stderr}`);
+				seedLocalCommit(fixture);
+				const attempt = pushRefs(fixture, [`${FEATURE}:${companion}`, `${FEATURE}:${PROTECTED}`]);
+				assert.notEqual(
+					attempt.status,
+					0,
+					`push stdin: a push whose protected ref arrives past line 1 was allowed — a check that consumes ` +
+						`stdin removes ref lines from the adapter's iteration, and the arm then measures fewer refs ` +
+						`than the push carries (§3.2); stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // Namespace census (SPEC §4.1, §4.2): nothing generated beside the committed
@@ -947,7 +974,11 @@ function buildNestedRepo(hooksRel: string): NestedRepo {
 }
 
 /** Stage a pattern-matching key and attempt a commit in `root` under `extra` env. */
-function commitUnder(root: string, name: string, extra: Record<string, string> = {}): { status: number | null; stderr: string } {
+function commitUnder(
+	root: string,
+	name: string,
+	extra: Record<string, string> = {},
+): { status: number | null; stderr: string } {
 	writeFileSync(join(root, name), `${AWS_SECRET}\n`);
 	const env = constructedEnv(root);
 	spawnSync("git", ["add", "--", name], { cwd: root, env, timeout: 30_000 });
@@ -959,127 +990,131 @@ function commitUnder(root: string, name: string, extra: Record<string, string> =
 	return { status: result.status, stderr: (result.stderr ?? Buffer.alloc(0)).toString("utf8") };
 }
 
-describe("the tier's locations derive from the adapters' installed position (issue #68, SPEC §4.6, §5.5)", { skip: IS_WINDOWS }, () => {
-	it("a fabricated ancestor work tree writes no record outside the repository, and does not go silent", () => {
-		const repo = buildNestedRepo(".githooks");
-		try {
-			const control = commitUnder(repo.root, "zqancestorctl.txt");
-			assert.notEqual(
-				control.status,
-				0,
-				`fabricated ancestor control: the clone's own chain allowed a staged key, so the probe that ` +
-					`follows would measure a dead fixture; stderr: ${JSON.stringify(control.stderr)}`,
-			);
-			const probe = commitUnder(repo.root, "zqancestorleak.txt", { GIT_WORK_TREE: repo.ancestor });
-			assert.equal(
-				existsSync(join(repo.ancestor, ".gitjig")),
-				false,
-				"fabricated ancestor: the tier created its state namespace at the directory the ENVIRONMENT " +
-					"named, outside the repository — the record boundary §5.5 draws is then the caller's to move, " +
-					"and the disarm notice lands where nothing the shell governs can read it",
-			);
-			assert.equal(
-				probe.stderr.includes("not enforced"),
-				true,
-				`fabricated ancestor: the tier neither enforced nor said so — a disarmed allow that reads on ` +
-					`every surface exactly like an enforced pass (§3.9); stderr: ${JSON.stringify(probe.stderr)}`,
-			);
-		} finally {
-			rmSync(repo.tmp, { recursive: true, force: true });
-		}
-	});
+describe(
+	"the tier's locations derive from the adapters' installed position (issue #68, SPEC §4.6, §5.5)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a fabricated ancestor work tree writes no record outside the repository, and does not go silent", () => {
+			const repo = buildNestedRepo(".githooks");
+			try {
+				const control = commitUnder(repo.root, "zqancestorctl.txt");
+				assert.notEqual(
+					control.status,
+					0,
+					`fabricated ancestor control: the clone's own chain allowed a staged key, so the probe that ` +
+						`follows would measure a dead fixture; stderr: ${JSON.stringify(control.stderr)}`,
+				);
+				const probe = commitUnder(repo.root, "zqancestorleak.txt", { GIT_WORK_TREE: repo.ancestor });
+				assert.equal(
+					existsSync(join(repo.ancestor, ".gitjig")),
+					false,
+					"fabricated ancestor: the tier created its state namespace at the directory the ENVIRONMENT " +
+						"named, outside the repository — the record boundary §5.5 draws is then the caller's to move, " +
+						"and the disarm notice lands where nothing the shell governs can read it",
+				);
+				assert.equal(
+					probe.stderr.includes("not enforced"),
+					true,
+					`fabricated ancestor: the tier neither enforced nor said so — a disarmed allow that reads on ` +
+						`every surface exactly like an enforced pass (§3.9); stderr: ${JSON.stringify(probe.stderr)}`,
+				);
+			} finally {
+				rmSync(repo.tmp, { recursive: true, force: true });
+			}
+		});
 
-	it("a ceiling on git's own discovery does not disarm the tier", () => {
-		const repo = buildNestedRepo(".githooks");
-		try {
-			const attempt = commitUnder(repo.root, "zqceilingleak.txt", { GIT_CEILING_DIRECTORIES: repo.root });
-			assert.notEqual(
-				attempt.status,
-				0,
-				`discovery ceiling: the staged key committed — a variable an operator sets for their own ` +
-					`reasons made the tier's own derivation fail, so every commit in that shell is a ` +
-					`non-enforcing allow; stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			rmSync(repo.tmp, { recursive: true, force: true });
-		}
-	});
+		it("a ceiling on git's own discovery does not disarm the tier", () => {
+			const repo = buildNestedRepo(".githooks");
+			try {
+				const attempt = commitUnder(repo.root, "zqceilingleak.txt", { GIT_CEILING_DIRECTORIES: repo.root });
+				assert.notEqual(
+					attempt.status,
+					0,
+					`discovery ceiling: the staged key committed — a variable an operator sets for their own ` +
+						`reasons made the tier's own derivation fail, so every commit in that shell is a ` +
+						`non-enforcing allow; stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				rmSync(repo.tmp, { recursive: true, force: true });
+			}
+		});
 
-	it("an alternate in-top installation still resolves the committed pattern rules", () => {
-		const repo = buildNestedRepo(join("tools", "hooks"));
-		try {
-			assert.equal(
-				existsSync(join(repo.root, ".githooks")),
-				false,
-				"substrate: the alternate install left a .githooks directory, so a rule source spelled against " +
-					"the repository top would find it and the arm would measure nothing",
-			);
-			const attempt = commitUnder(repo.root, "zqaltinstallleak.txt");
-			assert.notEqual(
-				attempt.status,
-				0,
-				`alternate in-top install: the staged key committed — the secret arm alone is dead while the ` +
-					`rest of the tier looks alive, because its rule source was spelled against the repository ` +
-					`top rather than read beside the helper that reads it; stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-			assert.equal(
-				attempt.stderr.includes(AWS_PATTERN_ID),
-				true,
-				`alternate in-top install: the refusal does not name the pattern, so it is not the secret arm ` +
-					`that refused; stderr: ${JSON.stringify(attempt.stderr)}`,
-			);
-		} finally {
-			rmSync(repo.tmp, { recursive: true, force: true });
-		}
-	});
+		it("an alternate in-top installation still resolves the committed pattern rules", () => {
+			const repo = buildNestedRepo(join("tools", "hooks"));
+			try {
+				assert.equal(
+					existsSync(join(repo.root, ".githooks")),
+					false,
+					"substrate: the alternate install left a .githooks directory, so a rule source spelled against " +
+						"the repository top would find it and the arm would measure nothing",
+				);
+				const attempt = commitUnder(repo.root, "zqaltinstallleak.txt");
+				assert.notEqual(
+					attempt.status,
+					0,
+					`alternate in-top install: the staged key committed — the secret arm alone is dead while the ` +
+						`rest of the tier looks alive, because its rule source was spelled against the repository ` +
+						`top rather than read beside the helper that reads it; stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+				assert.equal(
+					attempt.stderr.includes(AWS_PATTERN_ID),
+					true,
+					`alternate in-top install: the refusal does not name the pattern, so it is not the secret arm ` +
+						`that refused; stderr: ${JSON.stringify(attempt.stderr)}`,
+				);
+			} finally {
+				rmSync(repo.tmp, { recursive: true, force: true });
+			}
+		});
 
-	/**
-	 * The prelude self-locates with a `cd` over the argv git hands the
-	 * adapter — a relative operand with no `./` prefix, which is exactly the
-	 * operand shape `cd` resolves against CDPATH's entries before the cwd. So
-	 * one exported environment cell can move the derivation the whole tier
-	 * stands on, to a decoy tree the operation's repository never contained.
-	 * The fixture binds the way the instrument binds (relative `.githooks`),
-	 * because an absolute hooks path hands the adapter an absolute argv and
-	 * the shape is unreachable — the arm would measure nothing.
-	 */
-	it("a CDPATH naming a decoy tree does not move the tier's own derivation", () => {
-		const fixture = buildDerivedFixture();
-		const decoy = mkdtempSync(join(tmpdir(), "gitjig-cdpath-decoy-"));
-		try {
-			mkdirSync(join(decoy, ".githooks", "helpers"), { recursive: true });
-			assertFixtureArmed(fixture, "zqcdpathctl.txt", "CDPATH decoy");
-			stageFile(fixture, "zqcdpathleak.txt", `${AWS_SECRET}\n`);
-			const attempt = commitWithMessage(fixture, "chore: exercise the CDPATH derivation arm\n", {
-				env: { CDPATH: decoy },
-			});
-			assertSecretRefused(attempt, "zqcdpathleak.txt", "CDPATH decoy");
-		} finally {
-			rmSync(decoy, { recursive: true, force: true });
-			removeGithookFixture(fixture);
-		}
-	});
+		/**
+		 * The prelude self-locates with a `cd` over the argv git hands the
+		 * adapter — a relative operand with no `./` prefix, which is exactly the
+		 * operand shape `cd` resolves against CDPATH's entries before the cwd. So
+		 * one exported environment cell can move the derivation the whole tier
+		 * stands on, to a decoy tree the operation's repository never contained.
+		 * The fixture binds the way the instrument binds (relative `.githooks`),
+		 * because an absolute hooks path hands the adapter an absolute argv and
+		 * the shape is unreachable — the arm would measure nothing.
+		 */
+		it("a CDPATH naming a decoy tree does not move the tier's own derivation", () => {
+			const fixture = buildDerivedFixture();
+			const decoy = mkdtempSync(join(tmpdir(), "gitjig-cdpath-decoy-"));
+			try {
+				mkdirSync(join(decoy, ".githooks", "helpers"), { recursive: true });
+				assertFixtureArmed(fixture, "zqcdpathctl.txt", "CDPATH decoy");
+				stageFile(fixture, "zqcdpathleak.txt", `${AWS_SECRET}\n`);
+				const attempt = commitWithMessage(fixture, "chore: exercise the CDPATH derivation arm\n", {
+					env: { CDPATH: decoy },
+				});
+				assertSecretRefused(attempt, "zqcdpathleak.txt", "CDPATH decoy");
+			} finally {
+				rmSync(decoy, { recursive: true, force: true });
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("a disarmed secret scan says so on stderr, not only in the record", () => {
-		const repo = buildNestedRepo(".githooks");
-		try {
-			const control = commitUnder(repo.root, "zqdisarmctl.txt");
-			assert.notEqual(
-				control.status,
-				0,
-				`disarm control: the clone's own chain allowed a staged key, so the arm below measures a dead ` +
-					`fixture; stderr: ${JSON.stringify(control.stderr)}`,
-			);
-			rmSync(join(repo.root, ".githooks", "helpers", "secret-patterns"), { force: true });
-			const probe = commitUnder(repo.root, "zqdisarmleak.txt");
-			assert.equal(
-				probe.stderr.includes("staged-secret scan not enforced"),
-				true,
-				`disarmed scan: the scan disarmed and printed nothing, so this allow is byte-identical on both ` +
-					`streams to an enforced pass (§3.9); stderr: ${JSON.stringify(probe.stderr)}`,
-			);
-		} finally {
-			rmSync(repo.tmp, { recursive: true, force: true });
-		}
-	});
-});
+		it("a disarmed secret scan says so on stderr, not only in the record", () => {
+			const repo = buildNestedRepo(".githooks");
+			try {
+				const control = commitUnder(repo.root, "zqdisarmctl.txt");
+				assert.notEqual(
+					control.status,
+					0,
+					`disarm control: the clone's own chain allowed a staged key, so the arm below measures a dead ` +
+						`fixture; stderr: ${JSON.stringify(control.stderr)}`,
+				);
+				rmSync(join(repo.root, ".githooks", "helpers", "secret-patterns"), { force: true });
+				const probe = commitUnder(repo.root, "zqdisarmleak.txt");
+				assert.equal(
+					probe.stderr.includes("staged-secret scan not enforced"),
+					true,
+					`disarmed scan: the scan disarmed and printed nothing, so this allow is byte-identical on both ` +
+						`streams to an enforced pass (§3.9); stderr: ${JSON.stringify(probe.stderr)}`,
+				);
+			} finally {
+				rmSync(repo.tmp, { recursive: true, force: true });
+			}
+		});
+	},
+);

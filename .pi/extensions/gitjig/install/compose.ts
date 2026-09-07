@@ -259,7 +259,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "destination falls outside the shell-owned namespaces §4.1 states, or names a namespace root rather than a member beneath one; nothing is landed",
+				reason:
+					"destination falls outside the shell-owned namespaces §4.1 states, or names a namespace root rather than a member beneath one; nothing is landed",
 			};
 		}
 		const container = containerVerdict(destRoot, rel);
@@ -276,7 +277,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "a destination container could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
+				reason:
+					"a destination container could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
 			};
 		}
 
@@ -296,7 +298,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "the destination could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
+				reason:
+					"the destination could not be measured; an unmeasurable input refuses rather than being landed into (§3.9)",
 			};
 		}
 		if (st.isSymbolicLink()) {
@@ -304,7 +307,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "the destination itself is a symbolic link; a landing would write through it, and what it points at is not a same-named asset this instrument may reason about",
+				reason:
+					"the destination itself is a symbolic link; a landing would write through it, and what it points at is not a same-named asset this instrument may reason about",
 			};
 		}
 		if (!st.isFile()) {
@@ -312,7 +316,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 				source: raw,
 				dest: null,
 				action: "refuse" as const,
-				reason: "the destination exists and is not a regular file; it is not a same-named asset this instrument may reason about",
+				reason:
+					"the destination exists and is not a regular file; it is not a same-named asset this instrument may reason about",
 			};
 		}
 		if (sameBytes(join(sourceRoot, rel), destAbs)) {
@@ -327,7 +332,8 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 			source: raw,
 			dest: rel,
 			action: "skip" as const,
-			reason: "a pre-existing same-named asset differs from the substrate; skipped with a warning and left untouched (§4.7 never overwrites)",
+			reason:
+				"a pre-existing same-named asset differs from the substrate; skipped with a warning and left untouched (§4.7 never overwrites)",
 		};
 	});
 }

@@ -229,7 +229,7 @@ const REVIEW_SUMMARY = "the review delegate composed its bounded return";
  */
 const REVIEW_DELEGATE_SCRIPT = [
 	"#!/bin/sh",
-	'head=$(git rev-parse HEAD)',
+	"head=$(git rev-parse HEAD)",
 	`printf '{"ok":true,"summary":"${REVIEW_SUMMARY}","reviewedHead":"%s"}' "$head" > ../return.json`,
 	"",
 ].join("\n");
@@ -440,7 +440,14 @@ before(async () => {
 });
 
 after(() => {
-	for (const fixture of [probeFixture, registrationFixture, mutantExtensionFixture, mutantPromptFixture, callerFixture, satisfiedFixture]) {
+	for (const fixture of [
+		probeFixture,
+		registrationFixture,
+		mutantExtensionFixture,
+		mutantPromptFixture,
+		callerFixture,
+		satisfiedFixture,
+	]) {
 		if (fixture !== undefined) {
 			removeFixture(fixture);
 		}
@@ -452,9 +459,7 @@ after(() => {
 // ---------------------------------------------------------------------------
 
 function customEntries(fixture: Fixture, customType: string): Array<Record<string, unknown>> {
-	return readSessionEntries(fixture).filter(
-		(entry) => entry.type === "custom" && entry.customType === customType,
-	);
+	return readSessionEntries(fixture).filter((entry) => entry.type === "custom" && entry.customType === customType);
 }
 
 /** The review anchor: the command's OWN session entry, or the authored red. */
@@ -540,7 +545,11 @@ describe("registration on the governed home, from the substrate's own report (is
 	});
 
 	it("work-on registers as a prompt template on the governed home", () => {
-		const row = requireGovernedRow("work-on-registration", "work-on", "the work-on prompt template at .pi/prompts/work-on.md");
+		const row = requireGovernedRow(
+			"work-on-registration",
+			"work-on",
+			"the work-on prompt template at .pi/prompts/work-on.md",
+		);
 		assert.equal(
 			row.source,
 			"prompt",
@@ -736,9 +745,7 @@ describe("the ship composition: caller-supplied facts, offline undecidables name
 
 	it("a fact-bearing invocation composes 'satisfied' — the report's other direction", () => {
 		const entry = requireSatisfiedShipEntry("ship-satisfied");
-		const data = (
-			entry as { data?: { composition?: unknown; verdictPinned?: unknown; acClosure?: unknown } }
-		).data;
+		const data = (entry as { data?: { composition?: unknown; verdictPinned?: unknown; acClosure?: unknown } }).data;
 		assert.equal(
 			data?.composition,
 			"satisfied",

@@ -22,8 +22,7 @@ export const POSTURES: readonly PostureRow[] = [
 		failureShape:
 			"no admissible .pi/ ancestor above the installed module (a .pi/ below the install root is rejected, never a root — §4.7)",
 		posture: "open",
-		justification:
-			"Absent means never installed; the actor cannot repair the installation from inside a block (§3.9).",
+		justification: "Absent means never installed; the actor cannot repair the installation from inside a block (§3.9).",
 	},
 	{
 		dependency: "audit-append",

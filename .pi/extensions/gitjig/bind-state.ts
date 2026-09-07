@@ -518,11 +518,7 @@ export function maybeAdviseBindState(pi: Pick<ExtensionAPI, "appendEntry">, stat
 		// trail, which is what the `ftruncate` preserves.
 		let fd: number;
 		try {
-			fd = openSync(
-				stampPath,
-				constants.O_WRONLY | constants.O_CREAT | STATE_PATH_GUARD_FLAGS,
-				STATE_FILE_MODE,
-			);
+			fd = openSync(stampPath, constants.O_WRONLY | constants.O_CREAT | STATE_PATH_GUARD_FLAGS, STATE_FILE_MODE);
 		} catch (error) {
 			// The guard flags refuse INSIDE `open(2)`: `ELOOP` for a link at the
 			// leaf, `ENXIO` for a reader-less FIFO. Those are the two shapes the

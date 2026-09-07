@@ -193,61 +193,65 @@ function buildFreshClone(): GithookFixture {
 // AC1 — fresh clone, one run.
 // ---------------------------------------------------------------------------
 
-describe("one run arms a fresh clone and writes no per-clone code (issue #68 AC1, SPEC §3.2, §4.2)", { skip: IS_WINDOWS }, () => {
-	it("after one run the clone refuses a staged secret with the pattern ID on the record, passes a clean commit, and carries no file at the retired binding path", () => {
-		const fixture = buildFreshClone();
-		try {
-			requireInstrument(fixture.root);
-			assertBindSucceeded(runBind(fixture.root), "fresh clone");
+describe(
+	"one run arms a fresh clone and writes no per-clone code (issue #68 AC1, SPEC §3.2, §4.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("after one run the clone refuses a staged secret with the pattern ID on the record, passes a clean commit, and carries no file at the retired binding path", () => {
+			const fixture = buildFreshClone();
+			try {
+				requireInstrument(fixture.root);
+				assertBindSucceeded(runBind(fixture.root), "fresh clone");
 
-			assert.equal(
-				existsSync(join(fixture.root, RETIRED_BINDING_REL)),
-				false,
-				`fresh clone: the run generated a file at ${RETIRED_BINDING_REL} — a location a clone needs is ` +
-					`derived at run time from the running file's own installed position and the repository top, ` +
-					`never generated as code beside the committed bytes (§4.2)`,
-			);
+				assert.equal(
+					existsSync(join(fixture.root, RETIRED_BINDING_REL)),
+					false,
+					`fresh clone: the run generated a file at ${RETIRED_BINDING_REL} — a location a clone needs is ` +
+						`derived at run time from the running file's own installed position and the repository top, ` +
+						`never generated as code beside the committed bytes (§4.2)`,
+				);
 
-			const porcelain = gitOut(fixture.root, ["status", "--porcelain"]);
-			assert.equal(
-				porcelain.split("\n").some((line) => line.includes(".gitjig")),
-				false,
-				`fresh clone: the shell's untracked namespace is visible to version control — it is excluded at ` +
-					`creation (§4.1, §5.5): ${porcelain}`,
-			);
+				const porcelain = gitOut(fixture.root, ["status", "--porcelain"]);
+				assert.equal(
+					porcelain.split("\n").some((line) => line.includes(".gitjig")),
+					false,
+					`fresh clone: the shell's untracked namespace is visible to version control — it is excluded at ` +
+						`creation (§4.1, §5.5): ${porcelain}`,
+				);
 
-			stageFile(fixture, "zqfreshleak.txt", `${AWS_SECRET}\n`);
-			const refused = commitWithMessage(fixture, "chore: exercise the fresh-clone refusal\n");
-			assert.notEqual(
-				refused.status,
-				0,
-				`fresh clone: the staged key passed after a verified run; stderr: ${JSON.stringify(refused.stderr)}`,
-			);
-			assert.equal(
-				refused.auditDelta.includes(AWS_PATTERN_ID),
-				true,
-				`fresh clone: the record at .gitjig/state/${AUDIT_FILE_NAME} does not name pattern ` +
-					`'${AWS_PATTERN_ID}' (§3.3, §4.6): ${JSON.stringify(refused.auditDelta)}`,
-			);
-			assert.equal(
-				Buffer.from(refused.auditDelta, "utf8").includes(Buffer.from(AWS_SECRET, "utf8")),
-				false,
-				"fresh clone: the planted key's bytes reached the record (§3.8's refusal-record rule)",
-			);
+				stageFile(fixture, "zqfreshleak.txt", `${AWS_SECRET}\n`);
+				const refused = commitWithMessage(fixture, "chore: exercise the fresh-clone refusal\n");
+				assert.notEqual(
+					refused.status,
+					0,
+					`fresh clone: the staged key passed after a verified run; stderr: ${JSON.stringify(refused.stderr)}`,
+				);
+				assert.equal(
+					refused.auditDelta.includes(AWS_PATTERN_ID),
+					true,
+					`fresh clone: the record at .gitjig/state/${AUDIT_FILE_NAME} does not name pattern ` +
+						`'${AWS_PATTERN_ID}' (§3.3, §4.6): ${JSON.stringify(refused.auditDelta)}`,
+				);
+				assert.equal(
+					Buffer.from(refused.auditDelta, "utf8").includes(Buffer.from(AWS_SECRET, "utf8")),
+					false,
+					"fresh clone: the planted key's bytes reached the record (§3.8's refusal-record rule)",
+				);
 
-			fixtureGit(fixture, ["reset", "-q", "--", "zqfreshleak.txt"]);
-			rmSync(join(fixture.root, "zqfreshleak.txt"), { force: true });
-			const clean = commitWithMessage(fixture, "chore: exercise the fresh-clone clean commit\n");
-			assert.equal(
-				clean.status,
-				0,
-				`fresh clone: an ordinary commit was refused by the armed chain; stderr: ${JSON.stringify(clean.stderr)}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+				fixtureGit(fixture, ["reset", "-q", "--", "zqfreshleak.txt"]);
+				rmSync(join(fixture.root, "zqfreshleak.txt"), { force: true });
+				const clean = commitWithMessage(fixture, "chore: exercise the fresh-clone clean commit\n");
+				assert.equal(
+					clean.status,
+					0,
+					`fresh clone: an ordinary commit was refused by the armed chain; stderr: ${JSON.stringify(clean.stderr)}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // AC2 — idempotence.
@@ -501,51 +505,55 @@ describe("the compare reads the bytes git resolves (issue #68 AC5, SPEC §4.7, �
 // and the line the run appends then changes nothing at all.
 // ---------------------------------------------------------------------------
 
-describe("the exclusion the success line claims is re-measured after the append (issue #68 AC4, SPEC §4.1)", { skip: IS_WINDOWS }, () => {
-	it("a rule that outranks the resolved info/exclude makes the run refuse instead of reporting a verified bound state", () => {
-		const fixture = buildFreshClone();
-		try {
-			requireInstrument(fixture.root);
-			writeFileSync(join(fixture.root, ".gitignore"), "!/.gitjig/\n");
-			fixtureGit(fixture, ["add", "--", ".gitignore"]);
-			fixtureGit(fixture, ["commit", "--no-verify", "-q", "-m", "chore: a rule outranking info/exclude"]);
+describe(
+	"the exclusion the success line claims is re-measured after the append (issue #68 AC4, SPEC §4.1)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a rule that outranks the resolved info/exclude makes the run refuse instead of reporting a verified bound state", () => {
+			const fixture = buildFreshClone();
+			try {
+				requireInstrument(fixture.root);
+				writeFileSync(join(fixture.root, ".gitignore"), "!/.gitjig/\n");
+				fixtureGit(fixture, ["add", "--", ".gitignore"]);
+				fixtureGit(fixture, ["commit", "--no-verify", "-q", "-m", "chore: a rule outranking info/exclude"]);
 
-			// Same-run control: the fallback path really is the live one here, so
-			// the run below reaches the append this arm is about.
-			assert.equal(
-				spawnSync("git", ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"], {
-					cwd: fixture.root,
-					env: constructedEnv(fixture.root),
-					timeout: 30_000,
-				}).status,
-				1,
-				"exclusion re-measure: the fixture already ignores .gitjig/, so the run takes the no-write fast path " +
-					"and this arm measures nothing",
-			);
+				// Same-run control: the fallback path really is the live one here, so
+				// the run below reaches the append this arm is about.
+				assert.equal(
+					spawnSync("git", ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"], {
+						cwd: fixture.root,
+						env: constructedEnv(fixture.root),
+						timeout: 30_000,
+					}).status,
+					1,
+					"exclusion re-measure: the fixture already ignores .gitjig/, so the run takes the no-write fast path " +
+						"and this arm measures nothing",
+				);
 
-			const run = runBind(fixture.root);
-			assertBindRefused(run, "exclusion defeated by an outranking rule");
-			assert.equal(
-				run.output.includes("bound: verified"),
-				false,
-				`exclusion re-measure: the run reported a verified bound state while git still does not ignore ` +
-					`.gitjig/ — the success line names an exclusion that does not hold (§4.1): ${run.output}`,
-			);
-			assert.equal(
-				spawnSync("git", ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"], {
-					cwd: fixture.root,
-					env: constructedEnv(fixture.root),
-					timeout: 30_000,
-				}).status,
-				1,
-				"exclusion re-measure: git now ignores the path, so the refusal above was about a shape that " +
-					"repaired itself and the arm measures nothing",
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+				const run = runBind(fixture.root);
+				assertBindRefused(run, "exclusion defeated by an outranking rule");
+				assert.equal(
+					run.output.includes("bound: verified"),
+					false,
+					`exclusion re-measure: the run reported a verified bound state while git still does not ignore ` +
+						`.gitjig/ — the success line names an exclusion that does not hold (§4.1): ${run.output}`,
+				);
+				assert.equal(
+					spawnSync("git", ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"], {
+						cwd: fixture.root,
+						env: constructedEnv(fixture.root),
+						timeout: 30_000,
+					}).status,
+					1,
+					"exclusion re-measure: git now ignores the path, so the refusal above was about a shape that " +
+						"repaired itself and the arm measures nothing",
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // The append writes into a file another writer owns, and `git help gitignore`
@@ -557,86 +565,90 @@ describe("the exclusion the success line claims is re-measured after the append 
 // re-run the exclusion refusal prescribes must add nothing.
 // ---------------------------------------------------------------------------
 
-describe("the exclusion append reads info/exclude as line-oriented (issue #68 AC4, SPEC §4.1, §4.7)", { skip: IS_WINDOWS }, () => {
-	it("an operator rule on an unterminated final line still decides its own path after the run", () => {
-		const fixture = buildFreshClone();
-		try {
-			requireInstrument(fixture.root);
-			const excludePath = resolvedExcludePath(fixture.root);
-			mkdirSync(dirname(excludePath), { recursive: true });
-			writeFileSync(join(fixture.root, "zqkeep.env"), "zqcontents\n");
-			// The byte under test is the ABSENT terminator, so the rule is
-			// written without one and never through a helper that adds it.
-			writeFileSync(excludePath, "/zqkeep.env");
+describe(
+	"the exclusion append reads info/exclude as line-oriented (issue #68 AC4, SPEC §4.1, §4.7)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("an operator rule on an unterminated final line still decides its own path after the run", () => {
+			const fixture = buildFreshClone();
+			try {
+				requireInstrument(fixture.root);
+				const excludePath = resolvedExcludePath(fixture.root);
+				mkdirSync(dirname(excludePath), { recursive: true });
+				writeFileSync(join(fixture.root, "zqkeep.env"), "zqcontents\n");
+				// The byte under test is the ABSENT terminator, so the rule is
+				// written without one and never through a helper that adds it.
+				writeFileSync(excludePath, "/zqkeep.env");
 
-			// Control: git honours the unterminated rule BEFORE the run, so what
-			// the assertions below measure is the run and not a dead fixture.
-			assert.equal(
-				gitStatus(fixture.root, ["check-ignore", "-q", "--", "zqkeep.env"]),
-				0,
-				"unterminated rule: git does not honour the fixture's rule to begin with, so this arm measures nothing",
-			);
-			assert.equal(
-				gitStatus(fixture.root, ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"]),
-				1,
-				"unterminated rule: the clone already ignores .gitjig/, so the run takes the no-write fast path and " +
-					"never reaches the append this arm is about",
-			);
+				// Control: git honours the unterminated rule BEFORE the run, so what
+				// the assertions below measure is the run and not a dead fixture.
+				assert.equal(
+					gitStatus(fixture.root, ["check-ignore", "-q", "--", "zqkeep.env"]),
+					0,
+					"unterminated rule: git does not honour the fixture's rule to begin with, so this arm measures nothing",
+				);
+				assert.equal(
+					gitStatus(fixture.root, ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"]),
+					1,
+					"unterminated rule: the clone already ignores .gitjig/, so the run takes the no-write fast path and " +
+						"never reaches the append this arm is about",
+				);
 
-			assertBindSucceeded(runBind(fixture.root), "unterminated operator rule");
+				assertBindSucceeded(runBind(fixture.root), "unterminated operator rule");
 
-			assert.equal(
-				gitStatus(fixture.root, ["check-ignore", "-q", "--", "zqkeep.env"]),
-				0,
-				`unterminated rule: the run destroyed a rule it does not own — git no longer ignores zqkeep.env ` +
-					`(§4.7 never-overwrite): ${JSON.stringify(readFileSync(excludePath, "utf8"))}`,
-			);
-			assert.equal(
-				readFileSync(excludePath, "utf8").split("\n")[0],
-				"/zqkeep.env",
-				`unterminated rule: the operator's last line no longer stands alone: ` +
-					`${JSON.stringify(readFileSync(excludePath, "utf8"))}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-
-	it("the shape whose own refusal prescribes a re-run holds at one exclusion line across three runs", () => {
-		const fixture = buildFreshClone();
-		try {
-			requireInstrument(fixture.root);
-			writeFileSync(join(fixture.root, ".gitignore"), "!/.gitjig/\n");
-			fixtureGit(fixture, ["add", "--", ".gitignore"]);
-			fixtureGit(fixture, ["commit", "--no-verify", "-q", "-m", "chore: a rule outranking info/exclude"]);
-			// Control: the fallback really is the live path here, so each run
-			// below reaches the append and the refusal that prescribes the next.
-			assert.equal(
-				gitStatus(fixture.root, ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"]),
-				1,
-				"re-run accumulation: the fixture already ignores .gitjig/, so no run reaches the append",
-			);
-
-			const excludePath = resolvedExcludePath(fixture.root);
-			for (let run = 1; run <= 3; run += 1) {
-				assertBindRefused(runBind(fixture.root), `re-run accumulation, run ${run}`);
+				assert.equal(
+					gitStatus(fixture.root, ["check-ignore", "-q", "--", "zqkeep.env"]),
+					0,
+					`unterminated rule: the run destroyed a rule it does not own — git no longer ignores zqkeep.env ` +
+						`(§4.7 never-overwrite): ${JSON.stringify(readFileSync(excludePath, "utf8"))}`,
+				);
+				assert.equal(
+					readFileSync(excludePath, "utf8").split("\n")[0],
+					"/zqkeep.env",
+					`unterminated rule: the operator's last line no longer stands alone: ` +
+						`${JSON.stringify(readFileSync(excludePath, "utf8"))}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
 			}
+		});
 
-			const appended = readFileSync(excludePath, "utf8")
-				.split("\n")
-				.filter((line) => line === "/.gitjig/");
-			assert.equal(
-				appended.length,
-				1,
-				`re-run accumulation: the resolved info/exclude carries ${appended.length} '/.gitjig/' lines after ` +
-					`three runs — the refusal prescribes the re-run, so the growth is by instruction (§4.7 ` +
-					`safe-to-repeat): ${JSON.stringify(readFileSync(excludePath, "utf8"))}`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+		it("the shape whose own refusal prescribes a re-run holds at one exclusion line across three runs", () => {
+			const fixture = buildFreshClone();
+			try {
+				requireInstrument(fixture.root);
+				writeFileSync(join(fixture.root, ".gitignore"), "!/.gitjig/\n");
+				fixtureGit(fixture, ["add", "--", ".gitignore"]);
+				fixtureGit(fixture, ["commit", "--no-verify", "-q", "-m", "chore: a rule outranking info/exclude"]);
+				// Control: the fallback really is the live path here, so each run
+				// below reaches the append and the refusal that prescribes the next.
+				assert.equal(
+					gitStatus(fixture.root, ["check-ignore", "-q", "--", ".gitjig/state/audit.jsonl"]),
+					1,
+					"re-run accumulation: the fixture already ignores .gitjig/, so no run reaches the append",
+				);
+
+				const excludePath = resolvedExcludePath(fixture.root);
+				for (let run = 1; run <= 3; run += 1) {
+					assertBindRefused(runBind(fixture.root), `re-run accumulation, run ${run}`);
+				}
+
+				const appended = readFileSync(excludePath, "utf8")
+					.split("\n")
+					.filter((line) => line === "/.gitjig/");
+				assert.equal(
+					appended.length,
+					1,
+					`re-run accumulation: the resolved info/exclude carries ${appended.length} '/.gitjig/' lines after ` +
+						`three runs — the refusal prescribes the re-run, so the growth is by instruction (§4.7 ` +
+						`safe-to-repeat): ${JSON.stringify(readFileSync(excludePath, "utf8"))}`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);
 
 // ---------------------------------------------------------------------------
 // `git help config` on --includes: "Defaults to off when a specific file is
@@ -731,71 +743,75 @@ describe("the local read sees what the local scope resolves (issue #68 AC3, SPEC
 // arm RUNS the act the message prescribes rather than matching its spelling.
 // ---------------------------------------------------------------------------
 
-describe("every prescribed act is live at the shape that reached it (issue #68 AC8, SPEC §3.11)", { skip: IS_WINDOWS }, () => {
-	it("a multi-valued local hooks path is refused with an act that survives the multiplicity", () => {
-		const fixture = buildFreshClone();
-		try {
-			const first = join(fixture.root, "zqmultihooksa");
-			const second = join(fixture.root, "zqmultihooksb");
-			mkdirSync(first);
-			mkdirSync(second);
-			gitOut(fixture.root, ["config", "--local", "core.hooksPath", first]);
-			gitOut(fixture.root, ["config", "--local", "--add", "core.hooksPath", second]);
-			// Control: the clone really carries two lines at this scope.
-			assert.equal(
-				gitOut(fixture.root, ["config", "--local", "--get-all", "core.hooksPath"]).split("\n").length,
-				2,
-				"multi-valued local: the fixture does not carry two values, so this arm measures nothing",
-			);
-			requireInstrument(fixture.root);
+describe(
+	"every prescribed act is live at the shape that reached it (issue #68 AC8, SPEC §3.11)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("a multi-valued local hooks path is refused with an act that survives the multiplicity", () => {
+			const fixture = buildFreshClone();
+			try {
+				const first = join(fixture.root, "zqmultihooksa");
+				const second = join(fixture.root, "zqmultihooksb");
+				mkdirSync(first);
+				mkdirSync(second);
+				gitOut(fixture.root, ["config", "--local", "core.hooksPath", first]);
+				gitOut(fixture.root, ["config", "--local", "--add", "core.hooksPath", second]);
+				// Control: the clone really carries two lines at this scope.
+				assert.equal(
+					gitOut(fixture.root, ["config", "--local", "--get-all", "core.hooksPath"]).split("\n").length,
+					2,
+					"multi-valued local: the fixture does not carry two values, so this arm measures nothing",
+				);
+				requireInstrument(fixture.root);
 
-			const run = runBind(fixture.root);
-			assertBindRefused(run, "multi-valued local hooks path");
-			const act = prescribedGitAct(run.output);
-			assert.equal(
-				gitStatus(fixture.root, act.slice(1)),
-				0,
-				`multi-valued local: the act the refusal prescribes (${act.join(" ")}) exited non-zero, so an ` +
-					`operator following the message reaches the same refusal again (§3.11): ${run.output}`,
-			);
-			assertBindSucceeded(runBind(fixture.root), "multi-valued local, after the prescribed act");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
+				const run = runBind(fixture.root);
+				assertBindRefused(run, "multi-valued local hooks path");
+				const act = prescribedGitAct(run.output);
+				assert.equal(
+					gitStatus(fixture.root, act.slice(1)),
+					0,
+					`multi-valued local: the act the refusal prescribes (${act.join(" ")}) exited non-zero, so an ` +
+						`operator following the message reaches the same refusal again (§3.11): ${run.output}`,
+				);
+				assertBindSucceeded(runBind(fixture.root), "multi-valued local, after the prescribed act");
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
 
-	it("a multi-valued worktree hooks path is refused with an act that survives the multiplicity", () => {
-		const fixture = buildFreshClone();
-		try {
-			const first = join(fixture.root, "zqwtmultia");
-			const second = join(fixture.root, "zqwtmultib");
-			mkdirSync(first);
-			mkdirSync(second);
-			gitOut(fixture.root, ["config", "extensions.worktreeConfig", "true"]);
-			gitOut(fixture.root, ["config", "--worktree", "core.hooksPath", first]);
-			gitOut(fixture.root, ["config", "--worktree", "--add", "core.hooksPath", second]);
-			gitOut(fixture.root, ["config", "--local", "core.hooksPath", ".githooks"]);
-			// Control: the overriding value really is at worktree scope, which is
-			// the scope the refusal composes its act for.
-			assert.equal(
-				gitOut(fixture.root, ["config", "--show-scope", "--get", "core.hooksPath"]).split("\t")[0],
-				"worktree",
-				"multi-valued worktree: git does not resolve the worktree scope here, so this arm measures nothing",
-			);
-			requireInstrument(fixture.root);
+		it("a multi-valued worktree hooks path is refused with an act that survives the multiplicity", () => {
+			const fixture = buildFreshClone();
+			try {
+				const first = join(fixture.root, "zqwtmultia");
+				const second = join(fixture.root, "zqwtmultib");
+				mkdirSync(first);
+				mkdirSync(second);
+				gitOut(fixture.root, ["config", "extensions.worktreeConfig", "true"]);
+				gitOut(fixture.root, ["config", "--worktree", "core.hooksPath", first]);
+				gitOut(fixture.root, ["config", "--worktree", "--add", "core.hooksPath", second]);
+				gitOut(fixture.root, ["config", "--local", "core.hooksPath", ".githooks"]);
+				// Control: the overriding value really is at worktree scope, which is
+				// the scope the refusal composes its act for.
+				assert.equal(
+					gitOut(fixture.root, ["config", "--show-scope", "--get", "core.hooksPath"]).split("\t")[0],
+					"worktree",
+					"multi-valued worktree: git does not resolve the worktree scope here, so this arm measures nothing",
+				);
+				requireInstrument(fixture.root);
 
-			const run = runBind(fixture.root);
-			assertBindRefused(run, "multi-valued worktree hooks path");
-			const act = prescribedGitAct(run.output);
-			assert.equal(
-				gitStatus(fixture.root, act.slice(1)),
-				0,
-				`multi-valued worktree: the act the refusal prescribes (${act.join(" ")}) exited non-zero, so an ` +
-					`operator following the message reaches the same refusal again (§3.11): ${run.output}`,
-			);
-			assertBindSucceeded(runBind(fixture.root), "multi-valued worktree, after the prescribed act");
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+				const run = runBind(fixture.root);
+				assertBindRefused(run, "multi-valued worktree hooks path");
+				const act = prescribedGitAct(run.output);
+				assert.equal(
+					gitStatus(fixture.root, act.slice(1)),
+					0,
+					`multi-valued worktree: the act the refusal prescribes (${act.join(" ")}) exited non-zero, so an ` +
+						`operator following the message reaches the same refusal again (§3.11): ${run.output}`,
+				);
+				assertBindSucceeded(runBind(fixture.root), "multi-valued worktree, after the prescribed act");
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);

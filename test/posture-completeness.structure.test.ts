@@ -173,7 +173,8 @@ export function collectCauses(relPath: string, source: string): DeclaredCause[] 
 	// 1) audit_log warn <category> <constant> — category may be a shell
 	//    expansion, so it is matched loosely; the constant must be a bare
 	//    token, since a computed constant has no fixed string to inventory.
-	const warnRe = /audit_log\s+warn\s+(?:"[^"]*"|'[^']*'|\S+)\s+(?:"([A-Za-z][A-Za-z0-9_-]*)"|'([A-Za-z][A-Za-z0-9_-]*)'|([A-Za-z][A-Za-z0-9_-]*))/g;
+	const warnRe =
+		/audit_log\s+warn\s+(?:"[^"]*"|'[^']*'|\S+)\s+(?:"([A-Za-z][A-Za-z0-9_-]*)"|'([A-Za-z][A-Za-z0-9_-]*)'|([A-Za-z][A-Za-z0-9_-]*))/g;
 	for (const m of text.matchAll(warnRe)) {
 		found.push({ cause: m[1] ?? m[2] ?? m[3], where: relPath, kind: "constant" });
 	}
@@ -228,10 +229,7 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 			sources.size >= 4,
 			`causes came from only ${sources.size} source(s) (${[...sources].sort().join(", ")}) — the walk or the recognizer is broken`,
 		);
-		assert.ok(
-			causes.length >= 12,
-			`the walk collected ${causes.length} causes — too few to be the real tier`,
-		);
+		assert.ok(causes.length >= 12, `the walk collected ${causes.length} causes — too few to be the real tier`);
 	});
 
 	it("every declared fail-open cause is accounted for by a row that names its own site", () => {
@@ -265,7 +263,10 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 		// inventoried shape, which is why they are allowed to be > 1.
 		const census = realTreeCauses()
 			.filter((c) => c.kind === "constant")
-			.reduce<Map<string, number>>((acc, c) => acc.set(`${c.where} :: ${c.cause}`, (acc.get(`${c.where} :: ${c.cause}`) ?? 0) + 1), new Map());
+			.reduce<Map<string, number>>(
+				(acc, c) => acc.set(`${c.where} :: ${c.cause}`, (acc.get(`${c.where} :: ${c.cause}`) ?? 0) + 1),
+				new Map(),
+			);
 		assert.deepEqual(
 			[...census.entries()].map(([k, n]) => `${k} ×${n}`).sort(),
 			[
@@ -304,12 +305,12 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 				".githooks/helpers/mutant.sh",
 				"audit_log warn secret zqnotinventoriedzq 'a cause no row names'\n",
 			);
-			assert.deepEqual(mutant.map((c) => c.cause), ["zqnotinventoriedzq"]);
-			const inventory = readFileSync(join(repoRoot(), INVENTORY_HOME), "utf8");
-			assert.ok(
-				!inventory.includes("zqnotinventoriedzq"),
-				"the synthetic mutant cause leaked into the real inventory",
+			assert.deepEqual(
+				mutant.map((c) => c.cause),
+				["zqnotinventoriedzq"],
 			);
+			const inventory = readFileSync(join(repoRoot(), INVENTORY_HOME), "utf8");
+			assert.ok(!inventory.includes("zqnotinventoriedzq"), "the synthetic mutant cause leaked into the real inventory");
 		});
 
 		it("reds on an uninventoried disarm sub-cause", () => {
@@ -317,7 +318,10 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 				".githooks/helpers/mutant.sh",
 				"\t\t_gitjig_ss_disarm 'zq synthetic uninventoried cause zq'\n",
 			);
-			assert.deepEqual(mutant.map((c) => c.cause), ["zq synthetic uninventoried cause zq"]);
+			assert.deepEqual(
+				mutant.map((c) => c.cause),
+				["zq synthetic uninventoried cause zq"],
+			);
 		});
 
 		it("does not collect block records — a refusal is not a posture", () => {
@@ -362,7 +366,7 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 			// fixed string to inventory. A double-quoted literal has one, so
 			// the ground does not reach it and it is collected.
 			assert.deepEqual(
-				collectCauses(".githooks/x.sh", 'audit_log warn secret "zqdqzq" \'m\'\n').map((c) => c.cause),
+				collectCauses(".githooks/x.sh", "audit_log warn secret \"zqdqzq\" 'm'\n").map((c) => c.cause),
 				["zqdqzq"],
 			);
 			assert.deepEqual(
@@ -376,7 +380,10 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 			// recognizer requiring a bare category token would silently miss
 			// every cause that file declares.
 			const collected = collectCauses(".githooks/_lib.sh", 'audit_log warn "${2:-git-hook-tier}" zqexpandedzq\n');
-			assert.deepEqual(collected.map((c) => c.cause), ["zqexpandedzq"]);
+			assert.deepEqual(
+				collected.map((c) => c.cause),
+				["zqexpandedzq"],
+			);
 		});
 	});
 });

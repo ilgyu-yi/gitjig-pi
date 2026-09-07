@@ -175,9 +175,7 @@ function loadCommittedPatterns(): CompiledPattern[] {
 	try {
 		raw = readFileSync(path, "utf8");
 	} catch {
-		throw new PatternSourceError(
-			"the committed pattern file is absent or unreadable at the resolved repository root",
-		);
+		throw new PatternSourceError("the committed pattern file is absent or unreadable at the resolved repository root");
 	}
 	const compiled: CompiledPattern[] = [];
 	for (const rawLine of raw.split("\n")) {
@@ -194,7 +192,9 @@ function loadCommittedPatterns(): CompiledPattern[] {
 		// cannot measure it: a JS-only construct compiles happily at this
 		// reader and diverges at the tier-2 one, which is the whole hazard.
 		if (!inCommonSubset(ere)) {
-			throw new PatternSourceError("a committed pattern uses a construct outside the POSIX-ERE and RegExp common subset");
+			throw new PatternSourceError(
+				"a committed pattern uses a construct outside the POSIX-ERE and RegExp common subset",
+			);
 		}
 		try {
 			compiled.push({ id: line.slice(0, tab), regexp: new RegExp(ere) });

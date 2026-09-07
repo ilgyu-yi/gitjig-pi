@@ -985,9 +985,7 @@ describe("T22 — a filename carrying a line feed", () => {
 	});
 
 	it("puts no forged command on the annotation surface", () => {
-		assert.ok(
-			!workflowCommandLines(resultOf("T22")).some((line) => line.startsWith(T22_FORGED_COMMAND)),
-		);
+		assert.ok(!workflowCommandLines(resultOf("T22")).some((line) => line.startsWith(T22_FORGED_COMMAND)));
 	});
 });
 
@@ -1011,10 +1009,7 @@ describe("T24 — an entry the platform sent with no status", () => {
 	});
 
 	it("names the empty status and the filename it belongs to, in that order", () => {
-		assert.match(
-			resultOf("T24").stderr,
-			/Unrecognized file status '' for 'changelog_unreleased\/fixed\/43\.md'/,
-		);
+		assert.match(resultOf("T24").stderr, /Unrecognized file status '' for 'changelog_unreleased\/fixed\/43\.md'/);
 	});
 });
 
@@ -1037,7 +1032,10 @@ describe("S1 — the empty-payload arm short-circuits instead of rebuilding the 
 		.filter((line) => !/^\s*#/.test(line));
 
 	it("keeps the whole-payload substitution out of the code: its only mention is commentary", () => {
-		assert.deepEqual(codeLines.filter((line) => line.includes("payload//")), []);
+		assert.deepEqual(
+			codeLines.filter((line) => line.includes("payload//")),
+			[],
+		);
 	});
 
 	it("tests the payload with a case arm, which stops at the first non-space byte", () => {

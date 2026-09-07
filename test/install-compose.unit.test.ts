@@ -288,12 +288,7 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	}
 
 	/** Compose, act, and assert containment over the RESULT rather than the verdict. */
-	function composeAndAct(
-		box: string,
-		src: string,
-		dest: string,
-		members: readonly string[],
-	): ComposedMember[] {
+	function composeAndAct(box: string, src: string, dest: string, members: readonly string[]): ComposedMember[] {
 		const composed = composeSubstrate({ sourceRoot: src, destRoot: dest, members });
 		performLandings(src, dest, composed);
 		assert.deepEqual(
@@ -317,7 +312,10 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 
 		const composed = composeAndAct(box, src, dest, deriveSubstrateSet(src));
 		assert.equal(decisionFor(composed, ".githooks/pre-commit")?.action, "refuse");
-		assert.ok(!existsSync(outside), "the shell's bytes were written through a dangling symlink, outside every namespace");
+		assert.ok(
+			!existsSync(outside),
+			"the shell's bytes were written through a dangling symlink, outside every namespace",
+		);
 	});
 
 	it("a spelling that traverses an ABSENT component into a real symlinked container is refused", () => {
@@ -449,7 +447,13 @@ describe("a pre-existing asset is never overwritten (issue #116, §4.7)", () => 
 		const src = mkdtempSync(join(root, "src-"));
 		write(join(src, ".githooks/new.sh").slice(root.length + 1), "body\n");
 		const dest = mkdtempSync(join(root, "dest-"));
-		assert.equal(decisionFor(composeSubstrate({ sourceRoot: src, destRoot: dest, members: [".githooks/new.sh"] }), ".githooks/new.sh")?.action, "land");
+		assert.equal(
+			decisionFor(
+				composeSubstrate({ sourceRoot: src, destRoot: dest, members: [".githooks/new.sh"] }),
+				".githooks/new.sh",
+			)?.action,
+			"land",
+		);
 	});
 
 	it("no-ops where the destination already holds identical content, and says so", () => {

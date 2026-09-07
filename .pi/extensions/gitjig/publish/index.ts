@@ -181,9 +181,7 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// the body rides stdin, so neither can be neutralized by the other's
 			// treatment.
 			const sendDestination =
-				publishedTitle !== undefined
-					? { ...destination, title: neutralizeBody(publishedTitle) }
-					: destination;
+				publishedTitle !== undefined ? { ...destination, title: neutralizeBody(publishedTitle) } : destination;
 			// The success shape is this kind's own: only the comment verbs print
 			// a comment url, so validating every kind against that shape made a
 			// successful create or body edit report outcome-unverified — which

@@ -59,7 +59,13 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { buildGithookFixture, fixtureGit, type GithookFixture, commitWithMessage, removeGithookFixture } from "./harness/githook-fixture.ts";
+import {
+	buildGithookFixture,
+	fixtureGit,
+	type GithookFixture,
+	commitWithMessage,
+	removeGithookFixture,
+} from "./harness/githook-fixture.ts";
 import { AUDIT_FILE_NAME } from "./harness/run-pi.ts";
 
 const IS_WINDOWS = process.platform === "win32";
@@ -106,78 +112,82 @@ function storedHooksPath(fixture: GithookFixture): Buffer {
 	return nul === -1 ? out : out.subarray(0, nul);
 }
 
-describe("a clone armed before the namespace move needs no re-arm (issue #75, SPEC §2.5, §3.2)", { skip: IS_WINDOWS }, () => {
-	it("still refuses a staged secret, records under the moved sink, and leaves the stored binding untouched", () => {
-		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
-		try {
-			fixtureGit(fixture, ["checkout", "-q", "-b", FEATURE]);
+describe(
+	"a clone armed before the namespace move needs no re-arm (issue #75, SPEC §2.5, §3.2)",
+	{ skip: IS_WINDOWS },
+	() => {
+		it("still refuses a staged secret, records under the moved sink, and leaves the stored binding untouched", () => {
+			const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
+			try {
+				fixtureGit(fixture, ["checkout", "-q", "-b", FEATURE]);
 
-			// Arming already happened at build (`core.hooksPath` = the committed
-			// adapters). Capture what it wrote, and verify it genuinely points
-			// at the adapters — a captured-then-compared value would agree with
-			// itself even if arming had pointed nowhere.
-			const armed = storedHooksPath(fixture);
-			assert.notEqual(armed.length, 0, "arming stored an empty core.hooksPath — nothing was bound");
-			assert.equal(
-				existsSync(join(fixture.root, armed.toString("utf8"), "pre-commit")),
-				true,
-				`the stored core.hooksPath ${JSON.stringify(armed.toString("utf8"))} does not resolve to the ` +
-					`committed pre-commit adapter — this clone is not armed, so nothing below measures the tier`,
-			);
+				// Arming already happened at build (`core.hooksPath` = the committed
+				// adapters). Capture what it wrote, and verify it genuinely points
+				// at the adapters — a captured-then-compared value would agree with
+				// itself even if arming had pointed nowhere.
+				const armed = storedHooksPath(fixture);
+				assert.notEqual(armed.length, 0, "arming stored an empty core.hooksPath — nothing was bound");
+				assert.equal(
+					existsSync(join(fixture.root, armed.toString("utf8"), "pre-commit")),
+					true,
+					`the stored core.hooksPath ${JSON.stringify(armed.toString("utf8"))} does not resolve to the ` +
+						`committed pre-commit adapter — this clone is not armed, so nothing below measures the tier`,
+				);
 
-			writeFileSync(join(fixture.root, STAGED_PATH), AWS_SECRET + "\n");
-			fixtureGit(fixture, ["add", "--", STAGED_PATH]);
-			const attempt = commitWithMessage(fixture, "chore: exercise the namespace-move arm\n");
+				writeFileSync(join(fixture.root, STAGED_PATH), AWS_SECRET + "\n");
+				fixtureGit(fixture, ["add", "--", STAGED_PATH]);
+				const attempt = commitWithMessage(fixture, "chore: exercise the namespace-move arm\n");
 
-			// 1. Enforcement survived. Keyed on the refusal's own observables,
-			//    never on the sink (the sink is assertion 2's subject).
-			assert.notEqual(
-				attempt.status,
-				0,
-				`the guarded commit SUCCEEDED — the tier went inert across the namespace move: ${attempt.stderr}`,
-			);
-			assert.match(
-				attempt.stderr,
-				/\[dev-shell\]/,
-				"the refusal reached the operator without the adapter's live recovery line (§3.11)",
-			);
-			assert.equal(
-				attempt.stderr.includes(PATTERN_ID),
-				true,
-				`the refusal's stderr does not name pattern '${PATTERN_ID}' — the refusal is not the staged-secret one`,
-			);
+				// 1. Enforcement survived. Keyed on the refusal's own observables,
+				//    never on the sink (the sink is assertion 2's subject).
+				assert.notEqual(
+					attempt.status,
+					0,
+					`the guarded commit SUCCEEDED — the tier went inert across the namespace move: ${attempt.stderr}`,
+				);
+				assert.match(
+					attempt.stderr,
+					/\[dev-shell\]/,
+					"the refusal reached the operator without the adapter's live recovery line (§3.11)",
+				);
+				assert.equal(
+					attempt.stderr.includes(PATTERN_ID),
+					true,
+					`the refusal's stderr does not name pattern '${PATTERN_ID}' — the refusal is not the staged-secret one`,
+				);
 
-			// 2. The sink follows the namespace.
-			const sink = contractSink(fixture);
-			assert.equal(
-				existsSync(sink),
-				true,
-				`no record sink at <top>/${STATE_CONTAINER}/state/${AUDIT_FILE_NAME} — the tier refused the ` +
-					`commit but wrote its record somewhere else, so an armed clone's records do not follow its ` +
-					`own state container (SPEC §2.5)`,
-			);
-			const records = readFileSync(sink, "utf8");
-			assert.match(
-				records,
-				/\bblock\b.*\bsecret\b/,
-				`the moved sink carries no block record naming the secret class; sink contents: ${JSON.stringify(records)}`,
-			);
-			assert.equal(
-				records.includes(PATTERN_ID),
-				true,
-				`the moved sink's record does not name pattern '${PATTERN_ID}' (§3.3 pattern-ID reporting)`,
-			);
+				// 2. The sink follows the namespace.
+				const sink = contractSink(fixture);
+				assert.equal(
+					existsSync(sink),
+					true,
+					`no record sink at <top>/${STATE_CONTAINER}/state/${AUDIT_FILE_NAME} — the tier refused the ` +
+						`commit but wrote its record somewhere else, so an armed clone's records do not follow its ` +
+						`own state container (SPEC §2.5)`,
+				);
+				const records = readFileSync(sink, "utf8");
+				assert.match(
+					records,
+					/\bblock\b.*\bsecret\b/,
+					`the moved sink carries no block record naming the secret class; sink contents: ${JSON.stringify(records)}`,
+				);
+				assert.equal(
+					records.includes(PATTERN_ID),
+					true,
+					`the moved sink's record does not name pattern '${PATTERN_ID}' (§3.3 pattern-ID reporting)`,
+				);
 
-			// 3. No re-arm was required, and nothing rewrote the binding.
-			assert.equal(
-				storedHooksPath(fixture).equals(armed),
-				true,
-				`the clone's stored core.hooksPath changed across the measured commit — an armed clone's own ` +
-					`config is the operator's, not the tier's to rewrite (was ${JSON.stringify(armed.toString("utf8"))}, ` +
-					`now ${JSON.stringify(storedHooksPath(fixture).toString("utf8"))})`,
-			);
-		} finally {
-			removeGithookFixture(fixture);
-		}
-	});
-});
+				// 3. No re-arm was required, and nothing rewrote the binding.
+				assert.equal(
+					storedHooksPath(fixture).equals(armed),
+					true,
+					`the clone's stored core.hooksPath changed across the measured commit — an armed clone's own ` +
+						`config is the operator's, not the tier's to rewrite (was ${JSON.stringify(armed.toString("utf8"))}, ` +
+						`now ${JSON.stringify(storedHooksPath(fixture).toString("utf8"))})`,
+				);
+			} finally {
+				removeGithookFixture(fixture);
+			}
+		});
+	},
+);

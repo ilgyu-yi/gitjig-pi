@@ -105,7 +105,11 @@ interface ExecutorRun {
 }
 
 const SCRIPT = [
-	{ kind: "toolCall" as const, name: TOOL, arguments: { body: EXEC_BODY, destination: { kind: "issue-comment", number: 5 } } },
+	{
+		kind: "toolCall" as const,
+		name: TOOL,
+		arguments: { body: EXEC_BODY, destination: { kind: "issue-comment", number: 5 } },
+	},
 	{ kind: "text" as const, text: "EGRESS_EXEC_DONE" },
 ];
 
@@ -238,7 +242,7 @@ before(async () => {
 	);
 	// Junk output after consuming the body: exit 0, no comment-URL shape —
 	// the post-send-ambiguity shape (§3.3's outcome-unverified).
-	junkRun = await runWithShim('cat > "$SINK/gh-consumed"\nprintf \'zqjunk output with no comment url\\n\'\nexit 0\n');
+	junkRun = await runWithShim("cat > \"$SINK/gh-consumed\"\nprintf 'zqjunk output with no comment url\\n'\nexit 0\n");
 	// Hostile echo: the child prints the request body back as its output.
 	echoRun = await runWithShim(`printf '${STREAM_MARKER}ECHO '\ncat\nexit 0\n`);
 	// Payload on the wrong stream: a well-formed URL, but on stderr.
@@ -255,10 +259,7 @@ before(async () => {
 	// grace decides and an in-bound run is marked timed out: a refusal for a
 	// send that succeeded, which is the false-withholding direction §5.6
 	// forbids. The URL is on stdout, so the only correct outcome is published.
-	orphanLateRun = await runWithShim(
-		"sleep 30 &\n" + "sleep 9\n" + `printf '${SHIM_URL}\\n'\n` + "exit 0\n",
-		90_000,
-	);
+	orphanLateRun = await runWithShim("sleep 30 &\n" + "sleep 9\n" + `printf '${SHIM_URL}\\n'\n` + "exit 0\n", 90_000);
 	// Kill REACH. The shim spawns a grandchild that keeps ticking a file, then
 	// hangs past its own bound. Killing the direct child alone leaves that
 	// grandchild running; killing the process group takes it too. The ticks
@@ -370,7 +371,8 @@ describe("a late in-bound exit behind an orphan-held pipe publishes (issue #85, 
 			orphanLateRun.result.timedOut,
 			false,
 			"orphan-late: the session wedged — an in-bound exit behind a held pipe must still decide inside the " +
-				"flush grace\n" + diagnostics(orphanLateRun.result),
+				"flush grace\n" +
+				diagnostics(orphanLateRun.result),
 		);
 		assert.equal(orphanLateRun.result.exitCode, 0, diagnostics(orphanLateRun.result));
 		requireOwnResult(orphanLateRun, "orphan-late");
@@ -438,10 +440,7 @@ describe("the unreapable-child backstop is armed and cleared (issue #85)", () =>
 		// test (it needs a blocking kernel path this suite cannot arrange), so
 		// what is pinned is that the kill path arms a backstop at all. Every
 		// OTHER bound in this module is pinned behaviourally above.
-		const executor = readFileSync(
-			join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts"),
-			"utf8",
-		);
+		const executor = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts"), "utf8");
 		const body = executor
 			.replace(/\/\*[\s\S]*?\*\//g, "")
 			.split("\n")
@@ -469,7 +468,8 @@ describe("a hanging child is bounded, never a wedged session (issue #83)", () =>
 			hangingRun.result.timedOut,
 			false,
 			"hanging child: the session wedged past 60s — the executor's child bound must fire well under the " +
-				"arm's backstop (§3.3's bounded child)\n" + diagnostics(hangingRun.result),
+				"arm's backstop (§3.3's bounded child)\n" +
+				diagnostics(hangingRun.result),
 		);
 		assert.equal(hangingRun.result.exitCode, 0, diagnostics(hangingRun.result));
 		requireOwnResult(hangingRun, "hanging-child");

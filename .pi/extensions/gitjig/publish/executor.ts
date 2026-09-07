@@ -156,12 +156,7 @@ export interface PublishDestination {
  * fails toward the block (§3.9's ambiguity rule).
  */
 function isAdmissibleTitle(title: unknown): title is string {
-	return (
-		typeof title === "string" &&
-		title.trim().length > 0 &&
-		!title.startsWith("-") &&
-		!/[\n\r\0]/.test(title)
-	);
+	return typeof title === "string" && title.trim().length > 0 && !title.startsWith("-") && !/[\n\r\0]/.test(title);
 }
 
 /** Structural admission for a destination that arrived untyped. */

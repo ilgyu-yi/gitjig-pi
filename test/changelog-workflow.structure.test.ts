@@ -155,7 +155,10 @@ function labelStep(): string[] {
  * split across source lines for width is read as the one logical line it is.
  */
 function shellLines(step: string[]): string[] {
-	return step.join("\n").replace(/\\\n\s*/g, " ").split("\n");
+	return step
+		.join("\n")
+		.replace(/\\\n\s*/g, " ")
+		.split("\n");
 }
 
 /**
@@ -200,9 +203,11 @@ function payloadDraftVar(): string | undefined {
 
 /** Every `--json` field list requested inside the gate step. */
 function jsonFieldLists(): string[][] {
-	return [...validateStep().join("\n").matchAll(/--json\s+([A-Za-z0-9_,]+)/g)].map((match) =>
-		match[1].split(",").filter((field) => field !== ""),
-	);
+	return [
+		...validateStep()
+			.join("\n")
+			.matchAll(/--json\s+([A-Za-z0-9_,]+)/g),
+	].map((match) => match[1].split(",").filter((field) => field !== ""));
 }
 
 /** The `on.pull_request.types` sequence, in either the flow or the block form. */
@@ -215,7 +220,10 @@ function triggerTypes(): string[] {
 	const unquote = (value: string): string => value.trim().replace(/^['"]|['"]$/g, "");
 	const inline = block[idx].match(/\[([^\]]*)\]/);
 	if (inline !== null) {
-		return inline[1].split(",").map(unquote).filter((value) => value !== "");
+		return inline[1]
+			.split(",")
+			.map(unquote)
+			.filter((value) => value !== "");
 	}
 	const types: string[] = [];
 	for (let i = idx + 1; i < block.length; i += 1) {
@@ -249,7 +257,10 @@ describe("W1 — the pull_request trigger set (SPEC §1.3, §2.3)", () => {
 
 	it("keeps every event the gate already fired on", () => {
 		const required = ["opened", "synchronize", "reopened", "labeled", "unlabeled"];
-		assert.deepEqual(required.filter((type) => !triggerTypes().includes(type)), []);
+		assert.deepEqual(
+			required.filter((type) => !triggerTypes().includes(type)),
+			[],
+		);
 	});
 });
 
@@ -382,9 +393,7 @@ describe("W6 — the sleep's disclosure", () => {
 			return "";
 		}
 		const opensAt = indentOf(lines[start]);
-		const end = lines.findIndex(
-			(line, i) => i > start && /^\s*fi\s*$/.test(line) && indentOf(line) === opensAt,
-		);
+		const end = lines.findIndex((line, i) => i > start && /^\s*fi\s*$/.test(line) && indentOf(line) === opensAt);
 		return end === -1 ? "" : lines.slice(start, end).join("\n");
 	};
 

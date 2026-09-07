@@ -77,12 +77,9 @@ export function registerShipCommand(pi: ExtensionAPI, repoRoot: string): void {
 			}
 			const verdictHead = facts.get("verdict-head");
 			const verdictPinned =
-				localHead !== undefined && verdictHead !== undefined && verdictHead === localHead
-					? "confirmed"
-					: "unsatisfied";
+				localHead !== undefined && verdictHead !== undefined && verdictHead === localHead ? "confirmed" : "unsatisfied";
 			const acClosure = facts.get("ac") === "closed" ? "asserted" : "unsatisfied";
-			const composition =
-				verdictPinned === "confirmed" && acClosure === "asserted" ? "satisfied" : "unsatisfied";
+			const composition = verdictPinned === "confirmed" && acClosure === "asserted" ? "satisfied" : "unsatisfied";
 			pi.appendEntry("gitjig-ship", { composition, verdictPinned, acClosure });
 			// The durability turn (header): empty fixed content, so nothing
 			// caller-held can ride it; `triggerTurn` makes an assistant message

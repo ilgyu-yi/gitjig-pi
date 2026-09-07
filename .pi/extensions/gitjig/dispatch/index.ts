@@ -110,7 +110,8 @@ const REFUSE_EXPECTED_REF = "dispatch refused: the expected ref is present but n
  * reported under the bound-exceeded class, so admitting it would put a false
  * outcome class in the trail (§5.5).
  */
-const REFUSE_TIMEOUT_MS = "dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
+const REFUSE_TIMEOUT_MS =
+	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
 
 export type DispatchOutcome =
 	| { disposition: "admitted"; ok: boolean; summary: string; compare?: "confirmed" | "invalid" }
@@ -347,10 +348,7 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 			const timeoutMs: unknown = params.timeoutMs;
 			if (
 				timeoutMs !== undefined &&
-				(typeof timeoutMs !== "number" ||
-					!Number.isFinite(timeoutMs) ||
-					timeoutMs <= 0 ||
-					timeoutMs > MAX_RUN_BOUND_MS)
+				(typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_RUN_BOUND_MS)
 			) {
 				// The whole inadmissible set in one predicate, so no member falls
 				// through to a bound the caller did not name. Absent stays legal and

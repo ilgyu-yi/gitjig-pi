@@ -398,11 +398,7 @@ function leadingBlockComment(source: string): string {
  * One predicate, two call sites (§3.11): the roster arm calls it over the
  * real tree, the teeth arms below call it over synthetic inputs.
  */
-function rosterDisposition(
-	file: string,
-	roster: readonly string[],
-	source: string,
-): "locked" | "exempt" | "undecided" {
+function rosterDisposition(file: string, roster: readonly string[], source: string): "locked" | "exempt" | "undecided" {
 	if (roster.includes(file)) {
 		return "locked";
 	}
@@ -594,9 +590,7 @@ describe("the lock's own teeth (§3.12 — a guard the suite never measures is d
 	});
 
 	it("reports an unlisted bare identifier even beside an allowlisted one", () => {
-		assert.deepEqual(interpolationViolations("console.warn(`${cause} at ${sinkPath}`);", ["cause"]), [
-			"sinkPath",
-		]);
+		assert.deepEqual(interpolationViolations("console.warn(`${cause} at ${sinkPath}`);", ["cause"]), ["sinkPath"]);
 	});
 
 	it("captures a brace-bearing expression WHOLE, not up to its first inner brace", () => {
@@ -658,18 +652,14 @@ describe("the lock's own teeth (§3.12 — a guard the suite never measures is d
 	it("reports a raw path interpolation in a degradedMessage-shaped composition", () => {
 		// Acceptance criterion 3, in the scanner's own terms: the site that
 		// composes the bind-state advisory must not be able to grow a raw path.
-		assert.deepEqual(
-			interpolationViolations("return `gitjig bind state: ${state}; stamp ${stampPath}`;", ["state"]),
-			["stampPath"],
-		);
+		assert.deepEqual(interpolationViolations("return `gitjig bind state: ${state}; stamp ${stampPath}`;", ["state"]), [
+			"stampPath",
+		]);
 	});
 
 	it("reports a raw error interpolation in a recordStampRefusal-shaped composition", () => {
 		// Acceptance criterion 4: the same site with the extraction wrapped passes.
-		assert.deepEqual(
-			interpolationViolations("`could not be opened: ${error.message}`", []),
-			["error.message"],
-		);
+		assert.deepEqual(interpolationViolations("`could not be opened: ${error.message}`", []), ["error.message"]);
 		assert.deepEqual(interpolationViolations("`could not be opened: ${quoted(error.message)}`", []), []);
 	});
 
