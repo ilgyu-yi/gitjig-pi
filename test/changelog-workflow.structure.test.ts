@@ -23,7 +23,7 @@
  *   1. That the workflow file is syntactically valid YAML, or that Actions
  *      accepts it. No YAML parser is reachable from here: the root manifest
  *      declares development and CI tools only, and this suite runs with no
- *      dependency on an installed tree — measured, 800/800 with
+ *      dependency on an installed tree — measured, 811/811 with
  *      `node_modules` absent — so the readers below are narrow text scanners
  *      over a comment-stripped view, not a parse. They can be fooled by YAML
  *      this repository does not write — quoted keys, anchors, flow mappings,

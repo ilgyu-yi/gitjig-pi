@@ -8,7 +8,7 @@ Active development under the contract in [`SPEC.md`](SPEC.md).
 
 ## Getting started
 
-The runtime has no build step — the tree ships TypeScript sources that run directly, and nothing is compiled before it executes. Two prerequisites, and neither is an install:
+The runtime has no build step — the tree ships TypeScript sources that run directly, and nothing is compiled before it executes. Two prerequisites, and neither is an `npm install` — nothing in this repository's manifest is needed to run the suite:
 
 - [`pi`](https://github.com/earendil-works/pi) available on `PATH` — the suite drives the real binary against disposable fixtures.
 - A Node.js runtime with native TypeScript type-stripping.

@@ -12,9 +12,13 @@
 	},
 	"formatter": {
 		"enabled": true,
-		// Measured on this tree, not preferred: over 27,087 tracked `.ts`
-		// lines p95 is 100, p99 is 119, max is 1,174. At 120 the formatter
-		// rewrites 37 files; at the default 80 it rewrites 49.
+		// Measured, not preferred — and measured AT THE BASE of the change
+		// that set it, which is the only tree on which the comparison means
+		// anything: over the 27,087 tracked `.ts` lines the formatter was
+		// about to rewrite, p95 was 100, p99 119, max 1,174. At 120 it
+		// rewrote 37 files; at the default 80 it would have rewritten 49.
+		// The formatted tree necessarily reads differently: re-measuring here
+		// tells you what this setting produced, never what chose it.
 		"indentStyle": "tab",
 		"lineWidth": 120
 	},
@@ -38,10 +42,10 @@
 	},
 	"javascript": {
 		"formatter": {
-			// Set to what the tree already writes — 18,527 tab-indented lines
-			// against 0 two-space, 7,968 double-quoted strings against 379
-			// single — so the one-time reformat is a line-width pass and not a
-			// house-style change.
+			// Set to what the tree already wrote, on the same base as the line
+			// width above — 18,527 tab-indented lines against 0 two-space, and
+			// 7,968 double-quoted strings against 379 single — so the one-time
+			// reformat was a line-width pass and not a house-style change.
 			"quoteStyle": "double",
 			"semicolons": "always"
 		}
