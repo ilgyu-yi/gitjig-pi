@@ -28,44 +28,44 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§2.3 | PR-as-living-doc | 244 |
 | &nbsp;&nbsp;§2.4 | Evidence discipline | 248 |
 | &nbsp;&nbsp;§2.5 | Authoring doctrine | 263 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 296 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 308 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 318 |
-| §3 | Enforcement-layer architecture | 330 |
-| &nbsp;&nbsp;§3.1 | The constraint | 334 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 341 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 349 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 452 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 456 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 460 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 470 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 482 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 495 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 509 |
-| &nbsp;&nbsp;§3.11 | Gate design | 519 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 541 |
-| §4 | Substrate and install contract | 551 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 555 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 561 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 565 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 569 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 573 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 579 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 589 |
-| &nbsp;&nbsp;§4.8 | The command layer | 597 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 654 |
-| §5 | Cross-cutting contracts | 696 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 700 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 704 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 708 |
-| &nbsp;&nbsp;§5.4 | Work language | 712 |
-| &nbsp;&nbsp;§5.5 | State boundary | 716 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 722 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 732 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 742 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 750 |
-| §6 | Self-governance milestone | 758 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 769 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 298 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 310 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 320 |
+| §3 | Enforcement-layer architecture | 332 |
+| &nbsp;&nbsp;§3.1 | The constraint | 336 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 343 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 351 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 454 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 458 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 462 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 472 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 484 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 497 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 511 |
+| &nbsp;&nbsp;§3.11 | Gate design | 521 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 543 |
+| §4 | Substrate and install contract | 553 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 557 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 563 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 567 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 571 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 575 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 581 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 591 |
+| &nbsp;&nbsp;§4.8 | The command layer | 599 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 656 |
+| §5 | Cross-cutting contracts | 698 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 702 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 706 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 710 |
+| &nbsp;&nbsp;§5.4 | Work language | 714 |
+| &nbsp;&nbsp;§5.5 | State boundary | 718 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 724 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 734 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 744 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 752 |
+| §6 | Self-governance milestone | 760 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 771 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -268,7 +268,9 @@ Truth obligation is scoped by consumption window. The **living set** — the sur
 
 Both erasures are needed, and the second is not a flourish: a forward-facing sentence usually passes the historical half. "The target does not exist yet" is *present-true about HEAD* — the target really is absent — so erasing history acquits it, while the word doing the damage is `yet`, which imports a plan. Erase the plan and the sentence stops reading as documentation of anything.
 
-What separates the forward half from ordinary conditional prose is **whether the sentence carries its own condition**. A sentence stating what holds now and what would change it is a contract, and stays: §6's "until the milestone is reached, an external development environment may govern" names its own trigger, so it documents the current regime and its boundary. A sentence whose truth depends on a plan recorded somewhere else is a schedule, and goes: "red until the Code phase lands `publish/scan.ts`" is true only by reference to a plan the reader cannot see from the tree. Same tense, opposite dispositions, and the discriminator is where the condition lives rather than which way the sentence points.
+What separates the forward half from ordinary conditional prose is **whether its condition resolves from the living set at HEAD**. A sentence whose condition a reader can follow to a living surface is a contract and stays — it documents the current regime and its boundary. Two that do: §6's "Until then, an external development environment may govern the working process", whose antecedent milestone is stated in the same section; and §2.4's own "evidence instruments derive later per §1.2's macro-phase clause", whose condition is §1.2. A sentence whose condition resolves only to a plan the tree does not carry is a schedule and goes: "red until the Code phase lands `publish/scan.ts`" points at a phase plan no living surface holds. Same tense, opposite dispositions, and the discriminator is where the condition **resolves**, not which way the sentence points.
+
+So erasing plans never means erasing living-set sections. §1.2 is in the living set, and a sentence deferring to it survives the erasure precisely because a reader at HEAD can go and read the clause it defers to.
 
 The test is a discriminator, not a gate — what it produces is a re-read, and the reader that applies it is advisory by construction (§3.1 rule 1).
 

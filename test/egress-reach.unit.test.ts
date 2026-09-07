@@ -128,9 +128,9 @@ describe("every publication kind is reachable by the gate (issue #120)", () => {
 
 describe("success is recognized for every kind, not just the comment kinds (issue #120)", () => {
 	// Widening the INPUT union without widening the OUTPUT contract leaves
-	// four of six kinds unable to report success:
-	// only the comment verbs print a comment url, and every kind was
-	// validated against that one shape. A successful create then reported
+	// four of six kinds unable to report success: only the comment verbs
+	// print a comment url, so validating every kind against that one shape
+	// makes a successful create report
 	// outcome-unverified — "neither publication nor withholding is claimed"
 	// — which invites a retry, and a retried create mints a SECOND public
 	// issue or pull request. That is the unretractable-publication hazard

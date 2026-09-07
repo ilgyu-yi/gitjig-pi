@@ -43,7 +43,7 @@ jobs:
           set -uo pipefail
 
           if [ ! -f .github/workflows/check-provenance.sh ]; then
-            echo "::warning::.github/workflows/check-provenance.sh is missing, so no provenance reading ran. This reader is advisory and blocks nothing; its absence is reported rather than refused." >&2
+            echo "::warning::.github/workflows/check-provenance.sh is missing, so no provenance reading ran. This is NOT a clean result — nothing was scanned. The reader is advisory and blocks nothing, which is why its absence is reported rather than refused."
             exit 0
           fi
 

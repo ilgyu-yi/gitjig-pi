@@ -105,8 +105,13 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	},
 	{
 		shape: "review-archaeology",
-		line: "// Review round notes belong in the review record.",
-		why: "§2.4's species: round numbers and prior-defect narrative on a living surface",
+		line: "// Review round 2 asked for this split.",
+		why: "§2.4's species: a numbered round on a living surface",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Three review rounds widened the alphabet.",
+		why: "the plural spelling, which no numbered rule reaches — and which a feature name like `the review round trip` must not trip",
 	},
 	{
 		shape: "change-narration",
@@ -392,11 +397,21 @@ describe("the reader's domain is the living set (issue #70, SPEC §2.5)", () => 
 		// 200 KB — one minified .json or .js line, well inside the living set —
 		// cost seconds each, and a job killed by a timeout is a red X on a check
 		// designed never to fail a pull request. A sentence is not 200 KB.
-		const long = `once ${"x".repeat(20000)}`;
+		// The fixture MATCHES a rule and is long enough that an uncapped read is
+		// unambiguously slow. Both properties are needed: with a 20 KB fixture
+		// that matched nothing, removing the cap entirely left this arm green —
+		// the time assertion sat two hundred times above the uncapped cost and
+		// the content assertion could not fire, so the arm was decoration
+		// (§3.12) for the very repair it was written to defend.
+		const long = `We added ${"x".repeat(200000)}`;
 		const started = Date.now();
 		const run = runReader(diffAdding("src/thing.ts", [long, "// red until the helper lands."]));
 		assert.ok(Date.now() - started < 10_000, "the reader stalled on a long line");
-		assert.doesNotMatch(run.stdout, /xxxx/, "a line past the cap was matched anyway");
+		assert.doesNotMatch(
+			run.stdout,
+			/xxxx/,
+			"a line past the cap was read and reported. The cap is what keeps one minified line from costing minutes on a job that must never fail a pull request",
+		);
 		assert.match(
 			run.stdout,
 			/thing\.ts:2:/,
@@ -493,6 +508,11 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 			workflow,
 			/NOT a clean result/,
 			"the degraded path does not say plainly that nothing was scanned. §3.9 forbids a disarmed check reading as a passing one, and the posture row claims this signal exists",
+		);
+		assert.match(
+			workflow,
+			/if \[ ! -f \.github\/workflows\/check-provenance\.sh \]; then/,
+			"the workflow does not guard against the reader being absent. This is the exact signal the posture row's justification names — delete it and the row still claims it exists, which is a claim with nothing behind it",
 		);
 		assert.match(
 			workflow,

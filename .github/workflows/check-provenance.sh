@@ -34,10 +34,19 @@
 #   produce exactly the false block §3.6 rejects. The cost is real and is
 #   the accepted side: narration spelled with those words passes unreported.
 #
-#   FALSE POSITIVES. `previously`, `used to` and `formerly` also spell a
-#   legitimate compatibility fact ("v1 messages remain accepted"). §2.4
-#   draws that line at fact-versus-provenance and no pattern decides it, so
-#   these are reported for a human to judge — which is why this reader
+#   FALSE POSITIVES, in three measured classes. `previously`, `used to` and
+#   `formerly` also spell a legitimate compatibility fact ("v1 messages
+#   remain accepted"); §2.4 draws that line at fact-versus-provenance and no
+#   pattern decides it. `(once|after) X lands` also spells a CONTRACT whose
+#   condition resolves from the living set — "these arms hold while the
+#   helper is absent AND after it lands" is present-tense prose about a
+#   chain, which §2.5 explicitly acquits and this rule reports anyway;
+#   deciding it needs the resolvability test, which is a human's to apply.
+#   And a shape name can appear inside a feature name — a `[Rr]eview round`
+#   token once matched "the review round trip", the name of a live command
+#   flow, which is why that rule now requires a number or the plural.
+#
+#   All three are reported for a human to judge, which is why this reader
 #   cannot become a gate without first solving a problem it does not solve.
 #
 #   USE VERSUS MENTION, and this one is unavoidable rather than merely
@@ -54,6 +63,13 @@
 #
 #   NOT A PARSER. Matching is per line, so a sentence wrapped across two
 #   lines is seen as two fragments and may be missed.
+#
+#   GIT'S SPELLING, not every unified diff. File headers are admitted only
+#   before the first hunk of a `diff --git` / `diff --cc` entry, which is
+#   what stops content shaped like a header from stealing the attribution.
+#   Concatenated plain `diff -u` output carries no entry markers, so after
+#   the first hunk its later file headers are ignored. The usage line above
+#   is the documented domain.
 #
 # Pure bash. No third-party Actions; runs under check-provenance.yml.
 
@@ -81,7 +97,8 @@ RULE schedule 'does not exist yet'
 RULE schedule 'not yet (implemented|landed|written)'
 RULE schedule '(once|after) [^,]{1,40} lands'
 RULE schedule 'will be (added|implemented|landed|removed)'
-RULE review-archaeology '[Rr]eview round'
+RULE review-archaeology '[Rr]eview round [0-9]'
+RULE review-archaeology '[Rr]eview rounds'
 RULE review-archaeology '[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
@@ -113,6 +130,13 @@ in_domain=0
 # still steal the file and the line number. Entry state is what content
 # cannot forge.
 seen_hunk=0
+# How many leading COLUMNS the current entry's body lines carry: 1 for an
+# ordinary diff, one per parent for a combined one. A combined line is in the
+# merge result only when none of its columns is `-`, and its own text starts
+# after the columns — counting it as context whenever it merely begins with a
+# space puts every later added line in the hunk one line too high, once per
+# such line.
+columns=1
 
 # The longest line this reader will match against. A sentence is not 200 KB,
 # and bash's matcher is quadratic in the subject's length: one minified .json
@@ -161,7 +185,7 @@ emit() {
   local shape="$1" file="$2" line="$3" text="$4"
   hits=$((hits + 1))
   printf '%s:%s: [%s] %s\n' "$file" "$line" "$shape" "$text"
-  printf '    remedy: apply the erasure test (SPEC §2.5) — with the repository'"'"'s history AND its plans erased, does this sentence still read as documentation of the current HEAD? A forward-looking sentence that carries its own condition is a contract and stays; one whose truth depends on a plan recorded elsewhere is a schedule and goes. If not, DELETE it (§2.5 makes deletion the default repair), restate it as the invariant it is really about, or move it to the surface that owns it: issue (problem, intent, decision), PR (implementation and review), commit message (the atomic change), SPEC/README (the current contract), or a comment (current invariants, rationale, API semantics).\n'
+  printf '    remedy: apply the erasure test (SPEC §2.5) — with the repository'"'"'s history AND its plans erased, does this sentence still read as documentation of the current HEAD? A forward-looking sentence whose condition RESOLVES from the living set is a contract and stays; one whose condition resolves only to a plan the tree does not carry is a schedule and goes. If not, DELETE it (§2.5 makes deletion the default repair), restate it as the invariant it is really about, or move it to the surface that owns it: issue (problem, intent, decision), PR (implementation and review), commit message (the atomic change), SPEC/README (the current contract), or a comment (current invariants, rationale, API semantics).\n'
 }
 
 # `|| [ -n "$raw" ]` so a final line with no trailing newline is still read.
@@ -174,6 +198,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
     path=""
     in_domain=0
     seen_hunk=0
+    columns=1
     continue
   fi
 
@@ -191,29 +216,38 @@ while IFS= read -r raw || [ -n "$raw" ]; do
 
   if [[ $raw =~ $HUNK_RE ]]; then
     seen_hunk=1
+    columns=1
     lineno=$((BASH_REMATCH[2] - 1))
     continue
   fi
   if [[ $raw =~ $COMBINED_HUNK_RE ]]; then
-    # The merge-result range is the last one, and a combined entry carries
-    # one leading column per parent — so an added line's own text starts
-    # after those columns, not after a single `+`.
+    # The merge-result range is the LAST one, and the column count is the
+    # number of leading `@` minus one — the parent count.
     seen_hunk=1
     lineno=$((BASH_REMATCH[3] - 1))
+    marker="${raw%%[^@]*}"
+    columns=$((${#marker} - 1))
+    [ "$columns" -lt 1 ] && columns=1
     continue
   fi
 
-  case "$raw" in
-    '+'*)
+  # A body line's leading COLUMNS decide whether it exists in the merge result
+  # and where its own text starts. `-` in any column means the line is absent
+  # from the result: it is neither counted nor read.
+  cols="${raw:0:columns}"
+  rest="${raw:columns}"
+  case "$cols" in
+    *-*)
+      # Deleted relative to some parent, so not present in the result.
+      continue
+      ;;
+  esac
+  case "$cols" in
+    *+*)
       if [ -n "$path" ]; then
         lineno=$((lineno + 1))
         if [ "$in_domain" = 1 ] && [ "${#raw}" -le "$MAX_LINE" ]; then
-          text="${raw#+}"
-          # A combined entry's remaining `+` columns are diff syntax, not the
-          # author's bytes.
-          while [[ $text == '+'* ]]; do
-            text="${text#+}"
-          done
+          text="$rest"
           # Trim a trailing CR, leading whitespace, and one comment marker, so
           # the report carries the sentence rather than the syntax around it.
           sentence="${text%$'\r'}"
@@ -239,8 +273,12 @@ while IFS= read -r raw || [ -n "$raw" ]; do
         fi
       fi
       ;;
-    ' '*)
-      [ -n "$path" ] && lineno=$((lineno + 1))
+    *)
+      # All columns blank: a context line, present in the result.
+      case "$cols" in
+        *[![:space:]]*) ;;
+        *) [ -n "$path" ] && lineno=$((lineno + 1)) ;;
+      esac
       ;;
   esac
 done
