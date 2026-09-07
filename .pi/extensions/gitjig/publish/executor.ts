@@ -112,8 +112,19 @@ const KIND_SPECS = {
  * table above rather than declared beside it (§3.11's one-home rule, which
  * the table's own doc block argues for and which a second enumeration
  * standing next to it quietly broke). The list is EXPORTED and the suite
- * enumerates it, so a kind added without an admission rule or an argv
- * spelling reds rather than publishing unchecked.
+ * enumerates it, so a kind added to the table is driven by the coverage and
+ * act-distinctness arms rather than publishing unmeasured.
+ *
+ * That sentence used to name a different guard — a kind added "without an
+ * admission rule or an argv spelling" — and the derivation emptied it: a
+ * kind can now only enter the list by entering the table, and a table entry
+ * IS its admission rule and its argv spelling. What the arms catch is a kind
+ * nothing covers, not a kind nothing admits.
+ *
+ * The two populations this derivation joins are the list and the table, and
+ * those alone. The list's one production consumer — the tool's declared
+ * parameter schema — is a third site, bound by its own arm rather than by
+ * this derivation.
  *
  * Comments were once the whole union while the shell also created issues
  * and pull requests and edited their bodies — the same guarded act, with no

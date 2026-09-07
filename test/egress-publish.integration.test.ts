@@ -799,10 +799,21 @@ interface PublishToolSpec {
  * (§1.5: an unavailable protection states its substitute, never drops it).
  */
 const PUBLISH_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "index.ts");
+const EXECUTOR_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts");
 let publishModule: Record<string, unknown> | undefined;
 let publishModuleFailure = "";
+/** The instrument's own kind population, for the declared-schema arm below. */
+let publishDestinationKinds: readonly string[] | undefined;
 
 before(async () => {
+	// The executor takes no package dependency, so this load succeeds even
+	// where the one below is skipped for a missing install.
+	if (existsSync(EXECUTOR_MODULE_PATH)) {
+		const mod = (await import(EXECUTOR_MODULE_PATH)) as Record<string, unknown>;
+		if (Array.isArray(mod.PUBLISH_DESTINATION_KINDS)) {
+			publishDestinationKinds = mod.PUBLISH_DESTINATION_KINDS as readonly string[];
+		}
+	}
 	if (!existsSync(PUBLISH_MODULE_PATH)) {
 		publishModuleFailure = "publish/index.ts does not exist";
 		return;
@@ -848,6 +859,64 @@ async function publishToolAgainstShim(
 	assert.ok(registered !== undefined, `${arm}: registerPublishTool registered no tool — the arm is vacuous`);
 	return { tool: registered, fixture };
 }
+
+describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.11's one-home rule)", () => {
+	it("the parameter schema's kind union is built from the instrument's own population", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the declared schema cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The exported kind list has exactly ONE production consumer: the tool's
+		// declared parameter schema. Deriving the list from the spec table closed
+		// the list-vs-table seam and left this one exactly as open — dropping a
+		// kind on the way to the union left the whole suite, the type checker and
+		// the linter green, and the kind simply vanished from the tool's declared
+		// interface.
+		//
+		// The direction is fail-CLOSED, which is why this is a smaller thing than
+		// the seam it follows: a kind missing from the union is refused at
+		// parameter validation, so the harm is a publish route that silently stops
+		// working rather than an unscanned publish, and a bogus kind ADDED to the
+		// union is still refused downstream by the admission check against the
+		// table. It is measured anyway, because "there is one population" is a
+		// claim this change makes, and an unmeasured binding is where the second
+		// population comes back.
+		let registered: { parameters?: Record<string, unknown> } | undefined;
+		(publishModule.registerPublishTool as (pi: unknown, repo: string, state: string) => void)(
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as { parameters?: Record<string, unknown> };
+				},
+			},
+			"/nonexistent-repo-root",
+			"/nonexistent-state-root",
+		);
+		assert.ok(registered !== undefined, "registerPublishTool registered no tool — the arm is vacuous");
+		const properties = (registered.parameters as { properties?: Record<string, unknown> } | undefined)?.properties;
+		const destination = properties?.destination as { properties?: Record<string, unknown> } | undefined;
+		const kind = destination?.properties?.kind as { anyOf?: Array<{ const?: unknown }> } | undefined;
+		assert.ok(
+			Array.isArray(kind?.anyOf),
+			"the declared schema no longer exposes the kind union as an alternation, so this arm cannot read the population it exists to bind — red rather than pass silently",
+		);
+		assert.ok(
+			publishDestinationKinds !== undefined,
+			"red until publish/executor.ts exports PUBLISH_DESTINATION_KINDS — without it this arm would be comparing the schema against nothing",
+		);
+		const declared = kind.anyOf.map((member) => member.const).sort();
+		assert.deepEqual(
+			declared,
+			[...publishDestinationKinds].sort(),
+			"the kinds the tool DECLARES are not the kinds the instrument publishes to. The declared union is the list's only production consumer, so a kind dropped between them disappears from the tool's interface while every enumeration of kinds still names it",
+		);
+		assert.ok(
+			declared.length > 0,
+			"the declared union is empty, which would refuse every destination while reading as agreement",
+		);
+	});
+});
 
 describe("the count is present at ZERO on the structured face (issue #129, SPEC §3.3)", () => {
 	const fixtures: Fixture[] = [];
