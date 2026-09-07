@@ -79,6 +79,13 @@ let neutralizeBody: ((body: string) => string) | undefined;
 let neutralizeForDestination: ((body: string, kind: string) => { text: string; neutralized: number }) | undefined;
 /** The loader's subset predicate, loaded the same guarded way. */
 let inCommonSubset: ((ere: string) => boolean) | undefined;
+/**
+ * The instrument's OWN kind list, loaded the same guarded way — the
+ * population the two kind lists below must partition. Read from the module
+ * rather than retyped, so a kind added there cannot go unmeasured here.
+ */
+const EXECUTOR_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts");
+let publishDestinationKinds: readonly string[] | undefined;
 
 before(async () => {
 	// Guarded dynamic import: while the module is absent the arms below red
@@ -94,6 +101,12 @@ before(async () => {
 				body: string,
 				kind: string,
 			) => { text: string; neutralized: number };
+		}
+	}
+	if (existsSync(EXECUTOR_MODULE_PATH)) {
+		const mod = (await import(EXECUTOR_MODULE_PATH)) as Record<string, unknown>;
+		if (Array.isArray(mod.PUBLISH_DESTINATION_KINDS)) {
+			publishDestinationKinds = mod.PUBLISH_DESTINATION_KINDS as readonly string[];
 		}
 	}
 	if (existsSync(SCAN_MODULE_PATH)) {
@@ -607,6 +620,36 @@ function requireBoundary(arm: string): (body: string, kind: string) => { text: s
 }
 
 describe("§1.1's linkage line publishes live on a pull request description (issue #129)", () => {
+	it("the two kind lists PARTITION the instrument's own kinds — no kind goes unmeasured", () => {
+		// The BY KIND arms below iterate two hand-written lists. Their claim is
+		// about every kind the instrument admits, not about six names typed here,
+		// and nothing tied the one to the other: a SEVENTH kind added to the
+		// publish surface would appear in neither list, so neither arm would drive
+		// it and the exemption's kind bound would be unmeasured for exactly the
+		// kind nobody had thought about. That is the wrong-allow direction — an
+		// unclassified kind that takes the exemption opens §3.11's auto-close
+		// channel on a surface no arm covers.
+		//
+		// The population is therefore read off the instrument and partitioned
+		// here: disjoint, and exhaustive. A new kind reds this arm until someone
+		// decides, deliberately, which side of the bound it belongs on.
+		assert.ok(
+			publishDestinationKinds !== undefined,
+			"red until publish/executor.ts exports PUBLISH_DESTINATION_KINDS — without it this arm cannot read the population it exists to bind, and would be asserting two hand-written lists against each other",
+		);
+		const partition = [...DESCRIPTION_KINDS, ...NON_DESCRIPTION_KINDS].sort();
+		assert.deepEqual(
+			partition,
+			[...publishDestinationKinds].sort(),
+			"the kinds these arms drive are not the kinds the instrument publishes to. Every kind must sit on exactly one side of the exemption's kind bound, and a kind in neither list is one no arm below can reach",
+		);
+		assert.equal(
+			new Set(partition).size,
+			partition.length,
+			"a kind appears in BOTH lists: it would be asserted to pass the line through and to neutralize it, and one of the two arms would be measuring the opposite of what it claims",
+		);
+	});
+
 	it("the exemption is not inside the one predicate — neutralizeBody still wraps the line", () => {
 		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
 		assert.notEqual(
