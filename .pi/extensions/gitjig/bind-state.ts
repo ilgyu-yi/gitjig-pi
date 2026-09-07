@@ -18,10 +18,14 @@
  * classify the wrong clone (a linked worktree must be classified at ITS
  * top, where the adapters resolve). `locateRepoRoot()` names, with no test
  * seam set, the state root the TTL stamp lands under, since
- * `resolveStateRoot()` derives it from that same root: the debounce is
- * therefore keyed to the EXTENSION's repository while classification is
- * keyed to the session cwd. The two coincide in every shipped shape (the
- * extension is loaded from the clone the session stands in).
+ * `resolveStateRoot()` derives it from that same root. So the two are
+ * rooted differently on purpose: the state root is INSTALL-rooted, while
+ * the stamp's NAME within it is keyed to the repository classified above
+ * (`bindAdvisoryStampPath`). They no longer need to coincide, and issue
+ * #125 is what disproved the premise that they always did — one
+ * shell-owned state root stands behind every repository a checkout is
+ * invoked against (§5.5's fall-through disposition), so a debounce keyed
+ * on that root alone let a session in one repository spend another's.
  *
  * The module's own READ of the TTL stamp goes through `readGatedFile`: open
  * the path under `audit.ts`'s guard flags, then require a plain regular file

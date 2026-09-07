@@ -40,8 +40,11 @@
  *     repository resolve that names the stamp now runs BEFORE the compute.
  *     The COMPUTE limb is pinned by the erroring-child arm, whose shim
  *     leaves `rev-parse` working. The two guards sit in SERIES, so neither
- *     alone is killable by a single-point mutant — defense in depth, and
- *     declared rather than mistaken for coverage. What holds the pair is
+ *     is killable by THE HUNG-RESOLVE ARM alone — defense in depth, and
+ *     declared rather than mistaken for coverage. (The compute guard IS
+ *     killed by a single-point mutant: removing it reddens the
+ *     erroring-child arm. It is this fixture that cannot reach either.)
+ *     What holds the pair is
  *     the issue #125 block's stampless arm: it reads the WHOLE state root
  *     rather than one keyed path, so it reddens when both guards go, and
  *     it is the only arm here that can observe a stamp written under a key
@@ -1113,6 +1116,55 @@ describe("the TTL debounce is scoped per classified repository (issue #125, SPEC
 				`an unresolvable repository earned a TTL stamp: ${JSON.stringify(readdirSync(stateRoot))}. ` +
 					`Only a SUCCESSFUL compute stamps (§5.9), and a stamp under any key at all here is one ` +
 					`written for a repository the session could not name (issue #125)`,
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("the key is repository-granular, not directory-granular: a subdirectory shares the debounce", async () => {
+		// GRANULARITY, which is a different property from the separation the
+		// first arm measures. Those arms discriminate BETWEEN repositories and
+		// stay green if the key is the raw cwd, because two repositories have
+		// two cwds as surely as they have two tops. What only this arm sees is
+		// keying one repository under several names: `BIND_ADVISORY_TTL_MS`
+		// promises at most one compute per classified repository per hour, and
+		// §5.5 asks the datum to carry "the repository it concerns" — a
+		// subdirectory is the same repository, so it must not earn a second
+		// advisory. A symlinked spelling is the same claim through the other
+		// resolution the key performs.
+		const base = scratch();
+		try {
+			const top = repo(base, "zqgranular", "zqforeignhooks");
+			const sub = join(top, "zqsubdir");
+			mkdirSync(sub);
+			const link = join(base, "zqspelling");
+			symlinkSync(top, link);
+			const stateRoot = join(base, "state");
+
+			assert.deepEqual(
+				await advise(top, stateRoot),
+				["foreign-bound"],
+				"positive control: the repository must advise from its own top before a shared debounce can " +
+					"mean anything",
+			);
+			for (const [label, cwd] of [
+				["a subdirectory of it", sub],
+				["a symlinked spelling of it", link],
+			] as const) {
+				assert.deepEqual(
+					await advise(cwd, stateRoot),
+					[],
+					`a session in ${label} earned a second advisory inside the TTL: the key is granular per ` +
+						`DIRECTORY rather than per repository, so one repository debounces under as many keys ` +
+						`as it has spellings (§5.5's "the repository it concerns"; §5.9's cadence)`,
+				);
+			}
+			assert.deepEqual(
+				readdirSync(stateRoot).length,
+				1,
+				`three sessions in ONE repository left ${JSON.stringify(readdirSync(stateRoot))} — one ` +
+					`repository owns one stamp, whatever spelling reached it`,
 			);
 		} finally {
 			rmSync(base, { recursive: true, force: true });
