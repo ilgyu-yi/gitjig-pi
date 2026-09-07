@@ -815,14 +815,21 @@ before(async () => {
 });
 
 /** Registers the real publish tool against a `gh` shim, and returns its execute face. */
-async function publishToolAgainstShim(arm: string): Promise<{ tool: PublishToolSpec; fixture: Fixture }> {
+async function publishToolAgainstShim(
+	arm: string,
+	// The success output the shim prints. Defaulted to the comment URL the
+	// comment verbs promise; a create kind is validated against the SURFACE
+	// shape instead, and a shim printing the wrong one reports
+	// outcome-unverified rather than published.
+	successUrl: string = SHIM_URL,
+): Promise<{ tool: PublishToolSpec; fixture: Fixture }> {
 	const fixture = buildFixture({ script: [], linkGitjigRuntime: true });
 	const binDir = join(fixture.root, "bin");
 	const sinkDir = join(fixture.root, "sink");
 	mkdirSync(binDir);
 	mkdirSync(sinkDir);
 	const shimPath = join(binDir, "gh");
-	writeFileSync(shimPath, `#!/bin/sh\ncat > "${sinkDir}/gh-stdin"\nprintf '%s\\n' '${SHIM_URL}'\n`);
+	writeFileSync(shimPath, `#!/bin/sh\ncat > "${sinkDir}/gh-stdin"\nprintf '%s\\n' '${successUrl}'\n`);
 	chmodSync(shimPath, 0o755);
 	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
 	const mod = publishModule;
@@ -902,6 +909,39 @@ describe("the count is present at ZERO on the structured face (issue #129, SPEC 
 			out.details.neutralized,
 			2,
 			"two shapes were made inert and the structured count must say so — a field that is always 0 satisfies the zero arm and reports nothing",
+		);
+	});
+
+	it("the structured count sums BOTH operands, not the body alone", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The call site says the report is "a COUNT over both operands". The two
+		// arms above drive a comment kind with NO title, so the title term is
+		// undefined in both and contributes nothing either way — a structured
+		// count that silently dropped the title survived all 837 tests. The one
+		// arm that does exercise a title's contribution reads the result TEXT,
+		// so text and structure were each measured on one operand and the two
+		// measurements never overlapped.
+		//
+		// One shape in each operand, so the total dies if EITHER term is dropped.
+		// A create kind because it is the only shape that publishes a title, and
+		// its success is validated against the surface URL rather than a comment
+		// URL — hence the shim's output here.
+		const { tool, fixture } = await publishToolAgainstShim("count over both operands", SURFACE_SHIM_URL);
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "thanks @zqbodyuser for the review.\n",
+			destination: { kind: "pr-create", title: "ping @zqtitleuser" },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.equal(
+			out.details.neutralized,
+			2,
+			"the structured count reported one operand only. One shape was made inert in the body and one in the title, so the field a caller reads programmatically must say 2 — a body-only count leaves a caller told their title crossed unchanged, and makes the structured face disagree with the text the same send prints",
 		);
 	});
 });

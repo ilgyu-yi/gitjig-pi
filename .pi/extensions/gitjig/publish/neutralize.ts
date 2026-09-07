@@ -122,8 +122,11 @@ function neutralizeCore(body: string): NeutralizationOutcome {
 
 /**
  * The published spelling of `body`: every actionable shape wrapped whole.
- * The unexempted face of the one predicate — what a title crosses, and
- * what every conformance arm binds to.
+ * The unexempted face of the one predicate, as plain text — the shape the
+ * conformance arms that predate the boundary bind to. A title does NOT
+ * cross here: it takes `neutralizeOperand`, which is this face plus the
+ * count. Both halves of that sentence were true before the split below
+ * existed and neither survived it.
  */
 export function neutralizeBody(body: string): string {
 	return neutralizeCore(body).text;
