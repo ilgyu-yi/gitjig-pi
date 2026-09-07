@@ -937,6 +937,19 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 			Array.isArray(topRequired) && topRequired.includes("destination") && topRequired.includes("body"),
 			`the tool does not DECLARE both published operands required. Every send has a body and a destination; an interface saying otherwise invites a call the instrument then refuses. Declared required set was: ${JSON.stringify(topRequired)}`,
 		);
+		// Membership and required-ness are two axes; the PROPERTY SET is a third.
+		// A property added to the declared destination that the instrument never
+		// reads survives everything above — the union is unchanged and the
+		// required set is unchanged — so the tool can advertise an operand the
+		// boundary silently ignores. The harm is a misleading interface rather
+		// than an unscanned publish: the child is cwd-pinned to the runtime's own
+		// repository, so a caller who believed a declared field had retargeted
+		// their publish would still publish here.
+		assert.deepEqual(
+			Object.keys(destination?.properties ?? {}).sort(),
+			["kind", "number", "title"],
+			"the tool DECLARES a destination field set the instrument does not consume. Every declared operand must be one the boundary actually reads, or the interface invites a call whose extra field is silently dropped",
+		);
 	});
 });
 
