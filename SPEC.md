@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 322 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 329 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 337 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 434 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 438 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 442 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 452 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 464 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 477 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 491 |
-| &nbsp;&nbsp;§3.11 | Gate design | 501 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 523 |
-| §4 | Substrate and install contract | 533 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 537 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 543 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 547 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 551 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 555 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 561 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 571 |
-| &nbsp;&nbsp;§4.8 | The command layer | 579 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 636 |
-| §5 | Cross-cutting contracts | 678 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 682 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 686 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 690 |
-| &nbsp;&nbsp;§5.4 | Work language | 694 |
-| &nbsp;&nbsp;§5.5 | State boundary | 698 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 704 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 714 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 724 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 732 |
-| §6 | Self-governance milestone | 740 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 751 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 440 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 444 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 448 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 458 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 470 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 483 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 497 |
+| &nbsp;&nbsp;§3.11 | Gate design | 507 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 529 |
+| §4 | Substrate and install contract | 539 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 543 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 549 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 553 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 557 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 561 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 567 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 577 |
+| &nbsp;&nbsp;§4.8 | The command layer | 585 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 642 |
+| §5 | Cross-cutting contracts | 684 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 688 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 692 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 696 |
+| &nbsp;&nbsp;§5.4 | Work language | 700 |
+| &nbsp;&nbsp;§5.5 | State boundary | 704 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 710 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 720 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 730 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 738 |
+| §6 | Self-governance milestone | 746 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 757 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -413,7 +413,13 @@ With P in hand, the boundary is total over what the adapter hands the predicate.
 - **Pattern match** → refused: the record carries pattern IDs and line locators and **never** the matched text or the body (§3.8's refusal-record rule; §5.5's reduced-record shape). The return channel is bound by §4.9's measured ground — a registered tool's result enters the run's transcript — and a result a composer may later relay stays content-free with respect to what the refusal withheld.
 - **Clean** → the publication runs through a bounded child whose success is keyed on **output validity, never exit status** (§3.10), all five of that section's outcome classes refusing admission: the delegate absent, a failed run, junk output, partial success, and the payload on the wrong stream. A failure record excludes the child's streams, which can echo request bodies. One further terminal outcome is owed — **outcome-unverified**, for post-send ambiguity: the send left the process and no valid outcome can be established, so the tool claims neither publication nor withholding; a withholding claim is made only where it can be known — §5.6's unconfirmable-publish-toward-silence direction.
 
-*Neutralization.* The relayed-side-effect obligation §3.6's worked application binds to this instrument runs on **its own pattern set** — mention shapes are not secret patterns: `@`-mentions, close-keyword + issue-reference pairs in their case variants, `GH-N` forms, URL-form issue references, and cross-repository references are each transformed to an inert spelling (backtick-wrapped), so republished text cannot page uninvolved parties or drive the platform's auto-close channel from inside a relayed body (§3.11's auto-close essential; §3.7(e)). One shape stays live as a **recorded decision**: the bare same-repository `#N`. It is the shell's own pointer idiom — the in-repo citation form §5.1 commits every durable artifact to — and neutralizing it would break every body this instrument publishes.
+*Neutralization.* The relayed-side-effect obligation §3.6's worked application binds to this instrument runs on **its own pattern set** — mention shapes are not secret patterns: `@`-mentions, close-keyword + issue-reference pairs in their case variants, `GH-N` forms, URL-form issue references, and cross-repository references are each transformed to an inert spelling (backtick-wrapped), so republished text cannot page uninvolved parties or drive the platform's auto-close channel from inside a relayed body (§3.11's auto-close essential; §3.7(e)). **Two** shapes stay live as recorded decisions, and each is live for its own reason rather than by a shared exemption.
+
+The first is the bare same-repository `#N`. It is the shell's own pointer idiom — the in-repo citation form §5.1 commits every durable artifact to — and neutralizing it would break every body this instrument publishes.
+
+The second is **§1.1's linkage line**: a body whose FIRST line is exactly that section's closing spelling, published to a pull request's own description. §1.1 fixes that line's grammar and the platform reads it as a control rather than as prose, so neutralizing it makes the instrument unable to publish a body the standard flow requires — the composing actor is left choosing between §1.1 and §3.4. The exemption is bounded on three axes at once, and each bound is load-bearing. **By kind:** it reaches only the two destinations that write a pull request's description, never an issue body, never a comment, and never a title — the auto-close channel §3.11 governs is opened from a description, and a blanket exemption would re-open it everywhere else. **By position:** the first line only; a closing reference anywhere below it is relayed prose and neutralizes. **By grammar:** §1.1's own spelling and nothing adjacent to it, so a variant the platform would honour is neutralized rather than guessed at. The narrowness is what the reporting rule below pays for: a body that meant to link and spelled it otherwise is told so, instead of being read as an exemption the author did not earn.
+
+*Reporting.* Neutralization is **never silent**. Where the instrument makes any actionable reference inert, the published result says so — how many shapes were transformed, without the text — so a caller whose reference was rewritten learns it from the outcome rather than by reading the surface afterwards. A send that reports success while having removed the effect the caller composed for is an unmeasured allow at this gate's own surface (§3.9), and the same obligation binds whatever disposition a later amendment takes on the exemption above.
 
 *Named false-block cost (§3.6).* A body legitimately carrying format characters inside a secret-shaped span is over-blocked by the Cf strip, which joins what its author meant as inert. The in-flow recovery is defuse-and-recall: respell the span inertly and call the tool again — no repair commit and no escape needed, because the refused body never left the session.
 
