@@ -619,6 +619,16 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 	it("the standing separator arm's inputs are untouched by the exemption, at the boundary too", () => {
 		// The second independent ground. Even where the exemption applies, a
 		// `fixes` spelling is not §1.1's and must still be wrapped.
+		//
+		// WHICH inputs carry that ground, measured rather than assumed: the three
+		// SINGLE-LINE spellings do. Under a mutant admitting the fixes family as a
+		// whole well-formed line, those three survive un-neutralized and red this
+		// arm. The four multi-line spellings stay wrapped under that same mutant,
+		// because their reference sits below line one and position disqualifies
+		// them before grammar is consulted — they are non-regression cover for the
+		// standing separator arm, not measurements of the grammar bound. Recorded
+		// so the arm is not read as carrying seven inputs' worth of grammar
+		// evidence when it carries three.
 		const at = requireBoundary("separator arm");
 		for (const body of ["fixes #4", "fixes: #4", "fixes:#4", "fixes\n#4", "fixes\n   #4", "fixes:\n#4", "fixes \n#4"]) {
 			for (const kind of DESCRIPTION_KINDS) {
@@ -682,6 +692,16 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			/`+ Closes #7 `+/,
 			"§1.1's exact grammar published LIVE off the first line. Position is a load-bearing bound on its own: §1.1 fixes line one and nothing else, so a reference anywhere below it is prose this instrument relays, however it is spelled",
 		);
+		// The positive shape above shows A wrapped copy exists; it forbids nothing,
+		// so a second LIVE copy beside it would satisfy it. The absence probe is
+		// the half that forbids. Its lookbehind is what the original spelling got
+		// wrong: `[^`]` matched the space the wrap pads with, so a wrapped span
+		// read as live and the assertion was vacuous in the other direction.
+		assert.doesNotMatch(
+			out.text,
+			/(?<!` )Closes #7/,
+			"an unwrapped occurrence survives somewhere in the output. Every occurrence must be wrapped, not merely one of them",
+		);
 		assert.equal(out.neutralized, 1, "the below-the-line reference should be counted");
 	});
 
@@ -696,6 +716,13 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			out.text.slice(LINKAGE.length),
 			/`+ Closes #7 `+/,
 			"a second §1.1-shaped line published live: the exemption is one line, not every line matching the grammar",
+		);
+		// The forbidding half, as above. Scoped past the exempted first line,
+		// which is live BY DESIGN and would trip the probe.
+		assert.doesNotMatch(
+			out.text.slice(LINKAGE.length),
+			/(?<!` )Closes #7/,
+			"an unwrapped occurrence survives below the exempted line",
 		);
 		assert.equal(out.neutralized, 1, "exactly one of the two lines is neutralized");
 	});
@@ -793,6 +820,47 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			);
 		}
 		assert.equal(out.neutralized, 3, "three actionable shapes below the line, three counted");
+	});
+
+	it("an address-shaped span is not a mention: it crosses untouched and uncounted", () => {
+		// The mention pattern's comment states TWO claims — it admits a mention
+		// after whitespace or punctuation, and it EXCLUDES an `@` preceded by a
+		// word character. Several arms pin the admitting half. Nothing pinned the
+		// excluding half: dropping it survived all 833 tests, because no input
+		// anywhere in test/ put a word character immediately ahead of an `@`.
+		//
+		// The bound is load-bearing in the over-wrap direction. Under the
+		// survivor, a relayed address publishes MANGLED — its local part severed
+		// from its domain by an injected backtick run — and the count tells the
+		// caller a shape was made inert when none was, which is the reporting
+		// rule lying in the direction it exists to prevent.
+		//
+		// Pre-existing, not introduced by the exemption. Repaired here because it
+		// is one arm against a pattern in the module this change already touches,
+		// and it is the same defect class this change's own review exists to close.
+		const at = requireBoundary("address-shaped span");
+		for (const kind of ["pr-body", "issue-comment"]) {
+			const body = "reach me at ada@zqexample.com\n";
+			const out = at(body, kind);
+			assert.equal(
+				out.text,
+				body,
+				`${kind}: an address-shaped span was rewritten. The mention pattern excludes an @ preceded by a word character precisely so a relayed address is not severed from its domain by the wrap — republishing it mangled corrupts the caller's own bytes`,
+			);
+			assert.equal(
+				out.neutralized,
+				0,
+				`${kind}: nothing was made inert, so the count must say 0. A count that reports a rewrite that did not happen is the reporting rule lying in the over-reporting direction`,
+			);
+		}
+		// The admitting half, asserted beside it so a future change cannot buy the
+		// exclusion by giving up real mentions — the two claims stand together.
+		const admitted = at("ping @zquser and (@zqother) now", "issue-comment");
+		assert.equal(
+			admitted.neutralized,
+			2,
+			"a mention after a space and one after punctuation must both still be caught",
+		);
 	});
 
 	it("the count never carries the text it counted (§3.8's refusal-record rule)", () => {
