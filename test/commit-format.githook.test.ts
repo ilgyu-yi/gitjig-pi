@@ -94,8 +94,9 @@ function assertRefusedThroughAdapter(attempt: CommitAttempt, arm: string): void 
 	assert.notEqual(
 		attempt.status,
 		0,
-		`${arm}: the commit SUCCEEDED — the chain fell through fail-open instead of refusing (red until ` +
-			`.githooks/helpers/conventional_commit.sh lands and check_commit_subject refuses this subject)`,
+		`${arm}: the commit SUCCEEDED — the chain fell through fail-open instead of refusing, which is ` +
+			`what happens when .githooks/helpers/conventional_commit.sh is absent or check_commit_subject ` +
+			`does not refuse this subject`,
 	);
 	assert.match(
 		attempt.stderr,

@@ -124,10 +124,11 @@ const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 /** The expected governed-home multiset — §4.8's three worked cases on their ruled surfaces. */
 const EXPECTED_GOVERNED_ROWS = ["review|extension", "ship|extension", "work-on|prompt"];
 
-function redUntilLanded(arm: string, subject: string): string {
+function subjectAbsent(arm: string, subject: string): string {
 	return (
-		`${arm}: red until the Code phase lands ${subject} (issue #91; SPEC §4.8's worked cases place ` +
-		`work-on at .pi/prompts/work-on.md and review/ship as extension commands from the gitjig entry)`
+		`${arm}: ${subject} does not resolve, so this arm's subject does not exist to be measured. SPEC ` +
+		`§4.8's worked cases place work-on at .pi/prompts/work-on.md and review/ship as extension commands ` +
+		`from the gitjig entry`
 	);
 }
 
@@ -468,7 +469,7 @@ function requireReviewEntry(arm: string): Record<string, unknown> {
 	assert.equal(
 		entries.length,
 		1,
-		`${redUntilLanded(arm, "the review extension command")} — no gitjig-review session entry crossed ` +
+		`${subjectAbsent(arm, "the review extension command")} — no gitjig-review session entry crossed ` +
 			`back from the /review dispatch\n${diagnostics(reviewRun)}`,
 	);
 	return entries[0] as Record<string, unknown>;
@@ -480,7 +481,7 @@ function requireShipEntry(arm: string): Record<string, unknown> {
 	assert.equal(
 		entries.length,
 		1,
-		`${redUntilLanded(arm, "the ship extension command")} — no gitjig-ship session entry crossed back ` +
+		`${subjectAbsent(arm, "the ship extension command")} — no gitjig-ship session entry crossed back ` +
 			`from the /ship invocation\n${diagnostics(shipRun)}`,
 	);
 	return entries[0] as Record<string, unknown>;
@@ -504,7 +505,7 @@ function requireGovernedRow(arm: string, name: string, subject: string): Command
 	assert.equal(
 		rows.length,
 		1,
-		`${redUntilLanded(arm, subject)} — the substrate's command list reports no governed-home row named ` +
+		`${subjectAbsent(arm, subject)} — the substrate's command list reports no governed-home row named ` +
 			`"${name}" (scope=project, baseDir=<fixture>/.pi); governed rows seen: ` +
 			`${JSON.stringify(governedMultiset(registrationRun, registrationFixture))}\n${diagnostics(registrationRun)}`,
 	);
@@ -588,7 +589,7 @@ describe("cross-surface uniqueness over the governed home (issue #91 AC 2)", () 
 		assert.deepEqual(
 			governedMultiset(registrationRun, registrationFixture),
 			EXPECTED_GOVERNED_ROWS,
-			`${redUntilLanded("uniqueness", "all three spine assets")} — full-row-multiset equality is what ` +
+			`${subjectAbsent("uniqueness", "all three spine assets")} — full-row-multiset equality is what ` +
 				`fails on every collision shape §4.8 measured (within-surface suffixing, cross-surface ` +
 				`side-by-side rows, an alias's extra row) as well as on a missing asset\n${diagnostics(registrationRun)}`,
 		);
@@ -810,7 +811,7 @@ describe("the work-on template carries the flow's entry and order (issue #91 AC 
 		const templatePath = join(repoRoot(), ".pi", "prompts", "work-on.md");
 		assert.ok(
 			existsSync(templatePath),
-			redUntilLanded("work-on-template", "the work-on prompt template at .pi/prompts/work-on.md"),
+			subjectAbsent("work-on-template", "the work-on prompt template at .pi/prompts/work-on.md"),
 		);
 		const template = readFileSync(templatePath, "utf8");
 		assert.ok(
@@ -869,8 +870,7 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 // cannot vary an argument string cheaply. These arms drive the REGISTERED
 // HANDLER directly instead: the grammar is a pure function of the argument
 // string, and what must be pinned is which token the parser consumes and what
-// consequently reaches the delegate. Round 2 found this surface pinned by
-// nothing at all -- the parser was new and no arm anywhere drove it.
+// consequently reaches the delegate.
 // ---------------------------------------------------------------------------
 
 describe("/review's bound token is consumed from first position only (issue #94, SPEC §4.8, §4.9)", () => {

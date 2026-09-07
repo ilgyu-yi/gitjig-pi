@@ -87,10 +87,11 @@ const EXEC_PAYLOAD = "ZQEXECPAYLOAD";
 const EXEC_BODY = "zqexec publish body carrying " + EXEC_PAYLOAD + "\n";
 const STREAM_MARKER = "ZQCHILDSTREAM";
 
-function redUntilRegistered(arm: string): string {
+function toolUnregistered(arm: string): string {
 	return (
-		`${arm}: red until the Code phase registers the ${TOOL} tool (issue #83; SPEC §3.3's egress ` +
-		`home slot) — the scripted toolCall reached no handler and the substrate answered for the missing tool`
+		`${arm}: the ${TOOL} tool is not registered with the substrate, so the scripted toolCall reached ` +
+		`no handler and the substrate answered for the missing tool. SPEC §3.3's egress home slot is where ` +
+		`that registration belongs, and this arm's subject is that it is there`
 	);
 }
 
@@ -173,7 +174,7 @@ function requireOwnResult(run: ExecutorRun, arm: string): ToolResultMessage {
 	const results = publishResults(run.fixture);
 	assert.equal(results.length, 1, `${arm}: expected exactly one ${TOOL} toolResult\n${diagnostics(run.result)}`);
 	const own = results[0];
-	assert.ok(!SUBSTRATE_NOT_FOUND.test(textOf(own)), redUntilRegistered(arm));
+	assert.ok(!SUBSTRATE_NOT_FOUND.test(textOf(own)), toolUnregistered(arm));
 	return own;
 }
 
@@ -293,7 +294,7 @@ describe("delegate absent: no gh on PATH refuses admission with a record (issue 
 			egressAuditLines(absentRun).length >= 1,
 			"delegate-absent: no egress audit record — a presence-probe-free executor still owes its refusal a " +
 				"record (§3.5); " +
-				redUntilRegistered("delegate-absent record"),
+				toolUnregistered("delegate-absent record"),
 		);
 		assertNoSuccessClaim(absentRun, "delegate-absent");
 	});
@@ -305,14 +306,14 @@ describe("failed run: non-zero exit refuses admission, streams excluded (issue #
 	});
 
 	it("no success claim, and no child-stream bytes in any record", () => {
-		assert.ok(egressAuditLines(failedRun).length >= 1, redUntilRegistered("failed-run record"));
+		assert.ok(egressAuditLines(failedRun).length >= 1, toolUnregistered("failed-run record"));
 		assertNoSuccessClaim(failedRun, "failed-run");
 		assertStreamsExcluded(failedRun, "failed-run");
 	});
 
 	it("the child ran with its cwd pinned to the runtime's repository root", () => {
 		const cwdPath = join(failedRun.sinkDir, "gh-cwd");
-		assert.ok(existsSync(cwdPath), redUntilRegistered("child-cwd capture"));
+		assert.ok(existsSync(cwdPath), toolUnregistered("child-cwd capture"));
 		assert.equal(
 			readFileSync(cwdPath, "utf8").trim(),
 			repoRoot(),
@@ -348,7 +349,7 @@ describe("a stdin-echoing hostile child cannot ride its bytes into a record (iss
 	});
 
 	it("no success claim, and the echoed body reaches no record", () => {
-		assert.ok(egressAuditLines(echoRun).length >= 1, redUntilRegistered("stdin-echo record"));
+		assert.ok(egressAuditLines(echoRun).length >= 1, toolUnregistered("stdin-echo record"));
 		assertNoSuccessClaim(echoRun, "stdin-echo");
 		assertStreamsExcluded(echoRun, "stdin-echo");
 	});
@@ -360,7 +361,7 @@ describe("the payload on the wrong stream refuses admission (issue #83)", () => 
 	});
 
 	it("a URL on stderr is not output validity: no success claim, URL in no record", () => {
-		assert.ok(egressAuditLines(wrongStreamRun).length >= 1, redUntilRegistered("wrong-stream record"));
+		assert.ok(egressAuditLines(wrongStreamRun).length >= 1, toolUnregistered("wrong-stream record"));
 		assertNoSuccessClaim(wrongStreamRun, "wrong-stream");
 	});
 });
@@ -384,7 +385,7 @@ describe("a late in-bound exit behind an orphan-held pipe publishes (issue #85, 
 		// with the URL on stdout; only a kill timer left armed across the flush
 		// grace can turn that into a timeout refusal.
 		const results = publishResults(orphanLateRun.fixture).map((message) => textOf(message));
-		assert.ok(results.length >= 1, redUntilRegistered("orphan-late result"));
+		assert.ok(results.length >= 1, toolUnregistered("orphan-late result"));
 		const joined = results.join("\n");
 		assert.ok(
 			joined.includes(SUCCESS_URL_TOKEN),

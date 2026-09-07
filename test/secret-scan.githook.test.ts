@@ -34,7 +34,8 @@
  *     own refusal arm (§3.12). Machinery arms author their own degenerate
  *     fixture-local pattern files unconditionally — their contract IS the
  *     degenerate file. The committed-file pins at the bottom assert
- *     against the repository path itself and are red until the file lands.
+ *     against the repository path itself, so their subject is the committed
+ *     file rather than any fixture substitute.
  *   - The protected identity and every content marker use DISTINCTIVE
  *     spellings (`zq…`): byte-level "these bytes reached no surface"
  *     assertions must not collide with incidental git output.
@@ -219,8 +220,8 @@ function assertSecretRefused(
 		attempt.auditDelta,
 		/\bblock\b.*\bsecret\b/,
 		`${arm}: no block record naming the secret class was appended — the commit fell through the ` +
-			`fail-open chain (red until .githooks/helpers/secret_scan.sh lands and scan_staged_secrets ` +
-			`refuses this staged diff); delta: ${JSON.stringify(attempt.auditDelta)}`,
+			`fail-open chain, which is what happens when .githooks/helpers/secret_scan.sh is absent or ` +
+			`scan_staged_secrets does not refuse this staged diff; delta: ${JSON.stringify(attempt.auditDelta)}`,
 	);
 	assert.notEqual(attempt.status, 0, `${arm}: the guarded commit SUCCEEDED through the chain`);
 	assert.match(
@@ -275,8 +276,8 @@ function assertAllowedOrdinarily(attempt: CommitAttempt, arm: string): void {
 /**
  * The machinery-degradation observable (§3.9): the commit is ALLOWED, no
  * block record, and exactly one warn record says the scan is not enforced.
- * The allow half holds in both tree states; the SIGNAL is red until the
- * helper lands and disarms with its warn (the branch-guard shape).
+ * The allow half holds in both tree states; the SIGNAL is what separates a
+ * disarmed allow from an ordinary one (the branch-guard shape).
  */
 function assertDisarmedOpen(attempt: CommitAttempt, arm: string): void {
 	assert.equal(
@@ -295,7 +296,7 @@ function assertDisarmedOpen(attempt: CommitAttempt, arm: string): void {
 		lines.length,
 		1,
 		`${arm}: expected exactly one audit record stating the scan is not enforced (§3.9's ` +
-			`degradation-signal rule; red until scan_staged_secrets lands and disarms with its warn); ` +
+			`degradation-signal rule, which a disarmed scan satisfies with its warn); ` +
 			`delta: ${JSON.stringify(attempt.auditDelta)}`,
 	);
 	assert.match(lines[0], /\bwarn\b/, `${arm}: the disarmed-gate record is a warn, never a block`);
@@ -554,7 +555,7 @@ describe("an unmeasurable staged input refuses on its own cause (issue #66, SPEC
 			binaryRefusal.auditDelta,
 			/\bblock\b.*\bsecret\b/,
 			`binary input: no block record was appended — the commit fell through the fail-open chain ` +
-				`(red until scan_staged_secrets lands and refuses what it cannot measure); ` +
+				`, which is what happens when scan_staged_secrets does not refuse what it cannot measure; ` +
 				`delta: ${JSON.stringify(binaryRefusal.auditDelta)}`,
 		);
 		assert.notEqual(binaryRefusal.status, 0, "binary input: the guarded commit SUCCEEDED");
@@ -576,13 +577,13 @@ describe("an unmeasurable staged input refuses on its own cause (issue #66, SPEC
 		assert.match(
 			patternRefusal.auditDelta,
 			/\bblock\b.*\bsecret\b/,
-			`pattern reference: no block record (red until scan_staged_secrets lands); ` +
+			`pattern reference: no block record, so scan_staged_secrets did not refuse; ` +
 				`delta: ${JSON.stringify(patternRefusal.auditDelta)}`,
 		);
 		assert.match(
 			binaryRefusal.auditDelta,
 			/\bblock\b.*\bsecret\b/,
-			`binary input: no block record (red until scan_staged_secrets lands); ` +
+			`binary input: no block record, so scan_staged_secrets did not refuse; ` +
 				`delta: ${JSON.stringify(binaryRefusal.auditDelta)}`,
 		);
 		assert.notEqual(binaryRefusal.cause, "", "an unmeasurable-input refusal owes its own cause line");
@@ -670,7 +671,7 @@ describe(
 					attempt.auditDelta,
 					/\bblock\b.*\bsecret\b/,
 					`hostile path: no block record was appended — the commit fell through the fail-open chain ` +
-						`(red until scan_staged_secrets lands); delta: ${JSON.stringify(attempt.auditDelta)}`,
+						`, so scan_staged_secrets did not refuse; delta: ${JSON.stringify(attempt.auditDelta)}`,
 				);
 				assert.notEqual(attempt.status, 0, "hostile path: the guarded commit SUCCEEDED");
 				// Raw bytes reach no surface: the embedded newline (asserted as
@@ -781,7 +782,7 @@ describe("the protected-branch commit arm (issue #66, SPEC §3.3 ref-identity se
 				attempt.auditDelta,
 				/\bblock\b.*\bbranch\b/,
 				`commit on P: no block record naming the branch class — the commit fell through the ` +
-					`fail-open chain (red until secret_scan.sh completes pre-commit's require chain); ` +
+					`fail-open chain, so secret_scan.sh did not complete pre-commit's require chain; ` +
 					`delta: ${JSON.stringify(attempt.auditDelta)}`,
 			);
 			assert.notEqual(attempt.status, 0, "commit on P: the guarded commit SUCCEEDED through the chain");
@@ -988,7 +989,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 });
 
 // ---------------------------------------------------------------------------
-// Committed pattern-file pins — red until Phase C lands the file, asserted
+// Committed pattern-file pins, asserted
 // against the REPOSITORY path (never a fixture substitute): the object under
 // pin is the committed bytes both readers resolve.
 // ---------------------------------------------------------------------------
@@ -996,7 +997,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 describe("the committed pattern file compiles for both readers (issue #66, SPEC §3.3)", { skip: IS_WINDOWS }, () => {
 	const patternsPath = join(repoRoot(), ".githooks", "helpers", "secret-patterns");
 	const missingMsg =
-		"red until the Code phase lands .githooks/helpers/secret-patterns (§6.1: the pattern file ships with its scanner)";
+		".githooks/helpers/secret-patterns does not exist, so the committed pattern set has nothing to pin (§6.1: the pattern file ships with its scanner)";
 
 	function committedRows(): Array<{ n: number; id: string; ere: string; line: string }> {
 		const rows: Array<{ n: number; id: string; ere: string; line: string }> = [];

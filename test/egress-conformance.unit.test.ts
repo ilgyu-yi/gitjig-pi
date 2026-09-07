@@ -63,7 +63,7 @@ const IS_WINDOWS = process.platform === "win32";
 /** The egress reader's Phase-C home (SPEC §3.3 egress row; issue #83). */
 const SCAN_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "scan.ts");
 const SCAN_MODULE_RED =
-	"red until the Code phase lands .pi/extensions/gitjig/publish/scan.ts exporting scanBody " +
+	"publish/scan.ts does not export scanBody, so this arm has no scanner to measure " +
 	"(issue #83 AC4 — the egress consumer is the committed pattern file's second reader, SPEC §3.3)";
 
 type EgressScanOutcome =
@@ -339,7 +339,7 @@ describe("tier-2 arm: the committed chain honors every applicable case (issue #8
 });
 
 // ---------------------------------------------------------------------------
-// Egress-reader arm — RED until Phase C lands publish/scan.ts.
+// Egress-reader arm: publish/scan.ts is the reader under test here.
 // ---------------------------------------------------------------------------
 
 describe("egress-reader arm: publish/scan.ts against the same case set (issue #83 AC4)", () => {
@@ -476,7 +476,10 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		// diverged at the tier-2 matcher — caught only where the shared case
 		// set happened to look. The three classes the committed pattern file's
 		// own contract forbids are now measured before compilation.
-		assert.ok(inCommonSubset !== undefined, "red until publish/scan.ts exports inCommonSubset");
+		assert.ok(
+			inCommonSubset !== undefined,
+			"publish/scan.ts does not export inCommonSubset, so the subset predicate cannot be measured",
+		);
 		for (const outside of [
 			"(?=lookahead)x", // group extensions: POSIX ERE has none at all
 			"(?:group)x",
@@ -537,7 +540,10 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		// The blank-line repair overshot once: requiring a colon or a space
 		// BEFORE the newline dropped `fixes\n#4`, a same-paragraph pair the
 		// paragraph rule says must still match, in the wrong-allow direction.
-		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		assert.ok(
+			neutralizeBody !== undefined,
+			"publish/neutralize.ts does not export neutralizeBody, so the unexempted face cannot be measured",
+		);
 		for (const body of ["fixes #4", "fixes: #4", "fixes:#4", "fixes\n#4", "fixes\n   #4", "fixes:\n#4", "fixes \n#4"]) {
 			assert.notEqual(
 				neutralizeBody(body),
@@ -555,7 +561,10 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		// span cannot cross a blank line, so no span forms and the reference
 		// ships live wearing backticks. A blank line is a paragraph break, so
 		// the platform reads no close pair across it either.
-		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		assert.ok(
+			neutralizeBody !== undefined,
+			"publish/neutralize.ts does not export neutralizeBody, so the unexempted face cannot be measured",
+		);
 		const crossed = neutralizeBody("Fixes:\n\n#4");
 		assert.equal(
 			crossed,
@@ -572,7 +581,10 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		// The platform autolinks the lowercase spelling too, so a
 		// case-sensitive pass left `gh-4` live while wrapping `GH-4` — a
 		// neutralization that depends on how the author capitalized.
-		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		assert.ok(
+			neutralizeBody !== undefined,
+			"publish/neutralize.ts does not export neutralizeBody, so the unexempted face cannot be measured",
+		);
 		for (const spelling of ["GH-4", "gh-4", "Gh-4"]) {
 			assert.notEqual(
 				neutralizeBody(spelling),
@@ -614,7 +626,7 @@ const DESCRIPTION_KINDS = ["pr-body", "pr-create"] as const;
 function requireBoundary(arm: string): (body: string, kind: string) => { text: string; neutralized: number } {
 	assert.ok(
 		neutralizeForDestination !== undefined,
-		`${arm}: red until publish/neutralize.ts exports neutralizeForDestination`,
+		`${arm}: publish/neutralize.ts does not export neutralizeForDestination, so the boundary cannot be measured`,
 	);
 	return neutralizeForDestination;
 }
@@ -635,7 +647,7 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		// decides, deliberately, which side of the bound it belongs on.
 		assert.ok(
 			publishDestinationKinds !== undefined,
-			"red until publish/executor.ts exports PUBLISH_DESTINATION_KINDS — without it this arm cannot read the population it exists to bind, and would be asserting two hand-written lists against each other",
+			"publish/executor.ts does not export PUBLISH_DESTINATION_KINDS, so this arm cannot read the population it exists to bind and would be asserting two hand-written lists against each other",
 		);
 		const partition = [...DESCRIPTION_KINDS, ...NON_DESCRIPTION_KINDS].sort();
 		// Disjointness FIRST. Ordered this way deliberately: a duplicate makes
@@ -657,7 +669,10 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 	});
 
 	it("the exemption is not inside the one predicate — neutralizeBody still wraps the line", () => {
-		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		assert.ok(
+			neutralizeBody !== undefined,
+			"publish/neutralize.ts does not export neutralizeBody, so the unexempted face cannot be measured",
+		);
 		assert.notEqual(
 			neutralizeBody(LINKAGE),
 			LINKAGE,

@@ -90,8 +90,8 @@ function assertPushRefused(attempt: CommitAttempt, arm: string, opts: { checkExi
 		attempt.auditDelta,
 		/\bblock\b.*\bbranch\b/,
 		`${arm}: no block record naming the branch class was appended — the push fell through the ` +
-			`fail-open chain (red until .githooks/helpers/branch_guard.sh lands and is_protected_branch ` +
-			`refuses this target); delta: ${JSON.stringify(attempt.auditDelta)}`,
+			`fail-open chain, which is what happens when .githooks/helpers/branch_guard.sh is absent or ` +
+			`is_protected_branch does not refuse this target; delta: ${JSON.stringify(attempt.auditDelta)}`,
 	);
 	if (opts.checkExit !== false) {
 		assert.notEqual(attempt.status, 0, `${arm}: the guarded push SUCCEEDED through the chain`);
@@ -266,7 +266,7 @@ describe("derivation of the protected identity (issue #59, SPEC §3.3 stage 2, �
 			const attempt = pushRefs(fixture, [PROTECTED]);
 			// The allow itself holds in both tree states; the SIGNAL is what
 			// separates this disarmed allow from an ordinary allow (§3.9's
-			// degradation-signal rule) and is red until the helper lands.
+			// degradation-signal rule): the allow is the same, the signal is not.
 			assert.equal(attempt.status, 0, `disarmed gate must fail open, never block: ${attempt.stderr}`);
 			const notEnforced = attempt.auditDelta.split("\n").filter((line) => line.includes("not enforced"));
 			assert.equal(
