@@ -114,7 +114,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, sep } from "node:path";
-
+import { pathToFileURL } from "node:url";
+import { after, describe, it } from "node:test";
+import { repoRoot } from "./harness/run-pi.ts";
 /**
  * True iff `candidate` sits at or below `ancestor`, decided on PHYSICAL
  * paths and component-wise. Both sides are realpath-ed because the arms
@@ -127,9 +129,6 @@ function isInside(candidate: string, ancestor: string): boolean {
 	const rel = relative(realpathSync(ancestor), realpathSync(candidate));
 	return rel === "" || !rel.split(sep).includes("..");
 }
-import { pathToFileURL } from "node:url";
-import { after, describe, it } from "node:test";
-import { repoRoot } from "./harness/run-pi.ts";
 
 const DISPATCH_DIR = join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch");
 
@@ -265,6 +264,11 @@ async function withRoots<T>(tmp: string, seam: string, body: () => Promise<T>): 
 	}
 }
 
+/** The repository the rule itself reports for `path` — the module's answer, not a second copy of it. */
+function enclosingOf(provision: ProvisionModule, path: string): string {
+	return provision.containingRepository(path) ?? "";
+}
+
 /**
  * Runs `fn` with `console.warn` captured. The degradation signals this
  * module emits are assertable evidence, not decoration — §5.2 lets an aid
@@ -272,11 +276,6 @@ async function withRoots<T>(tmp: string, seam: string, body: () => Promise<T>): 
  * than assumed. Same device `primitives.unit.test.ts` uses on the audit
  * sink's degradations.
  */
-/** The repository the rule itself reports for `path` — the module's answer, not a second copy of it. */
-function enclosingOf(provision: ProvisionModule, path: string): string {
-	return provision.containingRepository(path) ?? "";
-}
-
 function captureWarnings<T>(fn: () => T): { value: T; warnings: string[] } {
 	const warnings: string[] = [];
 	const original = console.warn;
@@ -2079,14 +2078,32 @@ describe("the scratch never lands inside a repository the shell does not govern 
 		const seam = seamRoot();
 		symlinkSync(landing, join(seam, "dispatch"));
 		await withRoots(slot, seam, async () => {
-			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
-			cleanups.push(context.scratchRoot);
+			const { value: context, warnings } = captureWarnings(() =>
+				provision.provisionDispatchContext(caller, { brief: BRIEF }),
+			);
+			cleanups.push((await context).scratchRoot);
+			// The title says the fall-back-from-it is announced, so the arm
+			// measures that rather than leaning on its sibling: a redirected
+			// home and an uncreatable one share one catch and one warning, and
+			// an arm whose title names a signal it never reads is the shape
+			// this suite has already been caught on twice.
 			assert.equal(
-				isInside(context.scratchRoot, victim),
+				warnings.length,
+				1,
+				`the redirected home emitted ${warnings.length} warnings, not one: ${JSON.stringify(warnings)}`,
+			);
+			assert.equal(
+				/Cause:/.test(warnings[0] ?? "") && /Recovery:/.test(warnings[0] ?? ""),
+				true,
+				`the redirected home's line carries no cause and recovery: ${warnings[0]}`,
+			);
+			assert.equal(
+				isInside((await context).scratchRoot, victim),
 				false,
 				`the scratch was written THROUGH the planted link into ${victim}: a link at a component of the ` +
 					`shell-owned home redirects the clone, and mkdirSync(recursive) follows it (§5.5)`,
 			);
+			await context;
 			assert.equal(
 				git(victim, "status", "--porcelain").trim(),
 				"",
@@ -2160,6 +2177,14 @@ describe("the scratch never lands inside a repository the shell does not govern 
 				warnings[0]?.includes("TMPDIR"),
 				true,
 				`the announcement does not name the recovery an operator would act on: ${warnings[0]}`,
+			);
+			// The home is minted owner-only, the same property the bind
+			// advisory's namespace carries and now the same constant. Rewriting
+			// this call site's mode alone left the whole suite green.
+			assert.equal(
+				(statSync(join(seam, "dispatch")).mode & 0o777).toString(8),
+				"700",
+				"the shell-owned dispatch home is readable by accounts other than the one that writes it (§5.5)",
 			);
 		});
 	});

@@ -109,6 +109,13 @@ export interface DispatchContext {
  * directory would answer "no repository" for both and place the scratch
  * inside exactly the shapes this walk exists to avoid.
  *
+ * The answer is the nearest repository, GOVERNED OR NOT: this walk tests
+ * containment and never adoption, and the caller's own repository is one of
+ * the answers it can give. That is why the announcements this decides say a
+ * repository rather than one the shell does not govern — relocating out of
+ * the shell's own checkout is harmless and correct, and a line claiming
+ * otherwise would be false in exactly that case.
+ *
  * A BARE repository is not reported, because it carries no `.git` entry to
  * find. That is the answer this walk wants rather than a gap in it: a bare
  * repository has no work tree, so nothing written beside it can become
@@ -230,8 +237,8 @@ export function scratchParent(): string {
 		console.warn(
 			`[gitjig] the temporary root ${quoted(ambient)} lies inside the repository ${quoted(enclosing)}, and ` +
 				`the shell-owned home this dispatch would fall through to is unavailable, so the scratch is being ` +
-				`provisioned under that temporary root after all — an unexcluded shell-written tree in a ` +
-				`repository this shell does not govern (§5.5). Cause: ` +
+				`provisioned under that temporary root after all — an unexcluded shell-written tree inside a ` +
+				`repository (§5.5). Cause: ` +
 				`${quoted(error instanceof Error ? error.message : String(error))}. Recovery: point TMPDIR at a ` +
 				`directory outside every repository, or make the shell's state namespace writable and unlinked.`,
 		);
@@ -239,9 +246,9 @@ export function scratchParent(): string {
 	}
 	console.warn(
 		`[gitjig] the temporary root ${quoted(ambient)} lies inside the repository ${quoted(enclosing)}, so a ` +
-			`dispatch scratch there would be an unexcluded shell-written tree in a repository this shell does ` +
-			`not govern (§5.5). Provisioning under ${quoted(fallback)} instead. Recovery: point TMPDIR at a ` +
-			`directory outside every repository to use the ordinary temporary root.`,
+			`dispatch scratch there would be an unexcluded shell-written tree inside a repository (§5.5). ` +
+			`Provisioning under ${quoted(fallback)} instead. Recovery: point TMPDIR at a directory outside ` +
+			`every repository to use the ordinary temporary root.`,
 	);
 	return fallback;
 }
