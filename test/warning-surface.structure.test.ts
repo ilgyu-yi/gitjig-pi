@@ -41,8 +41,10 @@
  * behavioural arms. Specifically, a green run here does NOT establish:
  *
  *   1. That the sources parse as TypeScript, or that the scan sees what a
- *      parser would. There is no TS parser in this dependency-free tree
- *      (no `package.json` exists), so the readers below are narrow text
+ *      parser would. No TS parser is reachable from here: the root manifest
+ *      declares development and CI tools only, and this suite runs with no
+ *      dependency on an installed tree — measured, 800/800 with
+ *      `node_modules` absent — so the readers below are narrow text
  *      scanners over a comment-stripped view. They can be fooled by shapes
  *      these files do not write. A nested template literal and an
  *      expression containing braces are NO LONGER among them — both are
