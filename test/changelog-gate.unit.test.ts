@@ -973,6 +973,25 @@ describe("T21 — a rename whose previous path was never a fragment (clause 2)",
 	it("names the allow-set rule for the renamed-to stem", () => {
 		assert.match(resultOf("T21").stderr, /stem '31' is neither this PR's number/);
 	});
+
+	it("offers no remedy that cannot satisfy this gate (issue #129)", () => {
+		// The allow set is [PR number] + closingIssuesReferences, and only a
+		// CLOSING keyword enters that list. `Refs #N` never does, so a refusal
+		// that told an author to update "Closes/Refs" paired a working remedy
+		// with one that cannot work — §3.11's dead-recovery rule, and the
+		// repair is the dead limb rather than the message.
+		const stderr = resultOf("T21").stderr;
+		assert.doesNotMatch(
+			stderr,
+			/update the PR's Closes\/Refs/,
+			"the refusal offers 'Closes/Refs' again: `Refs #N` produces no closing reference, so following that half of the remedy leaves the gate refusing for the same reason",
+		);
+		assert.match(
+			stderr,
+			/first line of the PR body/,
+			"the live remedy must say WHERE the closing keyword goes — the platform records it from the body's first line, and a remedy that omits the position is one an author can follow and still be refused",
+		);
+	});
 });
 
 describe("T22 — a filename carrying a line feed", () => {

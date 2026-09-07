@@ -665,9 +665,11 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			out.text.startsWith(`${LINKAGE}\n`),
 			"the first line lost its exemption when the body carried a second reference — the two are decided independently",
 		);
-		assert.doesNotMatch(
+		// The wrap's own shape is the subject: a backtick run, one space, the
+		// matched text, one space, the closing run (§3.3's padding rule).
+		assert.match(
 			out.text.slice(LINKAGE.length),
-			/(^|[^`])Closes #7/,
+			/`+ Closes #7 `+/,
 			"a closing reference BELOW the first line published live. Position is a load-bearing bound: only line one is the field §1.1 fixes a grammar for, and everything under it is prose this instrument relays",
 		);
 		assert.equal(out.neutralized, 1, "exactly the one below-the-line reference should be counted");
@@ -699,9 +701,9 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		const out = at(body, "pr-body");
 		assert.ok(out.text.startsWith(`${LINKAGE}\n`), "the exempted line did not survive intact");
 		for (const shape of ["@someone", "GH-4", "owner/repo#9"]) {
-			assert.doesNotMatch(
+			assert.match(
 				out.text,
-				new RegExp(`(^|[^\`])${shape.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+				new RegExp(`\`+ ${shape.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \`+`),
 				`${shape} published live inside an exempted body — the exemption reaches ONE line, and the remainder is relayed text on the terms every other body gets`,
 			);
 		}

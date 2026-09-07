@@ -169,8 +169,16 @@ fragment_defect() {
 		return 1
 	fi
 
+	# Both remedies below are LIVE, and the second one was not always (issue
+	# #129). The allow set is [PR number] + closingIssuesReferences, and only a
+	# CLOSING keyword on the body's first line enters that list: `Refs #N`
+	# never does, so naming it here sent an author to a spelling that cannot
+	# satisfy this gate. The cause is not named either, and deliberately: this
+	# gate reads the platform's listing and cannot observe why a reference is
+	# absent, and a refusal that names a cause it did not measure is its own
+	# defect class.
 	if [ "$waive_allow_set" != 1 ] && ! printf '%s\n' $ALLOWED | grep -qx "$stem"; then
-		printf '%s' "Filename stem '$stem' is neither this PR's number (${PR}) nor in closingIssuesReferences. Rename the file to match, or update the PR's Closes/Refs to include #${stem}."
+		printf '%s' "Filename stem '$stem' is neither this PR's number (${PR}) nor in closingIssuesReferences. Rename the file to '${PR}.md', or make 'Closes #${stem}' the first line of the PR body (a closing keyword is what the platform records; 'Refs #${stem}' does not enter that list)."
 		return 1
 	fi
 
