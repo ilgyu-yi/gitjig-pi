@@ -101,9 +101,6 @@ import {
 } from "./audit.ts";
 import { quoted } from "./quote.ts";
 
-/** The TTL/debounce stamp's file-name stem under the resolved state root (§5.9). */
-export const BIND_ADVISORY_STAMP_FILE = "bind-advisory-stamp.json";
-
 /**
  * The debounce stamp's path, keyed by the repository the advisory
  * CLASSIFIED (§5.5, issue #125).
@@ -159,7 +156,7 @@ export function classifiedRepoTop(cwd: string): string | undefined {
  */
 const STAMP_NOUNS = { noun: "TTL stamp", restoredBy: "the next session recreates the stamp" } as const;
 
-/** Advisory cadence: at most one compute per state root per hour. */
+/** Advisory cadence: at most one compute per CLASSIFIED REPOSITORY per hour (§5.5). */
 export const BIND_ADVISORY_TTL_MS = 60 * 60 * 1000;
 
 /** Timeout bound on each child the detector spawns (§5.9). */
@@ -431,11 +428,25 @@ function stampIsFresh(stampPath: string): boolean {
  */
 export function maybeAdviseBindState(pi: Pick<ExtensionAPI, "appendEntry">, stateRoot: string): void {
 	try {
-		const stampPath = join(stateRoot, BIND_ADVISORY_STAMP_FILE);
+		// The repository is resolved BEFORE the stamp is read, because it is
+		// what names the stamp (§5.5, issue #125). That costs a debounced
+		// session one `rev-parse` child it did not pay before — the deliberate
+		// price of a correctly scoped debounce, and the cheaper of the two
+		// orders: classifying first would spend the config child too, on every
+		// session, including the ones the stamp is about to silence.
+		const cwd = process.cwd();
+		const repoTop = classifiedRepoTop(cwd);
+		if (repoTop === undefined) {
+			// No repository to key a stamp for: silence, and NO stamp — the same
+			// posture the degraded compute below takes, reached earlier because
+			// the failure is the same one (§5.9).
+			return;
+		}
+		const stampPath = bindAdvisoryStampPath(stateRoot, repoTop);
 		if (stampIsFresh(stampPath)) {
 			return;
 		}
-		const state = computeBindState(process.cwd());
+		const state = computeBindState(cwd);
 		if (state === undefined) {
 			// Degraded compute: silence, and NO stamp — retry next session (§5.9).
 			return;

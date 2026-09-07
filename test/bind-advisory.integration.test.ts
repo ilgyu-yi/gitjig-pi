@@ -26,17 +26,20 @@
  *   - arms that hold whatever the detector does — the reaped-child
  *     completion — are declared BOUNDARY PINS in place and state what
  *     mutation reddens them;
- *   - the stamp arms import `.pi/extensions/gitjig/bind-state.ts` and read
- *     its exported `BIND_ADVISORY_STAMP_FILE`, so the stamp's location is
- *     the module's to name and this suite cannot drift from it.
+ *   - the stamp arms import `.pi/extensions/gitjig/bind-state.ts` and CALL
+ *     its exported `bindAdvisoryStampPath`, so the stamp's location is the
+ *     module's to name and this suite cannot drift from it — the location
+ *     is keyed, so a name spelled here would be a second copy of the rule.
  *
  * PINNED SURFACES (what the runtime and this suite agree on):
  *   - advisory entry type: `gitjig-bind-advisory`; each degraded-state entry
  *     names its state token (`unbound` / `foreign-bound`) and the exact
  *     re-arm command `bash .githooks/bind_local_tier.sh` somewhere in its
  *     serialized form;
- *   - the TTL stamp lives at `<state root>/<BIND_ADVISORY_STAMP_FILE>`,
- *     exported by bind-state.ts.
+ *   - the TTL stamp lives where `bindAdvisoryStampPath(stateRoot, repoTop)`
+ *     puts it: under the state root, keyed by the repository the advisory
+ *     classified, so one shell-owned root debounces each repository
+ *     separately (§5.5's fall-through disposition; issue #125).
  *
  * POSIX substrate only: the suite skips on win32.
  */
@@ -253,7 +256,6 @@ function assertSilent(fixture: Fixture, run: PiRunResult, arm: string): void {
 
 /** The detector module's surface this suite binds to (header note). */
 interface BindStateModule {
-	BIND_ADVISORY_STAMP_FILE: string;
 	bindAdvisoryStampPath: (stateRoot: string, repoTop: string) => string;
 	maybeAdviseBindState: (pi: { appendEntry: (type: string, payload: unknown) => void }, stateRoot: string) => void;
 }
@@ -268,7 +270,6 @@ async function bindStateModule(): Promise<BindStateModule> {
 	const modulePath = join(repoRoot(), ".pi", "extensions", "gitjig", "bind-state.ts");
 	assert.equal(existsSync(modulePath), true, `${modulePath} is missing — the detector under test is not there`);
 	const module = (await import(pathToFileURL(modulePath).href)) as {
-		BIND_ADVISORY_STAMP_FILE?: unknown;
 		bindAdvisoryStampPath?: unknown;
 		maybeAdviseBindState?: unknown;
 	};
@@ -280,11 +281,6 @@ async function bindStateModule(): Promise<BindStateModule> {
 			"than spelling a second copy of it",
 	);
 	assert.equal(
-		typeof module.BIND_ADVISORY_STAMP_FILE === "string" && module.BIND_ADVISORY_STAMP_FILE !== "",
-		true,
-		"bind-state.ts must export the non-empty stamp file name BIND_ADVISORY_STAMP_FILE",
-	);
-	assert.equal(
 		typeof module.maybeAdviseBindState === "function",
 		true,
 		"bind-state.ts must export maybeAdviseBindState — the session_start entry point",
@@ -292,8 +288,14 @@ async function bindStateModule(): Promise<BindStateModule> {
 	return module as unknown as BindStateModule;
 }
 
-async function bindAdvisoryStampFile(): Promise<string> {
-	return (await bindStateModule()).BIND_ADVISORY_STAMP_FILE;
+/**
+ * The stamp path a session standing in `repoRoot` writes under `dir` — the
+ * module's own keying rule, called rather than spelled a second time here.
+ * `dir` is the fixture's state root, except in the arms that measure what a
+ * REFUSED write did not create, where it is the planted victim directory.
+ */
+async function stampPathFor(dir: string, repoRoot: string): Promise<string> {
+	return (await bindStateModule()).bindAdvisoryStampPath(dir, realpathSync(repoRoot));
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +471,7 @@ before(async () => {
 	armGitRepo(fifoStampFixture);
 	fifoStampTarget = join(fifoStampFixture.root, "zqstampfifo");
 	spawnSync("mkfifo", [fifoStampTarget], { timeout: 30_000 });
-	fifoStampPath = join(fifoStampFixture.stateDir, await bindAdvisoryStampFile());
+	fifoStampPath = await stampPathFor(fifoStampFixture.stateDir, fifoStampFixture.root);
 	symlinkSync(fifoStampTarget, fifoStampPath);
 	fifoStampRun = await runPi(fifoStampFixture, { timeoutMs: 60_000 });
 
@@ -494,7 +496,7 @@ before(async () => {
 	// already holds its own sink to.
 	bareFifoStampFixture = buildFixture({ script: SCRIPT, linkGitjigRuntime: true });
 	armGitRepo(bareFifoStampFixture);
-	bareFifoStampPath = join(bareFifoStampFixture.stateDir, await bindAdvisoryStampFile());
+	bareFifoStampPath = await stampPathFor(bareFifoStampFixture.stateDir, bareFifoStampFixture.root);
 	spawnSync("mkfifo", [bareFifoStampPath], { timeout: 30_000 });
 	bareFifoStampRun = await runPi(bareFifoStampFixture, { timeoutMs: 60_000 });
 
@@ -511,7 +513,7 @@ before(async () => {
 	hardLinkedStampVictim = join(hardLinkedStampFixture.root, "zqstamphardlinkvictim");
 	writeFileSync(hardLinkedStampVictim, STAMP_VICTIM_BYTES);
 	chmodSync(hardLinkedStampVictim, 0o600);
-	hardLinkedStampPath = join(hardLinkedStampFixture.stateDir, await bindAdvisoryStampFile());
+	hardLinkedStampPath = await stampPathFor(hardLinkedStampFixture.stateDir, hardLinkedStampFixture.root);
 	linkSync(hardLinkedStampVictim, hardLinkedStampPath);
 	hardLinkedStampRun = await runPi(hardLinkedStampFixture, { timeoutMs: 60_000 });
 
@@ -522,7 +524,7 @@ before(async () => {
 	// this path leaves a silently degraded state, which §5.2 forbids.
 	looseModeStampFixture = buildFixture({ script: SCRIPT, linkGitjigRuntime: true });
 	armGitRepo(looseModeStampFixture);
-	looseModeStampPath = join(looseModeStampFixture.stateDir, await bindAdvisoryStampFile());
+	looseModeStampPath = await stampPathFor(looseModeStampFixture.stateDir, looseModeStampFixture.root);
 	writeFileSync(looseModeStampPath, STAMP_VICTIM_BYTES);
 	chmodSync(looseModeStampPath, 0o644);
 	looseModeStampRun = await runPi(looseModeStampFixture, { timeoutMs: 60_000 });
@@ -681,29 +683,26 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 	});
 
 	it("a successful compute stamps under the seam-resolved state root (never the operational root)", async () => {
-		const stampName = await bindAdvisoryStampFile();
+		const stampPath = await stampPathFor(unboundFixture.stateDir, unboundFixture.root);
 		assert.equal(
-			existsSync(join(unboundFixture.stateDir, stampName)),
+			existsSync(stampPath),
 			true,
-			`no TTL stamp ${stampName} under the seam root ${unboundFixture.stateDir} after a successful ` +
-				`advisory compute (stamp-after-success, §5.9)`,
+			`no TTL stamp at ${stampPath} after a successful advisory compute (stamp-after-success, §5.9)`,
 		);
 	});
 
 	it("an erroring detector child degrades to silence and leaves NO stamp", async () => {
 		assertSilent(erroringFixture, erroringRun, "erroring detector");
-		const stampName = await bindAdvisoryStampFile();
 		assert.equal(
-			existsSync(join(erroringFixture.stateDir, stampName)),
+			existsSync(await stampPathFor(erroringFixture.stateDir, erroringFixture.root)),
 			false,
 			"an erroring compute left a stamp — the stamp may follow only a SUCCESSFUL compute (§5.9)",
 		);
 	});
 
 	it("a hung, reaped compute leaves NO stamp", async () => {
-		const stampName = await bindAdvisoryStampFile();
 		assert.equal(
-			existsSync(join(hangingGitFixture.stateDir, stampName)),
+			existsSync(await stampPathFor(hangingGitFixture.stateDir, hangingGitFixture.root)),
 			false,
 			"a hung, reaped compute earned a TTL stamp — stamping is for successful computes only (§5.9)",
 		);
@@ -763,9 +762,8 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 			"unbound",
 			"the advisory itself must still surface; only the stamp is refused",
 		);
-		const stampName = await bindAdvisoryStampFile();
 		assert.equal(
-			existsSync(join(stateRootVictim, stampName)),
+			existsSync(await stampPathFor(stateRootVictim, linkedStateRootFixture.root)),
 			false,
 			"the TTL stamp was written THROUGH the linked state root into the victim directory — the " +
 				"write-through refusal must cover the state root and its container, not the stamp leaf alone (§5.5)",
@@ -896,7 +894,7 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 		// Driven through the module rather than a session: the harness's state
 		// seam must already exist for the run to resolve at all (§5.5's
 		// disposable root), so no session can measure the creation.
-		const { maybeAdviseBindState, BIND_ADVISORY_STAMP_FILE } = await bindStateModule();
+		const { maybeAdviseBindState } = await bindStateModule();
 		const base = mkdtempSync(join(tmpdir(), "gitjig-bindumask-"));
 		try {
 			const container = join(base, "zqperm", ".gitjig");
@@ -907,7 +905,7 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 			} finally {
 				process.umask(previousUmask);
 			}
-			const stamp = join(stateRoot, BIND_ADVISORY_STAMP_FILE);
+			const stamp = await stampPathFor(stateRoot, repoRoot());
 			assert.equal(
 				existsSync(stamp),
 				true,
