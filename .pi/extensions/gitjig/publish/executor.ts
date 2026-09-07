@@ -71,27 +71,6 @@
  */
 import { spawn } from "node:child_process";
 
-/**
- * Every publication kind this gate reaches (issue #120). The list is
- * EXPORTED and the suite enumerates it, so a kind added here without an
- * admission rule or an argv spelling reds rather than publishing unchecked.
- *
- * Comments were once the whole union while the shell also created issues
- * and pull requests and edited their bodies — the same guarded act, with no
- * reach, publishing unscanned past a class whose backstop §3.3 records as
- * structurally unavailable.
- */
-export const PUBLISH_DESTINATION_KINDS = [
-	"issue-comment",
-	"pr-comment",
-	"issue-body",
-	"pr-body",
-	"issue-create",
-	"pr-create",
-] as const;
-
-export type PublishDestinationKind = (typeof PUBLISH_DESTINATION_KINDS)[number];
-
 /** A comment's own url — the shape only the comment verbs print. */
 const COMMENT_URL_SHAPE = /^https:\/\/[^\s]+#issuecomment-\d+$/;
 /** An issue or pull-request url — what the create and edit verbs print. */
@@ -119,14 +98,56 @@ interface KindSpec {
 	successShape: RegExp;
 }
 
-const KIND_SPECS: Readonly<Record<PublishDestinationKind, KindSpec>> = {
+const KIND_SPECS = {
 	"issue-comment": { noun: "issue", verb: "comment", target: "number", successShape: COMMENT_URL_SHAPE },
 	"pr-comment": { noun: "pr", verb: "comment", target: "number", successShape: COMMENT_URL_SHAPE },
 	"issue-body": { noun: "issue", verb: "edit", target: "number", successShape: SURFACE_URL_SHAPE },
 	"pr-body": { noun: "pr", verb: "edit", target: "number", successShape: SURFACE_URL_SHAPE },
 	"issue-create": { noun: "issue", verb: "create", target: "title", successShape: SURFACE_URL_SHAPE },
 	"pr-create": { noun: "pr", verb: "create", target: "title", successShape: SURFACE_URL_SHAPE },
-};
+} as const satisfies Readonly<Record<string, KindSpec>>;
+
+/**
+ * Every publication kind this gate reaches (issue #120), DERIVED from the
+ * table above rather than declared beside it (§3.11's one-home rule, which
+ * the table's own doc block argues for and which a second enumeration
+ * standing next to it quietly broke). The list is EXPORTED and the suite
+ * enumerates it, so a kind added to the table is driven by the coverage and
+ * act-distinctness arms rather than publishing unmeasured.
+ *
+ * That sentence used to name a different guard — a kind added "without an
+ * admission rule or an argv spelling" — and the derivation emptied it: a
+ * kind can now only enter the list by entering the table, and a table entry
+ * IS its admission rule and its argv spelling. What the arms catch is a kind
+ * nothing covers, not a kind nothing admits.
+ *
+ * The two populations this derivation joins are the list and the table, and
+ * those alone. The list's one production consumer — the tool's declared
+ * parameter schema — is a third site, bound by its own arm rather than by
+ * this derivation: in its membership, and in which operands it declares
+ * required, both of which can drift from this list without any other arm
+ * noticing.
+ *
+ * Comments were once the whole union while the shell also created issues
+ * and pull requests and edited their bodies — the same guarded act, with no
+ * reach, publishing unscanned past a class whose backstop §3.3 records as
+ * structurally unavailable.
+ *
+ * The list and the table were previously two hand-written populations held
+ * together by one type annotation and nothing else. That is a place to
+ * forget a kind, of exactly the sort the comment above warns about: the
+ * schema is built from the list while every admission and dispatch path
+ * reads the table, so a kind present in one and absent from the other is
+ * admissible, argv-buildable and reachable by the boundary while no
+ * enumeration of kinds mentions it. Measured before this derivation
+ * existed: widening the annotation and adding a seventh description-writing
+ * kind to the table left §1.1's linkage line publishing INERT on a pull
+ * request description — issue #129's own defect on a new surface — with the
+ * whole suite, the type checker and the linter all green.
+ */
+export const PUBLISH_DESTINATION_KINDS = Object.keys(KIND_SPECS) as readonly (keyof typeof KIND_SPECS)[];
+
+export type PublishDestinationKind = keyof typeof KIND_SPECS;
 
 /** The spec for a kind, or `undefined` where the kind is unmapped. */
 export function specForKind(kind: string): KindSpec | undefined {

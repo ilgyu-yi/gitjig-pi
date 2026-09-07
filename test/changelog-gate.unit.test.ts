@@ -973,6 +973,111 @@ describe("T21 — a rename whose previous path was never a fragment (clause 2)",
 	it("names the allow-set rule for the renamed-to stem", () => {
 		assert.match(resultOf("T21").stderr, /stem '31' is neither this PR's number/);
 	});
+
+	it("offers no remedy that cannot satisfy this gate (issue #129)", () => {
+		// The allow set is [PR number] + closingIssuesReferences, and only a
+		// CLOSING keyword enters that list. `Refs #N` never does, so a refusal
+		// that told an author to update "Closes/Refs" paired a working remedy
+		// with one that cannot work — §3.11's dead-recovery rule, and the
+		// repair is the dead limb rather than the message.
+		const stderr = resultOf("T21").stderr;
+		assert.doesNotMatch(
+			stderr,
+			/update the PR's Closes\/Refs/,
+			"the refusal offers 'Closes/Refs' again: `Refs #N` produces no closing reference, so following that half of the remedy leaves the gate refusing for the same reason",
+		);
+		// The keyword and the position in ONE clause, deliberately. Asserting
+		// them separately — forbid the dead pairing, require the phrase "first
+		// line of the PR body" somewhere — ties neither to the other, so a
+		// refusal naming the DEAD keyword in the LIVE position satisfies both
+		// halves. That mutant passed all 91 arms here and the whole suite: a gate
+		// instructing an author to write the one spelling that produces no
+		// closing reference, which is the defect this arm exists to forbid,
+		// green. The property is which keyword goes where, not which words appear.
+		assert.match(
+			stderr,
+			/'Closes #\d+' the first line of the PR body/,
+			"the remedy does not put the CLOSING keyword in the position that works. §1.1 fixes the body's first line and the publish instrument admits it there alone, so a remedy that omits the position, or that names a keyword the platform does not record, is one an author can follow and still be refused",
+		);
+	});
+
+	// The number each remedy names is a THIRD quantity, and binding the keyword
+	// to the position left it free. `\d+` above is a free variable: the arm held
+	// the refused stem at one value and never tied the number in the remedy to
+	// the stem being refused, so an implementation ignoring the stem passes.
+	//
+	// Two mutants proved it, both green across the whole suite. Naming a
+	// constant passes. Worse, naming THIS PR's number rather than the refused
+	// stem passes — and that remedy is dead in the most exact sense available:
+	// the allow set is the PR's own number plus its closing references, so it
+	// ALREADY contains the PR's number unconditionally. An author who follows
+	// that remedy exactly adds a reference the set already had, the stem is
+	// still outside it, and the next run refuses identically (§3.11's
+	// dead-recovery rule). A wrong-variable interpolation is also the realistic
+	// slip here, since both variables are in scope on that line.
+	//
+	// Driven at TWO cases with different refused stems, because one value cannot
+	// distinguish a bound number from a hard-coded one.
+	//
+	// EVERY interpolation site on that line is bound here, not the two the
+	// remedy sentence's headline claim names. The line reads $stem once and
+	// ${PR} and ${stem} twice each — five sites, both variables in scope at all
+	// of them. Binding two left three free, and two of those three survived the
+	// whole suite as mutants. Enumerating the sites and covering the enumeration
+	// is what stops this arm needing a sixth repair: the count of quantities in
+	// a claim is itself something to derive, not to assume.
+	for (const { id, stem } of [
+		{ id: "T4", stem: "99" },
+		{ id: "T21", stem: "31" },
+	]) {
+		it(`${id}: each remedy names the number that would actually clear this gate (issue #129)`, () => {
+			// The PR is read off the case spec rather than written here, so the
+			// assertion is bound to the fixture the gate actually ran against.
+			const spec = CASES.find((entry) => entry.id === id);
+			assert.ok(spec !== undefined, `${id}: no such case — the arm is vacuous`);
+			const pr = String(spec.pr);
+			// The stem must differ from the PR, or the arm cannot tell a remedy
+			// naming the stem from one naming the PR — which is the mutant it is
+			// here for.
+			assert.notEqual(stem, pr, `${id}: the case must refuse a stem that is NOT this PR, or this arm measures nothing`);
+			const stderr = resultOf(id).stderr;
+			assert.match(
+				stderr,
+				new RegExp(`'Closes #${stem}' the first line of the PR body`),
+				`${id}: the closing remedy does not name the REFUSED stem. A remedy naming any other number — a constant, or this PR's own number, which the allow set already contains — is one the author can follow exactly and be refused for the identical reason`,
+			);
+			assert.match(
+				stderr,
+				new RegExp(`Rename the file to '${pr}\\.md'`),
+				`${id}: the rename remedy does not name THIS PR's number, which is the one stem the allow set holds unconditionally. Renaming to anything else leaves the stem outside the set and the gate refusing`,
+			);
+			// The diagnostic clause. It is the ONLY place the refusal ever states
+			// what this PR's number is, so the rename remedy above is unusable
+			// without it — and naming the refused stem here makes the message
+			// self-contradictory: it tells the author their stem IS this PR's
+			// number while refusing it for not being in the allow set. That mutant
+			// survived the whole suite.
+			assert.match(
+				stderr,
+				new RegExp(`is neither this PR's number \\(${pr}\\)`),
+				`${id}: the refusal states the wrong number as THIS PR's. It is the only place the message says what the PR number is, and the rename remedy is unusable without it`,
+			);
+			// The opening diagnostic names the stem under refusal, and the caution
+			// names the same stem in the spelling that does NOT work. A caution
+			// naming some other number is true of that number and says nothing
+			// about the reference the author actually wrote.
+			assert.match(
+				stderr,
+				new RegExp(`stem '${stem}' is neither`),
+				`${id}: the refusal does not name the stem it refused, so the author cannot tell which file is at fault`,
+			);
+			assert.match(
+				stderr,
+				new RegExp(`'Refs #${stem}' does not enter`),
+				`${id}: the caution names a number other than the refused stem. It exists to tell the author why the spelling they may reach for fails on THEIR reference, and naming a different number makes it a true statement about nothing they wrote`,
+			);
+		});
+	}
 });
 
 describe("T22 — a filename carrying a line feed", () => {

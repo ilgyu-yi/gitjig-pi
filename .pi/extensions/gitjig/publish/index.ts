@@ -52,7 +52,7 @@ import {
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
-import { neutralizeBody } from "./neutralize.ts";
+import { neutralizeForDestination, neutralizeOperand } from "./neutralize.ts";
 import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
 
 /** The tool name §3.3's egress row records, verbatim. */
@@ -179,9 +179,15 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			// Both published operands cross through the neutralizer: the title
 			// carries mentions as readily as the body, and it rides argv where
 			// the body rides stdin, so neither can be neutralized by the other's
-			// treatment.
+			// treatment. They take DIFFERENT faces of the one predicate: the body
+			// goes through the destination-aware boundary, which admits §1.1's
+			// linkage line on a pull request description alone; the title takes
+			// the unexempted face, because §1.1 fixes a grammar for a
+			// description's first line and for no other field (§3.3, issue #129).
+			const neutralizedTitle = publishedTitle === undefined ? undefined : neutralizeOperand(publishedTitle);
+			const neutralizedBody = neutralizeForDestination(params.body, destination.kind);
 			const sendDestination =
-				publishedTitle !== undefined ? { ...destination, title: neutralizeBody(publishedTitle) } : destination;
+				neutralizedTitle !== undefined ? { ...destination, title: neutralizedTitle.text } : destination;
 			// The success shape is this kind's own: only the comment verbs print
 			// a comment url, so validating every kind against that shape made a
 			// successful create or body edit report outcome-unverified — which
@@ -195,15 +201,49 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			}
 			const outcome = await runPublishChild(
 				ghPublishArgv(sendDestination),
-				neutralizeBody(params.body),
+				neutralizedBody.text,
 				repoRoot,
 				spec.successShape,
 			);
 			if (outcome.outcome === "published") {
+				// Neutralization is never silent ON A CONFIRMED PUBLISH (§3.3's
+				// reporting rule, whose subject is "the published result"). The
+				// scope is stated because it is narrower than "never silent" reads:
+				// the `outcome-unverified` branch below carries no count, so a body
+				// that was rewritten and may well have reached the platform is
+				// reported without one. That is a RESIDUAL, not an oversight —
+				// §5.6's direction is toward claiming less where the outcome is
+				// unknown — but it is a real gap in the caller's information and it
+				// is written here rather than left for a reader to discover.
+				//
+				// A send that reported success while having removed the effect the
+				// caller composed for is an unmeasured allow at this gate's own surface,
+				// and the loss was previously discoverable only by reading the
+				// published surface afterwards. The report is a COUNT over both
+				// operands and never the text it counted (§3.8's refusal-record
+				// rule); it is present at zero as well, so a caller can tell a
+				// clean send from one this field says nothing about.
+				// WRAPS APPLIED, not distinct references — the number says what this
+				// module can know. Two grounds make the two differ: a span that was
+				// already inert is wrapped again, because telling it from a live one
+				// needs a markdown parser this module must not grow; and any narrower
+				// pattern matching inside an already-wrapped span draws its own pass,
+				// so one URL form carrying a mention AND a GH-N draws three. Both are
+				// pinned by arms, and the wording below keeps the report true of the
+				// number rather than of an enumeration of the shapes that produce it.
+				const neutralized = neutralizedBody.neutralized + (neutralizedTitle?.neutralized ?? 0);
+				const note =
+					neutralized === 0
+						? ""
+						: `; ${neutralized} span${neutralized === 1 ? "" : "s"} rewritten to an inert spelling before the send`;
 				// The one surface child bytes may cross: the URL validated whole
 				// against the comment-URL shape (§3.10's output validity), and
 				// escaped on the way out because that shape admits control bytes.
-				return result(`published: ${quoted(outcome.url)}`, { disposition: "published", url: outcome.url });
+				return result(`published: ${quoted(outcome.url)}${note}`, {
+					disposition: "published",
+					url: outcome.url,
+					neutralized,
+				});
 			}
 			if (outcome.outcome === "outcome-unverified") {
 				const text =

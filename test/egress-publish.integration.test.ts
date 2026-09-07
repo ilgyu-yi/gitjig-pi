@@ -59,6 +59,7 @@ import {
 	readAuditLines,
 	readSessionEntries,
 	removeFixture,
+	repoRoot,
 	runPi,
 } from "./harness/run-pi.ts";
 import {
@@ -72,6 +73,8 @@ const TOOL = "gitjig_publish";
 const SUBSTRATE_NOT_FOUND = /Tool gitjig_publish not found/;
 /** The shim's promised success output — a well-formed comment URL. */
 const SHIM_URL = "https://github.com/zqowner/zqrepo/issues/5#issuecomment-987654321";
+/** What the edit and create verbs print — a surface url, not a comment url. */
+const SURFACE_SHIM_URL = "https://github.com/zqowner/zqrepo/pull/5";
 
 /** One authored red message shape for every subject-absence anchor. */
 function redUntilRegistered(arm: string): string {
@@ -120,6 +123,14 @@ const NEUTRAL_BODY =
  * no span forms (line 2) — plus both colon-trailer close-pair spellings
  * and the deliberate separator-free non-match (§3.3).
  */
+/**
+ * Issue #129's subject, driven through the real instrument. The first line
+ * is exactly §1.1's linkage spelling; the second carries a mention, so one
+ * body measures BOTH halves of the contract at once — the line survives and
+ * the prose under it does not.
+ */
+const LINKAGE_BODY = "Closes #129\n\nrelayed thanks to @zqsomeone for the report.\n";
+
 const HOSTILE_BODY =
 	"a stray ` backtick precedes @zqstray in this relay\n" +
 	"quoting `@zqadjacent right against the wrap\n" +
@@ -161,10 +172,18 @@ interface PublishRun {
  * this exists for is a control byte, which only the format string can spell
  * (issue #97).
  */
-async function runPublish(body: string, successPrintf = `printf '%s\\n' '${SHIM_URL}'`): Promise<PublishRun> {
+async function runPublish(
+	body: string,
+	successPrintf = `printf '%s\\n' '${SHIM_URL}'`,
+	// The destination the tool is handed. Defaulted rather than required so
+	// every arm that predates the kind-aware boundary (issue #129) drives the
+	// same target it always did; only an arm whose subject IS the kind names
+	// one, and it must, because the boundary's first bound is the kind.
+	destination: Record<string, unknown> = { kind: "issue-comment", number: 5 },
+): Promise<PublishRun> {
 	const fixture = buildFixture({
 		script: [
-			{ kind: "toolCall", name: TOOL, arguments: { body, destination: { kind: "issue-comment", number: 5 } } },
+			{ kind: "toolCall", name: TOOL, arguments: { body, destination } },
 			{ kind: "text", text: "EGRESS_IT_DONE" },
 		],
 		linkGitjigRuntime: true,
@@ -298,6 +317,9 @@ let hostileRun: PublishRun;
 let falseBlockRun: PublishRun;
 let nulRun: PublishRun;
 let cfRun: PublishRun;
+let linkageRun: PublishRun;
+let linkageCommentRun: PublishRun;
+let linkageTitleRun: PublishRun;
 
 before(async () => {
 	secretRun = await runPublish(SECRET_BODY);
@@ -306,10 +328,38 @@ before(async () => {
 	falseBlockRun = await runPublish(FALSE_BLOCK_BODY);
 	nulRun = await runPublish((nulCase as { body: string }).body);
 	cfRun = await runPublish((cfCase as { body: string }).body);
+	// Issue #129's two arms: the SAME body to a pull request description and
+	// to a comment. One body, two destinations, so the only variable is the
+	// bound under test.
+	// `pr edit` prints a SURFACE url, not a comment url, and the executor
+	// validates each kind against its own success shape — the default shim
+	// output would settle this run outcome-unverified and measure nothing.
+	linkageRun = await runPublish(LINKAGE_BODY, `printf '%s\\n' '${SURFACE_SHIM_URL}'`, {
+		kind: "pr-body",
+		number: 5,
+	});
+	linkageCommentRun = await runPublish(LINKAGE_BODY, undefined, { kind: "pr-comment", number: 5 });
+	// The title bound, measured rather than asserted. A create kind is the
+	// only shape that publishes a title, and `pr-create` is the create kind
+	// the exemption would reach if the title took the body's route.
+	linkageTitleRun = await runPublish("nothing actionable in this body.\n", `printf '%s\\n' '${SURFACE_SHIM_URL}'`, {
+		kind: "pr-create",
+		title: "Closes #129",
+	});
 });
 
 after(() => {
-	for (const run of [secretRun, neutralRun, hostileRun, falseBlockRun, nulRun, cfRun]) {
+	for (const run of [
+		secretRun,
+		neutralRun,
+		hostileRun,
+		falseBlockRun,
+		nulRun,
+		cfRun,
+		linkageRun,
+		linkageCommentRun,
+		linkageTitleRun,
+	]) {
 		if (run !== undefined) {
 			removeFixture(run.fixture);
 		}
@@ -617,6 +667,426 @@ describe("a published URL carrying a control byte cannot land it raw on the resu
 			HOSTILE_URL,
 			"control-url-esc: the delimited locator does not decode back to the URL the child printed — rendering " +
 				`it inert must not discard or alter the locator the operator needs to reach the comment: ${JSON.stringify(text)}`,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// §1.1's linkage line through the instrument (issue #129; SPEC §3.3's second
+// recorded-live shape and its reporting rule).
+//
+// The unit arms in `egress-conformance.unit.test.ts` bind the boundary
+// function. These bind the INSTRUMENT: what actually reaches the child's
+// stdin, and what the caller is told. The distinction matters because the
+// defect this closes was not in the neutralizer's logic — it was that the
+// publish surface handed it the wrong text and then reported success.
+// ---------------------------------------------------------------------------
+
+describe("§1.1's linkage line reaches a pull request description live (issue #129)", () => {
+	it("the publish tool answers for itself", () => {
+		requireOwnResult(linkageRun, "linkage");
+	});
+
+	it("the first line reaches the shim's stdin unwrapped", () => {
+		const stdinPath = join(linkageRun.sinkDir, "gh-stdin");
+		assert.ok(existsSync(stdinPath), redUntilRegistered("linkage stdin capture"));
+		const capture = readFileSync(stdinPath, "utf8");
+		assert.ok(
+			capture.startsWith("Closes #129\n"),
+			`the linkage line did not reach the child intact, so the platform parses no closing reference from it and the merge closes nothing. Captured stdin began: ${JSON.stringify(capture.slice(0, 60))}`,
+		);
+		assert.doesNotMatch(
+			capture,
+			/`+ Closes #129 `+/,
+			"the linkage line was published wrapped — this is the defect #129 filed, measured at the surface that produces it",
+		);
+	});
+
+	it("the prose under it is still neutralized", () => {
+		const capture = readFileSync(join(linkageRun.sinkDir, "gh-stdin"), "utf8");
+		assertNeutralized(capture, "@zqsomeone", 1, "linkage");
+	});
+
+	it("the same body to a COMMENT keeps the line inert", () => {
+		const capture = readFileSync(join(linkageCommentRun.sinkDir, "gh-stdin"), "utf8");
+		assert.match(
+			capture,
+			/`+ Closes #129 `+/,
+			"a pull request COMMENT published the closing reference live. The kind bound is what keeps §3.11's auto-close channel shut everywhere except the one field §1.1 fixes a grammar for; one body driven to two destinations is what makes that bound measurable rather than asserted",
+		);
+	});
+
+	it("the caller is told what was made inert (§3.3's reporting rule)", () => {
+		const text = textOf(requireOwnResult(linkageRun, "linkage report"));
+		assert.match(
+			text,
+			/1 span rewritten to an inert spelling/,
+			`the send reported success without saying a reference had been rewritten. That silence is the second half of #129: the loss was discoverable only by reading the published surface afterwards. Result text was: ${JSON.stringify(text)}`,
+		);
+		const commentText = textOf(requireOwnResult(linkageCommentRun, "comment report"));
+		assert.match(
+			commentText,
+			/2 spans rewritten to an inert spelling/,
+			`the comment run made TWO shapes inert — the linkage line and the mention — and the count must say two. Result text was: ${JSON.stringify(commentText)}`,
+		);
+	});
+});
+
+describe("the linkage exemption never reaches a title (issue #129; SPEC §3.3)", () => {
+	it("the publish tool answers for itself", () => {
+		requireOwnResult(linkageTitleRun, "linkage title");
+	});
+
+	it("a pr-create title spelled exactly like §1.1's line publishes INERT", () => {
+		// The bound is stated in SPEC §3.3 ("never a title"), in
+		// neutralize.ts's header, and at the call site — and was measured
+		// nowhere until this arm. A reviewer's mutant routing the title
+		// through the boundary passed the entire suite.
+		//
+		// The input violates the title bound and NOTHING else: the kind is a
+		// description kind and the spelling is §1.1's exact grammar, so the
+		// only thing that can keep this title inert is the route the title
+		// takes. argv is the surface, because a title rides argv where the
+		// body rides stdin.
+		const argvPath = join(linkageTitleRun.sinkDir, "gh-argv");
+		assert.ok(existsSync(argvPath), redUntilRegistered("title argv capture"));
+		const argv = readFileSync(argvPath, "utf8");
+		assert.match(
+			argv,
+			/`+ Closes #129 `+/,
+			`the title reached gh live. §1.1 fixes a grammar for a pull request DESCRIPTION's first line and for no other field, so a title spelled like one is prose — and a title that takes the body's route would carry the exemption to a field the section says it never reaches. Captured argv: ${JSON.stringify(argv)}`,
+		);
+	});
+
+	it("the title's neutralization is counted in the report", () => {
+		const text = textOf(requireOwnResult(linkageTitleRun, "title report"));
+		assert.match(
+			text,
+			/1 span rewritten to an inert spelling/,
+			`the body carried nothing actionable and the title carried one shape, so the count must be 1 — a report that omitted the title would leave a caller believing their title crossed unchanged. Result text was: ${JSON.stringify(text)}`,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The count's STRUCTURED face. The arms above read the result TEXT, which by
+// construction cannot see zero — the note is empty at zero. So the one carrier
+// of "present at zero" is `details.neutralized`, and nothing measured it:
+// deleting the key from the published result survived the whole suite.
+//
+// The module route rather than a pi run, because the session record carries the
+// text surface and not `details`. It is the route `dispatch-module` already
+// uses to reach a details key, and it needs only a `gh` shim on PATH.
+// ---------------------------------------------------------------------------
+
+interface PublishToolSpec {
+	name: string;
+	execute(
+		toolCallId: string,
+		params: Record<string, unknown>,
+	): Promise<{ content: Array<{ type: string; text?: string }>; details: Record<string, unknown> }>;
+}
+
+/**
+ * Whether `publish/index.ts` can be loaded in-process at all.
+ *
+ * It cannot in a bare checkout: unlike `dispatch/index.ts`, it imports a
+ * PACKAGE, so loading it needs an installed tree. The rest of this suite
+ * deliberately takes no such dependency and runs green with `node_modules`
+ * absent — measured, and relied on by every mutation clone. So the two arms
+ * below announce a skip with this reason rather than reddening a bare
+ * checkout, and rather than passing silently while measuring nothing
+ * (§1.5: an unavailable protection states its substitute, never drops it).
+ */
+const PUBLISH_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "index.ts");
+const EXECUTOR_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "executor.ts");
+let publishModule: Record<string, unknown> | undefined;
+let publishModuleFailure = "";
+/** The instrument's own kind population, for the declared-schema arm below. */
+let publishDestinationKinds: readonly string[] | undefined;
+
+before(async () => {
+	// The executor takes no package dependency, so this load succeeds even
+	// where the one below is skipped for a missing install.
+	if (existsSync(EXECUTOR_MODULE_PATH)) {
+		const mod = (await import(EXECUTOR_MODULE_PATH)) as Record<string, unknown>;
+		if (Array.isArray(mod.PUBLISH_DESTINATION_KINDS)) {
+			publishDestinationKinds = mod.PUBLISH_DESTINATION_KINDS as readonly string[];
+		}
+	}
+	if (!existsSync(PUBLISH_MODULE_PATH)) {
+		publishModuleFailure = "publish/index.ts does not exist";
+		return;
+	}
+	try {
+		publishModule = (await import(PUBLISH_MODULE_PATH)) as Record<string, unknown>;
+	} catch (error) {
+		publishModuleFailure = error instanceof Error ? error.message : String(error);
+	}
+});
+
+/** Registers the real publish tool against a `gh` shim, and returns its execute face. */
+async function publishToolAgainstShim(
+	arm: string,
+	// The success output the shim prints. Defaulted to the comment URL the
+	// comment verbs promise; a create kind is validated against the SURFACE
+	// shape instead, and a shim printing the wrong one reports
+	// outcome-unverified rather than published.
+	successUrl: string = SHIM_URL,
+): Promise<{ tool: PublishToolSpec; fixture: Fixture }> {
+	const fixture = buildFixture({ script: [], linkGitjigRuntime: true });
+	const binDir = join(fixture.root, "bin");
+	const sinkDir = join(fixture.root, "sink");
+	mkdirSync(binDir);
+	mkdirSync(sinkDir);
+	const shimPath = join(binDir, "gh");
+	writeFileSync(shimPath, `#!/bin/sh\ncat > "${sinkDir}/gh-stdin"\nprintf '%s\\n' '${successUrl}'\n`);
+	chmodSync(shimPath, 0o755);
+	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+	const mod = publishModule;
+	assert.ok(mod !== undefined, `${arm}: publish/index.ts did not load: ${publishModuleFailure}`);
+	assert.equal(typeof mod.registerPublishTool, "function", `${arm}: publish/index.ts must export registerPublishTool`);
+	let registered: PublishToolSpec | undefined;
+	(mod.registerPublishTool as (pi: unknown, repo: string, state: string) => void)(
+		{
+			registerTool: (spec: unknown) => {
+				registered = spec as PublishToolSpec;
+			},
+		},
+		fixture.root,
+		join(fixture.root, "state"),
+	);
+	assert.ok(registered !== undefined, `${arm}: registerPublishTool registered no tool — the arm is vacuous`);
+	return { tool: registered, fixture };
+}
+
+describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.11's one-home rule)", () => {
+	it("the parameter schema's kind union is built from the instrument's own population", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the declared schema cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The exported kind list has exactly ONE production consumer: the tool's
+		// declared parameter schema. Deriving the list from the spec table closed
+		// the list-vs-table seam and left this one exactly as open — dropping a
+		// kind on the way to the union left the whole suite, the type checker and
+		// the linter green, and the kind simply vanished from the tool's declared
+		// interface.
+		//
+		// The direction is fail-CLOSED, which is why this is a smaller thing than
+		// the seam it follows: a kind missing from the union is refused at
+		// parameter validation, so the harm is a publish route that silently stops
+		// working rather than an unscanned publish, and a bogus kind ADDED to the
+		// union is still refused downstream by the admission check against the
+		// table. It is measured anyway, because "there is one population" is a
+		// claim this change makes, and an unmeasured binding is where the second
+		// population comes back.
+		let registered: { parameters?: Record<string, unknown> } | undefined;
+		(publishModule.registerPublishTool as (pi: unknown, repo: string, state: string) => void)(
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as { parameters?: Record<string, unknown> };
+				},
+			},
+			"/nonexistent-repo-root",
+			"/nonexistent-state-root",
+		);
+		assert.ok(registered !== undefined, "registerPublishTool registered no tool — the arm is vacuous");
+		const properties = (registered.parameters as { properties?: Record<string, unknown> } | undefined)?.properties;
+		const destination = properties?.destination as { properties?: Record<string, unknown> } | undefined;
+		const kind = destination?.properties?.kind as { anyOf?: Array<{ const?: unknown }> } | undefined;
+		assert.ok(
+			Array.isArray(kind?.anyOf),
+			"the declared schema no longer exposes the kind union as an alternation, so this arm cannot read the population it exists to bind — red rather than pass silently",
+		);
+		assert.ok(
+			publishDestinationKinds !== undefined,
+			"red until publish/executor.ts exports PUBLISH_DESTINATION_KINDS — without it this arm would be comparing the schema against nothing",
+		);
+		const declared = kind.anyOf.map((member) => member.const).sort();
+		assert.deepEqual(
+			declared,
+			[...publishDestinationKinds].sort(),
+			"the kinds the tool DECLARES are not the kinds the instrument publishes to. The declared union is the list's only production consumer, so a kind dropped between them disappears from the tool's interface while every enumeration of kinds still names it",
+		);
+		assert.ok(
+			declared.length > 0,
+			"the declared union is empty, which would refuse every destination while reading as agreement",
+		);
+		// MEMBERSHIP is not the whole contract. Everything above reads
+		// `properties`, and `properties` is untouched by making an operand
+		// optional — so wrapping either the kind or the destination itself in an
+		// optional marker left the union identical and the whole suite green,
+		// while the tool declared that a publish call need name no destination at
+		// all. The required set is a second axis of the same claim and is read
+		// here rather than assumed.
+		//
+		// Fail-closed in effect — the admission check refuses a missing kind or a
+		// missing destination content-free — so the harm is a declared interface
+		// that no longer matches the instrument: a composer told an operand is
+		// optional omits it and gets a refusal it was invited into.
+		const destinationRequired = (destination as { required?: unknown }).required;
+		assert.ok(
+			Array.isArray(destinationRequired) && destinationRequired.includes("kind"),
+			`the destination's kind is not DECLARED required, so the tool invites a call that names no kind and the admission check refuses it. Declared required set was: ${JSON.stringify(destinationRequired)}`,
+		);
+		const topRequired = (registered.parameters as { required?: unknown }).required;
+		assert.ok(
+			Array.isArray(topRequired) && topRequired.includes("destination") && topRequired.includes("body"),
+			`the tool does not DECLARE both published operands required. Every send has a body and a destination; an interface saying otherwise invites a call the instrument then refuses. Declared required set was: ${JSON.stringify(topRequired)}`,
+		);
+		// Membership and required-ness are two axes; the PROPERTY SET is a third.
+		// A property added to the declared destination that the instrument never
+		// reads survives everything above — the union is unchanged and the
+		// required set is unchanged — so the tool can advertise an operand the
+		// boundary silently ignores. The harm is a misleading interface rather
+		// than an unscanned publish: the child is cwd-pinned to the runtime's own
+		// repository, so a caller who believed a declared field had retargeted
+		// their publish would still publish here.
+		assert.deepEqual(
+			Object.keys(destination?.properties ?? {}).sort(),
+			["kind", "number", "title"],
+			"the tool DECLARES a destination field set the instrument does not consume. Every declared operand must be one the boundary actually reads, or the interface invites a call whose extra field is silently dropped",
+		);
+	});
+});
+
+describe("the count is present at ZERO on the structured face (issue #129, SPEC §3.3)", () => {
+	const fixtures: Fixture[] = [];
+	after(() => {
+		for (const fixture of fixtures) {
+			removeFixture(fixture);
+		}
+	});
+
+	it("a clean send reports the count as 0 rather than omitting it", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The claim this pins is stated at the call site in those words: the
+		// count "is present at zero as well, so a caller can tell a clean send
+		// from one this field says nothing about." A caller cannot draw that
+		// distinction from the text — the note is empty at zero, deliberately —
+		// so the whole claim rests on the key existing with value 0.
+		const { tool, fixture } = await publishToolAgainstShim("count at zero");
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "nothing actionable in this body at all.\n",
+			destination: { kind: "issue-comment", number: 5 },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.ok(
+			"neutralized" in out.details,
+			"the count key is ABSENT on a clean send. A caller then cannot tell a send that rewrote nothing from one whose report says nothing about rewriting — which is the distinction the call site claims this field carries, and the reason it is emitted at zero at all",
+		);
+		assert.equal(out.details.neutralized, 0, "a send that made nothing inert must report 0, not omit the field");
+		const text = (out.content ?? []).map((part) => part.text ?? "").join("\n");
+		assert.doesNotMatch(
+			text,
+			/rewritten to an inert spelling/,
+			"a clean send printed a rewrite note. The zero case is silent in the TEXT by design; it is the structured field that carries zero",
+		);
+	});
+
+	it("a send that rewrote spans reports the same key with the count", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The other side of the same key, so the arm above cannot be satisfied
+		// by a field hard-wired to 0.
+		const { tool, fixture } = await publishToolAgainstShim("count non-zero");
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "ping @zquser about GH-4\n",
+			destination: { kind: "issue-comment", number: 5 },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.equal(
+			out.details.neutralized,
+			2,
+			"two shapes were made inert and the structured count must say so — a field that is always 0 satisfies the zero arm and reports nothing",
+		);
+	});
+
+	it("the structured count sums BOTH operands, not the body alone", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The call site says the report is "a COUNT over both operands". The two
+		// arms above drive a comment kind with NO title, so the title term is
+		// undefined in both and contributes nothing either way — a structured
+		// count that silently dropped the title survived all 837 tests. The one
+		// arm that does exercise a title's contribution reads the result TEXT,
+		// so text and structure were each measured on one operand and the two
+		// measurements never overlapped.
+		//
+		// ONE shape in the body and TWO in the title, so the total is 3. The
+		// cardinality is the point, not just the presence: with one shape in each
+		// operand the total is 2, which "a title contributes one whenever there is
+		// a title" also computes — and that implementation survived the whole
+		// suite. Three is not reachable from the body's count by any
+		// title-independent constant, so the arm now pins the title's VALUE
+		// rather than merely that a title was seen.
+		//
+		// A create kind because it is the only shape that publishes a title, and
+		// its success is validated against the surface URL rather than a comment
+		// URL — hence the shim's output here.
+		const { tool, fixture } = await publishToolAgainstShim("count over both operands", SURFACE_SHIM_URL);
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "thanks @zqbodyuser for the review.\n",
+			destination: { kind: "pr-create", title: "ping @zqtitleuser and @zqother" },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.equal(
+			out.details.neutralized,
+			3,
+			"the structured count did not sum the title's OWN count. One shape in the body and two in the title is 3; a count that reports 2 is adding a constant for the title's presence rather than what the title actually made inert, and that under-reports every multi-shape title while telling the caller a number that looks right",
+		);
+	});
+
+	it("a create kind whose title and body are BOTH clean reports 0, and prints no note", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The OVER-report direction, which no arm could see: every other arm that
+		// exercises a title drives one carrying an actionable shape, so an
+		// implementation crediting the title for merely existing reports 1 here
+		// and nothing catches it. That is the reporting rule lying in the
+		// direction the address-shaped-span arm exists to forbid — a count that
+		// reports a rewrite that did not happen — on the operand where it had no
+		// arm at all.
+		const { tool, fixture } = await publishToolAgainstShim("clean create kind", SURFACE_SHIM_URL);
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "nothing actionable in this body at all.\n",
+			destination: { kind: "pr-create", title: "a clean release title" },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.equal(
+			out.details.neutralized,
+			0,
+			"a send that rewrote nothing in either operand reported a rewrite. The count must be 0 on a clean create kind — a title term that credits presence rather than value makes this 1, and the caller is told their title was rewritten when it crossed whole",
+		);
+		const text = (out.content ?? []).map((part) => part.text ?? "").join("\n");
+		assert.doesNotMatch(
+			text,
+			/rewritten to an inert spelling/,
+			"a clean create kind printed a rewrite note. Both faces of the report must agree that nothing was made inert",
 		);
 	});
 });

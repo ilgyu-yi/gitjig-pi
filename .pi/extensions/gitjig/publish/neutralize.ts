@@ -11,9 +11,14 @@
  * `GH-N` forms, URL-form issue references, and cross-repository
  * `owner/repo#N` references.
  *
- * One shape stays live as the recorded decision (§3.3): the bare
- * same-repository `#N` — the pointer idiom §5.1 commits every durable
- * artifact to.
+ * TWO shapes stay live as recorded decisions (§3.3), each on its own
+ * ground. The bare same-repository `#N` — the pointer idiom §5.1 commits
+ * every durable artifact to — stays live inside the predicate itself.
+ * §1.1's linkage line stays live at the DESTINATION-AWARE boundary below
+ * and nowhere else (issue #129): the predicate is total over close pairs,
+ * and what the boundary decides is which text it hands the predicate.
+ * That placement is the whole safety property — an exemption inside the
+ * predicate would reach the title operand and every destination kind.
  *
  * The wrap is delimiter-length-aware because CommonMark pairs a code
  * span's opener with the next backtick run of EQUAL length: each pass
@@ -83,14 +88,27 @@ function longestBacktickRun(text: string): number {
 	return longest;
 }
 
-/** The published spelling of `body`: every actionable shape wrapped whole. */
-export function neutralizeBody(body: string): string {
+/**
+ * What one neutralization did: the published spelling, and HOW MANY
+ * actionable shapes were made inert. The count and never the text — a
+ * result a composer may relay stays content-free about what it names
+ * (§3.8's refusal-record rule).
+ */
+export interface NeutralizationOutcome {
+	text: string;
+	neutralized: number;
+}
+
+/** The one predicate. Total over every shape in `WRAP_PASSES`, no exemption. */
+function neutralizeCore(body: string): NeutralizationOutcome {
 	let neutralized = body;
+	let count = 0;
 	for (const pass of WRAP_PASSES) {
 		// One backtick longer than anything already present, so the wrap's
 		// opener pairs with its own closer and never with a body run.
 		const delimiter = "`".repeat(longestBacktickRun(neutralized) + 1);
 		neutralized = neutralized.replace(pass, (match, offset: number, whole: string) => {
+			count += 1;
 			// A body backtick touching the wrap would merge runs (no span
 			// forms), so a space separates the delimiter from it.
 			const separatorBefore = offset > 0 && whole[offset - 1] === "`" ? " " : "";
@@ -99,5 +117,71 @@ export function neutralizeBody(body: string): string {
 			return `${separatorBefore}${delimiter} ${match} ${delimiter}${separatorAfter}`;
 		});
 	}
-	return neutralized;
+	return { text: neutralized, neutralized: count };
+}
+
+/**
+ * The published spelling of `body`: every actionable shape wrapped whole.
+ * The unexempted face of the one predicate, as plain text and without the
+ * count — `neutralizeOperand` is this same face WITH it, and is what a
+ * published title crosses. No production path calls this one: it is the
+ * shape conformance arms bind to when the count is not the subject,
+ * including the arm that pins the exemption OUT of the predicate.
+ */
+export function neutralizeBody(body: string): string {
+	return neutralizeCore(body).text;
+}
+
+/**
+ * The unexempted face WITH its count — what a published operand that is
+ * not a pull request description crosses. A title takes this route and
+ * never the boundary below, deliberately: §1.1 fixes a grammar for a
+ * description's first line and for no other field, so a title spelled
+ * like one is prose (§3.3, "never a title").
+ */
+export function neutralizeOperand(text: string): NeutralizationOutcome {
+	return neutralizeCore(text);
+}
+
+/**
+ * §1.1's linkage line, and nothing adjacent to it. The section fixes this
+ * spelling exactly; a variant the platform might honour is NOT admitted,
+ * because widening here would be the instrument deciding on the author's
+ * behalf that a variant was meant as a control. What makes the narrowness
+ * safe rather than merely strict is the count this module returns: an
+ * author who spelled it otherwise is told, instead of being handed an
+ * exemption they did not earn (§3.3's reporting rule).
+ */
+const LINKAGE_LINE = /^Closes #\d+$/;
+
+/**
+ * The destination kinds that write a pull request's own DESCRIPTION — the
+ * one field §1.1 fixes a grammar for and the platform reads as a control.
+ * Not `pr-comment`: a comment is prose on a pull request, not its body.
+ */
+const DESCRIPTION_KINDS: ReadonlySet<string> = new Set(["pr-body", "pr-create"]);
+
+/**
+ * The boundary the publish surface calls: the one predicate above, applied
+ * to the text this destination admits. Bounded on three axes at once, each
+ * of which is a separate arm in the conformance suite — by kind (the two
+ * description kinds only), by position (the first line only), and by
+ * grammar (§1.1's spelling only). Every other byte of every body reaches
+ * `neutralizeCore` exactly as it did before this function existed.
+ */
+export function neutralizeForDestination(body: string, kind: string): NeutralizationOutcome {
+	if (!DESCRIPTION_KINDS.has(kind)) {
+		return neutralizeCore(body);
+	}
+	const breakAt = body.indexOf("\n");
+	const first = breakAt === -1 ? body : body.slice(0, breakAt);
+	// A CRLF checkout smudge must not silently cost the exemption: the
+	// carriage return is dropped for the GRAMMAR test and kept in the bytes
+	// that publish, so the line the platform reads is the caller's own.
+	if (!LINKAGE_LINE.test(first.replace(/\r$/, ""))) {
+		return neutralizeCore(body);
+	}
+	const rest = breakAt === -1 ? "" : body.slice(breakAt);
+	const outcome = neutralizeCore(rest);
+	return { text: first + outcome.text, neutralized: outcome.neutralized };
 }

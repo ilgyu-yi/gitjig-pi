@@ -298,6 +298,23 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"m.operand",
 			'm.patternIds.join(", ")',
 			'm.lines.join(", ")',
+			// §3.3's reporting rule, issue #129. The published result states HOW
+			// MANY actionable references were made inert. The no-path property
+			// rests on the TYPE, as the block above requires of its own entries:
+			// `NeutralizationOutcome.neutralized` is declared `number` in
+			// neutralize.ts, so a future change that pushed a derived string
+			// through this expression stops compiling rather than quietly
+			// widening the entry. The count is also exactly what §3.8's
+			// refusal-record rule permits to cross: the number, never the text
+			// it counted.
+			"neutralized",
+			// The plural, whose two branches are both empty string literals.
+			'neutralized === 1 ? "" : "s"',
+			// `note` is the composition of the two entries above with fixed
+			// prose, on the same terms `located` and `cause` are admitted:
+			// escaping the carrier would double-escape a leaf that carries no
+			// path in the first place.
+			"note",
 			"located",
 			// NOTHING for the published operands (issue #120). An earlier draft
 			// joined the title and body with a template and allowlisted both,
