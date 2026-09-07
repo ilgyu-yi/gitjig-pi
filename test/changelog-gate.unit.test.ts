@@ -1018,6 +1018,14 @@ describe("T21 — a rename whose previous path was never a fragment (clause 2)",
 	//
 	// Driven at TWO cases with different refused stems, because one value cannot
 	// distinguish a bound number from a hard-coded one.
+	//
+	// EVERY interpolation site on that line is bound here, not the two the
+	// remedy sentence's headline claim names. The line reads $stem once and
+	// ${PR} and ${stem} twice each — five sites, both variables in scope at all
+	// of them. Binding two left three free, and two of those three survived the
+	// whole suite as mutants. Enumerating the sites and covering the enumeration
+	// is what stops this arm needing a sixth repair: the count of quantities in
+	// a claim is itself something to derive, not to assume.
 	for (const { id, stem } of [
 		{ id: "T4", stem: "99" },
 		{ id: "T21", stem: "31" },
@@ -1042,6 +1050,31 @@ describe("T21 — a rename whose previous path was never a fragment (clause 2)",
 				stderr,
 				new RegExp(`Rename the file to '${pr}\\.md'`),
 				`${id}: the rename remedy does not name THIS PR's number, which is the one stem the allow set holds unconditionally. Renaming to anything else leaves the stem outside the set and the gate refusing`,
+			);
+			// The diagnostic clause. It is the ONLY place the refusal ever states
+			// what this PR's number is, so the rename remedy above is unusable
+			// without it — and naming the refused stem here makes the message
+			// self-contradictory: it tells the author their stem IS this PR's
+			// number while refusing it for not being in the allow set. That mutant
+			// survived the whole suite.
+			assert.match(
+				stderr,
+				new RegExp(`is neither this PR's number \\(${pr}\\)`),
+				`${id}: the refusal states the wrong number as THIS PR's. It is the only place the message says what the PR number is, and the rename remedy is unusable without it`,
+			);
+			// The opening diagnostic names the stem under refusal, and the caution
+			// names the same stem in the spelling that does NOT work. A caution
+			// naming some other number is true of that number and says nothing
+			// about the reference the author actually wrote.
+			assert.match(
+				stderr,
+				new RegExp(`stem '${stem}' is neither`),
+				`${id}: the refusal does not name the stem it refused, so the author cannot tell which file is at fault`,
+			);
+			assert.match(
+				stderr,
+				new RegExp(`'Refs #${stem}' does not enter`),
+				`${id}: the caution names a number other than the refused stem. It exists to tell the author why the spelling they may reach for fails on THEIR reference, and naming a different number makes it a true statement about nothing they wrote`,
 			);
 		});
 	}
