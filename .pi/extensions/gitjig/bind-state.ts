@@ -75,6 +75,7 @@
  * TTL it never earned.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	accessSync,
 	closeSync,
@@ -100,8 +101,56 @@ import {
 } from "./audit.ts";
 import { quoted } from "./quote.ts";
 
-/** The TTL/debounce stamp's file name under the resolved state root (§5.9). */
+/** The TTL/debounce stamp's file-name stem under the resolved state root (§5.9). */
 export const BIND_ADVISORY_STAMP_FILE = "bind-advisory-stamp.json";
+
+/**
+ * The debounce stamp's path, keyed by the repository the advisory
+ * CLASSIFIED (§5.5, issue #125).
+ *
+ * §5.5's disposition is fall-through, so one shell-owned state root stands
+ * behind every repository this checkout is invoked against, while the
+ * classification is per-cwd-repository (§4.6's detector placement). Keyed
+ * on the state root alone the two disagree, and a session in a repository
+ * the shell does not govern spends the debounce belonging to one it does —
+ * §5.2's obligation to surface a degraded state at the next session start
+ * then goes undischarged for the whole TTL window.
+ *
+ * The key is a digest of the repository's PHYSICAL top, not the path
+ * itself: a path is not a file name, and the two properties wanted here
+ * are exactly what a digest gives — bounded length whatever the path's
+ * depth, and no component of a caller-influenced path reaching the joined
+ * name. It is a keying function and never a security claim; a collision
+ * costs one suppressed advisory, which is the cost this whole change is
+ * about and not a new one. The physical top is what `computeBindState`
+ * already compares against, so two spellings of one repository share a
+ * debounce rather than each keeping their own (§4.6).
+ */
+export function bindAdvisoryStampPath(stateRoot: string, repoTop: string): string {
+	const key = createHash("sha256").update(repoTop).digest("hex").slice(0, 16);
+	return join(stateRoot, `bind-advisory-stamp-${key}.json`);
+}
+
+/**
+ * The physical top of the repository the session stands in, or `undefined`
+ * where there is none to resolve — not a git repository, or a child that
+ * failed or was killed. `undefined` is the caller's cue to stay silent and
+ * write NO stamp, the same posture `computeBindState` takes for the same
+ * shapes: a session that could not name the repository it is in cannot key
+ * a stamp for it, and a stamp under any other key would be the defect this
+ * function exists to close.
+ */
+export function classifiedRepoTop(cwd: string): string | undefined {
+	const answer = gitAnswer(cwd, ["rev-parse", "--show-toplevel"]);
+	if (answer.kind !== "value" || answer.value === "") {
+		return undefined;
+	}
+	try {
+		return realpathSync(answer.value);
+	} catch {
+		return undefined;
+	}
+}
 
 /**
  * What the borrowed sink verdict calls THIS object. The verdict is shared

@@ -52,13 +52,14 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import {
@@ -253,6 +254,7 @@ function assertSilent(fixture: Fixture, run: PiRunResult, arm: string): void {
 /** The detector module's surface this suite binds to (header note). */
 interface BindStateModule {
 	BIND_ADVISORY_STAMP_FILE: string;
+	bindAdvisoryStampPath: (stateRoot: string, repoTop: string) => string;
 	maybeAdviseBindState: (pi: { appendEntry: (type: string, payload: unknown) => void }, stateRoot: string) => void;
 }
 
@@ -267,8 +269,16 @@ async function bindStateModule(): Promise<BindStateModule> {
 	assert.equal(existsSync(modulePath), true, `${modulePath} is missing — the detector under test is not there`);
 	const module = (await import(pathToFileURL(modulePath).href)) as {
 		BIND_ADVISORY_STAMP_FILE?: unknown;
+		bindAdvisoryStampPath?: unknown;
 		maybeAdviseBindState?: unknown;
 	};
+	assert.equal(
+		typeof module.bindAdvisoryStampPath === "function",
+		true,
+		"bind-state.ts must export bindAdvisoryStampPath — the debounce stamp's location is keyed by the " +
+			"repository the advisory classified (§5.5, issue #125), and this suite calls that rule rather " +
+			"than spelling a second copy of it",
+	);
 	assert.equal(
 		typeof module.BIND_ADVISORY_STAMP_FILE === "string" && module.BIND_ADVISORY_STAMP_FILE !== "",
 		true,
@@ -917,6 +927,158 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 				"600",
 				"the TTL stamp is readable by accounts other than the one that wrote it (§5.5)",
 			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Debounce scope (issue #125, SPEC §5.5): the stamp keys on the repository the
+// advisory CLASSIFIED, never on the state root alone.
+// ---------------------------------------------------------------------------
+
+describe("the TTL debounce is scoped per classified repository (issue #125, SPEC §5.5, §5.2)", { skip: IS_WINDOWS }, () => {
+	/**
+	 * §5.5's fall-through disposition puts ONE shell-owned state root behind
+	 * every repository a checkout is invoked against, and the obligation it
+	 * incurs is that a per-repository datum carries its repository in its own
+	 * key. The debounce stamp is exactly such a datum: the classification is
+	 * per-cwd-repository (§4.6's detector placement, issue #68 — and that read
+	 * is correct, not the defect), while the state root is per-install. Keyed
+	 * on the root alone, a session in a repository the shell does not govern
+	 * spends the debounce belonging to one it does, and §5.2's obligation to
+	 * surface a degraded state at the next session start is not discharged.
+	 *
+	 * The population is the two classified repositories and the reading unit
+	 * is one advisory instance per repository — never one line, never one
+	 * file. No arm here re-implements the keying rule: each reads the
+	 * advisories the module actually emitted, and the one arm that names the
+	 * rule calls the module's own exported path function.
+	 */
+	function repo(base: string, name: string, hooksPath?: string): string {
+		const root = join(base, name);
+		mkdirSync(root);
+		const opts = { cwd: root, timeout: 30_000 } as const;
+		spawnSync("git", ["-c", "init.defaultBranch=zqdebmain", "init", "-q"], opts);
+		if (hooksPath !== undefined) {
+			mkdirSync(join(root, hooksPath));
+			spawnSync("git", ["config", "core.hooksPath", hooksPath], opts);
+		}
+		return realpathSync(root);
+	}
+
+	/** Run one session_start in `cwd` against `stateRoot`; return the states advised. */
+	async function advise(cwd: string, stateRoot: string): Promise<string[]> {
+		const { maybeAdviseBindState } = await bindStateModule();
+		const seen: string[] = [];
+		const previousCwd = process.cwd();
+		try {
+			process.chdir(cwd);
+			maybeAdviseBindState({ appendEntry: (_t, p) => seen.push((p as { state: string }).state) }, stateRoot);
+		} finally {
+			process.chdir(previousCwd);
+		}
+		return seen;
+	}
+
+	function scratch(): string {
+		return mkdtempSync(join(tmpdir(), "gitjig-debouncescope-"));
+	}
+
+	it("a session in an UNADOPTED repository does not spend the governed repository's debounce", async () => {
+		const base = scratch();
+		try {
+			// `unadopted`: an ordinary git repository that never adopted the
+			// shell — no hooks path at all, so `unbound`. `governed`: a clone
+			// whose effective hooks path does not resolve to this repository's
+			// committed adapters, so `foreign-bound`. Two DIFFERENT degraded
+			// tokens, so the assertion below cannot be satisfied by counting
+			// the unadopted repository's own advisory twice.
+			const unadopted = repo(base, "zqunadopted");
+			const governed = repo(base, "zqgoverned", "zqforeignhooks");
+			const stateRoot = join(base, "state");
+
+			const controlBase = scratch();
+			try {
+				// Positive control, on a FRESH root: the governed repository
+				// owes an advisory on its own. Without this, the arm's real
+				// assertion would hold vacuously if that repository were
+				// silent for some reason having nothing to do with the stamp.
+				assert.deepEqual(
+					await advise(governed, join(controlBase, "state")),
+					["foreign-bound"],
+					"positive control: the governed repository must surface foreign-bound against a state root " +
+						"no other repository has stamped — every claim below is vacuous if it does not",
+				);
+			} finally {
+				rmSync(controlBase, { recursive: true, force: true });
+			}
+
+			const first = await advise(unadopted, stateRoot);
+			const second = await advise(governed, stateRoot);
+
+			assert.deepEqual(
+				first,
+				["unbound"],
+				`positive control: the unadopted repository must surface first for its stamp to suppress ` +
+					`anything; got ${JSON.stringify(first)}`,
+			);
+			assert.deepEqual(
+				second,
+				["foreign-bound"],
+				`a session in a repository the shell does not govern spent the debounce belonging to one it ` +
+					`does: the governed clone is degraded and surfaced ${JSON.stringify(second)} instead of its ` +
+					`own advisory. One shell-owned state root serves every repository (§5.5's fall-through ` +
+					`disposition), so the stamp must carry the repository it classified (§5.2, issue #125)`,
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("keying the stamp does not disable the debounce: a REPEAT session in one repository stays silent", async () => {
+		// Discrimination, not detection. Deleting the stamp read altogether
+		// passes the arm above and breaks the TTL contract §5.9 sets; this is
+		// the arm that separates a scoped debounce from an absent one.
+		const base = scratch();
+		try {
+			const governed = repo(base, "zqrepeat", "zqforeignhooks");
+			const stateRoot = join(base, "state");
+			assert.deepEqual(
+				await advise(governed, stateRoot),
+				["foreign-bound"],
+				"positive control: the first session must advise before a debounce can mean anything",
+			);
+			assert.deepEqual(
+				await advise(governed, stateRoot),
+				[],
+				"the SAME repository re-surfaced its advisory inside the TTL — the debounce is scoped away " +
+					"rather than scoped correctly (§5.9's cadence)",
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("the module's own stamp path separates two repositories under one state root", async () => {
+		// The rule this suite binds to is the module's, called — never a
+		// second copy of the keying spelled here (§3.11's converged-readers
+		// argument, applied to an arm).
+		const base = scratch();
+		try {
+			const { bindAdvisoryStampPath } = await bindStateModule();
+			const stateRoot = join(base, "state");
+			const a = bindAdvisoryStampPath(stateRoot, join(base, "zqalpha"));
+			const b = bindAdvisoryStampPath(stateRoot, join(base, "zqbeta"));
+			assert.notEqual(a, b, `two repositories share one stamp path under ${stateRoot}: ${a}`);
+			for (const [label, path] of [["alpha", a], ["beta", b]] as const) {
+				assert.equal(
+					dirname(path),
+					stateRoot,
+					`the ${label} stamp escaped the state root it was keyed under: ${path}`,
+				);
+			}
 		} finally {
 			rmSync(base, { recursive: true, force: true });
 		}
