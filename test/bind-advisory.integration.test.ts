@@ -58,8 +58,11 @@
  *     What holds the pair is
  *     the issue #125 block's stampless arm: it reads the WHOLE state root
  *     rather than one keyed path, so it reddens when both guards go, and
- *     it is the only arm here that can observe a stamp written under a key
- *     it did not ask for;
+ *     it is the only arm here that can observe a stamp filed for a
+ *     repository the session could NOT classify. It is not the only arm
+ *     that can see an unasked key at all — the granularity arm's
+ *     entry-count assert sees one too, and reddens on the raw-cwd mutant
+ *     even with its own advise assertion neutered;
  *   - the TTL stamp lives where `bindAdvisoryStampPath(stateRoot, repoTop)`
  *     puts it: under the state root, keyed by the repository the advisory
  *     classified, so one shell-owned root debounces each repository
@@ -745,8 +748,10 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 		// file. The compute limb is pinned by the
 		// erroring arm below; the both-guards case and the wrong-key write are
 		// caught by the issue #125 block's stampless arm, which reads the whole
-		// state root and is the only arm here that can see a stamp filed under
-		// a key it did not ask for.
+		// state root and is the only arm here that can see a stamp filed for a
+		// repository the session could not classify. (An unasked key as such is
+		// also visible to the granularity arm's entry-count assert; the doc
+		// block records that.)
 		assert.equal(
 			existsSync(await stampPathFor(hangingGitFixture.stateDir, hangingGitFixture.root)),
 			false,
