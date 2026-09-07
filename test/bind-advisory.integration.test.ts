@@ -20,23 +20,53 @@
  * ANTI-VACUITY (per-arm, stated in place):
  *   - silence is the advisory's contract for one state and its failure
  *     mode everywhere else, so no arm may read silence without proving the
- *     runtime ran: every one opens with `requireRuntimeLoaded`, which
- *     demands this fixture's session carry the extension's registration
- *     entry;
+ *     runtime ran. The PI-SESSION arms discharge that with
+ *     `requireRuntimeLoaded`, which demands the fixture's session carry the
+ *     extension's registration entry. The DIRECT-CALL arms cannot use it,
+ *     since no session exists to carry that entry — they are the four
+ *     entry-point arms of the issue #125 block plus the umask arm, and each
+ *     discharges it with an in-arm positive control that makes the runtime
+ *     speak against the same state root before any absence is read. The
+ *     population is stated by enumeration because reading it off the block
+ *     boundary gets it wrong in both directions: the umask arm drives the
+ *     entry point from OUTSIDE that block, and the block's own pure-path
+ *     arm drives no entry point, reads no absence, and stands outside this
+ *     rule rather than under it. Both devices are required, never assumed:
+ *     an arm reading only absences and holding no control passes against an
+ *     entry point replaced by an immediate return;
  *   - arms that hold whatever the detector does — the reaped-child
  *     completion — are declared BOUNDARY PINS in place and state what
  *     mutation reddens them;
- *   - the stamp arms import `.pi/extensions/gitjig/bind-state.ts` and read
- *     its exported `BIND_ADVISORY_STAMP_FILE`, so the stamp's location is
- *     the module's to name and this suite cannot drift from it.
+ *   - the stamp arms import `.pi/extensions/gitjig/bind-state.ts` and CALL
+ *     its exported `bindAdvisoryStampPath`, so the stamp's location is the
+ *     module's to name and this suite cannot drift from it — the location
+ *     is keyed, so a name spelled here would be a second copy of the rule.
  *
  * PINNED SURFACES (what the runtime and this suite agree on):
  *   - advisory entry type: `gitjig-bind-advisory`; each degraded-state entry
  *     names its state token (`unbound` / `foreign-bound`) and the exact
  *     re-arm command `bash .githooks/bind_local_tier.sh` somewhere in its
  *     serialized form;
- *   - the TTL stamp lives at `<state root>/<BIND_ADVISORY_STAMP_FILE>`,
- *     exported by bind-state.ts.
+ *   - stamp-after-success has two limbs since issue #125, because the
+ *     repository resolve that names the stamp now runs BEFORE the compute.
+ *     The COMPUTE limb is pinned by the erroring-child arm, whose shim
+ *     leaves `rev-parse` working. The two guards sit in SERIES, so neither
+ *     is killable by THE HUNG-RESOLVE ARM alone — defense in depth, and
+ *     declared rather than mistaken for coverage. (The compute guard IS
+ *     killed by a single-point mutant: removing it reddens the
+ *     erroring-child arm. It is this fixture that cannot reach either.)
+ *     What holds the pair is
+ *     the issue #125 block's stampless arm: it reads the WHOLE state root
+ *     rather than one keyed path, so it reddens when both guards go, and
+ *     it is the only arm here that can observe a stamp filed for a
+ *     repository the session could NOT classify. It is not the only arm
+ *     that can see an unasked key at all — the granularity arm's
+ *     entry-count assert sees one too, and reddens on the raw-cwd mutant
+ *     even with its own advise assertion neutered;
+ *   - the TTL stamp lives where `bindAdvisoryStampPath(stateRoot, repoTop)`
+ *     puts it: under the state root, keyed by the repository the advisory
+ *     classified, so one shell-owned root debounces each repository
+ *     separately (§5.5's fall-through disposition; issue #125).
  *
  * POSIX substrate only: the suite skips on win32.
  */
@@ -52,13 +82,15 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	readdirSync,
+	realpathSync,
 	rmSync,
 	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import {
@@ -252,7 +284,7 @@ function assertSilent(fixture: Fixture, run: PiRunResult, arm: string): void {
 
 /** The detector module's surface this suite binds to (header note). */
 interface BindStateModule {
-	BIND_ADVISORY_STAMP_FILE: string;
+	bindAdvisoryStampPath: (stateRoot: string, repoTop: string) => string;
 	maybeAdviseBindState: (pi: { appendEntry: (type: string, payload: unknown) => void }, stateRoot: string) => void;
 }
 
@@ -266,13 +298,15 @@ async function bindStateModule(): Promise<BindStateModule> {
 	const modulePath = join(repoRoot(), ".pi", "extensions", "gitjig", "bind-state.ts");
 	assert.equal(existsSync(modulePath), true, `${modulePath} is missing — the detector under test is not there`);
 	const module = (await import(pathToFileURL(modulePath).href)) as {
-		BIND_ADVISORY_STAMP_FILE?: unknown;
+		bindAdvisoryStampPath?: unknown;
 		maybeAdviseBindState?: unknown;
 	};
 	assert.equal(
-		typeof module.BIND_ADVISORY_STAMP_FILE === "string" && module.BIND_ADVISORY_STAMP_FILE !== "",
+		typeof module.bindAdvisoryStampPath === "function",
 		true,
-		"bind-state.ts must export the non-empty stamp file name BIND_ADVISORY_STAMP_FILE",
+		"bind-state.ts must export bindAdvisoryStampPath — the debounce stamp's location is keyed by the " +
+			"repository the advisory classified (§5.5, issue #125), and this suite calls that rule rather " +
+			"than spelling a second copy of it",
 	);
 	assert.equal(
 		typeof module.maybeAdviseBindState === "function",
@@ -282,8 +316,14 @@ async function bindStateModule(): Promise<BindStateModule> {
 	return module as unknown as BindStateModule;
 }
 
-async function bindAdvisoryStampFile(): Promise<string> {
-	return (await bindStateModule()).BIND_ADVISORY_STAMP_FILE;
+/**
+ * The stamp path a session standing in `repoRoot` writes under `dir` — the
+ * module's own keying rule, called rather than spelled a second time here.
+ * `dir` is the fixture's state root, except in the arms that measure what a
+ * REFUSED write did not create, where it is the planted victim directory.
+ */
+async function stampPathFor(dir: string, repoRoot: string): Promise<string> {
+	return (await bindStateModule()).bindAdvisoryStampPath(dir, realpathSync(repoRoot));
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +499,7 @@ before(async () => {
 	armGitRepo(fifoStampFixture);
 	fifoStampTarget = join(fifoStampFixture.root, "zqstampfifo");
 	spawnSync("mkfifo", [fifoStampTarget], { timeout: 30_000 });
-	fifoStampPath = join(fifoStampFixture.stateDir, await bindAdvisoryStampFile());
+	fifoStampPath = await stampPathFor(fifoStampFixture.stateDir, fifoStampFixture.root);
 	symlinkSync(fifoStampTarget, fifoStampPath);
 	fifoStampRun = await runPi(fifoStampFixture, { timeoutMs: 60_000 });
 
@@ -484,7 +524,7 @@ before(async () => {
 	// already holds its own sink to.
 	bareFifoStampFixture = buildFixture({ script: SCRIPT, linkGitjigRuntime: true });
 	armGitRepo(bareFifoStampFixture);
-	bareFifoStampPath = join(bareFifoStampFixture.stateDir, await bindAdvisoryStampFile());
+	bareFifoStampPath = await stampPathFor(bareFifoStampFixture.stateDir, bareFifoStampFixture.root);
 	spawnSync("mkfifo", [bareFifoStampPath], { timeout: 30_000 });
 	bareFifoStampRun = await runPi(bareFifoStampFixture, { timeoutMs: 60_000 });
 
@@ -501,7 +541,7 @@ before(async () => {
 	hardLinkedStampVictim = join(hardLinkedStampFixture.root, "zqstamphardlinkvictim");
 	writeFileSync(hardLinkedStampVictim, STAMP_VICTIM_BYTES);
 	chmodSync(hardLinkedStampVictim, 0o600);
-	hardLinkedStampPath = join(hardLinkedStampFixture.stateDir, await bindAdvisoryStampFile());
+	hardLinkedStampPath = await stampPathFor(hardLinkedStampFixture.stateDir, hardLinkedStampFixture.root);
 	linkSync(hardLinkedStampVictim, hardLinkedStampPath);
 	hardLinkedStampRun = await runPi(hardLinkedStampFixture, { timeoutMs: 60_000 });
 
@@ -512,7 +552,7 @@ before(async () => {
 	// this path leaves a silently degraded state, which §5.2 forbids.
 	looseModeStampFixture = buildFixture({ script: SCRIPT, linkGitjigRuntime: true });
 	armGitRepo(looseModeStampFixture);
-	looseModeStampPath = join(looseModeStampFixture.stateDir, await bindAdvisoryStampFile());
+	looseModeStampPath = await stampPathFor(looseModeStampFixture.stateDir, looseModeStampFixture.root);
 	writeFileSync(looseModeStampPath, STAMP_VICTIM_BYTES);
 	chmodSync(looseModeStampPath, 0o644);
 	looseModeStampRun = await runPi(looseModeStampFixture, { timeoutMs: 60_000 });
@@ -671,31 +711,52 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 	});
 
 	it("a successful compute stamps under the seam-resolved state root (never the operational root)", async () => {
-		const stampName = await bindAdvisoryStampFile();
+		const stampPath = await stampPathFor(unboundFixture.stateDir, unboundFixture.root);
 		assert.equal(
-			existsSync(join(unboundFixture.stateDir, stampName)),
+			existsSync(stampPath),
 			true,
-			`no TTL stamp ${stampName} under the seam root ${unboundFixture.stateDir} after a successful ` +
-				`advisory compute (stamp-after-success, §5.9)`,
+			`no TTL stamp at ${stampPath} after a successful advisory compute (stamp-after-success, §5.9)`,
 		);
 	});
 
 	it("an erroring detector child degrades to silence and leaves NO stamp", async () => {
 		assertSilent(erroringFixture, erroringRun, "erroring detector");
-		const stampName = await bindAdvisoryStampFile();
 		assert.equal(
-			existsSync(join(erroringFixture.stateDir, stampName)),
+			existsSync(await stampPathFor(erroringFixture.stateDir, erroringFixture.root)),
 			false,
 			"an erroring compute left a stamp — the stamp may follow only a SUCCESSFUL compute (§5.9)",
 		);
 	});
 
-	it("a hung, reaped compute leaves NO stamp", async () => {
-		const stampName = await bindAdvisoryStampFile();
+	it("a hung, reaped repo-resolve child leaves NO stamp", async () => {
+		// BOUNDARY PIN. This fixture's shim hangs `git rev-parse`, which since
+		// issue #125 is the repository resolve that NAMES the stamp: it runs
+		// before the compute and returns at the unresolved-top guard, so this
+		// arm no longer measures stamp-after-success on the compute limb.
+		// What mutation reddens it: none of the three tried, and that is the
+		// declaration rather than an omission. Measured — compute guard removed,
+		// this arm stays green while the erroring arm reddens; resolve guard
+		// neutralized alone, both stay green, because the compute guard behind
+		// it still returns; BOTH neutralized, this arm STILL stays green, since
+		// the stamp is then written under a CONSTANT fallback key and this arm
+		// reads only the classified repository's own path. Read that as a pin
+		// and not as coverage, and note what the ground depends on: key the
+		// fallback on `cwd` instead — the fallback the surrounding code most
+		// readily supplies, since `cwd` is in scope one line above — and this
+		// arm DOES redden, because on this fixture the session's cwd is the
+		// classified top, so the fallback key and this arm's read path name one
+		// file. The compute limb is pinned by the
+		// erroring arm below; the both-guards case and the wrong-key write are
+		// caught by the issue #125 block's stampless arm, which reads the whole
+		// state root and is the only arm here that can see a stamp filed for a
+		// repository the session could not classify. (An unasked key as such is
+		// also visible to the granularity arm's entry-count assert; the doc
+		// block records that.)
 		assert.equal(
-			existsSync(join(hangingGitFixture.stateDir, stampName)),
+			existsSync(await stampPathFor(hangingGitFixture.stateDir, hangingGitFixture.root)),
 			false,
-			"a hung, reaped compute earned a TTL stamp — stamping is for successful computes only (§5.9)",
+			"a hung, reaped repo-resolve child earned a TTL stamp — a session that could not name the " +
+				"repository it stands in cannot key a stamp for it (§5.9, issue #125)",
 		);
 	});
 
@@ -753,9 +814,8 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 			"unbound",
 			"the advisory itself must still surface; only the stamp is refused",
 		);
-		const stampName = await bindAdvisoryStampFile();
 		assert.equal(
-			existsSync(join(stateRootVictim, stampName)),
+			existsSync(await stampPathFor(stateRootVictim, linkedStateRootFixture.root)),
 			false,
 			"the TTL stamp was written THROUGH the linked state root into the victim directory — the " +
 				"write-through refusal must cover the state root and its container, not the stamp leaf alone (§5.5)",
@@ -886,7 +946,7 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 		// Driven through the module rather than a session: the harness's state
 		// seam must already exist for the run to resolve at all (§5.5's
 		// disposable root), so no session can measure the creation.
-		const { maybeAdviseBindState, BIND_ADVISORY_STAMP_FILE } = await bindStateModule();
+		const { maybeAdviseBindState } = await bindStateModule();
 		const base = mkdtempSync(join(tmpdir(), "gitjig-bindumask-"));
 		try {
 			const container = join(base, "zqperm", ".gitjig");
@@ -897,7 +957,7 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 			} finally {
 				process.umask(previousUmask);
 			}
-			const stamp = join(stateRoot, BIND_ADVISORY_STAMP_FILE);
+			const stamp = await stampPathFor(stateRoot, repoRoot());
 			assert.equal(
 				existsSync(stamp),
 				true,
@@ -917,6 +977,264 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 				"600",
 				"the TTL stamp is readable by accounts other than the one that wrote it (§5.5)",
 			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Debounce scope (issue #125, SPEC §5.5): the stamp keys on the repository the
+// advisory CLASSIFIED, never on the state root alone.
+// ---------------------------------------------------------------------------
+
+describe("the TTL debounce is scoped per classified repository (issue #125, SPEC §5.5, §5.2)", { skip: IS_WINDOWS }, () => {
+	/**
+	 * §5.5's fall-through disposition puts ONE shell-owned state root behind
+	 * every repository a checkout is invoked against, and the obligation it
+	 * incurs is that a per-repository datum carries its repository in its own
+	 * key. The debounce stamp is exactly such a datum: the classification is
+	 * per-cwd-repository (§4.6's detector placement, issue #68 — and that read
+	 * is correct, not the defect), while the state root is per-install. Keyed
+	 * on the root alone, a session in a repository the shell does not govern
+	 * spends the debounce belonging to one it does, and §5.2's obligation to
+	 * surface a degraded state at the next session start is not discharged.
+	 *
+	 * The population is the two classified repositories and the reading unit
+	 * is one advisory instance per repository — never one line, never one
+	 * file. No arm here re-implements the keying rule: each reads the
+	 * advisories the module actually emitted, and the one arm that names the
+	 * rule calls the module's own exported path function.
+	 */
+	function repo(base: string, name: string, hooksPath?: string): string {
+		const root = join(base, name);
+		mkdirSync(root);
+		const opts = { cwd: root, timeout: 30_000 } as const;
+		spawnSync("git", ["-c", "init.defaultBranch=zqdebmain", "init", "-q"], opts);
+		if (hooksPath !== undefined) {
+			mkdirSync(join(root, hooksPath));
+			spawnSync("git", ["config", "core.hooksPath", hooksPath], opts);
+		}
+		return realpathSync(root);
+	}
+
+	/** Run one session_start in `cwd` against `stateRoot`; return the states advised. */
+	async function advise(cwd: string, stateRoot: string): Promise<string[]> {
+		const { maybeAdviseBindState } = await bindStateModule();
+		const seen: string[] = [];
+		const previousCwd = process.cwd();
+		try {
+			process.chdir(cwd);
+			maybeAdviseBindState({ appendEntry: (_t, p) => seen.push((p as { state: string }).state) }, stateRoot);
+		} finally {
+			process.chdir(previousCwd);
+		}
+		return seen;
+	}
+
+	function scratch(): string {
+		return mkdtempSync(join(tmpdir(), "gitjig-debouncescope-"));
+	}
+
+	it("a session in an UNADOPTED repository does not spend the governed repository's debounce", async () => {
+		const base = scratch();
+		try {
+			// `unadopted`: an ordinary git repository that never adopted the
+			// shell — no hooks path at all, so `unbound`. `governed`: a clone
+			// whose effective hooks path does not resolve to this repository's
+			// committed adapters, so `foreign-bound`. Two DIFFERENT degraded
+			// tokens, so the assertion below cannot be satisfied by counting
+			// the unadopted repository's own advisory twice.
+			const unadopted = repo(base, "zqunadopted");
+			const governed = repo(base, "zqgoverned", "zqforeignhooks");
+			const stateRoot = join(base, "state");
+
+			const controlBase = scratch();
+			try {
+				// Positive control, on a FRESH root: the governed repository
+				// owes an advisory on its own. Without this, the arm's real
+				// assertion would hold vacuously if that repository were
+				// silent for some reason having nothing to do with the stamp.
+				assert.deepEqual(
+					await advise(governed, join(controlBase, "state")),
+					["foreign-bound"],
+					"positive control: the governed repository must surface foreign-bound against a state root " +
+						"no other repository has stamped — every claim below is vacuous if it does not",
+				);
+			} finally {
+				rmSync(controlBase, { recursive: true, force: true });
+			}
+
+			const first = await advise(unadopted, stateRoot);
+			const second = await advise(governed, stateRoot);
+
+			assert.deepEqual(
+				first,
+				["unbound"],
+				`positive control: the unadopted repository must surface first for its stamp to suppress ` +
+					`anything; got ${JSON.stringify(first)}`,
+			);
+			assert.deepEqual(
+				second,
+				["foreign-bound"],
+				`a session in a repository the shell does not govern spent the debounce belonging to one it ` +
+					`does: the governed clone is degraded and surfaced ${JSON.stringify(second)} instead of its ` +
+					`own advisory. One shell-owned state root serves every repository (§5.5's fall-through ` +
+					`disposition), so the stamp must carry the repository it classified (§5.2, issue #125)`,
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("keying the stamp does not disable the debounce: a REPEAT session in one repository stays silent", async () => {
+		// Discrimination, not detection. Deleting the stamp read altogether
+		// passes the arm above and breaks the TTL contract §5.9 sets; this is
+		// the arm that separates a scoped debounce from an absent one.
+		const base = scratch();
+		try {
+			const governed = repo(base, "zqrepeat", "zqforeignhooks");
+			const stateRoot = join(base, "state");
+			assert.deepEqual(
+				await advise(governed, stateRoot),
+				["foreign-bound"],
+				"positive control: the first session must advise before a debounce can mean anything",
+			);
+			assert.deepEqual(
+				await advise(governed, stateRoot),
+				[],
+				"the SAME repository re-surfaced its advisory inside the TTL — the debounce is scoped away " +
+					"rather than scoped correctly (§5.9's cadence)",
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("a session whose repository cannot be resolved writes NO stamp anywhere under the state root", async () => {
+		// The RESOLVE limb of stamp-after-success, and the reason this arm
+		// reads the whole state root instead of one keyed path: a keyed read
+		// cannot see a stamp written under the WRONG key, which is precisely
+		// how this limb fails. The sibling hung-child arm is keyed and is
+		// declared a boundary pin for exactly that reason.
+		//
+		// The cwd is a scratch directory under the system temp root and so is
+		// inside no git repository: `rev-parse --show-toplevel` fails, the top
+		// is unresolvable, and a session that cannot name the repository it
+		// stands in must not key a stamp for it (§5.9, issue #125).
+		const base = scratch();
+		try {
+			const stateRoot = join(base, "state");
+			mkdirSync(stateRoot, { recursive: true });
+			// Positive control, and this arm needs one more than its siblings do:
+			// its own two assertions are both ABSENCES, which an entry point that
+			// did nothing at all would satisfy. Measured — with the entry point
+			// replaced by an immediate return, 17 of this file's arms redden and
+			// this one stayed green until this control was added. So one
+			// resolvable repository in a degraded state advises and stamps first,
+			// against this same state root: the absences below then mean the
+			// unresolvable session was refused, not that nothing ran.
+			const live = repo(base, "zqcontrol", "zqforeignhooks");
+			assert.deepEqual(
+				await advise(live, stateRoot),
+				["foreign-bound"],
+				"positive control: the entry point must advise for a repository it CAN resolve, or the " +
+					"absences this arm asserts hold for a runtime that never ran",
+			);
+			assert.deepEqual(
+				readdirSync(stateRoot).length,
+				1,
+				"positive control: the resolvable session must leave exactly one stamp, so the emptiness " +
+					"asserted below is a refusal to stamp and not a state root nothing ever reached",
+			);
+			const afterControl = readdirSync(stateRoot);
+			assert.deepEqual(
+				await advise(base, stateRoot),
+				[],
+				"a session standing outside any repository surfaced an advisory about one",
+			);
+			assert.deepEqual(
+				readdirSync(stateRoot),
+				afterControl,
+				`an unresolvable repository earned a TTL stamp: the state root gained ` +
+					`${JSON.stringify(readdirSync(stateRoot).filter((e) => !afterControl.includes(e)))}. ` +
+					`Only a SUCCESSFUL compute stamps (§5.9), and a stamp under any key at all here is one ` +
+					`written for a repository the session could not name (issue #125)`,
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("the key is repository-granular, not directory-granular: a subdirectory shares the debounce", async () => {
+		// GRANULARITY, which is a different property from the separation the
+		// first arm measures. Those arms discriminate BETWEEN repositories and
+		// stay green if the key is the raw cwd, because two repositories have
+		// two cwds as surely as they have two tops. What only this arm sees is
+		// keying one repository under several names: `BIND_ADVISORY_TTL_MS`
+		// promises at most one compute per classified repository per hour, and
+		// §5.5 asks the datum to carry "the repository it concerns" — a
+		// subdirectory is the same repository, so it must not earn a second
+		// advisory.
+		//
+		// A symlinked spelling was tried here and REMOVED as inert rather than
+		// left as decoration: this arm reaches the module through
+		// `process.chdir`, and `getcwd(3)` answers with the physical path, so
+		// the module is handed bytes identical to the first session's and no
+		// keying function whatever could be discriminated by it. Measured —
+		// `process.chdir("…/linkdir"); process.cwd()` yields `…/realdir`; and
+		// with the subdirectory limb dropped, the raw-cwd mutant this arm
+		// exists to kill survives the whole suite. The subdirectory limb
+		// carries all of this arm's teeth.
+		const base = scratch();
+		try {
+			const top = repo(base, "zqgranular", "zqforeignhooks");
+			const sub = join(top, "zqsubdir");
+			mkdirSync(sub);
+			const stateRoot = join(base, "state");
+
+			assert.deepEqual(
+				await advise(top, stateRoot),
+				["foreign-bound"],
+				"positive control: the repository must advise from its own top before a shared debounce can " +
+					"mean anything",
+			);
+			assert.deepEqual(
+				await advise(sub, stateRoot),
+				[],
+				`a session in a subdirectory of it earned a second advisory inside the TTL: the key is ` +
+					`granular per DIRECTORY rather than per repository, so one repository debounces under as ` +
+					`many keys as it has directories (§5.5's "the repository it concerns"; §5.9's cadence)`,
+			);
+			assert.deepEqual(
+				readdirSync(stateRoot).length,
+				1,
+				`two sessions in ONE repository left ${JSON.stringify(readdirSync(stateRoot))} — one ` +
+					`repository owns one stamp, whatever directory within it reached the advisory`,
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("the module's own stamp path separates two repositories under one state root", async () => {
+		// The rule this suite binds to is the module's, called — never a
+		// second copy of the keying spelled here (§3.11's converged-readers
+		// argument, applied to an arm).
+		const base = scratch();
+		try {
+			const { bindAdvisoryStampPath } = await bindStateModule();
+			const stateRoot = join(base, "state");
+			const a = bindAdvisoryStampPath(stateRoot, join(base, "zqalpha"));
+			const b = bindAdvisoryStampPath(stateRoot, join(base, "zqbeta"));
+			assert.notEqual(a, b, `two repositories share one stamp path under ${stateRoot}: ${a}`);
+			for (const [label, path] of [["alpha", a], ["beta", b]] as const) {
+				assert.equal(
+					dirname(path),
+					stateRoot,
+					`the ${label} stamp escaped the state root it was keyed under: ${path}`,
+				);
+			}
 		} finally {
 			rmSync(base, { recursive: true, force: true });
 		}

@@ -194,6 +194,14 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// in quoted(); escaping the carrier would double-escape.
 			"cause",
 			"recovery",
+			// The debounce stamp's key (issue #125). It is not operator text
+			// and it is not a message: it is a FILE-NAME component, and
+			// quoted() there would put quote bytes into the name the writer
+			// then opens. The value provably carries no path — it is
+			// `createHash("sha256").update(…).digest("hex").slice(0, 16)`, so
+			// its byte set is [0-9a-f] whatever the repository path spells,
+			// which is the digest's purpose here rather than a side benefit.
+			"key",
 		],
 	},
 	// The command spine composes no message text: the rung-1 commands hand

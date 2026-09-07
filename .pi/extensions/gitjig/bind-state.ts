@@ -18,10 +18,14 @@
  * classify the wrong clone (a linked worktree must be classified at ITS
  * top, where the adapters resolve). `locateRepoRoot()` names, with no test
  * seam set, the state root the TTL stamp lands under, since
- * `resolveStateRoot()` derives it from that same root: the debounce is
- * therefore keyed to the EXTENSION's repository while classification is
- * keyed to the session cwd. The two coincide in every shipped shape (the
- * extension is loaded from the clone the session stands in).
+ * `resolveStateRoot()` derives it from that same root. So the two are
+ * rooted differently on purpose: the state root is INSTALL-rooted, while
+ * the stamp's NAME within it is keyed to the repository classified above
+ * (`bindAdvisoryStampPath`). They no longer need to coincide, and issue
+ * #125 is what disproved the premise that they always did — one
+ * shell-owned state root stands behind every repository a checkout is
+ * invoked against (§5.5's fall-through disposition), so a debounce keyed
+ * on that root alone let a session in one repository spend another's.
  *
  * The module's own READ of the TTL stamp goes through `readGatedFile`: open
  * the path under `audit.ts`'s guard flags, then require a plain regular file
@@ -75,6 +79,7 @@
  * TTL it never earned.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	accessSync,
 	closeSync,
@@ -100,8 +105,63 @@ import {
 } from "./audit.ts";
 import { quoted } from "./quote.ts";
 
-/** The TTL/debounce stamp's file name under the resolved state root (§5.9). */
-export const BIND_ADVISORY_STAMP_FILE = "bind-advisory-stamp.json";
+/**
+ * The debounce stamp's path, keyed by the repository the advisory
+ * CLASSIFIED (§5.5, issue #125).
+ *
+ * §5.5's disposition is fall-through, so one shell-owned state root stands
+ * behind every repository this checkout is invoked against, while the
+ * classification is per-cwd-repository (§4.6's detector placement). Keyed
+ * on the state root alone the two disagree, and a session in a repository
+ * the shell does not govern spends the debounce belonging to one it does —
+ * §5.2's obligation to surface a degraded state at the next session start
+ * then goes undischarged for the whole TTL window.
+ *
+ * The key is a digest of the repository's PHYSICAL top, not the path
+ * itself: a path is not a file name, and the two properties wanted here
+ * are exactly what a digest gives — bounded length whatever the path's
+ * depth, and no component of a caller-influenced path reaching the joined
+ * name. It is a keying function and never a security claim; a collision
+ * costs one suppressed advisory, which is the cost this whole change is
+ * about and not a new one. The physical top is what `computeBindState`
+ * already compares against, so two spellings of one repository share a
+ * debounce rather than each keeping their own (§4.6).
+ *
+ * This relocation takes §4.6's legacy-floor carve-out: the stamp is a
+ * suppression token, so its stale copy is itself the fault, and the old
+ * unkeyed leaf is not read at all. The ground is recorded here because the
+ * carve-out requires it at the relocated datum's definition. Concretely,
+ * consulting that leaf would re-spend — for one TTL window in every
+ * repository — exactly the debounce this keying exists to separate; the
+ * cost of not consulting it is one extra advisory, the direction §5.2
+ * wants. The orphaned leaf is left inert rather than reaped, per the same
+ * clause.
+ */
+export function bindAdvisoryStampPath(stateRoot: string, repoTop: string): string {
+	const key = createHash("sha256").update(repoTop).digest("hex").slice(0, 16);
+	return join(stateRoot, `bind-advisory-stamp-${key}.json`);
+}
+
+/**
+ * The physical top of the repository the session stands in, or `undefined`
+ * where there is none to resolve — not a git repository, or a child that
+ * failed or was killed. `undefined` is the caller's cue to stay silent and
+ * write NO stamp, the same posture `computeBindState` takes for the same
+ * shapes: a session that could not name the repository it is in cannot key
+ * a stamp for it, and a stamp under any other key would be the defect this
+ * function exists to close.
+ */
+export function classifiedRepoTop(cwd: string): string | undefined {
+	const answer = gitAnswer(cwd, ["rev-parse", "--show-toplevel"]);
+	if (answer.kind !== "value" || answer.value === "") {
+		return undefined;
+	}
+	try {
+		return realpathSync(answer.value);
+	} catch {
+		return undefined;
+	}
+}
 
 /**
  * What the borrowed sink verdict calls THIS object. The verdict is shared
@@ -110,7 +170,7 @@ export const BIND_ADVISORY_STAMP_FILE = "bind-advisory-stamp.json";
  */
 const STAMP_NOUNS = { noun: "TTL stamp", restoredBy: "the next session recreates the stamp" } as const;
 
-/** Advisory cadence: at most one compute per state root per hour. */
+/** Advisory cadence: at most one compute per CLASSIFIED REPOSITORY per hour (§5.5). */
 export const BIND_ADVISORY_TTL_MS = 60 * 60 * 1000;
 
 /** Timeout bound on each child the detector spawns (§5.9). */
@@ -382,11 +442,25 @@ function stampIsFresh(stampPath: string): boolean {
  */
 export function maybeAdviseBindState(pi: Pick<ExtensionAPI, "appendEntry">, stateRoot: string): void {
 	try {
-		const stampPath = join(stateRoot, BIND_ADVISORY_STAMP_FILE);
+		// The repository is resolved BEFORE the stamp is read, because it is
+		// what names the stamp (§5.5, issue #125). That costs a debounced
+		// session one `rev-parse` child it did not pay before — the deliberate
+		// price of a correctly scoped debounce, and the cheaper of the two
+		// orders: classifying first would spend the config child too, on every
+		// session, including the ones the stamp is about to silence.
+		const cwd = process.cwd();
+		const repoTop = classifiedRepoTop(cwd);
+		if (repoTop === undefined) {
+			// No repository to key a stamp for: silence, and NO stamp — the same
+			// posture the degraded compute below takes, reached earlier because
+			// the failure is the same one (§5.9).
+			return;
+		}
+		const stampPath = bindAdvisoryStampPath(stateRoot, repoTop);
 		if (stampIsFresh(stampPath)) {
 			return;
 		}
-		const state = computeBindState(process.cwd());
+		const state = computeBindState(cwd);
 		if (state === undefined) {
 			// Degraded compute: silence, and NO stamp — retry next session (§5.9).
 			return;
