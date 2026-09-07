@@ -127,16 +127,15 @@ import { quoted } from "./quote.ts";
  * already compares against, so two spellings of one repository share a
  * debounce rather than each keeping their own (§4.6).
  *
- * §4.6's legacy floor for relocated state is NOT taken here, and the
- * disposition is recorded rather than left to be inferred from the absence
- * of a legacy read. The floor exists so a relocation does not lose durable
- * state; what relocated is a suppression token whose STALE COPY IS THE
- * FAULT ITSELF, so consulting the old unkeyed leaf when the new one is
- * absent would re-spend, for one TTL window in every repository, exactly
- * the debounce this keying exists to separate. The cost of not taking it is
- * one extra advisory, in the direction §5.2 wants. The orphaned leaf is
- * inert — nothing reads it — and is left rather than reaped, since reaping
- * would be a write this module performs for no reader's benefit.
+ * This relocation takes §4.6's legacy-floor carve-out: the stamp is a
+ * suppression token, so its stale copy is itself the fault, and the old
+ * unkeyed leaf is not read at all. The ground is recorded here because the
+ * carve-out requires it at the relocated datum's definition. Concretely,
+ * consulting that leaf would re-spend — for one TTL window in every
+ * repository — exactly the debounce this keying exists to separate; the
+ * cost of not consulting it is one extra advisory, the direction §5.2
+ * wants. The orphaned leaf is left inert rather than reaped, per the same
+ * clause.
  */
 export function bindAdvisoryStampPath(stateRoot: string, repoTop: string): string {
 	const key = createHash("sha256").update(repoTop).digest("hex").slice(0, 16);
