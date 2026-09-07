@@ -98,10 +98,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	appendAuditRecord,
 	recoveryFor,
-	sinkRefusal,
 	STATE_DIR_MODE,
 	STATE_FILE_MODE,
 	STATE_PATH_GUARD_FLAGS,
+	sinkRefusal,
 	writeRecordLine,
 } from "./audit.ts";
 import { quoted } from "./quote.ts";

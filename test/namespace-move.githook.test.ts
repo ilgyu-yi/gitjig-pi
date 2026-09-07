@@ -61,9 +61,9 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
 	buildGithookFixture,
+	commitWithMessage,
 	fixtureGit,
 	type GithookFixture,
-	commitWithMessage,
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
 import { AUDIT_FILE_NAME } from "./harness/run-pi.ts";

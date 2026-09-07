@@ -44,7 +44,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
-import { neutralizeBody } from "./neutralize.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
@@ -53,6 +52,7 @@ import {
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
+import { neutralizeBody } from "./neutralize.ts";
 import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
 
 /** The tool name §3.3's egress row records, verbatim. */

@@ -21,7 +21,6 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeScanOutcomes, type ScanOutcome } from "../.pi/extensions/gitjig/publish/scan.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
@@ -30,6 +29,7 @@ import {
 	type PublishDestination,
 	specForKind,
 } from "../.pi/extensions/gitjig/publish/executor.ts";
+import { mergeScanOutcomes, type ScanOutcome } from "../.pi/extensions/gitjig/publish/scan.ts";
 
 /** A minimal admissible destination for each kind — the population, derived. */
 function sampleFor(kind: string): Record<string, unknown> {

@@ -44,6 +44,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import type { Stats } from "node:fs";
 import {
 	chmodSync,
 	closeSync,
@@ -62,7 +63,6 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
-import type { Stats } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
@@ -71,8 +71,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // or reads a mode has to address exactly the path the runtime appends to, so a
 // rename there moves the arm with it instead of quietly aiming it elsewhere.
 import {
-	appendAuditRecord,
 	AUDIT_FILE_NAME,
+	appendAuditRecord,
 	recoveryFor,
 	sinkRefusal,
 	writeRecordLine,

@@ -56,7 +56,7 @@ import {
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
 import { repoRoot } from "./harness/run-pi.ts";
-import { BODY_MEASUREMENT_CASES, committedPatternRows, CONFORMANCE_CASES } from "./harness/secret-pattern-cases.ts";
+import { BODY_MEASUREMENT_CASES, CONFORMANCE_CASES, committedPatternRows } from "./harness/secret-pattern-cases.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 

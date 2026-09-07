@@ -345,7 +345,6 @@ export function inCommonSubset(ere: string): boolean {
 				}
 			}
 			at = close;
-			continue;
 		}
 	}
 	return true;

@@ -40,7 +40,7 @@
  * — within `changelog_unreleased/`, only the top-level contract ships —
  * never as a list of the fragments that happen to exist today.
  */
-import { existsSync, lstatSync, readFileSync, readdirSync, type Stats } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, type Stats } from "node:fs";
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 
 /**

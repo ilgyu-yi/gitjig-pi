@@ -30,18 +30,18 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
-	symlinkSync,
 	type Stats,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
+	type ComposedMember,
 	composeSubstrate,
 	deriveSubstrateSet,
 	SHELL_NAMESPACES,
-	type ComposedMember,
 } from "../.pi/extensions/gitjig/install/compose.ts";
 
 let root: string;

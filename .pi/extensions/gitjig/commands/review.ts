@@ -32,8 +32,8 @@
  * the dispatch at all.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { runDispatch } from "../dispatch/index.ts";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
+import { runDispatch } from "../dispatch/index.ts";
 
 /**
  * The fixed dispatch brief (§1.5's dispatch-facts carrier): fixed text by

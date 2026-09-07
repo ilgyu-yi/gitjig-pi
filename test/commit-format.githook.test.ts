@@ -66,8 +66,8 @@ import {
 	buildGithookFixture,
 	type CommitAttempt,
 	commitWithMessage,
-	removeDelegatedHelpers,
 	type GithookFixture,
+	removeDelegatedHelpers,
 	removeGithookFixture,
 } from "./harness/githook-fixture.ts";
 import { repoRoot } from "./harness/run-pi.ts";

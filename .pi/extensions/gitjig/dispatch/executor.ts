@@ -38,7 +38,7 @@
  */
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
-import { withoutRepoLocatingGitEnv, type DispatchContext } from "./provision.ts";
+import { type DispatchContext, withoutRepoLocatingGitEnv } from "./provision.ts";
 
 /** Grace for stream flush after exit, when an orphan may hold the pipes. */
 const STREAM_GRACE_MS = 2_000;

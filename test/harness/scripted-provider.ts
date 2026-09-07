@@ -13,19 +13,20 @@
  * value that satisfies validation and is never contacted (§4.4; issue #4
  * spike note, finding 3).
  */
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	type Api,
 	type AssistantMessage,
 	type AssistantMessageEventStream,
 	type Context,
+	createAssistantMessageEventStream,
 	type Model,
 	type SimpleStreamOptions,
-	createAssistantMessageEventStream,
 } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 type ScriptTurn =
 	| { kind: "toolCall"; name: string; arguments: Record<string, unknown> }

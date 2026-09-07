@@ -127,8 +127,9 @@
  * closes only the descriptor a failed write left behind, guarded because
  * a second failure on an already-reported append has nothing to add.
  */
-import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, statSync, writeFileSync } from "node:fs";
+
 import type { Stats } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { quoted } from "./quote.ts";
 

@@ -64,8 +64,8 @@ import {
 import {
 	AWS_JOINED,
 	BODY_MEASUREMENT_CASES,
-	committedPatternRows,
 	CONFORMANCE_CASES,
+	committedPatternRows,
 } from "./harness/secret-pattern-cases.ts";
 
 const TOOL = "gitjig_publish";

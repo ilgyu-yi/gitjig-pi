@@ -114,9 +114,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
+
 /**
  * True iff `candidate` sits at or below `ancestor`, decided on PHYSICAL
  * paths and component-wise. Both sides are realpath-ed because the arms

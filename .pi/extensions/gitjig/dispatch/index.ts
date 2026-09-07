@@ -74,9 +74,9 @@ import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
 import { MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import {
 	cleanupDispatchContext,
+	type DispatchContext,
 	PROVISION_REFUSAL_CAUSES,
 	provisionDispatchContext,
-	type DispatchContext,
 } from "./provision.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
