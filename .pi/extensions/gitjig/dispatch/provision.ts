@@ -37,13 +37,17 @@
  * scratch. The scratch's own parent is the boundary that contains the
  * orphan — the ambient temporary root, or the shell-owned fallback
  * `scratchParent()` selects when that root lies inside a repository; no
- * TTL reap runs, an unfired contingency earning no code. The boundary is
+ * TTL reap runs, an unfired contingency earning no code. Under the
+ * fallback that boundary sits inside the governed repository, where the
+ * ordinary reclamation act does not reach it: `git clean -xdf` SKIPS a
+ * nested repository and reports doing so, and `-xdff` is what removes it.
+ * The boundary is
  * named that way rather than as "the OS temp root" because the temporary
  * root is an ambient VALUE and can be pointed anywhere, which is the whole
  * subject of `scratchParent()` below (issue #127).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { quoted } from "../quote.ts";
@@ -104,6 +108,12 @@ export interface DispatchContext {
  * directory would answer "no repository" for both and place the scratch
  * inside exactly the shapes this walk exists to avoid.
  *
+ * A BARE repository is not reported, because it carries no `.git` entry to
+ * find. That is the answer this walk wants rather than a gap in it: a bare
+ * repository has no work tree, so nothing written beside it can become
+ * that repository's committable content, which is the outcome the walk
+ * exists to prevent.
+ *
  * The walk is filesystem-only and spawns no child. `git rev-parse` would
  * answer the same question, but it reads the ambient git environment,
  * and this runs to decide where the shell may WRITE — a decision that
@@ -150,16 +160,35 @@ export function containingRepository(path: string): string | undefined {
  * layer over it fails an aid closed in the direction §5.2 forbids.
  *
  * The fallback is the shell's own state root, whose namespace §4.1 gives
- * it and which is excluded from version control at creation — so the
- * bytes land somewhere the shell owns and no repository tracks. The
+ * it — so the bytes land somewhere the shell owns. Its exclusion from
+ * version control is a per-clone fact and not a property of this write:
+ * the bind instrument writes that exclusion, and this repository also
+ * commits a root-anchored ignore for it. In a clone that has never been
+ * bound and carries no such ignore, the namespace this creates is
+ * untracked-and-unignored like any other new path — a residual inherited
+ * from the record writers that already materialise that directory, not one
+ * this branch introduces, and stated here rather than claimed away. The
  * fallback is announced, because a silently relocated scratch is a
  * degraded state a reader cannot see (§5.2's surfaced-signal rule): the
  * temporary root an operator configured is not the one in use.
  *
- * Where the state root is itself unusable the ambient root is taken
- * anyway: this function chooses between two homes and is not an
- * enforcement gate, so it degrades open to the shipped default rather
- * than wedging dispatch on a second failure (§5.2).
+ * Where the shell-owned home is unusable the ambient root is taken anyway,
+ * and the fall-back-from-the-fallback is ANNOUNCED too: this function
+ * chooses between two homes and is not an enforcement gate, so it degrades
+ * open rather than wedging dispatch on a second failure (§5.2) — but a
+ * relocation that silently did NOT happen ends in the very state this
+ * branch exists to prevent, which is worse than the surprising directory
+ * the first warning is about. Unusable covers two shapes: the home cannot
+ * be created, and the home is REDIRECTED. A symlink at a directory
+ * component this write creates or traverses is another writer's target,
+ * because `mkdirSync(…, {recursive: true})` follows both — the same hazard
+ * `bind-state.ts` lstats for before its own recursive mkdir, one component
+ * shallower. Writing through such a link would clone the caller repository
+ * to wherever it points, which is how a branch installed to keep bytes out
+ * of an ungoverned repository would put them there instead. Both shapes
+ * take one posture rather than two, because for this writer they have one
+ * remedy and one consequence: the shell-owned home is not available, so
+ * say so and use the ambient root.
  */
 export function scratchParent(): string {
 	const ambient = tmpdir();
@@ -169,9 +198,34 @@ export function scratchParent(): string {
 	}
 	let fallback: string;
 	try {
-		fallback = join(resolveStateRoot().root, "dispatch");
+		const stateRoot = resolveStateRoot().root;
+		fallback = join(stateRoot, "dispatch");
+		// The link probe covers every component this writer would create or
+		// traverse, leaf included — unlike the sibling's, which stops above
+		// its leaf because its leaf is opened under `O_NOFOLLOW` and refuses
+		// there. This writer's leaf is a DIRECTORY handed to `git clone`, so
+		// no descriptor-level refusal stands behind it.
+		for (const component of [dirname(stateRoot), stateRoot, fallback]) {
+			let linked = false;
+			try {
+				linked = lstatSync(component).isSymbolicLink();
+			} catch {
+				// Absent — nothing to refuse; the create below makes it.
+			}
+			if (linked) {
+				throw new Error(`refusing the redirected component ${quoted(component)}`);
+			}
+		}
 		mkdirSync(fallback, { recursive: true, mode: 0o700 });
-	} catch {
+	} catch (error) {
+		console.warn(
+			`[gitjig] the temporary root ${quoted(ambient)} lies inside the repository ${quoted(enclosing)}, and ` +
+				`the shell-owned home this dispatch would fall through to is unavailable, so the scratch is being ` +
+				`provisioned under that temporary root after all — an unexcluded shell-written tree in a ` +
+				`repository this shell does not govern (§5.5). Cause: ` +
+				`${quoted(error instanceof Error ? error.message : String(error))}. Recovery: point TMPDIR at a ` +
+				`directory outside every repository, or make the shell's state namespace writable and unlinked.`,
+		);
 		return ambient;
 	}
 	console.warn(

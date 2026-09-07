@@ -324,7 +324,9 @@ scan_staged_secrets() {
 	# one — the spool is removed within the same hook run rather than
 	# persisting, and the fallback is reached only where the git dir is
 	# unwritable, so the ordinary path never leaves the repository the hook
-	# is already committed in. The base is `--`-terminated: a worktree file named HEAD would
+	# is already committed in.
+	#
+	# The base is `--`-terminated: a worktree file named HEAD would
 	# otherwise make the argv ambiguous, and an enumeration failure is the
 	# machinery arm — a disarm any actor could mint with one file.
 	local _ss_list _ss_gd

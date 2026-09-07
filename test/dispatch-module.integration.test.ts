@@ -226,6 +226,43 @@ after(() => {
 	}
 });
 
+/**
+ * Runs `body` with TMPDIR pointed at `tmp` and the shell's state seam
+ * pointed at a disposable root, restoring both afterwards.
+ *
+ * The seam is not optional here and its absence was a defect: these arms
+ * load the module IN-PROCESS, while the harness sets the seam only for the
+ * `pi` child it spawns. With the seam unset, an arm that drives the
+ * fall-through writes the OPERATIONAL state root of the checkout under
+ * test — §5.5's second face forbids exactly that, a run that exists to
+ * exercise the shell resolving its state to a disposable root. Measured
+ * before this helper existed: `env -u GITJIG_TEST_STATE_ROOT node --test`
+ * left two full clones under `<tree>/.gitjig/state/dispatch`.
+ *
+ * Pinning it also supplies the POSITIVE half of the disposition, which
+ * asserting non-containment alone cannot reach: with the seam known, an
+ * arm can say where the scratch landed and not merely where it did not.
+ */
+async function withRoots<T>(tmp: string, seam: string, body: () => Promise<T>): Promise<T> {
+	const previousTmp = process.env.TMPDIR;
+	const previousSeam = process.env.GITJIG_TEST_STATE_ROOT;
+	const restore = (key: "TMPDIR" | "GITJIG_TEST_STATE_ROOT", value: string | undefined): void => {
+		if (value === undefined) {
+			delete process.env[key];
+		} else {
+			process.env[key] = value;
+		}
+	};
+	try {
+		process.env.TMPDIR = tmp;
+		process.env.GITJIG_TEST_STATE_ROOT = seam;
+		return await body();
+	} finally {
+		restore("TMPDIR", previousTmp);
+		restore("GITJIG_TEST_STATE_ROOT", previousSeam);
+	}
+}
+
 function mintDir(prefix: string): string {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
 	cleanups.push(dir);
@@ -1885,12 +1922,21 @@ describe("the scratch never lands inside a repository the shell does not govern 
 	 * an unexcluded shell-written tree lands there, which is the outcome
 	 * §5.5 closes by naming as the defect.
 	 *
-	 * The population here is the two shapes the ambient root can take, and
-	 * both are exercised: a temporary root inside a repository (the defect)
-	 * and one outside every repository (the ordinary case, which must be
-	 * unaffected — a fix that always fell through would pass the first arm
-	 * and silently abandon the temp root for everyone).
+	 * The population is every shape the ambient root can take against the
+	 * shell-owned home it falls through to, and each is an arm: a root
+	 * inside an ordinary repository; a root inside a LINKED WORKTREE, whose
+	 * `.git` is a file rather than a directory; a root inside no repository
+	 * at all, which must be unaffected; a shell-owned home REDIRECTED by a
+	 * symlink; and a shell-owned home that cannot be created.
+	 *
+	 * Every arm pins BOTH halves where it can — where the scratch did not
+	 * land and where it did. Non-containment alone is satisfied by an
+	 * implementation that relocates the scratch anywhere at all.
 	 */
+	function seamRoot(): string {
+		return mintDir("zqseam-");
+	}
+
 	it("a temporary root inside another repository does not receive the scratch", async () => {
 		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-ambient-root");
 		const caller = mintRepo();
@@ -1899,11 +1945,9 @@ describe("the scratch never lands inside a repository the shell does not govern 
 		const foreign = mintRepo();
 		const slot = join(foreign, "zqtmpslot");
 		mkdirSync(slot);
-		const previous = process.env.TMPDIR;
-		let context: { scratchRoot: string } | undefined;
-		try {
-			process.env.TMPDIR = slot;
-			context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
+		const seam = seamRoot();
+		await withRoots(slot, seam, async () => {
+			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
 			cleanups.push(context.scratchRoot);
 			assert.equal(
 				isInside(context.scratchRoot, foreign),
@@ -1912,22 +1956,25 @@ describe("the scratch never lands inside a repository the shell does not govern 
 					`${foreign}: an unexcluded shell-written tree in a repository the shell does not govern is ` +
 					`the outcome §5.5 names as the defect (issue #127)`,
 			);
+			// The positive half: shell-owned storage is where it must be, not
+			// merely somewhere else. Without this an implementation relocating
+			// to any arbitrary directory passes.
+			assert.equal(
+				isInside(context.scratchRoot, seam),
+				true,
+				`the scratch avoided the ungoverned repository but did not land in the shell's own state root ` +
+					`${seam} — fall-through is TO shell-owned storage, not merely away (§5.5)`,
+			);
 			// The verdict a caller can act on, not merely a location: git in
 			// that repository must see nothing new. A scratch placed outside
-			// it but SYMLINKED in would satisfy the path assertion above.
+			// it but SYMLINKED in would satisfy the path assertions above.
 			assert.equal(
 				git(foreign, "status", "--porcelain").trim(),
 				"",
 				`the ungoverned repository reports untracked content after a dispatch — ` +
 					`${JSON.stringify(git(foreign, "status", "--porcelain").trim())} (§5.5)`,
 			);
-		} finally {
-			if (previous === undefined) {
-				delete process.env.TMPDIR;
-			} else {
-				process.env.TMPDIR = previous;
-			}
-		}
+		});
 	});
 
 	it("a LINKED WORKTREE counts as a repository, though its .git is a file", async () => {
@@ -1937,7 +1984,7 @@ describe("the scratch never lands inside a repository the shell does not govern 
 		// is as much a repository the shell does not govern. Asking only for a
 		// directory answers "no repository" for both and places the scratch
 		// inside exactly the shapes the walk exists to avoid — a mutant that
-		// survives arm 1 and arm 3 and is caught only here.
+		// survives every other arm here and is caught only by this one.
 		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-worktree-root");
 		const caller = mintRepo();
 		const host = mintRepo();
@@ -1951,9 +1998,8 @@ describe("the scratch never lands inside a repository the shell does not govern 
 		);
 		const slot = join(linked, "zqtmpslot");
 		mkdirSync(slot);
-		const previous = process.env.TMPDIR;
-		try {
-			process.env.TMPDIR = slot;
+		const seam = seamRoot();
+		await withRoots(slot, seam, async () => {
 			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
 			cleanups.push(context.scratchRoot);
 			assert.equal(
@@ -1963,26 +2009,18 @@ describe("the scratch never lands inside a repository the shell does not govern 
 					`worktree carries .git as a FILE, and a walk that asks only for a directory reads it as no ` +
 					`repository at all (issue #127, §5.5)`,
 			);
-		} finally {
-			if (previous === undefined) {
-				delete process.env.TMPDIR;
-			} else {
-				process.env.TMPDIR = previous;
-			}
-		}
+		});
 	});
 
 	it("a temporary root outside every repository still receives the scratch", async () => {
 		// Discrimination, not detection. Falling through unconditionally
-		// passes the arm above while abandoning the temporary root for every
+		// passes every arm above while abandoning the temporary root for every
 		// ordinary dispatch; this arm is what separates the two.
 		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-ordinary-root");
 		const caller = mintRepo();
-		const plain = mkdtempSync(join(tmpdir(), "zqplainroot-"));
-		cleanups.push(plain);
-		const previous = process.env.TMPDIR;
-		try {
-			process.env.TMPDIR = plain;
+		const plain = mintDir("zqplainroot-");
+		const seam = seamRoot();
+		await withRoots(plain, seam, async () => {
 			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
 			cleanups.push(context.scratchRoot);
 			assert.equal(
@@ -1992,12 +2030,68 @@ describe("the scratch never lands inside a repository the shell does not govern 
 					`${plain} it was pointed at — the fall-through is for a root inside a repository, and this ` +
 					`root is inside none (issue #127)`,
 			);
-		} finally {
-			if (previous === undefined) {
-				delete process.env.TMPDIR;
-			} else {
-				process.env.TMPDIR = previous;
-			}
-		}
+		});
+	});
+
+	it("a REDIRECTED shell-owned home is not written through, and the fall-back-from-it is announced", async () => {
+		// The branch installed to keep bytes out of an ungoverned repository
+		// must not itself put them there. `mkdirSync(recursive)` FOLLOWS a
+		// symlink at any component it creates or traverses, so a link planted
+		// at the shell-owned home redirects the whole clone to wherever it
+		// points — and the warning would name the link path, telling the
+		// operator the bytes are in shell-owned storage while they are not.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-redirected-home");
+		const caller = mintRepo();
+		const foreign = mintRepo();
+		const slot = join(foreign, "zqtmpslot");
+		mkdirSync(slot);
+		// A second ungoverned repository, which the planted link points into.
+		const victim = mintRepo();
+		const landing = join(victim, "zqlanding");
+		mkdirSync(landing);
+		const seam = seamRoot();
+		symlinkSync(landing, join(seam, "dispatch"));
+		await withRoots(slot, seam, async () => {
+			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
+			cleanups.push(context.scratchRoot);
+			assert.equal(
+				isInside(context.scratchRoot, victim),
+				false,
+				`the scratch was written THROUGH the planted link into ${victim}: a link at a component of the ` +
+					`shell-owned home redirects the clone, and mkdirSync(recursive) follows it (§5.5)`,
+			);
+			assert.equal(
+				git(victim, "status", "--porcelain").trim(),
+				"",
+				`the link's target repository reports untracked content after a dispatch — the refusal must ` +
+					`precede the write, not merely rename it`,
+			);
+		});
+	});
+
+	it("an UNCREATABLE shell-owned home degrades to the ambient root rather than wedging dispatch", async () => {
+		// The open posture is deliberate — this chooses between two homes and
+		// is not an enforcement gate (§5.2) — so the arm pins that dispatch
+		// still completes. What it must NOT be is silent: a relocation that
+		// did not happen ends in the state the whole branch exists to prevent.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-uncreatable-home");
+		const caller = mintRepo();
+		const foreign = mintRepo();
+		const slot = join(foreign, "zqtmpslot");
+		mkdirSync(slot);
+		const seam = seamRoot();
+		// A regular FILE where the home's directory must be created: mkdir
+		// cannot make a directory over it, and no link is involved.
+		writeFileSync(join(seam, "dispatch"), "zq not a directory\n");
+		await withRoots(slot, seam, async () => {
+			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
+			cleanups.push(context.scratchRoot);
+			assert.equal(
+				existsSync(context.treeDir),
+				true,
+				"dispatch did not complete when the shell-owned home could not be created — this chooses " +
+					"between two homes and must degrade open, never wedge the layer (§5.2)",
+			);
+		});
 	});
 });
