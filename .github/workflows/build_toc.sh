@@ -144,7 +144,11 @@ if [ "$MODE" = "--migrate" ]; then
     # moves its temporary within the same run, so nothing persists to become
     # another repository's committable content — unlike the dispatch
     # scratch, which persisted and was therefore closed rather than
-    # enumerated.
+    # enumerated. The ground is scoped to this script's own EXIT PATHS: an
+    # INTERRUPTED run leaves its temporary behind, since only the --check
+    # mode installs an EXIT trap. That is the same orphan shape
+    # provision.ts names as its own residual for an uncleanly killed
+    # dispatcher, and it is named here rather than claimed away.
     mig=$(mktemp)
     if grep -qE '^## Table of contents[[:space:]]*$' "$SPEC"; then
       # Replace the legacy ToC-list block under the existing heading. The STANDARD

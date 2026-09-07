@@ -161,6 +161,8 @@ interface ProvisionModule {
 		options: { brief: string; expectedRef?: string },
 	): DispatchContext | Promise<DispatchContext>;
 	cleanupDispatchContext(context: DispatchContext): unknown;
+	scratchParent(): string;
+	containingRepository(path: string): string | undefined;
 }
 
 interface ExecutorModule {
@@ -260,6 +262,31 @@ async function withRoots<T>(tmp: string, seam: string, body: () => Promise<T>): 
 	} finally {
 		restore("TMPDIR", previousTmp);
 		restore("GITJIG_TEST_STATE_ROOT", previousSeam);
+	}
+}
+
+/**
+ * Runs `fn` with `console.warn` captured. The degradation signals this
+ * module emits are assertable evidence, not decoration — §5.2 lets an aid
+ * fail open only where the signal is SHOWN — so they are measured rather
+ * than assumed. Same device `primitives.unit.test.ts` uses on the audit
+ * sink's degradations.
+ */
+/** The repository the rule itself reports for `path` — the module's answer, not a second copy of it. */
+function enclosingOf(provision: ProvisionModule, path: string): string {
+	return provision.containingRepository(path) ?? "";
+}
+
+function captureWarnings<T>(fn: () => T): { value: T; warnings: string[] } {
+	const warnings: string[] = [];
+	const original = console.warn;
+	console.warn = (...args: unknown[]): void => {
+		warnings.push(args.map((arg) => String(arg)).join(" "));
+	};
+	try {
+		return { value: fn(), warnings };
+	} finally {
+		console.warn = original;
 	}
 }
 
@@ -2093,5 +2120,114 @@ describe("the scratch never lands inside a repository the shell does not govern 
 					"between two homes and must degrade open, never wedge the layer (§5.2)",
 			);
 		});
+	});
+	it("the fall-through ANNOUNCES itself, naming the home it chose", async () => {
+		// The open posture rests entirely on the signal being shown (§5.2), so
+		// the signal is measured. Deleting both warnings left the whole suite
+		// green before these two arms existed — a surviving mutant is a
+		// harness fault (§3.12), never a tolerated gap.
+		//
+		// These arms drive the exported rule DIRECTLY rather than through
+		// provisionDispatchContext, which is what makes the rules' export
+		// earn itself: the five arms above exercise the dispatch and never
+		// the rule, so nothing called `scratchParent` at all.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-announce");
+		const foreign = mintRepo();
+		const slot = join(foreign, "zqtmpslot");
+		mkdirSync(slot);
+		const seam = mintDir("zqseam-");
+		await withRoots(slot, seam, async () => {
+			const { value, warnings } = captureWarnings(() => provision.scratchParent());
+			assert.equal(
+				isInside(value, seam),
+				true,
+				`scratchParent() returned ${value}, which is not under the shell-owned home ${seam}`,
+			);
+			assert.equal(
+				warnings.length,
+				1,
+				`the fall-through emitted ${warnings.length} warnings, not one: ${JSON.stringify(warnings)}`,
+			);
+			// The operator-visible half: the line must name the home actually
+			// chosen. A line naming the temporary root alone tells an operator
+			// nothing about where the bytes went.
+			assert.equal(
+				warnings[0]?.includes(value),
+				true,
+				`the announcement does not name the home it chose (${value}): ${warnings[0]}`,
+			);
+			assert.equal(
+				warnings[0]?.includes("TMPDIR"),
+				true,
+				`the announcement does not name the recovery an operator would act on: ${warnings[0]}`,
+			);
+		});
+	});
+
+	it("the degrade-open path ANNOUNCES that the relocation did NOT happen, with cause and recovery", async () => {
+		// A relocation that silently did not happen ends in the state this
+		// whole branch exists to prevent, so it is the louder of the two.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-degrade-announce");
+		const foreign = mintRepo();
+		const slot = join(foreign, "zqtmpslot");
+		mkdirSync(slot);
+		const seam = mintDir("zqseam-");
+		writeFileSync(join(seam, "dispatch"), "zq not a directory\n");
+		await withRoots(slot, seam, async () => {
+			const { value, warnings } = captureWarnings(() => provision.scratchParent());
+			assert.equal(
+				value,
+				slot,
+				`positive control: with the shell-owned home uncreatable the ambient root must be returned, ` +
+					`or this arm measures a path the degrade branch never took — got ${value}`,
+			);
+			assert.equal(
+				warnings.length,
+				1,
+				`the degrade-open path emitted ${warnings.length} warnings, not one: ${JSON.stringify(warnings)}`,
+			);
+			const line = warnings[0] ?? "";
+			assert.equal(
+				line.includes(enclosingOf(provision, slot)),
+				true,
+				`the line does not name the repository the scratch is landing in: ${line}`,
+			);
+			assert.equal(
+				/Cause:/.test(line) && /Recovery:/.test(line),
+				true,
+				`the line carries no cause and recovery, so an operator learns the state and not the fix: ${line}`,
+			);
+		});
+	});
+
+	it("containingRepository answers about the shapes the disposition turns on", async () => {
+		// The second exported rule, called rather than inferred through the
+		// dispatch. Population: an ordinary repository, a path inside one, a
+		// path inside none, and a bare repository — the shape the block's
+		// contract explicitly excludes, which no other arm reaches.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "containing-repository");
+		const repo = mintRepo();
+		const nested = join(repo, "zqdeep", "zqdeeper");
+		mkdirSync(nested, { recursive: true });
+		assert.equal(
+			provision.containingRepository(nested),
+			realpathSync(repo),
+			"a path inside a repository must report that repository",
+		);
+		const plain = mintDir("zqnorepo-");
+		assert.equal(
+			provision.containingRepository(plain),
+			undefined,
+			`a path inside no repository reported one: ${provision.containingRepository(plain)}`,
+		);
+		const bareParent = mintDir("zqbare-");
+		const bare = join(bareParent, "zqbare.git");
+		execFileSync("git", ["init", "-q", "--bare", bare], { encoding: "utf8" });
+		assert.equal(
+			provision.containingRepository(bare),
+			undefined,
+			"a bare repository was reported: it carries no .git entry and has no work tree, so nothing " +
+				"beside it can become that repository's committable content (the block's stated exclusion)",
+		);
 	});
 });

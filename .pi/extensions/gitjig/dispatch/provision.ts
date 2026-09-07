@@ -50,6 +50,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { STATE_DIR_MODE } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import { resolveStateRoot } from "../state-root.ts";
 
@@ -205,6 +206,14 @@ export function scratchParent(): string {
 		// its leaf because its leaf is opened under `O_NOFOLLOW` and refuses
 		// there. This writer's leaf is a DIRECTORY handed to `git clone`, so
 		// no descriptor-level refusal stands behind it.
+		//
+		// Two residuals, stated because §5.5 asks each writer to state them
+		// and both siblings do. A link ABOVE these components is followed:
+		// those components are not this writer's to own, the same posture
+		// `bind-state.ts` takes and says it takes. And the lstat-then-mkdir
+		// pair leaves a check/use window at the leaf, which this writer cannot
+		// close the way the sibling's leaf-open does — its leaf must BE a
+		// directory, so there is no descriptor to carry the refusal.
 		for (const component of [dirname(stateRoot), stateRoot, fallback]) {
 			let linked = false;
 			try {
@@ -216,7 +225,7 @@ export function scratchParent(): string {
 				throw new Error(`refusing the redirected component ${quoted(component)}`);
 			}
 		}
-		mkdirSync(fallback, { recursive: true, mode: 0o700 });
+		mkdirSync(fallback, { recursive: true, mode: STATE_DIR_MODE });
 	} catch (error) {
 		console.warn(
 			`[gitjig] the temporary root ${quoted(ambient)} lies inside the repository ${quoted(enclosing)}, and ` +
