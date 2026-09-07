@@ -72,6 +72,8 @@ const TOOL = "gitjig_publish";
 const SUBSTRATE_NOT_FOUND = /Tool gitjig_publish not found/;
 /** The shim's promised success output — a well-formed comment URL. */
 const SHIM_URL = "https://github.com/zqowner/zqrepo/issues/5#issuecomment-987654321";
+/** What the edit and create verbs print — a surface url, not a comment url. */
+const SURFACE_SHIM_URL = "https://github.com/zqowner/zqrepo/pull/5";
 
 /** One authored red message shape for every subject-absence anchor. */
 function redUntilRegistered(arm: string): string {
@@ -120,6 +122,14 @@ const NEUTRAL_BODY =
  * no span forms (line 2) — plus both colon-trailer close-pair spellings
  * and the deliberate separator-free non-match (§3.3).
  */
+/**
+ * Issue #129's subject, driven through the real instrument. The first line
+ * is exactly §1.1's linkage spelling; the second carries a mention, so one
+ * body measures BOTH halves of the contract at once — the line survives and
+ * the prose under it does not.
+ */
+const LINKAGE_BODY = "Closes #129\n\nrelayed thanks to @zqsomeone for the report.\n";
+
 const HOSTILE_BODY =
 	"a stray ` backtick precedes @zqstray in this relay\n" +
 	"quoting `@zqadjacent right against the wrap\n" +
@@ -161,10 +171,18 @@ interface PublishRun {
  * this exists for is a control byte, which only the format string can spell
  * (issue #97).
  */
-async function runPublish(body: string, successPrintf = `printf '%s\\n' '${SHIM_URL}'`): Promise<PublishRun> {
+async function runPublish(
+	body: string,
+	successPrintf = `printf '%s\\n' '${SHIM_URL}'`,
+	// The destination the tool is handed. Defaulted rather than required so
+	// every arm that predates the kind-aware boundary (issue #129) drives the
+	// same target it always did; only an arm whose subject IS the kind names
+	// one, and it must, because the boundary's first bound is the kind.
+	destination: Record<string, unknown> = { kind: "issue-comment", number: 5 },
+): Promise<PublishRun> {
 	const fixture = buildFixture({
 		script: [
-			{ kind: "toolCall", name: TOOL, arguments: { body, destination: { kind: "issue-comment", number: 5 } } },
+			{ kind: "toolCall", name: TOOL, arguments: { body, destination } },
 			{ kind: "text", text: "EGRESS_IT_DONE" },
 		],
 		linkGitjigRuntime: true,
@@ -298,6 +316,8 @@ let hostileRun: PublishRun;
 let falseBlockRun: PublishRun;
 let nulRun: PublishRun;
 let cfRun: PublishRun;
+let linkageRun: PublishRun;
+let linkageCommentRun: PublishRun;
 
 before(async () => {
 	secretRun = await runPublish(SECRET_BODY);
@@ -306,10 +326,21 @@ before(async () => {
 	falseBlockRun = await runPublish(FALSE_BLOCK_BODY);
 	nulRun = await runPublish((nulCase as { body: string }).body);
 	cfRun = await runPublish((cfCase as { body: string }).body);
+	// Issue #129's two arms: the SAME body to a pull request description and
+	// to a comment. One body, two destinations, so the only variable is the
+	// bound under test.
+	// `pr edit` prints a SURFACE url, not a comment url, and the executor
+	// validates each kind against its own success shape — the default shim
+	// output would settle this run outcome-unverified and measure nothing.
+	linkageRun = await runPublish(LINKAGE_BODY, `printf '%s\\n' '${SURFACE_SHIM_URL}'`, {
+		kind: "pr-body",
+		number: 5,
+	});
+	linkageCommentRun = await runPublish(LINKAGE_BODY, undefined, { kind: "pr-comment", number: 5 });
 });
 
 after(() => {
-	for (const run of [secretRun, neutralRun, hostileRun, falseBlockRun, nulRun, cfRun]) {
+	for (const run of [secretRun, neutralRun, hostileRun, falseBlockRun, nulRun, cfRun, linkageRun, linkageCommentRun]) {
 		if (run !== undefined) {
 			removeFixture(run.fixture);
 		}
@@ -617,6 +648,67 @@ describe("a published URL carrying a control byte cannot land it raw on the resu
 			HOSTILE_URL,
 			"control-url-esc: the delimited locator does not decode back to the URL the child printed — rendering " +
 				`it inert must not discard or alter the locator the operator needs to reach the comment: ${JSON.stringify(text)}`,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// §1.1's linkage line through the instrument (issue #129; SPEC §3.3's second
+// recorded-live shape and its reporting rule).
+//
+// The unit arms in `egress-conformance.unit.test.ts` bind the boundary
+// function. These bind the INSTRUMENT: what actually reaches the child's
+// stdin, and what the caller is told. The distinction matters because the
+// defect this closes was not in the neutralizer's logic — it was that the
+// publish surface handed it the wrong text and then reported success.
+// ---------------------------------------------------------------------------
+
+describe("§1.1's linkage line reaches a pull request description live (issue #129)", () => {
+	it("the publish tool answers for itself", () => {
+		requireOwnResult(linkageRun, "linkage");
+	});
+
+	it("the first line reaches the shim's stdin unwrapped", () => {
+		const stdinPath = join(linkageRun.sinkDir, "gh-stdin");
+		assert.ok(existsSync(stdinPath), redUntilRegistered("linkage stdin capture"));
+		const capture = readFileSync(stdinPath, "utf8");
+		assert.ok(
+			capture.startsWith("Closes #129\n"),
+			`the linkage line did not reach the child intact, so the platform parses no closing reference from it and the merge closes nothing. Captured stdin began: ${JSON.stringify(capture.slice(0, 60))}`,
+		);
+		assert.doesNotMatch(
+			capture,
+			/`+ Closes #129 `+/,
+			"the linkage line was published wrapped — this is the defect #129 filed, measured at the surface that produces it",
+		);
+	});
+
+	it("the prose under it is still neutralized", () => {
+		const capture = readFileSync(join(linkageRun.sinkDir, "gh-stdin"), "utf8");
+		assertNeutralized(capture, "@zqsomeone", 1, "linkage");
+	});
+
+	it("the same body to a COMMENT keeps the line inert", () => {
+		const capture = readFileSync(join(linkageCommentRun.sinkDir, "gh-stdin"), "utf8");
+		assert.match(
+			capture,
+			/`+ Closes #129 `+/,
+			"a pull request COMMENT published the closing reference live. The kind bound is what keeps §3.11's auto-close channel shut everywhere except the one field §1.1 fixes a grammar for; one body driven to two destinations is what makes that bound measurable rather than asserted",
+		);
+	});
+
+	it("the caller is told what was made inert (§3.3's reporting rule)", () => {
+		const text = textOf(requireOwnResult(linkageRun, "linkage report"));
+		assert.match(
+			text,
+			/1 actionable reference made inert/,
+			`the send reported success without saying a reference had been rewritten. That silence is the second half of #129: the loss was discoverable only by reading the published surface afterwards. Result text was: ${JSON.stringify(text)}`,
+		);
+		const commentText = textOf(requireOwnResult(linkageCommentRun, "comment report"));
+		assert.match(
+			commentText,
+			/2 actionable references made inert/,
+			`the comment run made TWO shapes inert — the linkage line and the mention — and the count must say two. Result text was: ${JSON.stringify(commentText)}`,
 		);
 	});
 });
