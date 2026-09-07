@@ -802,7 +802,7 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		assert.equal(out.neutralized, 2, "two shapes were made inert");
 	});
 
-	it("the count is WRAPS APPLIED, and the two shapes where that differs are pinned", () => {
+	it("the count is WRAPS APPLIED, and both grounds for the difference are pinned", () => {
 		// A DECISION, not an accident, and pinned here so it cannot drift into
 		// one. The number is transformations applied, never distinct references,
 		// because the two cases below can only be told apart by machinery this
@@ -817,14 +817,24 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			1,
 			"an already-inert span stopped being counted: telling it from a live one needs a markdown parser, which this module does not have and must not grow",
 		);
-		// (2) One reference, two passes. The URL pass wraps the whole link, and
-		// the mention pass then matches the `@` inside that wrap. The module
-		// header already records this double wrap and its inert-erring result;
-		// what this arm fixes is that the COUNT says two.
-		assert.equal(
-			at("see https://github.com/@zqu/r/issues/4", "issue-comment").neutralized,
-			2,
-			"the nested-wrap count moved: one reference draws two passes, and the number is wraps applied",
-		);
+		// (2) One reference, more than one pass. The URL pass wraps the whole
+		// link, and any narrower pattern then matches INSIDE that wrap. The module
+		// header already records the double wrap and its inert-erring result; what
+		// these three inputs fix is that the COUNT says what the pass count is.
+		//
+		// Three inputs and not one, because the ground is a class rather than a
+		// shape: an enumeration of shapes is what SPEC §3.3 and the call site were
+		// carrying, and it was not exhaustive. The third input is its falsifier.
+		for (const [text, passes] of [
+			["see https://github.com/@zqu/r/issues/4", 2],
+			["see https://github.com/o/r/GH-4/issues/9", 2],
+			["see https://github.com/@zq/GH-4/issues/9", 3],
+		] as const) {
+			assert.equal(
+				at(text, "issue-comment").neutralized,
+				passes,
+				`${JSON.stringify(text)}: the nested-wrap count moved. One reference draws one pass per narrower pattern that matches inside the wrap, and the number is wraps applied — a report that counted references instead would need a second reader of the body`,
+			);
+		}
 	});
 });
