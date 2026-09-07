@@ -127,8 +127,8 @@ describe("every publication kind is reachable by the gate (issue #120)", () => {
 });
 
 describe("success is recognized for every kind, not just the comment kinds (issue #120)", () => {
-	// Review round 1, finding 1. Widening the INPUT union without widening
-	// the OUTPUT contract left four of six kinds unable to report success:
+	// Widening the INPUT union without widening the OUTPUT contract leaves
+	// four of six kinds unable to report success:
 	// only the comment verbs print a comment url, and every kind was
 	// validated against that one shape. A successful create then reported
 	// outcome-unverified — "neither publication nor withholding is claimed"
@@ -181,8 +181,8 @@ describe("success is recognized for every kind, not just the comment kinds (issu
 	});
 });
 
-describe("a refusal names which operand it came from (issue #120, review round 2)", () => {
-	// Round-2 nit: a bare line locator is unattributable between two
+describe("a refusal names which operand it came from (issue #120)", () => {
+	// A bare line locator is unattributable between two
 	// operands — "lines 1" reads identically for a title match and a
 	// first-line body match — and where BOTH matched, the title verdict
 	// replaced the body's, so the actor repaired one, retried, and only then
@@ -223,9 +223,9 @@ describe("a refusal names which operand it came from (issue #120, review round 2
 	});
 
 	it("an out-of-domain operand OUTRANKS a match on the other", () => {
-		// Review round 3, finding 1. `operands` used to be pushed independently
-		// of the winning verdict, so a NUL-bearing body plus a matching title
-		// reported `refuse-match ... in body and title` — claiming a located
+		// `operands` must not be pushed independently of the winning verdict:
+		// a NUL-bearing body plus a matching title would then report
+		// `refuse-match ... in body and title` — claiming a located
 		// span in text no pattern was ever consulted for, and discarding the
 		// stricter out-of-domain statement. What did not measure does not
 		// vouch, in either direction (§3.9).

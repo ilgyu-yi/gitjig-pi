@@ -209,9 +209,9 @@ describe("destinations stay inside shell-owned namespaces (issue #116, §4.1)", 
 });
 
 /**
- * The arm class that catches what verdict-only arms cannot (issue #116,
- * review round 1). Both round-1 findings were wrong `land` verdicts whose
- * wrongness is only visible in the ACT the verdict authorizes: a decision
+ * The arm class that catches what verdict-only arms cannot (issue #116).
+ * The defects it exists for are wrong `land` verdicts whose wrongness is
+ * only visible in the ACT the verdict authorizes: a decision
  * arm reads `land` and is satisfied, while performing that landing writes
  * the shell's bytes outside every shell-owned namespace.
  *

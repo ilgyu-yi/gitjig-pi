@@ -870,8 +870,8 @@ describe("the operand sweep's own teeth (§3.12)", () => {
 // cannot vary an argument string cheaply. These arms drive the REGISTERED
 // HANDLER directly instead: the grammar is a pure function of the argument
 // string, and what must be pinned is which token the parser consumes and what
-// consequently reaches the delegate. Round 2 found this surface pinned by
-// nothing at all -- the parser was new and no arm anywhere drove it.
+// consequently reaches the delegate. Nothing else drives the parser, so
+// these arms are the whole of its coverage.
 // ---------------------------------------------------------------------------
 
 describe("/review's bound token is consumed from first position only (issue #94, SPEC §4.8, §4.9)", () => {

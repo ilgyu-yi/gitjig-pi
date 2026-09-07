@@ -37,10 +37,9 @@
  * oracle assertion fails and the suite reds before such a row could land.
  *
  * THIS CHECK IS PARTIAL BY CONSTRUCTION and makes no completeness claim. It
- * is a lexical scanner over a grammar, not the grammar; three review rounds
- * each widened the measuring alphabet and each found another construct class
- * it did not hold, which is what a second implementation of a contract does
- * (§3.11). What it buys is that the likeliest spellings fail at the loader
+ * is a lexical scanner over a grammar, not the grammar. Every widening of
+ * the measuring alphabet has exposed another construct class it does not
+ * hold, which is what a second implementation of a contract does (§3.11). What it buys is that the likeliest spellings fail at the loader
  * rather than silently. What BOUNDS it is the conformance lock, which is the
  * real check: its oracle asserts the tier-2 probe compiles every committed
  * row, and its ID closure forces a case per row, so a committed pattern the

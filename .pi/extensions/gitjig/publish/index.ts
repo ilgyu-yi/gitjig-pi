@@ -217,8 +217,8 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				// is written here rather than left for a reader to discover.
 				//
 				// A send that reported success while having removed the effect the
-				// caller composed for is an unmeasured allow at this gate's own surface,
-				// and the loss was previously discoverable only by reading the
+				// caller composed for is an unmeasured allow at this gate's own surface:
+				// without this report the loss is discoverable only by reading the
 				// published surface afterwards. The report is a COUNT over both
 				// operands and never the text it counted (§3.8's refusal-record
 				// rule); it is present at zero as well, so a caller can tell a

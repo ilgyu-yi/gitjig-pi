@@ -105,8 +105,21 @@ RECORD_RE='^changelog_unreleased/'
 hits=0
 path=""
 lineno=0
-prev=""
 in_domain=0
+# Whether a hunk has been seen inside the CURRENT `diff --git` entry. A
+# `+++ ` line is a file header only BEFORE the first hunk of its entry —
+# looking one line back at `--- ` is not enough, because a REMOVED line
+# whose own text begins `-- ` has exactly that spelling, so content could
+# still steal the file and the line number. Entry state is what content
+# cannot forge.
+seen_hunk=0
+
+# The longest line this reader will match against. A sentence is not 200 KB,
+# and bash's matcher is quadratic in the subject's length: one minified .json
+# or .js line costs minutes, and an advisory job killed by a timeout is a red
+# X on a check designed never to fail a pull request. Beyond the cap the line
+# is not read, which is a disclosed miss rather than a stall.
+MAX_LINE=4000
 
 # A well-formed unified hunk header. Anything else is not one, and the
 # arithmetic below never runs on an unvalidated capture: a `@@`-leading line
@@ -114,7 +127,11 @@ in_domain=0
 # arithmetic-expansion error, and bash makes that fatal to the enclosing
 # loop — so the remaining files were dropped and the run printed nothing,
 # which is a stopped scan wearing a clean result.
-HUNK_RE='^@@+ -[0-9]+(,[0-9]+)? \+([0-9]+)(,[0-9]+)? @@'
+# An ordinary unified hunk header, and a COMBINED one (`@@@ … @@@`, which
+# merges produce and which carries one extra range). The merge-result range
+# is always the LAST one, so each spelling names its own capture group.
+HUNK_RE='^@@ -[0-9]+(,[0-9]+)? \+([0-9]+)(,[0-9]+)? @@'
+COMBINED_HUNK_RE='^@@@+ (-[0-9]+(,[0-9]+)? )+\+([0-9]+)(,[0-9]+)? @@@'
 
 # Whether this path is read at all. Decided ONCE per file rather than per
 # line: the domain is a property of the surface, not of the sentence.
@@ -132,6 +149,7 @@ enters_domain() {
 header_path() {
   local raw="$1"
   raw="${raw%%$'\t'*}"
+  raw="${raw%$'\r'}"
   if [[ $raw == '"'*'"' ]]; then
     raw="${raw#\"}"
     raw="${raw%\"}"
@@ -143,16 +161,24 @@ emit() {
   local shape="$1" file="$2" line="$3" text="$4"
   hits=$((hits + 1))
   printf '%s:%s: [%s] %s\n' "$file" "$line" "$shape" "$text"
-  printf '    remedy: apply the erasure test (SPEC §2.5) — with the repository'"'"'s history erased, does this sentence still read as documentation of the current HEAD? If not, DELETE it (§2.5 makes deletion the default repair), restate it as the invariant it is really about, or move it to the surface that owns it: issue (problem, intent, decision), PR (implementation and review), commit message (the atomic change), SPEC/README (the current contract), or a comment (current invariants, rationale, API semantics).\n'
+  printf '    remedy: apply the erasure test (SPEC §2.5) — with the repository'"'"'s history AND its plans erased, does this sentence still read as documentation of the current HEAD? A forward-looking sentence that carries its own condition is a contract and stays; one whose truth depends on a plan recorded elsewhere is a schedule and goes. If not, DELETE it (§2.5 makes deletion the default repair), restate it as the invariant it is really about, or move it to the surface that owns it: issue (problem, intent, decision), PR (implementation and review), commit message (the atomic change), SPEC/README (the current contract), or a comment (current invariants, rationale, API semantics).\n'
 }
 
-while IFS= read -r raw; do
-  # A `+++ ` line is a FILE HEADER only where one can appear: immediately
-  # after the matching `--- ` line. Without that guard an added line whose
-  # own text begins with `++ ` reads as a header, and the reader then
-  # attributes every following hit to a file that is not in the diff — a
-  # report that navigates to the wrong place is worse than no report.
-  if [[ $raw == '+++ '* && $prev == '--- '* ]]; then
+# `|| [ -n "$raw" ]` so a final line with no trailing newline is still read.
+while IFS= read -r raw || [ -n "$raw" ]; do
+  # A new entry resets everything. Without this, a missed or spoofed header
+  # leaves the PREVIOUS file's attribution in place and every downstream hit
+  # navigates somewhere wrong; resetting turns that class into silence,
+  # which is the cheaper failure.
+  if [[ $raw == 'diff --git '* || $raw == 'diff --cc '* || $raw == 'diff --combined '* ]]; then
+    path=""
+    in_domain=0
+    seen_hunk=0
+    continue
+  fi
+
+  # A file header, admitted only before the first hunk of its entry.
+  if [[ $seen_hunk == 0 && $raw == '+++ '* ]]; then
     path="$(header_path "${raw#+++ }")"
     lineno=0
     if [ "$path" = "/dev/null" ] || ! enters_domain "$path"; then
@@ -160,16 +186,20 @@ while IFS= read -r raw; do
     else
       in_domain=1
     fi
-    prev="$raw"
     continue
   fi
 
   if [[ $raw =~ $HUNK_RE ]]; then
-    # The capture is validated by the match itself, so the arithmetic below
-    # cannot be handed a non-number. Pre-incremented per added line, so it
-    # starts one below the hunk's first added line.
+    seen_hunk=1
     lineno=$((BASH_REMATCH[2] - 1))
-    prev="$raw"
+    continue
+  fi
+  if [[ $raw =~ $COMBINED_HUNK_RE ]]; then
+    # The merge-result range is the last one, and a combined entry carries
+    # one leading column per parent — so an added line's own text starts
+    # after those columns, not after a single `+`.
+    seen_hunk=1
+    lineno=$((BASH_REMATCH[3] - 1))
     continue
   fi
 
@@ -177,14 +207,17 @@ while IFS= read -r raw; do
     '+'*)
       if [ -n "$path" ]; then
         lineno=$((lineno + 1))
-        if [ "$in_domain" = 1 ]; then
+        if [ "$in_domain" = 1 ] && [ "${#raw}" -le "$MAX_LINE" ]; then
           text="${raw#+}"
-          # Trim leading whitespace and comment markers so the report carries
-          # the sentence rather than the syntax around it. A trailing CR from
-          # a CRLF input goes too, so it cannot ride into the report.
+          # A combined entry's remaining `+` columns are diff syntax, not the
+          # author's bytes.
+          while [[ $text == '+'* ]]; do
+            text="${text#+}"
+          done
+          # Trim a trailing CR, leading whitespace, and one comment marker, so
+          # the report carries the sentence rather than the syntax around it.
           sentence="${text%$'\r'}"
           sentence="${sentence#"${sentence%%[![:space:]]*}"}"
-          sentence="${sentence###+([[:space:]])}"
           case "$sentence" in
             '//'*) sentence="${sentence#//}" ;;
             '#'*) sentence="${sentence#\#}" ;;
@@ -210,7 +243,6 @@ while IFS= read -r raw; do
       [ -n "$path" ] && lineno=$((lineno + 1))
       ;;
   esac
-  prev="$raw"
 done
 
 if [ "$hits" -gt 0 ]; then

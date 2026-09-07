@@ -352,6 +352,79 @@ describe("the reader's domain is the living set (issue #70, SPEC §2.5)", () => 
 		assert.equal(run.status, 0);
 	});
 
+	it("a REMOVED line shaped like a header does not steal the attribution either", () => {
+		// The first repair of this class gated `+++ ` on the previous line
+		// beginning `--- `. That closed one spelling, not the class: a REMOVED
+		// line whose own text begins `-- ` has exactly that diff spelling, so
+		// content produced by real git could still take the file and the line.
+		//
+		// The gate is now ENTRY state — a `+++ ` line is a header only before
+		// the first hunk of its `diff --git` entry — which content cannot forge.
+		const diff =
+			"diff --git a/doc.md b/doc.md\n--- a/doc.md\n+++ b/doc.md\n@@ -1,5 +1,6 @@\n" +
+			" line1\n--- old bullet\n+++ b/nonexistent.ts\n keep\n keep2\n+Round 3 caught this\n";
+		const run = runReader(diff);
+		assert.match(run.stdout, /doc\.md:5:/, `the hit is at doc.md line 5:\n${run.stdout}`);
+		assert.doesNotMatch(run.stdout, /nonexistent\.ts/, "a path forged by removed content was named in the report");
+	});
+
+	it("a COMBINED diff's added lines get the merge-result line number", () => {
+		// Merges produce `@@@ -a,b -c,d +e,f @@@`, which the ordinary hunk
+		// pattern does not match — so the header was not recognised, the line
+		// counter carried over from whatever came before, and every added line
+		// of every combined entry was reported at a silently wrong number. The
+		// merge-result range is the LAST one, and a combined entry carries one
+		// leading column per parent, so the extra `+` is diff syntax rather than
+		// the author's bytes.
+		const diff =
+			"diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -900,0 +900,1 @@\n+ordinary\n" +
+			"diff --cc x.ts\n--- a/x.ts\n+++ b/x.ts\n@@@ -1,3 -1,3 +7,5 @@@\n  ctx\n++We added the flag\n";
+		const run = runReader(diff);
+		assert.match(
+			run.stdout,
+			/x\.ts:8: \[change-narration\] We added the flag/,
+			`the combined entry's hit is at x.ts line 8, with the parent column stripped from the sentence:\n${run.stdout}`,
+		);
+	});
+
+	it("a line longer than the cap is not read, and the cap is disclosed", () => {
+		// bash's matcher is quadratic in the subject's length: an added line of
+		// 200 KB — one minified .json or .js line, well inside the living set —
+		// cost seconds each, and a job killed by a timeout is a red X on a check
+		// designed never to fail a pull request. A sentence is not 200 KB.
+		const long = `once ${"x".repeat(20000)}`;
+		const started = Date.now();
+		const run = runReader(diffAdding("src/thing.ts", [long, "// red until the helper lands."]));
+		assert.ok(Date.now() - started < 10_000, "the reader stalled on a long line");
+		assert.doesNotMatch(run.stdout, /xxxx/, "a line past the cap was matched anyway");
+		assert.match(
+			run.stdout,
+			/thing\.ts:2:/,
+			`a line past the cap must be SKIPPED, not stop the scan — the line after it still counts and is still read:\n${run.stdout}`,
+		);
+		const source = readFileSync(READER, "utf8");
+		assert.match(source, /MAX_LINE/, "the cap is not stated in the reader, so its miss is undisclosed");
+	});
+
+	it("a diff whose HEADERS carry CRLF is still scanned", () => {
+		const diff = "diff --git a/x.ts b/x.ts\r\n--- a/x.ts\r\n+++ b/x.ts\r\n@@ -0,0 +1,1 @@\r\n+We added the flag\r\n";
+		const run = runReader(diff);
+		assert.match(
+			run.stdout,
+			/x\.ts:1:/,
+			`a CRLF header left the path carrying a CR, so the whole file left the domain:\n${run.stdout}`,
+		);
+	});
+
+	it("a final line with no trailing newline is still read", () => {
+		const run = runReader("diff --git a/x.ts b/x.ts\n--- a/x.ts\n+++ b/x.ts\n@@ -0,0 +5 @@\n+We added the flag");
+		assert.match(
+			run.stdout,
+			/x\.ts:5:/,
+			`the last line was dropped because the read returned false on it:\n${run.stdout}`,
+		);
+	});
+
 	it("REMOVED lines are not scanned — the domain is a change's ADDED lines", () => {
 		const removal =
 			"diff --git a/src/thing.ts b/src/thing.ts\n" +
@@ -402,6 +475,30 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 			"a MENTION of a forbidden shape went unreported, which would mean the reader distinguishes use from mention — it does not, and its header says so",
 		);
 		assert.equal(mention.status, 0, "still advisory");
+	});
+
+	it("the workflow does not print a clean line when nothing was scanned", () => {
+		// The repair for a scan that never started was landed in the workflow,
+		// and nothing in the suite read that file — so the guard could be deleted
+		// with every arm green. A guard the suite never measures is decoration
+		// (§3.12), and this one carries §3.9's rule that a disarmed check must
+		// never read as a passing one.
+		const workflow = readFileSync(join(repoRoot(), ".github", "workflows", "check-provenance.yml"), "utf8");
+		assert.match(
+			workflow,
+			/if ! git diff [^\n]*; then/,
+			"the diff is piped straight into the reader, so a failing `git diff` leaves the report empty and the job falls through to its clean line — a scan that never started, reported as one that found nothing",
+		);
+		assert.match(
+			workflow,
+			/NOT a clean result/,
+			"the degraded path does not say plainly that nothing was scanned. §3.9 forbids a disarmed check reading as a passing one, and the posture row claims this signal exists",
+		);
+		assert.match(
+			workflow,
+			/must NOT be added to the branch ruleset/i,
+			"the workflow no longer states that it must stay out of the required-check set, which is the one thing keeping an advisory reader from becoming a gate",
+		);
 	});
 
 	it("the reader's header states the residual it carries", () => {
