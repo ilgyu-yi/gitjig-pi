@@ -807,6 +807,35 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		assert.equal(out.neutralized, 1, "one shape below the line, one counted");
 	});
 
+	it("the CR tolerance is ANCHORED: an interior carriage return does not buy the exemption", () => {
+		// The arm above pins that the strip HAPPENS. This one pins where it may
+		// reach, which is a separate claim and was the weaker half: neutering the
+		// strip reds the arm above, but WIDENING it — dropping every carriage
+		// return in the line rather than only a trailing one — survived the whole
+		// suite.
+		//
+		// What the survivor costs is the auto-close channel itself. A first line
+		// of `Closes\r #7` is an actionable close pair at HEAD: the close-keyword
+		// pass matches it, because a carriage return is horizontal whitespace to
+		// its separator class. Under the widened strip that line launders into
+		// §1.1's spelling, takes the exemption, and publishes LIVE on a pull
+		// request description — and the count falls from 2 to 1, so the caller is
+		// not told either. The strip exists to forgive a checkout smudge at the
+		// END of a line, never to rewrite the line the author composed.
+		const at = requireBoundary("CR tolerance, anchored");
+		const out = at("Closes\r #7\nbody @zquser\n", "pr-body");
+		assert.match(
+			out.text,
+			/`+ Closes\r #7 `+/,
+			"a close pair carrying an INTERIOR carriage return published live on a pull request description. §1.1 fixes one spelling; a line that only becomes that spelling after the instrument deletes bytes from its middle was never it, and admitting it opens §3.11's auto-close essential on a body the caller did not compose for it",
+		);
+		assert.equal(
+			out.neutralized,
+			2,
+			"the count must report both shapes. A widened strip drops this to 1, which is the reporting rule going quiet at exactly the moment a reference went live",
+		);
+	});
+
 	it("the rest of an exempted body is neutralized exactly as before", () => {
 		const at = requireBoundary("rest of body");
 		const body = `${LINKAGE}\n\nthanks @someone, see GH-4 and owner/repo#9\n`;
@@ -861,6 +890,18 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			2,
 			"a mention after a space and one after punctuation must both still be caught",
 		);
+		// The bound's REACH, measured rather than assumed, because the sentence
+		// above is easy to read as "an address is safe" and that is not what the
+		// pattern says. It excludes an @ after a WORD character, so it protects a
+		// local part ending in one and nothing else. These three are addresses by
+		// any reader's account and are still wrapped and still counted:
+		for (const address of ["ada+@zqexample.com", "ada.@zqexample.com", "ada-@zqexample.com"]) {
+			assert.equal(
+				at(address, "issue-comment").neutralized,
+				1,
+				`${address}: this arm records the bound's REACH, not an aspiration. The exclusion is drawn at a word character, so an address whose local part ends in punctuation is severed and counted exactly as a mention would be. If that ever changes, this arm is the one to update — deliberately, with the widening stated`,
+			);
+		}
 	});
 
 	it("the count never carries the text it counted (§3.8's refusal-record rule)", () => {
