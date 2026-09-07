@@ -638,15 +638,21 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 			"red until publish/executor.ts exports PUBLISH_DESTINATION_KINDS — without it this arm cannot read the population it exists to bind, and would be asserting two hand-written lists against each other",
 		);
 		const partition = [...DESCRIPTION_KINDS, ...NON_DESCRIPTION_KINDS].sort();
-		assert.deepEqual(
-			partition,
-			[...publishDestinationKinds].sort(),
-			"the kinds these arms drive are not the kinds the instrument publishes to. Every kind must sit on exactly one side of the exemption's kind bound, and a kind in neither list is one no arm below can reach",
-		);
+		// Disjointness FIRST. Ordered this way deliberately: a duplicate makes
+		// the partition one entry longer than the instrument's list, so the
+		// deepEqual below would fire first and report a length mismatch — true,
+		// but not the failure that happened. An assertion that can only fire for
+		// a case other than the one its message describes is a message that will
+		// mislead exactly when it is read.
 		assert.equal(
 			new Set(partition).size,
 			partition.length,
 			"a kind appears in BOTH lists: it would be asserted to pass the line through and to neutralize it, and one of the two arms would be measuring the opposite of what it claims",
+		);
+		assert.deepEqual(
+			partition,
+			[...publishDestinationKinds].sort(),
+			"the kinds these arms drive are not the kinds the instrument publishes to. Every kind must sit on exactly one side of the exemption's kind bound, and a kind in neither list is one no arm below can reach",
 		);
 	});
 
