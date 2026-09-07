@@ -316,7 +316,17 @@ scan_staged_secrets() {
 	# repository's own git dir first (writable at commit time), the ambient
 	# temp dir as fallback — an inherited TMPDIR must not become a disarm
 	# lever (§3.3's env-neutrality ground, via the spool rather than the
-	# diff). The base is `--`-terminated: a worktree file named HEAD would
+	# diff). Scored against §5.5's state boundary as one of the shell's
+	# ambient-rooted write locations (issue #127): the fallback root can be
+	# pointed inside a repository the shell does not govern, so a spool can
+	# land there. Enumerated rather than closed, and the ground is that this
+	# write is unlike the dispatch scratch on both counts that decided that
+	# one — the spool is removed within the same hook run rather than
+	# persisting, and the fallback is reached only where the git dir is
+	# unwritable, so the ordinary path never leaves the repository the hook
+	# is already committed in.
+	#
+	# The base is `--`-terminated: a worktree file named HEAD would
 	# otherwise make the argv ambiguous, and an enumeration failure is the
 	# machinery arm — a disarm any actor could mint with one file.
 	local _ss_list _ss_gd

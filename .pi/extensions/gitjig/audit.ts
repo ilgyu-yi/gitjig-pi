@@ -153,6 +153,16 @@ export const STATE_PATH_GUARD_FLAGS = constants.O_NOFOLLOW | constants.O_NONBLOC
 /** Owner read/write only — any shell state file at rest (§5.5). */
 export const STATE_FILE_MODE = 0o600;
 
+/**
+ * Owner-only, with the search bit a state directory needs to be traversed
+ * at all — the directory counterpart of `STATE_FILE_MODE` (§5.5). It lives
+ * beside its file sibling because it is one property of one namespace, and
+ * two spellings of one property is the divergence §3.11 warns about: the
+ * bind advisory's state root and the dispatch fallback's home are both
+ * minted at this mode.
+ */
+export const STATE_DIR_MODE = 0o700;
+
 /** Append-only, create-if-absent, and guarded as above. */
 const SINK_FLAGS = constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | STATE_PATH_GUARD_FLAGS;
 

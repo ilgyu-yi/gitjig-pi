@@ -99,6 +99,7 @@ import {
 	appendAuditRecord,
 	recoveryFor,
 	sinkRefusal,
+	STATE_DIR_MODE,
 	STATE_FILE_MODE,
 	STATE_PATH_GUARD_FLAGS,
 	writeRecordLine,
@@ -181,12 +182,6 @@ export const BIND_CHECK_TIMEOUT_MS = 8_000;
  * JSON object, so anything past this is not it.
  */
 export const SMALL_READ_CAP_BYTES = 4_096;
-
-/**
- * Owner-only, with the search bit the state root needs to be traversed at
- * all — the directory counterpart of `audit.ts`'s `STATE_FILE_MODE` (§5.5).
- */
-const STATE_DIR_MODE = 0o700;
 
 /**
  * The one read primitive of this module (header note): OPEN the path under
