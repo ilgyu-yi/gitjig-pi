@@ -1444,6 +1444,7 @@ describe("fail-posture inventory (§3.9)", () => {
 				"local-tier-derivation → open",
 				"local-tier-derivation → open",
 				"local-tier-exclusion → closed",
+				"provenance-reader → open",
 				"repo-root-discovery → open",
 				"seam-target → closed",
 				"secret-scan-helper → open",

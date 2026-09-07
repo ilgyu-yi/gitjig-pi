@@ -1,0 +1,65 @@
+name: check-provenance
+
+# Per-PR development-provenance reader (issue #70; SPEC §2.4's genus,
+# §2.5's erasure test).
+#
+# ADVISORY. The job always succeeds: the reader exits 0 on every input and
+# this workflow adds no failure of its own, because §2.5 states that no gate
+# class homes a decidable check for the authoring doctrine and §3.6's cost
+# asymmetry puts a reversible stale-prose miss far below a false block over
+# ordinary documentation. What it produces is an instruction to re-read a
+# sentence, surfaced as a notice on the run.
+#
+# This job must NOT be added to the branch ruleset's required-check set. A
+# required advisory check is a gate wearing an advisory label — it would
+# block on exactly the false positives the reader's header enumerates.
+#
+# Pure bash. No third-party Actions; actions/checkout is the GitHub-shipped
+# git-clone equivalent.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR HEAD
+        # Full history: the reader's domain is the change's added lines, so
+        # the merge base must be resolvable.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read added lines for development provenance
+        run: |
+          set -uo pipefail
+
+          if [ ! -f .github/workflows/check-provenance.sh ]; then
+            echo "::warning::.github/workflows/check-provenance.sh is missing, so no provenance reading ran. This reader is advisory and blocks nothing; its absence is reported rather than refused." >&2
+            exit 0
+          fi
+
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+
+          report="$(git diff --unified=0 "$base...$head" | bash .github/workflows/check-provenance.sh)"
+
+          if [ -n "$report" ]; then
+            printf '%s\n' "$report"
+            # One notice carrying the count, so the run's summary says a
+            # re-read is owed without asserting that anything is wrong.
+            count="$(printf '%s' "$report" | grep -c '^\s*remedy:' || true)"
+            echo "::notice::check-provenance: ${count} sentence(s) on added lines to re-read against SPEC §2.5's erasure test. Advisory — this blocks nothing."
+          else
+            echo "check-provenance: no development provenance found on the added lines."
+          fi
+
+          exit 0

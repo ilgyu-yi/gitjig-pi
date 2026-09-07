@@ -302,4 +302,19 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"Present but cannot measure refuses the run (§3.9); a fallback would write the operational evidence surface from a test context — exactly what §5.5 forbids.",
 	},
+	{
+		dependency: "provenance-reader",
+		failureShape:
+			"the reader is absent, unreadable, or its diff input cannot be formed (unresolvable merge base), so a " +
+			"change's added lines are never read for development provenance (.github/workflows/check-provenance.sh, " +
+			"issue #70)",
+		posture: "open",
+		justification:
+			"The only posture this dependency may take. SPEC §2.5 states that no gate class homes a decidable check " +
+			"for the authoring doctrine, and §3.6's cost asymmetry puts a reversible stale-prose miss far below a " +
+			"false block — so the reader exits zero on every input BY CONTRACT, and its absence cannot be a stricter " +
+			"outcome than its presence. The degradation signal is a workflow warning naming the missing reader, per " +
+			"§3.9's rule that a disarmed check must never read as a passing one; nothing here is security-relevant, " +
+			'so the "not enforced" wording that clause reserves for that case does not apply.',
+	},
 ];
