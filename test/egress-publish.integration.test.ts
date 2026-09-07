@@ -915,6 +915,28 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 			declared.length > 0,
 			"the declared union is empty, which would refuse every destination while reading as agreement",
 		);
+		// MEMBERSHIP is not the whole contract. Everything above reads
+		// `properties`, and `properties` is untouched by making an operand
+		// optional — so wrapping either the kind or the destination itself in an
+		// optional marker left the union identical and the whole suite green,
+		// while the tool declared that a publish call need name no destination at
+		// all. The required set is a second axis of the same claim and is read
+		// here rather than assumed.
+		//
+		// Fail-closed in effect — the admission check refuses a missing kind or a
+		// missing destination content-free — so the harm is a declared interface
+		// that no longer matches the instrument: a composer told an operand is
+		// optional omits it and gets a refusal it was invited into.
+		const destinationRequired = (destination as { required?: unknown }).required;
+		assert.ok(
+			Array.isArray(destinationRequired) && destinationRequired.includes("kind"),
+			`the destination's kind is not DECLARED required, so the tool invites a call that names no kind and the admission check refuses it. Declared required set was: ${JSON.stringify(destinationRequired)}`,
+		);
+		const topRequired = (registered.parameters as { required?: unknown }).required;
+		assert.ok(
+			Array.isArray(topRequired) && topRequired.includes("destination") && topRequired.includes("body"),
+			`the tool does not DECLARE both published operands required. Every send has a body and a destination; an interface saying otherwise invites a call the instrument then refuses. Declared required set was: ${JSON.stringify(topRequired)}`,
+		);
 	});
 });
 

@@ -124,7 +124,9 @@ const KIND_SPECS = {
  * The two populations this derivation joins are the list and the table, and
  * those alone. The list's one production consumer — the tool's declared
  * parameter schema — is a third site, bound by its own arm rather than by
- * this derivation.
+ * this derivation: in its membership, and in which operands it declares
+ * required, both of which can drift from this list without any other arm
+ * noticing.
  *
  * Comments were once the whole union while the shell also created issues
  * and pull requests and edited their bodies — the same guarded act, with no
