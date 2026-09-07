@@ -22,13 +22,18 @@
  *     mode everywhere else, so no arm may read silence without proving the
  *     runtime ran. The PI-SESSION arms discharge that with
  *     `requireRuntimeLoaded`, which demands the fixture's session carry the
- *     extension's registration entry. The arms that drive the entry point
- *     directly — the issue #125 block — cannot use it, since no session
- *     exists to carry that entry; each discharges it with an in-arm
- *     positive control that makes the runtime speak against the same state
- *     root before any absence is read. Both devices are required, never
- *     assumed: an arm reading only absences and holding no control passes
- *     against an entry point replaced by an immediate return;
+ *     extension's registration entry. The DIRECT-CALL arms cannot use it,
+ *     since no session exists to carry that entry — they are the four
+ *     entry-point arms of the issue #125 block plus the umask arm, and each
+ *     discharges it with an in-arm positive control that makes the runtime
+ *     speak against the same state root before any absence is read. The
+ *     population is stated by enumeration because reading it off the block
+ *     boundary gets it wrong in both directions: the umask arm drives the
+ *     entry point from OUTSIDE that block, and the block's own pure-path
+ *     arm drives no entry point, reads no absence, and stands outside this
+ *     rule rather than under it. Both devices are required, never assumed:
+ *     an arm reading only absences and holding no control passes against an
+ *     entry point replaced by an immediate return;
  *   - arms that hold whatever the detector does — the reaped-child
  *     completion — are declared BOUNDARY PINS in place and state what
  *     mutation reddens them;
