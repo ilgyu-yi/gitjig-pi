@@ -75,6 +75,8 @@ let scanBody: ((body: string) => EgressScanOutcome) | undefined;
 /** The neutralizer, loaded the same guarded way as the scanner above. */
 const NEUTRALIZE_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "neutralize.ts");
 let neutralizeBody: ((body: string) => string) | undefined;
+/** The kind-aware boundary entry point (§3.3's linkage-line exemption, issue #129). */
+let neutralizeForDestination: ((body: string, kind: string) => { text: string; neutralized: number }) | undefined;
 /** The loader's subset predicate, loaded the same guarded way. */
 let inCommonSubset: ((ere: string) => boolean) | undefined;
 
@@ -86,6 +88,12 @@ before(async () => {
 		const mod = (await import(NEUTRALIZE_MODULE_PATH)) as Record<string, unknown>;
 		if (typeof mod.neutralizeBody === "function") {
 			neutralizeBody = mod.neutralizeBody as (body: string) => string;
+		}
+		if (typeof mod.neutralizeForDestination === "function") {
+			neutralizeForDestination = mod.neutralizeForDestination as (
+				body: string,
+				kind: string,
+			) => { text: string; neutralized: number };
 		}
 	}
 	if (existsSync(SCAN_MODULE_PATH)) {
@@ -561,5 +569,149 @@ describe("latent reader edges are pinned, not left silent (issue #86, SPEC §3.3
 		}
 		// The digits are what make it a reference; `gh-pages` is not one.
 		assert.equal(neutralizeBody("gh-pages"), "gh-pages", "gh-pages is not a reference and must not be wrapped");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// §1.1's linkage line at the boundary (issue #129; SPEC §3.3's second
+// recorded-live shape).
+//
+// The exemption lives at the DESTINATION-AWARE entry point, never inside
+// `neutralizeBody`. That placement is the subject of the first arm below and
+// is not incidental: `neutralizeBody` is the class's one predicate (§3.11
+// forbids a second implementation, not a second call), and every arm above
+// binds to it. What the exemption changes is which TEXT the boundary hands
+// that predicate for two of six kinds — a domain split, not a second matcher.
+//
+// The issue that filed this warned that a leading-exemption disposition would
+// redden the "every separator spelling" arm above. It does not, on two
+// INDEPENDENT grounds, and both are asserted below so neither can rot into
+// the other: that arm drives `neutralizeBody` directly, which is unexempted;
+// and every input it carries is a `fixes` spelling, which §1.1's grammar does
+// not admit even at the boundary.
+// ---------------------------------------------------------------------------
+
+/** §1.1's own spelling, the only one the exemption admits. */
+const LINKAGE = "Closes #129";
+/** The four destination kinds that never write a pull request's description. */
+const NON_DESCRIPTION_KINDS = ["issue-comment", "pr-comment", "issue-body", "issue-create"] as const;
+/** The two that do. */
+const DESCRIPTION_KINDS = ["pr-body", "pr-create"] as const;
+
+function requireBoundary(arm: string): (body: string, kind: string) => { text: string; neutralized: number } {
+	assert.ok(
+		neutralizeForDestination !== undefined,
+		`${arm}: red until publish/neutralize.ts exports neutralizeForDestination`,
+	);
+	return neutralizeForDestination;
+}
+
+describe("§1.1's linkage line publishes live on a pull request description (issue #129)", () => {
+	it("the exemption is not inside the one predicate — neutralizeBody still wraps the line", () => {
+		assert.ok(neutralizeBody !== undefined, "red until publish/neutralize.ts exports neutralizeBody");
+		assert.notEqual(
+			neutralizeBody(LINKAGE),
+			LINKAGE,
+			"the linkage line was exempted inside neutralizeBody itself. The predicate must stay total over close pairs: every arm above binds to it, and an exemption buried here silently widens to every caller, including the title operand and the four kinds that must never open the auto-close channel",
+		);
+	});
+
+	it("the standing separator arm's inputs are untouched by the exemption, at the boundary too", () => {
+		// The second independent ground. Even where the exemption applies, a
+		// `fixes` spelling is not §1.1's and must still be wrapped.
+		const at = requireBoundary("separator arm");
+		for (const body of ["fixes #4", "fixes: #4", "fixes:#4", "fixes\n#4", "fixes\n   #4", "fixes:\n#4", "fixes \n#4"]) {
+			for (const kind of DESCRIPTION_KINDS) {
+				assert.notEqual(
+					at(body, kind).text,
+					body,
+					`${JSON.stringify(body)} survived un-neutralized on ${kind}: the exemption is bounded BY GRAMMAR to §1.1's spelling, and a fixes-pair is relayed prose wherever it lands`,
+				);
+			}
+		}
+	});
+
+	it("BY KIND — the two description kinds pass the line through, live", () => {
+		const at = requireBoundary("kind bound");
+		for (const kind of DESCRIPTION_KINDS) {
+			const out = at(LINKAGE, kind);
+			assert.equal(
+				out.text,
+				LINKAGE,
+				`${kind}: §1.1's linkage line was made inert, so a body composed through the one egress boundary cannot carry the reference §1.1 requires — the composing actor is left choosing between §1.1 and §3.4`,
+			);
+			assert.equal(out.neutralized, 0, `${kind}: nothing was neutralized, so the count must report 0`);
+		}
+	});
+
+	it("BY KIND — the four other kinds neutralize it, so the auto-close channel stays shut", () => {
+		const at = requireBoundary("kind bound");
+		for (const kind of NON_DESCRIPTION_KINDS) {
+			const out = at(LINKAGE, kind);
+			assert.notEqual(
+				out.text,
+				LINKAGE,
+				`${kind}: the linkage line published live off a pull request description. §3.11's auto-close essential is what the kind bound protects, and a blanket exemption re-opens the channel at every surface the instrument can write`,
+			);
+			assert.ok(out.neutralized >= 1, `${kind}: a shape was made inert and the count did not report it`);
+		}
+	});
+
+	it("BY POSITION — a closing reference below the first line is relayed prose", () => {
+		const at = requireBoundary("position bound");
+		const body = `${LINKAGE}\n\nand later, Closes #7 in a sentence someone relayed\n`;
+		const out = at(body, "pr-body");
+		assert.ok(
+			out.text.startsWith(`${LINKAGE}\n`),
+			"the first line lost its exemption when the body carried a second reference — the two are decided independently",
+		);
+		assert.doesNotMatch(
+			out.text.slice(LINKAGE.length),
+			/(^|[^`])Closes #7/,
+			"a closing reference BELOW the first line published live. Position is a load-bearing bound: only line one is the field §1.1 fixes a grammar for, and everything under it is prose this instrument relays",
+		);
+		assert.equal(out.neutralized, 1, "exactly the one below-the-line reference should be counted");
+	});
+
+	it("BY GRAMMAR — a spelling §1.1 does not fix is neutralized rather than guessed at", () => {
+		const at = requireBoundary("grammar bound");
+		for (const spelling of [
+			"Fixes #129",
+			"Resolves #129",
+			"closes #129",
+			"CLOSES #129",
+			"Closes: #129",
+			"Closes  #129",
+		]) {
+			const out = at(spelling, "pr-body");
+			assert.notEqual(
+				out.text,
+				spelling,
+				`${JSON.stringify(spelling)} was exempted. The grammar bound admits §1.1's own spelling and nothing adjacent to it — a widened exemption is the instrument deciding, on the author's behalf, that a variant was meant as a control. The reporting rule is what makes the narrowness safe: this caller is told.`,
+			);
+			assert.ok(out.neutralized >= 1, `${JSON.stringify(spelling)}: the count must report what was made inert`);
+		}
+	});
+
+	it("the rest of an exempted body is neutralized exactly as before", () => {
+		const at = requireBoundary("rest of body");
+		const body = `${LINKAGE}\n\nthanks @someone, see GH-4 and owner/repo#9\n`;
+		const out = at(body, "pr-body");
+		assert.ok(out.text.startsWith(`${LINKAGE}\n`), "the exempted line did not survive intact");
+		for (const shape of ["@someone", "GH-4", "owner/repo#9"]) {
+			assert.doesNotMatch(
+				out.text,
+				new RegExp(`(^|[^\`])${shape.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+				`${shape} published live inside an exempted body — the exemption reaches ONE line, and the remainder is relayed text on the terms every other body gets`,
+			);
+		}
+		assert.equal(out.neutralized, 3, "three actionable shapes below the line, three counted");
+	});
+
+	it("the count never carries the text it counted (§3.8's refusal-record rule)", () => {
+		const at = requireBoundary("count shape");
+		const out = at("ping @someone about GH-4", "pr-comment");
+		assert.equal(typeof out.neutralized, "number", "the report is a count, not a list");
+		assert.equal(out.neutralized, 2, "two shapes were made inert");
 	});
 });
