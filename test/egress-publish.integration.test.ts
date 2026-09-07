@@ -927,7 +927,14 @@ describe("the count is present at ZERO on the structured face (issue #129, SPEC 
 		// so text and structure were each measured on one operand and the two
 		// measurements never overlapped.
 		//
-		// One shape in each operand, so the total dies if EITHER term is dropped.
+		// ONE shape in the body and TWO in the title, so the total is 3. The
+		// cardinality is the point, not just the presence: with one shape in each
+		// operand the total is 2, which "a title contributes one whenever there is
+		// a title" also computes — and that implementation survived the whole
+		// suite. Three is not reachable from the body's count by any
+		// title-independent constant, so the arm now pins the title's VALUE
+		// rather than merely that a title was seen.
+		//
 		// A create kind because it is the only shape that publishes a title, and
 		// its success is validated against the surface URL rather than a comment
 		// URL — hence the shim's output here.
@@ -935,13 +942,47 @@ describe("the count is present at ZERO on the structured face (issue #129, SPEC 
 		fixtures.push(fixture);
 		const out = await tool.execute("zqcall", {
 			body: "thanks @zqbodyuser for the review.\n",
-			destination: { kind: "pr-create", title: "ping @zqtitleuser" },
+			destination: { kind: "pr-create", title: "ping @zqtitleuser and @zqother" },
 		});
 		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
 		assert.equal(
 			out.details.neutralized,
-			2,
-			"the structured count reported one operand only. One shape was made inert in the body and one in the title, so the field a caller reads programmatically must say 2 — a body-only count leaves a caller told their title crossed unchanged, and makes the structured face disagree with the text the same send prints",
+			3,
+			"the structured count did not sum the title's OWN count. One shape in the body and two in the title is 3; a count that reports 2 is adding a constant for the title's presence rather than what the title actually made inert, and that under-reports every multi-shape title while telling the caller a number that looks right",
+		);
+	});
+
+	it("a create kind whose title and body are BOTH clean reports 0, and prints no note", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The OVER-report direction, which no arm could see: every other arm that
+		// exercises a title drives one carrying an actionable shape, so an
+		// implementation crediting the title for merely existing reports 1 here
+		// and nothing catches it. That is the reporting rule lying in the
+		// direction the address-shaped-span arm exists to forbid — a count that
+		// reports a rewrite that did not happen — on the operand where it had no
+		// arm at all.
+		const { tool, fixture } = await publishToolAgainstShim("clean create kind", SURFACE_SHIM_URL);
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "nothing actionable in this body at all.\n",
+			destination: { kind: "pr-create", title: "a clean release title" },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.equal(
+			out.details.neutralized,
+			0,
+			"a send that rewrote nothing in either operand reported a rewrite. The count must be 0 on a clean create kind — a title term that credits presence rather than value makes this 1, and the caller is told their title was rewritten when it crossed whole",
+		);
+		const text = (out.content ?? []).map((part) => part.text ?? "").join("\n");
+		assert.doesNotMatch(
+			text,
+			/rewritten to an inert spelling/,
+			"a clean create kind printed a rewrite note. Both faces of the report must agree that nothing was made inert",
 		);
 	});
 });

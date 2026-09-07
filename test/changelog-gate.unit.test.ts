@@ -986,10 +986,18 @@ describe("T21 — a rename whose previous path was never a fragment (clause 2)",
 			/update the PR's Closes\/Refs/,
 			"the refusal offers 'Closes/Refs' again: `Refs #N` produces no closing reference, so following that half of the remedy leaves the gate refusing for the same reason",
 		);
+		// The keyword and the position in ONE clause, deliberately. Asserting
+		// them separately — forbid the dead pairing, require the phrase "first
+		// line of the PR body" somewhere — ties neither to the other, so a
+		// refusal naming the DEAD keyword in the LIVE position satisfies both
+		// halves. That mutant passed all 91 arms here and the whole suite: a gate
+		// instructing an author to write the one spelling that produces no
+		// closing reference, which is the defect this arm exists to forbid,
+		// green. The property is which keyword goes where, not which words appear.
 		assert.match(
 			stderr,
-			/first line of the PR body/,
-			"the live remedy must say WHERE the closing keyword goes — §1.1 fixes the body's first line and the publish instrument admits it there alone, so a remedy that omits the position is one an author can follow and still be refused",
+			/'Closes #\d+' the first line of the PR body/,
+			"the remedy does not put the CLOSING keyword in the position that works. §1.1 fixes the body's first line and the publish instrument admits it there alone, so a remedy that omits the position, or that names a keyword the platform does not record, is one an author can follow and still be refused",
 		);
 	});
 });
