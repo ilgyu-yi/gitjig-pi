@@ -133,11 +133,12 @@ function isInside(candidate: string, ancestor: string): boolean {
 
 const DISPATCH_DIR = join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch");
 
-/** The authored red-anchor message every subject-absence arm carries. */
-function redUntilLanded(moduleName: string, arm: string, failure: string): string {
+/** The authored message every subject-absence arm carries. */
+function subjectAbsent(moduleName: string, arm: string, failure: string): string {
 	return (
-		`${arm}: red until the Code phase lands \`.pi/extensions/gitjig/dispatch/${moduleName}\` ` +
-		`(issue #88; SPEC §4.9's home clause) — the guarded dynamic import found nothing to measure: ${failure}`
+		`${arm}: no module resolves at \`.pi/extensions/gitjig/dispatch/${moduleName}\`, which is where ` +
+		`SPEC §4.9's home clause places it — so the guarded dynamic import found nothing to measure and ` +
+		`this arm's subject does not exist to be measured: ${failure}`
 	);
 }
 
@@ -212,7 +213,7 @@ async function importDispatch<T>(moduleName: string): Promise<Imported<T>> {
 /** Import-or-red: the arm's subject-absence anchor, one call per module. */
 async function requireModule<T>(moduleName: string, arm: string): Promise<T> {
 	const loaded = await importDispatch<T>(moduleName);
-	assert.ok("module" in loaded, redUntilLanded(moduleName, arm, "failure" in loaded ? loaded.failure : ""));
+	assert.ok("module" in loaded, subjectAbsent(moduleName, arm, "failure" in loaded ? loaded.failure : ""));
 	return (loaded as { module: T }).module;
 }
 

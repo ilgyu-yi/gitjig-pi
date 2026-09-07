@@ -92,11 +92,11 @@ const SUBSTRATE_NOT_FOUND = /Tool gitjig_dispatch not found/;
 const CHILD_MARKER = "DELEGATE_DONE marker-alpha";
 const SUMMARY = `the child session relayed ${CHILD_MARKER}`;
 
-function redUntilRegistered(arm: string): string {
+function toolUnregistered(arm: string): string {
 	return (
-		`${arm}: red until the Code phase registers the ${TOOL} tool (issue #88; SPEC §4.9's home at ` +
-		`.pi/extensions/gitjig/dispatch/) — the scripted toolCall reached no handler and the substrate ` +
-		`answered for the missing tool`
+		`${arm}: the ${TOOL} tool is not registered with the substrate, so the scripted toolCall reached ` +
+		`no handler and the substrate answered for the missing tool. SPEC §4.9 homes the registration at ` +
+		`.pi/extensions/gitjig/dispatch/, and this arm's subject is that registration existing`
 	);
 }
 
@@ -220,7 +220,7 @@ function requireOwnResult(arm: string): ToolResultMessage {
 	const results = dispatchResults();
 	assert.equal(results.length, 1, `${arm}: expected exactly one ${TOOL} toolResult\n${diagnostics()}`);
 	const own = results[0];
-	assert.ok(!SUBSTRATE_NOT_FOUND.test(textOf(own)), redUntilRegistered(arm));
+	assert.ok(!SUBSTRATE_NOT_FOUND.test(textOf(own)), toolUnregistered(arm));
 	return own;
 }
 

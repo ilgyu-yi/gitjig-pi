@@ -233,6 +233,26 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 		);
 	});
 
+	it("a line that MENTIONS a shape rather than committing it is still reported", () => {
+		// The residual that cannot be designed away. A rule that exempted
+		// quotation would need to tell use from mention, which is the whole
+		// problem; a path allowlist would silence real hits in exactly the files
+		// most likely to grow them — this reader's own source, and this file.
+		//
+		// So it is pinned rather than fixed: the reader reports a definition of a
+		// shape exactly as it reports a use. Measured here so the behaviour is a
+		// known quantity to whoever reads a run, and so it cannot change silently.
+		const mention = runReader(
+			diffAdding("src/thing.ts", ["// A sentence saying `red until X lands` is what this rule forbids."]),
+		);
+		assert.match(
+			mention.stdout,
+			/\[schedule\]/,
+			"a MENTION of a forbidden shape went unreported, which would mean the reader distinguishes use from mention — it does not, and its header says so",
+		);
+		assert.equal(mention.status, 0, "still advisory");
+	});
+
 	it("the reader's header states the residual it carries", () => {
 		const source = execFileSync("cat", [READER], { encoding: "utf8" });
 		assert.match(

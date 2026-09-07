@@ -76,11 +76,12 @@ const SHIM_URL = "https://github.com/zqowner/zqrepo/issues/5#issuecomment-987654
 /** What the edit and create verbs print — a surface url, not a comment url. */
 const SURFACE_SHIM_URL = "https://github.com/zqowner/zqrepo/pull/5";
 
-/** One authored red message shape for every subject-absence anchor. */
-function redUntilRegistered(arm: string): string {
+/** One authored message shape for every subject-absence anchor. */
+function toolUnregistered(arm: string): string {
 	return (
-		`${arm}: red until the Code phase registers the ${TOOL} tool (issue #83; SPEC §3.3's egress ` +
-		`home slot) — the scripted toolCall reached no handler and the substrate answered for the missing tool`
+		`${arm}: the ${TOOL} tool is not registered with the substrate, so the scripted toolCall reached ` +
+		`no handler and the substrate answered for the missing tool. SPEC §3.3's egress home slot is where ` +
+		`that registration belongs, and this arm's subject is that it is there`
 	);
 }
 
@@ -239,7 +240,7 @@ function requireOwnResult(run: PublishRun, arm: string): ToolResultMessage {
 	const results = publishResults(run.fixture);
 	assert.equal(results.length, 1, `${arm}: expected exactly one ${TOOL} toolResult\n${diagnostics(run.result)}`);
 	const own = results[0];
-	assert.ok(!SUBSTRATE_NOT_FOUND.test(textOf(own)), redUntilRegistered(arm));
+	assert.ok(!SUBSTRATE_NOT_FOUND.test(textOf(own)), toolUnregistered(arm));
 	return own;
 }
 
@@ -380,7 +381,7 @@ describe("AC1: a secret-shaped body is refused, content-free (issue #83)", () =>
 		assert.ok(
 			naming.length >= 1,
 			`refusal: no egress audit record names 'aws-access-key-id' — ` +
-				redUntilRegistered("refusal record") +
+				toolUnregistered("refusal record") +
 				`; audit: ${JSON.stringify(auditLines(secretRun))}`,
 		);
 	});
@@ -391,7 +392,7 @@ describe("AC1: a secret-shaped body is refused, content-free (issue #83)", () =>
 		// absence sweep would green vacuously.
 		assert.ok(
 			egressAuditLines(secretRun).length >= 1,
-			"refusal leak-domain: no egress audit record to anchor the absence sweep — " + redUntilRegistered("refusal"),
+			"refusal leak-domain: no egress audit record to anchor the absence sweep — " + toolUnregistered("refusal"),
 		);
 		assertOffEgressSurfaces(secretRun, (awsCase as { match: string }).match, "the secret span's bytes", "refusal");
 	});
@@ -399,7 +400,7 @@ describe("AC1: a secret-shaped body is refused, content-free (issue #83)", () =>
 	it("withholding: the shim sink stays empty after the refusal", () => {
 		assert.ok(
 			egressAuditLines(secretRun).length >= 1,
-			"withholding: no egress audit record to anchor the empty-sink claim — " + redUntilRegistered("withholding"),
+			"withholding: no egress audit record to anchor the empty-sink claim — " + toolUnregistered("withholding"),
 		);
 		assert.equal(
 			sinkBytes(secretRun).length,
@@ -420,7 +421,7 @@ describe("AC2: relayed shapes publish in inert spellings (issue #83)", () => {
 
 	it("every relayed shape reaches the shim's stdin backtick-wrapped, whole-shape", () => {
 		const stdinPath = join(neutralRun.sinkDir, "gh-stdin");
-		assert.ok(existsSync(stdinPath), redUntilRegistered("neutralization stdin capture"));
+		assert.ok(existsSync(stdinPath), toolUnregistered("neutralization stdin capture"));
 		const capture = readFileSync(stdinPath, "utf8");
 		for (const shape of NEUTRAL_SHAPES) {
 			assertNeutralized(capture, shape.raw, shape.delimiter, "neutralization");
@@ -429,7 +430,7 @@ describe("AC2: relayed shapes publish in inert spellings (issue #83)", () => {
 
 	it("the bare same-repository #N stays live (§3.3's recorded decision)", () => {
 		const stdinPath = join(neutralRun.sinkDir, "gh-stdin");
-		assert.ok(existsSync(stdinPath), redUntilRegistered("bare-reference capture"));
+		assert.ok(existsSync(stdinPath), toolUnregistered("bare-reference capture"));
 		const capture = readFileSync(stdinPath, "utf8");
 		assert.ok(
 			capture.includes("see #3 for context"),
@@ -452,7 +453,7 @@ describe("AC2: relayed shapes publish in inert spellings (issue #83)", () => {
 describe("AC2: the wrap survives body backticks; colon trailers are claimed (issue #83)", () => {
 	function hostileCapture(): string {
 		const stdinPath = join(hostileRun.sinkDir, "gh-stdin");
-		assert.ok(existsSync(stdinPath), redUntilRegistered("hostile-body capture"));
+		assert.ok(existsSync(stdinPath), toolUnregistered("hostile-body capture"));
 		return readFileSync(stdinPath, "utf8");
 	}
 
@@ -524,7 +525,7 @@ describe("AC3: a key-shaped quote matching no committed pattern publishes (issue
 
 	it("the quoted near-miss lines reach the shim intact", () => {
 		const stdinPath = join(falseBlockRun.sinkDir, "gh-stdin");
-		assert.ok(existsSync(stdinPath), redUntilRegistered("false-block publication"));
+		assert.ok(existsSync(stdinPath), toolUnregistered("false-block publication"));
 		const capture = readFileSync(stdinPath, "utf8");
 		assert.ok(
 			capture.includes((awsCase as { nearMiss: string }).nearMiss) &&
@@ -541,7 +542,7 @@ describe("AC3: a key-shaped quote matching no committed pattern publishes (issue
 describe("AC6: the issue-comment destination becomes the pinned gh argv (issue #83)", () => {
 	it("the shim receives `issue comment 5 --body-file -` and the body on stdin", () => {
 		const argvPath = join(falseBlockRun.sinkDir, "gh-argv");
-		assert.ok(existsSync(argvPath), redUntilRegistered("destination argv capture"));
+		assert.ok(existsSync(argvPath), toolUnregistered("destination argv capture"));
 		const argv = readFileSync(argvPath, "utf8")
 			.split("\n")
 			.filter((line) => line !== "");
@@ -565,7 +566,7 @@ describe("AC1: a NUL-bearing body refuses out-of-domain, with no pattern ID (iss
 
 	it("the refusal is the out-of-domain category: an egress record naming NO committed pattern", () => {
 		const lines = egressAuditLines(nulRun);
-		assert.ok(lines.length >= 1, redUntilRegistered("out-of-domain record"));
+		assert.ok(lines.length >= 1, toolUnregistered("out-of-domain record"));
 		for (const line of lines) {
 			for (const row of committedPatternRows()) {
 				assert.ok(
@@ -577,7 +578,7 @@ describe("AC1: a NUL-bearing body refuses out-of-domain, with no pattern ID (iss
 	});
 
 	it("nothing reaches the shim sink", () => {
-		assert.ok(egressAuditLines(nulRun).length >= 1, redUntilRegistered("out-of-domain withholding"));
+		assert.ok(egressAuditLines(nulRun).length >= 1, toolUnregistered("out-of-domain withholding"));
 		assert.equal(sinkBytes(nulRun).length, 0, "out-of-domain: the refused body reached the publish child (§3.3)");
 	});
 });
@@ -593,12 +594,12 @@ describe("AC1: a Cf-split secret is refused naming the pattern (issue #83)", () 
 			naming.length >= 1,
 			"cf-split: no egress record names the pattern — the format-character strip is §3.3 step 2's " +
 				"over-match closure and the divergence from tier-2's recorded residual; " +
-				redUntilRegistered("cf-split refusal"),
+				toolUnregistered("cf-split refusal"),
 		);
 	});
 
 	it("neither the split nor the joined spelling reaches any egress surface", () => {
-		assert.ok(egressAuditLines(cfRun).length >= 1, redUntilRegistered("cf-split leak domain"));
+		assert.ok(egressAuditLines(cfRun).length >= 1, toolUnregistered("cf-split leak domain"));
 		assertOffEgressSurfaces(
 			cfRun,
 			(cfCase as { body: string }).body.trim(),
@@ -689,7 +690,7 @@ describe("§1.1's linkage line reaches a pull request description live (issue #1
 
 	it("the first line reaches the shim's stdin unwrapped", () => {
 		const stdinPath = join(linkageRun.sinkDir, "gh-stdin");
-		assert.ok(existsSync(stdinPath), redUntilRegistered("linkage stdin capture"));
+		assert.ok(existsSync(stdinPath), toolUnregistered("linkage stdin capture"));
 		const capture = readFileSync(stdinPath, "utf8");
 		assert.ok(
 			capture.startsWith("Closes #129\n"),
@@ -749,7 +750,7 @@ describe("the linkage exemption never reaches a title (issue #129; SPEC §3.3)",
 		// takes. argv is the surface, because a title rides argv where the
 		// body rides stdin.
 		const argvPath = join(linkageTitleRun.sinkDir, "gh-argv");
-		assert.ok(existsSync(argvPath), redUntilRegistered("title argv capture"));
+		assert.ok(existsSync(argvPath), toolUnregistered("title argv capture"));
 		const argv = readFileSync(argvPath, "utf8");
 		assert.match(
 			argv,
@@ -903,7 +904,7 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 		);
 		assert.ok(
 			publishDestinationKinds !== undefined,
-			"red until publish/executor.ts exports PUBLISH_DESTINATION_KINDS — without it this arm would be comparing the schema against nothing",
+			"publish/executor.ts does not export PUBLISH_DESTINATION_KINDS, so this arm would be comparing the declared schema against nothing",
 		);
 		const declared = kind.anyOf.map((member) => member.const).sort();
 		assert.deepEqual(

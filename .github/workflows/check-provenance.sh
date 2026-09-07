@@ -40,6 +40,17 @@
 #   these are reported for a human to judge — which is why this reader
 #   cannot become a gate without first solving a problem it does not solve.
 #
+#   USE VERSUS MENTION, and this one is unavoidable rather than merely
+#   accepted. A line that quotes a provenance shape in order to DEFINE,
+#   TEST or FORBID it is reported exactly like one that commits it. This
+#   file's own pattern list, SPEC §2.4's defining example, and the reader's
+#   test fixtures are all reported, and correctly so under any rule this
+#   reader could carry: the alternative is a path allowlist, which would
+#   silence genuine hits in exactly the files most likely to grow them. The
+#   measured population on the change that introduced this reader was 13,
+#   every one a mention. An arm pins that number's shape so it is a known
+#   quantity rather than a surprise.
+#
 #   NOT A PARSER. Matching is per line, so a sentence wrapped across two
 #   lines is seen as two fragments and may be missed.
 #
