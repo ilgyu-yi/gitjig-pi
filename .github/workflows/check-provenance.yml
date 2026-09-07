@@ -50,7 +50,23 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
 
-          report="$(git diff --unified=0 "$base...$head" | bash .github/workflows/check-provenance.sh)"
+          # The diff is formed FIRST and its status checked, rather than piped
+          # straight into the reader. Piped, a failing `git diff` — an
+          # unresolvable base, a shallow fetch, a force-pushed base sha —
+          # leaves the report empty under `set -uo pipefail` without `set -e`,
+          # and the run then prints the affirmative clean line. A scan that
+          # never started must not be indistinguishable from one that scanned
+          # everything and found nothing: SPEC §3.9's degradation-signal rule
+          # says a disarmed check must never read as a passing one.
+          if ! git diff --unified=0 "$base...$head" > provenance.diff; then
+            echo "::warning::check-provenance: the diff between base and head could not be formed, so NO provenance reading ran. This is NOT a clean result — nothing was scanned. Advisory, so this warns rather than fails."
+            exit 0
+          fi
+
+          if ! report="$(bash .github/workflows/check-provenance.sh < provenance.diff)"; then
+            echo "::warning::check-provenance: the reader did not complete, so the added lines were NOT fully read. This is NOT a clean result."
+            exit 0
+          fi
 
           if [ -n "$report" ]; then
             printf '%s\n' "$report"

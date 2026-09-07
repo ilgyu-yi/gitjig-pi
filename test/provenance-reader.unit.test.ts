@@ -18,7 +18,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -84,9 +84,13 @@ describe("the provenance reader exists and is advisory (issue #70, SPEC §2.5)",
 });
 
 /**
- * One instance of each shape the reader claims to cover. The claim is the
- * reader's own SHAPES list; this table is the measurement of it, so a shape
- * the reader names and cannot find fails here rather than being believed.
+ * One instance of every ALTERNATIVE the reader applies — not one per shape.
+ *
+ * At shape granularity this table measured almost nothing: with the rules
+ * written as four fat regexes, thirteen of twenty-one alternatives could be
+ * deleted outright and the whole suite stayed green, because one fixture
+ * satisfied its shape through a different alternative. The unit of a rule
+ * is the alternative, so the unit of a case is too.
  */
 const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> = [
 	{
@@ -101,7 +105,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	},
 	{
 		shape: "review-archaeology",
-		line: "// Review round 3 found this survived the whole suite.",
+		line: "// Review round notes belong in the review record.",
 		why: "§2.4's species: round numbers and prior-defect narrative on a living surface",
 	},
 	{
@@ -111,7 +115,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	},
 	{
 		shape: "change-narration",
-		line: "// This field was previously called `count`.",
+		line: "// A field previously called `count`.",
 		why: "a rename's provenance; §2.5(c) forbids the alias, and its story belongs in the commit",
 	},
 	{
@@ -119,6 +123,41 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 		line: "// Added in #123 to close the auto-close channel.",
 		why: "a change verb bound to an issue number — the pointer is fine, the narration is not",
 	},
+	{ shape: "schedule", line: "// Blocked until Phase C.", why: "the phase spelling, with no other rule reaching it" },
+	{ shape: "schedule", line: "// The guard is not yet implemented.", why: "a state that dates itself" },
+	{ shape: "schedule", line: "// Green once the helper lands.", why: "the same schedule with the keyword moved" },
+	{
+		shape: "schedule",
+		line: "// The count will be added in a later pass.",
+		why: "a promise, which the next commit falsifies",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 4 caught the survivor here.",
+		why: "§2.4's round numbers, in the bare-numeral spelling",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The reviewer noted that both anchors survived.",
+		why: "prior-defect narrative attributed to the review",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// An earlier review asked for this split.",
+		why: "the same narrative without a round number",
+	},
+	{ shape: "issue-narration", line: "// Introduced in #12 alongside the boundary.", why: "the introduce verb" },
+	{ shape: "issue-narration", line: "// Fixed in #34 after the flake was found.", why: "the fix verb" },
+	{ shape: "issue-narration", line: "// Removed in #56 when the alias went.", why: "the remove verb" },
+	{ shape: "issue-narration", line: "// Landed in #78 with its own arm.", why: "the land verb" },
+	{
+		shape: "change-narration",
+		line: "// It was renamed to keep the call sites honest.",
+		why: "the passive spelling, which no `we` catches",
+	},
+	{ shape: "change-narration", line: "// This used to carry the whole union.", why: "the used-to spelling" },
+	{ shape: "change-narration", line: "// The field was previously optional.", why: "the was-previously spelling" },
+	{ shape: "change-narration", line: "// A helper formerly named subjectAbsent.", why: "the formerly spelling" },
 ];
 
 describe("every shape the reader claims to cover is reported (issue #70)", () => {
@@ -143,25 +182,67 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 		});
 	}
 
-	it("every shape the reader NAMES is exercised above — the table cannot silently shrink", () => {
-		// The population is read off the reader itself rather than retyped, so
-		// a shape added there without a case here fails, and a case here naming
-		// a shape the reader dropped fails too.
-		const declared = execFileSync(
+	it("each case violates EXACTLY ONE rule — or it measures a different rule than it names", () => {
+		// The property that makes the per-rule table mean anything. The reader
+		// stops at the first matching rule, so a fixture satisfying two is
+		// reported by the nearer one and the further one stays unmeasured while
+		// its case reads as coverage. Measured, two fixtures did exactly that
+		// and their rules survived deletion with every arm green.
+		const rules = readFileSync(READER, "utf8")
+			.split("\n")
+			.filter((entry) => entry.startsWith("RULE "))
+			.map((entry) => {
+				const parsed = entry.match(/^RULE (\S+) '(.*)'$/);
+				assert.ok(parsed, `a RULE line this arm cannot parse would silently drop a rule: ${entry}`);
+				return parsed[2];
+			});
+		assert.ok(rules.length > 0, "no RULE lines parsed, so this arm would pass over an empty population");
+		for (const { line } of SHAPE_CASES) {
+			const sentence = line.replace(/^\/\/ /, "");
+			const matched = rules.filter((rule) => {
+				const probe = execFileSync(
+					"bash",
+					["-c", 'if [[ "$1" =~ $2 ]]; then echo yes; else echo no; fi', "probe", sentence, rule],
+					{ encoding: "utf8" },
+				).trim();
+				return probe === "yes";
+			});
+			assert.equal(
+				matched.length,
+				1,
+				`${JSON.stringify(sentence)} matches ${matched.length} rules, not one: ${JSON.stringify(matched)}. The reader stops at the first, so every other rule this input touches is measured by nothing while this case reads as its coverage`,
+			);
+		}
+	});
+
+	it("every RULE the reader declares has a case — counted per alternative, not per shape", () => {
+		// The population is read off the reader itself rather than retyped: each
+		// `RULE <shape> '<regex>'` line is one alternative. A rule added there
+		// without a case here fails, and a case naming a rule the reader dropped
+		// fails too.
+		//
+		// Counted per SHAPE this arm passed while thirteen alternatives matched
+		// nothing, because one fixture satisfied a shape through a different
+		// alternative. The granularity is the whole point: one case per rule.
+		const declaredCount = execFileSync("bash", ["-c", `grep -cE "^RULE " ${JSON.stringify(READER)}`], {
+			encoding: "utf8",
+		}).trim();
+		assert.equal(
+			String(SHAPE_CASES.length),
+			declaredCount,
+			`the reader declares ${declaredCount} rules and this table drives ${SHAPE_CASES.length}. A rule no case reaches can be deleted or broken by a stray metacharacter and nothing reports it`,
+		);
+		const declaredShapes = execFileSync(
 			"bash",
-			["-c", `grep -oE '^# *SHAPE: *[a-z-]+' ${JSON.stringify(READER)} | sed 's/.*: *//'`],
-			{
-				encoding: "utf8",
-			},
+			["-c", `grep -oE "^RULE [a-z-]+" ${JSON.stringify(READER)} | sed 's/^RULE //'`],
+			{ encoding: "utf8" },
 		)
 			.split("\n")
-			.filter((entry) => entry.length > 0)
-			.sort();
-		const covered = [...new Set(SHAPE_CASES.map((entry) => entry.shape))].sort();
+			.filter((entry) => entry.length > 0);
 		assert.deepEqual(
-			covered,
-			[...new Set(declared)].sort(),
-			"the shapes this table exercises are not the shapes the reader declares. A reader claiming a shape no case drives is a claim with no measurement behind it",
+			[...SHAPE_CASES.map((entry) => entry.shape)].sort(),
+			[...declaredShapes].sort(),
+			"the shapes this table exercises are not the shapes the reader declares, rule for rule",
 		);
 	});
 });
@@ -199,6 +280,76 @@ describe("the reader's domain is the living set (issue #70, SPEC §2.5)", () => 
 	it("a path outside the living set is not scanned", () => {
 		const run = runReader(diffAdding("notes/scratch.txt", ["We added this in review round 3."]));
 		assert.equal(run.stdout.trim(), "", `a non-living-set path was scanned:\n${run.stdout}`);
+	});
+
+	it("a markdown path IS in the domain — the living set is mostly prose", () => {
+		// SPEC.md and README.md are the surfaces the doctrine is most about, and
+		// nothing pinned that the reader reads them: dropping markdown from the
+		// extension set left every arm green, because every other fixture is a
+		// TypeScript path.
+		const run = runReader(diffAdding("docs/thing.md", ["We added the second pass in review round 3."]));
+		assert.match(
+			run.stdout,
+			/docs\/thing\.md:1:/,
+			"a markdown path was not scanned. The living set is this SPEC, the README and the docs before it is anything else",
+		);
+	});
+
+	it("a path carrying a SPACE is scanned — git's tab-separated header is parsed", () => {
+		// git appends a tab and metadata to a header path containing whitespace.
+		// Taking the raw remainder as the path left the extension test failing
+		// on the trailing tab, so the whole file was skipped with no diagnostic
+		// — a fail-open miss on exactly the files least likely to be noticed.
+		const diff =
+			"diff --git a/my file.md b/my file.md\n--- a/my file.md\t\n+++ b/my file.md\t\n" +
+			"@@ -0,0 +1,1 @@\n+We added the spaced file.\n";
+		const run = runReader(diff);
+		assert.match(run.stdout, /my file\.md:1:/, `a path with a space was skipped whole:\n${run.stdout}`);
+	});
+
+	it("a QUOTED path is scanned — git C-quotes a header path carrying non-ASCII", () => {
+		const diff =
+			'diff --git a/x.md b/x.md\n--- "a/caf\\303\\251.md"\n+++ "b/caf\\303\\251.md"\n' +
+			"@@ -0,0 +1,1 @@\n+We added the accented file.\n";
+		const run = runReader(diff);
+		assert.match(run.stdout, /\.md:1:/, `a C-quoted path was skipped whole:\n${run.stdout}`);
+	});
+
+	it("content that LOOKS like a file header does not steal the attribution", () => {
+		// An added line whose own text begins with `++ ` has the diff spelling of
+		// a `+++ ` header. Treating it as one reset the path to a file not in the
+		// diff and the line counter to zero, so the report pointed at the wrong
+		// file and the wrong line. A report that cannot be navigated is worse
+		// than no report, so the header arms are gated on where a header can
+		// appear: immediately after the matching `--- ` line.
+		const diff =
+			"diff --git a/hdr.ts b/hdr.ts\n--- a/hdr.ts\n+++ b/hdr.ts\n@@ -0,0 +1,3 @@\n" +
+			"+// ok\n+++ b/elsewhere.ts\n+// We added the guard.\n";
+		const run = runReader(diff);
+		assert.match(
+			run.stdout,
+			/hdr\.ts:3:/,
+			`the hit was attributed to the wrong file or line. It is at hdr.ts line 3:\n${run.stdout}`,
+		);
+		assert.doesNotMatch(run.stdout, /elsewhere\.ts/, "a file that is not in the diff was named in the report");
+	});
+
+	it("a malformed hunk header does not abort the scan", () => {
+		// The worst failure mode available to this reader, and it was reachable:
+		// a `@@`-leading line whose range does not parse raised an
+		// arithmetic-expansion error, which bash makes fatal to the enclosing
+		// loop. Every remaining file was dropped, the count stayed 0, and the
+		// run was indistinguishable from a clean one — a stopped scan wearing a
+		// clean result, in a reader whose header says a clean run must not be
+		// read as clean prose.
+		const diff = "@@ bogus @@\n--- a/x.ts\n+++ b/x.ts\n@@ -0,0 +5 @@\n+We added junk\n";
+		const run = runReader(diff);
+		assert.match(
+			run.stdout,
+			/x\.ts:5:/,
+			`the scan stopped at a malformed hunk header and reported nothing, which reads exactly like a clean change:\n${run.stdout}`,
+		);
+		assert.equal(run.status, 0);
 	});
 
 	it("REMOVED lines are not scanned — the domain is a change's ADDED lines", () => {
