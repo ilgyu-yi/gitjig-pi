@@ -720,6 +720,66 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		}
 	});
 
+	it("BY GRAMMAR — a well-spelled line with text AFTER it is neutralized (the tail anchor)", () => {
+		// The anchoring half of the grammar bound, which the six spellings above
+		// cannot reach: every one of them varies the keyword or the separator, so
+		// none puts anything BESIDE a well-spelled line and neither anchor of
+		// `^Closes #\d+$` is exercised. Both anchors survived removal against the
+		// whole suite until these two arms existed.
+		//
+		// The input violates the anchoring half and nothing else: the kind is a
+		// description kind, the position is line one, and the keyword and
+		// separator are §1.1's own. What disqualifies it is the text adjacent to
+		// the linkage line — which is exactly what §1.1's grammar excludes.
+		const at = requireBoundary("grammar bound, tail anchor");
+		const out = at("Closes #4 ping @zqsomeone\nBody prose follows.\n", "pr-body");
+		assert.match(
+			out.text,
+			/`+ @zqsomeone `+/,
+			"a mention published LIVE on a pull request description. The exemption passes the WHOLE first line through untouched, so a line that merely BEGINS with §1.1's spelling must not qualify — anything the author put beside the linkage line rides out with it",
+		);
+		assert.match(
+			out.text,
+			/`+ Closes #4 `+/,
+			"the close pair on a disqualified line was left live: a line that fails the grammar bound is relayed prose in full, on the terms every other body gets",
+		);
+		assert.equal(out.neutralized, 2, "two actionable shapes on the disqualified line, two counted");
+	});
+
+	it("BY GRAMMAR — a well-spelled line with text BEFORE it is neutralized (the head anchor)", () => {
+		// The mirror of the arm above, and a separate arm because a separate
+		// anchor pins it: dropping `^` alone leaves the tail anchor holding, and
+		// the tail arm's input still fails. Same one-bound construction.
+		const at = requireBoundary("grammar bound, head anchor");
+		const out = at("@zqsomeone Closes #4\nBody prose follows.\n", "pr-body");
+		assert.match(
+			out.text,
+			/`+ @zqsomeone `+/,
+			"a mention published LIVE on a pull request description, ahead of the linkage line. §1.1 fixes what the first line IS, not what it ends with",
+		);
+		assert.match(
+			out.text,
+			/`+ Closes #4 `+/,
+			"the close pair on a disqualified line was left live: a line that fails the grammar bound is relayed prose in full",
+		);
+		assert.equal(out.neutralized, 2, "two actionable shapes on the disqualified line, two counted");
+	});
+
+	it("a CRLF-composed first line keeps the exemption, and publishes the caller's own bytes", () => {
+		// The grammar test drops a trailing CR and the published bytes keep it.
+		// Both halves are load-bearing and neither was measured: a checkout smudge
+		// must not silently cost the exemption, and the line the platform reads
+		// must be the one the caller composed.
+		const at = requireBoundary("grammar bound, CR tolerance");
+		const out = at("Closes #4\r\nthanks @zqsomeone\r\n", "pr-body");
+		assert.ok(
+			out.text.startsWith("Closes #4\r\n"),
+			"a CRLF-composed linkage line lost the exemption to its carriage return, or had the CR stripped from the bytes that publish — the grammar test drops the CR, the send does not",
+		);
+		assert.match(out.text, /`+ @zqsomeone `+/, "the remainder of a CRLF body is neutralized on the ordinary terms");
+		assert.equal(out.neutralized, 1, "one shape below the line, one counted");
+	});
+
 	it("the rest of an exempted body is neutralized exactly as before", () => {
 		const at = requireBoundary("rest of body");
 		const body = `${LINKAGE}\n\nthanks @someone, see GH-4 and owner/repo#9\n`;
