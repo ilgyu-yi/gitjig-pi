@@ -921,11 +921,16 @@ describe("/review's bound token is consumed from first position only (issue #94,
 			mkdtempSync(join(tmpdir(), "zq-review-state-")),
 		);
 		assert.ok(handler !== undefined, `${arm}: the module registered no review command — the arm is vacuous`);
+		// Bound to a const so the assertion above is what the call below rests
+		// on. `handler` is reassignable and captured, so its narrowing does not
+		// survive into the closure and the call would read as possibly absent —
+		// which is the vacuous arm the assertion exists to refuse.
+		const registered = handler;
 		return {
 			entries,
 			run: async (args: string) => {
 				entries.length = 0;
-				await handler(args, { waitForIdle: async () => {} });
+				await registered(args, { waitForIdle: async () => {} });
 			},
 		};
 	}

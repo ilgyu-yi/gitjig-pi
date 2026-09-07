@@ -309,7 +309,13 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 			"is not confined. The only thing that crosses back is a bounded structured return, and a compare " +
 			"outcome surfaces as validity alone.",
 		parameters: DISPATCH_PARAMS as Parameters<ExtensionAPI["registerTool"]>[0]["parameters"],
-		async execute(_toolCallId, params) {
+		// `params` is annotated rather than inherited: the `parameters` cast
+		// above erases what the schema would otherwise infer, leaving it
+		// `unknown`, which cannot be indexed. The annotation states only what
+		// every line below already assumes — an object whose fields are
+		// unknown — and widens no field: each is read into an `unknown` local
+		// and admitted by its own predicate, exactly as before.
+		async execute(_toolCallId, params: Record<string, unknown>) {
 			const delegateArgv: unknown = params.delegateArgv;
 			if (
 				!Array.isArray(delegateArgv) ||

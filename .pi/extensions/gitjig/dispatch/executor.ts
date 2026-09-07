@@ -36,7 +36,8 @@
  * post-spawn error is not group-killed, inherits the passthrough
  * environment, and outlives the scratch's removal.
  */
-import { spawn } from "node:child_process";
+import { type ChildProcessByStdio, spawn } from "node:child_process";
+import type { Readable } from "node:stream";
 import { withoutRepoLocatingGitEnv, type DispatchContext } from "./provision.ts";
 
 /** Grace for stream flush after exit, when an orphan may hold the pipes. */
@@ -88,7 +89,13 @@ export function runDelegate(
 		// nothing else is edited.
 		const env = withoutRepoLocatingGitEnv(process.env);
 		env.GITJIG_TEST_STATE_ROOT = context.stateDir;
-		let child: ReturnType<typeof spawn>;
+		// Typed from the `stdio` tuple below rather than as the general
+		// `spawn` return: both streams are pipes by that argument, so the
+		// drain below reaches a stream the type system knows exists. The
+		// general return admits `null` on either, and the two repairs that
+		// admits — an optional call, or an assertion — would both let a
+		// future edit of `stdio` silently stop draining while still compiling.
+		let child: ChildProcessByStdio<null, Readable, Readable>;
 		try {
 			child = spawn(argv[0], argv.slice(1), {
 				cwd: context.treeDir,
@@ -96,7 +103,7 @@ export function runDelegate(
 				// kill reaches delegate-spawned children too, not the child alone.
 				detached: true,
 				env,
-				stdio: ["ignore", "pipe", "pipe"],
+				stdio: ["ignore", "pipe", "pipe"] as const,
 			});
 		} catch {
 			// A synchronous spawn throw (an empty or NUL-bearing argv entry the
