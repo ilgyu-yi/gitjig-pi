@@ -101,9 +101,32 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, sep } from "node:path";
+import { basename, join, relative, sep } from "node:path";
+
+/**
+ * True iff `candidate` sits at or below `ancestor`, decided on PHYSICAL
+ * paths and component-wise. Both sides are realpath-ed because the arms
+ * that use this compare a caller-supplied root against a path the runtime
+ * produced, and a temporary root is a symlink on some hosts; the
+ * component test is what keeps a sibling merely NAMED like the ancestor
+ * from reading as containment.
+ */
+function isInside(candidate: string, ancestor: string): boolean {
+	const rel = relative(realpathSync(ancestor), realpathSync(candidate));
+	return rel === "" || !rel.split(sep).includes("..");
+}
 import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -1845,5 +1868,94 @@ describe("the operand scan admits a coincidental short hex run (issue #104, SPEC
 			`residual-pinned: a genuine five-character INTERIOR slice was refused in ${2_000 - admittedInterior} ` +
 				"of 2000 trials — the residual's interior half does not match what the code does",
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The scratch's root against §5.5's state boundary (issue #127).
+// ---------------------------------------------------------------------------
+
+describe("the scratch never lands inside a repository the shell does not govern (issue #127, SPEC §5.5)", () => {
+	/**
+	 * §5.5's disposition is fall-through: a state write that cannot be
+	 * placed inside a governed repository goes to shell-owned storage,
+	 * never into a repository the shell does not govern. The scratch is
+	 * rooted at the ambient temporary root, and that root is an ambient
+	 * VALUE — so where an operator points it inside some other repository,
+	 * an unexcluded shell-written tree lands there, which is the outcome
+	 * §5.5 closes by naming as the defect.
+	 *
+	 * The population here is the two shapes the ambient root can take, and
+	 * both are exercised: a temporary root inside a repository (the defect)
+	 * and one outside every repository (the ordinary case, which must be
+	 * unaffected — a fix that always fell through would pass the first arm
+	 * and silently abandon the temp root for everyone).
+	 */
+	it("a temporary root inside another repository does not receive the scratch", async () => {
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-ambient-root");
+		const caller = mintRepo();
+		// An ordinary repository that never adopted the shell, carrying a
+		// directory an operator has pointed the temporary root at.
+		const foreign = mintRepo();
+		const slot = join(foreign, "zqtmpslot");
+		mkdirSync(slot);
+		const previous = process.env.TMPDIR;
+		let context: { scratchRoot: string } | undefined;
+		try {
+			process.env.TMPDIR = slot;
+			context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
+			cleanups.push(context.scratchRoot);
+			assert.equal(
+				isInside(context.scratchRoot, foreign),
+				false,
+				`the scratch was provisioned at ${context.scratchRoot}, inside the ungoverned repository ` +
+					`${foreign}: an unexcluded shell-written tree in a repository the shell does not govern is ` +
+					`the outcome §5.5 names as the defect (issue #127)`,
+			);
+			// The verdict a caller can act on, not merely a location: git in
+			// that repository must see nothing new. A scratch placed outside
+			// it but SYMLINKED in would satisfy the path assertion above.
+			assert.equal(
+				git(foreign, "status", "--porcelain").trim(),
+				"",
+				`the ungoverned repository reports untracked content after a dispatch — ` +
+					`${JSON.stringify(git(foreign, "status", "--porcelain").trim())} (§5.5)`,
+			);
+		} finally {
+			if (previous === undefined) {
+				delete process.env.TMPDIR;
+			} else {
+				process.env.TMPDIR = previous;
+			}
+		}
+	});
+
+	it("a temporary root outside every repository still receives the scratch", async () => {
+		// Discrimination, not detection. Falling through unconditionally
+		// passes the arm above while abandoning the temporary root for every
+		// ordinary dispatch; this arm is what separates the two.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-ordinary-root");
+		const caller = mintRepo();
+		const plain = mkdtempSync(join(tmpdir(), "zqplainroot-"));
+		cleanups.push(plain);
+		const previous = process.env.TMPDIR;
+		try {
+			process.env.TMPDIR = plain;
+			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
+			cleanups.push(context.scratchRoot);
+			assert.equal(
+				isInside(context.scratchRoot, plain),
+				true,
+				`the scratch was provisioned at ${context.scratchRoot}, outside the ordinary temporary root ` +
+					`${plain} it was pointed at — the fall-through is for a root inside a repository, and this ` +
+					`root is inside none (issue #127)`,
+			);
+		} finally {
+			if (previous === undefined) {
+				delete process.env.TMPDIR;
+			} else {
+				process.env.TMPDIR = previous;
+			}
+		}
 	});
 });
