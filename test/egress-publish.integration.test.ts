@@ -59,6 +59,7 @@ import {
 	readAuditLines,
 	readSessionEntries,
 	removeFixture,
+	repoRoot,
 	runPi,
 } from "./harness/run-pi.ts";
 import {
@@ -763,6 +764,144 @@ describe("the linkage exemption never reaches a title (issue #129; SPEC §3.3)",
 			text,
 			/1 span rewritten to an inert spelling/,
 			`the body carried nothing actionable and the title carried one shape, so the count must be 1 — a report that omitted the title would leave a caller believing their title crossed unchanged. Result text was: ${JSON.stringify(text)}`,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The count's STRUCTURED face. The arms above read the result TEXT, which by
+// construction cannot see zero — the note is empty at zero. So the one carrier
+// of "present at zero" is `details.neutralized`, and nothing measured it:
+// deleting the key from the published result survived the whole suite.
+//
+// The module route rather than a pi run, because the session record carries the
+// text surface and not `details`. It is the route `dispatch-module` already
+// uses to reach a details key, and it needs only a `gh` shim on PATH.
+// ---------------------------------------------------------------------------
+
+interface PublishToolSpec {
+	name: string;
+	execute(
+		toolCallId: string,
+		params: Record<string, unknown>,
+	): Promise<{ content: Array<{ type: string; text?: string }>; details: Record<string, unknown> }>;
+}
+
+/**
+ * Whether `publish/index.ts` can be loaded in-process at all.
+ *
+ * It cannot in a bare checkout: unlike `dispatch/index.ts`, it imports a
+ * PACKAGE, so loading it needs an installed tree. The rest of this suite
+ * deliberately takes no such dependency and runs green with `node_modules`
+ * absent — measured, and relied on by every mutation clone. So the two arms
+ * below announce a skip with this reason rather than reddening a bare
+ * checkout, and rather than passing silently while measuring nothing
+ * (§1.5: an unavailable protection states its substitute, never drops it).
+ */
+const PUBLISH_MODULE_PATH = join(repoRoot(), ".pi", "extensions", "gitjig", "publish", "index.ts");
+let publishModule: Record<string, unknown> | undefined;
+let publishModuleFailure = "";
+
+before(async () => {
+	if (!existsSync(PUBLISH_MODULE_PATH)) {
+		publishModuleFailure = "publish/index.ts does not exist";
+		return;
+	}
+	try {
+		publishModule = (await import(PUBLISH_MODULE_PATH)) as Record<string, unknown>;
+	} catch (error) {
+		publishModuleFailure = error instanceof Error ? error.message : String(error);
+	}
+});
+
+/** Registers the real publish tool against a `gh` shim, and returns its execute face. */
+async function publishToolAgainstShim(arm: string): Promise<{ tool: PublishToolSpec; fixture: Fixture }> {
+	const fixture = buildFixture({ script: [], linkGitjigRuntime: true });
+	const binDir = join(fixture.root, "bin");
+	const sinkDir = join(fixture.root, "sink");
+	mkdirSync(binDir);
+	mkdirSync(sinkDir);
+	const shimPath = join(binDir, "gh");
+	writeFileSync(shimPath, `#!/bin/sh\ncat > "${sinkDir}/gh-stdin"\nprintf '%s\\n' '${SHIM_URL}'\n`);
+	chmodSync(shimPath, 0o755);
+	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+	const mod = publishModule;
+	assert.ok(mod !== undefined, `${arm}: publish/index.ts did not load: ${publishModuleFailure}`);
+	assert.equal(typeof mod.registerPublishTool, "function", `${arm}: publish/index.ts must export registerPublishTool`);
+	let registered: PublishToolSpec | undefined;
+	(mod.registerPublishTool as (pi: unknown, repo: string, state: string) => void)(
+		{
+			registerTool: (spec: unknown) => {
+				registered = spec as PublishToolSpec;
+			},
+		},
+		fixture.root,
+		join(fixture.root, "state"),
+	);
+	assert.ok(registered !== undefined, `${arm}: registerPublishTool registered no tool — the arm is vacuous`);
+	return { tool: registered, fixture };
+}
+
+describe("the count is present at ZERO on the structured face (issue #129, SPEC §3.3)", () => {
+	const fixtures: Fixture[] = [];
+	after(() => {
+		for (const fixture of fixtures) {
+			removeFixture(fixture);
+		}
+	});
+
+	it("a clean send reports the count as 0 rather than omitting it", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The claim this pins is stated at the call site in those words: the
+		// count "is present at zero as well, so a caller can tell a clean send
+		// from one this field says nothing about." A caller cannot draw that
+		// distinction from the text — the note is empty at zero, deliberately —
+		// so the whole claim rests on the key existing with value 0.
+		const { tool, fixture } = await publishToolAgainstShim("count at zero");
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "nothing actionable in this body at all.\n",
+			destination: { kind: "issue-comment", number: 5 },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.ok(
+			"neutralized" in out.details,
+			"the count key is ABSENT on a clean send. A caller then cannot tell a send that rewrote nothing from one whose report says nothing about rewriting — which is the distinction the call site claims this field carries, and the reason it is emitted at zero at all",
+		);
+		assert.equal(out.details.neutralized, 0, "a send that made nothing inert must report 0, not omit the field");
+		const text = (out.content ?? []).map((part) => part.text ?? "").join("\n");
+		assert.doesNotMatch(
+			text,
+			/rewritten to an inert spelling/,
+			"a clean send printed a rewrite note. The zero case is silent in the TEXT by design; it is the structured field that carries zero",
+		);
+	});
+
+	it("a send that rewrote spans reports the same key with the count", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(
+				`publish/index.ts is not loadable in-process here, so the structured face cannot be reached: ${publishModuleFailure}`,
+			);
+			return;
+		}
+		// The other side of the same key, so the arm above cannot be satisfied
+		// by a field hard-wired to 0.
+		const { tool, fixture } = await publishToolAgainstShim("count non-zero");
+		fixtures.push(fixture);
+		const out = await tool.execute("zqcall", {
+			body: "ping @zquser about GH-4\n",
+			destination: { kind: "issue-comment", number: 5 },
+		});
+		assert.equal(out.details.disposition, "published", `the shim's send did not publish: ${JSON.stringify(out)}`);
+		assert.equal(
+			out.details.neutralized,
+			2,
+			"two shapes were made inert and the structured count must say so — a field that is always 0 satisfies the zero arm and reports nothing",
 		);
 	});
 });

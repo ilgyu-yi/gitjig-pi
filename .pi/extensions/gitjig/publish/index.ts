@@ -206,9 +206,18 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 				spec.successShape,
 			);
 			if (outcome.outcome === "published") {
-				// Neutralization is never silent (§3.3's reporting rule). A send
-				// that reported success while having removed the effect the caller
-				// composed for is an unmeasured allow at this gate's own surface,
+				// Neutralization is never silent ON A CONFIRMED PUBLISH (§3.3's
+				// reporting rule, whose subject is "the published result"). The
+				// scope is stated because it is narrower than "never silent" reads:
+				// the `outcome-unverified` branch below carries no count, so a body
+				// that was rewritten and may well have reached the platform is
+				// reported without one. That is a RESIDUAL, not an oversight —
+				// §5.6's direction is toward claiming less where the outcome is
+				// unknown — but it is a real gap in the caller's information and it
+				// is written here rather than left for a reader to discover.
+				//
+				// A send that reported success while having removed the effect the
+				// caller composed for is an unmeasured allow at this gate's own surface,
 				// and the loss was previously discoverable only by reading the
 				// published surface afterwards. The report is a COUNT over both
 				// operands and never the text it counted (§3.8's refusal-record

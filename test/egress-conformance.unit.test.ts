@@ -848,6 +848,19 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 				`${shape} published live inside an exempted body — the exemption reaches ONE line, and the remainder is relayed text on the terms every other body gets`,
 			);
 		}
+		// The forbidding half, on this arm's own standard. The three probes above
+		// show a wrapped copy of each shape exists; none of them forbids a second
+		// LIVE copy beside it. This arm kept only positive probes when the two
+		// BY POSITION arms gained their lookbehind, which left it weaker than the
+		// reasoning written directly above them.
+		for (const shape of ["@someone", "GH-4", "owner/repo#9"]) {
+			const quoted = shape.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			assert.doesNotMatch(
+				out.text,
+				new RegExp(`(?<!\` )${quoted}`),
+				`${shape}: an unwrapped occurrence survives below the exempted line. Every occurrence must be wrapped, not merely one of them`,
+			);
+		}
 		assert.equal(out.neutralized, 3, "three actionable shapes below the line, three counted");
 	});
 
