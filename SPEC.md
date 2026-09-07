@@ -28,44 +28,44 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§2.3 | PR-as-living-doc | 244 |
 | &nbsp;&nbsp;§2.4 | Evidence discipline | 248 |
 | &nbsp;&nbsp;§2.5 | Authoring doctrine | 263 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 284 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 296 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 306 |
-| §3 | Enforcement-layer architecture | 318 |
-| &nbsp;&nbsp;§3.1 | The constraint | 322 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 329 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 337 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 440 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 444 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 448 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 458 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 470 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 483 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 497 |
-| &nbsp;&nbsp;§3.11 | Gate design | 507 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 529 |
-| §4 | Substrate and install contract | 539 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 543 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 549 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 553 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 557 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 561 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 567 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 577 |
-| &nbsp;&nbsp;§4.8 | The command layer | 585 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 642 |
-| §5 | Cross-cutting contracts | 684 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 688 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 692 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 696 |
-| &nbsp;&nbsp;§5.4 | Work language | 700 |
-| &nbsp;&nbsp;§5.5 | State boundary | 704 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 710 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 720 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 730 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 738 |
-| §6 | Self-governance milestone | 746 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 757 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 288 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 300 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 310 |
+| §3 | Enforcement-layer architecture | 322 |
+| &nbsp;&nbsp;§3.1 | The constraint | 326 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 333 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 341 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 444 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 448 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 452 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 462 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 474 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 487 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 501 |
+| &nbsp;&nbsp;§3.11 | Gate design | 511 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 533 |
+| §4 | Substrate and install contract | 543 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 547 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 553 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 557 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 561 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 565 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 571 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 581 |
+| &nbsp;&nbsp;§4.8 | The command layer | 589 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 646 |
+| §5 | Cross-cutting contracts | 688 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 692 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 696 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 700 |
+| &nbsp;&nbsp;§5.4 | Work language | 704 |
+| &nbsp;&nbsp;§5.5 | State boundary | 708 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 714 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 724 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 734 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 742 |
+| §6 | Self-governance milestone | 750 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 761 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -252,7 +252,7 @@ Durable artifacts — issue bodies, PR bodies, commit messages, review verdicts 
 - A quotation resolves at the file it is attributed to.
 - A claim about a corpus ("zero matches", "all files pass") carries the command that measured it and its output, pinned to a commit — and licenses exactly what that command read. Three distinct defects: ranging past the corpus the pattern could reach, silently narrowing a returned set into an enumeration, and printing a readable paraphrase in place of the pipeline actually run.
 - No claim that expires before the artifact does — expiring claims are removed or pinned to their snapshot, never left to rot.
-- Where a rule generates the instances, the artifact states the rule — never a count or roster a future commit can silently falsify; an exact count belongs where going stale fails a check. A measurement quantified over a corpus containing its own carrier pins that corpus or excludes itself. Review archaeology — round numbers, prior-defect narrative — lives in the review record, never on a living surface.
+- Where a rule generates the instances, the artifact states the rule — never a count or roster a future commit can silently falsify; an exact count belongs where going stale fails a check. A measurement quantified over a corpus containing its own carrier pins that corpus or excludes itself. Review archaeology — round numbers, prior-defect narrative — lives in the review record, never on a living surface. Archaeology is one species of a genus: **development provenance**, text a reader does not need in order to understand the current contract because it describes how the repository got here — a distinct term from §3.7's evidence provenance, which governs where a verdict artifact came from rather than what a sentence may say. A historical *fact* that explains current behavior stays ("v1 messages remain accepted for compatibility"); its provenance does not ("we added v1 in #123"). The schedule species §1.2 forbids inside a failing check's contract is the same genus reaching the same surface from the other phase.
 - A self-claim about the same change ("localized", "reviewed") ships its evidence or is not written. The three same-change claim shapes carry canonical evidence: a predicate claim ships the run against the real input; a coverage claim ships the count and the command that counted it; a machine-pair claim ("this arm refuses X") ships one attempted violation and its red.
 - Reviews are pinned to the exact commit they examined (`reviewed-head`); a verdict for one head never carries forward to another — one named exception: the nit carry-forward of §1.4's finding-severity clause, on that clause's terms alone. The mechanism that verifies the pin — the caller-side blind compare — lives at §1.6.
 
@@ -263,6 +263,10 @@ The generative rule behind this discipline — governing where a claim may come 
 ### 2.5 Authoring doctrine
 
 Truth obligation is scoped by consumption window. The **living set** — the surfaces read to decide current behavior: this SPEC, `MISSION.md`, `README.md`, code, tests, hooks, and agent/command assets (§4.8) — owes present-truth and is kept minimal. Everything else — issue and PR bodies once their flow concludes (an open PR body is living and curated per §2.3; an issue body is living until activation per §2.2), comments, plans — is a **write-once record**: true at authoring, owed no maintenance afterward. A stale record is superseded, never repaired, and a finding against a record is admissible only at its birth review. The reader side is the complement: an old record is dated evidence, re-verified before acting on it; an artifact whose consumption executes it (a plan, a fix list) is self-checking and authored lightly.
+
+**The erasure test** decides a borderline sentence: with the repository's history erased, a living-set sentence must still read as documentation of the current HEAD. A sentence that survives only because a reader can reconstruct what came before is development provenance (§2.4) and belongs on a history surface. The test is a discriminator, not a gate — what it produces is a re-read, and the reader that applies it is advisory by construction (§3.1 rule 1).
+
+The split of roles it implies, which is what makes the deletion cheap rather than lossy — every clause below is a surface that already exists, so provenance removed from the living set is not information destroyed but information moved to where it is read: **issue** — problem, intent, decision; **PR** — implementation and review; **commit message** — the atomic change; **SPEC and README** — the current contract; **comments and docstrings** — current invariants, rationale, API semantics.
 
 **Rendered-or-pointer.** A descriptive fact enters a durable artifact in exactly three forms: as a rendered command-plus-output block, as a pointer (issue number, path, commit sha, § heading), or not at all — measurement precedes generation. Performative sentences are exempt: a dated, attributed decision or ruling is constituted by being recorded, so there is nothing prior to render. The render is machine-emitted, never typed — a hand-transcribed "rendered" block is just prose. In a mixed sentence the descriptive limb carries the pointer or render; the judgment limb stays free. And a clean mechanical report is the floor the author owes the reviewer, never the review itself.
 
