@@ -34,13 +34,20 @@
  * caller-held operand (§4.9's content-free channels).
  *
  * Named residual (§3.11): a dispatcher killed uncleanly orphans its
- * scratch. The OS temp root is the boundary that contains the orphan; no
- * TTL reap runs — an unfired contingency earns no code.
+ * scratch. The scratch's own parent is the boundary that contains the
+ * orphan — the ambient temporary root, or the shell-owned fallback
+ * `scratchParent()` selects when that root lies inside a repository; no
+ * TTL reap runs, an unfired contingency earning no code. The boundary is
+ * named that way rather than as "the OS temp root" because the temporary
+ * root is an ambient VALUE and can be pointed anywhere, which is the whole
+ * subject of `scratchParent()` below (issue #127).
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { quoted } from "../quote.ts";
+import { resolveStateRoot } from "../state-root.ts";
 
 /**
  * A copy of `base` with two GIT_* families deleted, the members git
@@ -87,6 +94,95 @@ export interface DispatchContext {
 
 /** Fixed loud-refusal causes — content-free, naming no operand (§3.9);
  * exported so the composed pipeline can pass a known cause through. */
+/**
+ * The nearest repository at or above `path`, or `undefined` where the walk
+ * reaches the filesystem root without finding one.
+ *
+ * A `.git` ENTRY, not a `.git` directory: a linked worktree and a
+ * submodule both carry `.git` as a FILE, and each is as much a repository
+ * the shell does not govern as an ordinary clone is. Asking only for a
+ * directory would answer "no repository" for both and place the scratch
+ * inside exactly the shapes this walk exists to avoid.
+ *
+ * The walk is filesystem-only and spawns no child. `git rev-parse` would
+ * answer the same question, but it reads the ambient git environment,
+ * and this runs to decide where the shell may WRITE — a decision that
+ * must not itself be redirectable by the environment whose reach is the
+ * subject (§4.6's ambient-never-on-the-hot-path rule). It is the same
+ * upward-walk shape `locate.ts` uses for the repository root.
+ */
+export function containingRepository(path: string): string | undefined {
+	let current: string;
+	try {
+		current = realpathSync(path);
+	} catch {
+		return undefined;
+	}
+	for (;;) {
+		if (existsSync(join(current, ".git"))) {
+			return current;
+		}
+		const parent = dirname(current);
+		if (parent === current) {
+			return undefined;
+		}
+		current = parent;
+	}
+}
+
+/**
+ * Where the scratch is minted: the ambient temporary root, unless that
+ * root lies inside a repository — in which case the scratch falls through
+ * to shell-owned storage (§5.5, issue #127).
+ *
+ * `os.tmpdir()` returns `TMPDIR`, an ambient value with no guard, so the
+ * temporary root can sit inside a repository the shell does not govern.
+ * A scratch minted there is an unexcluded shell-written tree in a
+ * repository the shell does not control — the outcome §5.5 names as the
+ * defect, reached through neither of that section's two limbs.
+ *
+ * The disposition is §5.5's own, applied rather than invented:
+ * FALL-THROUGH to shell-owned storage. Exclusion-at-creation is the limb
+ * that section decided against, and it would mean writing to a foreign
+ * repository's metadata to make a write into that repository safe.
+ * Refusing was rejected on cost: a repository-internal temporary root is
+ * an ordinary environment, not an attack, and wedging the whole delegation
+ * layer over it fails an aid closed in the direction §5.2 forbids.
+ *
+ * The fallback is the shell's own state root, whose namespace §4.1 gives
+ * it and which is excluded from version control at creation — so the
+ * bytes land somewhere the shell owns and no repository tracks. The
+ * fallback is announced, because a silently relocated scratch is a
+ * degraded state a reader cannot see (§5.2's surfaced-signal rule): the
+ * temporary root an operator configured is not the one in use.
+ *
+ * Where the state root is itself unusable the ambient root is taken
+ * anyway: this function chooses between two homes and is not an
+ * enforcement gate, so it degrades open to the shipped default rather
+ * than wedging dispatch on a second failure (§5.2).
+ */
+export function scratchParent(): string {
+	const ambient = tmpdir();
+	const enclosing = containingRepository(ambient);
+	if (enclosing === undefined) {
+		return ambient;
+	}
+	let fallback: string;
+	try {
+		fallback = join(resolveStateRoot().root, "dispatch");
+		mkdirSync(fallback, { recursive: true, mode: 0o700 });
+	} catch {
+		return ambient;
+	}
+	console.warn(
+		`[gitjig] the temporary root ${quoted(ambient)} lies inside the repository ${quoted(enclosing)}, so a ` +
+			`dispatch scratch there would be an unexcluded shell-written tree in a repository this shell does ` +
+			`not govern (§5.5). Provisioning under ${quoted(fallback)} instead. Recovery: point TMPDIR at a ` +
+			`directory outside every repository to use the ordinary temporary root.`,
+	);
+	return fallback;
+}
+
 export const PROVISION_REFUSAL_CAUSES = {
 	unresolvable:
 		"dispatch provision refused: the expected ref resolves to no commit in the caller repository — " +
@@ -131,7 +227,7 @@ export function provisionDispatchContext(
 	}
 	// mkdtemp's exclusive creation is the isolation floor two racing
 	// dispatches stand on (§1.5).
-	const scratchRoot = mkdtempSync(join(tmpdir(), "gitjig-dispatch-"));
+	const scratchRoot = mkdtempSync(join(scratchParent(), "gitjig-dispatch-"));
 	const treeDir = join(scratchRoot, "tree");
 	try {
 		execFileSync("git", ["clone", "-q", "--no-hardlinks", callerRepoRoot, treeDir], { encoding: "utf8", env });

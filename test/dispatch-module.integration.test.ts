@@ -1930,6 +1930,48 @@ describe("the scratch never lands inside a repository the shell does not govern 
 		}
 	});
 
+	it("a LINKED WORKTREE counts as a repository, though its .git is a file", async () => {
+		// The second member of the repository-shape population, and it is a
+		// separate arm because a `.git` DIRECTORY is not the only spelling: a
+		// linked worktree and a submodule each carry `.git` as a FILE, and each
+		// is as much a repository the shell does not govern. Asking only for a
+		// directory answers "no repository" for both and places the scratch
+		// inside exactly the shapes the walk exists to avoid — a mutant that
+		// survives arm 1 and arm 3 and is caught only here.
+		const provision = await requireModule<ProvisionModule>("provision.ts", "scratch-worktree-root");
+		const caller = mintRepo();
+		const host = mintRepo();
+		const linked = join(mintDir("zqworktree-"), "wt");
+		git(host, "worktree", "add", "-q", "--detach", linked);
+		assert.equal(
+			statSync(join(linked, ".git")).isFile(),
+			true,
+			`fixture defect: a linked worktree's .git must be a FILE for this arm to test the shape it names — ` +
+				`${join(linked, ".git")} is not one`,
+		);
+		const slot = join(linked, "zqtmpslot");
+		mkdirSync(slot);
+		const previous = process.env.TMPDIR;
+		try {
+			process.env.TMPDIR = slot;
+			const context = await provision.provisionDispatchContext(caller, { brief: BRIEF });
+			cleanups.push(context.scratchRoot);
+			assert.equal(
+				isInside(context.scratchRoot, linked),
+				false,
+				`the scratch was provisioned at ${context.scratchRoot}, inside the linked worktree ${linked}: a ` +
+					`worktree carries .git as a FILE, and a walk that asks only for a directory reads it as no ` +
+					`repository at all (issue #127, §5.5)`,
+			);
+		} finally {
+			if (previous === undefined) {
+				delete process.env.TMPDIR;
+			} else {
+				process.env.TMPDIR = previous;
+			}
+		}
+	});
+
 	it("a temporary root outside every repository still receives the scratch", async () => {
 		// Discrimination, not detection. Falling through unconditionally
 		// passes the arm above while abandoning the temporary root for every
