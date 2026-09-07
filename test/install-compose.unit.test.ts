@@ -31,6 +31,7 @@ import {
 	readFileSync,
 	rmSync,
 	symlinkSync,
+	type Stats,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -250,7 +251,7 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 		const visit = (dir: string): void => {
 			for (const entry of readdirSync(dir)) {
 				const abs = join(dir, entry);
-				let st;
+				let st: Stats;
 				try {
 					st = lstatSync(abs);
 				} catch {

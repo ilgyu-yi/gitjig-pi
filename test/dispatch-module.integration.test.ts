@@ -639,7 +639,7 @@ describe("provision pins the tree at the once-resolved hash (issue #88, SPEC §4
 		const bystanderRefs = git(bystander, "for-each-ref");
 		// Provision runs in-process, so the poison rides the parent env the
 		// git children inherit; set/restore around the call, restore in finally.
-		const hadGitDir = Object.prototype.hasOwnProperty.call(process.env, "GIT_DIR");
+		const hadGitDir = Object.hasOwn(process.env, "GIT_DIR");
 		const priorGitDir = process.env.GIT_DIR;
 		process.env.GIT_DIR = join(bystander, ".git");
 		let context: DispatchContext;
@@ -900,7 +900,7 @@ describe("the executor's child is drained and seam-scoped (issue #88, SPEC §4.9
 		const refsBefore = git(repo, "for-each-ref");
 		const context = await provision.provisionDispatchContext(repo, { brief: BRIEF });
 		cleanups.push(context.scratchRoot);
-		const hadGitDir = Object.prototype.hasOwnProperty.call(process.env, "GIT_DIR");
+		const hadGitDir = Object.hasOwn(process.env, "GIT_DIR");
 		const priorGitDir = process.env.GIT_DIR;
 		process.env.GIT_DIR = join(repo, ".git");
 		let outcome: { exitCode: number | null; timedOut: boolean };
@@ -1387,7 +1387,15 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 
 	function register(arm: string, index: IndexModule, repo: string, stateRoot: string): BoundTool {
 		let registered: BoundTool | undefined;
-		index.registerDispatchTool({ registerTool: (spec: unknown) => (registered = spec as BoundTool) }, repo, stateRoot);
+		index.registerDispatchTool(
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as BoundTool;
+				},
+			},
+			repo,
+			stateRoot,
+		);
 		assert.ok(registered !== undefined, `${arm}: registerDispatchTool registered no tool — the arm is vacuous`);
 		return registered;
 	}
@@ -1420,7 +1428,7 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 		const index = await requireModule<IndexModule>("index.ts", "bound-schema");
 		const tool = register("bound-schema", index, mintRepo(PAYLOADS), mintStateRoot().stateRoot);
 		assert.ok(
-			Object.prototype.hasOwnProperty.call(tool.parameters.properties, "timeoutMs"),
+			Object.hasOwn(tool.parameters.properties, "timeoutMs"),
 			"bound-schema: the tool advertises no run bound, so the option the executor already honors is " +
 				`reachable by nobody and every dispatch runs at the default (§4.9): ${JSON.stringify(tool.parameters.properties)}`,
 		);
@@ -1608,7 +1616,11 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 		const sink = mintStateRoot();
 		let registered: RegisteredTool | undefined;
 		index.registerDispatchTool(
-			{ registerTool: (spec: unknown) => (registered = spec as RegisteredTool) },
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as RegisteredTool;
+				},
+			},
 			repo,
 			sink.stateRoot,
 		);
@@ -1645,7 +1657,11 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 		const sink = mintStateRoot();
 		let registered: RegisteredTool | undefined;
 		index.registerDispatchTool(
-			{ registerTool: (spec: unknown) => (registered = spec as RegisteredTool) },
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as RegisteredTool;
+				},
+			},
 			repo,
 			sink.stateRoot,
 		);
@@ -1697,7 +1713,11 @@ describe("a delegate's summary cannot forge a dispatch verdict in the composed t
 		const index = await requireModule<IndexModule>("index.ts", arm);
 		let registered: RegisteredTool | undefined;
 		index.registerDispatchTool(
-			{ registerTool: (spec: unknown) => (registered = spec as RegisteredTool) },
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as RegisteredTool;
+				},
+			},
 			mintRepo(PAYLOADS),
 			mintStateRoot().stateRoot,
 		);

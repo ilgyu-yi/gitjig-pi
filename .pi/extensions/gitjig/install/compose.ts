@@ -40,7 +40,7 @@
  * — within `changelog_unreleased/`, only the top-level contract ships —
  * never as a list of the fragments that happen to exist today.
  */
-import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, type Stats } from "node:fs";
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 
 /**
@@ -93,7 +93,7 @@ function walk(dir: string, rootForRelative: string, out: string[]): void {
 	}
 	for (const entry of entries) {
 		const abs = join(dir, entry);
-		let st;
+		let st: Stats;
 		try {
 			st = lstatSync(abs);
 		} catch {
@@ -287,7 +287,7 @@ export function composeSubstrate(input: ComposeInput): ComposedMember[] {
 		// that is a symlink to a path which does not yet exist reads as absent
 		// and would be landed — putting the shell's bytes wherever it points,
 		// outside every namespace, with no refusal and no warning.
-		let st;
+		let st: Stats;
 		try {
 			st = lstatSync(destAbs);
 		} catch (error) {

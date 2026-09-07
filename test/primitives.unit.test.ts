@@ -369,11 +369,11 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 			const precious = join(outside, "precious");
 			writeFileSync(precious, "a file no arm of this suite may reach");
 			symlinkSync(outside, join(fixture, "link"));
-			const escape = join(fixture, "link", "precious");
+			const escapingPath = join(fixture, "link", "precious");
 			assert.throws(
-				() => assertInsideFixture(escape, fixture),
+				() => assertInsideFixture(escapingPath, fixture),
 				/does not own/,
-				`the guard admits ${escape}, which really resolves to ${precious}: an arm performing what a clause names would delete or chmod outside the fixture it is contained to, and the fixture holding no link is not a property the guard may rest on`,
+				`the guard admits ${escapingPath}, which really resolves to ${precious}: an arm performing what a clause names would delete or chmod outside the fixture it is contained to, and the fixture holding no link is not a property the guard may rest on`,
 			);
 			assert.doesNotThrow(
 				() => assertInsideFixture(join(fixture, "no-such-dir", "deeper"), fixture),
@@ -669,7 +669,7 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 			// rather than stopping at the first, which is what lets this one
 			// unforgeable object discriminate a dropped check in any of the three.
 			const fd = openSync("/dev/null", constants.O_RDONLY);
-			let stats;
+			let stats: Stats;
 			try {
 				stats = fstatSync(fd);
 			} finally {
@@ -718,7 +718,7 @@ describe("audit primitive: the sink is the path the gate reads (§4.6, §5.5)", 
 			try {
 				assert.equal(captureWarnings(() => appendAuditRecord(stateRoot, INPUT)).value, true);
 				const fd = openSync(join(stateRoot, AUDIT_FILE_NAME), constants.O_RDONLY);
-				let stats;
+				let stats: Stats;
 				try {
 					stats = fstatSync(fd);
 				} finally {
@@ -1670,6 +1670,7 @@ describe("degradation surfaces carry no forged line and no control byte (§3.9, 
 		);
 		assert.doesNotMatch(
 			text,
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: this arm asserts that NO control byte reaches the operator surface, so the class it names is the property under test. Suppressed at the site rather than disabled in the configuration, so an accidental one elsewhere is still reported.
 			/[\x00-\x08\x0a-\x1f\x7f-\x9f\u061c]/,
 			`a control byte from a path component reached the operator surface unescaped: ${JSON.stringify(text)}`,
 		);
@@ -1958,6 +1959,7 @@ describe("command-context recovery clauses are substitution-dead when pasted (is
 				assert.ok(refusal !== undefined, "the arm measures nothing unless the fixture Stats are refused");
 				const command = /`([^`]+)`/.exec(refusal.recovery)?.[1];
 				assert.ok(
+					// biome-ignore lint/complexity/useOptionalChain: the explicit `!== undefined` is load-bearing for the two lines below, which use `command` as a string. An optional chain reads the same here and drops the narrowing — taken once, and the type check reported both of those lines.
 					command !== undefined && command.startsWith("chmod 600 "),
 					`the arm measures nothing unless the backtick-quoted chmod command was selected: ${refusal.recovery}`,
 				);

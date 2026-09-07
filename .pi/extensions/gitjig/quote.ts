@@ -96,6 +96,7 @@ const RAW_CLASSES = /[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\
  * shell delimiter owes the C0 controls the escaping `JSON.stringify`
  * performs for the JSON one.
  */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters ARE the subject. This class is what the escaper matches in order to escape it, so a rule that reads a control character in a pattern as an accident inverts this line's purpose. Suppressed at the site rather than disabled in the configuration, so an accidental one elsewhere is still reported.
 const RAW_CLASSES_AND_C0 = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g;
 
 /** One escaped codepoint; each escape is itself valid JSON-string syntax. */
