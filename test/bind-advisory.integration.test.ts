@@ -20,9 +20,15 @@
  * ANTI-VACUITY (per-arm, stated in place):
  *   - silence is the advisory's contract for one state and its failure
  *     mode everywhere else, so no arm may read silence without proving the
- *     runtime ran: every one opens with `requireRuntimeLoaded`, which
- *     demands this fixture's session carry the extension's registration
- *     entry;
+ *     runtime ran. The PI-SESSION arms discharge that with
+ *     `requireRuntimeLoaded`, which demands the fixture's session carry the
+ *     extension's registration entry. The arms that drive the entry point
+ *     directly — the issue #125 block — cannot use it, since no session
+ *     exists to carry that entry; each discharges it with an in-arm
+ *     positive control that makes the runtime speak against the same state
+ *     root before any absence is read. Both devices are required, never
+ *     assumed: an arm reading only absences and holding no control passes
+ *     against an entry point replaced by an immediate return;
  *   - arms that hold whatever the detector does — the reaped-child
  *     completion — are declared BOUNDARY PINS in place and state what
  *     mutation reddens them;
@@ -1105,6 +1111,28 @@ describe("the TTL debounce is scoped per classified repository (issue #125, SPEC
 		try {
 			const stateRoot = join(base, "state");
 			mkdirSync(stateRoot, { recursive: true });
+			// Positive control, and this arm needs one more than its siblings do:
+			// its own two assertions are both ABSENCES, which an entry point that
+			// did nothing at all would satisfy. Measured — with the entry point
+			// replaced by an immediate return, 17 of this file's arms redden and
+			// this one stayed green until this control was added. So one
+			// resolvable repository in a degraded state advises and stamps first,
+			// against this same state root: the absences below then mean the
+			// unresolvable session was refused, not that nothing ran.
+			const live = repo(base, "zqcontrol", "zqforeignhooks");
+			assert.deepEqual(
+				await advise(live, stateRoot),
+				["foreign-bound"],
+				"positive control: the entry point must advise for a repository it CAN resolve, or the " +
+					"absences this arm asserts hold for a runtime that never ran",
+			);
+			assert.deepEqual(
+				readdirSync(stateRoot).length,
+				1,
+				"positive control: the resolvable session must leave exactly one stamp, so the emptiness " +
+					"asserted below is a refusal to stamp and not a state root nothing ever reached",
+			);
+			const afterControl = readdirSync(stateRoot);
 			assert.deepEqual(
 				await advise(base, stateRoot),
 				[],
@@ -1112,8 +1140,9 @@ describe("the TTL debounce is scoped per classified repository (issue #125, SPEC
 			);
 			assert.deepEqual(
 				readdirSync(stateRoot),
-				[],
-				`an unresolvable repository earned a TTL stamp: ${JSON.stringify(readdirSync(stateRoot))}. ` +
+				afterControl,
+				`an unresolvable repository earned a TTL stamp: the state root gained ` +
+					`${JSON.stringify(readdirSync(stateRoot).filter((e) => !afterControl.includes(e)))}. ` +
 					`Only a SUCCESSFUL compute stamps (§5.9), and a stamp under any key at all here is one ` +
 					`written for a repository the session could not name (issue #125)`,
 			);
@@ -1131,15 +1160,22 @@ describe("the TTL debounce is scoped per classified repository (issue #125, SPEC
 		// promises at most one compute per classified repository per hour, and
 		// §5.5 asks the datum to carry "the repository it concerns" — a
 		// subdirectory is the same repository, so it must not earn a second
-		// advisory. A symlinked spelling is the same claim through the other
-		// resolution the key performs.
+		// advisory.
+		//
+		// A symlinked spelling was tried here and REMOVED as inert rather than
+		// left as decoration: this arm reaches the module through
+		// `process.chdir`, and `getcwd(3)` answers with the physical path, so
+		// the module is handed bytes identical to the first session's and no
+		// keying function whatever could be discriminated by it. Measured —
+		// `process.chdir("…/linkdir"); process.cwd()` yields `…/realdir`; and
+		// with the subdirectory limb dropped, the raw-cwd mutant this arm
+		// exists to kill survives the whole suite. The subdirectory limb
+		// carries all of this arm's teeth.
 		const base = scratch();
 		try {
 			const top = repo(base, "zqgranular", "zqforeignhooks");
 			const sub = join(top, "zqsubdir");
 			mkdirSync(sub);
-			const link = join(base, "zqspelling");
-			symlinkSync(top, link);
 			const stateRoot = join(base, "state");
 
 			assert.deepEqual(
@@ -1148,23 +1184,18 @@ describe("the TTL debounce is scoped per classified repository (issue #125, SPEC
 				"positive control: the repository must advise from its own top before a shared debounce can " +
 					"mean anything",
 			);
-			for (const [label, cwd] of [
-				["a subdirectory of it", sub],
-				["a symlinked spelling of it", link],
-			] as const) {
-				assert.deepEqual(
-					await advise(cwd, stateRoot),
-					[],
-					`a session in ${label} earned a second advisory inside the TTL: the key is granular per ` +
-						`DIRECTORY rather than per repository, so one repository debounces under as many keys ` +
-						`as it has spellings (§5.5's "the repository it concerns"; §5.9's cadence)`,
-				);
-			}
+			assert.deepEqual(
+				await advise(sub, stateRoot),
+				[],
+				`a session in a subdirectory of it earned a second advisory inside the TTL: the key is ` +
+					`granular per DIRECTORY rather than per repository, so one repository debounces under as ` +
+					`many keys as it has directories (§5.5's "the repository it concerns"; §5.9's cadence)`,
+			);
 			assert.deepEqual(
 				readdirSync(stateRoot).length,
 				1,
-				`three sessions in ONE repository left ${JSON.stringify(readdirSync(stateRoot))} — one ` +
-					`repository owns one stamp, whatever spelling reached it`,
+				`two sessions in ONE repository left ${JSON.stringify(readdirSync(stateRoot))} — one ` +
+					`repository owns one stamp, whatever directory within it reached the advisory`,
 			);
 		} finally {
 			rmSync(base, { recursive: true, force: true });
