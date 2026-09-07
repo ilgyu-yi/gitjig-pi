@@ -34,6 +34,12 @@
 #   produce exactly the false block §3.6 rejects. The cost is real and is
 #   the accepted side: narration spelled with those words passes unreported.
 #
+#   Also missed, and named because narrowing a rule opens a gap that owes a
+#   disclosure: the archaeology rules want a NUMBERED round or the plural, so
+#   a spelled ordinal — "Review round three asked for this" — is unreported.
+#   The narrowing was the price of not matching "the review round trip", a
+#   live feature name, and the miss is the cheaper side of that trade.
+#
 #   FALSE POSITIVES, in three measured classes. `previously`, `used to` and
 #   `formerly` also spell a legitimate compatibility fact ("v1 messages
 #   remain accepted"); §2.4 draws that line at fact-versus-provenance and no
@@ -93,6 +99,7 @@ RULE() {
 
 RULE schedule 'red until'
 RULE schedule 'until Phase'
+RULE schedule 'until #[0-9]+'
 RULE schedule 'does not exist yet'
 RULE schedule 'not yet (implemented|landed|written)'
 RULE schedule '(once|after) [^,]{1,40} lands'

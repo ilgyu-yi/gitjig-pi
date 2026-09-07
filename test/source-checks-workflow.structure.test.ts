@@ -186,7 +186,7 @@ describe("S3 — the source-checks workflow's own contract (issue #121; SPEC §3
 		assert.match(
 			header,
 			/development and CI only/i,
-			`${file[0]} does not declare itself development-and-CI only in its own header. This file sits inside \`.github/\`, which \`deriveSubstrateSet\` walks, so today it IS a member of the set an adopting repository would receive; the header is what a reader of the composed tree has to go on until #134's Execution lands the arm that proves it never enters`,
+			`${file[0]} does not declare itself development-and-CI only in its own header. This file sits inside \`.github/\`, which \`deriveSubstrateSet\` walks, so today it IS a member of the set an adopting repository would receive; the header is the only thing a reader of the composed tree has to go on, since no arm proves this file never enters it`,
 		);
 	});
 });

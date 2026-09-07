@@ -129,6 +129,11 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 		why: "a change verb bound to an issue number — the pointer is fine, the narration is not",
 	},
 	{ shape: "schedule", line: "// Blocked until Phase C.", why: "the phase spelling, with no other rule reaching it" },
+	{
+		shape: "schedule",
+		line: "// The header is what a reader has to go on until #134's Execution arrives.",
+		why: "a schedule deferring to an ISSUE's plan \u2014 the plainest spelling, and the one the live sweep missed because no rule reached it",
+	},
 	{ shape: "schedule", line: "// The guard is not yet implemented.", why: "a state that dates itself" },
 	{ shape: "schedule", line: "// Green once the helper lands.", why: "the same schedule with the keyword moved" },
 	{
@@ -249,6 +254,52 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 			[...declaredShapes].sort(),
 			"the shapes this table exercises are not the shapes the reader declares, rule for rule",
 		);
+	});
+});
+
+describe("§2.5's illustrative quotations resolve where they are attributed (issue #70, SPEC §2.4)", () => {
+	// §2.4's first bullet makes this a contract: "A quotation resolves at the
+	// file it is attributed to." §2.5's resolvability paragraph rests entirely
+	// on two quotations, and one earlier version of it quoted a sentence that
+	// existed nowhere — which mattered, because the real sentence FAILED the
+	// rule the misquotation was there to illustrate.
+	//
+	// §2.5 also says structural checks over prose files remain normal tests,
+	// so this is where that check belongs. It reads the quotations out of the
+	// paragraph rather than repeating them, so a quotation added there later
+	// is checked too.
+	const SPEC_PATH = join(repoRoot(), "SPEC.md");
+
+	it("every quoted span in the resolvability paragraph resolves inside the section it names", () => {
+		const spec = readFileSync(SPEC_PATH, "utf8");
+		const anchor = spec.indexOf("whether its condition resolves from the living set at HEAD");
+		assert.ok(anchor > 0, "§2.5's resolvability paragraph is not present, so this arm would measure nothing");
+		// The paragraph and the one after it, which carries the schedule side.
+		const paragraph = spec.slice(anchor, spec.indexOf("\n\n", spec.indexOf("\n\n", anchor) + 2));
+		const quoted = [...paragraph.matchAll(/§(\d+(?:\.\d+)?)'s(?: own)? "([^"]+)"/g)].map((entry) => ({
+			section: entry[1],
+			text: entry[2],
+		}));
+		assert.ok(
+			quoted.length >= 2,
+			`the paragraph carries ${quoted.length} attributed quotations; it rests on at least two, so a parse finding fewer is not measuring them`,
+		);
+		for (const { section, text } of quoted) {
+			// The section's own span: from its heading to the next heading at the
+			// same or a shallower depth.
+			const heading = new RegExp(`^#{1,4} ${section.replace(".", "\\.")}[. ]`, "m");
+			const found = spec.match(heading);
+			assert.ok(found?.index !== undefined, `§${section} has no heading, so the attribution points nowhere`);
+			// From the END of the heading line, so the slice cannot match its own
+			// truncated heading at position 0 and yield an empty body.
+			const after = spec.slice(spec.indexOf("\n", found.index) + 1);
+			const nextHeading = after.search(/^#{1,4} \d/m);
+			const body = nextHeading === -1 ? after : after.slice(0, nextHeading);
+			assert.ok(
+				body.includes(text),
+				`§2.5 attributes ${JSON.stringify(text)} to §${section}, and §${section} does not contain it. §2.4's first bullet makes a quotation resolve at what it is attributed to — and a misquoted illustration can make a rule look like it works when the real sentence fails it`,
+			);
+		}
 	});
 });
 
