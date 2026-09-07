@@ -36,6 +36,16 @@
  *     names its state token (`unbound` / `foreign-bound`) and the exact
  *     re-arm command `bash .githooks/bind_local_tier.sh` somewhere in its
  *     serialized form;
+ *   - stamp-after-success has two limbs since issue #125, because the
+ *     repository resolve that names the stamp now runs BEFORE the compute.
+ *     The COMPUTE limb is pinned by the erroring-child arm, whose shim
+ *     leaves `rev-parse` working. The two guards sit in SERIES, so neither
+ *     alone is killable by a single-point mutant — defense in depth, and
+ *     declared rather than mistaken for coverage. What holds the pair is
+ *     the issue #125 block's stampless arm: it reads the WHOLE state root
+ *     rather than one keyed path, so it reddens when both guards go, and
+ *     it is the only arm here that can observe a stamp written under a key
+ *     it did not ask for;
  *   - the TTL stamp lives where `bindAdvisoryStampPath(stateRoot, repoTop)`
  *     puts it: under the state root, keyed by the repository the advisory
  *     classified, so one shell-owned root debounces each repository
@@ -55,6 +65,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	readdirSync,
 	realpathSync,
 	rmSync,
 	statSync,
@@ -700,11 +711,28 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 		);
 	});
 
-	it("a hung, reaped compute leaves NO stamp", async () => {
+	it("a hung, reaped repo-resolve child leaves NO stamp", async () => {
+		// BOUNDARY PIN. This fixture's shim hangs `git rev-parse`, which since
+		// issue #125 is the repository resolve that NAMES the stamp: it runs
+		// before the compute and returns at the unresolved-top guard, so this
+		// arm no longer measures stamp-after-success on the compute limb.
+		// What mutation reddens it: none of the three tried, and that is the
+		// declaration rather than an omission. Measured — compute guard removed,
+		// this arm stays green while the erroring arm reddens; resolve guard
+		// neutralized alone, both stay green, because the compute guard behind
+		// it still returns; BOTH neutralized, this arm STILL stays green, since
+		// the stamp is then written under a fallback key and this arm reads
+		// only the classified repository's own path. It holds whatever the
+		// detector does on this fixture. The compute limb is pinned by the
+		// erroring arm below; the both-guards case and the wrong-key write are
+		// caught by the issue #125 block's stampless arm, which reads the whole
+		// state root and is the only arm here that can see a stamp filed under
+		// a key it did not ask for.
 		assert.equal(
 			existsSync(await stampPathFor(hangingGitFixture.stateDir, hangingGitFixture.root)),
 			false,
-			"a hung, reaped compute earned a TTL stamp — stamping is for successful computes only (§5.9)",
+			"a hung, reaped repo-resolve child earned a TTL stamp — a session that could not name the " +
+				"repository it stands in cannot key a stamp for it (§5.9, issue #125)",
 		);
 	});
 
@@ -1053,6 +1081,38 @@ describe("the TTL debounce is scoped per classified repository (issue #125, SPEC
 				[],
 				"the SAME repository re-surfaced its advisory inside the TTL — the debounce is scoped away " +
 					"rather than scoped correctly (§5.9's cadence)",
+			);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("a session whose repository cannot be resolved writes NO stamp anywhere under the state root", async () => {
+		// The RESOLVE limb of stamp-after-success, and the reason this arm
+		// reads the whole state root instead of one keyed path: a keyed read
+		// cannot see a stamp written under the WRONG key, which is precisely
+		// how this limb fails. The sibling hung-child arm is keyed and is
+		// declared a boundary pin for exactly that reason.
+		//
+		// The cwd is a scratch directory under the system temp root and so is
+		// inside no git repository: `rev-parse --show-toplevel` fails, the top
+		// is unresolvable, and a session that cannot name the repository it
+		// stands in must not key a stamp for it (§5.9, issue #125).
+		const base = scratch();
+		try {
+			const stateRoot = join(base, "state");
+			mkdirSync(stateRoot, { recursive: true });
+			assert.deepEqual(
+				await advise(base, stateRoot),
+				[],
+				"a session standing outside any repository surfaced an advisory about one",
+			);
+			assert.deepEqual(
+				readdirSync(stateRoot),
+				[],
+				`an unresolvable repository earned a TTL stamp: ${JSON.stringify(readdirSync(stateRoot))}. ` +
+					`Only a SUCCESSFUL compute stamps (§5.9), and a stamp under any key at all here is one ` +
+					`written for a repository the session could not name (issue #125)`,
 			);
 		} finally {
 			rmSync(base, { recursive: true, force: true });
