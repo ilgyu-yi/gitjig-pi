@@ -567,6 +567,11 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 		);
 		assert.match(
 			workflow,
+			/if ! report=/,
+			"the workflow does not guard against the reader itself failing. The reader exits 0 by contract and an arm pins that, so this path is unreachable short of a bash-level crash — but it is the third of three degradation guards and the only one without a mutant behind it",
+		);
+		assert.match(
+			workflow,
 			/must NOT be added to the branch ruleset/i,
 			"the workflow no longer states that it must stay out of the required-check set, which is the one thing keeping an advisory reader from becoming a gate",
 		);
