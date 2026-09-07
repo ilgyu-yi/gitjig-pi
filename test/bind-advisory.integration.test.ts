@@ -735,9 +735,14 @@ describe("advisory hygiene: TTL, stamp-after-success, degrade-to-silence (issue 
 		// this arm stays green while the erroring arm reddens; resolve guard
 		// neutralized alone, both stay green, because the compute guard behind
 		// it still returns; BOTH neutralized, this arm STILL stays green, since
-		// the stamp is then written under a fallback key and this arm reads
-		// only the classified repository's own path. It holds whatever the
-		// detector does on this fixture. The compute limb is pinned by the
+		// the stamp is then written under a CONSTANT fallback key and this arm
+		// reads only the classified repository's own path. Read that as a pin
+		// and not as coverage, and note what the ground depends on: key the
+		// fallback on `cwd` instead — the fallback the surrounding code most
+		// readily supplies, since `cwd` is in scope one line above — and this
+		// arm DOES redden, because on this fixture the session's cwd is the
+		// classified top, so the fallback key and this arm's read path name one
+		// file. The compute limb is pinned by the
 		// erroring arm below; the both-guards case and the wrong-key write are
 		// caught by the issue #125 block's stampless arm, which reads the whole
 		// state root and is the only arm here that can see a stamp filed under
