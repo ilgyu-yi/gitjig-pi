@@ -37,7 +37,7 @@
  * here — toolResult session entries, the audit trail, the shim sink. The
  * assistant message that CARRIES the toolCall persists the refused body as
  * the call's own arguments; that surface is §3.3's enumerated residual
- * (measured in the Doc phase) and is deliberately EXCLUDED from every
+ * (measured at settlement) and is deliberately EXCLUDED from every
  * leak-domain assertion below. Adversarially encoded payloads are out of
  * scope by the same §3.3 residual: this is in-session mistake prevention.
  *

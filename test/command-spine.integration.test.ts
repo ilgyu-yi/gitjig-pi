@@ -76,7 +76,7 @@
  *
  * TEMPLATE NORMS (AC 4). A lexical read of `.pi/prompts/work-on.md`'s
  * committed bytes: the issue-first-entry token (§1.1's standard flow) and
- * the Doc → Test → Code work-order pointer (§1.2) must be present.
+ * the §1.2 obligations pointer must be present.
  * "Points at the SPEC sections, not restated prose" is a review judgment
  * (§2.8) the lexical arm does NOT establish — disclosed at the arm.
  *
@@ -803,7 +803,7 @@ describe("the ship composition: caller-supplied facts, offline undecidables name
 // ---------------------------------------------------------------------------
 
 describe("the work-on template carries the flow's entry and order (issue #91 AC 4)", () => {
-	it("the committed template binds issue-first entry and the Doc → Test → Code order by §-pointer", () => {
+	it("the committed template binds issue-first entry and the §1.2 obligations by §-pointer", () => {
 		// Lexical arm over the committed bytes. What it does NOT establish:
 		// "points at the SPEC sections, not restated prose" is a review
 		// judgment (§2.8) — token presence cannot tell a pointer from a
@@ -820,9 +820,9 @@ describe("the work-on template carries the flow's entry and order (issue #91 AC 
 				"standard flow (work starts from an open, Active issue), by pointer",
 		);
 		assert.ok(
-			template.includes("§1.2") && template.includes("Doc → Test → Code"),
-			"work-on-template: the work-order token is missing — the template must carry the Doc → Test → Code " +
-				"order as §1.2's pointer",
+			template.includes("§1.2") && /authorization/i.test(template),
+			"work-on-template: the obligations token is missing — the template must carry §1.2's " +
+				"authorization-first obligations, by pointer",
 		);
 	});
 });
