@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Review escalation | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 151 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 163 |
-| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 175 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 185 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 197 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 209 |
-| §2 | Artifact hierarchy and lifecycle | 217 |
-| &nbsp;&nbsp;§2.1 | Issue types | 221 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 234 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 250 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 254 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 269 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 306 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 318 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 328 |
-| §3 | Enforcement-layer architecture | 340 |
-| &nbsp;&nbsp;§3.1 | The constraint | 344 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 351 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 359 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 462 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 466 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 470 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 480 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 492 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 505 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 519 |
-| &nbsp;&nbsp;§3.11 | Gate design | 529 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 551 |
-| §4 | Substrate and install contract | 561 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 565 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 571 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 575 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 579 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 583 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 589 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 599 |
-| &nbsp;&nbsp;§4.8 | The command layer | 607 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 664 |
-| §5 | Cross-cutting contracts | 706 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 710 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 714 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 718 |
-| &nbsp;&nbsp;§5.4 | Work language | 722 |
-| &nbsp;&nbsp;§5.5 | State boundary | 726 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 732 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 742 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 752 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 760 |
-| §6 | Self-governance milestone | 768 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 779 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 160 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 172 |
+| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 184 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 194 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 206 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 218 |
+| §2 | Artifact hierarchy and lifecycle | 226 |
+| &nbsp;&nbsp;§2.1 | Issue types | 230 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 243 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 259 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 263 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 278 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 315 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 327 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 337 |
+| §3 | Enforcement-layer architecture | 349 |
+| &nbsp;&nbsp;§3.1 | The constraint | 353 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 360 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 368 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 471 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 475 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 479 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 489 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 501 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 514 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 528 |
+| &nbsp;&nbsp;§3.11 | Gate design | 538 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 560 |
+| §4 | Substrate and install contract | 570 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 574 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 580 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 584 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 588 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 592 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 598 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 608 |
+| &nbsp;&nbsp;§4.8 | The command layer | 616 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 673 |
+| §5 | Cross-cutting contracts | 715 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 719 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 723 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 727 |
+| &nbsp;&nbsp;§5.4 | Work language | 731 |
+| &nbsp;&nbsp;§5.5 | State boundary | 735 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 741 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 751 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 761 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 769 |
+| §6 | Self-governance milestone | 777 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 788 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -143,10 +143,19 @@ The reviewer's verdict stays content-only: the round is caller-derived and calle
 1. **The finder owes the class.** Every finding in a rejection-class verdict is tagged `substantive` or `nit` by the reviewer that produced it.
 2. **The nit discriminator** — all three conditions, or the finding is substantive: (a) the remedy is fully specified by the finding itself — a verbatim replacement or a mechanical derivation, no design choice left with the receiver; (b) the remedy is local to the flagged span; (c) applying it leaves every commitment of the artifact extensionally unchanged — obligations, decisions, interfaces, and the content of measured claims. Condition (a) is the soundness condition: skipping re-review is sound only because the skipped round could have verified nothing but a verbatim application.
 3. **An untagged finding is classified by the receiver** under the same discriminator, and the classification plus the applied fix enter the round record — a misclassification is auditable, and a nit classification later shown to have concealed a commitment change is itself a substantive finding against the round record.
-4. **A nit-only round is a converged round and enters no ladder or backstop count**: the ladder counts rounds carrying at least one substantive finding, so round 2's method-change mandate and round 3's park index off substantive rounds alone. What follows the fixes splits on whether a downstream terminal action consumes the round's evidence artifact (§3.7), never on a git mechanism. At a verdict gate with no such consumer — a filing or plan verdict — the receiver's recorded classification renders convergence and nothing further is owed. Where a terminal action does consume the evidence — an activation flip's current-body pass (§2.2, §3.7), or the merge gate's head-pinned review (§3.3) — the evidence is re-established by **carry-forward, never re-review**: the author re-issues the evidence artifact at the post-fix state, recording the prior pass, the finding verbatim, the nit classification, and the exact delta. The author is transport only — the artifact's content is the reviewer's own pass plus the remedy the reviewer's finding fully specified, mechanically re-checkable, finding text against delta — so a carry-forward whose delta exceeds its finding is a substantive violation of the round record; that retained detection surface is what justifies the exception. The carry-forward is an explicit **named exception**, amended by reference (§2.8) into the three sentences that otherwise forbid it: §3.7(d)'s never-hand-authored conjunct, §1.6's answering-a-review-invalidates-it rule, and §2.4's never-carries-forward rule. An independent **discharge check** is optional, available when a classification is contested; where used, its actor and output collapse into the existing verdict grammar (§1.6) and reviewer-derivation rules (§3.7) rather than minting a mechanism, and it likewise enters no ladder count.
+4. **A nit-only round is a converged round and enters no ladder or backstop count**: the ladder counts rounds carrying at least one substantive finding the harm axis below leaves counting, so round 2's method-change mandate and round 3's park index off those rounds alone. What follows the fixes splits on whether a downstream terminal action consumes the round's evidence artifact (§3.7), never on a git mechanism. At a verdict gate with no such consumer — a filing or plan verdict — the receiver's recorded classification renders convergence and nothing further is owed. Where a terminal action does consume the evidence — an activation flip's current-body pass (§2.2, §3.7), or the merge gate's head-pinned review (§3.3) — the evidence is re-established by **carry-forward, never re-review**: the author re-issues the evidence artifact at the post-fix state, recording the prior pass, the finding verbatim, the nit classification, and the exact delta. The author is transport only — the artifact's content is the reviewer's own pass plus the remedy the reviewer's finding fully specified, mechanically re-checkable, finding text against delta — so a carry-forward whose delta exceeds its finding is a substantive violation of the round record; that retained detection surface is what justifies the exception. The carry-forward is an explicit **named exception**, amended by reference (§2.8) into the three sentences that otherwise forbid it: §3.7(d)'s never-hand-authored conjunct, §1.6's answering-a-review-invalidates-it rule, and §2.4's never-carries-forward rule. An independent **discharge check** is optional, available when a classification — or a recorded cost direction (the harm axis below) — is contested; where used, its actor and output collapse into the existing verdict grammar (§1.6) and reviewer-derivation rules (§3.7) rather than minting a mechanism, and it likewise enters no ladder count.
 5. **No weakening of evidence discipline** (§2.4): a literally-false wording is still fixed before the artifact ships — the clause changes only what follows the fix, and fixing ends the matter.
 
-The clause is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); tagging and counting instruments derive later per §1.2's macro-phase clause.
+**The harm axis.** The discriminator above reads the shape of the remedy and holds no term for what a finding's own adjudication says the finding *cost*. A finding whose demonstrated cost sits in the safe direction is still substantive whenever its remedy needs a design choice — a new test arm always does — so review methods that measure harder feed the ladder by construction, and review strength and round count grow together: the erosion the opening paragraph names, produced by the backstop itself. The floor is therefore drawn in the grammar, the move §1.6 makes for heuristic-axis findings pointed the other way — and every input it reads is authored by the finder or derived by the caller, never by the party whose rounds it relieves: the independence the opening paragraph requires of the count's record, carried into the relief.
+
+6. **The finder owes the cost direction** alongside the class, on the same finding, in one of two tokens this clause commits to as their referents' durable names (§2.7). **Fail-closed**: the demonstrated cost is a refusal where an act was intended, a declared interface narrower than the instrument it declares, or an over-report in the safe direction; where the finding's subject is a norm and nothing operates, the limbs are read through what the norm costs the changes that consume it. **Live-harm**: anything else — a cost reachable in the artifact's own operation. An unrecorded direction is live-harm, so the floor never rests on an omission. `fail-closed` is §3.9's token, **deliberately extended here to a second referent** — there a posture a gate takes on its own failure, here a cost a finding has — which §2.7 permits, a finding's cost direction having no canonical identifier in this document's set; the complement is `live-harm`, not `fail-open`, which names a gate's posture and this is not a posture.
+7. **A deferrable finding** — the name is coined here as this class's durable identifier (§2.7) — is a substantive finding recorded `fail-closed` whose ground stands unrefuted (item 9) and uncontested (item 4's discharge check hears a contest), and which sits on **no acceptance criterion of the change under review**. That test is the caller's: the caller compares the finding against the criteria of the change's closing issue as they stood at round open — it already holds the round record the opening paragraph requires the acting agent not to author, and it reaches the issue where a reviewer cannot, a reviewer's input set being closed at the pushed head (§1.6). Where the change has no closing issue, or where its criteria are empty however they came to be empty, nothing is deferrable — absent and empty are distinct states (§2.6) and both close here. A deferrable finding **enters no ladder or backstop count**, and its owed disposition is filing as its own issue, the filed issue's identifier entering the round record beside the finding's class (item 3's surface) — which makes a false filing record mechanically falsifiable; repairing it in place instead is always available and discharges the obligation. The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction.
+8. **The two axes are independent**, and a deferrable finding is not thereby a nit: the discriminator reads the remedy, this axis reads the cost, and §2.4 is otherwise untouched — clause 5 reaches a literally-false wording whatever its direction.
+9. **A cost direction is a finder's judgment, not an observation, and stays falsifiable.** It is recorded with the ground that makes it fail-closed, so the ground can be refuted on a measurement rather than a re-reading of what was already before the finder; a refutation meeting that bar withdraws the ground, the direction reverts to unrecorded, and item 6's default carries it from there. Nothing here moves a count directly, so no adjudicating party enters a tally by ruling.
+
+**The axis relieves the count and nothing else.** It converts no verdict — the line §1.9 draws for the judgment layer: a blocking verdict still stops the flow however its findings are directed — and it amends no other reader of rejections: §5.7's blocker classification escalates on its own terms, relieved findings included. Nor does it need a re-submission rule: a receiver who returns over an unrepaired deferrable finding gains nothing, because the gate the verdict holds stays held until the finding is repaired or its ground refuted — that pressure is what ends the loop, and the ladder owes it nothing: the ladder interrupts method failure, and a finding the finder itself placed in the safe direction, on no criterion of the change, is not evidence of one.
+
+The clause is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); tagging, direction and counting instruments derive later per §1.2's macro-phase clause.
 
 ### 1.5 Delegated work
 
