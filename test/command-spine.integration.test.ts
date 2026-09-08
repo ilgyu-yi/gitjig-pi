@@ -4,7 +4,7 @@
  * surface rule, the uniqueness obligation; §4.9 for the dispatcher the
  * `review` command rides as one more call site).
  *
- * Every spine arm is RED until the Code phase lands the three assets —
+ * Every spine arm binds an asset contract: absent assets red them —
  * `work-on` at `.pi/prompts/work-on.md`, `review` and `ship` as extension
  * commands registered from the gitjig entry — and each arm's first
  * assertion is authored to fail on exactly that absence: a missing
@@ -820,9 +820,12 @@ describe("the work-on template carries the flow's entry and order (issue #91 AC 
 				"standard flow (work starts from an open, Active issue), by pointer",
 		);
 		assert.ok(
-			template.includes("§1.2") && /authorization/i.test(template),
-			"work-on-template: the obligations token is missing — the template must carry §1.2's " +
-				"authorization-first obligations, by pointer",
+			template.includes("§1.2") &&
+				/authorization/i.test(template) &&
+				/evidence/i.test(template) &&
+				/synchroniz/i.test(template),
+			"work-on-template: an obligations token is missing — the template must name all three of " +
+				"§1.2's obligations, by pointer",
 		);
 	});
 });

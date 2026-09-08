@@ -138,7 +138,7 @@ function stepBlocks(): string[][] {
 
 /**
  * The step that calls the gate script, identified by the call itself rather
- * than by its `name:`. The step's title is prose the Code phase may reword;
+ * than by its `name:`. The step's title is prose the implementation may reword;
  * the call into `check-changelog.sh` is the thing that makes it this step.
  */
 function validateStep(): string[] {

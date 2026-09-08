@@ -4,9 +4,8 @@ SSOT and restates no contract; read each cited section before acting on it.
 - Enter issue-first: work starts from an open, Active issue — SPEC §1.1 (the
   standard flow; branch, draft PR, commits, ready PR, and merge shape all
   live there).
-- Discharge §1.2's three obligations — name the authorization before
-  implementing, observe each check failing before it goes green, synchronize
-  implementation-describing prose from the implemented tree — SPEC §1.2
-  (the obligations, the settlement rule, and pickup re-validation).
+- Discharge §1.2's three obligations — authorization, evidence,
+  synchronization — SPEC §1.2 (the obligations, the settlement rule, and
+  pickup re-validation).
 - Keep the PR body a living document and pin evidence where a claim needs
   it — SPEC §2.3 and §2.4.

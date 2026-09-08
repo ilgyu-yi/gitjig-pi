@@ -6,7 +6,7 @@
  * runtime linked from this repository's tree and a PATH-prepended `gh`
  * SHIM — a fixture-local script that tees argv, cwd, and stdin into sink
  * files and prints a well-formed comment URL. Every instrument arm is RED
- * until the Code phase registers the `gitjig_publish` tool: the scripted
+ * wherever nothing registers the `gitjig_publish` tool: the scripted
  * toolCall reaches no handler today, the substrate answers "Tool
  * gitjig_publish not found", and each arm's first assertion is authored to
  * fail on exactly that absence.

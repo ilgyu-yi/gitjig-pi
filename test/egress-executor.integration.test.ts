@@ -12,7 +12,7 @@
  * a hanging child, an orphan holding the pipes past a late in-bound exit,
  * and a child that spawns a grandchild of its own (issue #85).
  *
- * Every instrument arm is RED until the Code phase registers
+ * Every instrument arm binds registration: it reds unless the tree registers
  * `gitjig_publish` — each arm's first assertion is the authored
  * subject-absence anchor (the substrate's "Tool … not found" stand-in).
  * Three arms stand outside that sentence on purpose: the hanging-child arm
