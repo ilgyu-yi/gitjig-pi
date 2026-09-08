@@ -819,20 +819,18 @@ describe("the work-on template carries the flow's entry and order (issue #91 AC 
 			"work-on-template: the issue-first-entry token is missing — the template must enter through §1.1's " +
 				"standard flow (work starts from an open, Active issue), by pointer",
 		);
-		const obligationsBullet = template
-			.split(/\n- /)
-			.find((bullet) => bullet.includes("§1.2"));
+		const spineBullets = template.split(/\n- /).filter((bullet) => bullet.includes("§1.2"));
 		assert.ok(
-			obligationsBullet !== undefined,
+			spineBullets.length > 0,
 			"work-on-template: no bullet cites §1.2 — the template must point at the obligations",
 		);
-		assert.ok(
-			/authorization/i.test(obligationsBullet) &&
-				/evidence/i.test(obligationsBullet) &&
-				/synchroniz/i.test(obligationsBullet),
-			"work-on-template: an obligations token is missing from the §1.2 bullet — it must name " +
-				"all three of §1.2's obligations, by pointer",
-		);
+		for (const bullet of spineBullets) {
+			assert.ok(
+				/authorization/i.test(bullet) && /evidence/i.test(bullet) && /synchroniz/i.test(bullet),
+				"work-on-template: a §1.2-citing bullet omits an obligations token — every such bullet " +
+					"must name all three of §1.2's obligations, by pointer",
+			);
+		}
 	});
 });
 

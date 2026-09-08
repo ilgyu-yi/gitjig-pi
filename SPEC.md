@@ -14,58 +14,58 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | §1 | Work norms | 87 |
 | &nbsp;&nbsp;§1.1 | The standard flow | 91 |
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
-| &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 121 |
-| &nbsp;&nbsp;§1.4 | Review escalation | 125 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 147 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 159 |
-| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 171 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 181 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 193 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 205 |
-| §2 | Artifact hierarchy and lifecycle | 213 |
-| &nbsp;&nbsp;§2.1 | Issue types | 217 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 230 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 246 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 250 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 265 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 302 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 314 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 324 |
-| §3 | Enforcement-layer architecture | 336 |
-| &nbsp;&nbsp;§3.1 | The constraint | 340 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 347 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 355 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 458 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 462 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 466 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 476 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 488 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 501 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 515 |
-| &nbsp;&nbsp;§3.11 | Gate design | 525 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 547 |
-| §4 | Substrate and install contract | 557 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 561 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 567 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 571 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 575 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 579 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 585 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 595 |
-| &nbsp;&nbsp;§4.8 | The command layer | 603 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 660 |
-| §5 | Cross-cutting contracts | 702 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 706 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 710 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 714 |
-| &nbsp;&nbsp;§5.4 | Work language | 718 |
-| &nbsp;&nbsp;§5.5 | State boundary | 722 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 728 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 738 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 748 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 756 |
-| §6 | Self-governance milestone | 764 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 775 |
+| &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
+| &nbsp;&nbsp;§1.4 | Review escalation | 129 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 151 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 163 |
+| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 175 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 185 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 197 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 209 |
+| §2 | Artifact hierarchy and lifecycle | 217 |
+| &nbsp;&nbsp;§2.1 | Issue types | 221 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 234 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 250 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 254 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 269 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 306 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 318 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 328 |
+| §3 | Enforcement-layer architecture | 340 |
+| &nbsp;&nbsp;§3.1 | The constraint | 344 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 351 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 359 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 462 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 466 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 470 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 480 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 492 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 505 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 519 |
+| &nbsp;&nbsp;§3.11 | Gate design | 529 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 551 |
+| §4 | Substrate and install contract | 561 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 565 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 571 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 575 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 579 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 583 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 589 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 599 |
+| &nbsp;&nbsp;§4.8 | The command layer | 607 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 664 |
+| §5 | Cross-cutting contracts | 706 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 710 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 714 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 718 |
+| &nbsp;&nbsp;§5.4 | Work language | 722 |
+| &nbsp;&nbsp;§5.5 | State boundary | 726 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 732 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 742 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 752 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 760 |
+| §6 | Self-governance milestone | 768 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 779 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -110,7 +110,11 @@ Within one issue, work discharges three obligations. They are not phases and own
 
 3. **Synchronization** — prose whose truth depends on the implementation (where state lives, which paths perform a behavior, implementation topology, operational detail that is not itself a commitment) is authored from the implemented tree, never predicted — §2.5's outcome rule, which this obligation honors rather than overrides. A stable invariant, a test, or a code pointer is preferred over implementation-descriptive prose in this SPEC. A normative contract change never rides this obligation.
 
-**Settlement.** A new normative contract is settled before implementation derives from it, and the judge of a change's claimed authorization case — including whether a contract is normative, and including the precedence rule above — is the activation gate (§2.2), never the executor (§5.7). The settlement mode derives from the contract's reach — a declaration the issue body itself owes for any settlement claim, adjudicated at activation; a settlement claim with no declared reach is not actionable and does not activate — never from an expectation of difficulty, which is the same guess §2.6 exists to replace. §2.6's plan-time trailers then record that same reach as the binding declared set; a trailer set that disagrees with the adjudicated reach, or a later widening that crosses the mode boundary, re-enters §2.2's re-validation before the work proceeds. A contract that amends a settled section, or retires or re-roles existing SSOT vocabulary (a non-empty declared set), lands as its own change: adjudicated at activation, merged before any implementation derives from it — the settling change itself carries §2.5(c)'s compelled migration of the retired vocabulary's call sites — migration re-points existing call sites and re-pins existing checks, and work the contract newly owes is derivation, not migration. A purely additive contract whose reach stays within its own new clause settles at activation alone: the issue body carries the contract, the activation review adjudicates it, and the implementing PR lands the SSOT amendment beside its tests and code, reviewed and closed out against the activated contract as yardstick (§2.2's AC-closeout) — so the implementation cannot become the source of truth. The activation reviewer confirms the derived mode and deviates only with the ground recorded in the activation verdict — the adjudication is what keeps the derivation's input out of the author's hands alone. An instrument's **derivation cycle** is the settlement-to-implementation path it rides from the contract that owes it, whether a section, a §3.3 row, or a gate class states that contract.
+**Settlement.** A new normative contract is settled before implementation derives from it, and the judge of a change's claimed authorization case — including whether a contract is normative, and including the precedence rule above — is the activation gate (§2.2), never the executor (§5.7). The settlement mode derives from the contract's reach — a declaration the issue body itself owes for any settlement claim, adjudicated at activation; a settlement claim with no declared reach is not actionable and does not activate — never from an expectation of difficulty, which is the same guess §2.6 exists to replace. A contract that amends a settled section, or retires or re-roles existing SSOT vocabulary (a non-empty declared set), lands as its own change: adjudicated at activation, merged before any implementation derives from it — the settling change itself carries §2.5(c)'s compelled migration of the retired vocabulary's call sites, where a re-pin re-aims a check's anchor without shrinking what it accepts; a change that shrinks a check's accepted set is deriving new evidence, governed by the settling change's own Evidence obligation, and work the contract newly owes downstream is derivation, not migration. A purely additive contract whose reach stays within its own new clause settles at activation alone: the issue body carries the contract, the activation review adjudicates it, and the implementing PR lands the SSOT amendment beside its tests and code, reviewed and closed out against the activated contract as yardstick (§2.2's AC-closeout) — so the implementation cannot become the source of truth. The activation reviewer confirms the derived mode and deviates only with the ground recorded in the activation verdict — the adjudication is what keeps the derivation's input out of the author's hands alone.
+
+**The reach record.** §2.6's plan-time trailers record the adjudicated reach as the binding declared set, and the comparison has an actor and its inputs: the activation verdict records the adjudicated reach, and review (§2.3) reads the trailers against it. A trailer set that disagrees with the adjudicated reach, or a later widening that crosses the mode boundary, re-enters the same gate as the original activation (§2.2), and that adjudication also rules the disposition of any work already derived under the superseded mode — the unwind is decided there, never assumed away.
+
+**Derivation cycle.** An instrument's derivation cycle is the settlement-to-implementation path it rides from the contract that owes it; the section, §3.3 row, or gate class whose instrument rides that path owns the cycle, which is how those clauses speak of it.
 
 **One change = one issue.** The obligations discharge as commits within a single issue, never as sibling per-obligation issues. The constraint binds issue granularity only: issue-to-PR stays one-to-many (§1.1's `Refs`/`Closes` linkage).
 
@@ -295,7 +299,7 @@ The doctrine's change side is **subtraction-first**:
 - (a) Operation order: remove → modify in place → replace → add.
 - (b) No retention without a stated live function.
 - (c) No legacy surfaces: a rename migrates every call site and deletes the old path in the same change, atomically at the boundary its consumers resolve it from — the merge, where the trunk is the consumer (§1.1) — no alias period. The premise, restated: the rule holds where every consumer resolves the canonical source live; an installed copy is a version-pinned consumer, so a rename that crosses the install boundary owes the re-sync path (§4.5) as its migration story. The rule forbids retaining the old surface — never breaking pinned consumers silently.
-- (d) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design: it is authored as the decision is taken — the ADR is what makes the decision a record, so nothing derives from the decision before it exists — and where the decision is a normative contract, that authoring is its settlement (§1.2) — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
+- (d) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design: it is authored as the decision is taken and before anything derives from it — and where the decision is a normative contract, that authoring is its settlement (§1.2) — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
 
 This section is **explicitly advisory** (§3.1 rule 1): no gate class homes a decidable check for it today, and it is enforced at review (§2.3).
 
@@ -453,7 +457,7 @@ The second is **§1.1's linkage line**: a body whose FIRST line is exactly that 
 
 *What neither gate establishes* (§3.11's report-only rule). `type-check` checks against the API of a **declared** dependency version, not against the runtime an adopter binds (§4.6), so agreement here is agreement with what the manifest pins and no more; where the manifest's pin and the substrate record's differ, the gate measures the former. `source-style` establishes conformance to a committed configuration, never that the configuration is the right one — a rule the configuration disables is not measured and its absence is visible only in that file.
 
-The placement rule is itself **procedural** (§3.1 rule 1): it binds SPEC authorship, the two rightmost columns of the table above are its only product, and it is enforced at review (§2.3). §3.6's hardening-trigger obligation does not fire on it — that obligation binds irreversible-class norms, and a mis-placed row is a reversible document defect the next amendment repairs.
+The placement rule is itself **procedural** (§3.1 rule 1): it binds SPEC authorship, the two rightmost columns of the table above are its only product, and it is enforced at review (§2.3). §3.6's hardening-trigger requirement does not fire on it — that requirement binds irreversible-class norms, and a mis-placed row is a reversible document defect the next amendment repairs.
 
 ### 3.4 Agent-agnosticism of the tiers
 

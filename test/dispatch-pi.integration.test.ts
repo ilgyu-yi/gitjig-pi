@@ -26,7 +26,7 @@
  * `-c user.name=zq -c user.email=zq@zq.zq -c commit.gpgsign=false`
  * (mandatory: the host signs commits and the throwaway identity cannot).
  *
- * THE ROUND TRIP (modeled on the measured delegate shape:
+ * THE ROUND TRIP (modeled on the delegate shape:
  * a no-hardlinks clone carrying committed `.pi/` runs a headless child
  * session on the scripted provider). The dispatched delegate is
  * `sh zq-delegate.sh` in the cloned tree: it stages the CHILD's script,
