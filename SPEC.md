@@ -13,59 +13,59 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§0.3 | Reading and amendment conventions | 83 |
 | §1 | Work norms | 87 |
 | &nbsp;&nbsp;§1.1 | The standard flow | 91 |
-| &nbsp;&nbsp;§1.2 | Doc → Test → Code work order | 103 |
-| &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 119 |
-| &nbsp;&nbsp;§1.4 | Review escalation | 123 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 145 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 157 |
-| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 169 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 179 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 191 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 203 |
-| §2 | Artifact hierarchy and lifecycle | 211 |
-| &nbsp;&nbsp;§2.1 | Issue types | 215 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 228 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 244 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 248 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 263 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 300 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 312 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 322 |
-| §3 | Enforcement-layer architecture | 334 |
-| &nbsp;&nbsp;§3.1 | The constraint | 338 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 345 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 353 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 456 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 460 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 464 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 474 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 486 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 499 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 513 |
-| &nbsp;&nbsp;§3.11 | Gate design | 523 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 545 |
-| §4 | Substrate and install contract | 555 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 559 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 565 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 569 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 573 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 577 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 583 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 593 |
-| &nbsp;&nbsp;§4.8 | The command layer | 601 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 658 |
-| §5 | Cross-cutting contracts | 700 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 704 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 708 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 712 |
-| &nbsp;&nbsp;§5.4 | Work language | 716 |
-| &nbsp;&nbsp;§5.5 | State boundary | 720 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 726 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 736 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 746 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 754 |
-| §6 | Self-governance milestone | 762 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 773 |
+| &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
+| &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 121 |
+| &nbsp;&nbsp;§1.4 | Review escalation | 125 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 147 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 159 |
+| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 171 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 181 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 193 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 205 |
+| §2 | Artifact hierarchy and lifecycle | 213 |
+| &nbsp;&nbsp;§2.1 | Issue types | 217 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 230 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 246 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 250 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 265 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 302 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 314 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 324 |
+| §3 | Enforcement-layer architecture | 336 |
+| &nbsp;&nbsp;§3.1 | The constraint | 340 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 347 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 355 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 458 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 462 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 466 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 476 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 488 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 501 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 515 |
+| &nbsp;&nbsp;§3.11 | Gate design | 525 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 547 |
+| §4 | Substrate and install contract | 557 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 561 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 567 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 571 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 575 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 579 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 585 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 595 |
+| &nbsp;&nbsp;§4.8 | The command layer | 603 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 660 |
+| §5 | Cross-cutting contracts | 702 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 706 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 710 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 714 |
+| &nbsp;&nbsp;§5.4 | Work language | 718 |
+| &nbsp;&nbsp;§5.5 | State boundary | 722 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 728 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 738 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 748 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 756 |
+| §6 | Self-governance milestone | 764 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 775 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -82,11 +82,11 @@ The SPEC governs the operating shell this repository ships — the norms it enfo
 
 ### 0.3 Reading and amendment conventions
 
-Sections are numbered (`## N.` / `### N.M`) and indexed by the generated table of contents, which records line numbers for targeted reads. Every edit to this document regenerates the table of contents in the same commit (`.github/workflows/build_toc.sh`; freshness is CI-enforced by `.github/workflows/check-toc.yml`). Amendments ride the standard flow like any other change, doc phase first (§1.2). A disagreement between running code and this SPEC defaults to a **code defect** — the SPEC is never edited to match possibly-wrong code. Three dispositions, decided before any edit: *spec-ahead* (code lags a settled section — tracked as ordinary work), *code-ahead-correct* (the code embodies the better rule — the SPEC amendment is proposed and lands only through attended approval), and *code-wrong* (the code is fixed). Drift between the two is detected and surfaced, never auto-corrected; an unattended run never applies an SSOT correction (§5.6, §5.7). Supporting documents, if a `docs/` tree ever exists, are thin pointers that lead with a reference into this SPEC (`.github/workflows/check-ssot-home.sh` enforces the discipline); contract prose lives here, not there — the consumer-side generalization of that discipline is §2.8.
+Sections are numbered (`## N.` / `### N.M`) and indexed by the generated table of contents, which records line numbers for targeted reads. Every edit to this document regenerates the table of contents in the same commit (`.github/workflows/build_toc.sh`; freshness is CI-enforced by `.github/workflows/check-toc.yml`). Amendments ride the standard flow like any other change, settled on §1.2's terms before anything derives from them. A disagreement between running code and this SPEC defaults to a **code defect** — the SPEC is never edited to match possibly-wrong code. Three dispositions, decided before any edit: *spec-ahead* (code lags a settled section — tracked as ordinary work), *code-ahead-correct* (the code embodies the better rule — the SPEC amendment is proposed and lands only through attended approval), and *code-wrong* (the code is fixed). Drift between the two is detected and surfaced, never auto-corrected; an unattended run never applies an SSOT correction (§5.6, §5.7). Supporting documents, if a `docs/` tree ever exists, are thin pointers that lead with a reference into this SPEC (`.github/workflows/check-ssot-home.sh` enforces the discipline); contract prose lives here, not there — the consumer-side generalization of that discipline is §2.8.
 
 ## 1. Work norms
 
-This section states the standard flow every change rides — issue → branch → draft PR → review-gated merge — the Doc → Test → Code work order with its strict and relaxed conditions, its pre-1.0 Doc-loop macro-phase, the per-PR changelog-fragment discipline, the review-escalation ladder for repeated rejection (§1.4), and the delegation-and-review architecture: delegated work (§1.5), review integrity (§1.6), the high-asymmetry quorum (§1.7), the plan contest (§1.8), and finding judgment (§1.9) — and the release backbone that periodically consolidates what the flow lands (§1.10).
+This section states the standard flow every change rides — issue → branch → draft PR → review-gated merge — the authorization, evidence and synchronization obligations with their settlement rule and pre-1.0 macro-phase, the per-PR changelog-fragment discipline, the review-escalation ladder for repeated rejection (§1.4), and the delegation-and-review architecture: delegated work (§1.5), review integrity (§1.6), the high-asymmetry quorum (§1.7), the plan contest (§1.8), and finding judgment (§1.9) — and the release backbone that periodically consolidates what the flow lands (§1.10).
 
 ### 1.1 The standard flow
 
@@ -97,24 +97,26 @@ Every change to a governed repository rides one backbone: **issue → branch →
 - **Commit convention.** `<type>(#<N>)[!]: <subject>`, subject 1–72 codepoints. The required group (`feat` / `fix` / `docs` / `refactor` / `perf`) must carry an issue number; the optional group (`test` / `style` / `build` / `ci` / `chore` / `revert`) may carry one (an issue or PR number). The grammar is enforced at the local tier (§3.2).
 - **Draft PR early.** The PR opens as a draft with its first real commit — never an empty seed commit — and its body is maintained as a living document (§2.3).
 - **Linkage.** The PR body's first line carries `Closes #N` when merging to the default branch closes the issue, `Refs #N` for intermediate work.
-- **Merge shape.** Merges to the default branch use a merge commit (no fast-forward, no squash), so the branch's phase commits (§1.2) stay readable on the trunk. The server-side ruleset (§3.2) enforces both faces: the merge-commit method is the only one it allows into the default branch, and history is non-fast-forward. Squash and rebase remain legitimate on non-default bases (topic-branch consolidation), which the ruleset does not govern.
+- **Merge shape.** Merges to the default branch use a merge commit (no fast-forward, no squash), so the branch's typed commits stay readable on the trunk. The server-side ruleset (§3.2) enforces both faces: the merge-commit method is the only one it allows into the default branch, and history is non-fast-forward. Squash and rebase remain legitimate on non-default bases (topic-branch consolidation), which the ruleset does not govern.
 - **Integration direction.** Integration is one-way: a feature branch rebases onto its advancing base, and merging the base into the branch is not done — it muddies the per-change commit graph the merge shape exists to preserve. A collision on a branch two parties share escalates rather than auto-resolves. This direction rule is **procedural today**, enforced at review (§2.3); a gate class derives later (§1.2).
 
-### 1.2 Doc → Test → Code work order
+### 1.2 Authorization, evidence, and synchronization
 
-Within one issue, work proceeds in three phases, each its own commit, in order:
+Within one issue, work discharges three obligations. They are not phases and own no commit slots: exactly three orderings bind — authorization precedes implementation, a check's failure is observed before the implementation turns it green, synchronization is authored from the implemented tree — and beyond them no order among commits is owed.
 
-1. **Doc** — write the contract into the SSOT first (this SPEC, `MISSION.md`, `README.md`, or an ADR for irreversible decisions). The contract exists before anything asserts it. An intentional doc omission is declared positively in the commit ("no doc owed, because …"): an absent declaration and a declared nothing-owed are different states — the same absent-versus-empty distinction §2.6 draws.
-2. **Test** — translate the doc into a failing check and observe the intended failure. A check that has never failed proves nothing; the failing observation is pinned as evidence (§2.4). The contract a failing check states must remain true verbatim after it goes green: state the invariant asserted, never the schedule — "this fails because the target does not exist yet" becomes a lie the moment the plan succeeds. A new check that unexpectedly passes is a diagnosis, never a success: either the contract is wrong or the check is too weak — strengthen one — or it is a legitimate regression check over existing behavior — note that and proceed; neither outcome is an automatic restart.
-3. **Code** — the minimal change that turns the failing check green.
+1. **Authorization** — before implementation begins, the change names what authorizes its intended behavior, as a resolvable pointer recorded in the PR body's Plan (§2.3): a settled contract in this SPEC, another existing normative source, or the change's own activated issue where its acceptance criteria suffice and no normative contract is altered. Where nothing yet authorizes the behavior, the contract is settled first (the settlement rule below). A missing or unresolvable pointer is a review finding; prose is never authored merely to have something to point at. There is no type-keyed table beneath this rule: a `fix`'s authorization is the violated contract and its first evidence the reproduction; a `refactor`'s is the invariant it preserves; internal work's is its activated issue's criteria; a `feat` owes new SSOT prose only where it introduces or changes a normative contract. **Precedence:** an activated issue authorizes only within what settled normative sources leave open — where its acceptance criteria conflict with a settled contract, the issue authorizes nothing, and the executor does not silently follow the contract either, since inferring intent is not starting work (the pickup rule below): the conflict stops the work with a question, resolved by amending the contract through settlement or reworking the issue through §2.2's re-validation.
 
-**One change = one issue.** The phases are commits within a single issue, never filed as sibling Doc/Test/Code issues — the phase lives at the commit tier. The constraint binds issue granularity only: issue-to-PR stays one-to-many (§1.1's `Refs`/`Closes` linkage).
+2. **Evidence** — a contract that can be translated into an executable check observes its failure before the implementation satisfies it. A check that has never failed proves nothing; the failing observation is pinned (§2.4). The check states the invariant asserted, never the schedule — "fails because the target does not exist yet" becomes a lie the moment the plan succeeds. A check that unexpectedly passes is a diagnosis, never an automatic acceptance and never an automatic restart: the contract is wrong, or the check is too weak — strengthen one — or it is a legitimate regression check over existing behavior, noted as such. A document-only deliverable discharges this obligation through the pre-existing gates exercised failing-first and §2.4/§2.5's claims-and-evidence discipline. A spike discharges nothing: no branch, no PR, an empty change surface, and a findings note on the issue as its terminal artifact (e.g. issue #4).
 
-**Strict** for: new capabilities (`feat`), documentation contracts (`docs`), and any change to an external contract, API, or schema. **Relaxed**, with the reason stated in the PR body's Plan, for: `fix` (reproduce first — the reproduction is the failing test), `refactor` (doc phase skippable when external behavior is unchanged), `perf` (measure first), spikes (no phases, no branch, no PR — the change surface is empty and the terminal artifact is a findings note on the issue, e.g. issue #4), and trivial corrections. For a pure-document deliverable the phases re-map rather than disappear: Doc is the document's architecture, Test is the pre-existing gates exercised failing-first, Code is the content.
+3. **Synchronization** — prose whose truth depends on the implementation (where state lives, which paths perform a behavior, implementation topology, operational detail that is not itself a commitment) is authored from the implemented tree, never predicted — §2.5's outcome rule, which this obligation honors rather than overrides. A stable invariant, a test, or a code pointer is preferred over implementation-descriptive prose in this SPEC. A normative contract change never rides this obligation.
+
+**Settlement.** A new normative contract is settled before implementation derives from it, and the judge of a change's claimed authorization case — including whether a contract is normative, and including the precedence rule above — is the activation gate (§2.2), never the executor (§5.7). The settlement mode derives from the contract's declared reach (§2.6), never from an expectation of difficulty — a difficulty estimate is the same guess §2.6 exists to replace. A contract that amends a settled section, or retires or re-roles existing SSOT vocabulary (a non-empty declared set), lands as its own change: adjudicated at activation, merged before any implementation derives from it. A purely additive contract whose reach stays within its own new clause settles at activation alone: the issue body carries the contract, the activation review adjudicates it, and the implementing PR lands the SSOT amendment beside its tests and code, reviewed and closed out against the activated contract as yardstick (§2.2's AC-closeout) — so the implementation cannot become the source of truth. The activation reviewer confirms the derived mode and deviates only with the ground recorded in the activation verdict; §2.6's widen-only binding is what keeps the derivation's input out of the author's hands.
+
+**One change = one issue.** The obligations discharge as commits within a single issue, never as sibling per-obligation issues. The constraint binds issue granularity only: issue-to-PR stays one-to-many (§1.1's `Refs`/`Closes` linkage).
 
 **Pickup and drift.** The executor re-validates the issue's goal at pickup: acceptance criteria that cannot be acted on stop the work with a question, even though activation already passed — inferring intent is not starting work. Acceptance-criteria drift mid-work is written back to the issue with a change note and mirrored in the PR body, so closeout evaluates the criteria actually agreed. The granularity and pickup rules above are **procedural today**, enforced at review (§2.3); instruments derive later per this section's macro-phase clause.
 
-**Pre-1.0 Doc-loop macro-phase.** Before the first major release the three phases also operate one level up: iterations author this SPEC alone until it is fairly complete, and only then are issues derived from its settled sections — the pre-1.0 period is one long Doc phase whose Test and Code derivations follow. **Doc presatisfaction:** an issue derived from a settled SPEC section runs Test → Code with its Doc phase pre-satisfied by that section; the issue body cites the section instead of re-authoring the contract. The macro-phase is **explicitly advisory** (§3.1 rule 1), enforced at review (§2.3); Doc presatisfaction is checked at issue activation (§2.2).
+**Pre-1.0 Doc-loop macro-phase.** Before the first major release the obligations also operate one level up: iterations author this SPEC's contracts until it is fairly complete, and only then are issues derived from its settled sections — the pre-1.0 period is one long settlement (the **pre-1.0 Doc loop**) whose evidence and implementation derivations follow. An issue derived from a settled section carries its authorization pre-satisfied by that section: the issue body cites the section instead of re-authoring the contract, and activation checks the citation (§2.2). The macro-phase is **explicitly advisory** (§3.1 rule 1), enforced at review (§2.3).
 
 ### 1.3 Changelog-fragment discipline
 
@@ -150,7 +152,7 @@ Output quality does not rest on one actor holding one context. Authoring and jud
 
 **The shared-tree hazard.** A delegate that is read-only by intent but write-capable in fact can silently mutate the shared working tree — reverting or staging the caller's uncommitted work. The answer is layered: an isolated working tree, read-only history commands, and the structural backstop that merges build from the pushed commit, never the tree (§1.1). Isolation separates *trees*, not scratch space: concurrent delegates mint private scratch directories through an atomically exclusive primitive, so two concurrent invocations cannot receive the same path — the guarantee is the primitive's, not a convention's. That scratch is rooted under the host's temporary root rather than under the repository the caller stands in, so it is one of the ambient-rooted locations §5.5's state boundary accounts for and not a write that follows the caller's working directory. The temporary root is itself an ambient value, so it can be pointed inside a repository the shell does not govern; where it is, the mint falls through to shell-owned storage and says so — §5.5's disposition, applied at the writer rather than restated here, and the reason this sentence claims placement rather than the rooting alone. The fall-through is not unconditional and the residual survives narrowed rather than closed: where the shell-owned home is itself unusable, the mint degrades open and takes the ambient root after all, landing where that root points and announcing that it did. The announcement is what the open direction rests on (§5.2), so it is the writer's obligation and not a courtesy.
 
-**The write-capable delegate.** The one delegate that must write — the code-phase author, whose commit must land on the work branch — cannot be isolated from that branch, so it substitutes a named tightened discipline. It acts from an explicit **manifest**: the plan, the failing check plus the exact command that runs it, and the named relevant paths — a missing required field means report-and-stop, never infer. It stages only manifest-named paths, never a blanket stage, and the caller surfaces a dirty tree before dispatch. Only a **structured return** crosses back — change refs, plan deviations, discoveries; the authoring churn (file reads, abandoned approaches, lint iterations) is discarded with the delegate's context. The general rule the substitution instantiates: when a structural protection is unavailable, its explicit substitute is stated, never silently dropped.
+**The write-capable delegate.** The one delegate that must write — the implementation author, whose commit must land on the work branch — cannot be isolated from that branch, so it substitutes a named tightened discipline. It acts from an explicit **manifest**: the plan, the failing check plus the exact command that runs it, and the named relevant paths — a missing required field means report-and-stop, never infer. It stages only manifest-named paths, never a blanket stage, and the caller surfaces a dirty tree before dispatch. Only a **structured return** crosses back — change refs, plan deviations, discoveries; the authoring churn (file reads, abandoned approaches, lint iterations) is discarded with the delegate's context. The general rule the substitution instantiates: when a structural protection is unavailable, its explicit substitute is stated, never silently dropped.
 
 The norm is **explicitly advisory** (§3.1 rule 1), enforced at review (§2.3); the delegate roles are instruments that derive later per §1.2's macro-phase clause — the instrument that dispatches them homes at §4.9.
 
@@ -230,7 +232,7 @@ The type of an issue is its label — never inference from prose. The shipped is
 States are encoded as labels; issues are the SSOT and any project-board mirror is derived, never authoritative.
 
 - **Proposed** (`status:proposed`, auto-stamped at filing) — filed but not yet actionable. No branch is created against a Proposed issue.
-- **Active** (no status label) — the Proposed → Active flip requires **activation evidence**: a substance review of the current body whose pass verdict is posted as an issue comment with the marker `<!-- activation-verdict: pass -->` as its first line, by a trusted account (owner/member/collaborator), before the `status:proposed` label is removed. Two review moments are complementary, not redundant: an author-side check before filing, and this observer-side check at activation.
+- **Active** (no status label) — the Proposed → Active flip requires **activation evidence**: a substance review of the current body whose pass verdict is posted as an issue comment with the marker `<!-- activation-verdict: pass -->` as its first line, by a trusted account (owner/member/collaborator), before the `status:proposed` label is removed. Two review moments are complementary, not redundant: an author-side check before filing, and this observer-side check at activation. The substance review adjudicates the body's claimed authorization case (§1.2): it checks the precedence rule, confirms a pre-satisfying citation where one is claimed, and, for a new normative contract, confirms the reach-derived settlement mode — any deviation's ground is recorded in the verdict.
 - **`awaiting-author`** — a reviewer returned a non-pass verdict; the author owes the next move.
 - **`status:blocked`** — a Directive that cannot proceed without external input; unblocking re-validates the current body through the same activation gate.
 - **Closed** — `completed` only through the flow (merge closes via `Closes #N`, or an explicit completion review for Directives); `not planned` otherwise. Before a merge that closes an issue, each of the issue's acceptance criteria is resolved in an AC-closeout comment: checked, or marked N/A with a one-line reason.
@@ -293,7 +295,7 @@ The doctrine's change side is **subtraction-first**:
 - (a) Operation order: remove → modify in place → replace → add.
 - (b) No retention without a stated live function.
 - (c) No legacy surfaces: a rename migrates every call site and deletes the old path in the same commit — no alias period. The premise, restated: the rule holds where every consumer resolves the canonical source live; an installed copy is a version-pinned consumer, so a rename that crosses the install boundary owes the re-sync path (§4.5) as its migration story. The rule forbids retaining the old surface — never breaking pinned consumers silently.
-- (d) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design: it is authored in the Doc phase (§1.2) as the record of a performative decision — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
+- (d) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design: it is authored when its contract settles (§1.2) as the record of a performative decision — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
 
 This section is **explicitly advisory** (§3.1 rule 1): no gate class homes a decidable check for it today, and it is enforced at review (§2.3).
 
@@ -383,7 +385,7 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 
 **What the rule moves, and what it merely assigns.** Some rows the rule relocates; others it places for the first time — a row that recorded no tier before is assigned a home rather than moved, and the change claims no more reach than that. `protected-branch` guards two acts and places per arm; `force-push` and `protected-branch`'s landing arm home at tier 3 because git and the platform each hold the deciding fact exactly, so exactness discriminates nothing and the irreversible moment — publication — selects the platform. Both homes are live at the ruleset (§3.2), and the ruleset's default-branch condition is the scope residual each row records in place. `protected-branch`'s commit arm decides on which branch `HEAD` sits when the commit is made: git holds that natively and the platform has no representation of it at that moment, nothing having been published, so that arm's decision is **taken** at tier 2. It is not a pre-image of the landing arm's gate either: §3.11 fixes a pre-image by local and remote not diverging over one act, which is not evaluable for an act the remote gate never sees. The two arms guard different acts, and a local commit is reversible until the landing the other arm gates. What this tree carries at tier 2 is the call-site shape and, on the push surface, the check itself: `.githooks/pre-commit` and `.githooks/pre-push` are committed and call the class's own predicate — the first on the branch `HEAD` is on, the second on each target ref — and the helper they delegate that predicate to, `.githooks/helpers/branch_guard.sh`, is shipped here; the commit arm is live, the adapter's require chain being complete now that `.githooks/helpers/secret_scan.sh` ships in this tree beside it. Tier 1, which can only lex a command string for a fact §3.11 binds to what a ref *is*, is confined to an echo on either arm. `force-push` has no tier-2 call site of its own: its earlier tier-2 entry read *by subsumption*, which is a coverage claim and not an ownership one — §3.11 binds ownership to the predicate, and the adapter shows the local tier evaluates no sharedness predicate at all: `.githooks/pre-push` tests only `is_protected_branch` on the target, and reads the remote oid it is handed as a positional filler explicitly marked unused. What tier 2 blocks there it blocks under the neighbouring class's predicate, so no call site of this row's own predicate sits beneath its home and the `earlier:` slot is empty. `secret` homes at tier 2 not because git is its only layer — the platform can read a pushed commit's content — but because its guarded act is the **commit**, whose deciding object is the index, and the index has no platform representation at that moment. `change-reach` homes at tier 3 on a part worth naming: the declared set arrives as commit trailers, exact in git, but §2.6's pairwise monotonicity is judged over the pull request's push history, which only the platform holds. `approval-evidence` splits by arm — the review-gated merge arm terminates at a blocking platform surface, and the ruleset beneath it blocks a landing that arrives outside a pull request while evaluating no approval predicate, so the landing is backstopped and the approval predicate's backstop stands deferred; the other arms §3.7 names have no such surface and their terminal acts are reversible, so §3.11's backstop obligation does not reach them. And `egress`'s backstop is structurally unavailable rather than deferred: the bytes exist only at the composing publish call, and the platform's first sight of them is the publication the gate exists to precede.
 
-A row whose `home:` slot records that no instrument holds that home yet is a commitment, not an implementation: the gate lands at the recorded home through its own Doc → Test → Code cycle. A class with no live gate in any tier is advisory and must be labeled so wherever it is stated.
+A row whose `home:` slot records that no instrument holds that home yet is a commitment, not an implementation: the gate lands at the recorded home through its own derivation cycle (§1.2). A class with no live gate in any tier is advisory and must be labeled so wherever it is stated.
 
 **`protected-branch` ref-identity semantics.** §3.11 binds this class's protection to what a ref **is**, never its literal spelling; what establishes that identity is recorded here, the prose home the column-shape rule routes slot-sized derivations to. The rule source is **one derived identity P** — the branch this repository's own remote pointer names as its default — derived in two stages. Stage 1 reads the local pointer: `git symbolic-ref -q refs/remotes/origin/HEAD`, with the `refs/remotes/origin/` prefix stripped. Stage 2, only where stage 1 fails, measures the remote's advertised default directly: `git ls-remote --symref origin HEAD` with terminal prompts disabled (`GIT_TERMINAL_PROMPT=0`) — a measurement, never a guess, because §3.9's loader rule forbids a guessing fallback (`init.defaultBranch`, the local `HEAD`): a resolver that guesses erodes its own degradation signal until a warning no longer implies its condition. Stage 2 is reachable only from the push surface, where the push's own ref advertisement has already contacted the remote; the commit surface never reaches it, because an offline commit must not open a network connection. The residual that reachability carries is enumerated in place: no portable timeout instrument exists on the host class the tier binds at, so the second connection can hang — accepted with prompts disabled and only on a surface whose own advertisement has just succeeded against the same remote. `GIT_TERMINAL_PROMPT=0` disables git's own terminal prompting and does not reach an agent outside git: an ssh transport whose key is passphrase-protected and whose agent holds no decrypted copy re-prompts on this second connection, and an askpass program the environment supplies is likewise unaffected. That re-prompt is a member of the same accepted hang class, named here rather than left to read as excluded by the disabled prompts. Stage-2 failure is keyed by outcome, not cause (§3.10): a non-zero exit, or empty or unparseable output — a dangling remote `HEAD` yields empty output with exit 0. Where both stages fail, P is underivable and the gate is **disarmed for that run and says so plainly**: one audit warn record stating the gate is not enforced (§3.9's degradation-signal rule) — the observable that separates a disarmed allow from an ordinary allow. Stage 2 repairs the absent-pointer case only: a present-but-stale local pointer satisfies stage 1 and never reaches stage 2, so the migration shape — the remote's default moved while the fetched local pointer stayed — is unmodeled, enumerated below.
 
@@ -465,7 +467,7 @@ Every blocking message names its positive remediation — the command or path th
 
 Every gate class and every advisory label in this SPEC is the output of one decision procedure: the face of a norm is chosen by the asymmetry in the cost of being wrong. Where a wrong ALLOW is irreversible — the canonical class is a leaked secret; an unreviewed merge is another — and the check is decidable, the face is a hard, narrow, fail-closed gate. Where the check is heuristic, or a wrong BLOCK is costly, the norm is born advisory, its firing observed, and hardened into a gate only on accumulated evidence: **born-advisory → measure → harden**. The loop runs in both directions: faces also migrate back — a gate that fights the prescribed flow is narrowed, and the narrowing pressure is read from escape clustering (§3.8): a category escaped repeatedly is a defect report against the gate, not against its operators. Both pressures are observable only because non-pass verdicts, parks (§5.7), and escapes land as categorized records; an unconsumed record is inert — a wired reader of the aggregate is what completes the positive face.
 
-Two obligations ride every face decision. (i) Wherever a hard gate is stated, its plausible false-block cost is named in the same place — not discovered in operation. (ii) An irreversible-class norm never terminates at guidance alone: guidance for such a class carries a decidable hardening trigger — an observable condition a reader can test — and a named owner for the hardened stage. Guidance with no gate behind it for an irreversible class is a one-sided regression. For the corpus that predates this section, both obligations are satisfied amortized: the Doc → Test → Code cycle that puts an instrument at the home a §3.3 row records is that row's accepted hardening commitment, the issue that lands it is the named owner, and a pre-existing gate's false-block cost is named at that gate's next amendment.
+Two obligations ride every face decision. (i) Wherever a hard gate is stated, its plausible false-block cost is named in the same place — not discovered in operation. (ii) An irreversible-class norm never terminates at guidance alone: guidance for such a class carries a decidable hardening trigger — an observable condition a reader can test — and a named owner for the hardened stage. Guidance with no gate behind it for an irreversible class is a one-sided regression. For the corpus that predates this section, both obligations are satisfied amortized: the derivation cycle (§1.2) that puts an instrument at the home a §3.3 row records is that row's accepted hardening commitment, the issue that lands it is the named owner, and a pre-existing gate's false-block cost is named at that gate's next amendment.
 
 **Worked application — the egress boundary.** Text authored from repository content and published to a public, unretractable surface — a PR comment or review, an issue body — is an egress boundary, and a leaked secret there is the irreversible wrong-allow class, so the committed face is staged: an explicit redaction obligation at every publish path now, hardened to a fail-closed secret-pattern scan at the publish boundary when any publishing instrument lands — the hardening trigger is that the instrument's first implementation ships the scan with it — the issue landing that first publishing instrument is the hardened stage's named owner — and the scan reuses the same secret-pattern source as the commit-time secret gate (§3.3), single-sourced. The named false-block cost: a review body legitimately quoting a diff that handles key-shaped strings — which is why the scan is boundary-scoped and pattern-ID-reporting, never content-echoing. Egress harm is not only the leaked secret: republished repository content must not trigger platform side effects against uninvolved parties, so a relayed mention or actionable reference is neutralized at every publish path — the same obligation as the redaction, born now and hardened by the same trigger and owner: the first publishing instrument ships neutralization alongside the secret scan, with its own pattern set — mention shapes are not §3.3's secret patterns.
 
@@ -540,7 +542,7 @@ The norm is **procedural today**, enforced at review (§2.3); instruments derive
 - Allow decisions are non-terminal and any block terminates, so gate composition is order-independent — no ordering can convert a block into an allow.
 - A gate enumerates, in place, the bypass vectors it deliberately does not model, so a residual reads as a decision rather than an oversight.
 
-The norm is **procedural today**, enforced at review (§2.3); the semantics land per gate class through each class's own Doc → Test → Code derivation cycle (§1.2, §3.3).
+The norm is **procedural today**, enforced at review (§2.3); the semantics land per gate class through each class's own derivation cycle (§1.2, §3.3).
 
 ### 3.12 Gate verification
 
