@@ -21,7 +21,7 @@
  * literal secret-shaped string in this source would trip the development
  * shell's own staged-secret matcher the moment this file is committed, and
  * a literal control byte cannot ride a Bash command inline (measured; the
- * issue #83 Doc-phase probes). The asserted sequences exist only at
+ * issue #83 probes). The asserted sequences exist only at
  * runtime, which also keeps byte-absence assertions honest.
  *
  * Divergence table pinned by the body-measurement cases (SPEC §3.3):

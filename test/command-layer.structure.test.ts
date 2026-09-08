@@ -9,8 +9,8 @@
  *
  *   1. a `### 4.8 ` heading exists;
  *   2. §4.8 has a row in the generated table of contents;
- *   3. §3.4's body carries a §4.8 cross-reference (issue #78 AC, §1.2's
- *      work-order criterion names this arm by name);
+ *   3. §3.4's body carries a §4.8 cross-reference (issue #78's AC names
+ *      this arm by name);
  *   4. §3.2's tier-1 paragraph — the one that says extensions "can register
  *      commands" — carries a §4.8 pointer;
  *   5. §4.1's `.pi/` paragraph carries a §4.8 pointer;

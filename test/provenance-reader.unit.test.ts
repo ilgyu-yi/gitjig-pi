@@ -73,7 +73,7 @@ describe("the provenance reader exists and is advisory (issue #70, SPEC §2.5)",
 		// never refuse. An exit-nonzero reader is a gate class §2.5 says is not
 		// homed for this norm, and §3.6's cost asymmetry rejects a false block
 		// over ordinary documentation.
-		const run = runReader(diffAdding("src/thing.ts", ["// red until the Code phase lands the helper."]));
+		const run = runReader(diffAdding("src/thing.ts", ["// red until the implementation lands the helper."]));
 		assert.ok(run.stdout.length > 0, "the hit-bearing input produced no report at all, so the arm measures nothing");
 		assert.equal(
 			run.status,
@@ -95,7 +95,7 @@ describe("the provenance reader exists and is advisory (issue #70, SPEC §2.5)",
 const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> = [
 	{
 		shape: "schedule",
-		line: "// red until the Code phase lands publish/scan.ts.",
+		line: "// red until the implementation lands publish/scan.ts.",
 		why: "§1.2's species: a failing check's contract stating WHEN it goes green rather than what it asserts",
 	},
 	{
@@ -495,7 +495,7 @@ describe("the reader's domain is the living set (issue #70, SPEC §2.5)", () => 
 		const removal =
 			"diff --git a/src/thing.ts b/src/thing.ts\n" +
 			"--- a/src/thing.ts\n+++ b/src/thing.ts\n" +
-			"@@ -1,1 +0,0 @@\n-// red until the Code phase lands the helper.\n";
+			"@@ -1,1 +0,0 @@\n-// red until the implementation lands the helper.\n";
 		const run = runReader(removal);
 		assert.equal(
 			run.stdout.trim(),

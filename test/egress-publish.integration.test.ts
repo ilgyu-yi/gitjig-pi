@@ -6,7 +6,7 @@
  * runtime linked from this repository's tree and a PATH-prepended `gh`
  * SHIM — a fixture-local script that tees argv, cwd, and stdin into sink
  * files and prints a well-formed comment URL. Every instrument arm is RED
- * until the Code phase registers the `gitjig_publish` tool: the scripted
+ * wherever nothing registers the `gitjig_publish` tool: the scripted
  * toolCall reaches no handler today, the substrate answers "Tool
  * gitjig_publish not found", and each arm's first assertion is authored to
  * fail on exactly that absence.
@@ -37,7 +37,7 @@
  * here — toolResult session entries, the audit trail, the shim sink. The
  * assistant message that CARRIES the toolCall persists the refused body as
  * the call's own arguments; that surface is §3.3's enumerated residual
- * (measured in the Doc phase) and is deliberately EXCLUDED from every
+ * (measured at settlement) and is deliberately EXCLUDED from every
  * leak-domain assertion below. Adversarially encoded payloads are out of
  * scope by the same §3.3 residual: this is in-session mistake prevention.
  *

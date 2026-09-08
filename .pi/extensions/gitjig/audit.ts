@@ -26,7 +26,7 @@
  *     land `600`; `umask 777` lands `000`, which the next append then
  *     degrades open on). The direction that matters for §5.5 is the one
  *     the ceiling binds. The sink is a file only this runtime writes, so
- *     no legitimate flow is refused (§3.6 obligation (i)).
+ *     no legitimate flow is refused (§3.6 requirement (i)).
  *
  * Fail posture (§3.9, `audit-append` row): a missing or unwritable
  * destination degrades OPEN — warn, return `false`, never throw. The

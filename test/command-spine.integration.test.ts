@@ -4,7 +4,7 @@
  * surface rule, the uniqueness obligation; §4.9 for the dispatcher the
  * `review` command rides as one more call site).
  *
- * Every spine arm is RED until the Code phase lands the three assets —
+ * Every spine arm binds an asset contract: absent assets red them —
  * `work-on` at `.pi/prompts/work-on.md`, `review` and `ship` as extension
  * commands registered from the gitjig entry — and each arm's first
  * assertion is authored to fail on exactly that absence: a missing
@@ -76,7 +76,7 @@
  *
  * TEMPLATE NORMS (AC 4). A lexical read of `.pi/prompts/work-on.md`'s
  * committed bytes: the issue-first-entry token (§1.1's standard flow) and
- * the Doc → Test → Code work-order pointer (§1.2) must be present.
+ * the §1.2 obligations pointer must be present.
  * "Points at the SPEC sections, not restated prose" is a review judgment
  * (§2.8) the lexical arm does NOT establish — disclosed at the arm.
  *
@@ -803,7 +803,7 @@ describe("the ship composition: caller-supplied facts, offline undecidables name
 // ---------------------------------------------------------------------------
 
 describe("the work-on template carries the flow's entry and order (issue #91 AC 4)", () => {
-	it("the committed template binds issue-first entry and the Doc → Test → Code order by §-pointer", () => {
+	it("the committed template binds issue-first entry and the §1.2 obligations by §-pointer", () => {
 		// Lexical arm over the committed bytes. What it does NOT establish:
 		// "points at the SPEC sections, not restated prose" is a review
 		// judgment (§2.8) — token presence cannot tell a pointer from a
@@ -819,11 +819,21 @@ describe("the work-on template carries the flow's entry and order (issue #91 AC 
 			"work-on-template: the issue-first-entry token is missing — the template must enter through §1.1's " +
 				"standard flow (work starts from an open, Active issue), by pointer",
 		);
+		const spineBullets = ("\n" + template)
+			.split(/\n- /)
+			.slice(1)
+			.filter((bullet) => bullet.includes("§1.2"));
 		assert.ok(
-			template.includes("§1.2") && template.includes("Doc → Test → Code"),
-			"work-on-template: the work-order token is missing — the template must carry the Doc → Test → Code " +
-				"order as §1.2's pointer",
+			spineBullets.length > 0,
+			"work-on-template: no bullet cites §1.2 — the template must point at the obligations",
 		);
+		for (const bullet of spineBullets) {
+			assert.ok(
+				/authorization/i.test(bullet) && /evidence/i.test(bullet) && /synchroniz/i.test(bullet),
+				"work-on-template: a §1.2-citing bullet omits an obligations token — every such bullet " +
+					"must name all three of §1.2's obligations, by pointer",
+			);
+		}
 	});
 });
 

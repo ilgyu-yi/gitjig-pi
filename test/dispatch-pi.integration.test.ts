@@ -5,7 +5,7 @@
  *
  * Drives one real `pi` session through `harness/run-pi.ts` whose scripted
  * provider issues a `gitjig_dispatch` toolCall. Every instrument arm is
- * RED until the Code phase registers the tool: the toolCall reaches no
+ * red wherever no implementation registers the tool: the toolCall reaches no
  * handler today, the substrate answers "Tool gitjig_dispatch not found",
  * and each arm's first assertion is authored to fail on exactly that
  * absence (the sibling egress suites' anchor, verbatim in shape).
@@ -26,7 +26,7 @@
  * `-c user.name=zq -c user.email=zq@zq.zq -c commit.gpgsign=false`
  * (mandatory: the host signs commits and the throwaway identity cannot).
  *
- * THE ROUND TRIP (modeled on the Doc commit's measured delegate shape:
+ * THE ROUND TRIP (modeled on the delegate shape:
  * a no-hardlinks clone carrying committed `.pi/` runs a headless child
  * session on the scripted provider). The dispatched delegate is
  * `sh zq-delegate.sh` in the cloned tree: it stages the CHILD's script,

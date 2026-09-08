@@ -79,7 +79,7 @@ export const POSTURES: readonly PostureRow[] = [
 			"the resolved info/exclude path, or the directory component the run would create, is a symbolic link or an existing non-regular object (.githooks/bind_local_tier.sh's exclusion fallback)",
 		posture: "closed",
 		justification:
-			"`mkdir -p` and `>>` both follow a link, so the append would land wherever that object points while the run reported a verified bound state — the write-through-link refusal §5.5 binds on every record producer, asked here of the components this writer creates and not of the ones above them. The run refuses without writing and names the object and the remedy; its false-block cost is nil in the shape the fallback exists for (§3.6's obligation (i)) — an ABSENT exclude file is still created and appended.",
+			"`mkdir -p` and `>>` both follow a link, so the append would land wherever that object points while the run reported a verified bound state — the write-through-link refusal §5.5 binds on every record producer, asked here of the components this writer creates and not of the ones above them. The run refuses without writing and names the object and the remedy; its false-block cost is nil in the shape the fallback exists for (§3.6's requirement (i)) — an ABSENT exclude file is still created and appended.",
 	},
 	{
 		dependency: "commit-format-helper",
