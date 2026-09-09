@@ -1024,3 +1024,79 @@ describe("§1.1's linkage line publishes live on a pull request description (iss
 		}
 	});
 });
+
+describe("five load-bearing pattern elements, each pinned in isolation (issue #140)", () => {
+	// Each input violates exactly one element of one wrap pattern and
+	// nothing else, so a weakened element reds its own arm rather than a
+	// neighbour's (§3.12). The two directions differ: 1 and 2 are
+	// wrong-allow (an actionable reference reaches the platform live), 3–5
+	// are over-wrap (published bytes corrupted mid-token and a count that
+	// reports a wrap where no reference was).
+	it("the URL form's scheme matches the unencrypted spelling too", () => {
+		// The platform resolves an http:// issue URL to the issue (measured
+		// via the markdown render API: linked with an issue hovercard,
+		// though without the shortened issue-link treatment the https form
+		// gets), so the pattern deliberately stays wide in the fail-closed
+		// direction and this arm keeps it there.
+		const at = requireBoundary("url scheme");
+		const out = at("see http://github.com/zqo/zqr/issues/4", "issue-comment");
+		assert.equal(
+			out.neutralized,
+			1,
+			"an unencrypted issue URL was not made inert — a scheme-strict pattern lets the http spelling reach the platform as a live, resolvable reference",
+		);
+	});
+
+	it("the URL form reaches pull-request URLs, not only issues", () => {
+		// Measured via the markdown render API: a /pull/N URL gets the
+		// platform's full issue-link reference treatment (shortened to #N),
+		// so a pattern without the alternation publishes a live reference.
+		const at = requireBoundary("url pull alternation");
+		const out = at("see https://github.com/zqo/zqr/pull/4", "issue-comment");
+		assert.equal(
+			out.neutralized,
+			1,
+			"a pull-request URL was not made inert — dropping the pull alternative lets an actionable PR reference reach the platform live",
+		);
+	});
+
+	it("the URL form's backtick exclusion stops a wrap from crossing a body backtick", () => {
+		// The exclusion sits mid-pattern: it bites only when the backtick
+		// precedes the trailing /issues/N segment, which is why this input
+		// puts it there and why a casual probe finds the element unkillable.
+		const at = requireBoundary("url backtick exclusion");
+		const input = "https://github.com/zqo`x/zqr/issues/4";
+		const out = at(input, "issue-comment");
+		assert.equal(
+			out.neutralized,
+			0,
+			"a host run containing a backtick was wrapped — the wrap's own delimiter would then sit inside the wrapped text, corrupting the published bytes mid-token",
+		);
+		assert.equal(out.text, input, "the body must pass through unmodified when nothing matches");
+	});
+
+	it("the cross-repository form starts at a word boundary, never inside a word", () => {
+		const at = requireBoundary("cross-repo leading boundary");
+		for (const input of ["_zqowner/zqrepo#4", "zq_owner/zqrepo#4"]) {
+			const out = at(input, "issue-comment");
+			assert.equal(
+				out.neutralized,
+				0,
+				`${JSON.stringify(input)}: a span inside a word was wrapped — without the leading boundary the wrap splits an identifier mid-token and reports a reference where the platform sees none`,
+			);
+			assert.equal(out.text, input, "the body must pass through unmodified when nothing matches");
+		}
+	});
+
+	it("the cross-repository form requires at least one digit after the hash", () => {
+		const at = requireBoundary("cross-repo digit quantifier");
+		const input = "ref zqowner/zqrepo#";
+		const out = at(input, "issue-comment");
+		assert.equal(
+			out.neutralized,
+			0,
+			"a bare trailing hash was wrapped — a starred quantifier turns a non-reference into a counted wrap, corrupting the caller's bytes for a shape the platform never links",
+		);
+		assert.equal(out.text, input, "the body must pass through unmodified when nothing matches");
+	});
+});
