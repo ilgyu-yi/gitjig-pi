@@ -35,7 +35,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -88,11 +88,15 @@ function orchestrator(): PanelModule {
 }
 
 /**
- * The one cast in this file. `deriveRequiredSlots` takes a BRANDED
- * changed-path set that only `changedPathsFromRepo` mints, which is what
- * makes §1.7's authoritative property structural rather than promised.
- * A suite that wants to derive from a literal has to say so out loud;
- * this is that seam, named so it cannot be mistaken for the real read.
+ * The named seam for hand-built path sets. `deriveRequiredSlots` takes a
+ * BRANDED changed-path set that only `changedPathsFromRepo` mints, so a
+ * type-checked consumer deriving from a literal has to say so out loud —
+ * through this helper, whose name is the point. Honest bounds, stated:
+ * the brand binds the type checker's consumers, not the runtime (the
+ * symbol does not exist there), and this suite's own mirror types are
+ * unbranded by construction (a dynamic import cannot see them), so what
+ * the suite pins is the brand's presence in the module's source and the
+ * seam's use in its own.
  */
 const paths = (literal: string[]): ChangedPaths => literal as unknown as ChangedPaths;
 
@@ -211,6 +215,22 @@ describe("§1.7 the panel is a search, not a vote (issue #169)", () => {
 		);
 	});
 
+	it("the bundle's provenance is fixed at construction — mutating the caller's slot array later changes nothing", () => {
+		const p = orchestrator();
+		const required: Slot[] = [{ lens: "runtime", surface: ".pi/" }];
+		const first = required[0] as Slot;
+		const bundle = p.buildBundle([found(p, first, "f1")], required);
+		first.lens = "spec-contract";
+		first.surface = "forged";
+		assert.deepEqual(
+			bundle,
+			[{ finding: "f1", slot: { lens: "runtime", surface: ".pi/" } }],
+			"mutating the caller's required[] after buildBundle rewrote the provenance of an entry already in the " +
+				"bundle — the artifact the Judge reads must be fixed when it is constructed, not aliased to whatever " +
+				"the caller's array says later",
+		);
+	});
+
 	it("every finding carries its originating lens", () => {
 		const p = orchestrator();
 		const bundle = p.buildBundle([found(p, LENS_A, "x"), found(p, LENS_B, "y")], [LENS_A, LENS_B]);
@@ -307,15 +327,21 @@ describe("§1.7 completeness, re-dispatch, and the unrouted case (issue #169)", 
 		assert.ok(!("bundle" in outcome), "the findings-free path produced a bundle — the Judge must have no input");
 	});
 
-	it("a change no lens routes has NO panel outcome — the question is refused, not answered", () => {
+	it("an empty required set takes the SSOT's derived answer — APPROVED, with the concern filed as #172", () => {
 		const p = orchestrator();
-		assert.throws(
-			() => p.panelOutcome([], []),
-			/no required slot/,
-			"an empty required set yielded a review outcome. §1.7's completeness test is vacuously true over one and " +
-				"§1.9 would then read the empty bundle as Review APPROVED — an approval for a head no reviewer " +
-				"examined. Minting a fourth token instead would ship a contract the SSOT does not carry; what SHOULD " +
-				"happen there is a §1.7/§1.9 question, open on issue #172",
+		// §1.7's completeness test is vacuously true over an empty set, and
+		// §1.9's findings-free path then determines Review APPROVED. Two
+		// earlier shapes are pinned OUT here because each was reviewed and
+		// ruled a divergence: a minted `unrouted` token, and a thrown
+		// refusal. The zero-reviewer-approval concern is real and it is
+		// issue #172's, not this module's, while the question is open.
+		const outcome = p.panelOutcome([], []);
+		assert.equal(
+			outcome.outcome,
+			"approved",
+			"an empty required set yielded something other than the SSOT's own derived answer — a token or a " +
+				"behaviour the SSOT does not carry is a divergence however well-motivated, and the motivation lives " +
+				"on issue #172 until the operator settles it",
 		);
 	});
 });
@@ -402,6 +428,48 @@ describe("§1.6 validity is the caller's fact — a reviewer cannot vouch for it
 			p.decideValidity(result, LENS_B).valid,
 			false,
 			"a result recorded against one slot was ruled valid for another",
+		);
+	});
+
+	it("slot identity is the PAIR: same surface with a different lens is still the wrong slot", () => {
+		const p = orchestrator();
+		// Every other fixture pair differs in BOTH fields, so an identity
+		// check that ignored the lens would pass them all.
+		const sameSurface: Slot = { lens: "enforcement", surface: "SPEC.md" };
+		const result = p.receive(sameSurface, "confirmed", { token: "APPROVED", findings: [] });
+		assert.equal(
+			p.decideValidity(result, LENS_A).valid,
+			false,
+			"a result recorded against a different LENS over the same surface was ruled valid — identity is the " +
+				"lens+surface pair, and an identity that reads only the surface half lets one dispatched reviewer " +
+				"satisfy every lens that happens to share its surface",
+		);
+	});
+
+	it("a token outside the two-token grammar is invalid, with the grammar named as the reason", () => {
+		const p = orchestrator();
+		const outside = p.receive(LENS_A, "confirmed", { token: "MAYBE", findings: [] } as unknown as ReviewerReturn);
+		const verdict = p.decideValidity(outside, LENS_A);
+		assert.equal(verdict.valid, false, "a third token was ruled valid — §1.6's set is exactly two");
+		assert.equal(
+			verdict.reason,
+			"token outside the two-token grammar",
+			"the third token was refused for some other reason — the grammar guard is the one §1.6 licenses, and a " +
+				"fallthrough that happens to refuse cannot say why",
+		);
+	});
+
+	it("mutating a FAILURE return after receive does not reach the recorded result", () => {
+		const p = orchestrator();
+		const failure = { failure: "timeout" } as ReviewerReturn;
+		const result = p.receive(LENS_A, "confirmed", failure);
+		(failure as { failure: string }).failure = "malformed";
+		assert.equal(
+			p.decideValidity(result, LENS_A).reason,
+			"timed out",
+			"the recorded failure kind changed after receipt — the failure branch of receive's copy is as " +
+				"load-bearing as the token branch, since the reason a slot went invalid is part of what the caller " +
+				"decides re-dispatch on",
 		);
 	});
 
@@ -593,11 +661,11 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		const policy = p.loadPolicy();
 		assert.notDeepEqual(
 			p
-				.deriveRequiredSlots(["SPEC.md"], policy)
+				.deriveRequiredSlots(paths(["SPEC.md"]), policy)
 				.map((s) => s.lens)
 				.sort(),
 			p
-				.deriveRequiredSlots([".pi/extensions/gitjig/dispatch/index.ts"], policy)
+				.deriveRequiredSlots(paths([".pi/extensions/gitjig/dispatch/index.ts"]), policy)
 				.map((s) => s.lens)
 				.sort(),
 			"two unrelated surfaces derived the same lens set — a constant answer is not a derivation",
@@ -635,6 +703,60 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			p.deriveRequiredSlots(paths(["README.md", "package.json"]), policy),
 			[],
 			"a change the policy routes nowhere derived a lens anyway",
+		);
+	});
+
+	it("loadPolicy refuses a dirty committed surface — pinned in source, and why only in source", () => {
+		// A behavioural arm would have to EDIT the repository's own tracked
+		// policy file mid-suite; test files run in parallel processes and at
+		// least one other suite reads that file, so a transient edit is a
+		// flake generator and a crash mid-arm leaves the operator's tree
+		// dirty. The source pin is the weak lock, taken deliberately: it
+		// makes deleting the guard a visible act, and the guard's behaviour
+		// is exercised the day #173's caller lands with its own fixture.
+		const source = readFileSync(`${repoRoot()}${REVIEW_DIR}panel.ts`, "utf8");
+		assert.ok(
+			source.includes('["status", "--porcelain", "--", POLICY_PATH]') && source.includes("uncommitted local edits"),
+			"loadPolicy no longer refuses a worktree-modified policy — §1.7's committed property is a constraint " +
+				"only if an uncommitted local edit cannot silently change the derived slot set, and without the " +
+				"guard routing derives from bytes no reviewer can diff",
+		);
+	});
+
+	it("the module's source carries both brands and the seam — their removal is visible to this suite", () => {
+		// The brands are type-only, so no runtime arm can see them removed;
+		// what this suite CAN pin mechanically is the source text that
+		// declares them and the loader that mints them. A prose pin is the
+		// weakest lock in this file and it is labelled as one — its job is
+		// to make deleting a brand a visible act instead of a silent one.
+		const source = readFileSync(`${repoRoot()}${REVIEW_DIR}panel.ts`, "utf8");
+		for (const declaration of [
+			"declare const authoritative: unique symbol",
+			"declare const recorded: unique symbol",
+			"declare const validated: unique symbol",
+			"readonly [authoritative]: true",
+			"readonly [recorded]: true",
+			"readonly [validated]: true",
+		]) {
+			assert.ok(
+				source.includes(declaration),
+				`panel.ts no longer declares \`${declaration}\` — the brand is what makes a routing input's ` +
+					"provenance a property for type-checked consumers rather than a convention, and removing one " +
+					"must be a deliberate, reviewed act",
+			);
+		}
+	});
+
+	it("a case-folded match on the PREFIX branch routes nothing — both branches are case-significant", () => {
+		const p = orchestrator();
+		// `.PI/x.ts` against the prefix ".pi/" reaches the trailing-slash
+		// branch of underPrefix, which the `spec.md` arm cannot: that
+		// fixture only reaches the exact-equality branch.
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths([".PI/x.ts"]), p.loadPolicy()),
+			[],
+			"an upper-cased path selected a lens through the prefix branch — a case-folding match routes files the " +
+				"policy does not name, and the equality-branch arm cannot see it",
 		);
 	});
 
@@ -691,6 +813,26 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			p.deriveRequiredSlots(read, p.loadPolicy()).map((slot) => slot.lens),
 			["runtime"],
 			"the runtime lens was not required for a change to a .pi/ file",
+		);
+	});
+
+	it("a dash-leading ref is a refusal, never a silently-empty read", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		// Without an end-of-options guard, an `--output=`-shaped operand is
+		// consumed as a git OPTION: measured once returning [] and WRITING a
+		// file — so the change would route to no reviewer, silently. The
+		// guard turns it into a revision that does not resolve, which
+		// throws: the refusal direction.
+		assert.throws(
+			() => p.changedPathsFromRepo("--output=/tmp/gitjig-a1-probe", "HEAD", repo),
+			"a dash-leading base ref was consumed as a git option — the read returned instead of refusing, so a " +
+				"routing input that cannot be a revision degraded into an empty change surface",
+		);
+		assert.ok(
+			!existsSync("/tmp/gitjig-a1-probe...HEAD"),
+			"the dash-leading operand reached git as an option and wrote a file — the exact side effect the " +
+				"end-of-options guard exists to make impossible",
 		);
 	});
 

@@ -27,15 +27,12 @@
  * Collecting every valid result is order-independent and cannot drop;
  * two answers that are really one finding are the Judge's to merge.
  *
- * DECISION — a change the policy routes nowhere convenes no panel, and
- * this module refuses the question rather than answering it. §1.7's
- * completeness test is vacuously true over an empty required set, so
- * §1.9 would read the empty bundle as Review APPROVED — an approval for
- * a head no reviewer examined. Minting a fourth outcome token instead
- * was tried and rejected: the SSOT carries no such token and this change
- * settles no contract, so the token would ship a rule nothing licenses.
- * What SHOULD happen there is a §1.7/§1.9 question and is recorded on
- * issue #172, not decided here.
+ * DECISION — the empty required set follows the SSOT as written, and
+ * the concern is filed rather than decided. Two rejected alternatives
+ * are recorded at the branch itself so neither returns silently: a
+ * minted `unrouted` token (a contract the SSOT does not carry) and a
+ * thrown refusal (a behaviour it does not carry either). Issue #172
+ * holds the open §1.7/§1.9 question.
  *
  * DECISION — the policy is read from the committed file and from
  * nowhere else. `loadPolicy` takes no path. An earlier shape took one
@@ -65,7 +62,7 @@ export type ReviewerReturn =
 	/** The shapes §1.7 names that carry no reviewer output at all. */
 	| { failure: "timeout" | "malformed" };
 
-/** §1.6's blind-compare outcome as the DISPATCHER can report it. */
+/** §1.6's blind-compare outcome. */
 export type Compare = "confirmed" | "invalid" | "absent";
 
 declare const recorded: unique symbol;
@@ -75,10 +72,13 @@ declare const recorded: unique symbol;
  * dispatched and `compare` is the caller's own blind-compare outcome
  * (§1.6); neither is anything the delegate said.
  *
- * The brand is load-bearing rather than decorative: without it a plain
- * object literal of this shape is a SlotResult, and "only `receive`
- * builds one" is a convention callers keep rather than a property this
- * module has. `receive` is the only thing that can mint the brand.
+ * What the brand holds, and what holds the brand — stated so neither is
+ * over-read: without it a plain object literal of this shape is a
+ * SlotResult, so "only `receive` builds one" would be a convention. The
+ * brand makes it a property FOR TYPE-CHECKED CONSUMERS; at runtime the
+ * symbol does not exist, so nothing dynamic is stopped by it, and the
+ * suite pins the brand's presence in the source text rather than its
+ * effect. `receive` is the only thing that can mint it.
  */
 export type SlotResult = {
 	readonly [recorded]: true;
@@ -105,7 +105,19 @@ export type PanelOutcome =
 	| { outcome: "bundle"; bundle: BundleEntry[] };
 
 type PolicyRow = { lens: string; surface: string; prefixes: string[] };
-export type Policy = { version: number; rows: PolicyRow[] };
+declare const validated: unique symbol;
+
+/** The policy's parsed shape, before its validity predicate has run. */
+export type PolicyInput = { version: number; rows: PolicyRow[] };
+
+/**
+ * A policy the predicate has ruled on. Branded like the other two
+ * routing inputs and for the same reason: an unbranded parameter accepts
+ * anyone's routing table however honestly it was assembled, which is the
+ * caller-summary defect §1.7's caller-owned property exists to close.
+ * Only `validatePolicy` mints one.
+ */
+export type Policy = PolicyInput & { readonly [validated]: true };
 
 const POLICY_PATH = join(dirname(fileURLToPath(import.meta.url)), "lens-policy.json");
 
@@ -122,7 +134,7 @@ const POLICY_PATH = join(dirname(fileURLToPath(import.meta.url)), "lens-policy.j
  * its business. What each check defends is the local ground stated
  * beside it.
  */
-export function validatePolicy(parsed: Policy): Policy {
+export function validatePolicy(parsed: PolicyInput): Policy {
 	// The parameter is typed, but every value that reaches it came from
 	// JSON.parse of a file, so the type is not a guarantee. Without this
 	// the null case throws a TypeError no one in this repository authored,
@@ -167,12 +179,12 @@ export function validatePolicy(parsed: Policy): Policy {
 			if (typeof prefix !== "string" || prefix.length === 0) {
 				throw new Error(
 					`lens policy: row ${quoted(row.lens)} carries an empty prefix, which matches every ` +
-						"string — the caller-owned routing §1.7 requires cannot rest on a row anything selects",
+						"string — the caller-owned routing cannot rest on a row anything selects",
 				);
 			}
 		}
 	}
-	return parsed;
+	return parsed as Policy;
 }
 
 /**
@@ -181,7 +193,23 @@ export function validatePolicy(parsed: Policy): Policy {
  * fourth decision). This function takes no path for that reason.
  */
 export function loadPolicy(): Policy {
-	return validatePolicy(JSON.parse(readFileSync(POLICY_PATH, "utf8")) as Policy);
+	// Committedness is a CONSTRAINT here, not a description: reading the
+	// worktree bytes alone would let an uncommitted local edit change the
+	// derived slot set with nothing observing it, and §1.7 makes the
+	// routing decision auditable-after-the-fact because the surface is a
+	// committed artifact. A dirty surface refuses — the evidence-gate
+	// direction — rather than routing from bytes no reviewer can diff.
+	const dirty = execFileSync("git", ["status", "--porcelain", "--", POLICY_PATH], {
+		cwd: dirname(POLICY_PATH),
+		encoding: "utf8",
+	});
+	if (dirty.trim().length > 0) {
+		throw new Error(
+			"lens policy: the committed surface has uncommitted local edits — routing must derive from bytes a " +
+				"reviewer can diff, so a dirty policy refuses rather than routes (SPEC §1.7's committed property)",
+		);
+	}
+	return validatePolicy(JSON.parse(readFileSync(POLICY_PATH, "utf8")) as PolicyInput);
 }
 
 declare const authoritative: unique symbol;
@@ -205,7 +233,13 @@ export type ChangedPaths = readonly string[] & { readonly [authoritative]: true 
  * line-split read has.
  */
 export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot: string): ChangedPaths {
-	const out = execFileSync("git", ["diff", "--name-only", "-z", `${baseRef}...${headRef}`], {
+	// `--end-of-options` is the guard, not a flourish: without it a ref
+	// beginning with `-` is consumed as a git OPTION — measured: an
+	// `--output=`-shaped operand wrote a file and the read returned empty,
+	// so the change would route to no reviewer, silently. With the guard a
+	// dash-leading operand is a revision, which does not resolve, which
+	// throws — the refusal direction, never the silent-empty one.
+	const out = execFileSync("git", ["diff", "--name-only", "-z", "--end-of-options", `${baseRef}...${headRef}`], {
 		cwd: repoRoot,
 		encoding: "utf8",
 	});
@@ -313,7 +347,12 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
 				continue;
 			}
 			for (const finding of result.returned.findings) {
-				bundle.push({ finding, slot });
+				// A COPY, never the caller's `required[i]` object: `readonly`
+				// is shallow, and an aliased entry lets a later mutation of
+				// the caller's array rewrite the provenance of findings
+				// already in the bundle — after construction, which is when
+				// the Judge reads it.
+				bundle.push({ finding, slot: { lens: slot.lens, surface: slot.surface } });
 			}
 		}
 	}
@@ -327,22 +366,20 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
  * independent of the order results are supplied in.
  */
 export function panelOutcome(results: readonly SlotResult[], required: readonly Slot[]): PanelOutcome {
-	if (required.length === 0) {
-		// Not an outcome. §1.7's completeness test is vacuously true over an
-		// empty required set and §1.9 would then read the empty bundle as
-		// Review APPROVED — an approval for a head no reviewer examined. The
-		// module refuses the question instead of answering it, because
-		// minting a fourth outcome token would be a contract the SSOT does
-		// not carry and this change settles none. A change the policy routes
-		// nowhere convenes no panel; asking a panel's outcome for it is the
-		// caller's error, and what SHOULD happen there is a §1.7/§1.9
-		// question, recorded on issue #172 rather than decided here.
-		throw new Error(
-			"reviewer panel: no required slot — a change the policy routes nowhere convenes no panel, so it has no " +
-				"panel outcome (SPEC §1.7's completeness test presupposes a required set; see issue #172)",
-		);
-	}
-	const missing = required.filter((slot) => validResultsFor(results, slot).length === 0);
+	// The empty required set takes the SSOT's own derived answer, stated
+	// here because two review rounds pulled it in opposite directions:
+	// §1.7's completeness test is vacuously true over an empty set and
+	// §1.9's findings-free path then reads the empty bundle as Review
+	// APPROVED — an approval for a head no reviewer examined, which is a
+	// real concern, and it is FILED (issue #172) rather than answered in
+	// this module. A minted fourth token and a thrown refusal were both
+	// tried and both rejected as behaviours the SSOT does not carry;
+	// conforming while the question is open is §1.9's own defer shape —
+	// the concern is durable and caller-held, and the code follows the
+	// contract as written until the operator settles it.
+	const missing = required
+		.filter((slot) => validResultsFor(results, slot).length === 0)
+		.map((slot) => ({ lens: slot.lens, surface: slot.surface }));
 	if (missing.length > 0) {
 		return { outcome: "incomplete", missing };
 	}

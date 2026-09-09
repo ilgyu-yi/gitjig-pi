@@ -16,7 +16,7 @@
  * and neither operand ever enters the tool result, the outcome, or the
  * audit trail (§4.9's content-free return channels; §1.6's blind
  * compare). The mechanical outgoing-surface scan enforces the same rule
- * on the admitted summary: every hex run of ≥ 4 chars (either case) is
+ * on the admitted summary and payload: every hex run of ≥ 4 chars (either case) is
  * lowercased, and the return is refused whole with a fixed cause iff the
  * held hash contains the run AND the run is at least MIN_CONTAINED_RUN
  * long, or the run contains the held 7-prefix at any length (§4.9
