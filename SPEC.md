@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Review escalation | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 160 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 172 |
-| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 184 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 194 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 206 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 218 |
-| §2 | Artifact hierarchy and lifecycle | 226 |
-| &nbsp;&nbsp;§2.1 | Issue types | 230 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 243 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 259 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 263 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 278 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 315 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 327 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 337 |
-| §3 | Enforcement-layer architecture | 349 |
-| &nbsp;&nbsp;§3.1 | The constraint | 353 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 360 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 368 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 471 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 475 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 479 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 489 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 501 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 514 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 528 |
-| &nbsp;&nbsp;§3.11 | Gate design | 538 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 560 |
-| §4 | Substrate and install contract | 570 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 574 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 580 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 584 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 588 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 592 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 598 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 608 |
-| &nbsp;&nbsp;§4.8 | The command layer | 616 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 673 |
-| §5 | Cross-cutting contracts | 715 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 719 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 723 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 727 |
-| &nbsp;&nbsp;§5.4 | Work language | 731 |
-| &nbsp;&nbsp;§5.5 | State boundary | 735 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 741 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 751 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 761 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 769 |
-| §6 | Self-governance milestone | 777 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 788 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 162 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 174 |
+| &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 186 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 196 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 208 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 220 |
+| §2 | Artifact hierarchy and lifecycle | 228 |
+| &nbsp;&nbsp;§2.1 | Issue types | 232 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 245 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 261 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 265 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 280 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 317 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 329 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 339 |
+| §3 | Enforcement-layer architecture | 351 |
+| &nbsp;&nbsp;§3.1 | The constraint | 355 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 362 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 370 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 473 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 477 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 481 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 491 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 503 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 516 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 530 |
+| &nbsp;&nbsp;§3.11 | Gate design | 540 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 562 |
+| §4 | Substrate and install contract | 572 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 576 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 582 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 586 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 590 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 594 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 600 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 610 |
+| &nbsp;&nbsp;§4.8 | The command layer | 618 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 675 |
+| §5 | Cross-cutting contracts | 717 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 721 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 725 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 729 |
+| &nbsp;&nbsp;§5.4 | Work language | 733 |
+| &nbsp;&nbsp;§5.5 | State boundary | 737 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 743 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 753 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 763 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 771 |
+| §6 | Self-governance milestone | 779 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 790 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -134,9 +134,11 @@ The ladder:
 
 1. **Round 1** — ordinary: fix the work.
 2. **Round 2** — the caller injects a method-change mandate: a resubmission is accepted only with a recorded, materially different method; a textually different record describing the same method is refused.
-3. **Round 3** — park to a human. There is no round 4.
+3. **Round 3** — park to a human. There is no round 4 — one named exception: a round the Round-diagnosis clause below admits — a suspension or its tolerance — on that clause's terms alone.
 
 The reviewer's verdict stays content-only: the round is caller-derived and caller-injected, never a token the reviewer invents — the reviewer-side integrity norms this caller-derivation pairs with are §1.6. The ladder binds only named rejection classes — a small subset, explicitly enumerated at the ladder instrument's introduction; expansion requires evidence per §3.6's hardening order. Degrade: when the count is unreadable, the ladder degrades to ordinary iteration — never a park on its own malfunction — but never silently: the degrade is recorded through a channel that does not depend on the failed substrate (the same principle §3.8's Accountable-and-observable norm applies to escapes). The ladder is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); the count substrate and the ladder are instruments that derive later per §1.2's macro-phase clause.
+
+**Round diagnosis.** Each counted round after the first enters with a diagnosis, written before the resubmission is composed, in one of two tokens this clause commits to as their referents' durable names (§2.7): **legitimate progress** — every substantive finding the harm axis below leaves counting sits on ground the previous round's landing newly opened — or **defect signal** — any such finding returns to ground an earlier round already touched; both limbs read that one class, so the dichotomy is real, and nits and deferrable findings feed neither limb. The diagnosis is derived from the reviewer-authored verdict record, each finding's classification carrying a pointer into the verdicts it reads, so the ruling is auditable against a record the acting agent does not author — the count's own independence ground above; a diagnosis the record cannot support is defect signal, and the author's unanchored diagnosis alone suspends nothing. What the diagnosis moves is the park, in both directions. A legitimate-progress diagnosis suspends round 3's park for that round — the count still runs and round 2's mandate stands, so suspension is never exemption. A counted round past the third runs only on one of this clause's two **admissions** — a suspension, or the **tolerance**: one defect-signal round whose predecessor's diagnosis was legitimate progress runs as an ordinary counted repair round, the pair rule's own complement and what gives the pair a domain; the tolerance never reaches the third counted round itself, whose unsuspended entry parks on the rung as written — so no repair round past the third ever runs unadmitted, which is what keeps the rung's no-round-4 commitment true under its named exception. **Two consecutive defect-signal diagnoses on one artifact are a hard stop**, and the stop is a handoff, never a further autonomous round: the artifact-repair round does not run, and what is owed instead is the materially different method round 2 already demands — a new product decision, never the author's alone (§5.7's soft→hard shape, applied to rounds) — so attended it goes to the human, unattended it parks, and wherever the stop and the rung's park fire on one state they are one act. The earliest consecutive pair completes at the third counted round's entry, where the pair rule and the rung coincide by construction. From the third counted round's entry on, the exits split on the diagnosis sequence: the consecutive pair is the handoff above, an unsuspended untolerated round parks on the rung, and a converged tail — rounds whose open substantive findings the harm axis below leaves deferrable — takes the **named default exit**: the open findings are filed on item 7's own disposition, referenced not restated (§2.8), and the change proceeds to the ready decision; a finding item 7's carve-out keeps non-deferrable never rides the exit. The diagnosis and its consequences are **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); instruments derive later per §1.2's macro-phase clause.
 
 **Finding severity.** The ladder is not severity-blind: a round whose only findings are wording residues must not count like a round that found a wrong commitment, or the backstop parks work on residue — which trains operators to route around review, the erosion the method-level mandate above exists to prevent. The contract:
 
