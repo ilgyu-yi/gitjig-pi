@@ -35,7 +35,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -212,6 +212,29 @@ describe("§1.7 the panel is a search, not a vote (issue #169)", () => {
 			3,
 			"the bundle collapsed two slots' identical text — §1.9's Judge merges duplicates and needs both to " +
 				"preserve every raw finding's provenance, which it cannot do if the bundle merged them first",
+		);
+	});
+
+	it("an incomplete panel's `missing` is fixed at construction — mutating the caller's slot array changes nothing", () => {
+		const p = orchestrator();
+		const required: Slot[] = [
+			{ lens: "runtime", surface: ".pi/" },
+			{ lens: "suite", surface: "test/" },
+		];
+		const first = required[0] as Slot;
+		// One slot answered, one not: the outcome is incomplete and `missing`
+		// names the unanswered one. That entry must be a copy, not the
+		// caller's live object, or a later mutation rewrites which slot the
+		// caller re-dispatches.
+		const outcome = p.panelOutcome([found(p, required[1] as Slot, "f")], required);
+		assert.equal(outcome.outcome, "incomplete");
+		first.lens = "forged";
+		first.surface = "forged";
+		assert.deepEqual(
+			"missing" in outcome ? outcome.missing : [],
+			[{ lens: "runtime", surface: ".pi/" }],
+			"mutating the caller's required[] after panelOutcome rewrote which slot `missing` reports — the caller " +
+				"re-dispatches from that list, so it must be fixed when the outcome is computed",
 		);
 	});
 
@@ -619,13 +642,67 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			"a row with no surface was accepted — two such rows produce slots that compare equal on a field that is " +
 				"undefined in both, which is the same unpairable slot the lens-uniqueness check exists to prevent",
 		);
-		const derived = p.deriveRequiredSlots(paths(["SPEC.md"]), p.loadPolicy());
-		assert.equal(
-			derived[0]?.surface,
-			"the behavioural SSOT and the direction document",
-			"the derived slot's surface did not come from the policy row it was derived from — a constant surface " +
+		// Two rows, two DIFFERENT surfaces, one derivation: a constant surface
+		// equal to either row's cannot satisfy both, which is what a
+		// single-row single-string assertion could not catch.
+		const twoRow = p.validatePolicy({
+			version: 1,
+			rows: [
+				{ lens: "one", surface: "surface one", prefixes: ["a/"] },
+				{ lens: "two", surface: "surface two", prefixes: ["b/"] },
+			],
+		});
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["a/x", "b/y"]), twoRow),
+			[
+				{ lens: "one", surface: "surface one" },
+				{ lens: "two", surface: "surface two" },
+			],
+			"a derived slot's surface did not come from the policy row it was derived from — a constant surface " +
 				"makes the wrong-surface invalidity cause unreachable for every row",
 		);
+	});
+
+	it("validatePolicy returns a detached policy — a post-validation push to the caller's rows does not route", () => {
+		const p = orchestrator();
+		const input = { version: 1, rows: [{ lens: "a", surface: "s", prefixes: ["a/"] }] };
+		const validated = p.validatePolicy(input);
+		// The row this pushes would be REFUSED by the validator (empty lens,
+		// empty prefixes); if the branded value aliased the caller's array it
+		// would now route on rows nothing validated.
+		input.rows.push({ lens: "", surface: "", prefixes: [] });
+		assert.equal(
+			validated.rows.length,
+			1,
+			"a row pushed to the caller's input after validation reached the branded policy — validatePolicy must " +
+				"return a fresh object, or the brand certifies a snapshot the predicate never ruled on (the aliasing " +
+				"class receive and buildBundle were cured of, at the table boundary)",
+		);
+	});
+
+	it("the authoritative read ignores an ambient GIT_DIR — the routing query is pinned to its cwd", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		const saved = process.env.GIT_DIR;
+		// An ambient GIT_DIR would, unscrubbed, redirect the committedness/
+		// diff query at another repository while cwd still points here. The
+		// scrub must strip it; the read must still report the fixture's path.
+		process.env.GIT_DIR = join(mkdtempSync(join(tmpdir(), "gitjig-ambient-")), "nonexistent.git");
+		try {
+			assert.deepEqual(
+				[...p.changedPathsFromRepo("HEAD~1", "HEAD", repo)],
+				["SPEC.md"],
+				"an ambient GIT_DIR reached the authoritative read — §4.6 keeps the ambient environment off the " +
+					"routing path, and an unscrubbed GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE answers about a different " +
+					"repository than the one under review",
+			);
+		} finally {
+			if (saved === undefined) {
+				delete process.env.GIT_DIR;
+			} else {
+				process.env.GIT_DIR = saved;
+			}
+		}
 	});
 
 	it("a policy that did not parse to an object is refused in this module's own words", () => {
@@ -706,20 +783,22 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
-	it("loadPolicy refuses a dirty committed surface — pinned in source, and why only in source", () => {
-		// A behavioural arm would have to EDIT the repository's own tracked
-		// policy file mid-suite; test files run in parallel processes and at
-		// least one other suite reads that file, so a transient edit is a
-		// flake generator and a crash mid-arm leaves the operator's tree
-		// dirty. The source pin is the weak lock, taken deliberately: it
-		// makes deleting the guard a visible act, and the guard's behaviour
-		// is exercised the day #173's caller lands with its own fixture.
+	it("loadPolicy runs no git subprocess — committedness is a review property, not a runtime probe", () => {
+		// A round-3 repair had loadPolicy shell `git status` to refuse a
+		// worktree-modified policy; that one mechanism drew a §4.6 ambient
+		// exposure, an undeclared §3.9 git dependency, and false-clean
+		// bypasses — a patch cascade whose root was the premise. §1.7's
+		// committed property is enforced by the file being a reviewed,
+		// tracked artifact, exactly as this module's own source is, so
+		// loadPolicy reads its committed bytes and shells nothing. The pin
+		// is over source text, labelled as the weak lock it is, and its job
+		// is to make re-adding a status probe here a visible act.
 		const source = readFileSync(`${repoRoot()}${REVIEW_DIR}panel.ts`, "utf8");
+		const loadBody = source.slice(source.indexOf("export function loadPolicy"));
 		assert.ok(
-			source.includes('["status", "--porcelain", "--", POLICY_PATH]') && source.includes("uncommitted local edits"),
-			"loadPolicy no longer refuses a worktree-modified policy — §1.7's committed property is a constraint " +
-				"only if an uncommitted local edit cannot silently change the derived slot set, and without the " +
-				"guard routing derives from bytes no reviewer can diff",
+			!/loadPolicy[\s\S]*?"status"/.test(loadBody.slice(0, loadBody.indexOf("\n}"))),
+			"loadPolicy shells `git status` again — committedness belongs to review and the merge gate, not to a " +
+				"runtime subprocess on the routing path, and a status probe here re-opens the §4.6/§3.9 cascade",
 		);
 	});
 
@@ -745,6 +824,30 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 					"must be a deliberate, reviewed act",
 			);
 		}
+	});
+
+	it("a bare directory prefix routes a segment child, and only a true segment child", () => {
+		const p = orchestrator();
+		// The committed policy's bare prefixes (SPEC.md, MISSION.md) are
+		// files, so this branch of underPrefix — a prefix with no trailing
+		// slash matched against `prefix/child` — has no positive fixture
+		// there. A synthetic bare directory prefix exercises it.
+		const policy = p.validatePolicy({
+			version: 1,
+			rows: [{ lens: "docs", surface: "the docs tree", prefixes: ["docs"] }],
+		});
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["docs/x.md"]), policy).map((slot) => slot.lens),
+			["docs"],
+			"a bare directory prefix did not route its own segment child — the non-slash branch of underPrefix is " +
+				"dead, so a policy row naming a directory routes nothing",
+		);
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["docsy/x.md", "DOCS/x.md"]), policy),
+			[],
+			"a near-miss (`docsy`) or a case-fold (`DOCS`) matched a bare directory prefix — the branch is not " +
+				"segment-aware or not case-significant",
+		);
 	});
 
 	it("a case-folded match on the PREFIX branch routes nothing — both branches are case-significant", () => {
@@ -819,21 +922,29 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 	it("a dash-leading ref is a refusal, never a silently-empty read", () => {
 		const p = orchestrator();
 		const repo = fixtureRepo({ "SPEC.md": "x\n" });
-		// Without an end-of-options guard, an `--output=`-shaped operand is
-		// consumed as a git OPTION: measured once returning [] and WRITING a
-		// file — so the change would route to no reviewer, silently. The
-		// guard turns it into a revision that does not resolve, which
-		// throws: the refusal direction.
-		assert.throws(
-			() => p.changedPathsFromRepo("--output=/tmp/gitjig-a1-probe", "HEAD", repo),
-			"a dash-leading base ref was consumed as a git option — the read returned instead of refusing, so a " +
-				"routing input that cannot be a revision degraded into an empty change surface",
-		);
-		assert.ok(
-			!existsSync("/tmp/gitjig-a1-probe...HEAD"),
-			"the dash-leading operand reached git as an option and wrote a file — the exact side effect the " +
-				"end-of-options guard exists to make impossible",
-		);
+		// The probe path is UNIQUE to this run and cleaned after, so the arm
+		// is a function of its own act and not of stale /tmp state: an
+		// `--output=`-shaped operand git would consume as an option would
+		// write exactly <sideEffect>, and the guard turns it into an operand
+		// git refuses while parsing options.
+		const probeDir = mkdtempSync(join(tmpdir(), "gitjig-a1-"));
+		const sideEffect = `${join(probeDir, "written")}...HEAD`;
+		try {
+			assert.throws(
+				() => p.changedPathsFromRepo(`--output=${join(probeDir, "written")}`, "HEAD", repo),
+				/must come before non-option arguments|end.?of.?options|ambiguous|unknown|fatal/i,
+				"a dash-leading base ref did not refuse — git either consumed it as an option or the read returned " +
+					"empty, and a routing input that cannot be a revision must refuse, not degrade into an empty " +
+					"change surface",
+			);
+			assert.ok(
+				!existsSync(sideEffect),
+				"the dash-leading operand reached git as an option and wrote a file — the exact side effect the " +
+					"end-of-options guard exists to make impossible",
+			);
+		} finally {
+			rmSync(probeDir, { recursive: true, force: true });
+		}
 	});
 
 	it("the authoritative read is what derivation consumes — a hand-built array needs a named cast", () => {

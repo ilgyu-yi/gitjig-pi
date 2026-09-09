@@ -4,9 +4,11 @@
  *
  * This module derives the required slot set, decides each returned
  * result's validity, concatenates findings into the bundle, and decides
- * panel completeness. It enforces §1.7 and §1.6 and copies neither
- * (§2.8): read those sections for what the panel owes. What lives here
- * instead is the local decisions and the alternatives weighed.
+ * panel completeness. It enforces §1.7 and §1.6; read those sections for
+ * what the panel owes, and expect the comments here to point at a clause
+ * rather than restate it (§2.8). What lives here is the local decisions
+ * and the alternatives weighed — where a comment does name a rule, it is
+ * to say which branch applies it, not to carry a second copy of it.
  *
  * DECISION — a result is constructed by the caller, never by a reviewer.
  * `receive()` is the only way to make a SlotResult, and it takes the
@@ -35,12 +37,23 @@
  * holds the open §1.7/§1.9 question.
  *
  * DECISION — the policy is read from the committed file and from
- * nowhere else. `loadPolicy` takes no path. An earlier shape took one
- * with a committed default, which made the committed property a default
- * rather than a constraint and let routing derive from an untracked file
- * outside the repository. A caller that wants to exercise derivation
- * against a synthetic table calls `deriveRequiredSlots` with one
- * directly; that is derivation under test, not the policy surface.
+ * nowhere else. `loadPolicy` takes no path, so routing cannot derive
+ * from an untracked file outside the repository; a caller exercising
+ * derivation against a synthetic table calls `deriveRequiredSlots`
+ * directly, which is derivation under test, not the policy surface.
+ *
+ * What "committed" is NOT: it is not a runtime cleanliness check.
+ * A round-3 repair had `loadPolicy` shell `git status` to refuse a
+ * worktree-modified policy; that one mechanism drew a §4.6 ambient-env
+ * exposure onto the routing path, an undeclared §3.9 git dependency,
+ * and `git status` proxies with measured false-clean bypasses — a patch
+ * cascade whose root was the premise. §1.7's committed property is that
+ * the policy is a reviewed repository artifact, diffable and auditable
+ * like any other; that is enforced by the file being tracked and going
+ * through review and the merge gate, exactly as this module's own source
+ * is, not by the module re-policing its own bytes at every call. An
+ * operator's uncommitted local edit to it is outside the threat model
+ * the same way an edit to any gate's own source is (§5.5, §4.6).
  *
  * NOT here, by design: the Judge and the Resolver. A non-empty bundle is
  * this module's terminal output. Nothing below reads what a finding
@@ -52,6 +65,30 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { quoted } from "../quote.ts";
+
+/**
+ * The parent environment with git's repo-locating and config-injection
+ * families removed, so a shelled read answers about the repository `cwd`
+ * names and not one an ambient variable points at (§4.6, §4.7). The same
+ * families §4.9's executor strips; the panel does not import that helper
+ * because the dispatcher's dependency boundary is severed from it, so the
+ * one list lives here for the panel's own git calls.
+ */
+function withoutRepoLocatingGitEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+	const scrubbed = { ...env };
+	for (const key of [
+		"GIT_DIR",
+		"GIT_WORK_TREE",
+		"GIT_INDEX_FILE",
+		"GIT_OBJECT_DIRECTORY",
+		"GIT_COMMON_DIR",
+		"GIT_CONFIG_PARAMETERS",
+		"GIT_CONFIG_COUNT",
+	]) {
+		delete scrubbed[key];
+	}
+	return scrubbed;
+}
 
 /** A required review slot: one lens over one declared surface (§1.7). */
 export type Slot = { lens: string; surface: string };
@@ -88,8 +125,7 @@ export type SlotResult = {
 };
 // The brand is TYPE-ONLY and never exists at runtime: this runtime strips
 // types, so a branded key written into an object literal would be a
-// reference to a binding that is not there. `receive` casts instead, and
-// it is the only place in the module that may.
+// reference to a binding that is not there. `receive` casts instead.
 
 /**
  * One raw finding in the bundle, with the slot it came from. The whole
@@ -152,20 +188,24 @@ export function validatePolicy(parsed: PolicyInput): Policy {
 		if (typeof row.lens !== "string" || row.lens.length === 0) {
 			throw new Error("lens policy: a row carries no lens name, and a lens is half a slot's identity");
 		}
-		// Lens uniqueness is load-bearing, not tidiness: a slot's identity
-		// is its lens+surface, and two rows sharing a lens produce two
-		// slots a caller cannot tell apart when it pairs a dispatch to one.
+		// Lens uniqueness is not an identity requirement — `sameSlot` reads
+		// the lens+surface pair, so two rows sharing a lens but differing in
+		// surface are distinguishable. It is a readability-and-routing rule:
+		// one row per lens keeps the committed table diffable by lens and
+		// keeps deriveRequiredSlots' "each lens appears at most once" true,
+		// so a required set is a set of lenses rather than a multiset.
 		if (seen.has(row.lens)) {
 			throw new Error(
-				`lens policy: lens ${quoted(row.lens)} appears twice — a lens names one slot, and two rows ` +
-					"sharing one make a slot no caller can pair a dispatch to",
+				`lens policy: lens ${quoted(row.lens)} appears twice — one row per lens keeps the committed table ` +
+					"diffable by lens and the required set free of duplicates",
 			);
 		}
 		seen.add(row.lens);
 		// The surface is half of a slot's identity, so it is validated like
-		// the other half: an absent surface makes two rows' slots compare
-		// equal on a field that is undefined in both, which is the same
-		// unpairable slot the uniqueness check above exists to prevent.
+		// the other half: an absent surface leaves a derived slot with an
+		// undefined surface, and `sameSlot` then cannot distinguish it from
+		// any other surfaceless slot on the same lens — a slot no dispatch
+		// can be paired to.
 		if (typeof row.surface !== "string" || row.surface.length === 0) {
 			throw new Error(
 				`lens policy: row ${quoted(row.lens)} declares no surface, and a slot's identity is the lens and ` +
@@ -178,13 +218,22 @@ export function validatePolicy(parsed: PolicyInput): Policy {
 		for (const prefix of row.prefixes) {
 			if (typeof prefix !== "string" || prefix.length === 0) {
 				throw new Error(
-					`lens policy: row ${quoted(row.lens)} carries an empty prefix, which matches every ` +
-						"string — the caller-owned routing cannot rest on a row anything selects",
+					`lens policy: row ${quoted(row.lens)} carries an empty prefix, which under this module's ` +
+						"segment-aware matching selects nothing a change surface emits — the caller-owned routing " +
+						"cannot rest on a row that never routes",
 				);
 			}
 		}
 	}
-	return parsed as Policy;
+	// A fresh, fully-detached policy — never the caller's own object. The
+	// brand certifies the rows the predicate ruled on, so a post-validation
+	// push to the caller's array must not reach the branded value; this is
+	// the aliasing class receive and buildBundle were cured of, at the
+	// boundary where the routing table itself ships.
+	return {
+		version: parsed.version,
+		rows: parsed.rows.map((row) => ({ lens: row.lens, surface: row.surface, prefixes: [...row.prefixes] })),
+	} as Policy;
 }
 
 /**
@@ -193,22 +242,6 @@ export function validatePolicy(parsed: PolicyInput): Policy {
  * fourth decision). This function takes no path for that reason.
  */
 export function loadPolicy(): Policy {
-	// Committedness is a CONSTRAINT here, not a description: reading the
-	// worktree bytes alone would let an uncommitted local edit change the
-	// derived slot set with nothing observing it, and §1.7 makes the
-	// routing decision auditable-after-the-fact because the surface is a
-	// committed artifact. A dirty surface refuses — the evidence-gate
-	// direction — rather than routing from bytes no reviewer can diff.
-	const dirty = execFileSync("git", ["status", "--porcelain", "--", POLICY_PATH], {
-		cwd: dirname(POLICY_PATH),
-		encoding: "utf8",
-	});
-	if (dirty.trim().length > 0) {
-		throw new Error(
-			"lens policy: the committed surface has uncommitted local edits — routing must derive from bytes a " +
-				"reviewer can diff, so a dirty policy refuses rather than routes (SPEC §1.7's committed property)",
-		);
-	}
 	return validatePolicy(JSON.parse(readFileSync(POLICY_PATH, "utf8")) as PolicyInput);
 }
 
@@ -236,12 +269,20 @@ export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot:
 	// `--end-of-options` is the guard, not a flourish: without it a ref
 	// beginning with `-` is consumed as a git OPTION — measured: an
 	// `--output=`-shaped operand wrote a file and the read returned empty,
-	// so the change would route to no reviewer, silently. With the guard a
-	// dash-leading operand is a revision, which does not resolve, which
-	// throws — the refusal direction, never the silent-empty one.
+	// so the change would route to no reviewer, silently. With the guard git
+	// refuses the operand while parsing options — measured: `fatal: option
+	// '--output=...' must come before non-option arguments` — the refusal
+	// direction, never the silent-empty one.
+	//
+	// The repo-locating GIT_* families are stripped from the child's
+	// environment, the same scrub §4.9's executor applies: without it an
+	// ambient GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE would redirect this
+	// read at a repository other than the one under review, while `cwd`
+	// still points here — an ambient value on the routing path (§4.6).
 	const out = execFileSync("git", ["diff", "--name-only", "-z", "--end-of-options", `${baseRef}...${headRef}`], {
 		cwd: repoRoot,
 		encoding: "utf8",
+		env: withoutRepoLocatingGitEnv(process.env),
 	});
 	return out.split("\0").filter((entry) => entry.length > 0) as unknown as ChangedPaths;
 }
@@ -360,23 +401,24 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
 }
 
 /**
- * The panel's outcome. Completeness is every required slot carrying at
- * least one valid result; a slot answered twice is satisfied by either
- * answer, which is what makes re-dispatch work and the outcome
- * independent of the order results are supplied in.
+ * The panel's outcome, on §1.7's completeness contract. The local facts,
+ * not restated from the section: a slot answered twice is satisfied by
+ * either valid answer, which is what makes re-dispatch work and the
+ * outcome independent of the order results are supplied in.
  */
 export function panelOutcome(results: readonly SlotResult[], required: readonly Slot[]): PanelOutcome {
-	// The empty required set takes the SSOT's own derived answer, stated
-	// here because two review rounds pulled it in opposite directions:
-	// §1.7's completeness test is vacuously true over an empty set and
-	// §1.9's findings-free path then reads the empty bundle as Review
-	// APPROVED — an approval for a head no reviewer examined, which is a
-	// real concern, and it is FILED (issue #172) rather than answered in
-	// this module. A minted fourth token and a thrown refusal were both
-	// tried and both rejected as behaviours the SSOT does not carry;
-	// conforming while the question is open is §1.9's own defer shape —
-	// the concern is durable and caller-held, and the code follows the
-	// contract as written until the operator settles it.
+	// The empty required set follows the SSOT as written (§1.7, §1.9), and
+	// the concern with doing so is FILED, not decided here. Read those
+	// sections for the outcome; the local facts are why this is not the
+	// module's call. §1.7 names the gap as its own open residual — it
+	// "sets no floor on the required slot set" and says closing it "is an
+	// amendment to §5.6's substitution reach and is not made here" — and
+	// §0.3 forbids code leading that amendment (drift is surfaced, never
+	// auto-corrected; an SSOT correction is attended-only). So the concern
+	// that this can approve a head no reviewer examined is on issue #172
+	// for the operator, and the code follows the contract meanwhile. A
+	// minted fourth token and a thrown refusal were both tried in earlier
+	// rounds and both ruled behaviours the SSOT does not carry.
 	const missing = required
 		.filter((slot) => validResultsFor(results, slot).length === 0)
 		.map((slot) => ({ lens: slot.lens, surface: slot.surface }));
