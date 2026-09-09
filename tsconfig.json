@@ -15,11 +15,13 @@
 		// and none can reach an out-of-range slot, so the flag would have
 		// caught nothing here. A tree of 74 `!` marks buys no defect and
 		// hides the guards that do the work. Reopen if a triage ever finds a
-		// site in the wrong-allow shape, or — a proxy that over-triggers on
-		// any new production index and costs only a re-triage — if
-		// `tsc --noEmit --noUncheckedIndexedAccess` ever names more than the
-		// 4 sites under `.pi/` it names today; the per-site table is on
-		// issue #137.
+		// site in the wrong-allow shape, or if
+		// `tsc --noEmit --noUncheckedIndexedAccess | grep -c '^\.pi/'` (from
+		// the repo root) ever counts more than the 4 sites it counts today
+		// (a different four — the tripwire counts by directory, the triage
+		// above by repair — and a count, so a one-for-one swap hides in it)
+		// — a proxy that over-triggers on any new production index and costs
+		// only a re-triage; the per-site table is on issue #137.
 		"strict": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
