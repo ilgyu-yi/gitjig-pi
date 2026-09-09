@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 357 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 364 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 372 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 475 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 479 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 483 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 493 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 505 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 518 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 532 |
-| &nbsp;&nbsp;§3.11 | Gate design | 542 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 564 |
-| §4 | Substrate and install contract | 574 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 578 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 584 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 588 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 592 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 596 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 602 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 612 |
-| &nbsp;&nbsp;§4.8 | The command layer | 620 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 677 |
-| §5 | Cross-cutting contracts | 719 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 723 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 727 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 731 |
-| &nbsp;&nbsp;§5.4 | Work language | 735 |
-| &nbsp;&nbsp;§5.5 | State boundary | 739 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 745 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 755 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 765 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 773 |
-| §6 | Self-governance milestone | 781 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 792 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 476 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 480 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 484 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 494 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 506 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 519 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 533 |
+| &nbsp;&nbsp;§3.11 | Gate design | 543 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 565 |
+| §4 | Substrate and install contract | 575 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 579 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 585 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 589 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 593 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 597 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 603 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 613 |
+| &nbsp;&nbsp;§4.8 | The command layer | 621 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 678 |
+| §5 | Cross-cutting contracts | 720 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 724 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 728 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 732 |
+| &nbsp;&nbsp;§5.4 | Work language | 736 |
+| &nbsp;&nbsp;§5.5 | State boundary | 740 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 746 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 756 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 766 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 774 |
+| §6 | Self-governance milestone | 782 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 793 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -367,7 +367,7 @@ This section states the first-class design constraint — pi provides no built-i
 
 **Tier 2 — the local git-hook tier.** The committed `.githooks/` adapters (`pre-commit`, `pre-push`, `commit-msg`) bind any local git operation — human, script, or any agent harness — once a clone activates them (`core.hooksPath=.githooks`). This is an **advice tier**: it folds to `--no-verify` by design, and a clone that has not activated the hooks path no-ops rather than wedging git. The adapters carry no check logic; they delegate through the contract declared in `.githooks/_lib.sh`, which carries the tier's own runtime — the helper-source primitive and the audit-record writer (§5.5) — as committed code and **derives** the two locations the tier needs: the helper directory from its own installed position (§4.1), and the state root from the repository top the hook is running against (§4.6). What the tier sources is what stands at that derived position in the working tree, committed or not. The derivation is bounded by one refusal, taken over the adapter position alone: where the repository top discovered from the running adapter's own installed position is not the top of the repository the operation runs against, the tier runs no check and says so on stderr — a tier that resolved its checks outside the repository it was invoked in would write its records there too, across the boundary §5.5 draws. Two residuals ride that bound and are enumerated in place (§3.11) rather than closed. The helper directory is appended to the adapter position after the refusal is taken and is itself neither resolved nor re-tested, so a `helpers` component linked out of the repository is sourced and executed with no refusal on any surface. That is a residual to **§5.9's disarm bar** on the same argument §3.3 makes for its allow-list read — enforcement-disabling, since what the tier sources decides every delegated check; reachable by the one worktree-write the same principal already holds; and traceless by this paragraph's own words, no refusal anywhere being exactly the record that is missing — placed outside that bar here rather than left as an unmet one. A third state rides the same derivation and is a residual to the same bar, on the SAME ground the linked-out component above stands on: what the tier sources is what stands at the derived position in the working tree, committed or not, so an ordinary edit to an adapter or a helper — no link, no moved path, just different bytes — replaces every delegated check, and the bind advisory cannot see it, since it reads configuration and runs no program of the repository it classifies while the degradation arms key on absent files and absent functions. The door carries it, and carries the persistence with it: **the door's ground reaches a rewrite that later runs inherit, not merely a single bypass.** The actor who can write those bytes can already take every operation through `--no-verify`, as many times as they like, so a persistent edit grants that actor no outcome the tier's **sanctioned** door does not already grant. The qualifier is the discriminator and not decoration: bare outcome equivalence would excuse the tier-1 states too, since a publication composed outside that instrument is observed by no tier and its actor already holds the outcome. What separates them is that `--no-verify` is this tier's sanctioned escape (§3.8), while an out-of-reach path is not sanctioned at all — it is bound by §3.4's procedural obligation instead. Persistence changes how long the capability is convenient, never who holds it — and that is what the ground is about. Stated here because it is the reading the whole tier-2 family depends on: without it the linked-out component, the pattern read and the allow-list read would all lose their ground, all three being writes later runs inherit. The second residual below is a residual to the same bar, and owes its own clause rather than §3.8's: `GIT_WORK_TREE` is one spelling of it and is enumerated there, but a work tree named on the command line or in `core.worktree` reaches the same outcome — no hooks directory at the relative path, no adapter, no check — and §3.8's ground does not carry, since that section disposes of the environment channels it enumerated and measured, and this is not one of them. So the caller-named work tree, however it is named, is enforcement-disabling, reachable by one innocuous command, and traceless, and it stands outside the bar here as a recorded decision. And a refusal that lives inside a hook speaks only where a hook runs: under the relative `core.hooksPath` the bind instrument writes, an operation git resolves against a caller-named work tree finds no hooks directory there, runs no adapter, and reaches none of this. The delegated checks are branch guarding, staged-secret scanning, and commit-subject grammar. A present-but-incomplete helper degrades to allow, never to a false block — and the fold is **arm-ordered**: an adapter sources each arm's helper immediately before that arm runs, so a helper failure degrades that arm and every arm after it; an arm that has already run and decided is never undone. On the push surface the adapter calls its predicate once per ref line git streams on stdin, so a delegated check reads no stdin of its own: a check that consumes stdin removes ref lines from the iteration, and the arm then measures fewer refs than the push carries with nothing to show for the difference. A clone arms this tier through the committed bind instrument `.githooks/bind_local_tier.sh`: one idempotent run activates `core.hooksPath`, excludes the untracked state directory from version control at creation (§4.1), and verifies the effective bound state before reporting it (§4.7); the session surface's bind advisory (§5.2, §5.9) names any degraded binding state and that exact command.
 
-**Tier 3 — CI gates and the server-side ruleset.** The workflow gates (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`) run as required status checks, and the branch ruleset, scoped to the default branch, requires every change to arrive through a pull request and adds the merge-commit-only method (§1.1), non-fast-forward history, deletion protection, and review-thread resolution — it requires no approving review. This tier is the **hard floor**: it binds every contributor and every clone, including one where tiers 1–2 are absent or bypassed.
+**Tier 3 — CI gates and the server-side ruleset.** The workflow gates (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`, `suite`) run as required status checks, and the branch ruleset, scoped to the default branch, requires every change to arrive through a pull request and adds the merge-commit-only method (§1.1), non-fast-forward history, deletion protection, and review-thread resolution — it requires no approving review. This tier is the **hard floor**: it binds every contributor and every clone, including one where tiers 1–2 are absent or bypassed.
 
 ### 3.3 Gate classes
 
@@ -392,6 +392,7 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 | toc-freshness | a stale SPEC table of contents | `home:` tier 3 (`toc-freshness`) · `backstop:` same · `earlier:` — | `supplies:` platform (PR file set) / `infers:` session |
 | source-style | sources landing unformatted or carrying a lint error | `home:` tier 3 (`source-style`) · `backstop:` same · `earlier:` — | `supplies:` platform (source text at the PR head) / `infers:` session |
 | type-check | a type annotation drifting from the code the runtime strips it off | `home:` tier 3 (`type-check`) · `backstop:` same · `earlier:` — | `supplies:` platform (source text at the PR head) / `infers:` session |
+| suite | a regression landing that reds the test suite | `home:` tier 3 (`suite`) · `backstop:` same · `earlier:` — | `supplies:` platform (source and test text at the PR head) / `infers:` session |
 | merge-review | merging without a review pinned at the merged head | `home:` tier 3 (procedural today, §2.3) · `backstop:` deferred (§3.11 amortized) · `earlier:` tier 1 echo planned | `supplies:` platform (verdict + merged head) / `infers:` session |
 | ac-closeout | merging a PR whose closing issue has unresolved AC | `home:` tier 3 (procedural today, §2.2) · `backstop:` deferred (§3.11 amortized) · `earlier:` tier 1 echo planned | `supplies:` platform (issue AC + merge event) / `infers:` session |
 | change-reach | retired SSOT vocabulary surviving the declared-set completion check | `home:` tier 3 (procedural today, §2.6) · `backstop:` none (reversible) · `earlier:` — | `supplies:` git (trailers) + platform (push history) / `infers:` session |
@@ -587,7 +588,7 @@ Committed substrate carries no absolute paths, no clone-specific values, and no 
 
 ### 4.3 PR-based installs
 
-Substrate lands in an adopting repository through the standard flow — a reviewed PR (§1.1) — never a direct push. The one exception is the stage-0 seed of an empty repository (an unborn default branch cannot host a PR); that seed is minimal (the direction documents), scoped, and audit-logged. Server-side configuration (labels, the branch ruleset, board mirrors) is applied via the platform API; the repository records the shape server config must match — above all that required-check contexts equal the CI job names (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`) and that the default branch's allowed merge method is the merge commit alone (§1.1).
+Substrate lands in an adopting repository through the standard flow — a reviewed PR (§1.1) — never a direct push. The one exception is the stage-0 seed of an empty repository (an unborn default branch cannot host a PR); that seed is minimal (the direction documents), scoped, and audit-logged. Server-side configuration (labels, the branch ruleset, board mirrors) is applied via the platform API; the repository records the shape server config must match — above all that required-check contexts equal the CI job names (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`, `suite`) and that the default branch's allowed merge method is the merge commit alone (§1.1).
 
 ### 4.4 Headless and scripted operation
 
