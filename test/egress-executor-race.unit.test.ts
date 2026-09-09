@@ -21,10 +21,10 @@
  * per §3.12 the kill is verified by hand in a throwaway copy.
  */
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { after, before, describe, it } from "node:test";
 import { runPublishChild } from "../.pi/extensions/gitjig/publish/executor.ts";
 
 const URL_LINE = "https://example.invalid/gitjig/race#issuecomment-119";
@@ -44,7 +44,7 @@ before(() => {
 	const shim = join(shimRoot, "gh");
 	// The orphan (`sleep 15 &`) inherits the pipes and outlives the grace
 	// decision at ~7.5s, so "close" cannot decide; only the grace can.
-	writeFileSync(shim, "#!/bin/sh\nsleep 15 &\nsleep 3\nprintf '%s\\n' '" + URL_LINE + "'\nexit 0\n");
+	writeFileSync(shim, `#!/bin/sh\nsleep 15 &\nsleep 3\nprintf '%s\\n' '${URL_LINE}'\nexit 0\n`);
 	chmodSync(shim, 0o755);
 	mkdirSync(join(shimRoot, "cwd"));
 	savedPath = process.env.PATH;
