@@ -429,8 +429,8 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "ci-utility-absence",
 		failureShape:
-			"a runner utility the gate scripts assume (jq, awk, mktemp) is missing or fails mid-run — fragment-gate, " +
-			"ssot-home, toc-freshness",
+			"a runner utility the gate scripts assume (jq, awk, mktemp, grep, cut, head, cmp, tail) is missing or " +
+			"fails mid-run — fragment-gate, ssot-home, toc-freshness",
 		posture: "closed",
 		justification:
 			"The nonzero exit reds the job — the right direction — but by default, not by arm, and two enumerated " +
