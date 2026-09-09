@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-round repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 156 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 168 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 182 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 202 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 214 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 251 |
-| §2 | Artifact hierarchy and lifecycle | 259 |
-| &nbsp;&nbsp;§2.1 | Issue types | 263 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 276 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 292 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 296 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 311 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 348 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 360 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 370 |
-| §3 | Enforcement-layer architecture | 382 |
-| &nbsp;&nbsp;§3.1 | The constraint | 386 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 393 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 401 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 505 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 509 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 513 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 523 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 535 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 548 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 562 |
-| &nbsp;&nbsp;§3.11 | Gate design | 572 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 594 |
-| §4 | Substrate and install contract | 604 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 608 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 614 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 618 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 622 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 626 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 632 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 642 |
-| &nbsp;&nbsp;§4.8 | The command layer | 650 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 707 |
-| §5 | Cross-cutting contracts | 749 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 753 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 757 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 761 |
-| &nbsp;&nbsp;§5.4 | Work language | 765 |
-| &nbsp;&nbsp;§5.5 | State boundary | 769 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 775 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 785 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 795 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 803 |
-| §6 | Self-governance milestone | 811 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 822 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 158 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 170 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 184 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 204 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 216 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 258 |
+| §2 | Artifact hierarchy and lifecycle | 266 |
+| &nbsp;&nbsp;§2.1 | Issue types | 270 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 283 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 299 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 303 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 318 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 355 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 367 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 377 |
+| §3 | Enforcement-layer architecture | 389 |
+| &nbsp;&nbsp;§3.1 | The constraint | 393 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 400 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 408 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 512 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 516 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 520 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 530 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 542 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 555 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 569 |
+| &nbsp;&nbsp;§3.11 | Gate design | 579 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 601 |
+| §4 | Substrate and install contract | 611 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 615 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 621 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 625 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 629 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 633 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 639 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 649 |
+| &nbsp;&nbsp;§4.8 | The command layer | 657 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 714 |
+| §5 | Cross-cutting contracts | 756 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 760 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 764 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 768 |
+| &nbsp;&nbsp;§5.4 | Work language | 772 |
+| &nbsp;&nbsp;§5.5 | State boundary | 776 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 782 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 792 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 802 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 810 |
+| §6 | Self-governance milestone | 818 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 829 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -128,7 +128,7 @@ Every PR to the default branch lands exactly one changelog fragment `changelog_u
 
 ### 1.4 Cross-round repair
 
-Repeated repair at a review gate must carry method-level information: resubmitting the same method against the same objection is a failure mode the flow observes and interrupts, not one it repeats indefinitely. What the observation reads is the **repair history** of one change — the sequence of its review states and the repairs between them — held in a durable record the acting agent does not author, since a self-kept record reproduces exactly the failure it exists to prevent, and readable at the start of the next review across a session or clone boundary (MISSION § "Success looks like > Evidence": the history is a recorded fact, never a remembered one). Simultaneous results at one head collapse into one review state: the panel's slots at one head are one decision, not N (§1.7).
+Repeated repair at a review gate must carry method-level information: resubmitting the same method against the same objection is a failure mode the flow observes and interrupts, not one it repeats indefinitely. What the observation reads is the **repair history** of one change — the sequence of its review states and the repairs between them — held in a durable record the acting agent does not author, since a self-kept record reproduces exactly the failure it exists to prevent, and readable at the start of the next review across a session or clone boundary (MISSION § "Success looks like > Evidence": the history is a recorded fact, never a remembered one). A **review state** is the unit that history is counted in: one resolved review of the change at one head, individuated by the head it was pinned to (§1.6). The panel's slots at one head therefore collapse into one review state — simultaneous results at one head are one decision, not N (§1.7) — and a head that drew no review contributes no state.
 
 **A count triggers inspection, never escalation.** How many times a change has been repaired is not evidence that its method has failed — a change reviewed by stronger methods finds more, and a backstop indexed on the count alone parks work for reviewing well, which trains operators to route around review. A count therefore has exactly one workflow role: a **coarse deterministic trigger** for the diagnosis below. Past the trigger the history is inspected, and what the inspection finds — never the count that occasioned it — decides what happens next. **The default trigger is the second consecutive review state carrying a substantive finding that needed repair.** A more authoritative and equally simple trigger may substitute for it, with the ground recorded where the substitution is made; a trigger that is merely more elaborate may not — the coarseness is the point, since a trigger with judgment in it is a second diagnosis nobody adjudicated. The trigger never fires on the findings-free path: a complete panel with an empty bundle ends review for that head (§1.7, §1.9).
 
@@ -151,6 +151,8 @@ Plan invalidation is deliberately **not** a value of this taxonomy. A repair his
 
 **Autonomy budget is orthogonal.** A run's autonomy and resource ceilings (§5.6, §5.7) bound how far it may proceed without a human. They are decided mechanically from the run's own accounting and carry no claim about the quality of the work, while every value above is a semantic reading of a history. A ceiling reached is not STAGNATION, and a diagnosis is not a budget: each fires on its own terms, and where both fire on one state they are one stop standing on two grounds, never two stops.
 
+**When the history cannot be read.** Where the repair history is absent, unreadable, or unreachable, the diagnosis does not run and the flow continues on its ordinary terms: this clause never stops work on its own malfunction, and an unreadable history is never read as STAGNATION or as NONE. It is never silent either — the degrade is recorded through a channel that does not depend on the failed substrate, the principle §3.8's accountable-and-observable norm applies to escapes. The announcement is what the open direction rests on (§5.2), so it is an obligation and not a courtesy.
+
 The clause is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); the history record, the trigger, and the diagnosis are instruments that derive later per §1.2's macro-phase clause.
 
 ### 1.5 Delegated work
@@ -171,9 +173,9 @@ A reviewer judges from the artifact alone: it is assumed to know nothing of the 
 
 **Blind compare.** The reviewer independently derives and reports the head it reviewed; the caller compares that self-reported head against an expected head it resolved itself and never revealed — a revealed expectation can be echoed back for a tautological pass. A mismatched, absent, or unconfirmable head makes the result invalid — never an approve. Honest residual, stated: the head pin binds the artifact the reviewer resolved, not the cognitive act of review — a reviewer could pin correctly yet reason over stale context; tightening that (a content challenge over the diff) is a named deferred limitation.
 
-**Answering a review invalidates it.** Landing the repairs a review demanded advances the head, so no result carries forward to the head that contains them — the generative form of §2.4's reviewed-head rule, pointed at, not restated. One named exception: the nit carry-forward of §1.9's resolution clause, on that clause's terms alone.
+**Answering a review invalidates it.** Landing the repairs a review demanded advances the head, so no result carries forward to the head that contains them — the generative form of §2.4's reviewed-head rule, pointed at, not restated. One named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone.
 
-**Result grammar.** A reviewer's result is a fixed machine-readable token at a defined output position, and the set is exactly two: **APPROVED** — the reviewer discovered no finding — and **FINDINGS** — it discovered at least one, carried as raw findings. A reviewer reports what it found and nothing about what should follow it: it does not rule a finding valid, does not classify severity, does not state a cost direction, does not direct the workflow, and mints no third token for a case it judges the two not to cover. Every consequence is derived downstream of the reviewer — the bundle mechanically (§1.7), the semantics once at the Judge, the workflow deterministically at the Resolver (§1.9). A reviewer result holds no gate of its own, which is why nothing in this grammar survives the Judge's refutation of the findings under it (§1.9).
+**Result grammar.** A **panel reviewer's** result — this grammar's subject is the artifact review §1.7 dispatches, not every gate in this document that consumes a verdict artifact, and §2.2's activation verdict keeps its own committed marker — is a fixed machine-readable token at a defined output position, and the set is exactly two: **APPROVED** — the reviewer discovered no finding — and **FINDINGS** — it discovered at least one, carried as raw findings. A reviewer reports what it found and nothing about what should follow it: it does not rule a finding valid, does not classify severity, does not state a cost direction, does not direct the workflow, and mints no third token for a case it judges the two not to cover. Every consequence is derived downstream of the reviewer — the bundle mechanically (§1.7), the semantics once at the Judge, the workflow deterministically at the Resolver (§1.9). A reviewer result holds no gate of its own, which is why nothing in this grammar survives the Judge's refutation of the findings under it (§1.9).
 
 **Validity is the caller's fact.** Whether a reviewer's result counts at all — the blind compare above, completion, well-formedness, and whether the surface reviewed is the one the slot was required for — is decided by the caller and never reported by the reviewer, which cannot attest to its own integrity. An invalid result is not a rejection and not an approval: it is **no result**, and what an absent result does to the panel is §1.7's.
 
@@ -183,7 +185,7 @@ The norm is **procedural today** — homed with the `merge-review` row in §3.3,
 
 Reviewer multiplicity is **search diversification, not a vote.** Several reviewers are dispatched independently at one head so that different lenses reach different defects; what multiplicity buys is coverage, and the property that follows is the one that matters: **one valid finding survives any number of empty co-reviews.**
 
-Majority vote is the **rejected design**, recorded here so it is not re-proposed. It fails in both directions at once: it discards a true finding whenever a minority holds it — which is precisely the case a search panel exists to catch — and it converts correlated contamination into confidence, since silently correlated redundancy is one sample reported N times. Serial debate, where each reviewer sees the others' results, is rejected for the second reason alone: it destroys the independence the panel is built on. What a vote was reached for — protection against an irreversible wrong approve — is not abandoned; it re-homes to the gates that actually stand at the irreversible boundary, the ready decision and the landing gates (§2.3, §3.3) and the autonomy ceiling (§5.6, §5.7), where a human or an explicit policy stands rather than a threshold.
+Majority vote is the **rejected design**, recorded here so it is not re-proposed. It fails in both directions at once: it discards a true finding whenever a minority holds it — which is precisely the case a search panel exists to catch — and it converts correlated contamination into confidence, since silently correlated redundancy is one sample reported N times. Serial debate, where each reviewer sees the others' results, is rejected for the second reason alone: it destroys the independence the panel is built on. What a vote was reached for — protection against an irreversible wrong approve — is not abandoned; it re-homes to the gates that actually stand at the irreversible boundary, the ready decision and the landing gates (§2.3, §3.3) and the autonomy ceiling (§5.6, §5.7), where a human or an explicit policy stands rather than a threshold. **The re-home is partial, and the residual is named rather than glossed:** §5.6 lets a reviewer verdict fill the human slot at the ready decision, and this section sets no floor on the required slot set, so at that one boundary the protection rests on the slot policy and the autonomy ceiling rather than on a second independent judgment. Closing it is an amendment to §5.6's substitution reach and is not made here.
 
 **Required slots derive from a committed policy surface.** A panel's required slot set is derived from **authoritative facts about the change under review** — its change surface — against a **committed, caller-owned policy surface** mapping those facts to required lenses. Three properties are the contract, and the surface's content is not this section's business: the policy is *committed*, so it is a repository artifact reviewable and diffable like any other and a routing decision is auditable after the fact; it is *caller-owned*, so no reviewer selects the lens it will be graded on and no model selects one at dispatch time — a self-selected specialist re-imports exactly the omission bias §1.8 names; and its inputs are *authoritative*, read from the change itself rather than from anyone's summary of it (§3.3's exactness rule, applied to routing).
 
@@ -193,7 +195,7 @@ Majority vote is the **rejected design**, recorded here so it is not re-proposed
 
 **Panel completeness.** A panel is **complete** when every required slot has returned a valid result — validity being the caller's fact (§1.6). Completeness is the panel's whole contract: there is no threshold below it and no quorum above it.
 
-**An invalid slot is a missing result, never a verdict.** A slot that timed out, returned malformed or unparseable output, failed the blind compare, or reviewed a surface other than the one it was required for has produced *no result*. It is never read as an approval, never as a rejection, and never as an abstention that some denominator absorbs. An incomplete panel is therefore not a review outcome at all: the caller re-dispatches the missing slots, or the review is **incomplete**, a state that stops the flow at the gate consuming the review (§3.3's `merge-review` row) rather than passing it — the evidence-gate direction of §5.2.
+**An invalid slot is a missing result, never a verdict.** A slot that timed out, returned malformed or unparseable output, failed the blind compare, or reviewed a surface other than the one it was required for has produced *no result*. It is never read as an approval, never as a rejection, and never as an abstention that some denominator absorbs. An incomplete panel is therefore not a review outcome at all: the caller re-dispatches the missing slots, or the review is **incomplete**, a state that stops the flow at whichever gate consumes the review — §3.7 enumerates them — rather than passing it: the evidence-gate direction of §5.2.
 
 **One semantic adjudication point.** With the vote retired, review carries exactly **one** semantic adjudication point for discovered findings: the Judge (§1.9). This is stated rather than left implicit because the retired design distributed judgment across the voters, and a successor that re-adds a semantic step anywhere — a reviewer ruling its own finding valid, a caller filtering the bundle, a second adjudicator after the Judge — reintroduces the multiplicity without the vote that once bounded it.
 
@@ -217,13 +219,13 @@ An adversarial reviewer's success condition is "find something" — a structural
 
 **The findings-free path.** A complete panel with an empty bundle is **Review APPROVED** for that head, and the Judge never runs — nothing was discovered, so there is nothing to adjudicate (the sleeping-gate shape, §5.3). What that approval settles is the review and only the review: AC closeout (§2.2) and the landing gates (§2.3, §3.3) are untouched by it, and nothing on this path is evidence about any other head.
 
-**The Judge.** The Judge is dispatched independently of the panel and rules the bundle, per effective finding, on five axes and no others:
+**The Judge.** The Judge is dispatched independently of the panel and rules the bundle, per effective finding, on five axes and no others. Its input is the bundle plus a **caller-derived criterion manifest** — the criterion set the AC-impact axis below reads, derived at dispatch from existing SSOT on §1.8's manifest pattern, never invented by the Judge and never assembled by the author. The manifest is what makes the AC-impact ruling reachable at all: a provisioned tree cannot reach the platform record where the criteria live (the dispatch clause below), so an axis whose input the caller does not supply is an axis the Judge cannot rule. A missing manifest is a missing input, and the review is incomplete on the availability rule below rather than adjudicated without it.
 
 - **Validity** — **CONFIRMED**, **REFUTED**, or **INDETERMINATE**, each recorded with the command it ran or the citation it rests on. INDETERMINATE is a ruling, not an absence: where the Judge cannot decide, it says so, and uncertainty is never resolved by defaulting to either of the other two.
 - **Deduplication** — findings that are semantically one finding become one effective finding, with **every raw finding's provenance preserved**. Dedup merges and never discards: the surviving effective finding carries which slots reported it, so a later reader can tell one reviewer's finding from four reviewers' agreement without the merge having been a vote.
 - **Severity** — **SUBSTANTIVE** or **NIT**. A finding is a NIT only where the Judge states an **exact mechanical remedy**: a verbatim replacement or a mechanical derivation (a) fully specified by the ruling itself, leaving no design choice with the receiver, (b) local to the flagged span, and (c) leaving every commitment of the artifact extensionally unchanged — obligations, decisions, interfaces, and the content of measured claims. Condition (a) is the soundness condition: skipping re-review is sound only because the skipped review could have verified nothing but a verbatim application. **A remaining design choice makes the finding SUBSTANTIVE**, and the Judge designs no substantive repair — for a substantive finding it rules and stops; authoring the repair is the author's, and a Judge that wrote one would have something of its own to grade.
 - **Harm direction** — recorded **explicitly on every confirmed finding**, in one of two tokens this clause commits to as their referents' durable names (§2.7). **`fail-closed`**: the demonstrated cost is a refusal where an act was intended, a declared interface narrower than the instrument it declares, or an over-report in the safe direction; where the finding's subject is a norm and nothing operates, the limbs are read through what the norm costs the changes that consume it. **`live-harm`**: anything else — a cost reachable in the artifact's own operation. Where the Judge cannot rule the direction, it rules the finding INDETERMINATE. **There is no silence default**: an unstated direction is a missing ruling, not a value, and it is never filled in by whoever reads the record next. (`fail-closed` is §3.9's token, deliberately extended here to a second referent — there a posture a gate takes on its own failure, here a cost a finding has — which §2.7 permits; the complement is `live-harm`, not `fail-open`, which names a gate's posture and this is not a posture.)
-- **AC impact** — whether the finding sits on an acceptance criterion of the change under review, judged against **the criterion set as a whole**. This is an input the Resolver consumes, and it is not AC closeout (§2.2), which is a separate gate run against the criteria one by one at a different moment; naming both is what keeps them from being conflated into one pass.
+- **AC impact** — whether the finding sits on an acceptance criterion of the change under review, judged against **the criterion set as a whole**: a whole-set read, distinct from AC closeout (§2.2), which is a separate gate run against the criteria one by one at a different moment; naming both is what keeps them from being conflated into one pass. The set the Judge reads is fixed against drift in one direction: it is the **union** of the criteria as activation — or a re-activation through the same gate (§2.2) — adjudicated them and the criteria as they stand when the panel opens, so a criterion present in either set counts, and drift under §1.2's rule can narrow the relief the Resolver's defer rule grants and never widen it. The drift record is executor-authored, and a set the relieved party could shrink would hand that party its own relief.
 
 **Judge availability is review completeness.** Where the bundle is non-empty and no valid Judge adjudication exists — the Judge was not dispatched, returned invalid under the same compare the panel rides (§1.6), or is unavailable — the **review is incomplete**, and an incomplete review passes no gate. Two paths are named as closed rather than left to be rediscovered: proceeding on the raw findings, which acts on unadjudicated false positives and is exactly the bias the layer exists to remove; and the author filling the Judge's slot, which returns to the adjudicator something of its own to grade. This layer fails **closed** on its own evidence — it is an evidence gate, not a best-effort aid, and §5.2's fail-open direction does not reach it.
 
@@ -233,16 +235,21 @@ An adversarial reviewer's success condition is "find something" — a structural
 
 **Reconsideration.** A Judge ruling is durable, and a later review may not reverse it by re-reading what was already before the Judge. It is reconsidered only on **new evidence in the artifact or its measurements** — an advanced head, a measurement not previously run, a fact the ruling's own recorded command now reports differently. A re-reading is not new evidence, and a reversal without it is the reversal §1.4's OSCILLATION detects downstream.
 
-**The Resolver.** The Resolver is a **function, not a role**: it maps the adjudicated finding set to a workflow outcome, and for a fixed adjudicated input it yields the same outcome every time. Four outcomes, and every effective finding resolves through them:
+**The Resolver.** The Resolver is a **function, not a role**: it maps the adjudicated finding set to exactly one workflow outcome, and for a fixed adjudicated input it yields the same outcome every time. It runs in two stages, both total.
 
-- **repair** — a confirmed SUBSTANTIVE finding that the defer rule below does not reach. The head advances and draws a fresh required panel (§1.6, §1.7).
-- **defer** — a confirmed SUBSTANTIVE finding recorded `fail-closed` and sitting on **no** acceptance criterion of the change under review. It is filed as its own issue, the filed issue's identifier entering the review record beside the finding — which makes a false filing record mechanically falsifiable — and the change proceeds. Repairing it in place instead is always available and discharges the obligation. The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction. Where the change has no closing issue, or its criteria are empty however they came to be empty, nothing is deferrable — absent and empty are distinct states (§2.6) and both close here.
-- **measure-escalate** — any finding ruled INDETERMINATE on validity or direction. It resolves by measurement or by escalation to a human, and it can become neither an approval nor an author repair by anyone's silence.
-- **clear** — no effective finding remains that resolves to repair, defer, or measure-escalate. In particular, **where every finding is REFUTED the outcome is clear**: no reviewer result holds a gate of its own (§1.6), so refutation leaves nothing behind, and the old design's independent blocking verdict — which survived the refutation of every finding under it — retires here.
+First, **every effective finding takes exactly one disposition**, and the five are exhaustive over the Judge's rulings:
+
+- **repair** — confirmed SUBSTANTIVE, and the defer disposition below does not reach it. The author authors the repair; the head advances and draws a fresh required panel (§1.6, §1.7).
+- **defer** — confirmed SUBSTANTIVE, recorded `fail-closed`, and sitting on **no** criterion of the manifest the AC-impact axis read. It is filed as its own issue, the filed issue's identifier entering the review record beside the finding — which makes a false filing record mechanically falsifiable. Repairing it in place instead is always available and discharges the obligation. The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction. Where the change has no closing issue, or its criteria are empty however they came to be empty, nothing is deferrable — absent and empty are distinct states (§2.6) and both close here.
+- **remedy** — confirmed NIT. The Judge's exact mechanical remedy is applied verbatim; nothing else follows from the finding.
+- **measure-escalate** — INDETERMINATE on validity or on direction. It resolves by measurement or by escalation to a human, and it can become neither an approval nor an author repair by anyone's silence.
+- **none** — REFUTED. It is retained marked refuted and leaves nothing behind.
+
+Second, the **outcome over the set** is derived by a fixed total precedence, so a mixed set has exactly one answer: **repair** if any finding disposed to repair; otherwise **measure-escalate** if any disposed to measure-escalate; otherwise **clear**. A set of deferrals, remedies, and refutations therefore resolves **clear**, which is what lets the change proceed to the ready decision (§2.3) with its deferrals filed and its exact remedies applied — the filing and the verbatim remedy are the whole of what those dispositions owe at that head. **Where every finding is REFUTED the outcome is clear** for the same reason: no reviewer result holds a gate of its own (§1.6), so refutation leaves nothing behind, and the old design's independent blocking verdict — which survived the refutation of every finding under it — retires here.
 
 **The never-list.** The Resolver never compares acceptance-criterion semantics, never deduplicates, never decides severity, never infers a harm direction, and never invents, repairs, or evaluates a remedy. Each of those is a Judge act, and a Resolver reaching for one is a second semantic decision-maker under a deterministic name. Where the Resolver's input is missing an axis it needs, the adjudication is incomplete and the review is incomplete with it — it does not fill the gap.
 
-**Nit carry-forward.** A substantive repair advances the head and draws a fresh required panel. One **named exception**, amended by reference (§2.8) into the three sentences that otherwise forbid it — §3.7(d)'s never-hand-authored conjunct, §1.6's answering-a-review-invalidates-it rule, and §2.4's never-carries-forward rule: where the Resolver's outcome is **clear** and the repairs applied were exactly the Judge's exact mechanical remedies, the author re-issues the evidence artifact at the post-fix state, recording the completed panel, the Judge's adjudication, each finding verbatim, and the exact delta. The author is transport only — the artifact's content is the panel's own completion plus remedies the Judge fully specified, mechanically re-checkable, ruling text against delta — so **a carry-forward whose delta exceeds its finding draws fresh review** and is a substantive violation of the review record. That retained detection surface is what justifies the exception. No weakening of evidence discipline (§2.4) rides here: a literally-false wording is still fixed before the artifact ships, whatever its severity or direction; the exception changes only what follows the fix.
+**Nit carry-forward.** A substantive repair advances the head and draws a fresh required panel. One **named exception**, amended by reference (§2.8) into the three sentences that otherwise forbid it — §3.7(d)'s never-hand-authored conjunct, §1.6's answering-a-review-invalidates-it rule, and §2.4's never-carries-forward rule: where the Resolver's outcome is **clear** and the only change to the artifact since the panel ran is the verbatim application of the Judge's exact mechanical remedies, the author re-issues the evidence artifact at the post-fix state, recording the completed panel, the Judge's adjudication, each finding verbatim, and the exact delta. The author is transport only — the artifact's content is the panel's own completion plus remedies the Judge fully specified, mechanically re-checkable, ruling text against delta — so **a carry-forward whose delta exceeds its finding draws fresh review** and is a substantive violation of the review record. That retained detection surface is what justifies the exception. No weakening of evidence discipline (§2.4) rides here: a literally-false wording is still fixed before the artifact ships, whatever its severity or direction; the exception changes only what follows the fix.
 
 **The Judge dispatch.** The instrument is the same isolation the panel rides (§4.9's dispatcher, §1.5's isolation): a Judge delegate is dispatched into a clone pinned at the reviewed head — the pin's operand is the head the panel itself reported and the caller's blind compare confirmed (§1.6), never the caller's revealed expectation (§4.9's content-free-return clause) — so a ruling's command runs against the state the finding claims exactly as far as that compare reaches: the pin closes head selection, and pushed-head freshness stays §4.9's named residual, carried here by reference rather than silently equated. The findings cross embedded verbatim in the brief as §1.5's dispatch-facts form (iii) — explicitly labeled unverified — since a provisioned tree cannot reach the platform record, so the Judge's verification obligation attaches by that rule's own sentence rather than by inference from the role.
 
@@ -279,7 +286,7 @@ States are encoded as labels; issues are the SSOT and any project-board mirror i
 
 - **Proposed** (`status:proposed`, auto-stamped at filing) — filed but not yet actionable. No branch is created against a Proposed issue.
 - **Active** (no status label) — the Proposed → Active flip requires **activation evidence**: a substance review of the current body whose pass verdict is posted as an issue comment with the marker `<!-- activation-verdict: pass -->` as its first line, by a trusted account (owner/member/collaborator), before the `status:proposed` label is removed. Two review moments are complementary, not redundant: an author-side check before filing, and this observer-side check at activation. The substance review adjudicates the body's claimed authorization case (§1.2): it rules whether the change's contract is normative, checks the precedence rule, confirms a pre-satisfying citation where one is claimed, and, for a new normative contract, confirms the reach-derived settlement mode and records the adjudicated reach in the verdict — any deviation's ground is recorded there too.
-- **`awaiting-author`** — a reviewer returned a non-pass verdict; the author owes the next move.
+- **`awaiting-author`** — a review resolved to an outcome that leaves the author owing the next move (§1.9's Resolver). The trigger is the resolved outcome, never a reviewer's own result: findings a Judge refutes resolve clear and put the artifact in no such state.
 - **`status:blocked`** — a Directive that cannot proceed without external input; unblocking re-validates the current body through the same activation gate.
 - **Closed** — `completed` only through the flow (merge closes via `Closes #N`, or an explicit completion review for Directives); `not planned` otherwise. Before a merge that closes an issue, each of the issue's acceptance criteria is resolved in an AC-closeout comment: checked, or marked N/A with a one-line reason.
 
@@ -300,9 +307,9 @@ Durable artifacts — issue bodies, PR bodies, commit messages, review verdicts 
 - A quotation resolves at the file it is attributed to.
 - A claim about a corpus ("zero matches", "all files pass") carries the command that measured it and its output, pinned to a commit — and licenses exactly what that command read. Three distinct defects: ranging past the corpus the pattern could reach, silently narrowing a returned set into an enumeration, and printing a readable paraphrase in place of the pipeline actually run.
 - No claim that expires before the artifact does — expiring claims are removed or pinned to their snapshot, never left to rot.
-- Where a rule generates the instances, the artifact states the rule — never a count or roster a future commit can silently falsify; an exact count belongs where going stale fails a check. A measurement quantified over a corpus containing its own carrier pins that corpus or excludes itself. Review archaeology — round numbers, prior-defect narrative — lives in the review record, never on a living surface. Archaeology is one species of a genus: **development provenance**, text a reader does not need in order to understand the current contract because it describes the repository's development rather than its present state — how it got here, or where its work is going next. A distinct term from §3.7's evidence provenance, which governs where a verdict artifact came from rather than what a sentence may say. A historical *fact* that explains current behavior stays ("v1 messages remain accepted for compatibility"); its provenance does not ("we added v1 in #123"). Both tenses are the same defect because both date the sentence to a moment that is not now: §1.2's schedule species is the forward-facing half, which is why one reader covers both.
+- Where a rule generates the instances, the artifact states the rule — never a count or roster a future commit can silently falsify; an exact count belongs where going stale fails a check. A measurement quantified over a corpus containing its own carrier pins that corpus or excludes itself. Review archaeology — prior-defect narrative, which review said what when — lives in the review record, never on a living surface. Archaeology is one species of a genus: **development provenance**, text a reader does not need in order to understand the current contract because it describes the repository's development rather than its present state — how it got here, or where its work is going next. A distinct term from §3.7's evidence provenance, which governs where a verdict artifact came from rather than what a sentence may say. A historical *fact* that explains current behavior stays ("v1 messages remain accepted for compatibility"); its provenance does not ("we added v1 in #123"). Both tenses are the same defect because both date the sentence to a moment that is not now: §1.2's schedule species is the forward-facing half, which is why one reader covers both.
 - A self-claim about the same change ("localized", "reviewed") ships its evidence or is not written. The three same-change claim shapes carry canonical evidence: a predicate claim ships the run against the real input; a coverage claim ships the count and the command that counted it; a machine-pair claim ("this arm refuses X") ships one attempted violation and its red.
-- Reviews are pinned to the exact commit they examined (`reviewed-head`); a review result for one head never carries forward to another — one named exception: the nit carry-forward of §1.9's resolution clause, on that clause's terms alone. The mechanism that verifies the pin — the caller-side blind compare — lives at §1.6.
+- Reviews are pinned to the exact commit they examined (`reviewed-head`); a review result for one head never carries forward to another — one named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone. The mechanism that verifies the pin — the caller-side blind compare — lives at §1.6.
 
 This discipline is **procedural today**, enforced at review (§2.3); evidence instruments derive later per §1.2's macro-phase clause.
 
@@ -527,7 +534,7 @@ For every gated approval this SPEC commits to — activation flips (§2.2), comp
 - (a) **Evidence-before-action ordering** — the flow produces the evidence artifact before the terminal action fires, so the gate finds it.
 - (b) **No silent skip** — every skip is either blocked or an explicit, audited escape (§3.5); a silent omission path is a defect.
 - (c) **Fail-closed lookup** — an approval gate fails closed on lookup failure (§5.2).
-- (d) **Evidence provenance** — a passing verdict artifact derives only from a real reviewer run and is never hand-authored — one named exception: the nit carry-forward of §1.9's resolution clause, on that clause's terms alone; where hand-forgery remains technically possible, the surfaces that would detect it are retained (§1.6's blind-compared self-reported head is one such surface), so a deferred hardening stays measurable rather than blind.
+- (d) **Evidence provenance** — a passing review's evidence artifacts derive only from real runs of the actors that produce them — the panel's results from real reviewer runs, and the Judge adjudication §3.3's `merge-review` row consumes beside them from a real Judge run (§1.9's author-non-role rule, given its enforcement face here) and is never hand-authored — one named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone; where hand-forgery remains technically possible, the surfaces that would detect it are retained (§1.6's blind-compared self-reported head is one such surface), so a deferred hardening stays measurable rather than blind.
 - (e) **Predicate integrity** — a gate's evidence predicate binds to the artifact's canonical position and shape (its own artifact, its own head or subject binding), never to substring presence: an evidence marker relayed verbatim inside some other trusted artifact must not satisfy a gate, and composers that relay third-party text verbatim neutralize any gate-marker shapes they carry.
 
 The norm is homed as the `approval-evidence` row in §3.3, which records its placement per arm — procedural today; instruments derive later per §1.2's macro-phase clause.
@@ -784,7 +791,7 @@ The norm is **explicitly advisory** today (§3.1 rule 1), enforced at review (§
 
 ### 5.7 Unattended conduct
 
-An unattended run classifies what stopped it before acting: **clean** — nothing blocks; **soft** — attributable to the run's own last change and fixable without a new product decision; **hard** — needing a decision only a human can make. A clean state proceeds to the ceiling action (§5.6). A soft blocker earns exactly one self-repair attempt; a second soft outcome escalates to hard — a second rejection demands another materially different method: §1.4's method-change requirement where its diagnosis reads the repair history, and this section's own soft-outcome count where that diagnosis does not reach, the ceiling here being unattended conduct rather than review method — the orthogonality §1.4's autonomy-budget paragraph states, applied at the budget's own end — either way a new product decision, which is what makes the blocker hard. A hard blocker **parks**: a deterministic state summary, a marker label, a log entry, and an audit record — idempotent on repeat, and itself a friction signal the calibration loop (§3.6) reads. Parking is the named next action, never a bare stop.
+An unattended run classifies what stopped it before acting: **clean** — nothing blocks; **soft** — attributable to the run's own last change and fixable without a new product decision; **hard** — needing a decision only a human can make. A clean state proceeds to the ceiling action (§5.6). A soft blocker earns exactly one self-repair attempt; a second soft outcome escalates to hard — a second unresolved stop demands another materially different method: §1.4's method-change requirement where its diagnosis reads the repair history, and this section's own soft-outcome count where that diagnosis does not reach, the ceiling here being unattended conduct rather than review method — the orthogonality §1.4's autonomy-budget paragraph states, applied at the budget's own end — either way a new product decision, which is what makes the blocker hard. A hard blocker **parks**: a deterministic state summary, a marker label, a log entry, and an audit record — idempotent on repeat, and itself a friction signal the calibration loop (§3.6) reads. Parking is the named next action, never a bare stop.
 
 **Generation is open, decision is gated.** The shell may produce any artifact unattended — drafts, proposals, candidate corrections — but every state transition stays behind its gate: completing a scoping-tier item, applying an SSOT correction, or discarding another party's filed work is never a side effect of an unattended run. An unattended sweep never reverses a deliberate human act — a human-set blocked state is not auto-cleared. It never re-adjudicates an unchanged artifact — batch idempotence keys on subject freshness, so a verdict postdating the subject's last edit stands. And it never destroys an untrusted filer's content — a rejected outside filing is demoted to the friction-free tier (§2.1) with a lineage link, and a trusted filer's item is never auto-closed.
 
@@ -821,7 +828,7 @@ Until then, an external development environment may govern the working process, 
 
 ### 6.1 Substrate posture
 
-The substrate under the shell is a rising floor: it improves under use and absorbs generic agent-support machinery over time. A shell mechanism that merely re-does what the substrate now does natively is redundant cost; the shell's durable value concentrates where a general substrate structurally cannot go — opinionated engineering policy, high-asymmetry safety redundancy (§3.6), and repository artifacts as durable memory. Each shell mechanism therefore carries exactly one standing posture — **cede to the substrate**, **keep as policy**, or **keep as safety redundancy** — and a cede is a forward-discipline signal retired through its own change on the standard flow (§1.1), never an in-place deletion. §3.1 caps the classification: an enforcement-layer mechanism never resolves to cede on the strength of substrate-grown permissions — its floor posture is keep-as-safety-redundancy, because the only-safety-net commitment is substrate-evolution-proof by definition.
+The substrate under the shell is a rising floor: it improves under use and absorbs generic agent-support machinery over time. A shell mechanism that merely re-does what the substrate now does natively is redundant cost; the shell's durable value concentrates where a general substrate structurally cannot go — opinionated engineering policy, safety redundancy where §3.6's cost asymmetry calls for it, and repository artifacts as durable memory. Each shell mechanism therefore carries exactly one standing posture — **cede to the substrate**, **keep as policy**, or **keep as safety redundancy** — and a cede is a forward-discipline signal retired through its own change on the standard flow (§1.1), never an in-place deletion. §3.1 caps the classification: an enforcement-layer mechanism never resolves to cede on the strength of substrate-grown permissions — its floor posture is keep-as-safety-redundancy, because the only-safety-net commitment is substrate-evolution-proof by definition.
 
 Where this SPEC claims to classify a family exhaustively, a parity check fails until every member has its row; and an inventory this SPEC states is machine-checked against the real tree, or it rots — §2.4's clause that an exact count belongs where going stale fails a check, applied to trees. This SPEC also owes its own falsifiable acceptance checklist — observable, all-must-hold conditions read before the shell operates on a repository — committed to here and derived later like this section's parity and inventory checks. And build order follows consumption order — shared contracts before their consumers, templates before their readers, one end-to-end path proven before self-application (this section's milestone).
 
