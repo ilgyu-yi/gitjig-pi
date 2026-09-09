@@ -235,8 +235,8 @@ const STREAM_GRACE_MS = 2_000;
 
 /**
  * The two timers as an injectable pair — a test seam taken as a function
- * argument, never an environment read (the runtime's only env read stays
- * `GITJIG_TEST_STATE_ROOT`, state-root.ts). What it substitutes for,
+ * argument, never an environment read — the single-seam discipline
+ * state-root.ts states. What it substitutes for,
  * stated (§1.5): the exit-inside-the-flush-grace race is a real-time
  * window of width `graceMs` between the two production timers, and a
  * suite arm staging it against the production numbers holds at most a 1s

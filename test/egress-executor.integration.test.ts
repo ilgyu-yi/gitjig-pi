@@ -9,7 +9,7 @@
  * run needs except gh — the minimal symlink set pi/git/node/sh/bash/env,
  * measured sufficient on this substrate 2026-09-05), a failed run, junk
  * output, a hostile stdin-echoing child, the payload on the wrong stream,
- * a hanging child, an orphan holding the pipes past a late in-bound exit,
+ * a hanging child, an orphan holding the pipes past an in-bound exit,
  * and a child that spawns a grandchild of its own (issue #85).
  *
  * Every instrument arm binds registration: it reds unless the tree registers
@@ -372,7 +372,7 @@ describe("the payload on the wrong stream refuses admission (issue #83)", () => 
 	});
 });
 
-describe("a late in-bound exit behind an orphan-held pipe publishes (issue #85, SPEC §5.6)", () => {
+describe("an in-bound exit behind an orphan-held pipe publishes through the flush grace (issue #85, SPEC §5.6)", () => {
 	it("the run completes and the tool answers for itself", () => {
 		assert.equal(
 			orphanLateRun.result.timedOut,

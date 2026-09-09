@@ -21,10 +21,11 @@
  * per §3.12 the kill is verified by hand in a throwaway copy.
  */
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { runPublishChild } from "../.pi/extensions/gitjig/publish/executor.ts";
 
 const URL_LINE = "https://example.invalid/gitjig/race#issuecomment-119";
@@ -58,6 +59,36 @@ after(() => {
 		process.env.PATH = savedPath;
 	}
 	rmSync(shimRoot, { recursive: true, force: true });
+});
+
+describe("the seam's default is the production constants, pinned (issue #119)", () => {
+	it("STRUCTURAL: the bounds parameter defaults to CHILD_TIMEOUT_MS and STREAM_GRACE_MS by name", () => {
+		// STRUCTURAL, and recorded as such (§1.5), naming what it substitutes
+		// for: a behavioral arm observing the default from outside the module.
+		// A parameter default is not runtime-observable — the one production
+		// caller passes no bounds and its 10s/2s timing is what the retired
+		// staging flaked on — so what is pinned is the initializer's spelling:
+		// the default reads the two exported constants by name, never its own
+		// literals, which is the tie the module's doc sentence ("production
+		// callers pass nothing and run the constants") claims and a diverged
+		// default (measured green at 20s/8s across the whole suite) breaks.
+		const executor = readFileSync(
+			fileURLToPath(new URL("../.pi/extensions/gitjig/publish/executor.ts", import.meta.url)),
+			"utf8",
+		);
+		const body = executor
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.split("\n")
+			.filter((line) => !line.trimStart().startsWith("//"))
+			.join("\n");
+		assert.match(
+			body,
+			/bounds:\s*ChildBounds\s*=\s*\{\s*timeoutMs:\s*CHILD_TIMEOUT_MS,\s*graceMs:\s*STREAM_GRACE_MS\s*\}/,
+			"the bounds default no longer spells the production constants by name — a second spelling of the " +
+				"production bound can drift with the whole suite green, against the module's own claim that " +
+				"production callers run the constants",
+		);
+	});
 });
 
 describe("a late in-bound exit behind an orphan-held pipe is published, staged at the seam (issue #119)", () => {
