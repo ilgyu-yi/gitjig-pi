@@ -10,10 +10,14 @@
  * environment variable that configures the runtime's own behavior; the
  * name marks it test-only, and an active seam is reported
  * (`seamActive: true`) so the entry can announce it (§5.9). The other
- * named reads in the tree — `PATH`, `HOME`, `XDG_CONFIG_HOME`, and
- * `GIT_CONFIG_NOSYSTEM` in bind-state.ts's `childEnv()` — are
- * passthroughs composing a child's environment, never knobs on this
- * runtime: none of them changes what any shell code does.
+ * named reads in the runtime (`.pi/extensions/`) — `PATH`, `HOME`,
+ * `XDG_CONFIG_HOME`, and `GIT_CONFIG_NOSYSTEM` in bind-state.ts's
+ * `childEnv()` — are read only to compose a child process's
+ * environment: the only branches on them decide whether a value is
+ * copied onto the child. Their values still reach outcomes through
+ * that child — bind-state.ts's own header records that the
+ * classifier's verdict follows `HOME` and `XDG_CONFIG_HOME` by design
+ * — so they are passthroughs, not configuration seams.
  *
  * Fail posture (§3.9, `seam-target` row): a seam that is set but
  * unusable — empty, relative, missing, or not a directory — REFUSES the
