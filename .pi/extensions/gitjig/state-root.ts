@@ -16,7 +16,7 @@
  * environment: the only branches on them decide what is copied onto
  * the child — whether the key is set at all, or the empty string in
  * place of an unset value. Their values still reach outcomes through
- * that child — bind-state.ts's own header records that the
+ * that child — bind-state.ts's `childEnv()` docstring records that the
  * classifier's verdict follows `HOME` and `XDG_CONFIG_HOME` by design
  * — so they are passthroughs, not configuration seams.
  *
@@ -48,7 +48,7 @@ import { isAbsolute, join } from "node:path";
 import { locateRepoRoot } from "./locate.ts";
 import { quoted } from "./quote.ts";
 
-/** The single test-only override seam — the only environment variable that configures the runtime. */
+/** The single test-only override seam — the only environment variable that configures the runtime's own behavior. */
 export const STATE_SEAM = "GITJIG_TEST_STATE_ROOT";
 
 export interface StateRootResolution {
