@@ -1,5 +1,5 @@
 {
-	"$comment": "The committed reviewer-lens policy surface (SPEC §1.7; issue #169, Directive #166). Committed so a routing decision is diffable and auditable after the fact; caller-owned so nothing a delegate says at dispatch time can select a lens. Rows are matched against the change's own changed-path set by path prefix. A row's prefixes are non-empty by contract — an empty prefix would match every string, including a delegate-shaped claim that is not a path at all. The CONTENT below is deliberately a minimal working set, not a curated taxonomy: §1.7 puts the surface's content outside its own contract, and issue #169 scopes only the surface.",
+	"$comment": "The reviewer-lens policy surface this repository commits (SPEC §1.7; issue #169, Directive #166). What the section requires of this file, and why, is stated there and is not restated here (§2.8). Local facts a reader needs and the SPEC does not carry: rows are matched against the change's own changed-path set by path prefix, segment-aware, so a name that merely begins with a prefix does not route; a row's prefixes and its lens are validated non-empty and its lens unique at load, by .pi/extensions/gitjig/review/panel.ts's validatePolicy. The CONTENT below is deliberately a minimal working set rather than a curated taxonomy — issue #169 scopes the surface, not its rows.",
 	"version": 1,
 	"rows": [
 		{

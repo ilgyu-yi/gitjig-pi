@@ -154,12 +154,27 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{
 		file: "gitjig/review/panel.ts",
 		allow: [
-			// The lens NAME from the committed policy surface beside the
-			// module. It is not a path and cannot become one: it is read from
-			// a tracked repository artifact, never from an actor's input, and
-			// the two sites that interpolate it are policy-validation throws
-			// naming which row is malformed.
-			"row.lens",
+			// The two git revision operands, composed into ONE argv element of
+			// an execFileSync call — `git diff --name-only <base>...<head>` —
+			// and never into a message. No shell parses them (execFileSync
+			// takes an argv array, not a command string), and no operator
+			// surface receives them: the only thing that reads this string is
+			// git's own revision parser, which is not the surface issue #47's
+			// lock protects.
+			"baseRef",
+			"headRef",
+			// A policy prefix, composed into a comparison operand for the
+			// segment-aware match (`path.startsWith(`${prefix}/`)`). It does
+			// carry a path, and that is why it is allowlisted on the second
+			// ground the lock offers rather than the first: the composed value
+			// is compared and discarded, never warned, thrown, or printed.
+			"prefix",
+			// NOT allowlisted, and named here so the absence is legible: the
+			// lens name reaches three validation throws and goes through
+			// `quoted` at each, the tree's single escaper. An earlier revision
+			// of this module minted its own one-line escaper instead; the lock
+			// refused it, correctly — a second escaper is the divergence
+			// engine §3.11 names.
 		],
 	},
 	// The committed lens-policy surface is DATA, not a module, and it is
