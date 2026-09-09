@@ -5,7 +5,7 @@
  * `registerDispatchTool` wraps it as the registered tool: one home, many
  * call sites (§4.9).
  *
- * The caller acts §1.4/§1.6/§1.7/§1.8 assign ride this dispatcher; where
+ * The caller acts §1.4 and §1.6-§1.9 assign ride this dispatcher; where
  * a §3.3 row consumes the property, the dispatcher is a CALL SITE of the
  * predicate that row owns, never a second implementation (§3.11). The
  * named instance: holding and comparing the expected head is evidence
