@@ -6,6 +6,22 @@
 		"moduleResolution": "nodenext",
 		"types": ["node"],
 
+		// noUncheckedIndexedAccess stays OFF — a decision, not an omission
+		// (issue #137). Triaged 2026-09-09 at 78 flagged entries: 74 provably
+		// in range at the call site (length-asserted, mandatory regex group,
+		// or loop-bounded — each repair a non-null assertion the guard already
+		// justifies), 4 more in range but better repaired by a restructure
+		// than an assertion, 0 genuinely unchecked: every index is guarded
+		// and none can reach an out-of-range slot, so the flag would have
+		// caught nothing here. A tree of 74 `!` marks buys no defect and
+		// hides the guards that do the work. Reopen if a triage ever finds a
+		// site in the wrong-allow shape, or if
+		// `tsc --noEmit --noUncheckedIndexedAccess | grep -c '^\.pi/'` (from
+		// the repo root, toolchain installed) ever counts more than the 4
+		// error lines it counts today (not the same four as the restructure
+		// class — this count is by directory). That count is a coarse proxy
+		// in both directions: the per-site table and the tripwire's measured
+		// blind spots are on issue #137.
 		"strict": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
