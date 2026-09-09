@@ -305,9 +305,10 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "provenance-reader",
 		failureShape:
-			"the reader is absent, unreadable, or its diff input cannot be formed (unresolvable merge base), so a " +
-			"change's added lines are never read for development provenance (.github/workflows/check-provenance.sh, " +
-			"issue #70)",
+			"the reader is absent, unreadable, or its diff input cannot be formed (unresolvable merge base), or the " +
+			"job's own checkout machinery fails, so a change's added lines are never read for development provenance " +
+			"(the `provenance` job in check-provenance.yml running .github/workflows/check-provenance.sh, issue #70; " +
+			"a machinery red there blocks nothing — the check is never in the required set by its own header)",
 		posture: "open",
 		justification:
 			"The only posture this dependency may take. SPEC §2.5 states that no gate class homes a decidable check " +
@@ -328,9 +329,9 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "ci-gate-machinery",
 		failureShape:
-			"actions/checkout or actions/setup-node fails, or `npm ci` cannot install from the committed lockfile " +
-			"(registry unreachable, lockfile out of agreement) at any required gate — fragment-gate, ssot-home, " +
-			"toc-freshness, source-style, type-check",
+			"actions/checkout fails at any required gate — fragment-gate, ssot-home, toc-freshness — or " +
+			"actions/setup-node fails or `npm ci` cannot install from the committed lockfile (registry unreachable, " +
+			"lockfile out of agreement) at source-style or type-check, the only gates that install anything",
 		posture: "closed",
 		justification:
 			"The step fails with the platform's or npm's own message and none of the gate's — an accepted default, " +
@@ -358,7 +359,9 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"Decided in both surfaces with the ground written in place: 'a project with no external contract " +
 			"legitimately has none' (check-toc.yml), and check-ssot-home.sh's track-active guard leaves 'a genuinely " +
-			"contract-less repo' untouched. The skip prints its reason; it is a scoped subject-absence, not a disarm.",
+			"contract-less repo' untouched. A scoped subject-absence, not a disarm — toc-freshness's skip prints its " +
+			"reason; ssot-home's track-active skip is silent on both streams, an enumerated residual recorded not " +
+			"repaired here.",
 	},
 	{
 		dependency: "spec-absence",
@@ -377,7 +380,7 @@ export const POSTURES: readonly PostureRow[] = [
 		failureShape:
 			"the PR metadata or file-listing read degrades at fragment-gate — transport failure after three retries, a " +
 			"concatenated or non-array response, an empty stdin handoff, an unclassifiable or uncountable listing, a " +
-			"listing shorter than the PR's changedFiles, or a file status outside the known enum",
+			"listing whose entry count disagrees with the PR's changedFiles, or a file status outside the known enum",
 		posture: "closed",
 		justification:
 			"Decided across check-changelog.yml and check-changelog.sh on §3.10's output-validity admission, with each " +
@@ -399,8 +402,7 @@ export const POSTURES: readonly PostureRow[] = [
 	},
 	{
 		dependency: "ci-toolchain-presence",
-		failureShape:
-			"biome or tsc absent from node_modules under the --no-install seam at source-style or type-check",
+		failureShape: "biome or tsc absent from node_modules under the --no-install seam at source-style or type-check",
 		posture: "closed",
 		justification:
 			"npx --no-install fails rather than fetching (the lockfile-bounded choice), so the job reds — the right " +
@@ -414,10 +416,13 @@ export const POSTURES: readonly PostureRow[] = [
 		posture: "closed",
 		justification:
 			"No workflow arm measures this shape; the tools' own refusals decide it, and both were measured at this " +
-			"tree: biome under default rules emits warnings that --error-on-warnings makes fatal (rc 1), and tsc " +
-			"without a resolvable config refuses (no inputs). Enumerated residual: biome's direction is contingent on " +
-			"the tree producing default-rule diagnostics — a tree that is clean under defaults would pass with the " +
-			"committed configuration silently unenforced — and the refusal wears the tool's message, not the gate's.",
+			"tree: biome under default rules emits errors and warnings on this tree (rc 1 with or without " +
+			"--error-on-warnings), and tsc without a resolvable config refuses (usage banner, rc 1 — it type-checks " +
+			"nothing). Enumerated residuals: biome's direction is contingent on the tree producing default-rule " +
+			"diagnostics — a tree that is clean under defaults would pass with the committed configuration silently " +
+			"unenforced; the refusal wears the tool's message, not the gate's; and tsc searches ancestors, so a " +
+			"tsconfig above the workspace is silently substituted rather than refused (a local-reproduction hazard " +
+			"first — a runner checkout sits under a clean ancestor chain).",
 	},
 	{
 		dependency: "ci-utility-absence",
@@ -428,7 +433,7 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"The nonzero exit reds the job — the right direction — but by default, not by arm, and two enumerated " +
 			"residuals ride it: toc-freshness's catch-all reports any unclassified rc as a stale TOC (rc 2's collapsed " +
-			"class: unnumbered headings, an unresolvable SPEC, non-convergence, and utility misses all wear the " +
+			"class as reachable through --check at this gate: unnumbered headings and utility misses wear the " +
 			"staleness message, with rc=$rc printed for recovery from the log), and ssot-home under set -uo without -e " +
 			"reports an awk miss as a docs authoring defect — or, with no SPEC present, skips clean. Recorded not " +
 			"repaired; message disambiguation is follow-up work.",

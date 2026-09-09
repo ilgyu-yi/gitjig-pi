@@ -1453,8 +1453,6 @@ describe("fail-posture inventory (§3.9)", () => {
 				"platform-file-listing → closed",
 				"provenance-reader → open",
 				"repo-root-discovery → open",
-				"spec-absence → closed",
-				"spec-absence → open",
 				"seam-target → closed",
 				"secret-scan-helper → open",
 				"secret-scan-helper → open",
@@ -1465,6 +1463,8 @@ describe("fail-posture inventory (§3.9)", () => {
 				"secret-scan-measurement → closed",
 				"secret-scan-patterns → open",
 				"secret-scan-toplevel → open",
+				"spec-absence → closed",
+				"spec-absence → open",
 			].sort(),
 		);
 		// One component may carry several rows — one posture per failure

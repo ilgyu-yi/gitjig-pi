@@ -403,10 +403,16 @@ describe("tier-3 completeness floor: every live-PR gate workflow is inventoried 
 	// job ids must appear verbatim in at least one row's text. The join
 	// is substring-over-row-text, coarse on purpose: it pins that a row
 	// EXISTS naming the gate, not that the row is right — that half is
-	// held by the enumeration on issue #136 and by review. Residual,
-	// enumerated in place: a future workflow triggering on closed PLUS
-	// live types spells a types line this skip does not match and joins
-	// the domain, which is the fail-closed direction for this floor.
+	// held by the enumeration on issue #136 and by review. Candidacy is
+	// token-level — any workflow whose text carries `pull_request` — so
+	// the flow-style, array, and bare-scalar `on:` spellings all join the
+	// domain (the block-style-only predicate this replaces was measured
+	// walking three live spellings past the floor). Residuals, enumerated
+	// in place, both in the fail-closed direction for this floor: a
+	// workflow that merely MENTIONS pull_request in a comment joins the
+	// domain and demands a row it may not owe; and a future workflow
+	// triggering on closed PLUS live types spells a types line the
+	// closed-skip below does not match and joins the domain.
 	it("every live-PR workflow job id appears in at least one posture row", () => {
 		const wfDir = join(repoRoot(), ".github", "workflows");
 		const rowTexts = POSTURES.map((row) => `${row.dependency}\n${row.failureShape}\n${row.justification}`);
@@ -417,7 +423,7 @@ describe("tier-3 completeness floor: every live-PR gate workflow is inventoried 
 				continue;
 			}
 			const text = readFileSync(join(wfDir, name), "utf8");
-			if (!/^\s+pull_request:/m.test(text)) {
+			if (!text.includes("pull_request")) {
 				continue;
 			}
 			if (/^\s+types:\s*\[closed\]\s*$/m.test(text)) {
