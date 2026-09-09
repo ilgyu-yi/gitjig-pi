@@ -52,8 +52,11 @@
  * wrongly claimed for a send that landed, and only the allow direction
  * catches that. So an executor keyed on exit status alone reddens at the
  * junk/echo/wrong-stream arms, one keyed on presence alone reddens at the
- * absent arm, and one whose bound outlives the child's exit reddens at the
- * orphan-late arm.
+ * absent arm, and one whose bound outlives the child's exit reddens at
+ * the race arm in egress-executor-race.unit.test.ts, which stages the
+ * exit inside the (bound - grace, bound) window at the executor's
+ * injected-bounds seam — the orphan-late arm here exits early on purpose
+ * (issue #119) and no longer holds that window.
  *
  * ONE ARM HERE IS STRUCTURAL, not behavioral, and is marked so at its own
  * site: the unreapable-child backstop. A child in an uninterruptible wait
@@ -252,15 +255,18 @@ before(async () => {
 	// The arm's own 60s timeout is the backstop that turns a wedge into a
 	// measured failure instead of a wedged suite.
 	hangingRun = await runWithShim("sleep 120\n", 60_000);
-	// The race the exit-handler's timer clear repairs. The child exits WELL
-	// INSIDE its bound but LATE — past (bound - flush grace) — while an
-	// orphaned grandchild holds the pipes open past that exit, so "close"
-	// never comes and the outcome is decided by the flush grace. With the
-	// kill timer still armed across that grace, the bound elapses before the
-	// grace decides and an in-bound run is marked timed out: a refusal for a
-	// send that succeeded, which is the false-withholding direction §5.6
-	// forbids. The URL is on stdout, so the only correct outcome is published.
-	orphanLateRun = await runWithShim("sleep 30 &\n" + "sleep 9\n" + `printf '${SHIM_URL}\\n'\n` + "exit 0\n", 90_000);
+	// The grace-path publish, end to end: the child exits inside its bound
+	// while an orphaned grandchild holds the pipes open past that exit, so
+	// "close" never comes and the outcome is decided by the flush grace.
+	// The URL is on stdout, so the only correct outcome is published. The
+	// exit is staged EARLY (1s against the 10s bound): the race geometry —
+	// an exit inside (bound - grace, bound), where a kill timer left armed
+	// across the grace refuses a send that landed — held at most 1s of
+	// real-time margin here and flaked under load (issue #119), so that
+	// window is proven at the executor's injected-bounds seam instead
+	// (egress-executor-race.unit.test.ts); this arm keeps the session-level
+	// claim with a margin load cannot eat.
+	orphanLateRun = await runWithShim("sleep 30 &\n" + "sleep 1\n" + `printf '${SHIM_URL}\\n'\n` + "exit 0\n", 90_000);
 	// Kill REACH. The shim spawns a grandchild that keeps ticking a file, then
 	// hangs past its own bound. Killing the direct child alone leaves that
 	// grandchild running; killing the process group takes it too. The ticks
@@ -381,9 +387,9 @@ describe("a late in-bound exit behind an orphan-held pipe publishes (issue #85, 
 
 	it("the in-bound send is reported PUBLISHED, never refused as bound-exceeded", () => {
 		// The regression direction is the one §5.6 forbids: withholding claimed
-		// for a send that succeeded. The child exited at 9s against a 10s bound
-		// with the URL on stdout; only a kill timer left armed across the flush
-		// grace can turn that into a timeout refusal.
+		// for a send that succeeded. The child exited at 1s against a 10s bound
+		// with the URL on stdout and an orphan holding the pipes, so only the
+		// flush grace can decide — and it must decide published.
 		const results = publishResults(orphanLateRun.fixture).map((message) => textOf(message));
 		assert.ok(results.length >= 1, toolUnregistered("orphan-late result"));
 		const joined = results.join("\n");

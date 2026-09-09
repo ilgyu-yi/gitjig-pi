@@ -251,8 +251,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{
 		file: "gitjig/publish/executor.ts",
 		allow: [
-			// A numeric module constant.
-			"CHILD_TIMEOUT_MS",
+			// A numeric bound — the module constant by default, a
+			// test-injected number through the ChildBounds seam otherwise.
+			"bounds.timeoutMs",
 			// The child's numeric exit status, and the signal NAME the
 			// platform reports — neither is actor-named text. The whole
 			// ternary is one entry now that the capture balances braces; the

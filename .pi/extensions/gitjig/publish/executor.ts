@@ -233,6 +233,22 @@ export const CHILD_TIMEOUT_MS = 10_000;
 /** Grace for stream flush after exit, when an orphan may hold the pipes. */
 const STREAM_GRACE_MS = 2_000;
 
+/**
+ * The two timers as an injectable pair — a test seam taken as a function
+ * argument, never an environment read (the runtime's only env read stays
+ * `GITJIG_TEST_STATE_ROOT`, state-root.ts). What it substitutes for,
+ * stated (§1.5): the exit-inside-the-flush-grace race is a real-time
+ * window of width `graceMs` between the two production timers, and a
+ * suite arm staging it against the production numbers holds at most a 1s
+ * margin — which machine load consumes (issue #119). The race arm injects
+ * wide margins here; production callers pass nothing and run the
+ * constants.
+ */
+export interface ChildBounds {
+	timeoutMs: number;
+	graceMs: number;
+}
+
 /** Output validity: one comment-URL, the whole of the trimmed stdout (§3.10). */
 
 export type PublishChildOutcome =
@@ -250,6 +266,7 @@ export function runPublishChild(
 	body: string,
 	repoRoot: string,
 	successShape: RegExp,
+	bounds: ChildBounds = { timeoutMs: CHILD_TIMEOUT_MS, graceMs: STREAM_GRACE_MS },
 ): Promise<PublishChildOutcome> {
 	return new Promise((resolve) => {
 		let settled = false;
@@ -308,8 +325,8 @@ export function runPublishChild(
 			// `exit`, and without this the awaited promise never settles and
 			// the tool call wedges — against this module's own bounded-refusal
 			// claim. Decide from what has arrived instead of waiting forever.
-			unkillableTimer = setTimeout(() => decide(null, "SIGKILL"), STREAM_GRACE_MS);
-		}, CHILD_TIMEOUT_MS);
+			unkillableTimer = setTimeout(() => decide(null, "SIGKILL"), bounds.graceMs);
+		}, bounds.timeoutMs);
 		let graceTimer: ReturnType<typeof setTimeout> | undefined;
 		const decide = (code: number | null, signal: string | null): void => {
 			clearTimeout(killTimer);
@@ -322,7 +339,7 @@ export function runPublishChild(
 			if (timedOut) {
 				settle({
 					outcome: "refused",
-					cause: `the publish child exceeded its ${CHILD_TIMEOUT_MS} ms bound and was terminated; the send is not admitted`,
+					cause: `the publish child exceeded its ${bounds.timeoutMs} ms bound and was terminated; the send is not admitted`,
 				});
 			} else if (code === 0) {
 				const line = stdout.trim();
@@ -374,7 +391,7 @@ export function runPublishChild(
 			}
 			// Streams may still be flushing; "close" decides as soon as they
 			// end, and the grace decides when an orphan never lets them end.
-			graceTimer = setTimeout(() => decide(code, signal), STREAM_GRACE_MS);
+			graceTimer = setTimeout(() => decide(code, signal), bounds.graceMs);
 		});
 		child.on("close", (code, signal) => decide(code, signal));
 	});
