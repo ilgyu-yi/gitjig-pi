@@ -114,7 +114,7 @@ const REFUSE_TIMEOUT_MS =
 	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
 
 export type DispatchOutcome =
-	| { disposition: "admitted"; ok: boolean; summary: string; compare?: "confirmed" | "invalid" }
+	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
 	| { disposition: "refused"; cause: string };
 
 /**
@@ -232,10 +232,20 @@ export async function runDispatch(options: RunDispatchOptions): Promise<Dispatch
 		if (!admission.admitted) {
 			return refuse("refuse-return", admission.cause);
 		}
-		if (namesHeldOperand(admission.summary, context.heldHash)) {
+		// The scan reaches EVERY byte that crosses, not the summary alone:
+		// the opaque `payload` slot (issue #169) is delegate-authored like
+		// the summary, so a slot the scan skipped would be a hole the schema
+		// widening opened in §4.9's content-free return channel.
+		if (
+			namesHeldOperand(admission.summary, context.heldHash) ||
+			(admission.payload !== undefined && namesHeldOperand(admission.payload, context.heldHash))
+		) {
 			return refuse("refuse-operand-named", REFUSAL_CAUSES.operandNamed);
 		}
 		const outcome: DispatchOutcome = { disposition: "admitted", ok: admission.ok, summary: admission.summary };
+		if (admission.payload !== undefined) {
+			outcome.payload = admission.payload;
+		}
 		if (options.expectedRef !== undefined) {
 			// The blind compare (§1.6 via §4.9): validity alone crosses back.
 			outcome.compare = admission.reviewedHead === context.heldHash ? "confirmed" : "invalid";

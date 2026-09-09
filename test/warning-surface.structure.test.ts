@@ -152,6 +152,24 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	},
 	{ file: "gitjig/locate.ts", allow: [] },
 	{
+		file: "gitjig/review/panel.ts",
+		allow: [
+			// The lens NAME from the committed policy surface beside the
+			// module. It is not a path and cannot become one: it is read from
+			// a tracked repository artifact, never from an actor's input, and
+			// the two sites that interpolate it are policy-validation throws
+			// naming which row is malformed.
+			"row.lens",
+		],
+	},
+	// The committed lens-policy surface is DATA, not a module, and it is
+	// the first data file this walk has returned. It is rostered rather
+	// than exempted because a data file cannot carry a leading block
+	// comment for the exemption marker to live in, and because rostering
+	// is the stronger state: the escaping lock scans it and finds nothing,
+	// which stays true only while it holds no interpolation at all.
+	{ file: "gitjig/review/lens-policy.json", allow: [] },
+	{
 		file: "gitjig/state-root.ts",
 		allow: [
 			// The seam's NAME is a constant of this module, not a value an

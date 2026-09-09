@@ -9,9 +9,17 @@
  * or a symlinked slot refuses without ever being opened; at most
  * 64 KiB — an oversize return is refused WHOLE, never truncated into an
  * admission; strict JSON; the CLOSED schema
- * `{ ok: boolean, summary: string, reviewedHead?: string }` with unknown
- * keys refused — a minimum-match would admit a surface no contract
- * bounds. Anything the delegate printed on a stream is not the crossing
+ * `{ ok: boolean, summary: string, reviewedHead?: string, payload?: string }`
+ * with unknown keys refused — a minimum-match would admit a surface no
+ * contract bounds. `payload` is an OPAQUE caller-interpreted slot (issue
+ * #169): this module fixes its type and its bound and the caller scans
+ * its bytes for held operands exactly as it scans the summary, and
+ * nothing here reads its meaning. That is deliberate and it is what
+ * keeps a caller's policy — the reviewer panel's result contract is the
+ * first — ABOVE this dispatcher rather than inside it (Directive #166's
+ * non-goal). A non-string at that key refuses whole: widening the schema
+ * by one slot widens it by one STRING slot, since an unbounded shape
+ * there is the surface no contract bounds. Anything the delegate printed on a stream is not the crossing
  * (§3.10's wrong-stream class lands here as a missing return).
  *
  * Every refusal cause below is a FIXED literal (§3.9's content-free
@@ -41,10 +49,10 @@ export const REFUSAL_CAUSES = {
 } as const;
 
 export type ReturnAdmission =
-	| { admitted: true; ok: boolean; summary: string; reviewedHead?: string }
+	| { admitted: true; ok: boolean; summary: string; reviewedHead?: string; payload?: string }
 	| { admitted: false; cause: string };
 
-const SCHEMA_KEYS = new Set(["ok", "summary", "reviewedHead"]);
+const SCHEMA_KEYS = new Set(["ok", "summary", "reviewedHead", "payload"]);
 
 export function admitReturn(returnPath: string): ReturnAdmission {
 	// Type and bound are decided on the lstat BEFORE any read: an
@@ -89,12 +97,27 @@ export function admitReturn(returnPath: string): ReturnAdmission {
 			return { admitted: false, cause: REFUSAL_CAUSES.malformedReturn };
 		}
 	}
-	const { ok, summary, reviewedHead } = parsed as { ok?: unknown; summary?: unknown; reviewedHead?: unknown };
+	const { ok, summary, reviewedHead, payload } = parsed as {
+		ok?: unknown;
+		summary?: unknown;
+		reviewedHead?: unknown;
+		payload?: unknown;
+	};
 	if (typeof ok !== "boolean" || typeof summary !== "string") {
 		return { admitted: false, cause: REFUSAL_CAUSES.malformedReturn };
 	}
 	if (reviewedHead !== undefined && typeof reviewedHead !== "string") {
 		return { admitted: false, cause: REFUSAL_CAUSES.malformedReturn };
 	}
-	return reviewedHead === undefined ? { admitted: true, ok, summary } : { admitted: true, ok, summary, reviewedHead };
+	if (payload !== undefined && typeof payload !== "string") {
+		return { admitted: false, cause: REFUSAL_CAUSES.malformedReturn };
+	}
+	const admitted: ReturnAdmission = { admitted: true, ok, summary };
+	if (reviewedHead !== undefined) {
+		admitted.reviewedHead = reviewedHead;
+	}
+	if (payload !== undefined) {
+		admitted.payload = payload;
+	}
+	return admitted;
 }
