@@ -1030,8 +1030,9 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 	// nothing else, so a weakened element reds its own arm rather than a
 	// neighbour's (§3.12). The two directions differ: 1 and 2 are
 	// wrong-allow (an actionable reference reaches the platform live), 3–5
-	// are over-wrap (published bytes corrupted mid-token and a count that
-	// reports a wrap where no reference was).
+	// are over-wrap (a wrap laid over text no reference occupies — crossing
+	// an author's own code span in 3, splitting an identifier mid-token in
+	// 4, and in 4 and 5 counting a wrap where no reference was).
 	it("the URL form's scheme matches the unencrypted spelling too", () => {
 		// The platform resolves an http:// issue URL to the issue (measured
 		// via the markdown render API: linked with an issue hovercard,
@@ -1044,6 +1045,11 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 			out.neutralized,
 			1,
 			"an unencrypted issue URL was not made inert — a scheme-strict pattern lets the http spelling reach the platform as a live, resolvable reference",
+		);
+		assert.equal(
+			out.text,
+			"see ` http://github.com/zqo/zqr/issues/4 `",
+			"the whole URL must sit inside the wrap — a partial cover counts a neutralization while leaving a live fragment outside it",
 		);
 	});
 
@@ -1058,6 +1064,11 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 			1,
 			"a pull-request URL was not made inert — dropping the pull alternative lets an actionable PR reference reach the platform live",
 		);
+		assert.equal(
+			out.text,
+			"see ` https://github.com/zqo/zqr/pull/4 `",
+			"the whole URL must sit inside the wrap — a partial cover counts a neutralization while leaving a live fragment outside it",
+		);
 	});
 
 	it("the URL form's backtick exclusion stops a wrap from crossing a body backtick", () => {
@@ -1070,7 +1081,7 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 		assert.equal(
 			out.neutralized,
 			0,
-			"a host run containing a backtick was wrapped — the wrap's own delimiter would then sit inside the wrapped text, corrupting the published bytes mid-token",
+			"a host run containing a backtick was wrapped — the wrap then crosses the author's own code-span boundary, and CommonMark's equal-length pairing makes the author's span and the wrap interleave rather than nest, leaving the reference's tail outside every span",
 		);
 		assert.equal(out.text, input, "the body must pass through unmodified when nothing matches");
 	});
