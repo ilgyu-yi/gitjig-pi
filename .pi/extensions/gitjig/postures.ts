@@ -308,7 +308,8 @@ export const POSTURES: readonly PostureRow[] = [
 			"the reader is absent, unreadable, or its diff input cannot be formed (unresolvable merge base), or the " +
 			"job's own checkout machinery fails, so a change's added lines are never read for development provenance " +
 			"(the `provenance` job in check-provenance.yml running .github/workflows/check-provenance.sh, issue #70; " +
-			"a machinery red there blocks nothing — the check is never in the required set by its own header)",
+			"a machinery red there blocks nothing — its own header forbids adding the check to the required set, and " +
+			"the SPEC-recorded required-check shape excludes it)",
 		posture: "open",
 		justification:
 			"The only posture this dependency may take. SPEC §2.5 states that no gate class homes a decidable check " +
@@ -329,9 +330,10 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "ci-gate-machinery",
 		failureShape:
-			"actions/checkout fails at any required gate — fragment-gate, ssot-home, toc-freshness — or " +
-			"actions/setup-node fails or `npm ci` cannot install from the committed lockfile (registry unreachable, " +
-			"lockfile out of agreement) at source-style or type-check, the only gates that install anything",
+			"actions/checkout fails at any required gate — fragment-gate, ssot-home, toc-freshness, source-style, " +
+			"type-check — or actions/setup-node fails or `npm ci` cannot install from the committed lockfile " +
+			"(registry unreachable, lockfile out of agreement) at source-style or type-check, the only gates that " +
+			"install anything",
 		posture: "closed",
 		justification:
 			"The step fails with the platform's or npm's own message and none of the gate's — an accepted default, " +
@@ -432,9 +434,11 @@ export const POSTURES: readonly PostureRow[] = [
 		posture: "closed",
 		justification:
 			"The nonzero exit reds the job — the right direction — but by default, not by arm, and two enumerated " +
-			"residuals ride it: toc-freshness's catch-all reports any unclassified rc as a stale TOC (rc 2's collapsed " +
-			"class as reachable through --check at this gate: unnumbered headings and utility misses wear the " +
-			"staleness message, with rc=$rc printed for recovery from the log), and ssot-home under set -uo without -e " +
+			"residuals ride it: toc-freshness's catch-all reports any unclassified rc as a stale TOC (the catch-all's " +
+			"collapsed class as reachable through --check at this gate: unnumbered headings (rc 2) and the utility " +
+			"misses that land outside rc 3 and rc 4 wear the staleness message, with rc=$rc printed for recovery from " +
+			"the log; an awk miss instead lands on rc 4 and a grep, cut, or head miss on rc 3, wearing the " +
+			"corrupt-marker and marker-less messages), and ssot-home under set -uo without -e " +
 			"reports an awk miss as a docs authoring defect — or, with no SPEC present, skips clean. Recorded not " +
 			"repaired; message disambiguation is follow-up work.",
 	},
