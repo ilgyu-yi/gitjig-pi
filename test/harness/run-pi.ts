@@ -29,6 +29,8 @@
  * harness assets themselves; `scripted-provider.ts` resolves its
  * `@earendil-works/*` imports only under pi's loader, so that shape
  * false-reds on a harness asset instead of measuring the runtime (§3.12).
+ * CI runs this contract on every pull request: the `suite` gate,
+ * `.github/workflows/suite.yml`.
  */
 import { execFileSync, spawn } from "node:child_process";
 import {
