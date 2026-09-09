@@ -55,7 +55,7 @@ const FEATURE = "zqbindfeat2zq";
 
 /** "AKIA" — assembled from codepoints, never literal in this source. */
 const AKIA = cp(0x41, 0x4b, 0x49, 0x41);
-const AWS_SECRET = AKIA + "IOSFODNN7EXAMPLE";
+const AWS_SECRET = `${AKIA}IOSFODNN7EXAMPLE`;
 const AWS_PATTERN_ID = "aws-access-key-id";
 
 /** The retired per-clone binding path — a file the instrument no longer writes. */

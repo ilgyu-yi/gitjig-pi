@@ -92,7 +92,7 @@ assert.ok(
 	"the case set lost a committed ID this suite builds bodies from",
 );
 
-const SECRET_BODY = "zqrefusal context line\n" + (awsCase as { match: string }).match + "\nzqrefusal trailing line\n";
+const SECRET_BODY = `zqrefusal context line\n${(awsCase as { match: string }).match}\nzqrefusal trailing line\n`;
 
 /**
  * Each shape with its expected delimiter run length. The wrap delimiter is
@@ -295,7 +295,7 @@ function occurrences(haystack: string, needle: string): number {
  */
 function assertNeutralized(capture: string, raw: string, delimiter: number, arm: string): void {
 	const run = "`".repeat(delimiter);
-	const wrapped = run + " " + raw + " " + run;
+	const wrapped = `${run} ${raw} ${run}`;
 	assert.ok(
 		occurrences(capture, wrapped) >= 1,
 		`${arm}: relayed shape ${JSON.stringify(raw)} was not published in its delimiter-aware inert spelling ` +
@@ -392,7 +392,7 @@ describe("AC1: a secret-shaped body is refused, content-free (issue #83)", () =>
 		// absence sweep would green vacuously.
 		assert.ok(
 			egressAuditLines(secretRun).length >= 1,
-			"refusal leak-domain: no egress audit record to anchor the absence sweep — " + toolUnregistered("refusal"),
+			`refusal leak-domain: no egress audit record to anchor the absence sweep — ${toolUnregistered("refusal")}`,
 		);
 		assertOffEgressSurfaces(secretRun, (awsCase as { match: string }).match, "the secret span's bytes", "refusal");
 	});
@@ -400,7 +400,7 @@ describe("AC1: a secret-shaped body is refused, content-free (issue #83)", () =>
 	it("withholding: the shim sink stays empty after the refusal", () => {
 		assert.ok(
 			egressAuditLines(secretRun).length >= 1,
-			"withholding: no egress audit record to anchor the empty-sink claim — " + toolUnregistered("withholding"),
+			`withholding: no egress audit record to anchor the empty-sink claim — ${toolUnregistered("withholding")}`,
 		);
 		assert.equal(
 			sinkBytes(secretRun).length,

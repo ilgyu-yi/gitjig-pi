@@ -86,7 +86,7 @@ const FEATURE = "zqbindfeatzq";
 // Runtime-built secret material (header note: never literal in source).
 /** "AKIA" — assembled from codepoints. */
 const AKIA = cp(0x41, 0x4b, 0x49, 0x41);
-const AWS_SECRET = AKIA + "ZQ0BINDZQ4PLANT9"; // prefix + 16 × [A-Z0-9]
+const AWS_SECRET = `${AKIA}ZQ0BINDZQ4PLANT9`; // prefix + 16 × [A-Z0-9]
 const AWS_PATTERN_ID = "aws-access-key-id";
 
 // ---------------------------------------------------------------------------
@@ -297,7 +297,7 @@ describe("a hostile-bytes repository root binds and fires (issue #68, SPEC §4.2
 		// Dir name from codepoints (header note): "zqh '<quote>$d`t" —
 		// space, 0x27, 0x24, 0x60 all inside one path segment.
 		const base = mkdtempSync(join(tmpdir(), "gitjig-bindhostile-"));
-		const hostileName = "zqh " + cp(0x27) + cp(0x24) + "d" + cp(0x60) + "t";
+		const hostileName = `zqh ${cp(0x27)}${cp(0x24)}d${cp(0x60)}t`;
 		const root = join(base, hostileName);
 		try {
 			mkdirSync(join(root, "home"), { recursive: true });
@@ -315,7 +315,7 @@ describe("a hostile-bytes repository root binds and fires (issue #68, SPEC §4.2
 
 			requireInstrument(root);
 			assertBindSucceeded(runBind(root), "hostile root bind");
-			stageFile(fixture, "zqhostileleak.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqhostileleak.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the hostile-root arm\n");
 			assertSecretRefused(attempt, "zqhostileleak.txt", "hostile root");
 		} finally {
@@ -964,7 +964,7 @@ describe("the tier's record writer bounds its own writes (issue #68, SPEC §5.5)
 describe("a sourced file's own `exit` folds the hook to allow (issue #68, SPEC §3.2)", { skip: IS_WINDOWS }, () => {
 	/** The control the arm below owes: this fixture's chain provably refuses. */
 	function assertFixtureArmed(fixture: GithookFixture, marker: string, arm: string): void {
-		stageFile(fixture, marker, AWS_SECRET + "\n");
+		stageFile(fixture, marker, `${AWS_SECRET}\n`);
 		const control = commitWithMessage(fixture, "chore: exercise the fixture-arming control\n");
 		assertSecretRefused(control, marker, `${arm} control`);
 		fixtureGit(fixture, ["reset", "-q", "--", marker]);
@@ -985,7 +985,7 @@ describe("a sourced file's own `exit` folds the hook to allow (issue #68, SPEC �
 				"\ngithook_source conventional_commit.sh commit-format\nexit 9\n",
 			);
 
-			stageFile(fixture, "zqnestedleak.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqnestedleak.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the nested-source arm\n");
 			assert.equal(
 				attempt.status,
@@ -1245,13 +1245,13 @@ describe(
 		it("a refusal after .gitjig/state is removed re-creates a traversable dir and lands the block record", () => {
 			const fixture = buildArmedScanFixture();
 			try {
-				stageFile(fixture, "zqumaskseed.txt", AWS_SECRET + "\n");
+				stageFile(fixture, "zqumaskseed.txt", `${AWS_SECRET}\n`);
 				commitWithMessage(fixture, "chore: seed the state directory\n");
 				fixtureGit(fixture, ["reset", "-q", "--", "zqumaskseed.txt"]);
 				rmSync(join(fixture.root, "zqumaskseed.txt"), { force: true });
 				rmSync(join(fixture.root, ".gitjig", "state"), { recursive: true, force: true });
 
-				stageFile(fixture, "zqumaskleak.txt", AWS_SECRET + "\n");
+				stageFile(fixture, "zqumaskleak.txt", `${AWS_SECRET}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the state-dir umask arm\n");
 				assert.notEqual(attempt.status, 0, "state-dir umask: the staged secret passed — the armed chain did not fire");
 				assert.doesNotThrow(
@@ -1285,7 +1285,7 @@ describe(
 				mkdirSync(dirname(sink), { recursive: true });
 				const made = spawnSync("mkfifo", [sink], { timeout: 30_000 });
 				assert.equal(made.status, 0, `substrate: mkfifo at the sink failed: ${made.stderr?.toString("utf8")}`);
-				stageFile(fixture, "zqfifoleak.txt", AWS_SECRET + "\n");
+				stageFile(fixture, "zqfifoleak.txt", `${AWS_SECRET}\n`);
 				const status = commitTimed(fixture, "chore: exercise the fifo-sink arm", 20_000);
 				assert.notEqual(
 					status,

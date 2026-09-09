@@ -53,12 +53,12 @@ const cp = String.fromCharCode;
 /** "AKIA" — assembled from codepoints, never literal. */
 export const AKIA = cp(0x41, 0x4b, 0x49, 0x41);
 /** "PRIVATE KEY" — assembled from codepoints, never literal. */
-const PRIVATE_KEY_WORDS = cp(0x50, 0x52, 0x49, 0x56, 0x41, 0x54, 0x45) + " " + cp(0x4b, 0x45, 0x59);
+const PRIVATE_KEY_WORDS = `${cp(0x50, 0x52, 0x49, 0x56, 0x41, 0x54, 0x45)} ${cp(0x4b, 0x45, 0x59)}`;
 /** "ghp_" — assembled from codepoints, never literal. */
 const GHP = cp(0x67, 0x68, 0x70, 0x5f);
 /** "Authorization: " / "Bearer " with codepoint-built initials. */
-const AUTH_HEADER = cp(0x41) + "uthorization: ";
-const BEARER_WORD = cp(0x42) + "earer ";
+const AUTH_HEADER = `${cp(0x41)}uthorization: `;
+const BEARER_WORD = `${cp(0x42)}earer `;
 
 /** U+200B ZERO WIDTH SPACE — category Cf, built from its codepoint. */
 export const ZWSP = cp(0x200b);
@@ -70,7 +70,7 @@ const CR = cp(0x0d);
 // The split-secret halves: joined they are the AWS prefix + exactly 16
 // class characters (a match); either half alone is too short to match, so
 // a truncating reader flips the joined disposition to allow.
-const AWS_SPLIT_HEAD = AKIA + "ZQ0CASES";
+const AWS_SPLIT_HEAD = `${AKIA}ZQ0CASES`;
 const AWS_SPLIT_TAIL = "ZQ4CASES";
 /** The joined spelling a Cf/NUL strip produces — 16 class chars after the prefix. */
 export const AWS_JOINED = AWS_SPLIT_HEAD + AWS_SPLIT_TAIL;
@@ -123,24 +123,24 @@ export interface ConformanceCase {
 export const CONFORMANCE_CASES: ConformanceCase[] = [
 	{
 		id: "private-key",
-		match: "-----BEGIN RSA " + PRIVATE_KEY_WORDS + "-----",
+		match: `-----BEGIN RSA ${PRIVATE_KEY_WORDS}-----`,
 		// Four trailing hyphens where the pattern demands five.
-		nearMiss: "-----BEGIN RSA " + PRIVATE_KEY_WORDS + "----",
+		nearMiss: `-----BEGIN RSA ${PRIVATE_KEY_WORDS}----`,
 	},
 	{
 		id: "aws-access-key-id",
 		match: AWS_JOINED, // prefix + 16 × [A-Z0-9]
-		nearMiss: AKIA + "ZQ0CASESZQ4CASE", // prefix + only 15 class chars
+		nearMiss: `${AKIA}ZQ0CASESZQ4CASE`, // prefix + only 15 class chars
 	},
 	{
 		id: "github-token",
-		match: GHP + "zqCASEzqCASEzqCASEzqCASEzqCASEzqCAS9", // prefix + 36 chars
-		nearMiss: GHP + "zqCASEzqCASEzqCASEzqCASEzqCASEzqCAS", // prefix + 35 chars
+		match: `${GHP}zqCASEzqCASEzqCASEzqCASEzqCASEzqCAS9`, // prefix + 36 chars
+		nearMiss: `${GHP}zqCASEzqCASEzqCASEzqCASEzqCASEzqCAS`, // prefix + 35 chars
 	},
 	{
 		id: "bearer-token",
-		match: AUTH_HEADER + BEARER_WORD + "zqtokenCASEzqtokenC0", // 20-char token
-		nearMiss: AUTH_HEADER + BEARER_WORD + "zqtokenCASEzqtoken0", // 19-char token
+		match: `${AUTH_HEADER + BEARER_WORD}zqtokenCASEzqtokenC0`, // 20-char token
+		nearMiss: `${AUTH_HEADER + BEARER_WORD}zqtokenCASEzqtoken0`, // 19-char token
 	},
 ];
 
@@ -182,7 +182,7 @@ const SNIFF_WINDOW_PAD = "zqpadline zqpadline zqpadline zqpadline\n".repeat(210)
 export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 	{
 		name: "nul-join",
-		body: SNIFF_WINDOW_PAD + AWS_SPLIT_HEAD + NUL + AWS_SPLIT_TAIL + "\n",
+		body: `${SNIFF_WINDOW_PAD + AWS_SPLIT_HEAD + NUL + AWS_SPLIT_TAIL}\n`,
 		divergent: true,
 		tier2: {
 			disposition: "refuse-match",
@@ -198,7 +198,7 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 	},
 	{
 		name: "nul-binary",
-		body: AWS_SPLIT_HEAD + NUL + AWS_SPLIT_TAIL + "\n",
+		body: `${AWS_SPLIT_HEAD + NUL + AWS_SPLIT_TAIL}\n`,
 		divergent: false,
 		tier2: {
 			disposition: "refuse-unmeasurable",
@@ -212,7 +212,7 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 	},
 	{
 		name: "cf-split",
-		body: AWS_SPLIT_HEAD + ZWSP + AWS_SPLIT_TAIL + "\n",
+		body: `${AWS_SPLIT_HEAD + ZWSP + AWS_SPLIT_TAIL}\n`,
 		divergent: true,
 		tier2: {
 			disposition: "allow",
@@ -227,7 +227,7 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 	},
 	{
 		name: "multibyte-interrupt",
-		body: AWS_SPLIT_HEAD + E_ACUTE + AWS_SPLIT_TAIL + "\n",
+		body: `${AWS_SPLIT_HEAD + E_ACUTE + AWS_SPLIT_TAIL}\n`,
 		divergent: false,
 		tier2: {
 			disposition: "allow",
@@ -241,7 +241,7 @@ export const BODY_MEASUREMENT_CASES: BodyMeasurementCase[] = [
 	},
 	{
 		name: "crlf-line",
-		body: AWS_JOINED + CR + "\n",
+		body: `${AWS_JOINED + CR}\n`,
 		divergent: false,
 		tier2: {
 			disposition: "refuse-match",

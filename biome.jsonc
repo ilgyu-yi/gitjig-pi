@@ -37,6 +37,18 @@
 				// fixture string. Site suppressions would be 18 comments
 				// asserting the same one fact.
 				"noTemplateCurlyInString": "off"
+			},
+			"style": {
+				// ERROR by decision, not default (issue #138, disposition 1,
+				// operator-chosen): at information severity the rule reported
+				// 73 sites on every local run and enforced nothing — the
+				// decision-or-omission ambiguity #121 was filed about, one
+				// level down — and one session's reviews spent two round-trips
+				// on the same idiom by hand. The 73 sites were converted
+				// mechanically in the change that raised it, so the gate
+				// arrived green (the conversion is biome's own fix,
+				// byte-audited parent-plus-tool against the commit).
+				"useTemplate": "error"
 			}
 		}
 	},
