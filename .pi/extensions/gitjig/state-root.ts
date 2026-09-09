@@ -10,11 +10,12 @@
  * environment variable that configures the runtime's own behavior; the
  * name marks it test-only, and an active seam is reported
  * (`seamActive: true`) so the entry can announce it (§5.9). The other
- * named reads in the runtime (`.pi/extensions/`) — `PATH`, `HOME`,
+ * named env-value reads in the runtime (`.pi/extensions/`) — `PATH`, `HOME`,
  * `XDG_CONFIG_HOME`, and `GIT_CONFIG_NOSYSTEM` in bind-state.ts's
  * `childEnv()` — are read only to compose a child process's
- * environment: the only branches on them decide whether a value is
- * copied onto the child. Their values still reach outcomes through
+ * environment: the only branches on them decide what is copied onto
+ * the child — whether the key is set at all, or the empty string in
+ * place of an unset value. Their values still reach outcomes through
  * that child — bind-state.ts's own header records that the
  * classifier's verdict follows `HOME` and `XDG_CONFIG_HOME` by design
  * — so they are passthroughs, not configuration seams.
@@ -47,7 +48,7 @@ import { isAbsolute, join } from "node:path";
 import { locateRepoRoot } from "./locate.ts";
 import { quoted } from "./quote.ts";
 
-/** The single test-only override seam — the runtime's only env read. */
+/** The single test-only override seam — the only environment variable that configures the runtime. */
 export const STATE_SEAM = "GITJIG_TEST_STATE_ROOT";
 
 export interface StateRootResolution {
