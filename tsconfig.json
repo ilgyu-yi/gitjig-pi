@@ -18,10 +18,10 @@
 		// site in the wrong-allow shape, or if
 		// `tsc --noEmit --noUncheckedIndexedAccess | grep -c '^\.pi/'` (from
 		// the repo root, toolchain installed) ever counts more than the 4
-		// error lines it counts today (a different four than the restructure
-		// class — this one counts by directory) — a coarse proxy in both
-		// directions; the per-site table and the tripwire's measured blind
-		// spots are on issue #137.
+		// error lines it counts today (not the same four as the restructure
+		// class — this count is by directory). That count is a coarse proxy
+		// in both directions: the per-site table and the tripwire's measured
+		// blind spots are on issue #137.
 		"strict": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
