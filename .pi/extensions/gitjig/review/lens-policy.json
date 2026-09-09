@@ -1,26 +1,26 @@
 {
-  "$comment": "The committed reviewer-lens policy surface (SPEC §1.7; issue #169, Directive #166). Committed so a routing decision is diffable and auditable after the fact; caller-owned so nothing a delegate says at dispatch time can select a lens. Rows are matched against the change's own changed-path set by path prefix. A row's prefixes are non-empty by contract — an empty prefix would match every string, including a delegate-shaped claim that is not a path at all. The CONTENT below is deliberately a minimal working set, not a curated taxonomy: §1.7 puts the surface's content outside its own contract, and issue #169 scopes only the surface.",
-  "version": 1,
-  "rows": [
-    {
-      "lens": "spec-contract",
-      "surface": "the behavioural SSOT and the direction document",
-      "prefixes": ["SPEC.md", "MISSION.md"]
-    },
-    {
-      "lens": "runtime",
-      "surface": "the shell's runtime extensions",
-      "prefixes": [".pi/"]
-    },
-    {
-      "lens": "enforcement",
-      "surface": "the local and platform enforcement tiers",
-      "prefixes": [".githooks/", ".github/"]
-    },
-    {
-      "lens": "suite",
-      "surface": "the test suite",
-      "prefixes": ["test/"]
-    }
-  ]
+	"$comment": "The committed reviewer-lens policy surface (SPEC §1.7; issue #169, Directive #166). Committed so a routing decision is diffable and auditable after the fact; caller-owned so nothing a delegate says at dispatch time can select a lens. Rows are matched against the change's own changed-path set by path prefix. A row's prefixes are non-empty by contract — an empty prefix would match every string, including a delegate-shaped claim that is not a path at all. The CONTENT below is deliberately a minimal working set, not a curated taxonomy: §1.7 puts the surface's content outside its own contract, and issue #169 scopes only the surface.",
+	"version": 1,
+	"rows": [
+		{
+			"lens": "spec-contract",
+			"surface": "the behavioural SSOT and the direction document",
+			"prefixes": ["SPEC.md", "MISSION.md"]
+		},
+		{
+			"lens": "runtime",
+			"surface": "the shell's runtime extensions",
+			"prefixes": [".pi/"]
+		},
+		{
+			"lens": "enforcement",
+			"surface": "the local and platform enforcement tiers",
+			"prefixes": [".githooks/", ".github/"]
+		},
+		{
+			"lens": "suite",
+			"surface": "the test suite",
+			"prefixes": ["test/"]
+		}
+	]
 }
