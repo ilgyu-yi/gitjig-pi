@@ -1,7 +1,8 @@
 name: auto-clear-awaiting-author
 
-# When an author edits an Issue body after a
-# `revise` or trusted-filer `reject`, the `awaiting-author` handoff label is
+# When an author edits an Issue body after a review resolved to `repair`
+# (SPEC §2.2's `awaiting-author`, whose trigger is the Resolver's outcome and
+# never a reviewer's own result), the handoff label is
 # stale — clear it automatically so the maintainer queue
 # (`is:open label:awaiting-author -author:@me`) stays accurate without manual
 # relabeling.

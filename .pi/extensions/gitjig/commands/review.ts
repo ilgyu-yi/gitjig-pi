@@ -1,8 +1,8 @@
 /**
  * The /review command — an operator-initiated call site of the ONE
  * dispatcher (SPEC §4.9 "one home, many call sites"; §4.8 rung 1: the
- * blind compare and the caller-derived round count are acts that must not
- * be contingent on a model's cooperation).
+ * blind compare and the caller-owned required-slot derivation are acts that
+ * must not be contingent on a model's cooperation).
  *
  * Argument string: `[timeoutMs=<n>] <expectedRef> <delegateArgv…>`,
  * whitespace-split, the bound optional and recognized in first position only

@@ -106,7 +106,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{
 		shape: "review-archaeology",
 		line: "// Review round 2 asked for this split.",
-		why: "§2.4's species: a numbered round on a living surface",
+		why: "§2.4's species: a numbered review on a living surface",
 	},
 	{
 		shape: "review-archaeology",
@@ -144,7 +144,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{
 		shape: "review-archaeology",
 		line: "// Round 4 caught the survivor here.",
-		why: "§2.4's round numbers, in the bare-numeral spelling",
+		why: "§2.4's which-review-said-what-when narrative, in the bare-numeral spelling",
 	},
 	{
 		shape: "review-archaeology",
@@ -154,7 +154,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{
 		shape: "review-archaeology",
 		line: "// An earlier review asked for this split.",
-		why: "the same narrative without a round number",
+		why: "the same narrative without a review numeral",
 	},
 	{ shape: "issue-narration", line: "// Introduced in #12 alongside the boundary.", why: "the introduce verb" },
 	{ shape: "issue-narration", line: "// Fixed in #34 after the flake was found.", why: "the fix verb" },
