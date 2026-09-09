@@ -1081,7 +1081,7 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 		assert.equal(
 			out.neutralized,
 			0,
-			"a host run containing a backtick was wrapped — the wrap then crosses the author's own code-span boundary, and CommonMark's equal-length pairing makes the author's span and the wrap interleave rather than nest, leaving the reference's tail outside every span",
+			"a matched run containing a backtick was wrapped — the wrap then crosses the author's own code-span boundary, and CommonMark's equal-length pairing makes the author's span and the wrap interleave rather than nest, so the closing delimiter pairs with nothing and the caller's bytes carry a wrap that forms no span, counted as a neutralization the text never owed",
 		);
 		assert.equal(out.text, input, "the body must pass through unmodified when nothing matches");
 	});
