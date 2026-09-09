@@ -21,51 +21,51 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.7 | The reviewer panel | 184 |
 | &nbsp;&nbsp;§1.8 | Plan contest | 204 |
 | &nbsp;&nbsp;§1.9 | Finding judgment | 216 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 258 |
-| §2 | Artifact hierarchy and lifecycle | 266 |
-| &nbsp;&nbsp;§2.1 | Issue types | 270 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 283 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 299 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 303 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 318 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 355 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 367 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 377 |
-| §3 | Enforcement-layer architecture | 389 |
-| &nbsp;&nbsp;§3.1 | The constraint | 393 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 400 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 408 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 512 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 516 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 520 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 530 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 542 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 555 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 569 |
-| &nbsp;&nbsp;§3.11 | Gate design | 579 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 601 |
-| §4 | Substrate and install contract | 611 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 615 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 621 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 625 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 629 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 633 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 639 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 649 |
-| &nbsp;&nbsp;§4.8 | The command layer | 657 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 714 |
-| §5 | Cross-cutting contracts | 756 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 760 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 764 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 768 |
-| &nbsp;&nbsp;§5.4 | Work language | 772 |
-| &nbsp;&nbsp;§5.5 | State boundary | 776 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 782 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 792 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 802 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 810 |
-| §6 | Self-governance milestone | 818 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 829 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 257 |
+| §2 | Artifact hierarchy and lifecycle | 265 |
+| &nbsp;&nbsp;§2.1 | Issue types | 269 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 282 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 298 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 302 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 317 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 354 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 366 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 376 |
+| §3 | Enforcement-layer architecture | 388 |
+| &nbsp;&nbsp;§3.1 | The constraint | 392 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 399 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 407 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 511 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 515 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 519 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 529 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 541 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 554 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 568 |
+| &nbsp;&nbsp;§3.11 | Gate design | 578 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 600 |
+| §4 | Substrate and install contract | 610 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 614 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 620 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 624 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 628 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 632 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 638 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 648 |
+| &nbsp;&nbsp;§4.8 | The command layer | 656 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 713 |
+| §5 | Cross-cutting contracts | 755 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 759 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 763 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 767 |
+| &nbsp;&nbsp;§5.4 | Work language | 771 |
+| &nbsp;&nbsp;§5.5 | State boundary | 775 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 781 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 791 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 801 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 809 |
+| §6 | Self-governance milestone | 817 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 828 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -132,7 +132,7 @@ Repeated repair at a review gate must carry method-level information: resubmitti
 
 **A count triggers inspection, never escalation.** How many times a change has been repaired is not evidence that its method has failed — a change reviewed by stronger methods finds more, and a backstop indexed on the count alone parks work for reviewing well, which trains operators to route around review. A count therefore has exactly one workflow role: a **coarse deterministic trigger** for the diagnosis below. Past the trigger the history is inspected, and what the inspection finds — never the count that occasioned it — decides what happens next. **The default trigger is the second consecutive review state carrying a substantive finding that needed repair.** A more authoritative and equally simple trigger may substitute for it, with the ground recorded where the substitution is made; a trigger that is merely more elaborate may not — the coarseness is the point, since a trigger with judgment in it is a second diagnosis nobody adjudicated. The trigger never fires on the findings-free path: a complete panel with an empty bundle ends review for that head (§1.7, §1.9).
 
-**The diagnosis.** Inspecting the history yields exactly one of four values, and this clause commits to them as their referents' durable names (§2.7):
+**The diagnosis.** Inspecting the history is a **Judge** ruling (§1.9), in that actor's second capacity: it is a semantic reading, it reads the same findings the Judge already ruled once, and §1.9's rule that semantic judgment ends at the Judge admits no separate adjudicator for it. The caller derives the trigger, supplies the history record, and consumes the value deterministically through the routing below; the acting agent rules nothing here, which is the same independence the record itself is held to. Inspecting the history yields exactly one of four values, and this clause commits to them as their referents' durable names (§2.7):
 
 - **NONE** — the history shows repair advancing: each repair addressed ground the previous ones had not closed. NONE is the ordinary outcome and grants nothing; the flow simply continues on its own terms.
 - **STAGNATION** — the same underlying problem, met by a materially equivalent repair, without closure. All three conjuncts are required, and the middle one is what makes the value about *method*: the problem is the same problem, the repair is not materially different from one already attempted against it, and the problem is still open. STAGNATION is the home of the **method-change requirement** — a further repair attempt is admissible only with a recorded, materially different method, and a textually different record describing the same method is not one.
@@ -175,7 +175,7 @@ A reviewer judges from the artifact alone: it is assumed to know nothing of the 
 
 **Answering a review invalidates it.** Landing the repairs a review demanded advances the head, so no result carries forward to the head that contains them — the generative form of §2.4's reviewed-head rule, pointed at, not restated. One named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone.
 
-**Result grammar.** A **panel reviewer's** result — this grammar's subject is the artifact review §1.7 dispatches, not every gate in this document that consumes a verdict artifact, and §2.2's activation verdict keeps its own committed marker — is a fixed machine-readable token at a defined output position, and the set is exactly two: **APPROVED** — the reviewer discovered no finding — and **FINDINGS** — it discovered at least one, carried as raw findings. A reviewer reports what it found and nothing about what should follow it: it does not rule a finding valid, does not classify severity, does not state a cost direction, does not direct the workflow, and mints no third token for a case it judges the two not to cover. Every consequence is derived downstream of the reviewer — the bundle mechanically (§1.7), the semantics once at the Judge, the workflow deterministically at the Resolver (§1.9). The general rule this two-token set instantiates binds **every** verdict artifact this document names, gated or not — §2.2's activation verdict, §1.8's plan-contest verdict, and any successor's: a fixed machine-readable token at a defined output position, and a new adjudication mechanism collapses into an existing grammar rather than minting tokens of its own. A reviewer result holds no gate of its own, which is why nothing in this grammar survives the Judge's refutation of the findings under it (§1.9).
+**Result grammar.** A **panel reviewer's** result — this grammar's subject is the artifact review §1.7 dispatches, not every gate in this document that consumes a verdict artifact, and §2.2's activation verdict keeps its own committed marker — is a fixed machine-readable token at a defined output position, and the set is exactly two: **APPROVED** — the reviewer discovered no finding — and **FINDINGS** — it discovered at least one, carried as raw findings. A reviewer reports what it found and nothing about what should follow it: it does not rule a finding valid, does not classify severity, does not state a cost direction, does not direct the workflow, and mints no third token for a case it judges the two not to cover. Every consequence is derived downstream of the reviewer — the bundle mechanically (§1.7), the semantics once at the Judge, the workflow deterministically at the Resolver (§1.9). The general rule this two-token set instantiates binds **every** verdict artifact this document names, gated or not — §2.2's activation verdict, §1.8's plan-contest verdict, and any successor's: a fixed machine-readable token at a defined output position, and a new adjudication mechanism collapses into an existing grammar rather than minting tokens of its own. Named residual: §1.8 states its verdict in prose and fixes no token or position for it today, so the rule reaches that verdict as an obligation its deferred instruments discharge, not as a grammar this document already supplies. A reviewer result holds no gate of its own, which is why nothing in this grammar survives the Judge's refutation of the findings under it (§1.9).
 
 **Validity is the caller's fact.** Whether a reviewer's result counts at all — the blind compare above, completion, well-formedness, and whether the surface reviewed is the one the slot was required for — is decided by the caller and never reported by the reviewer, which cannot attest to its own integrity. An invalid result is not a rejection and not an approval: it is **no result**, and what an absent result does to the panel is §1.7's.
 
@@ -185,7 +185,7 @@ The norm is **procedural today** — homed with the `merge-review` row in §3.3,
 
 Reviewer multiplicity is **search diversification, not a vote.** Several reviewers are dispatched independently at one head so that different lenses reach different defects; what multiplicity buys is coverage, and the property that follows is the one that matters: **one valid finding survives any number of empty co-reviews.**
 
-Majority vote is the **rejected design**, recorded here so it is not re-proposed. It fails in both directions at once: it discards a true finding whenever a minority holds it — which is precisely the case a search panel exists to catch — and it converts correlated contamination into confidence, since silently correlated redundancy is one sample reported N times. Serial debate, where each reviewer sees the others' results, is rejected for the second reason alone: it destroys the independence the panel is built on. What a vote was reached for — protection against an irreversible wrong approve — is not abandoned; it re-homes to the gates that actually stand at the irreversible boundary, the ready decision and the landing gates (§2.3, §3.3) and the autonomy ceiling (§5.6, §5.7), where a human or an explicit policy stands rather than a threshold. **The re-home is partial, and the residual is named rather than glossed:** §5.6 lets a reviewer verdict fill the human slot at its judgment checkpoints — an open class of which the ready decision is one named member — and this section sets no floor on the required slot set, so at the checkpoints that substitution reaches the protection rests on the slot policy and the autonomy ceiling rather than on a second independent judgment. Closing it is an amendment to §5.6's substitution reach and is not made here.
+Majority vote is the **rejected design**, recorded here so it is not re-proposed. It fails in both directions at once: it discards a true finding whenever a minority holds it — which is precisely the case a search panel exists to catch — and it converts correlated contamination into confidence, since silently correlated redundancy is one sample reported N times. Serial debate, where each reviewer sees the others' results, is rejected for the second reason alone: it destroys the independence the panel is built on. What a vote was reached for — protection against an irreversible wrong approve — is not abandoned; it re-homes to the gates that actually stand at the irreversible boundary, the ready decision and the landing gates (§2.3, §3.3) and the autonomy ceiling (§5.6, §5.7), where a human or an explicit policy stands rather than a threshold. **The re-home is partial, and the residual is named rather than glossed:** §5.6 lets a reviewer verdict fill the human slot at its judgment checkpoints, which it names as plan approval and the ready decision — and this section sets no floor on the required slot set, so at the checkpoints that substitution reaches the protection rests on the slot policy and the autonomy ceiling rather than on a second independent judgment. Closing it is an amendment to §5.6's substitution reach and is not made here.
 
 **Required slots derive from a committed policy surface.** A panel's required slot set is derived from **authoritative facts about the change under review** — its change surface — against a **committed, caller-owned policy surface** mapping those facts to required lenses. Three properties are the contract, and the surface's content is not this section's business: the policy is *committed*, so it is a repository artifact reviewable and diffable like any other and a routing decision is auditable after the fact; it is *caller-owned*, so no reviewer selects the lens it will be graded on and no model selects one at dispatch time — a self-selected specialist re-imports exactly the omission bias §1.8 names; and its inputs are *authoritative*, read from the change itself rather than from anyone's summary of it (§3.3's exactness rule, applied to routing).
 
@@ -215,19 +215,18 @@ The norm is **explicitly advisory** today (§3.1 rule 1), enforced at review (§
 
 ### 1.9 Finding judgment
 
-An adversarial reviewer's success condition is "find something" — a structural false-positive bias by construction. A panel's raw bundle (§1.7) is therefore adjudicated by an independent **Judge** before the author acts on any of it, and the workflow consequence of that adjudication is computed by a deterministic **Resolver**. The rule the whole architecture turns on: **semantic judgment over discovered findings ends at the Judge, and every workflow consequence the review derives from them is deterministic.** The scope is the findings pipeline, and it is stated rather than left universal because §1.4's history diagnosis is a semantic reading too — over resolved reviews, not over findings — which is exactly why that section owns its own trigger, taxonomy, and routing instead of returning through the Resolver.
+An adversarial reviewer's success condition is "find something" — a structural false-positive bias by construction. A panel's raw bundle (§1.7) is therefore adjudicated by an independent **Judge** before the author acts on any of it, and the workflow consequence of that adjudication is computed by a deterministic **Resolver**. The rule the whole architecture turns on: **semantic judgment ends at the Judge, and every workflow consequence after it is deterministic.** The rule is universal, and it is what forces §1.4's history diagnosis to be a **Judge** act as well: that diagnosis reads the same findings across review states and rules them the same, so an actor of its own would be the second semantic decision-maker this architecture exists to remove. The Judge therefore rules in two capacities — the findings of one review, here; the repair history past §1.4's trigger, there — with the caller deriving the occasion and supplying the input in both, and a deterministic consequence downstream of both.
 
 **The findings-free path.** A complete panel with an empty bundle is **Review APPROVED** for that head, and the Judge never runs — nothing was discovered, so there is nothing to adjudicate (the sleeping-gate shape, §5.3). What that approval settles is the review and only the review: AC closeout (§2.2) and the landing gates (§2.3, §3.3) are untouched by it, and nothing on this path is evidence about any other head.
 
-**The Judge.** The **Judge** — coined here as this actor's durable name (§2.7), and a different actor from §1.8's plan-contest judge, which rules candidate plans and never a finding — is dispatched independently of the panel and rules the bundle, per effective finding, on five axes and no others. Its input is the bundle plus a **caller-derived criterion manifest** — the criterion set the AC-impact axis below reads, derived at dispatch from existing SSOT on §1.8's manifest pattern, never invented by the Judge and never assembled by the author, and crossing into the brief as §1.5's dispatch-facts form (i), derived at dispatch by a command. The manifest is what makes the AC-impact ruling reachable at all: a provisioned tree cannot reach the platform record where the criteria live (the dispatch clause below), so an axis whose input the caller does not supply is an axis the Judge cannot rule. **Absent and empty are distinct states here, as they are at the defer disposition below (§2.6).** An *absent* manifest — none supplied — is a missing input, and the review is incomplete on the availability rule below rather than adjudicated without it. An *empty* manifest is a manifest: a change with no closing issue, or one whose criteria are empty however they came to be empty, yields the empty set with an attestation of what was checked — never a withholding and never a block, §1.8's rule for its own manifest — on which the AC-impact axis rules every finding to sit on no criterion, and the adjudication completes.
+**The Judge.** The **Judge** — coined here as this actor's durable name (§2.7), and a different actor from §1.8's plan-contest judge, which rules candidate plans and never a finding — is dispatched independently of the panel. It first performs **deduplication**, the one bundle-level operation: raw findings that are semantically one finding become one **effective finding**, with **every raw finding's provenance preserved**. Dedup merges and never discards — the surviving effective finding carries which slots reported it, so a later reader can tell one reviewer's finding from four reviewers' agreement without the merge having been a vote — and it is owed on the whole bundle, whatever the rulings that follow. It then rules **each effective finding** on four axes and no others. Its input is the bundle plus a **caller-derived criterion manifest** — the criterion set the AC-impact axis below reads, derived at dispatch from existing SSOT on §1.8's manifest pattern, never invented by the Judge and never assembled by the author, and crossing into the brief as §1.5's dispatch-facts form (i), derived at dispatch by a command. The manifest is what makes the AC-impact ruling reachable at all: a provisioned tree cannot reach the platform record where the criteria live (the dispatch clause below), so an axis whose input the caller does not supply is an axis the Judge cannot rule. **Absent and empty are distinct states here, as they are at the defer disposition below (§2.6).** An *absent* manifest — none supplied — is a missing input, and the review is incomplete on the availability rule below rather than adjudicated without it. An *empty* manifest is a manifest: a change with no closing issue, or one whose criteria are empty however they came to be empty, yields the empty set with an attestation of what was checked — never a withholding and never a block, §1.8's rule for its own manifest — on which the AC-impact axis rules every finding to sit on no criterion, and the adjudication completes.
 
 - **Validity** — **CONFIRMED**, **REFUTED**, or **INDETERMINATE**, each recorded with the command it ran or the citation it rests on. INDETERMINATE is a ruling, not an absence: where the Judge cannot decide, it says so, and uncertainty is never resolved by defaulting to either of the other two.
-- **Deduplication** — findings that are semantically one finding become one effective finding, with **every raw finding's provenance preserved**. Dedup merges and never discards: the surviving effective finding carries which slots reported it, so a later reader can tell one reviewer's finding from four reviewers' agreement without the merge having been a vote.
-- **Severity** — **SUBSTANTIVE** or **NIT**. A finding is a NIT only where the Judge states an **exact mechanical remedy**: a verbatim replacement or a mechanical derivation (a) fully specified by the ruling itself, leaving no design choice with the receiver, (b) local to the flagged span, and (c) leaving every commitment of the artifact extensionally unchanged — obligations, decisions, interfaces, and the content of measured claims. Condition (a) is the soundness condition: skipping re-review is sound only because the skipped review could have verified nothing but a verbatim application. **A remaining design choice makes the finding SUBSTANTIVE**, and the Judge designs no substantive repair — for a substantive finding it rules and stops; authoring the repair is the author's, and a Judge that wrote one would have something of its own to grade.
+- **Severity** — **SUBSTANTIVE** or **NIT**. A finding is a NIT only where the Judge states an **exact mechanical remedy** — the remedy is part of the ruling, not a note beside it, so a bare NIT token with no remedy stated leaves this axis unruled and the adjudication incomplete: a verbatim replacement or a mechanical derivation (a) fully specified by the ruling itself, leaving no design choice with the receiver, (b) local to the flagged span, and (c) leaving every commitment of the artifact extensionally unchanged — obligations, decisions, interfaces, and the content of measured claims. Condition (a) is the soundness condition: skipping re-review is sound only because the skipped review could have verified nothing but a verbatim application. **A remaining design choice makes the finding SUBSTANTIVE**, and the Judge designs no substantive repair — for a substantive finding it rules and stops; authoring the repair is the author's, and a Judge that wrote one would have something of its own to grade.
 - **Harm direction** — ruled **explicitly on every confirmed finding**, in one of two tokens this clause commits to as their referents' durable names (§2.7). **`fail-closed`**: the demonstrated cost is a refusal where an act was intended, a declared interface narrower than the instrument it declares, or an over-report in the safe direction; where the finding's subject is a norm and nothing operates, the limbs are read through what the norm costs the changes that consume it. **`live-harm`**: anything else — a cost reachable in the artifact's own operation. Where the Judge cannot rule the direction, it rules the finding INDETERMINATE. **There is no silence default**: an unstated direction is a missing ruling, not a value, and it is never filled in by whoever reads the record next — a confirmed finding whose direction is unruled has an incomplete adjudication whatever its severity, which the Resolver's never-list rules as incompleteness rather than disposing of as a finding. (`fail-closed` is §3.9's token, deliberately extended here to a second referent — there a posture a gate takes on its own failure, here a cost a finding has — which §2.7 permits; the complement is `live-harm`, not `fail-open`, which names a gate's posture and this is not a posture.)
 - **AC impact** — whether the finding sits on an acceptance criterion of the change under review, judged against **the criterion set as a whole**: a whole-set read, distinct from AC closeout (§2.2), which is a separate gate run against the criteria one by one at a different moment; naming both is what keeps them from being conflated into one pass. The set the Judge reads is fixed against drift in one direction: it is the **union** of the criteria as activation — or a re-activation through the same gate (§2.2) — adjudicated them and the criteria as they stand when the panel opens, so a criterion present in either set counts, and drift under §1.2's rule can narrow the relief the Resolver's defer rule grants and never widen it. The drift record is executor-authored, and a set the relieved party could shrink would hand that party its own relief.
 
-**Judge availability is review completeness.** Where the bundle is non-empty and no valid Judge adjudication exists — the Judge was not dispatched, returned invalid under the same compare the panel rides (§1.6), or is unavailable — the **review is incomplete**, and an incomplete review passes no gate. Two paths are named as closed rather than left to be rediscovered: proceeding on the raw findings, which acts on unadjudicated false positives and is exactly the bias the layer exists to remove; and the author filling the Judge's slot, which returns to the adjudicator something of its own to grade. This layer fails **closed** on its own evidence — it is an evidence gate, not a best-effort aid, and §5.2's fail-open direction does not reach it.
+**Judge availability is review completeness.** Where the bundle is non-empty and no valid Judge adjudication exists — the Judge was not dispatched, was dispatched without an input its rulings need such as the criterion manifest above, returned invalid under the same compare the panel rides (§1.6), or is unavailable — the **review is incomplete**, and an incomplete review passes no gate. Two paths are named as closed rather than left to be rediscovered: proceeding on the raw findings, which acts on unadjudicated false positives and is exactly the bias the layer exists to remove; and the author filling the Judge's slot, which returns to the adjudicator something of its own to grade. This layer fails **closed** on its own evidence — it is an evidence gate, not a best-effort aid, and §5.2's fail-open direction does not reach it.
 
 **The author's non-role.** The author of the artifact under review performs no part of the initial adjudication — not validity, not dedup, not severity, not direction, not AC impact. The author may contest a ruling on new evidence (below) and owes the repair the Resolver derives; it holds no seat in the ruling itself.
 
@@ -237,12 +236,12 @@ An adversarial reviewer's success condition is "find something" — a structural
 
 **The Resolver.** The Resolver is a **function, not a role**: it maps the adjudicated finding set to exactly one workflow outcome, and for a fixed adjudicated input it yields the same outcome every time. It runs in two stages, both total.
 
-First, **every effective finding takes exactly one disposition**, and the five are exhaustive over the Judge's rulings. Totality is over **complete** adjudications, and a finding's adjudication is complete when every axis the Judge owes on it is ruled: all five on a CONFIRMED finding, validity alone on a REFUTED or INDETERMINATE one. An incomplete adjudication is not a finding the Resolver disposes at all; the never-list below rules it, and the completeness test is one test for every disposition rather than each disposition's own.
+First, **every effective finding takes exactly one disposition**, and the five are exhaustive over the Judge's rulings. Totality is over **complete** adjudications, and a finding's adjudication is complete when the bundle it came from was deduplicated and every axis the Judge owes on it is ruled — all four on a CONFIRMED finding, validity alone on a REFUTED or INDETERMINATE one. An incomplete adjudication is not a finding the Resolver disposes at all; the never-list below rules it, and the completeness test is one test for every disposition rather than each disposition's own.
 
 - **repair** — confirmed SUBSTANTIVE, and the defer disposition below does not reach it. The author authors the repair; the head advances and draws a fresh required panel (§1.6, §1.7).
 - **defer** — confirmed SUBSTANTIVE, recorded `fail-closed`, and sitting on **no** criterion of the manifest the AC-impact axis read. It is filed as its own issue, the filed issue's identifier entering the review record beside the finding — which makes a false filing record mechanically falsifiable. Repairing it in place instead is always available and discharges the obligation. The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction. Where the manifest is **empty** — a change with no closing issue, or criteria empty however they came to be empty — nothing is deferrable. An **absent** manifest never reaches this disposition at all: it is the missing input the Judge's own rule above stops on, which is what makes the two states distinct (§2.6) rather than two names for one outcome.
 - **remedy** — confirmed NIT. The Judge's exact mechanical remedy is applied verbatim; nothing else follows from the finding.
-- **measure-escalate** — INDETERMINATE on validity or on direction. It resolves by measurement or by escalation to a human, and it can become neither an approval nor an author repair by anyone's silence.
+- **measure-escalate** — INDETERMINATE on validity, which is where an unrulable direction has already collapsed by the harm-direction axis's own rule. It resolves by measurement or by escalation to a human, and it can become neither an approval nor an author repair by anyone's silence.
 - **none** — REFUTED. It is retained marked refuted and leaves nothing behind.
 
 Second, the **outcome over the set** is derived by a fixed total precedence, so a mixed set has exactly one answer: **repair** if any finding disposed to repair; otherwise **measure-escalate** if any disposed to measure-escalate; otherwise **clear**. A set of deferrals, remedies, and refutations therefore resolves **clear**, which is what lets the change proceed to the ready decision (§2.3) with its deferrals filed and its exact remedies applied — the filing and the verbatim remedy are the whole of what those dispositions owe at that head. **Where every finding is REFUTED the outcome is clear** for the same reason: no reviewer result holds a gate of its own (§1.6), so refutation leaves nothing behind, and the old design's independent blocking verdict — which survived the refutation of every finding under it — retires here.
