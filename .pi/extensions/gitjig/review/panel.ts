@@ -27,12 +27,15 @@
  * Collecting every valid result is order-independent and cannot drop;
  * two answers that are really one finding are the Judge's to merge.
  *
- * DECISION — an unrouted change is its own outcome, not an approval.
- * A change whose paths match no policy row derives an empty required
- * set. Reporting that as Review APPROVED would hand a head an approval
- * no reviewer produced, so it reports `unrouted` and the caller decides.
- * §1.7 sets no floor on the required slot set, so this module does not
- * invent one; it refuses only to call the empty case a review.
+ * DECISION — a change the policy routes nowhere convenes no panel, and
+ * this module refuses the question rather than answering it. §1.7's
+ * completeness test is vacuously true over an empty required set, so
+ * §1.9 would read the empty bundle as Review APPROVED — an approval for
+ * a head no reviewer examined. Minting a fourth outcome token instead
+ * was tried and rejected: the SSOT carries no such token and this change
+ * settles no contract, so the token would ship a rule nothing licenses.
+ * What SHOULD happen there is a §1.7/§1.9 question and is recorded on
+ * issue #172, not decided here.
  *
  * DECISION — the policy is read from the committed file and from
  * nowhere else. `loadPolicy` takes no path. An earlier shape took one
@@ -62,24 +65,42 @@ export type ReviewerReturn =
 	/** The shapes §1.7 names that carry no reviewer output at all. */
 	| { failure: "timeout" | "malformed" };
 
+/** §1.6's blind-compare outcome as the DISPATCHER can report it. */
+export type Compare = "confirmed" | "invalid" | "absent";
+
+declare const recorded: unique symbol;
+
 /**
  * A result, as the CALLER records it. `slot` is what the caller
  * dispatched and `compare` is the caller's own blind-compare outcome
- * (§1.6); neither is anything the delegate said. Built only by
- * `receive`.
+ * (§1.6); neither is anything the delegate said.
+ *
+ * The brand is load-bearing rather than decorative: without it a plain
+ * object literal of this shape is a SlotResult, and "only `receive`
+ * builds one" is a convention callers keep rather than a property this
+ * module has. `receive` is the only thing that can mint the brand.
  */
 export type SlotResult = {
+	readonly [recorded]: true;
 	readonly slot: Slot;
-	readonly compare: "confirmed" | "invalid";
+	readonly compare: Compare;
 	readonly returned: ReviewerReturn;
 };
+// The brand is TYPE-ONLY and never exists at runtime: this runtime strips
+// types, so a branded key written into an object literal would be a
+// reference to a binding that is not there. `receive` casts instead, and
+// it is the only place in the module that may.
 
-/** One raw finding in the bundle, with the slot it came from. */
-export type BundleEntry = { finding: string; lens: string };
+/**
+ * One raw finding in the bundle, with the slot it came from. The whole
+ * slot rides, not its lens alone: this module's own identity rule is the
+ * lens+surface pair, and a bundle that carried half of it would hand the
+ * Judge a provenance that cannot tell two slots apart.
+ */
+export type BundleEntry = { finding: string; slot: Slot };
 
 export type PanelOutcome =
-	| { outcome: "unrouted" }
-	| { outcome: "incomplete"; missing: string[] }
+	| { outcome: "incomplete"; missing: Slot[] }
 	| { outcome: "approved" }
 	| { outcome: "bundle"; bundle: BundleEntry[] };
 
@@ -92,19 +113,32 @@ const POLICY_PATH = join(dirname(fileURLToPath(import.meta.url)), "lens-policy.j
  * The policy's own validity predicate, exported so it has exactly one
  * implementation and one owner (§3.11): `loadPolicy` calls it, and a
  * test exercises it directly rather than re-deriving these rules over a
- * fixture. Every check is a property routing rests on — a policy that
- * routes nothing, a row that can never match, a prefix that matches
- * everything, or two rows sharing a lens each break a guarantee §1.7
- * states.
+ * fixture.
+ *
+ * These rules are THIS MODULE'S, not §1.7's, and the refusals below say
+ * so rather than citing a clause that does not carry them: §1.7 fixes
+ * three properties of the surface — committed, caller-owned,
+ * authoritative — and says in terms that the surface's CONTENT is not
+ * its business. What each check defends is the local ground stated
+ * beside it.
  */
 export function validatePolicy(parsed: Policy): Policy {
+	// The parameter is typed, but every value that reaches it came from
+	// JSON.parse of a file, so the type is not a guarantee. Without this
+	// the null case throws a TypeError no one in this repository authored,
+	// in place of the citing refusals below.
+	if (typeof parsed !== "object" || parsed === null) {
+		throw new Error("lens policy: the committed surface did not parse to an object");
+	}
 	if (!Array.isArray(parsed.rows) || parsed.rows.length === 0) {
-		throw new Error("lens policy: no rows — a policy that routes nothing is not a routing surface (SPEC §1.7)");
+		throw new Error(
+			"lens policy: no rows — a policy that routes nothing derives an empty required set for every change, and this module refuses to convene a panel from one",
+		);
 	}
 	const seen = new Set<string>();
 	for (const row of parsed.rows) {
 		if (typeof row.lens !== "string" || row.lens.length === 0) {
-			throw new Error("lens policy: a row carries no lens name (SPEC §1.7)");
+			throw new Error("lens policy: a row carries no lens name, and a lens is half a slot's identity");
 		}
 		// Lens uniqueness is load-bearing, not tidiness: a slot's identity
 		// is its lens+surface, and two rows sharing a lens produce two
@@ -112,18 +146,28 @@ export function validatePolicy(parsed: Policy): Policy {
 		if (seen.has(row.lens)) {
 			throw new Error(
 				`lens policy: lens ${quoted(row.lens)} appears twice — a lens names one slot, and two rows ` +
-					"sharing one make a slot no caller can pair a dispatch to (SPEC §1.7)",
+					"sharing one make a slot no caller can pair a dispatch to",
 			);
 		}
 		seen.add(row.lens);
+		// The surface is half of a slot's identity, so it is validated like
+		// the other half: an absent surface makes two rows' slots compare
+		// equal on a field that is undefined in both, which is the same
+		// unpairable slot the uniqueness check above exists to prevent.
+		if (typeof row.surface !== "string" || row.surface.length === 0) {
+			throw new Error(
+				`lens policy: row ${quoted(row.lens)} declares no surface, and a slot's identity is the lens and ` +
+					"the surface together",
+			);
+		}
 		if (!Array.isArray(row.prefixes) || row.prefixes.length === 0) {
-			throw new Error(`lens policy: row ${quoted(row.lens)} declares no prefix — it would never route (SPEC §1.7)`);
+			throw new Error(`lens policy: row ${quoted(row.lens)} declares no prefix — it would never route`);
 		}
 		for (const prefix of row.prefixes) {
 			if (typeof prefix !== "string" || prefix.length === 0) {
 				throw new Error(
 					`lens policy: row ${quoted(row.lens)} carries an empty prefix, which matches every ` +
-						"string — a lens no change surface selects is a lens anything selects (SPEC §1.7)",
+						"string — the caller-owned routing §1.7 requires cannot rest on a row anything selects",
 				);
 			}
 		}
@@ -140,19 +184,32 @@ export function loadPolicy(): Policy {
 	return validatePolicy(JSON.parse(readFileSync(POLICY_PATH, "utf8")) as Policy);
 }
 
+declare const authoritative: unique symbol;
+
 /**
- * The change's own changed-path set, read from the repository rather
- * than from anyone's summary of it — §1.7's third contract property,
- * which a caller-supplied array cannot satisfy however honestly it was
- * assembled. This is the authoritative read; `deriveRequiredSlots`
- * consumes what it returns.
+ * A changed-path set read from the change itself. Branded for the same
+ * reason a result is: §1.7's third property is not satisfied by a caller
+ * promising its array came from a repository, and an unbranded
+ * `string[]` parameter accepts anyone's summary however honestly it was
+ * assembled. Only `changedPathsFromRepo` mints one.
  */
-export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot: string): string[] {
-	const out = execFileSync("git", ["diff", "--name-only", `${baseRef}...${headRef}`], {
+export type ChangedPaths = readonly string[] & { readonly [authoritative]: true };
+
+/**
+ * The authoritative read. `-z` is not a detail: without it git renders
+ * any path carrying a non-ASCII or special byte in C-quoted form with
+ * surrounding double quotes, and a quoted name matches no policy prefix
+ * — so a change touching only such files would route to no lens at all
+ * and its review would silently never run. `-z` emits the true bytes and
+ * NUL-separates them, which also removes the newline ambiguity a
+ * line-split read has.
+ */
+export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot: string): ChangedPaths {
+	const out = execFileSync("git", ["diff", "--name-only", "-z", `${baseRef}...${headRef}`], {
 		cwd: repoRoot,
 		encoding: "utf8",
 	});
-	return out.split("\n").filter((line) => line.length > 0);
+	return out.split("\0").filter((entry) => entry.length > 0) as unknown as ChangedPaths;
 }
 
 /**
@@ -174,7 +231,7 @@ function underPrefix(path: string, prefix: string): boolean {
  * one change surface cannot derive two different-looking sets. Each
  * lens appears at most once however many paths matched it.
  */
-export function deriveRequiredSlots(changedPaths: string[], policy: Policy): Slot[] {
+export function deriveRequiredSlots(changedPaths: ChangedPaths, policy: Policy): Slot[] {
 	const required: Slot[] = [];
 	for (const row of policy.rows) {
 		const matched = changedPaths.some((path) => row.prefixes.some((prefix) => underPrefix(path, prefix)));
@@ -190,8 +247,14 @@ export function deriveRequiredSlots(changedPaths: string[], policy: Policy): Slo
  * constructor of a SlotResult, and the reason nothing a delegate says
  * can decide which slot it answered or whether its compare confirmed.
  */
-export function receive(slot: Slot, compare: "confirmed" | "invalid", returned: ReviewerReturn): SlotResult {
-	return { slot: { lens: slot.lens, surface: slot.surface }, compare, returned };
+export function receive(slot: Slot, compare: Compare, returned: ReviewerReturn): SlotResult {
+	// Both operands are COPIED, not aliased. `readonly` is shallow, so an
+	// aliased `returned` lets whoever still holds the parsed object rewrite
+	// what the panel reports — and, by emptying `findings`, flip the
+	// result's own validity — after the caller recorded it.
+	const copied: ReviewerReturn =
+		"failure" in returned ? { failure: returned.failure } : { token: returned.token, findings: [...returned.findings] };
+	return { slot: { lens: slot.lens, surface: slot.surface }, compare, returned: copied } as unknown as SlotResult;
 }
 
 /** Do two slots name the same slot? Identity is the pair, never the lens alone. */
@@ -236,10 +299,11 @@ function validResultsFor(results: readonly SlotResult[], slot: Slot): SlotResult
 }
 
 /**
- * The bundle: the concatenation of the raw findings from every valid
- * result recorded against a required slot. It drops nothing, reads no
- * finding's text, and carries each finding's lens so the Judge can
- * merge duplicates without losing which slots reported them.
+ * Builds the bundle §1.7 defines. Read that clause for what it must and
+ * must not do; what this comment adds is the one local consequence: each
+ * entry carries its whole slot, because the Judge's dedup (§1.9) needs
+ * to know which slot reported a finding and this module's identity rule
+ * is the pair.
  */
 export function buildBundle(results: readonly SlotResult[], required: readonly Slot[]): BundleEntry[] {
 	const bundle: BundleEntry[] = [];
@@ -249,7 +313,7 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
 				continue;
 			}
 			for (const finding of result.returned.findings) {
-				bundle.push({ finding, lens: slot.lens });
+				bundle.push({ finding, slot });
 			}
 		}
 	}
@@ -264,9 +328,21 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
  */
 export function panelOutcome(results: readonly SlotResult[], required: readonly Slot[]): PanelOutcome {
 	if (required.length === 0) {
-		return { outcome: "unrouted" };
+		// Not an outcome. §1.7's completeness test is vacuously true over an
+		// empty required set and §1.9 would then read the empty bundle as
+		// Review APPROVED — an approval for a head no reviewer examined. The
+		// module refuses the question instead of answering it, because
+		// minting a fourth outcome token would be a contract the SSOT does
+		// not carry and this change settles none. A change the policy routes
+		// nowhere convenes no panel; asking a panel's outcome for it is the
+		// caller's error, and what SHOULD happen there is a §1.7/§1.9
+		// question, recorded on issue #172 rather than decided here.
+		throw new Error(
+			"reviewer panel: no required slot — a change the policy routes nowhere convenes no panel, so it has no " +
+				"panel outcome (SPEC §1.7's completeness test presupposes a required set; see issue #172)",
+		);
 	}
-	const missing = required.filter((slot) => validResultsFor(results, slot).length === 0).map((slot) => slot.lens);
+	const missing = required.filter((slot) => validResultsFor(results, slot).length === 0);
 	if (missing.length > 0) {
 		return { outcome: "incomplete", missing };
 	}

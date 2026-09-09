@@ -34,7 +34,10 @@
  * which live in `dispatch-module`.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -43,25 +46,27 @@ const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
 
 type Slot = { lens: string; surface: string };
 type ReviewerReturn = { token: "APPROVED" | "FINDINGS"; findings: string[] } | { failure: "timeout" | "malformed" };
-type SlotResult = { slot: Slot; compare: "confirmed" | "invalid"; returned: ReviewerReturn };
+type Compare = "confirmed" | "invalid" | "absent";
+/** The module brands this; the suite mirrors its shape and casts at `receive`. */
+type SlotResult = { slot: Slot; compare: Compare; returned: ReviewerReturn };
+type ChangedPaths = readonly string[];
 type Policy = { version: number; rows: { lens: string; surface: string; prefixes: string[] }[] };
 
 type PanelModule = {
 	loadPolicy(): Policy;
 	validatePolicy(policy: Policy): Policy;
-	deriveRequiredSlots(changedPaths: string[], policy: Policy): Slot[];
-	changedPathsFromRepo(baseRef: string, headRef: string, repoRoot: string): string[];
-	receive(slot: Slot, compare: "confirmed" | "invalid", returned: ReviewerReturn): SlotResult;
+	deriveRequiredSlots(changedPaths: ChangedPaths, policy: Policy): Slot[];
+	changedPathsFromRepo(baseRef: string, headRef: string, repoRoot: string): ChangedPaths;
+	receive(slot: Slot, compare: Compare, returned: ReviewerReturn): SlotResult;
 	decideValidity(result: SlotResult, slot: Slot): { valid: boolean; reason?: string };
-	buildBundle(results: SlotResult[], required: Slot[]): { finding: string; lens: string }[];
+	buildBundle(results: SlotResult[], required: Slot[]): { finding: string; slot: Slot }[];
 	panelOutcome(
 		results: SlotResult[],
 		required: Slot[],
 	):
-		| { outcome: "unrouted" }
-		| { outcome: "incomplete"; missing: string[] }
+		| { outcome: "incomplete"; missing: Slot[] }
 		| { outcome: "approved" }
-		| { outcome: "bundle"; bundle: { finding: string; lens: string }[] };
+		| { outcome: "bundle"; bundle: { finding: string; slot: Slot }[] };
 };
 
 let panel: PanelModule | undefined;
@@ -80,6 +85,55 @@ function orchestrator(): PanelModule {
 			`${loadError}`,
 	);
 	return panel;
+}
+
+/**
+ * The one cast in this file. `deriveRequiredSlots` takes a BRANDED
+ * changed-path set that only `changedPathsFromRepo` mints, which is what
+ * makes §1.7's authoritative property structural rather than promised.
+ * A suite that wants to derive from a literal has to say so out loud;
+ * this is that seam, named so it cannot be mistaken for the real read.
+ */
+const paths = (literal: string[]): ChangedPaths => literal as unknown as ChangedPaths;
+
+/**
+ * A throwaway repository. With `baseOnly` the history DIVERGES: the base
+ * ref gets a commit the head does not carry, which is the only shape in
+ * which `A..B` and `A...B` differ — on a linear history the two ranges
+ * are the same set, so a two-dot implementation is indistinguishable
+ * from a three-dot one and an arm over a linear fixture cannot tell them
+ * apart.
+ */
+function fixtureRepo(files: Record<string, string>, baseOnly?: Record<string, string>): string {
+	const dir = mkdtempSync(join(tmpdir(), "gitjig-panel-repo-"));
+	const git = (...argv: string[]) => execFileSync("git", argv, { cwd: dir, encoding: "utf8" });
+	git("init", "-q");
+	git("config", "user.email", "t@example.invalid");
+	git("config", "user.name", "t");
+	// The ambient environment may sign commits; a fixture repository must
+	// not depend on the operator having a key.
+	git("config", "commit.gpgsign", "false");
+	git("config", "tag.gpgsign", "false");
+	writeFileSync(join(dir, "seed.txt"), "seed\n");
+	git("add", "-A");
+	git("commit", "-qm", "seed");
+	if (baseOnly !== undefined) {
+		git("checkout", "-q", "-b", "base-line");
+		for (const [name, body] of Object.entries(baseOnly)) {
+			mkdirSync(dirname(join(dir, name)), { recursive: true });
+			writeFileSync(join(dir, name), body);
+		}
+		git("add", "-A");
+		git("commit", "-qm", "base-only");
+		git("checkout", "-q", "-");
+	}
+	for (const [name, body] of Object.entries(files)) {
+		mkdirSync(dirname(join(dir, name)), { recursive: true });
+		writeFileSync(join(dir, name), body);
+	}
+	git("add", "-A");
+	git("commit", "-qm", "change");
+	return dir;
 }
 
 const LENS_A: Slot = { lens: "spec-contract", surface: "SPEC.md" };
@@ -105,7 +159,7 @@ describe("§1.7 the panel is a search, not a vote (issue #169)", () => {
 		);
 		assert.deepEqual(
 			"bundle" in outcome ? outcome.bundle : [],
-			[{ finding: "the lone finding", lens: "spec-contract" }],
+			[{ finding: "the lone finding", slot: LENS_A }],
 			"the outcome's bundle is not the lone finding — a truncating or filtering panelOutcome passes every arm " +
 				"that never asserts the bundle branch's contents",
 		);
@@ -119,9 +173,9 @@ describe("§1.7 the panel is a search, not a vote (issue #169)", () => {
 		assert.deepEqual(
 			"bundle" in outcome ? outcome.bundle : [],
 			[
-				{ finding: "first", lens: "spec-contract" },
-				{ finding: "second", lens: "spec-contract" },
-				{ finding: "third", lens: "runtime" },
+				{ finding: "first", slot: LENS_A },
+				{ finding: "second", slot: LENS_A },
+				{ finding: "third", slot: LENS_B },
 			],
 			"the outcome's bundle is not every valid slot's findings in policy order — §1.7 makes the bundle transport, " +
 				"and a panel that truncates or reorders at its terminal output loses findings the Judge never sees",
@@ -161,9 +215,10 @@ describe("§1.7 the panel is a search, not a vote (issue #169)", () => {
 		const p = orchestrator();
 		const bundle = p.buildBundle([found(p, LENS_A, "x"), found(p, LENS_B, "y")], [LENS_A, LENS_B]);
 		assert.deepEqual(
-			bundle.map((e) => e.lens).sort(),
-			["runtime", "spec-contract"],
-			"a finding reached the bundle without its originating lens, or under a constant one",
+			bundle.map((e) => e.slot).sort((a, b) => a.lens.localeCompare(b.lens)),
+			[LENS_B, LENS_A],
+			"a finding reached the bundle without its originating slot, or under a constant one — the WHOLE slot rides, " +
+				"because this module's identity rule is the lens+surface pair and half of it cannot tell two slots apart",
 		);
 	});
 
@@ -195,7 +250,20 @@ describe("§1.7 completeness, re-dispatch, and the unrouted case (issue #169)", 
 		const p = orchestrator();
 		const outcome = p.panelOutcome([ok(p, LENS_A)], [LENS_A, LENS_B]);
 		assert.equal(outcome.outcome, "incomplete", "a panel missing a required slot was read as an outcome");
-		assert.deepEqual("missing" in outcome ? outcome.missing : [], ["runtime"]);
+		assert.deepEqual("missing" in outcome ? outcome.missing : [], [LENS_B]);
+	});
+
+	it("the bundle is ordered by the POLICY, not by the order results arrive in", () => {
+		const p = orchestrator();
+		// Results supplied in the REVERSE of the required order: an
+		// implementation that iterates results outermost yields B then A.
+		const outcome = p.panelOutcome([found(p, LENS_B, "from B"), found(p, LENS_A, "from A")], [LENS_A, LENS_B]);
+		assert.deepEqual(
+			("bundle" in outcome ? outcome.bundle : []).map((e) => e.finding),
+			["from A", "from B"],
+			"the bundle followed the order results were supplied in — the artifact the Judge reads must be " +
+				"reproducible from the same result set however the caller collected it",
+		);
 	});
 
 	it("a re-dispatched valid result satisfies its slot whichever order it arrives in", () => {
@@ -239,14 +307,15 @@ describe("§1.7 completeness, re-dispatch, and the unrouted case (issue #169)", 
 		assert.ok(!("bundle" in outcome), "the findings-free path produced a bundle — the Judge must have no input");
 	});
 
-	it("a change no lens routes is UNROUTED, never APPROVED — zero reviewers is not a clean review", () => {
+	it("a change no lens routes has NO panel outcome — the question is refused, not answered", () => {
 		const p = orchestrator();
-		const outcome = p.panelOutcome([], []);
-		assert.equal(
-			outcome.outcome,
-			"unrouted",
-			"an empty required set yielded a review outcome — Review APPROVED ends review for a head (§1.9), and " +
-				"handing that to a change no reviewer examined is an approval nobody produced",
+		assert.throws(
+			() => p.panelOutcome([], []),
+			/no required slot/,
+			"an empty required set yielded a review outcome. §1.7's completeness test is vacuously true over one and " +
+				"§1.9 would then read the empty bundle as Review APPROVED — an approval for a head no reviewer " +
+				"examined. Minting a fourth token instead would ship a contract the SSOT does not carry; what SHOULD " +
+				"happen there is a §1.7/§1.9 question, open on issue #172",
 		);
 	});
 });
@@ -336,6 +405,46 @@ describe("§1.6 validity is the caller's fact — a reviewer cannot vouch for it
 		);
 	});
 
+	it("a slot claim smuggled into the return is ignored — receive reads only its own argument", () => {
+		const p = orchestrator();
+		// A delegate-shaped return carrying a slot it would like to answer.
+		const smuggled = { token: "APPROVED", findings: [], slot: LENS_B } as unknown as ReviewerReturn;
+		const result = p.receive(LENS_A, "confirmed", smuggled);
+		assert.deepEqual(
+			result.slot,
+			LENS_A,
+			"a slot named inside the return decided which slot the result answered — that is the self-selected " +
+				"specialist §1.7 forbids, and it makes the wrong-surface cause compare a delegate's claim to itself",
+		);
+	});
+
+	it("mutating the RETURN a caller passed in does not reach the recorded result", () => {
+		const p = orchestrator();
+		const findings = ["the real finding"];
+		const result = p.receive(LENS_A, "confirmed", { token: "FINDINGS", findings });
+		findings.length = 0;
+		findings.push("rewritten after the fact");
+		assert.deepEqual(
+			p.buildBundle([result], [LENS_A]).map((e) => e.finding),
+			["the real finding"],
+			"the recorded result aliases the caller's return — `readonly` is shallow, so whoever still holds the " +
+				"parsed object can rewrite what the panel reports, and emptying the array flips the result's own " +
+				"validity, after the caller recorded it",
+		);
+	});
+
+	it("an absent blind compare is invalid — §1.6's third state has a representation here", () => {
+		const p = orchestrator();
+		const result = p.receive(LENS_A, "absent", { token: "APPROVED", findings: [] });
+		assert.equal(
+			p.decideValidity(result, LENS_A).valid,
+			false,
+			"a result whose head could not be confirmed at all was ruled valid — the dispatcher can report three " +
+				"compare states and §1.6 rules all three invalid but `confirmed`; a two-state field cannot carry the " +
+				"one it does not name",
+		);
+	});
+
 	it("mutating the slot a caller passed in does not reach the recorded result", () => {
 		const p = orchestrator();
 		const dispatched = { ...LENS_A };
@@ -351,7 +460,39 @@ describe("§1.6 validity is the caller's fact — a reviewer cannot vouch for it
 });
 
 describe("§1.7 required slots derive from a committed, caller-owned policy (issue #169)", () => {
-	it("the committed file is what loadPolicy reads — and it takes no path to read anything else", () => {
+	it("loadPolicy reads the committed file and nothing a caller names", () => {
+		const p = orchestrator();
+		// The round-1 defect was `loadPolicy(path = POLICY_PATH)`, whose
+		// arity is 0 — so an arity assertion cannot see it. This one can:
+		// a loader that honoured an argument would read the decoy.
+		const decoy = join(mkdtempSync(join(tmpdir(), "gitjig-decoy-")), "lens-policy.json");
+		writeFileSync(decoy, JSON.stringify({ version: 1, rows: [{ lens: "decoy", surface: "s", prefixes: ["x/"] }] }));
+		const loaded = (p.loadPolicy as (path?: string) => Policy)(decoy);
+		assert.ok(
+			!loaded.rows.some((row) => row.lens === "decoy"),
+			"loadPolicy honoured a path a caller supplied — a path parameter makes the committed surface a DEFAULT " +
+				"rather than a constraint, and routing could then derive from an untracked file outside the " +
+				"repository, which is the audit property §1.7 makes contractual",
+		);
+	});
+
+	it("loadPolicy runs the validator, and it is the same one the suite exercises", () => {
+		const p = orchestrator();
+		assert.throws(
+			() => p.validatePolicy({ version: 1, rows: [] }),
+			"the exported predicate accepted a policy that routes nothing",
+		);
+		// The binding: a loader that skipped the predicate would pass every
+		// arm that only checks the predicate and the committed file apart.
+		assert.equal(
+			p.loadPolicy.toString().includes("validatePolicy"),
+			true,
+			"loadPolicy does not call validatePolicy — the module's §3.11 claim is that the predicate has one " +
+				"implementation AND one owner, and a loader that parses without validating leaves the owner unwired",
+		);
+	});
+
+	it("the committed file is what loadPolicy returns — a hardcoded table cannot pass", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
 		assert.ok(policy && Array.isArray(policy.rows) && policy.rows.length > 0, "no committed lens policy resolved");
@@ -403,17 +544,44 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		assert.ok(p.validatePolicy(p.loadPolicy()), "the committed policy does not satisfy its own validator");
 	});
 
+	it("a row's surface is validated and carried — a slot's identity is the pair, so half of it is not enough", () => {
+		const p = orchestrator();
+		assert.throws(
+			() => p.validatePolicy({ version: 1, rows: [{ lens: "a", prefixes: ["x/"] } as never] }),
+			"a row with no surface was accepted — two such rows produce slots that compare equal on a field that is " +
+				"undefined in both, which is the same unpairable slot the lens-uniqueness check exists to prevent",
+		);
+		const derived = p.deriveRequiredSlots(paths(["SPEC.md"]), p.loadPolicy());
+		assert.equal(
+			derived[0]?.surface,
+			"the behavioural SSOT and the direction document",
+			"the derived slot's surface did not come from the policy row it was derived from — a constant surface " +
+				"makes the wrong-surface invalidity cause unreachable for every row",
+		);
+	});
+
+	it("a policy that did not parse to an object is refused in this module's own words", () => {
+		const p = orchestrator();
+		assert.throws(
+			() => p.validatePolicy(null as never),
+			/did not parse to an object/,
+			"a non-object policy threw something this repository did not author — the parameter is typed but every " +
+				"value reaching it came from JSON.parse of a file, so the type is not a guarantee and the authored " +
+				"refusals are what a reader is supposed to get",
+		);
+	});
+
 	it("derivation is a function of the change surface, ordered by the policy and never by the input", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
 		assert.deepEqual(
-			p.deriveRequiredSlots(["SPEC.md", ".pi/x.ts"], policy),
-			p.deriveRequiredSlots([".pi/x.ts", "SPEC.md"], policy),
+			p.deriveRequiredSlots(paths(["SPEC.md", ".pi/x.ts"]), policy),
+			p.deriveRequiredSlots(paths([".pi/x.ts", "SPEC.md"]), policy),
 			"two orderings of one change surface derived two different-looking sets — a routing decision that " +
 				"depends on input order is not reproducible, and §1.7 makes auditability the point of the surface",
 		);
 		assert.deepEqual(
-			p.deriveRequiredSlots([".pi/a.ts", ".pi/b.ts"], policy).map((s) => s.lens),
+			p.deriveRequiredSlots(paths([".pi/a.ts", ".pi/b.ts"]), policy).map((s) => s.lens),
 			["runtime"],
 			"two paths matching one lens derived that lens twice — a duplicated required slot cannot be satisfied " +
 				"coherently and double-counts its findings",
@@ -436,17 +604,35 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
+	it("an exact policy prefix routes its lens, and its case is significant", () => {
+		const p = orchestrator();
+		const policy = p.loadPolicy();
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["SPEC.md"]), policy).map((s) => s.lens),
+			["spec-contract"],
+			"the SSOT lens is not required for a change to SPEC.md — its policy prefixes are bare names, so an " +
+				"implementation without an exact-path branch routes that whole row nowhere and every arm that only " +
+				"asserts an empty set stays green",
+		);
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["spec.md"]), policy),
+			[],
+			"a differently-cased name selected the lens — paths are case-significant here and a case-folding match " +
+				"routes files the policy does not name",
+		);
+	});
+
 	it("matching is path-segment aware — a near-miss name routes nothing", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
 		assert.deepEqual(
-			p.deriveRequiredSlots(["SPEC.md.bak"], policy),
+			p.deriveRequiredSlots(paths(["SPEC.md.bak"]), policy),
 			[],
 			"a path that merely BEGINS with a policy prefix selected that lens — `SPEC.md.bak` is not `SPEC.md`, " +
 				"and a bare prefix test routes a change by a name it resembles",
 		);
 		assert.deepEqual(
-			p.deriveRequiredSlots(["README.md", "package.json"], policy),
+			p.deriveRequiredSlots(paths(["README.md", "package.json"]), policy),
 			[],
 			"a change the policy routes nowhere derived a lens anyway",
 		);
@@ -456,23 +642,65 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		const p = orchestrator();
 		const policy = p.loadPolicy();
 		assert.deepEqual(
-			p.deriveRequiredSlots(["SPEC.md", "lens=runtime", "runtime", ".pi"], policy).map((s) => s.lens),
-			p.deriveRequiredSlots(["SPEC.md"], policy).map((s) => s.lens),
+			p.deriveRequiredSlots(paths(["SPEC.md", "lens=runtime", "runtime", ".pi"]), policy).map((s) => s.lens),
+			p.deriveRequiredSlots(paths(["SPEC.md"]), policy).map((s) => s.lens),
 			"a lens claim riding in the input selected a slot — §1.7: no reviewer selects the lens it will be graded " +
 				"on and no model selects one at dispatch time",
 		);
 	});
 
-	it("the authoritative read exists and reads the repository, not an argument", () => {
+	it("the authoritative read reports the change's real paths, from the repository it was pointed at", () => {
 		const p = orchestrator();
-		assert.equal(
-			typeof p.changedPathsFromRepo,
-			"function",
-			'there is no authoritative changed-path read — §1.7 requires routing inputs be "read from the change ' +
-				"itself rather than from anyone's summary of it\", and a caller-supplied array cannot satisfy that " +
-				"however honestly it was assembled",
+		const repo = fixtureRepo({ "SPEC.md": "x\n", ".pi/a.ts": "y\n" });
+		assert.deepEqual(
+			[...p.changedPathsFromRepo("HEAD~1", "HEAD", repo)].sort(),
+			[".pi/a.ts", "SPEC.md"],
+			"the changed-path read did not report the change's own paths — a constant, a wrong range, or a read of " +
+				"the wrong repository all satisfy an arm that only compares a ref against itself",
 		);
-		const paths = p.changedPathsFromRepo("HEAD", "HEAD", repoRoot());
-		assert.deepEqual(paths, [], "a ref compared against itself reported changed paths");
+	});
+
+	it("the read is a three-dot range: it reports the head's own changes, not the base's", () => {
+		const p = orchestrator();
+		// Divergent history: `base-line` carries a change the head does not.
+		// `base..HEAD` and `base...HEAD` agree on a linear history and part
+		// company here, which is the only place an arm can tell them apart.
+		const repo = fixtureRepo({ "SPEC.md": "x\n" }, { ".pi/base-only.ts": "b\n" });
+		assert.deepEqual(
+			[...p.changedPathsFromRepo("base-line", "HEAD", repo)].sort(),
+			["SPEC.md"],
+			"the read reported a path only the BASE changed — routing must derive from the change under review, so " +
+				"the range is the head's own changes since the merge base and not the two-dot difference, which " +
+				"would require a lens for work this change did not do",
+		);
+		assert.deepEqual([...p.changedPathsFromRepo("HEAD", "HEAD", repo)], [], "a ref against itself reported paths");
+	});
+
+	it("a path git would C-quote still routes — the read is exact, not merely present", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ ".pi/caf\u00e9.ts": "y\n" });
+		const read = p.changedPathsFromRepo("HEAD~1", "HEAD", repo);
+		assert.deepEqual(
+			[...read],
+			[".pi/caf\u00e9.ts"],
+			"a non-ASCII path came back in git's C-quoted form — a quoted name begins with a double quote and " +
+				"matches no policy prefix, so a change touching only such files would route to NO lens and its " +
+				"review would silently never run",
+		);
+		assert.deepEqual(
+			p.deriveRequiredSlots(read, p.loadPolicy()).map((slot) => slot.lens),
+			["runtime"],
+			"the runtime lens was not required for a change to a .pi/ file",
+		);
+	});
+
+	it("the authoritative read is what derivation consumes — a hand-built array needs a named cast", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		assert.deepEqual(
+			p.deriveRequiredSlots(p.changedPathsFromRepo("HEAD~1", "HEAD", repo), p.loadPolicy()).map((s) => s.lens),
+			["spec-contract"],
+			"the authoritative read's output did not derive the lens its paths select",
+		);
 	});
 });

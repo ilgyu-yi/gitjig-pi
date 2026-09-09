@@ -379,7 +379,6 @@ const PAYLOADS: Record<string, string> = {
 	// it (Directive #166's non-goal).
 	"payload-carrier.json": `{"ok":true,"summary":"${CLEAN_SUMMARY}","payload":"{\\"opaque\\":\\"zqcarried\\"}"}`,
 	"payload-carrier-nonstring.json": `{"ok":true,"summary":"zq","payload":{"zq":1}}`,
-	"payload-carrier-operand.json": `{"ok":true,"summary":"zq clean","payload":"HEAD_PLACEHOLDER"}`,
 	"payload-oversize.json": `{"ok":true,"summary":"${OVERSIZE_MARKER}${"z".repeat(RETURN_LIMIT)}"}`,
 	"payload-misreported-head.json": `{"ok":true,"summary":"zqcompare misreported summary","reviewedHead":"${MISREPORTED_HEAD}"}`,
 	"payload-unrelated-hex.json": `{"ok":true,"summary":"zq run alongside deadbee7 stays inert"}`,
@@ -1122,7 +1121,7 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		assert.equal(
 			(verdict as { payload?: string }).payload,
 			'{"opaque":"zqcarried"}',
-			"payload-carrier: the payload did not cross intact — the dispatcher fixes its type and bound and scans its " +
+			"payload-carrier: the payload did not cross intact — the dispatcher fixes its type and scans its " +
 				"bytes, and parses nothing of its meaning",
 		);
 	});
@@ -1139,6 +1138,32 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 			admit.REFUSAL_CAUSES.malformedReturn,
 			"payload-nonstring: a non-string payload did not refuse whole — widening the schema by one slot widens it " +
 				"by one STRING slot, and an unbounded shape at that key is a surface no contract bounds",
+		);
+	});
+
+	it("a clean payload crosses runDispatch onto the outcome — the widening has a success path", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "payload-crosses");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-carrier.json")],
+			timeoutMs: 30_000,
+		});
+		assert.equal(
+			outcome.disposition,
+			"admitted",
+			"payload-crosses: a return carrying a clean opaque payload was refused — a dispatcher that refuses every " +
+				"payload passes every arm that only asserts the refusal direction, and the slot exists to carry a " +
+				"value ACROSS, not to be rejected",
+		);
+		assert.equal(
+			(outcome as { payload?: string }).payload,
+			'{"opaque":"zqcarried"}',
+			"payload-crosses: the payload did not reach the caller on the dispatch outcome — admitting it and then " +
+				"dropping it at the dispatcher's own boundary is indistinguishable from never widening the schema",
 		);
 	});
 

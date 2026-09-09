@@ -12,7 +12,7 @@
  * `{ ok: boolean, summary: string, reviewedHead?: string, payload?: string }`
  * with unknown keys refused — a minimum-match would admit a surface no
  * contract bounds. `payload` is an OPAQUE caller-interpreted slot (issue
- * #169): this module fixes its type and its bound and the caller scans
+ * #169): this module fixes its type and the caller scans
  * its bytes for held operands exactly as it scans the summary, and
  * nothing here reads its meaning. That is deliberate and it is what
  * keeps a caller's policy ABOVE this dispatcher rather than inside it

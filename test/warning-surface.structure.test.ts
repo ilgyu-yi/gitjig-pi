@@ -155,12 +155,24 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		file: "gitjig/review/panel.ts",
 		allow: [
 			// The two git revision operands, composed into ONE argv element of
-			// an execFileSync call — `git diff --name-only <base>...<head>` —
-			// and never into a message. No shell parses them (execFileSync
-			// takes an argv array, not a command string), and no operator
-			// surface receives them: the only thing that reads this string is
-			// git's own revision parser, which is not the surface issue #47's
-			// lock protects.
+			// an execFileSync call: `git diff --name-only -z <base>...<head>`.
+			//
+			// The ground is NOT that they never reach a message — an earlier
+			// revision of this entry claimed that and it was false, measured
+			// twice: execFileSync synthesizes an Error whose `message` begins
+			// "Command failed: git diff --name-only -z <base>...<head>", and
+			// its default stdio leaves the child's stderr inherited, so git's
+			// own diagnostic echoes the operand onto the PARENT's stderr.
+			//
+			// The ground that does hold is provenance. Issue #47's lock exists
+			// for text an ACTOR influences — a path component an outside party
+			// names. These two are refs the caller resolves for the change it
+			// is reviewing; they are never read from a delegate's return, from
+			// a policy file, or from any surface a reviewed party writes. What
+			// reaches the throw path is the caller's own operand, and a caller
+			// that cannot trust its own refs has lost the compare before this.
+			// If a later change ever routes an outside-supplied ref here, this
+			// entry stops holding and the interpolation goes through `quoted`.
 			"baseRef",
 			"headRef",
 			// A policy prefix, composed into a comparison operand for the
@@ -168,6 +180,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// carry a path, and that is why it is allowlisted on the second
 			// ground the lock offers rather than the first: the composed value
 			// is compared and discarded, never warned, thrown, or printed.
+			// Verified by reading `underPrefix`, whose only use of the
+			// composed string is the comparison itself.
 			"prefix",
 			// NOT allowlisted, and named here so the absence is legible: the
 			// lens name reaches three validation throws and goes through
