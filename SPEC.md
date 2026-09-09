@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 167 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 179 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 193 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 213 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 225 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 266 |
-| §2 | Artifact hierarchy and lifecycle | 274 |
-| &nbsp;&nbsp;§2.1 | Issue types | 278 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 291 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 307 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 311 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 326 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 363 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 375 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 385 |
-| §3 | Enforcement-layer architecture | 397 |
-| &nbsp;&nbsp;§3.1 | The constraint | 401 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 408 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 416 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 520 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 524 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 528 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 538 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 550 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 563 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 577 |
-| &nbsp;&nbsp;§3.11 | Gate design | 587 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 609 |
-| §4 | Substrate and install contract | 619 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 623 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 629 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 633 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 637 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 641 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 647 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 657 |
-| &nbsp;&nbsp;§4.8 | The command layer | 665 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 722 |
-| §5 | Cross-cutting contracts | 764 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 768 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 772 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 776 |
-| &nbsp;&nbsp;§5.4 | Work language | 780 |
-| &nbsp;&nbsp;§5.5 | State boundary | 784 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 790 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 800 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 810 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 818 |
-| §6 | Self-governance milestone | 826 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 837 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 169 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 181 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 195 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 215 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 227 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 268 |
+| §2 | Artifact hierarchy and lifecycle | 276 |
+| &nbsp;&nbsp;§2.1 | Issue types | 280 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 293 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 309 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 313 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 328 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 365 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 377 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 387 |
+| §3 | Enforcement-layer architecture | 399 |
+| &nbsp;&nbsp;§3.1 | The constraint | 403 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 410 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 418 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 522 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 526 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 530 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 540 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 552 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 565 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 579 |
+| &nbsp;&nbsp;§3.11 | Gate design | 589 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 611 |
+| §4 | Substrate and install contract | 621 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 625 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 631 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 635 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 639 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 643 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 649 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 659 |
+| &nbsp;&nbsp;§4.8 | The command layer | 667 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 724 |
+| §5 | Cross-cutting contracts | 766 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 770 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 774 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 778 |
+| &nbsp;&nbsp;§5.4 | Work language | 782 |
+| &nbsp;&nbsp;§5.5 | State boundary | 786 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 792 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 802 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 812 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 820 |
+| §6 | Self-governance milestone | 828 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 839 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -130,7 +130,7 @@ Every PR to the default branch lands exactly one changelog fragment `changelog_u
 
 Repeated repair at a review gate must carry method-level information: resubmitting the same method against the same objection is a failure mode the flow observes and interrupts, not one it repeats indefinitely. What the observation reads is the **repair history** of one change — the sequence of its review states and the repairs between them — held in a durable record the acting agent does not author — since a self-kept record reproduces exactly the failure it exists to prevent — with one named exception, §1.9's **Nit carry-forward** clause, on that clause's terms alone, and readable at the start of the next review across a session or clone boundary (MISSION § "Success looks like > Evidence": the history is a recorded fact, never a remembered one). A **review state** is the unit that history is counted in: one resolved review of the change at one head, individuated by the head it was pinned to (§1.6). The panel's slots at one head therefore collapse into one review state — simultaneous results at one head are one decision, not N (§1.7) — and a head that drew no review contributes no state.
 
-**A count triggers inspection, never escalation.** How many times a change has been repaired is not evidence that its method has failed — a change reviewed by stronger methods finds more, and a backstop indexed on the count alone parks work for reviewing well, which trains operators to route around review. A count therefore has exactly one workflow role: a **coarse deterministic trigger** for the diagnosis below. Past the trigger the history is inspected, and what the inspection finds — never the count that occasioned it — decides what happens next. **The default trigger is the second consecutive review state the Resolver resolved to `repair`** (§1.9) — keyed on that disposition because it is already defined, already caller-readable, and already what §2.2's `awaiting-author` keys on, so the predicate needs no second definition and admits no second reading. A deferred or remedied finding is not a repair and does not feed the count, which is what keeps the trigger from indexing on having been reviewed well. A more authoritative and equally simple trigger may substitute for it, with the ground recorded where the substitution is made; a trigger that is merely more elaborate may not — the coarseness is the point, since a trigger with judgment in it is a second diagnosis nobody adjudicated. The trigger never fires on the findings-free path: a complete panel with an empty bundle ends review for that head (§1.7, §1.9).
+**A count triggers inspection, never escalation.** How many times a change has been repaired is not evidence that its method has failed — a change reviewed by stronger methods finds more, and a backstop indexed on the count alone parks work for reviewing well, which trains operators to route around review. A count therefore has exactly one workflow role: a **coarse deterministic trigger** for the diagnosis below. Past the trigger the history is inspected, and what the inspection finds — never the count that occasioned it — decides what happens next. **The default trigger is the second consecutive review state the Resolver resolved to `repair`** (§1.9) — keyed on that disposition because it is already defined, already caller-readable, and already what §2.2's `awaiting-author` keys on, so the predicate needs no second definition. A review resolving to anything else — `clear`, or `measure-escalate`, which has already handed off on its own terms — is not a repair state: it does not feed the count and, being interposed, **resets** it. That is what keeps the trigger from indexing on having been reviewed well, and the coarseness it costs is the coarseness this clause chose. A more authoritative and equally simple trigger may substitute for it, with the ground recorded where the substitution is made; a trigger that is merely more elaborate may not — the coarseness is the point, since a trigger with judgment in it is a second diagnosis nobody adjudicated. The trigger never fires on the findings-free path: a complete panel with an empty bundle ends review for that head (§1.7, §1.9).
 
 **The diagnosis.** Inspecting the history is a **Judge** ruling (§1.9), in that actor's second capacity: it is a semantic reading, it reads the same findings the Judge already ruled once, and §1.9's rule admits no separate adjudicator for it. The ruling returns **two** things, both semantic and both the Judge's, so that what consumes them can be deterministic: the taxonomy value below, which answers whether a further autonomous repair attempt is admissible, and the **invalidation** finding — exactly one of nothing, the selected plan, or the authorization — which answers where the change re-enters the flow. **The two answer different questions and never compete**, which is what makes the pair consumable without a tie-break: a value and a route are read together, never against each other, and where the history shows both the plan and the authorization invalidated the finding is the authorization, the wider of the two: the gate route 3 below returns the change to rules the disposition of everything derived under that authorization. The caller derives the trigger, supplies the history record, and consumes the pair; the acting agent rules nothing here and no substitute fills the seat, which is the same independence the record itself is held to. The diagnosis **does** gate — it decides whether the next act is an autonomous repair attempt — so it takes the same closed direction §1.9 states for the Judge's other capacity, and §3.9's keying rule then allocates the postures inside it, which the **When the diagnosis cannot be made** clause below applies rather than restates.
 
@@ -147,7 +147,7 @@ There is no workflow-effective *progress* value beyond NONE, and none is added l
 
 Plan invalidation is deliberately **not** a value of this taxonomy — it is the ruling's second output, above. A repair history can show that the selected plan no longer holds, but that is not a diagnosis of the repair loop; it is a planning fact, and giving it a taxonomy slot would route it through the repair machinery instead of through the model that owns it — and would also force one output to answer two questions, which is the tie the separation above exists to prevent.
 
-**The planning boundary.** **Which gate** the change re-enters is decided by the ruling's invalidation finding and by nothing else — a caller act reading one output, not a second reading of the history. The boundary and the value answer different questions and compose without a tie-break: the value says whether the next act is an autonomous repair attempt or a handoff, the boundary says which gate the change carries with it either way, and no route grants what a value withholds:
+**The planning boundary.** **Which gate** the change re-enters is decided by the ruling's invalidation finding and by nothing else — a caller act reading one output, not a second reading of the history. Where there is no ruling, there is no finding either, and route 1 is not a default the absence supplies: the change has already handed off, and re-entry is the recipient's act. The boundary and the value answer different questions and compose without a tie-break: the value says whether the next act is an autonomous repair attempt or a handoff, the boundary says which gate the change carries with it either way, and no route grants what a value withholds:
 
 1. **Nothing invalidated** — no re-entry is owed. The standing authorization and the selected plan hold, and what happens next is whatever the taxonomy value admits: under NONE the repair simply continues, while under STAGNATION, OSCILLATION, or INDETERMINATE this route adds nothing and those values govern.
 2. **The selected plan is invalidated** — the change re-enters the planning model (§1.8) for the invalidated scope alone, before any further repair the value admits. A re-plan performed silently inside a repair attempt is the failure this route exists to prevent.
@@ -157,12 +157,14 @@ Plan invalidation is deliberately **not** a value of this taxonomy — it is the
 
 **When the diagnosis cannot be made.** No value is ever inferred from a failure — **absence is not NONE**, and an unreadable history is never read as STAGNATION — so what a failure can do is withhold the relief only NONE grants, never supply a value. Which failures withhold it is §3.9's keying rule, applied here rather than re-derived:
 
-- **Present but cannot measure** — an unreadable or unreachable history record, a Judge not dispatched, dispatched and unavailable, or returning a ruling that is invalid or incomplete. The Judge dependency takes this limb in **every** shape, which is what keeps one direction across the actor's two capacities (§1.9): an undispatched Judge is a caller's omission, not an uninstalled enforcement, and relieving it would hand the relieved party the lever this section elsewhere refuses to mint. The instrument is being asked to vouch for something it did not measure, so it **fails closed**: the change hands off exactly as a non-NONE value would. This is what keeps the interrupt off a semantic actor's availability — the trigger that occasioned the ruling is a caller-derived fact and has already fired, and the handoff stands until a ruling is actually obtained, which a later valid ruling then governs.
-- **Absent** — no history record exists **because the record instrument has not derived** (below). The limb's reach is exactly that regime and no wider: the enforcement was never installed, the acting party is neither its cause nor able to repair it from inside a block, so it **fails open with a warning** and the flow continues on its ordinary terms. Once the instrument exists, an absent record is a caller's omission and takes the limb above; this limb then has no domain left, which is the whole of what it means for the clause to be advisory until its instruments derive.
+- **Present but cannot measure** — an unreadable or unreachable history record, a Judge not dispatched, dispatched and unavailable, or returning a ruling that is invalid or incomplete. The Judge dependency takes this limb in **every** shape, which is what keeps one direction across the actor's two capacities (§1.9): an undispatched Judge is a caller's omission, not an uninstalled enforcement, and relieving it would hand the relieved party the lever this section elsewhere refuses to mint. The instrument is being asked to vouch for something it did not measure, so it **fails closed**: the change hands off exactly as a non-NONE value would. Named false-block cost, stated here rather than discovered in operation (§3.6): this is the limb that parks a change on the diagnosis machinery's own malfunction — a transient outage or one malformed return stops work whose history would have ruled NONE — which is a guarantee the retired ladder held and this direction deliberately gives up, bounded by the recovery below and read by §3.6's calibration loop if it proves too eager. This is what keeps the interrupt off a semantic actor's availability — the trigger that occasioned the ruling is a caller-derived fact and has already fired, and the handoff stands until a ruling is actually obtained, which a later valid ruling then governs.
+- **Absent** — the record substrate is **not installed in this clone**: the enforcement was never installed, the acting party is neither its cause nor able to repair it from inside a block, so it **fails open with a warning** and the flow continues on its ordinary terms. The shape is a property of a clone, not of a moment — a caller that omits a record the substrate does hold has made an omission, which takes the limb above.
+
+Both limbs allocate postures for a diagnosis that was **attempted**. Where the instruments have not derived at all (below), no diagnosis is attempted: the clause's subject does not exist and the clause sleeps, §5.3's shape, which is what "advisory today" amounts to in operation and why neither limb reaches that regime.
 
 Neither limb is silent. The state is recorded through a channel that does not depend on the failed substrate — the principle §3.8's accountable-and-observable norm applies to escapes — and the announcement is an obligation rather than a courtesy: on the open limb because §5.2's open direction rests on it, on the closed limb because the handoff's recipient must know why it received the change.
 
-The clause is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); the history record, the trigger, and the diagnosis are instruments that derive later per §1.2's macro-phase clause. Until the record instrument derives, an absent record takes the absent limb above; the Judge's shapes take the limb before it, in this regime as in any other, since the role is performed by its actor under this contract rather than simulated (§1.9). Nothing here is the "standing state" of the section as a whole — each dependency's failure is keyed on its own terms.
+The clause is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); the history record, the trigger, and the diagnosis are instruments that derive later per §1.2's macro-phase clause. Until they derive the clause sleeps on its own subject's absence, as the limbs above state; each dependency's failure is keyed on its own terms thereafter, and the section asserts no standing state of its own.
 
 ### 1.5 Delegated work
 
@@ -248,7 +250,7 @@ An adversarial reviewer's success condition is "find something" — a structural
 First, **every effective finding takes exactly one disposition**, and the five are exhaustive over the Judge's rulings. Totality is over **complete** adjudications, and a finding's adjudication is complete when the Judge's return **attests** that the bundle was deduplicated — a recorded fact the Resolver reads, never a property it derives, since deriving it is the act the never-list forbids it — and every axis the Judge owes on the finding is ruled — all four on a CONFIRMED finding, validity alone on a REFUTED or INDETERMINATE one. An incomplete adjudication is not a finding the Resolver disposes at all; the never-list below rules it, and the completeness test is one test for every disposition rather than each disposition's own.
 
 - **repair** — confirmed SUBSTANTIVE, and the defer disposition below does not reach it. The author authors the repair; the head advances and draws a fresh required panel (§1.6, §1.7).
-- **defer** — confirmed SUBSTANTIVE, recorded `fail-closed`, and sitting on **no** criterion of the manifest the AC-impact axis read. It is filed as its own issue, the filed issue's identifier entering the review record beside the finding — which makes a false filing record mechanically falsifiable. Repairing it in place instead is always available and discharges the obligation — at the ordinary cost of a substantive repair, since landing it advances the head and draws a fresh required panel (§1.6). The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction. Where the manifest is **empty** — a change with no closing issue, or criteria empty however they came to be empty — nothing is deferrable. An **absent** manifest never reaches this disposition at all: it is the missing input the Judge's own rule above stops on, which is what makes the two states distinct (§2.6) rather than two names for one outcome.
+- **defer** — confirmed SUBSTANTIVE, recorded `fail-closed`, and sitting on **no** criterion of the manifest the AC-impact axis read. It is filed as its own issue, the filed issue's identifier entering the review record beside the finding — which makes a false filing record mechanically falsifiable. Repairing it in place instead is always available and discharges the obligation — at the ordinary cost of a substantive repair, since landing it advances the head and draws a fresh required panel (§1.6, §1.7). The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction. Where the manifest is **empty** — a change with no closing issue, or criteria empty however they came to be empty — nothing is deferrable. An **absent** manifest never reaches this disposition at all: it is the missing input the Judge's own rule above stops on, which is what makes the two states distinct (§2.6) rather than two names for one outcome.
 - **remedy** — confirmed NIT. The Judge's exact mechanical remedy is applied verbatim; nothing else follows from the finding.
 - **measure-escalate** — INDETERMINATE on validity, which is where an unrulable direction has already collapsed by the harm-direction axis's own rule. It hands off to the recipient §1.4 names, on that clause's terms — which may resolve it by measurement or by a human's ruling, and it can become neither an approval nor an author repair by anyone's silence.
 - **none** — REFUTED. It is retained marked refuted and leaves nothing behind.
