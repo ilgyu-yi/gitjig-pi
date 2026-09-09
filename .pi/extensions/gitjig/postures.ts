@@ -305,9 +305,11 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "provenance-reader",
 		failureShape:
-			"the reader is absent, unreadable, or its diff input cannot be formed (unresolvable merge base), so a " +
-			"change's added lines are never read for development provenance (.github/workflows/check-provenance.sh, " +
-			"issue #70)",
+			"the reader is absent, unreadable, or its diff input cannot be formed (unresolvable merge base), or the " +
+			"job's own checkout machinery fails, so a change's added lines are never read for development provenance " +
+			"(the `provenance` job in check-provenance.yml running .github/workflows/check-provenance.sh, issue #70; " +
+			"a machinery red there blocks nothing — its own header forbids adding the check to the required set, and " +
+			"the SPEC-recorded required-check shape excludes it)",
 		posture: "open",
 		justification:
 			"The only posture this dependency may take. SPEC §2.5 states that no gate class homes a decidable check " +
@@ -316,5 +318,128 @@ export const POSTURES: readonly PostureRow[] = [
 			"outcome than its presence. The degradation signal is a workflow warning naming the missing reader, per " +
 			"§3.9's rule that a disarmed check must never read as a passing one; nothing here is security-relevant, " +
 			'so the "not enforced" wording that clause reserves for that case does not apply.',
+	},
+	// ------------------------------------------------------------------
+	// Tier 3 — the required CI gates (issue #136). These rows HOME
+	// postures the workflows and scripts already take; none of them
+	// changes a behavior. Where the current behavior mis-attributes a
+	// machinery miss to the gate's own subject, the row records that as an
+	// enumerated residual (§3.11) rather than closing it here. Every row
+	// names the gate contexts it covers, which is the join the tier-3
+	// completeness floor in posture-completeness.structure.test.ts reads.
+	{
+		dependency: "ci-gate-machinery",
+		failureShape:
+			"actions/checkout fails at any required gate — fragment-gate, ssot-home, toc-freshness, source-style, " +
+			"type-check — or actions/setup-node fails or `npm ci` cannot install from the committed lockfile " +
+			"(registry unreachable, lockfile out of agreement) at source-style or type-check, the only gates that " +
+			"install anything",
+		posture: "closed",
+		justification:
+			"The step fails with the platform's or npm's own message and none of the gate's — an accepted default, " +
+			"recorded here as the decision it already is: a gate that cannot fetch the tree or the pinned toolchain " +
+			"admits nothing, and a re-run is the recovery. The ci-not-install choice carries its own written ground " +
+			"in source-checks.yml (bounded by the committed lockfile); the on-miss direction had none until this row.",
+	},
+	{
+		dependency: "ci-gate-script-presence",
+		failureShape:
+			"a gate's own shipped script is absent from the checkout — check-changelog.sh (fragment-gate), " +
+			"check-ssot-home.sh (ssot-home), build_toc.sh (toc-freshness)",
+		posture: "closed",
+		justification:
+			"Decided in each workflow with its own arm and remedy: '::error::... is missing — restore it from this " +
+			"repository's history (the substrate onboarding commit ships it)' then exit 1. Present-but-broken machinery " +
+			"refuses rather than passes (§3.9).",
+	},
+	{
+		dependency: "spec-absence",
+		failureShape:
+			"SPEC.md is absent in a contract-less repository — toc-freshness, and ssot-home when no docs/ lead is " +
+			"anchored at a SPEC pointer either",
+		posture: "open",
+		justification:
+			"Decided in both surfaces with the ground written in place: 'a project with no external contract " +
+			"legitimately has none' (check-toc.yml), and check-ssot-home.sh's track-active guard leaves 'a genuinely " +
+			"contract-less repo' untouched. A scoped subject-absence, not a disarm — toc-freshness's skip prints its " +
+			"reason; ssot-home's track-active skip is silent on both streams, an enumerated residual recorded not " +
+			"repaired here.",
+	},
+	{
+		dependency: "spec-absence",
+		failureShape:
+			"a docs/ lead is anchored at a SPEC pointer but SPEC.md is absent or a stub — ssot-home's track-active " +
+			"branch",
+		posture: "closed",
+		justification:
+			"Decided in check-ssot-home.sh: the docs already reference a content home that does not exist, so the gate " +
+			"refuses with the one remedy that fits both shapes ('create SPEC.md as the content home your docs already " +
+			"reference'). Stub detection is deliberately false-skip-biased in the other direction (any real prose line " +
+			"is not a stub), so a mid-onboarding SPEC is never mis-failed.",
+	},
+	{
+		dependency: "platform-file-listing",
+		failureShape:
+			"the PR metadata or file-listing read degrades at fragment-gate — transport failure after three retries, a " +
+			"concatenated or non-array response, an empty stdin handoff, an unclassifiable or uncountable listing, a " +
+			"listing whose entry count disagrees with the PR's changedFiles, or a file status outside the known enum",
+		posture: "closed",
+		justification:
+			"Decided across check-changelog.yml and check-changelog.sh on §3.10's output-validity admission, with each " +
+			"arm's message stating 'This is NOT a missing-fragment failure' so a machinery miss is never blamed on the " +
+			"author — the gate will not judge a partial view, and the unknown-status arm names a recovery per cause. " +
+			"One enumerated residual stays open in place (the script's own header, residual 7): the skip-changelog " +
+			"label step's un-armed gh call fails the job with no message of the gate's.",
+	},
+	{
+		dependency: "fragment-gate-draft-sleep",
+		failureShape:
+			"the PR is a draft at fragment-gate — the one clean-skip path, taken only when the event payload AND a " +
+			"live read agree the PR is a draft",
+		posture: "open",
+		justification:
+			"Decided in check-changelog.yml with a six-item residual list of what the sleep leaves unreached; the " +
+			"payload only ever vetoes the sleep, never grants it, and a degraded isDraft read runs the gate. Scoped to " +
+			"the draft subject: the gate re-runs at the ready flip, where the merge it guards becomes reachable.",
+	},
+	{
+		dependency: "ci-toolchain-presence",
+		failureShape: "biome or tsc absent from node_modules under the --no-install seam at source-style or type-check",
+		posture: "closed",
+		justification:
+			"npx --no-install fails rather than fetching (the lockfile-bounded choice), so the job reds — the right " +
+			"direction. Enumerated residual, recorded not repaired: the failure wears the gate's own subject message " +
+			"('Formatting or lint errors.' / 'Type errors.'), so a tool miss is indistinguishable from a finding in the " +
+			"log; disambiguating the arm is follow-up work this row makes findable.",
+	},
+	{
+		dependency: "ci-gate-config-presence",
+		failureShape: "biome.jsonc or tsconfig.json absent at the root under source-style or type-check",
+		posture: "closed",
+		justification:
+			"No workflow arm measures this shape; the tools' own refusals decide it, and both were measured at this " +
+			"tree: biome under default rules emits errors and warnings on this tree (rc 1 with or without " +
+			"--error-on-warnings), and tsc without a resolvable config refuses (usage banner, rc 1 — it type-checks " +
+			"nothing). Enumerated residuals: biome's direction is contingent on the tree producing default-rule " +
+			"diagnostics — a tree that is clean under defaults would pass with the committed configuration silently " +
+			"unenforced; the refusal wears the tool's message, not the gate's; and tsc searches ancestors, so a " +
+			"tsconfig above the workspace is silently substituted rather than refused (a local-reproduction hazard " +
+			"first — a runner checkout sits under a clean ancestor chain).",
+	},
+	{
+		dependency: "ci-utility-absence",
+		failureShape:
+			"a runner utility the gate scripts assume (jq, awk, mktemp, grep, cut, head, cmp, tail) is missing or " +
+			"fails mid-run — fragment-gate, ssot-home, toc-freshness",
+		posture: "closed",
+		justification:
+			"The nonzero exit reds the job — the right direction — but by default, not by arm, and two enumerated " +
+			"residuals ride it: toc-freshness's catch-all reports any unclassified rc as a stale TOC (the catch-all's " +
+			"collapsed class as reachable through --check at this gate: unnumbered headings (rc 2) and the utility " +
+			"misses that land outside rc 3 and rc 4 wear the staleness message, with rc=$rc printed for recovery from " +
+			"the log; an awk miss instead lands on rc 4 and a grep, cut, or head miss on rc 3, wearing the " +
+			"corrupt-marker and marker-less messages), and ssot-home under set -uo without -e " +
+			"reports an awk miss as a docs authoring defect — or, with no SPEC present, skips clean. Recorded not " +
+			"repaired; message disambiguation is follow-up work.",
 	},
 ];
