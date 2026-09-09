@@ -565,7 +565,7 @@ describe("registration on the governed home, from the substrate's own report (is
 			row.source,
 			"extension",
 			`review-registration: review's row reports source=${row.source}, not extension — §4.8's rung 1 ` +
-				`returns on the blind compare and the caller-derived round count, acts no model may mediate`,
+				`returns on the blind compare and the caller-owned required-slot derivation, acts no model may mediate`,
 		);
 	});
 
