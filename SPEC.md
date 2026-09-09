@@ -21,51 +21,51 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.7 | High-asymmetry quorum | 186 |
 | &nbsp;&nbsp;§1.8 | Plan contest | 196 |
 | &nbsp;&nbsp;§1.9 | Finding judgment | 208 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 220 |
-| §2 | Artifact hierarchy and lifecycle | 228 |
-| &nbsp;&nbsp;§2.1 | Issue types | 232 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 245 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 261 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 265 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 280 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 317 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 329 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 339 |
-| §3 | Enforcement-layer architecture | 351 |
-| &nbsp;&nbsp;§3.1 | The constraint | 355 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 362 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 370 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 473 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 477 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 481 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 491 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 503 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 516 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 530 |
-| &nbsp;&nbsp;§3.11 | Gate design | 540 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 562 |
-| §4 | Substrate and install contract | 572 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 576 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 582 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 586 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 590 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 594 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 600 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 610 |
-| &nbsp;&nbsp;§4.8 | The command layer | 618 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 675 |
-| §5 | Cross-cutting contracts | 717 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 721 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 725 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 729 |
-| &nbsp;&nbsp;§5.4 | Work language | 733 |
-| &nbsp;&nbsp;§5.5 | State boundary | 737 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 743 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 753 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 763 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 771 |
-| §6 | Self-governance milestone | 779 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 790 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 222 |
+| §2 | Artifact hierarchy and lifecycle | 230 |
+| &nbsp;&nbsp;§2.1 | Issue types | 234 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 247 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 263 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 267 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 282 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 319 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 331 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 341 |
+| §3 | Enforcement-layer architecture | 353 |
+| &nbsp;&nbsp;§3.1 | The constraint | 357 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 364 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 372 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 475 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 479 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 483 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 493 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 505 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 518 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 532 |
+| &nbsp;&nbsp;§3.11 | Gate design | 542 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 564 |
+| §4 | Substrate and install contract | 574 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 578 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 584 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 588 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 592 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 596 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 602 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 612 |
+| &nbsp;&nbsp;§4.8 | The command layer | 620 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 677 |
+| §5 | Cross-cutting contracts | 719 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 723 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 727 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 731 |
+| &nbsp;&nbsp;§5.4 | Work language | 735 |
+| &nbsp;&nbsp;§5.5 | State boundary | 739 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 745 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 755 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 765 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 773 |
+| §6 | Self-governance milestone | 781 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 792 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -213,9 +213,11 @@ An adversarial reviewer's success condition is "find something" — a structural
 
 **Durable before the fix.** The judged list is made durable before the fix is authored — written first it is the manifest for the review-response phase; written after it is a report. Where no durable surface exists, that absence is declared explicitly rather than the ordering silently dropped. A refuted finding is never converted into a deferred issue — filing it launders a false positive into durable memory, where a later round reads it back as an open concern; it is retained marked refuted, with its refuting command. Deliberate absences are recorded as decisions, not omissions.
 
-**An aid, never a gate.** The judgment layer emits no verdict token, enters no tally, and converts no verdict — a blocking verdict still stops the flow however many of its findings are refuted. On unavailability the flow proceeds on the raw findings with a recorded warning; parking on the aid's own malfunction would convert an advisory layer into a blocker.
+**An aid, never a gate.** The judgment layer emits no verdict token, enters no tally, and converts no verdict — a blocking verdict still stops the flow however many of its findings are refuted. On the built instrument's runtime unavailability the flow proceeds on the raw findings with a recorded warning; parking on the aid's own malfunction would convert an advisory layer into a blocker.
 
-The norm is **explicitly advisory** (§3.1 rule 1), enforced at review (§2.3); the judging instrument derives later per §1.2's macro-phase clause.
+**The judge dispatch.** The instrument is the same isolation the reviewer rides (§4.9's dispatcher, §1.5's isolation): a judge delegate is dispatched into a clone pinned at the reviewed head — the pin's operand is the head the reviewer itself reported and the caller's blind compare confirmed (§1.6), never the caller's revealed expectation (§4.9's content-free-return clause) — so a ruling's command runs against the state the finding claims exactly as far as that compare reaches: the pin closes head selection, and pushed-head freshness stays §4.9's named residual, carried here by reference rather than silently equated. The findings cross embedded verbatim in the brief as §1.5's dispatch-facts form (iii) — explicitly labeled unverified — since a provisioned tree cannot reach the platform record, so the judge's verification obligation attaches by that rule's own sentence rather than by inference from the role. The return is the ruled list the **Judge, not author** paragraph owes — per finding, confirmed or refuted with the command, and whether the remedy survives — and it collapses into the existing round record and verdict grammar (§1.6): no new token, no tally entry, the **An aid, never a gate** bound above unmoved, and §1.4's item 9 binding any adjudicating party out of the count.
+
+The norm is **explicitly advisory** (§3.1 rule 1), enforced at review (§2.3); the judging instrument derives later per §1.2's macro-phase clause — and while it is deferred, the operating substitution is named rather than silent, per §1.5's stated-substitute rule (the write-capable-delegate paragraph's closing sentence): the author fills the judge slot (**author-as-judge**, coined here as the substitution's durable name, §2.7). The degradation surrenders the property the **Judge, not author** paragraph grounds independence in — under it the adjudicator has something of its own to grade — and both pressures on it are named: demoting one's own reviewer's finding reads as evasion exactly when the author is honest, pushing toward confirming, while confirming obligates the author to author the fix, pushing toward refuting. The confirming pressure dominates on the record's own asymmetry — a demotion is durable and attributable on the round record where avoided work is invisible — so the stated direction is toward confirming, and each adjudication that runs under the substitution records it explicitly on the round record. Runtime unavailability of a built instrument is not this substitution's trigger: that state stays on the **An aid, never a gate** paragraph's raw-findings path.
 
 ### 1.10 Release backbone
 
