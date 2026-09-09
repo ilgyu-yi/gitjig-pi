@@ -331,8 +331,8 @@ export const POSTURES: readonly PostureRow[] = [
 		dependency: "ci-gate-machinery",
 		failureShape:
 			"actions/checkout fails at any required gate — fragment-gate, ssot-home, toc-freshness, source-style, " +
-			"type-check — or actions/setup-node fails or `npm ci` cannot install from the committed lockfile " +
-			"(registry unreachable, lockfile out of agreement) at source-style or type-check, the only gates that " +
+			"type-check, suite — or actions/setup-node fails or `npm ci` cannot install from the committed lockfile " +
+			"(registry unreachable, lockfile out of agreement) at source-style, type-check, or suite, the gates that " +
 			"install anything",
 		posture: "closed",
 		justification:
@@ -411,6 +411,17 @@ export const POSTURES: readonly PostureRow[] = [
 			"direction. Enumerated residual, recorded not repaired: the failure wears the gate's own subject message " +
 			"('Formatting or lint errors.' / 'Type errors.'), so a tool miss is indistinguishable from a finding in the " +
 			"log; disambiguating the arm is follow-up work this row makes findable.",
+	},
+	{
+		dependency: "ci-suite-pi-presence",
+		failureShape: "`pi` unresolvable on the npm-script PATH at suite — the lockfile install yielded no pinned binary",
+		posture: "closed",
+		justification:
+			"The harness resolves `pi` before any fixture runs (execFileSync in test/harness/run-pi.ts), so the miss " +
+			"throws and every integration arm reds — the right direction for a gate whose subject is the suite's own " +
+			"verdict. Enumerated residual, recorded not repaired: the failure wears node's ENOENT, not the gate's " +
+			"subject message, so a toolchain miss is distinguishable from a finding only by reading the log — the " +
+			"same disambiguation follow-up ci-toolchain-presence records for its gates.",
 	},
 	{
 		dependency: "ci-gate-config-presence",

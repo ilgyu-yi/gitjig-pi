@@ -1,0 +1,67 @@
+name: suite
+
+# DEVELOPMENT AND CI ONLY. Like source-checks.yml, this workflow exists for
+# the people and agents developing THIS repository; it is not substrate and
+# an adopting repository is not meant to receive it (#118/#134 own turning
+# that statement into an arm).
+#
+# The gate's contract is homed in SPEC §3.3's `suite` row and is not
+# restated here. The job id is the required-check context §4.3 records;
+# renaming it without amending both SPEC sentences reds
+# test/source-checks-workflow.structure.test.ts.
+#
+# Invocation: `npm test` runs the one canonical invocation the repository
+# commits to, from package.json's script, which is its one home (§2.8;
+# the ground for the quoted glob lives in README.md's suite section and
+# the header of test/harness/run-pi.ts). The script path matters beyond
+# deduplication:
+# npm puts node_modules/.bin on the child PATH, which is what resolves the
+# pinned `pi` below.
+#
+# Install posture, decided and stated (issue #145 AC2): `npm ci`, never a
+# bare run and never `npm install`. Three grounds: the install is bounded
+# by the committed lockfile (the same choice source-checks.yml records);
+# it arms the five egress-publish integration arms that announce a SKIP in
+# an uninstalled clone (test/egress-publish.integration.test.ts); and it
+# supplies the pinned `pi` binary the integration harness drives — a
+# hosted runner carries none of its own.
+#
+# The #119 wall-clock-flake precondition (issue #145 AC3) is dispositioned
+# FIXED FIRST, not absorbed: the flaking geometry rides injected bounds
+# since PR #155, so this gate runs the whole suite unisolated.
+#
+# No third-party Actions; actions/checkout and actions/setup-node are
+# GitHub-shipped.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install the pinned dev tools
+        run: npm ci
+
+      - name: Run the verification suite
+        run: |
+          set -euo pipefail
+          if ! npm test; then
+            echo "::error::The verification suite is red at this head. Reproduce locally with 'npm test' (the same invocation package.json's 'test' script names — README.md § suite). A green run needs 'pi' resolvable: local clones take it from PATH, this job takes the pinned one from the lockfile install above." >&2
+            exit 1
+          fi

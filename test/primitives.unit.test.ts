@@ -1432,6 +1432,7 @@ describe("fail-posture inventory (§3.9)", () => {
 				"ci-gate-config-presence → closed",
 				"ci-gate-machinery → closed",
 				"ci-gate-script-presence → closed",
+				"ci-suite-pi-presence → closed",
 				"ci-toolchain-presence → closed",
 				"ci-utility-absence → closed",
 				"commit-format-helper → open",
