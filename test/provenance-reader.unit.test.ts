@@ -106,7 +106,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{
 		shape: "review-archaeology",
 		line: "// Review round 2 asked for this split.",
-		why: "§2.4's species: a numbered round on a living surface",
+		why: "§2.4's species: a numbered review on a living surface",
 	},
 	{
 		shape: "review-archaeology",
