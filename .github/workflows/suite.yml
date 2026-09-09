@@ -11,10 +11,10 @@ name: suite
 # test/source-checks-workflow.structure.test.ts.
 #
 # Invocation: `npm test` runs the one canonical invocation the repository
-# commits to — `node --test "test/*.test.ts"`, glob quoted — from
-# package.json's script, which is its one home (§2.8; the ground for the
-# quoted glob lives in README.md's suite section and the header of
-# test/harness/run-pi.ts). The script path matters beyond deduplication:
+# commits to, from package.json's script, which is its one home (§2.8;
+# the ground for the quoted glob lives in README.md's suite section and
+# the header of test/harness/run-pi.ts). The script path matters beyond
+# deduplication:
 # npm puts node_modules/.bin on the child PATH, which is what resolves the
 # pinned `pi` below.
 #
@@ -62,6 +62,6 @@ jobs:
         run: |
           set -euo pipefail
           if ! npm test; then
-            echo "::error::The verification suite is red at this head. Reproduce locally with 'npm test' (or the same invocation it names, node --test \"test/*.test.ts\" — keep the glob quoted, README.md § suite). A green run needs 'pi' resolvable: local clones take it from PATH, this job takes the pinned one from the lockfile install above." >&2
+            echo "::error::The verification suite is red at this head. Reproduce locally with 'npm test' (the same invocation package.json's 'test' script names — README.md § suite). A green run needs 'pi' resolvable: local clones take it from PATH, this job takes the pinned one from the lockfile install above." >&2
             exit 1
           fi
