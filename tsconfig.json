@@ -10,12 +10,16 @@
 		// (issue #137). Triaged 2026-09-09 at 78 violation sites: 74 provably
 		// in range at the call site (length-asserted, mandatory regex group,
 		// or loop-bounded — each repair a non-null assertion the guard already
-		// justifies), 4 restructures, 0 genuinely unchecked — no site lets an
-		// out-of-range undefined flow into a decision silently; every one
-		// throws, the safe direction. A tree of 74 `!` marks buys no defect
-		// and hides the guards that do the work. Reopen if a triage ever
-		// finds a site in the wrong-allow shape, or if the indexing parsers
-		// grow faster than their guards; the per-site table is on issue #137.
+		// justifies), 4 more in range but better repaired by a restructure
+		// than an assertion, 0 genuinely unchecked: every index is guarded
+		// and none can reach an out-of-range slot, so the flag would have
+		// caught nothing here. A tree of 74 `!` marks buys no defect and
+		// hides the guards that do the work. Reopen if a triage ever finds a
+		// site in the wrong-allow shape, or — a proxy that over-triggers on
+		// any new production index and costs only a re-triage — if
+		// `tsc --noEmit --noUncheckedIndexedAccess` ever names more than the
+		// 4 sites under `.pi/` it names today; the per-site table is on
+		// issue #137.
 		"strict": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
