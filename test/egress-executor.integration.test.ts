@@ -266,7 +266,7 @@ before(async () => {
 	// window is proven at the executor's injected-bounds seam instead
 	// (egress-executor-race.unit.test.ts); this arm keeps the session-level
 	// claim with a margin load cannot eat.
-	orphanLateRun = await runWithShim("sleep 30 &\n" + "sleep 1\n" + `printf '${SHIM_URL}\\n'\n` + "exit 0\n", 90_000);
+	orphanLateRun = await runWithShim(`sleep 30 &\nsleep 1\nprintf '${SHIM_URL}\\n'\nexit 0\n`, 90_000);
 	// Kill REACH. The shim spawns a grandchild that keeps ticking a file, then
 	// hangs past its own bound. Killing the direct child alone leaves that
 	// grandchild running; killing the process group takes it too. The ticks

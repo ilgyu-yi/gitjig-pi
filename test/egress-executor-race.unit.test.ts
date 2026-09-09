@@ -68,7 +68,7 @@ describe("the seam's default is the production constants, pinned (issue #119)", 
 		// A parameter default is not runtime-observable — the one production
 		// caller passes no bounds and its 10s/2s timing is what the retired
 		// staging flaked on — so what is pinned is the initializer's spelling:
-		// the default reads the two exported constants by name, never its own
+		// the default reads the two module constants by name, never its own
 		// literals, which is the tie the module's doc sentence ("production
 		// callers pass nothing and run the constants") claims and a diverged
 		// default (measured green at 20s/8s across the whole suite) breaks.
@@ -119,8 +119,61 @@ describe("a late in-bound exit behind an orphan-held pipe is published, staged a
 		// armed-across-the-grace window.
 		assert.ok(
 			elapsedMs >= 6_000,
-			`race arm: decided at ${elapsedMs}ms — before the bound elapsed, so the pipes were not held across ` +
-				`the race window and the arm measured the close path, not the grace path`,
+			`race arm: decided at ${elapsedMs}ms — sooner than the exit-plus-grace the grace path decides at, so ` +
+				`the pipes were not held across the race window and the arm measured the close path, not the grace path`,
 		);
+	});
+});
+
+describe("the injected timeoutMs is the bound the kill timer arms (issue #119)", () => {
+	it("a never-exiting child under a 1s injected bound is refused near 1s, never at the production bound", async () => {
+		// The other half of the seam. The structural arm above pins the
+		// DEFAULT's spelling; this arm pins the USE SITE: a kill timer armed
+		// from the production constant instead of `bounds.timeoutMs` is
+		// behaviorally identical for every production caller, so only an
+		// injected divergence can see it — and with it unseen, the grace-path
+		// arm above stages nothing (its 3s exit falls out of the effective
+		// window and the target mutant escapes). The refusal cause cannot
+		// discriminate — it is composed from `bounds.timeoutMs` either way —
+		// so the elapsed ceiling is the load-bearing check: at 8s it sits 7s
+		// above the ~1s refusal this arm stages and 2s below the 10s
+		// production bound a diverged use site would arm, and load moves a
+		// diverged run only further past it. The cause substring stays for
+		// the class it does catch: a cause spelled from the constant.
+		const boundShim = mkdtempSync(join(tmpdir(), "gitjig-bound-"));
+		writeFileSync(join(boundShim, "gh"), "#!/bin/sh\nsleep 30\n");
+		chmodSync(join(boundShim, "gh"), 0o755);
+		const pathBefore = process.env.PATH;
+		process.env.PATH = `${boundShim}:${pathBefore ?? ""}`;
+		try {
+			const started = Date.now();
+			const outcome = await runPublishChild([], "bound-arm body", join(shimRoot, "cwd"), SHAPE, {
+				timeoutMs: 1_000,
+				graceMs: 200,
+			});
+			const elapsedMs = Date.now() - started;
+			assert.equal(
+				outcome.outcome,
+				"refused",
+				`bound arm: a never-exiting child under a 1s injected bound was not refused: ${JSON.stringify(outcome)}`,
+			);
+			assert.ok(
+				outcome.outcome === "refused" && outcome.cause.includes("1000 ms"),
+				`bound arm: the refusal cause does not name the injected bound — a cause spelled from the production ` +
+					`constant misreports what was enforced: ${JSON.stringify(outcome)}`,
+			);
+			assert.ok(
+				elapsedMs < 8_000,
+				`bound arm: refused only at ${elapsedMs}ms — the kill timer armed a bound other than the injected ` +
+					`timeoutMs, so the seam's bound half is decoration and the grace-path arm above stages nothing`,
+			);
+		} finally {
+			if (pathBefore === undefined) {
+				delete process.env.PATH;
+			} else {
+				process.env.PATH = pathBefore;
+			}
+			rmSync(boundShim, { recursive: true, force: true });
+		}
 	});
 });
