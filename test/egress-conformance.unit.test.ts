@@ -1032,7 +1032,7 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 	// wrong-allow (an actionable reference reaches the platform live), 3–5
 	// are over-wrap (a wrap laid over text no reference occupies — crossing
 	// an author's own code span in 3, splitting an identifier mid-token in
-	// 4, and in 4 and 5 counting a wrap where no reference was).
+	// 4, and in all three counting a wrap where no reference was).
 	it("the URL form's scheme matches the unencrypted spelling too", () => {
 		// The platform resolves an http:// issue URL to the issue (measured
 		// via the markdown render API: linked with an issue hovercard,
@@ -1076,7 +1076,7 @@ describe("five load-bearing pattern elements, each pinned in isolation (issue #1
 		// precedes the trailing /issues/N segment, which is why this input
 		// puts it there and why a casual probe finds the element unkillable.
 		const at = requireBoundary("url backtick exclusion");
-		const input = "https://github.com/zqo`x/zqr/issues/4";
+		const input = "`code https://github.com/zqo/zqr`x/issues/4 more` end";
 		const out = at(input, "issue-comment");
 		assert.equal(
 			out.neutralized,
