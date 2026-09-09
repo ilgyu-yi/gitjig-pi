@@ -819,7 +819,7 @@ describe("the work-on template carries the flow's entry and order (issue #91 AC 
 			"work-on-template: the issue-first-entry token is missing — the template must enter through §1.1's " +
 				"standard flow (work starts from an open, Active issue), by pointer",
 		);
-		const spineBullets = ("\n" + template)
+		const spineBullets = `\n${template}`
 			.split(/\n- /)
 			.slice(1)
 			.filter((bullet) => bullet.includes("§1.2"));

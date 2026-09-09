@@ -80,7 +80,7 @@ const FEATURE = "zqmovefeaturezq";
 /** "AKIA" — assembled from codepoints, never literal. */
 const AKIA = cp(0x41, 0x4b, 0x49, 0x41);
 /** A committed-pattern match: the AKIA prefix + 16 × [A-Z0-9]. */
-const AWS_SECRET = AKIA + "ZQ0MOVEDZQ4MOVED";
+const AWS_SECRET = `${AKIA}ZQ0MOVEDZQ4MOVED`;
 /** The committed pattern ID this planted secret must be reported under. */
 const PATTERN_ID = "aws-access-key-id";
 const STAGED_PATH = "zqmoveleak.txt";
@@ -134,7 +134,7 @@ describe(
 						`committed pre-commit adapter — this clone is not armed, so nothing below measures the tier`,
 				);
 
-				writeFileSync(join(fixture.root, STAGED_PATH), AWS_SECRET + "\n");
+				writeFileSync(join(fixture.root, STAGED_PATH), `${AWS_SECRET}\n`);
 				fixtureGit(fixture, ["add", "--", STAGED_PATH]);
 				const attempt = commitWithMessage(fixture, "chore: exercise the namespace-move arm\n");
 

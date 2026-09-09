@@ -364,8 +364,7 @@ const CONTROL_CODEPOINTS: readonly number[] = [
 	0x2028,
 	0x2029,
 ];
-const CONTROL_SWEEP =
-	CONTROL_CODEPOINTS.map((point) => `\\u${point.toString(16).padStart(4, "0")}`).join("") + "\\u001b[2K";
+const CONTROL_SWEEP = `${CONTROL_CODEPOINTS.map((point) => `\\u${point.toString(16).padStart(4, "0")}`).join("")}\\u001b[2K`;
 
 const PAYLOADS: Record<string, string> = {
 	"payload-valid.json": `{"ok":true,"summary":"${CLEAN_SUMMARY}"}`,

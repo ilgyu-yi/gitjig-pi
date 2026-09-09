@@ -351,7 +351,16 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		],
 	},
 	// The scanner composes no interpolated text; its refusals are fixed.
-	{ file: "gitjig/publish/scan.ts", allow: [] },
+	{
+		file: "gitjig/publish/scan.ts",
+		allow: [
+			// Not a message and provably no path: `kind` is `ere[cursor + 1]`,
+			// a single character the guarding branch has already narrowed to
+			// one of ":", "=", "." — a POSIX bracket-class operand composed
+			// into an indexOf needle, never text that reaches a record.
+			"kind",
+		],
+	},
 ];
 
 function read(file: string): string {

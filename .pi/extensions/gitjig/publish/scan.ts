@@ -228,7 +228,7 @@ function closingBracket(ere: string, at: number): number {
 		// its inner bracket.
 		const kind = ere[cursor] === "[" ? ere[cursor + 1] : undefined;
 		if (kind === ":" || kind === "=" || kind === ".") {
-			const end = ere.indexOf(kind + "]", cursor + 2);
+			const end = ere.indexOf(`${kind}]`, cursor + 2);
 			if (end !== -1) {
 				cursor = end + 1;
 				continue;

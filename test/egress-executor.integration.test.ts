@@ -87,7 +87,7 @@ const SHIM_URL = "https://github.com/zqowner/zqrepo/issues/5#issuecomment-987654
 
 /** Distinctive payload + stream markers (byte-absence assertions). */
 const EXEC_PAYLOAD = "ZQEXECPAYLOAD";
-const EXEC_BODY = "zqexec publish body carrying " + EXEC_PAYLOAD + "\n";
+const EXEC_BODY = `zqexec publish body carrying ${EXEC_PAYLOAD}\n`;
 const STREAM_MARKER = "ZQCHILDSTREAM";
 
 function toolUnregistered(arm: string): string {

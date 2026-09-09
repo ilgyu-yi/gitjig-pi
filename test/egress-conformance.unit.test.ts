@@ -261,7 +261,7 @@ describe("tier-2 arm: the committed chain honors every applicable case (issue #8
 		it(`match sample '${conformanceCase.id}': refused naming the pattern ID`, () => {
 			const attempt = stageAndCommit(
 				`zqlock-${conformanceCase.id}.txt`,
-				Buffer.from(conformanceCase.match + "\n", "utf8"),
+				Buffer.from(`${conformanceCase.match}\n`, "utf8"),
 			);
 			assert.notEqual(attempt.status, 0, `tier-2 '${conformanceCase.id}': the staged match COMMITTED`);
 			assert.match(
@@ -278,7 +278,7 @@ describe("tier-2 arm: the committed chain honors every applicable case (issue #8
 		it(`near-miss '${conformanceCase.id}': allowed with no block record`, () => {
 			const attempt = stageAndCommit(
 				`zqlock-nm-${conformanceCase.id}.txt`,
-				Buffer.from(conformanceCase.nearMiss + "\n", "utf8"),
+				Buffer.from(`${conformanceCase.nearMiss}\n`, "utf8"),
 			);
 			assert.equal(attempt.status, 0, `tier-2 near-miss '${conformanceCase.id}': ${attempt.stderr}`);
 			assert.doesNotMatch(

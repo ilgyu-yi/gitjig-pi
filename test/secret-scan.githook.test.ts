@@ -80,16 +80,16 @@ const FEATURE = "zqfeaturezq";
 /** "AKIA" — assembled from codepoints, never literal. */
 const AKIA = cp(0x41, 0x4b, 0x49, 0x41);
 /** "PRIVATE KEY" — assembled from codepoints, never literal. */
-const PRIVATE_KEY_WORDS = cp(0x50, 0x52, 0x49, 0x56, 0x41, 0x54, 0x45) + " " + cp(0x4b, 0x45, 0x59);
+const PRIVATE_KEY_WORDS = `${cp(0x50, 0x52, 0x49, 0x56, 0x41, 0x54, 0x45)} ${cp(0x4b, 0x45, 0x59)}`;
 /** "ghp_" — assembled from codepoints, never literal. */
 const GHP = cp(0x67, 0x68, 0x70, 0x5f);
 
-const PRIVATE_KEY_SECRET = "-----BEGIN RSA " + PRIVATE_KEY_WORDS + "-----";
-const AWS_SECRET = AKIA + "ZQ0PLANTZQ4PLANT"; // prefix + 16 × [A-Z0-9]
-const GITHUB_SECRET = GHP + "zqPLANTzqPLANTzqPLANTzqPLANTzqPLANT9"; // prefix + 36 chars
-const BEARER_SECRET = cp(0x41) + "uthorization: " + cp(0x42) + "earer zqtokenPLANTzqtokenPLAN0"; // 24-char token
+const PRIVATE_KEY_SECRET = `-----BEGIN RSA ${PRIVATE_KEY_WORDS}-----`;
+const AWS_SECRET = `${AKIA}ZQ0PLANTZQ4PLANT`; // prefix + 16 × [A-Z0-9]
+const GITHUB_SECRET = `${GHP}zqPLANTzqPLANTzqPLANTzqPLANTzqPLANT9`; // prefix + 36 chars
+const BEARER_SECRET = `${cp(0x41)}uthorization: ${cp(0x42)}earer zqtokenPLANTzqtokenPLAN0`; // 24-char token
 /** AKIA prefix followed by only 15 key chars — must NOT match (precision pin). */
-const AWS_NEAR_MISS = AKIA + "ZQ0PLANTZQ4PLAN";
+const AWS_NEAR_MISS = `${AKIA}ZQ0PLANTZQ4PLAN`;
 
 /**
  * The planned committed rows (SPEC §3.3's id<TAB>ERE format). Written into
@@ -98,8 +98,8 @@ const AWS_NEAR_MISS = AKIA + "ZQ0PLANTZQ4PLAN";
  * in source are assembled from the codepoint constants above.
  */
 const PLANNED_PATTERNS: Array<[string, string]> = [
-	["private-key", "-----BEGIN [A-Z ]*" + PRIVATE_KEY_WORDS + "-----"],
-	["aws-access-key-id", "(A3T[A-Z0-9]|" + AKIA + "|ASIA)[A-Z0-9]{16}"],
+	["private-key", `-----BEGIN [A-Z ]*${PRIVATE_KEY_WORDS}-----`],
+	["aws-access-key-id", `(A3T[A-Z0-9]|${AKIA}|ASIA)[A-Z0-9]{16}`],
 	["github-token", "gh[pousr]_[A-Za-z0-9]{36,}"],
 	["bearer-token", "[Aa]uthorization: *[Bb]earer +[A-Za-z0-9._~+/=-]{20,}"],
 ];
@@ -109,13 +109,13 @@ const PLANNED_PATTERNS: Array<[string, string]> = [
 // a raw ANSI escape, quote and controls from codepoints.
 const HOSTILE_HEAD = "zqhostA";
 const HOSTILE_TAIL = "zqhostB.txt";
-const HOSTILE_NAME = HOSTILE_HEAD + cp(0x27) + cp(0x0a) + cp(0x1b) + "[31m" + HOSTILE_TAIL;
+const HOSTILE_NAME = `${HOSTILE_HEAD + cp(0x27) + cp(0x0a) + cp(0x1b)}[31m${HOSTILE_TAIL}`;
 
 // High-byte path material (%XX-fidelity arm): U+00E9 lands on disk and in
 // the index as the UTF-8 pair 0xC3 0xA9 — two bytes ≥ 0x80 for the
 // sanitizer's byte loop, built from a codepoint per the header note.
 const HIGH_BYTE_HEAD = "zqhi8a";
-const HIGH_BYTE_NAME = HIGH_BYTE_HEAD + cp(0xe9) + "zqhi8b.txt";
+const HIGH_BYTE_NAME = `${HIGH_BYTE_HEAD + cp(0xe9)}zqhi8b.txt`;
 
 // Binary staged input (unmeasurable-input arm): NUL bytes force git's
 // numstat to the `-<TAB>-` no-line-counts outcome; the printable marker
@@ -155,7 +155,7 @@ function ensurePlannedPatterns(fixture: GithookFixture): void {
 	if (existsSync(copied)) {
 		return;
 	}
-	writeFileSync(copied, PLANNED_PATTERNS.map(([id, ere]) => `${id}\t${ere}`).join("\n") + "\n");
+	writeFileSync(copied, `${PLANNED_PATTERNS.map(([id, ere]) => `${id}\t${ere}`).join("\n")}\n`);
 }
 
 /** Build the standard scan fixture: bare remote (stage-1-derivable P) + feature branch. */
@@ -318,7 +318,7 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		it(`a staged ${patternId} match is refused, content-free`, () => {
 			const fixture = buildScanFixture();
 			try {
-				stageFile(fixture, stagedPath, secret + "\n");
+				stageFile(fixture, stagedPath, `${secret}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the staged-secret arm\n");
 				assertSecretRefused(attempt, patternId, stagedPath, secret, `staged ${patternId}`);
 			} finally {
@@ -335,7 +335,7 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		const fixture = buildScanFixture();
 		try {
 			fixtureGit(fixture, ["config", "color.diff", "always"]);
-			stageFile(fixture, "zqleakcolor.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqleakcolor.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the colored-diff arm\n");
 			assertSecretRefused(attempt, "aws-access-key-id", "zqleakcolor.txt", AWS_SECRET, "color.diff=always");
 			assertBytesReachNoSurface(attempt, Buffer.from([0x1b]), "a raw ANSI escape byte", "color.diff=always");
@@ -353,7 +353,7 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		// variable, so the shape is reachable with no adversary.
 		const fixture = buildScanFixture();
 		try {
-			stageFile(fixture, "zqleakenv.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqleakenv.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the ambient-env arm\n", {
 				env: { GIT_LITERAL_PATHSPECS: "1" },
 			});
@@ -374,9 +374,9 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		try {
 			writeFileSync(
 				fixturePatternsPath(fixture),
-				PLANNED_PATTERNS.map(([id, ere]) => `${id}\t${ere}`).join("\r\n") + "\r\n",
+				`${PLANNED_PATTERNS.map(([id, ere]) => `${id}\t${ere}`).join("\r\n")}\r\n`,
 			);
-			stageFile(fixture, "zqleakcrlf.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqleakcrlf.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the CRLF-pattern-file arm\n");
 			assertSecretRefused(attempt, "aws-access-key-id", "zqleakcrlf.txt", AWS_SECRET, "CRLF pattern file");
 		} finally {
@@ -393,7 +393,7 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		const fixture = buildScanFixture();
 		try {
 			stageFile(fixture, "HEAD", "ordinary text\n");
-			stageFile(fixture, "zqleakhead.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqleakhead.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the HEAD-file arm\n");
 			assertSecretRefused(attempt, "aws-access-key-id", "zqleakhead.txt", AWS_SECRET, "HEAD-file path");
 		} finally {
@@ -408,7 +408,7 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		// staged secret is still refused.
 		const fixture = buildScanFixture();
 		try {
-			stageFile(fixture, "zqleaktmp.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqleaktmp.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the hostile-TMPDIR arm\n", {
 				env: { TMPDIR: "/nonexistent-zqtmpdir" },
 			});
@@ -429,11 +429,11 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		// to plant fixture state.
 		const fixture = buildScanFixture();
 		try {
-			stageFile(fixture, "zqreplace.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqreplace.txt", `${AWS_SECRET}\n`);
 			fixtureGit(fixture, ["commit", "-q", "--no-verify", "-m", "carrier: fixture-local plant"]);
 			fixtureGit(fixture, ["reset", "-q", "--hard", "HEAD~1"]);
 			fixtureGit(fixture, ["replace", "HEAD", "ORIG_HEAD"]);
-			stageFile(fixture, "zqreplace.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqreplace.txt", `${AWS_SECRET}\n`);
 			stageFile(fixture, "zqbenign.txt", "ordinary text\n");
 			const attempt = commitWithMessage(fixture, "chore: exercise the replace-graft arm\n");
 			assertSecretRefused(attempt, "aws-access-key-id", "zqreplace.txt", AWS_SECRET, "replace graft");
@@ -452,7 +452,7 @@ describe("staged-secret refusals, one arm per pattern (issue #66)", { skip: IS_W
 		const fixture = buildGithookFixture({});
 		try {
 			ensurePlannedPatterns(fixture);
-			stageFile(fixture, "zqleakfirst.txt", GITHUB_SECRET + "\n");
+			stageFile(fixture, "zqleakfirst.txt", `${GITHUB_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the unborn-HEAD arm\n");
 			assertSecretRefused(attempt, "github-token", "zqleakfirst.txt", GITHUB_SECRET, "unborn HEAD");
 		} finally {
@@ -474,13 +474,13 @@ describe("the .shellsecretignore allow-list is domain exclusion (issue #66)", { 
 		fixture = buildScanFixture();
 		// Glob form on purpose — the contract admits literal or shell glob.
 		writeFileSync(join(fixture.root, ".shellsecretignore"), "# fixture allow-list\nzqallow*.txt\n");
-		stageFile(fixture, "zqallowed.txt", GITHUB_SECRET + "\n");
+		stageFile(fixture, "zqallowed.txt", `${GITHUB_SECRET}\n`);
 		allowedOnly = commitWithMessage(fixture, "chore: exercise the allow-listed path\n");
 		// Second commit: the allow-listed path gains ANOTHER match while a
 		// non-allow-listed path carries its own — exclusion must not become
 		// approval of the neighbour.
-		stageFile(fixture, "zqallowed.txt", GITHUB_SECRET + "\n" + AWS_SECRET + "\n");
-		stageFile(fixture, "zqnotallowed.txt", GITHUB_SECRET + "\n");
+		stageFile(fixture, "zqallowed.txt", `${GITHUB_SECRET}\n${AWS_SECRET}\n`);
+		stageFile(fixture, "zqnotallowed.txt", `${GITHUB_SECRET}\n`);
 		alongside = commitWithMessage(fixture, "chore: exercise the alongside path\n");
 	});
 	after(() => removeGithookFixture(fixture));
@@ -508,7 +508,7 @@ describe(
 				const ignorePath = join(fixture.root, ".shellsecretignore");
 				writeFileSync(ignorePath, "zqallowed.txt\n");
 				chmodSync(ignorePath, 0o000);
-				stageFile(fixture, "zqallowed.txt", AWS_SECRET + "\n");
+				stageFile(fixture, "zqallowed.txt", `${AWS_SECRET}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the unreadable allow-list arm\n");
 				assertSecretRefused(attempt, "aws-access-key-id", "zqallowed.txt", AWS_SECRET, "unreadable allow-list");
 				const warns = attempt.auditDelta.split("\n").filter((line) => /"action":"warn"/.test(line));
@@ -539,7 +539,7 @@ describe("an unmeasurable staged input refuses on its own cause (issue #66, SPEC
 		// Filenames differ only in a digit (header note): after decimal
 		// normalization the two causes can differ only in their wording,
 		// never in path spelling.
-		stageFile(fixture, "zqmix2.txt", AWS_SECRET + "\n");
+		stageFile(fixture, "zqmix2.txt", `${AWS_SECRET}\n`);
 		patternRefusal = commitWithMessage(fixture, "chore: exercise the pattern-refusal reference\n");
 		// A refused commit leaves its file staged; unstage it so the binary
 		// attempt measures only its own input (a no-op while the chain is
@@ -611,7 +611,7 @@ describe(
 			const fixture = buildScanFixture();
 			try {
 				rmSync(fixturePatternsPath(fixture), { force: true });
-				stageFile(fixture, "zqleakopen.txt", AWS_SECRET + "\n");
+				stageFile(fixture, "zqleakopen.txt", `${AWS_SECRET}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the absent-pattern-file arm\n");
 				assertDisarmedOpen(attempt, "pattern file absent");
 			} finally {
@@ -629,7 +629,7 @@ describe(
 			const fixture = buildScanFixture();
 			try {
 				writeFileSync(fixturePatternsPath(fixture), ["zq-invalid\t(a|", PLANNED_PATTERNS[0].join("\t"), ""].join("\n"));
-				stageFile(fixture, "zqleakbadset.txt", PRIVATE_KEY_SECRET + "\n");
+				stageFile(fixture, "zqleakbadset.txt", `${PRIVATE_KEY_SECRET}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the invalid-pattern-line arm\n");
 				assertDisarmedOpen(attempt, "invalid pattern line");
 			} finally {
@@ -665,7 +665,7 @@ describe(
 		it("a secret in a newline/ANSI-named file lands exactly one unsplit record, raw path bytes nowhere", () => {
 			const fixture = buildScanFixture();
 			try {
-				stageFile(fixture, HOSTILE_NAME, AWS_SECRET + "\n");
+				stageFile(fixture, HOSTILE_NAME, `${AWS_SECRET}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the hostile-path arm\n");
 				assert.match(
 					attempt.auditDelta,
@@ -710,7 +710,7 @@ describe(
 				// quoted path field would terminate it early and forge the field
 				// for any quote-delimited reader.
 				assert.equal(
-					naming[0].includes(HOSTILE_HEAD + "%27"),
+					naming[0].includes(`${HOSTILE_HEAD}%27`),
 					true,
 					`hostile path: the path's single quote is not percent-encoded on the record — a raw quote ` +
 						`forges the path field's boundary: ${JSON.stringify(naming[0])}`,
@@ -728,7 +728,7 @@ describe(
 			// surfaces, with the raw pair on neither.
 			const fixture = buildScanFixture();
 			try {
-				stageFile(fixture, HIGH_BYTE_NAME, AWS_SECRET + "\n");
+				stageFile(fixture, HIGH_BYTE_NAME, `${AWS_SECRET}\n`);
 				const attempt = commitWithMessage(fixture, "chore: exercise the high-byte-path arm\n");
 				assert.match(
 					attempt.auditDelta,
@@ -862,7 +862,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 		// match: an over-widened pattern is a false block on ordinary text.
 		const fixture = buildScanFixture();
 		try {
-			stageFile(fixture, "zqnearmiss.txt", "prefix-shaped but short: " + AWS_NEAR_MISS + "\n");
+			stageFile(fixture, "zqnearmiss.txt", `prefix-shaped but short: ${AWS_NEAR_MISS}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the near-miss pin\n");
 			assertAllowedOrdinarily(attempt, "near-miss commit");
 		} finally {
@@ -874,7 +874,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 		const fixture = buildGithookFixture({ remote: { defaultBranch: PROTECTED } });
 		removeDelegatedHelpers(fixture);
 		try {
-			stageFile(fixture, "zqnoop1.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqnoop1.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the absent-helper no-op\n");
 			assert.equal(
 				attempt.status,
@@ -906,7 +906,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 				join(fixture.helpersDir, "secret_scan.sh"),
 				"# stub helper: sources cleanly, defines everything except the delegated function\nunrelated_scan_function() { :; }\n",
 			);
-			stageFile(fixture, "zqnoop2.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqnoop2.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the per-arm degradation pin\n");
 			assert.match(
 				attempt.auditDelta,
@@ -947,7 +947,7 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 				join(repoRoot(), ".githooks", "helpers", "conventional_commit.sh"),
 				join(fixture.helpersDir, "conventional_commit.sh"),
 			);
-			stageFile(fixture, "zqleakbstub.txt", AWS_SECRET + "\n");
+			stageFile(fixture, "zqleakbstub.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the silent-stub arm\n");
 			assert.equal(attempt.status, 0, `stub branch helper: the fold-open contract broke: ${attempt.stderr}`);
 			assert.doesNotMatch(
