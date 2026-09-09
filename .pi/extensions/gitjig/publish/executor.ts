@@ -241,8 +241,9 @@ const STREAM_GRACE_MS = 2_000;
  * window of width `graceMs` between the two production timers, and a
  * suite arm staging it against the production numbers holds at most a 1s
  * margin — which machine load consumes (issue #119). The race arm injects
- * wide margins here; production callers pass nothing and run the
- * constants.
+ * wide margins here, and a sibling arm injects a deliberately narrow
+ * bound to pin which number the kill timer arms; production callers pass
+ * nothing and run the constants.
  */
 export interface ChildBounds {
 	timeoutMs: number;

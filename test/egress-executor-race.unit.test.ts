@@ -120,7 +120,7 @@ describe("a late in-bound exit behind an orphan-held pipe is published, staged a
 		assert.ok(
 			elapsedMs >= 6_000,
 			`race arm: decided at ${elapsedMs}ms — sooner than the exit-plus-grace the grace path decides at, so ` +
-				`the pipes were not held across the race window and the arm measured the close path, not the grace path`,
+				`the pipes were not held across the race window, or the grace timer did not arm the injected graceMs`,
 		);
 	});
 });
@@ -140,6 +140,10 @@ describe("the injected timeoutMs is the bound the kill timer arms (issue #119)",
 		// production bound a diverged use site would arm, and load moves a
 		// diverged run only further past it. The cause substring stays for
 		// the class it does catch: a cause spelled from the constant.
+		// The PATH swap is process-global and this shim never exits, so it is
+		// correct only while this file's arms run serially (node:test's default
+		// subtest concurrency): a concurrent race arm would resolve gh to this
+		// shim and wedge. Restored in the finally either way.
 		const boundShim = mkdtempSync(join(tmpdir(), "gitjig-bound-"));
 		writeFileSync(join(boundShim, "gh"), "#!/bin/sh\nsleep 30\n");
 		chmodSync(join(boundShim, "gh"), 0o755);
@@ -158,7 +162,7 @@ describe("the injected timeoutMs is the bound the kill timer arms (issue #119)",
 				`bound arm: a never-exiting child under a 1s injected bound was not refused: ${JSON.stringify(outcome)}`,
 			);
 			assert.ok(
-				outcome.outcome === "refused" && outcome.cause.includes("1000 ms"),
+				outcome.outcome === "refused" && outcome.cause.includes("its 1000 ms bound"),
 				`bound arm: the refusal cause does not name the injected bound — a cause spelled from the production ` +
 					`constant misreports what was enforced: ${JSON.stringify(outcome)}`,
 			);
