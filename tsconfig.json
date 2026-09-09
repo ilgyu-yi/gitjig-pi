@@ -17,11 +17,13 @@
 		// hides the guards that do the work. Reopen if a triage ever finds a
 		// site in the wrong-allow shape, or if
 		// `tsc --noEmit --noUncheckedIndexedAccess | grep -c '^\.pi/'` (from
-		// the repo root) ever counts more than the 4 sites it counts today
-		// (a different four — the tripwire counts by directory, the triage
-		// above by repair — and a count, so a one-for-one swap hides in it)
-		// — a proxy that over-triggers on any new production index and costs
-		// only a re-triage; the per-site table is on issue #137.
+		// the repo root, toolchain installed) ever counts more than the 4
+		// error lines it counts today (a different four than the restructure
+		// class — this counts by directory, and it counts the compiler's
+		// error lines, not sites, so a swap or an unflagged addition hides
+		// in it). The tripwire is a proxy: any rise in that line count fires
+		// it, benign guarded additions included, and a trip costs only a
+		// re-triage; the per-site table is on issue #137.
 		"strict": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
