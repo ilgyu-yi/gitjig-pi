@@ -387,3 +387,60 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 		});
 	});
 });
+
+describe("tier-3 completeness floor: every live-PR gate workflow is inventoried (issue #136)", () => {
+	// The FLOOR half of the recognizer judgment issue #136 asks for,
+	// recorded here as the decision taken: the tier-3 rows land with a
+	// workflow-to-row join, so a gate workflow added without a row reds
+	// the day it lands, while the per-decision recognizer (a reader of
+	// control flow over workflow scripts) stays #30's, per residual 1
+	// above — the workflows name no cause constants, so the two idioms
+	// this suite recognizes cannot reach them by construction.
+	//
+	// The DOMAIN is the walk of .github/workflows, never a list: every
+	// workflow that triggers on pull_request for a live PR — any types
+	// set other than exactly [closed] — is a candidate, and each of its
+	// job ids must appear verbatim in at least one row's text. The join
+	// is substring-over-row-text, coarse on purpose: it pins that a row
+	// EXISTS naming the gate, not that the row is right — that half is
+	// held by the enumeration on issue #136 and by review. Residual,
+	// enumerated in place: a future workflow triggering on closed PLUS
+	// live types spells a types line this skip does not match and joins
+	// the domain, which is the fail-closed direction for this floor.
+	it("every live-PR workflow job id appears in at least one posture row", () => {
+		const wfDir = join(repoRoot(), ".github", "workflows");
+		const rowTexts = POSTURES.map((row) => `${row.dependency}\n${row.failureShape}\n${row.justification}`);
+		const misses: string[] = [];
+		let candidates = 0;
+		for (const name of readdirSync(wfDir)) {
+			if (!name.endsWith(".yml")) {
+				continue;
+			}
+			const text = readFileSync(join(wfDir, name), "utf8");
+			if (!/^\s+pull_request:/m.test(text)) {
+				continue;
+			}
+			if (/^\s+types:\s*\[closed\]\s*$/m.test(text)) {
+				continue;
+			}
+			const jobsAt = text.search(/^jobs:\s*$/m);
+			assert.notEqual(jobsAt, -1, `${name}: a pull_request workflow with no jobs: block — the floor cannot read it`);
+			for (const match of text.slice(jobsAt).matchAll(/^ {2}([A-Za-z0-9_-]+):\s*$/gm)) {
+				candidates += 1;
+				const jobId = match[1] as string;
+				if (!rowTexts.some((row) => row.includes(jobId))) {
+					misses.push(`${name} -> ${jobId}`);
+				}
+			}
+		}
+		// A FLOOR under the domain too: the five required gates plus the
+		// advisory provenance job exist today, so a walk that read fewer
+		// than six candidates measured the wrong thing, not a clean tree.
+		assert.ok(candidates >= 6, `only ${candidates} live-PR job(s) found — the domain walk broke, not the inventory`);
+		assert.deepEqual(
+			misses,
+			[],
+			`live-PR gate job(s) with no posture row — a CI gate's dependencies declare their on-miss posture in the one inventory (§3.9), and these declare nothing: ${misses.join("; ")}`,
+		);
+	});
+});
