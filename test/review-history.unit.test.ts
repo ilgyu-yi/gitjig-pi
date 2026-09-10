@@ -176,7 +176,29 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("an incomplete head is a state but a no-review record contributes none", () => {
+	it("a NON-CONTIGUOUS re-post moves the head to its latest position — the trigger does not under-fire (round 2's E1)", () => {
+		const h = mod();
+		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+		// A repaired, then C cleared, then B repaired, then A re-posted as a
+		// repair. Taking A's position from its FIRST occurrence freezes it at
+		// index 0 (sequence a|c|b, trailing run one repair, trigger silent);
+		// taking position from the LAST occurrence yields c|b|a (trailing run
+		// two repairs, trigger fires) — §1.4 forbids the under-fire.
+		const out = h.repairHistory([repair(a), clear(c), repair(b), repair(a)]);
+		assert.deepEqual(
+			out.map((s) => s.head),
+			[c, b, a],
+			"a re-posted head kept its first position — the sequence is misordered and position/outcome are split " +
+				"across records",
+		);
+		assert.equal(
+			h.triggerFires(out),
+			true,
+			"the trigger under-fired on a non-contiguous re-post — a change could then repair indefinitely (§1.4)",
+		);
+	});
+
+	it("an incomplete head is a review state, distinct from repair", () => {
 		const h = mod();
 		const out = h.repairHistory([incomplete("a".repeat(40)), repair("b".repeat(40))]);
 		assert.deepEqual(
@@ -257,6 +279,17 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 
 	it("embeds each state's findings and rulings verbatim, labelled unverified", () => {
 		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
+		// Round 2's S1: pin the per-state FINDINGS line with a needle only it
+		// can produce — a state carrying a finding but NO rulings, so the
+		// ruling line (which also renders the finding) cannot satisfy it.
+		const findingsOnly = mod().composeDiagnosisBrief([state({ findings: ["zq findings-only line"], rulings: [] })], {
+			changeDescription: "d",
+		});
+		assert.ok(
+			findingsOnly.includes("zq findings-only line"),
+			"a state with findings but no rulings lost its findings from the brief — the per-state findings line is " +
+				"not pinned, and a findings-but-no-rulings state (adjudication null) would drop its findings",
+		);
 		for (const [needle, why] of [
 			["zq the recurring finding", "the state's finding text — the diagnosis reads the same findings the Judge ruled"],
 			["zq the evidence", "the ruling's evidence verbatim (F15's discipline carried into the history)"],
@@ -279,10 +312,17 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (issue #186)", () => {
 	it("a valid confirmed diagnosis is available with its two outputs and evidence", () => {
 		const h = mod();
-		const admission = h.admitDiagnosis(
-			admittedPayload({ value: "STAGNATION", invalidation: "nothing", evidence: "the method repeated" }),
+		const input = { value: "STAGNATION" as const, invalidation: "nothing" as const, evidence: "the method repeated" };
+		const admission = h.admitDiagnosis(admittedPayload(input));
+		assert.ok(admission.available, "a valid diagnosis was not admitted");
+		// Round 2's S2: all three fields must be the payload's, not just the
+		// value — a forged invalidation drops a §1.4 re-entry route.
+		assert.deepEqual(
+			admission.available ? admission.diagnosis : undefined,
+			input,
+			"the admitted diagnosis is not the payload's two outputs and evidence — a forged invalidation or evidence " +
+				"would pass, dropping a re-entry route or fabricating the evidence",
 		);
-		assert.ok(admission.available && admission.diagnosis.value === "STAGNATION", "a valid diagnosis was not admitted");
 	});
 
 	it("a refused dispatch hands off — never read as NONE", () => {

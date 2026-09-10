@@ -35,11 +35,12 @@
  * gates the invalidation finding routes to (this module names the
  * route, the caller performs it).
  *
- * Warning-surface roster: EXEMPT — like briefs.ts, the one
- * path-adjacent interpolation (composeDiagnosisBrief) embeds a
- * caller-derived commit hash and a closed-union outcome into a
- * delegate brief, never a warned/thrown/printed message; the head is
- * the caller's own operand and the outcome is one of five literals.
+ * Warning-surface roster: EXEMPT — like briefs.ts, composeDiagnosisBrief
+ * embeds caller-supplied content verbatim into a delegate brief (the
+ * record's heads, outcomes, finding texts, and ruling evidence), never
+ * a warned/thrown/printed message; escaping it would corrupt the
+ * verbatim-embedding contract §1.4's diagnosis rests on, and the one
+ * consumer is the dispatcher's brief slot.
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import type { ReviewRecord } from "./record.ts";
@@ -107,12 +108,15 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 						}
 						return summary;
 					});
-		if (!byHead.has(record.head)) {
-			order.push(record.head);
+		// One head is one state, taken from its LAST record — position AND
+		// outcome from the same record so the collapse stays coherent. A
+		// re-post moves the head to its latest position (an earlier frozen
+		// position would leave the sequence misordered and the trigger
+		// under-firing, which §1.4 forbids).
+		if (byHead.has(record.head)) {
+			order.splice(order.indexOf(record.head), 1);
 		}
-		// One head is one state, taken from its LAST record — position and
-		// outcome from the same record so the collapse stays coherent (a
-		// re-dispatched slot re-posts the head's settled record).
+		order.push(record.head);
 		byHead.set(record.head, { head: record.head, outcome, findings, rulings });
 	}
 	return order.map((head) => byHead.get(head) as StateSummary);
