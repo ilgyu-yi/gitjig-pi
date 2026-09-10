@@ -199,6 +199,7 @@ const ruling = (over: Partial<Ruling> = {}): Ruling => ({
 	severity: "SUBSTANTIVE",
 	direction: "live-harm",
 	onCriterion: true,
+	evidence: "zq evidence: the command that ran, and what it printed",
 	...over,
 });
 
@@ -452,7 +453,12 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 				dedupAttested: true,
 				rulings: [
 					ruling({ provenance: [] }),
-					{ finding: "zq refuted with no provenance", provenance: [], validity: "REFUTED" },
+					{
+						finding: "zq refuted with no provenance",
+						provenance: [],
+						validity: "REFUTED",
+						evidence: "zq: the refuting command",
+					},
 				],
 			},
 			MANIFEST,
@@ -523,14 +529,19 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 		}
 	});
 
-	it("REFUTED and INDETERMINATE owe validity alone — a ruling without the other axes is complete", () => {
+	it("REFUTED and INDETERMINATE owe validity and its evidence alone — a ruling without the other axes is complete", () => {
 		const r = resolves();
 		const admission = r.admitAdjudication(
 			{
 				dedupAttested: true,
 				rulings: [
-					{ finding: "zq refuted", provenance: [SLOT], validity: "REFUTED" },
-					{ finding: "zq undecided", provenance: [OTHER_SLOT], validity: "INDETERMINATE" },
+					{ finding: "zq refuted", provenance: [SLOT], validity: "REFUTED", evidence: "zq: the refuting command" },
+					{
+						finding: "zq undecided",
+						provenance: [OTHER_SLOT],
+						validity: "INDETERMINATE",
+						evidence: "zq: the citation it rests on",
+					},
 				],
 			},
 			MANIFEST,
@@ -539,7 +550,7 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 			admission.complete,
 			true,
 			"a REFUTED or INDETERMINATE ruling was held to axes §1.9 does not owe on it — completeness is all four " +
-				"axes on a CONFIRMED finding and validity alone otherwise",
+				"axes on a CONFIRMED finding and validity plus its evidence otherwise",
 		);
 	});
 
@@ -692,30 +703,19 @@ describe("§1.9 validity evidence rides the ruling — the operator's F15 ruling
 	// rests on". Admission checks presence and shape only; nothing
 	// deterministic evaluates the content; the field rides the snapshot
 	// verbatim as the reconsideration anchor.
-	const evidenced = (over: Partial<Ruling> = {}): Ruling => ({
-		finding: "zq evidenced finding",
-		provenance: [SLOT],
-		validity: "CONFIRMED",
-		severity: "SUBSTANTIVE",
-		direction: "live-harm",
-		onCriterion: true,
-		evidence: "zq evidence: node --test ran red, then green",
-		...over,
-	});
-
 	it("the closed wire shape REQUIRES evidence — a ruling without it, or with a non-string one, is no adjudication", () => {
 		const r = resolves();
-		const good = { dedupAttested: true, rulings: [evidenced()] };
+		const good = { dedupAttested: true, rulings: [ruling()] };
 		assert.deepEqual(
 			r.adjudicationFromPayload(JSON.stringify(good)),
 			good,
 			"an evidence-bearing payload did not parse intact — the wire shape must carry the field the ruling " +
 				"makes part of the ruling itself",
 		);
-		const { evidence: _dropped, ...bare } = evidenced();
+		const { evidence: _dropped, ...bare } = ruling();
 		for (const [shape, rulings] of [
 			["a ruling with no evidence key", [bare]],
-			["a ruling with a non-string evidence", [evidenced({ evidence: 7 as never })]],
+			["a ruling with a non-string evidence", [ruling({ evidence: 7 as never })]],
 		] as [string, unknown[]][]) {
 			assert.equal(
 				r.adjudicationFromPayload(JSON.stringify({ dedupAttested: true, rulings })),
@@ -731,7 +731,7 @@ describe("§1.9 validity evidence rides the ruling — the operator's F15 ruling
 		for (const validity of ["CONFIRMED", "REFUTED", "INDETERMINATE"] as Validity[]) {
 			const one =
 				validity === "CONFIRMED"
-					? evidenced({ evidence: "" })
+					? ruling({ evidence: "" })
 					: ({ finding: "zq bare", provenance: [SLOT], validity, evidence: "" } as Ruling);
 			const admission = r.admitAdjudication({ dedupAttested: true, rulings: [one] }, MANIFEST);
 			assert.equal(
@@ -751,7 +751,7 @@ describe("§1.9 validity evidence rides the ruling — the operator's F15 ruling
 		const r = resolves();
 		const admit = (evidence: string) =>
 			r.admitAdjudication(
-				{ dedupAttested: true, rulings: [evidenced({ direction: "fail-closed", onCriterion: false, evidence })] },
+				{ dedupAttested: true, rulings: [ruling({ direction: "fail-closed", onCriterion: false, evidence })] },
 				MANIFEST,
 			);
 		const one = admit("zq: grep returned zero hits");
@@ -768,7 +768,7 @@ describe("§1.9 validity evidence rides the ruling — the operator's F15 ruling
 	it("the admitted evidence rides the branded snapshot verbatim — the reconsideration anchor survives the copy", () => {
 		const r = resolves();
 		const anchor = "zq\tanchor — bytes intact";
-		const input = { dedupAttested: true, rulings: [evidenced({ evidence: anchor })] };
+		const input = { dedupAttested: true, rulings: [ruling({ evidence: anchor })] };
 		const admission = r.admitAdjudication(input, MANIFEST);
 		assert.ok(admission.complete, "the fixture admission should be complete");
 		(input.rulings[0] as Ruling).evidence = "zq rewritten after admission";

@@ -68,6 +68,16 @@ export type Ruling = {
 	direction?: Direction;
 	/** The AC-impact axis: does the finding sit on a manifest criterion? */
 	onCriterion?: boolean;
+	/**
+	 * The validity ruling's own record — the command it ran or the citation
+	 * it rests on (§1.9) — owed on EVERY validity: a REFUTED finding is
+	 * retained "with its refuting command" in the clause's own words. Fixed
+	 * as part of the ruling, never later metadata, by the operator's ruling
+	 * on the escalated question (issue #179); it is what §1.9's
+	 * reconsideration clause anchors on, and nothing deterministic in this
+	 * layer evaluates its content.
+	 */
+	evidence: string;
 };
 
 /**
@@ -118,7 +128,16 @@ const VALIDITIES = new Set<unknown>(["CONFIRMED", "REFUTED", "INDETERMINATE"]);
 const SEVERITIES = new Set<unknown>(["SUBSTANTIVE", "NIT"]);
 const DIRECTIONS = new Set<unknown>(["fail-closed", "live-harm"]);
 const TOP_KEYS = new Set(["dedupAttested", "rulings"]);
-const RULING_KEYS = new Set(["finding", "provenance", "validity", "severity", "remedy", "direction", "onCriterion"]);
+const RULING_KEYS = new Set([
+	"finding",
+	"provenance",
+	"validity",
+	"severity",
+	"remedy",
+	"direction",
+	"onCriterion",
+	"evidence",
+]);
 const SLOT_KEYS = new Set(["lens", "surface"]);
 
 function isSlot(value: unknown): value is Slot {
@@ -142,6 +161,9 @@ function isRuling(value: unknown): value is Ruling {
 	}
 	const r = value as Record<string, unknown>;
 	if (typeof r.finding !== "string" || !Array.isArray(r.provenance) || !r.provenance.every(isSlot)) {
+		return false;
+	}
+	if (typeof r.evidence !== "string") {
 		return false;
 	}
 	if (!VALIDITIES.has(r.validity)) {
@@ -228,8 +250,17 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 		if (ruling.provenance.length === 0) {
 			gaps.push(`ruling ${index}: provenance is empty — dedup merges and never discards (§1.9)`);
 		}
+		// Presence alone, owed on every validity like provenance — the parse
+		// rules the field's type, this checks only that a ruling says what it
+		// rests on, and nothing here reads what it says (issue #179's ruling:
+		// admission checks presence and shape, never evaluates).
+		if (!ruling.evidence) {
+			gaps.push(
+				`ruling ${index}: validity evidence is empty — each ruling records the command it ran or the citation it rests on (§1.9)`,
+			);
+		}
 		if (ruling.validity !== "CONFIRMED") {
-			// REFUTED and INDETERMINATE owe validity alone (§1.9).
+			// REFUTED and INDETERMINATE owe validity and its evidence alone (§1.9).
 			return;
 		}
 		if (ruling.severity === undefined) {
