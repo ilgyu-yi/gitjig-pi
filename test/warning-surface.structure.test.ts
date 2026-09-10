@@ -202,6 +202,30 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// that parses a DELEGATE-authored payload — the surface most exposed to
 	// actor bytes in the review layer — cannot grow a raw rendering of one.
 	{ file: "gitjig/review/join.ts", allow: [] },
+	{ file: "gitjig/review/carry-forward.ts", allow: [] },
+	{
+		file: "gitjig/review/orchestrate.ts",
+		allow: [
+			// The caller's own head ref, composed into ONE execFileSync argv
+			// operand (`git rev-parse --verify <headRef>^{commit}`) — the same
+			// provenance ground panel.ts's baseRef/headRef ride: a ref the
+			// caller resolves for the change it is reviewing, never read from a
+			// delegate return or a reviewed party's surface, and the composed
+			// value is passed to git and discarded, never warned or printed. If
+			// a later change routes an outside-supplied ref here, this entry
+			// stops holding and the interpolation goes through `quoted`.
+			"options.headRef",
+		],
+	},
+	{
+		file: "gitjig/review/record.ts",
+		allow: [
+			// The record marker — a module-level string constant, no byte of it
+			// from a path or a delegate; interpolated only into the parse's own
+			// needle.
+			"REVIEW_RECORD_MARKER",
+		],
+	},
 	{
 		file: "gitjig/review/resolve.ts",
 		allow: [
