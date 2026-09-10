@@ -334,10 +334,13 @@ export function reviewOutcome(panel: PanelOutcome, admission: AdmitResult | unde
 		// construction — yields at least one effective finding as a theorem.
 		// A Judge return that rules NOTHING over real findings is the
 		// emptiest shape of §1.9's returned-invalid limb, refused at the one
-		// seam where both operands are in hand; this branch reads two lengths
-		// and no finding's text. The alternative — widening admitAdjudication
-		// to take the bundle so completeness stays one test — is recorded and
-		// not taken: the admission deliberately never sees the bundle.
+		// seam where both operands are in hand; this branch reads ONE length
+		// — the rulings' — and no finding's text, taking the bundle's
+		// non-emptiness from the panel's own construction (`panelOutcome`
+		// returns approved at `bundle.length === 0`) rather than from a read
+		// here. The alternative — widening admitAdjudication to take the
+		// bundle so completeness stays one test — is recorded and not taken:
+		// the admission deliberately never sees the bundle.
 		return {
 			state: "incomplete",
 			cause: "adjudication-incomplete",

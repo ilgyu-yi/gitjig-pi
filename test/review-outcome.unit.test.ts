@@ -446,7 +446,16 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 
 	it("an effective finding with empty provenance is incomplete — dedup merges and never discards", () => {
 		const r = resolves();
-		const admission = r.admitAdjudication({ dedupAttested: true, rulings: [ruling({ provenance: [] })] }, MANIFEST);
+		const admission = r.admitAdjudication(
+			{
+				dedupAttested: true,
+				rulings: [
+					ruling({ provenance: [] }),
+					{ finding: "zq refuted with no provenance", provenance: [], validity: "REFUTED" },
+				],
+			},
+			MANIFEST,
+		);
 		assert.equal(
 			admission.complete,
 			false,
@@ -456,6 +465,12 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 		assert.ok(
 			!admission.complete && admission.gaps.some((gap) => /^ruling 0: provenance is empty/.test(gap)),
 			"the empty-provenance gap is not named in its authored words",
+		);
+		assert.ok(
+			!admission.complete && admission.gaps.some((gap) => /^ruling 1: provenance is empty/.test(gap)),
+			"the REFUTED ruling's empty provenance was not named — dedup is owed on the whole bundle, whatever the " +
+				"rulings that follow (§1.9), so an implementation that returns on the non-CONFIRMED validity before " +
+				"measuring provenance admits a merge that discarded what it merged",
 		);
 	});
 
@@ -559,6 +574,10 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 			[
 				"a provenance element with a non-string lens",
 				JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), provenance: [{ lens: 1, surface: "s" }] }] }),
+			],
+			[
+				"an extra key on a provenance element",
+				JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), provenance: [{ ...SLOT, zqExtra: 1 }] }] }),
 			],
 			["an unknown top-level key", JSON.stringify({ dedupAttested: true, rulings: [], zqExtra: 1 })],
 			["an unknown ruling key", JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), zqExtra: 1 }] })],
@@ -951,6 +970,21 @@ describe("§1.9 the composed review outcome — Judge availability is review com
 			{ state: "approved" },
 			"a findings-free complete panel did not yield approved with no adjudication — §1.9's findings-free " +
 				"path never runs the Judge, and requiring an adjudication here would run it",
+		);
+	});
+
+	it("an approved panel stays approved whatever adjudication is offered — the Judge path is never taken", () => {
+		const r = resolves();
+		const p = panel();
+		const approved = p.panelOutcome([p.receive(SLOT, "confirmed", { token: "APPROVED", findings: [] })], [SLOT]);
+		const admission = r.admitAdjudication({ dedupAttested: true, rulings: [ruling()] }, MANIFEST);
+		assert.ok(admission.complete, "the fixture admission should be complete");
+		assert.deepEqual(
+			r.reviewOutcome(approved, admission),
+			{ state: "approved" },
+			"an approved panel was read past on the strength of an offered adjudication — §1.9's findings-free path " +
+				"never runs the Judge, so a gate narrowed to the no-adjudication case falls through to the Resolver " +
+				"and answers a findings-free head with dispositions over findings the panel never bundled",
 		);
 	});
 
