@@ -19,53 +19,53 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.5 | Delegated work | 169 |
 | &nbsp;&nbsp;§1.6 | Review integrity | 181 |
 | &nbsp;&nbsp;§1.7 | The reviewer panel | 195 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 215 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 227 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 268 |
-| §2 | Artifact hierarchy and lifecycle | 276 |
-| &nbsp;&nbsp;§2.1 | Issue types | 280 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 293 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 309 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 313 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 328 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 365 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 377 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 387 |
-| §3 | Enforcement-layer architecture | 399 |
-| &nbsp;&nbsp;§3.1 | The constraint | 403 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 410 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 418 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 522 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 526 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 530 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 540 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 552 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 565 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 579 |
-| &nbsp;&nbsp;§3.11 | Gate design | 589 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 611 |
-| §4 | Substrate and install contract | 621 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 625 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 631 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 635 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 639 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 643 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 649 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 659 |
-| &nbsp;&nbsp;§4.8 | The command layer | 667 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 724 |
-| §5 | Cross-cutting contracts | 766 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 770 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 774 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 778 |
-| &nbsp;&nbsp;§5.4 | Work language | 782 |
-| &nbsp;&nbsp;§5.5 | State boundary | 786 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 792 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 802 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 812 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 820 |
-| §6 | Self-governance milestone | 828 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 839 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 217 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 229 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 270 |
+| §2 | Artifact hierarchy and lifecycle | 278 |
+| &nbsp;&nbsp;§2.1 | Issue types | 282 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 295 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 311 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 315 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 330 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 367 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 379 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 389 |
+| §3 | Enforcement-layer architecture | 401 |
+| &nbsp;&nbsp;§3.1 | The constraint | 405 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 412 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 420 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 524 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 528 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 532 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 542 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 554 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 567 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 581 |
+| &nbsp;&nbsp;§3.11 | Gate design | 591 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 613 |
+| §4 | Substrate and install contract | 623 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 627 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 633 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 637 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 641 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 645 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 651 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 661 |
+| &nbsp;&nbsp;§4.8 | The command layer | 669 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 726 |
+| §5 | Cross-cutting contracts | 768 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 772 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 776 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 780 |
+| &nbsp;&nbsp;§5.4 | Work language | 784 |
+| &nbsp;&nbsp;§5.5 | State boundary | 788 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 794 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 804 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 814 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 822 |
+| §6 | Self-governance milestone | 830 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 841 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -196,9 +196,11 @@ The norm is **procedural today** — homed with the `merge-review` row in §3.3,
 
 Reviewer multiplicity is **search diversification, not a vote.** Several reviewers are dispatched independently at one head so that different lenses reach different defects; what multiplicity buys is coverage, and the property that follows is the one that matters: **one valid finding survives any number of empty co-reviews.**
 
-Majority vote is the **rejected design**, recorded here so it is not re-proposed. It fails in both directions at once: it discards a true finding whenever a minority holds it — which is precisely the case a search panel exists to catch — and it converts correlated contamination into confidence, since silently correlated redundancy is one sample reported N times. Serial debate, where each reviewer sees the others' results, is rejected for the second reason alone: it destroys the independence the panel is built on. What a vote was reached for — protection against an irreversible wrong approve — is not abandoned; it re-homes to the gates that actually stand at the irreversible boundary, the ready decision and the landing gates (§2.3, §3.3) and the autonomy ceiling (§5.6, §5.7), where a human or an explicit policy stands rather than a threshold. **The re-home is partial, and the residual is named rather than glossed:** §5.6 lets a reviewer verdict fill the human slot at its judgment checkpoints, which it names as plan approval and the ready decision — and this section sets no floor on the required slot set, so at the checkpoints that substitution reaches the protection rests on the slot policy and the autonomy ceiling rather than on a second independent judgment. Closing it is an amendment to §5.6's substitution reach and is not made here.
+Majority vote is the **rejected design**, recorded here so it is not re-proposed. It fails in both directions at once: it discards a true finding whenever a minority holds it — which is precisely the case a search panel exists to catch — and it converts correlated contamination into confidence, since silently correlated redundancy is one sample reported N times. Serial debate, where each reviewer sees the others' results, is rejected for the second reason alone: it destroys the independence the panel is built on. What a vote was reached for — protection against an irreversible wrong approve — is not abandoned; it re-homes to the gates that actually stand at the irreversible boundary, the ready decision and the landing gates (§2.3, §3.3) and the autonomy ceiling (§5.6, §5.7), where a human or an explicit policy stands rather than a threshold. **The re-home's floor, on the routing-coverage rule's own activation terms:** §5.6 lets a reviewer verdict fill the human slot at its judgment checkpoints — plan approval and the ready decision. At the **ready decision**, which §2.3 gates on a complete panel, the floor under that substitution is the routing-coverage rule below, on that rule's own activation terms: once active, a change with a non-empty change surface derives at least one required slot — the coverage clause's pinned quantifier, carried here — so a substituted verdict rests on at least one independent judgment. Plan approval is §1.8's contest, where no panel runs and the protection is that section's own structure; at both checkpoints, beyond any floor, the protection rests on the slot policy's content and the autonomy ceiling.
 
 **Required slots derive from a committed policy surface.** A panel's required slot set is derived from **authoritative facts about the change under review** — its change surface — against a **committed, caller-owned policy surface** mapping those facts to required lenses. Three properties are the contract, and the surface's content is not this section's business: the policy is *committed*, so it is a repository artifact reviewable and diffable like any other and a routing decision is auditable after the fact; it is *caller-owned*, so no reviewer selects the lens it will be graded on and no model selects one at dispatch time — a self-selected specialist re-imports exactly the omission bias §1.8 names; and its inputs are *authoritative*, read from the change itself rather than from anyone's summary of it (§3.3's exactness rule, applied to routing).
+
+**Routing coverage.** Every reviewable constituent of the authoritative change surface is claimed by at least one row of the committed policy, and a review cannot derive APPROVED from an empty or partially unrouted **required-review surface** — coined here as the durable name (§2.7) for the surface that review is required over: the authoritative change surface as the committed policy routes it into the required slot set. **Reviewable constituent** is pinned here, once, and the pin carries through every quantifier this rule uses: it is *any* constituent of the authoritative change surface, the modifier reading as emphasis rather than as a filter — under this clause reviewability is claimability, since what a row claims is exactly what review reaches, so no constituent is exempt from being claimed. A filter — a defined class of constituent the coverage obligation does not reach — would be new normative content and is not made here. A constituent a row claims requires that row's lens, so full coverage of a non-empty change surface derives a non-empty required slot set — the required-review surface is *empty* only where the change surface itself is (the last limb of this clause), and *partially unrouted* exactly where some constituent is unowned (the routing failure next). A change surface any constituent of which no row claims is a **routing failure** — a refusal upstream of review, not a review state: no panel is convened, completeness is never evaluated, the findings-free path is unreachable, and Review APPROVED cannot derive. It is not a finding, it feeds no Judge, it contributes no review state to §1.4's history, and no denominator absorbs it; its one remedy is an amendment to the committed policy — itself a reviewed change, which keeps the coverage obligation as auditable as the routing it guards. Coverage is evaluated against the committed policy **at the head under review**, so the change that amends the policy is judged by the rows it lands, never locked out by the rows it lacks. The **catch-all row is the rejected design**, recorded so it is not re-proposed: a row that claims everything discharges coverage as decoration and dissolves the lens a reviewer is dispatched through — and with it the search diversification this section is built on. An **empty change surface** convenes no panel, contributes no review state, and derives no APPROVED either, but it is no routing failure and no policy amendment is owed on it: there is nothing to route, a row cannot claim a constituent that does not exist, and the artifacts that legitimately carry an empty surface (§1.2's spike) reach no review at all — the refusal here says only that an approval no reviewer produced derives from nothing. The routing-coverage refusal **sleeps until its instrument derives** (§5.3, on the operator's activation ruling), and **the sleep is the whole clause's**: the routing-failure refusal and the empty-surface refusal above activate together, on one activation story, neither limb ahead of the other. It activates with the derivation that enforces it, which lands together with the policy amendment that first satisfies it, and until that activation no change is refused on either limb's grounds.
 
 **Mutual blindness.** Every slot runs in its own isolated execution context (§1.5) and sees no other slot's result until the panel completes. Independence covers the execution environment, not only the conversation.
 
@@ -210,7 +212,7 @@ Majority vote is the **rejected design**, recorded here so it is not re-proposed
 
 **One semantic adjudication point.** With the vote retired, review carries exactly **one** semantic adjudication point for discovered findings: the Judge (§1.9). This is stated rather than left implicit because the retired design distributed judgment across the voters, and a successor that re-adds a semantic step anywhere — a reviewer ruling its own finding valid, a caller filtering the bundle, a second adjudicator after the Judge — reintroduces the multiplicity without the vote that once bounded it.
 
-The norm is **procedural today**, enforced at review (§2.3); the panel and dispatch instruments derive later per §1.2's macro-phase clause — the dispatch instrument is §4.9's, landed at `.pi/extensions/gitjig/dispatch/`, which leaves slot derivation and bundle construction as the half still deriving.
+The norm is **procedural today**, enforced at review (§2.3); the dispatch instrument is §4.9's, landed at `.pi/extensions/gitjig/dispatch/`, and slot derivation and bundle construction are landed at `.pi/extensions/gitjig/review/` — the routing-coverage refusal above activates on its own clause's terms, never procedurally ahead of its instrument.
 
 ### 1.8 Plan contest
 
@@ -228,7 +230,7 @@ The norm is **explicitly advisory** today (§3.1 rule 1), enforced at review (§
 
 An adversarial reviewer's success condition is "find something" — a structural false-positive bias by construction. A panel's raw bundle (§1.7) is therefore adjudicated by an independent **Judge** before the author acts on any of it, and the workflow consequence of that adjudication is computed by a deterministic **Resolver**. The rule the whole architecture turns on: **semantic judgment about a panel's findings ends at the Judge, and every workflow consequence derived from them is deterministic.** The scope is stated rather than left universal, and what bounds it is stated too, since the retired design's defect was a second semantic step *inside* this pipeline. Gates outside it keep their own adjudicators, declared in their own sections — §1.8's plan-contest judge over candidate plans, §2.2's activation substance review over an issue body — and neither adjudicates a panel's bundle. Where such a gate raises a finding of its own, this pipeline does not run on it — and what does not lapse there is the discipline this section's axes exist for: the finding's cost direction is **recorded** by whoever raises it, in the two tokens the direction axis below names, never left to a default — and where that party cannot rule the direction, it records that it could not, which its own gate then disposes of on its own terms. The axes themselves are the Judge's rulings over a bundle and are not re-homed by this sentence. What the rule does reach beyond one review is §1.4's history diagnosis: it reads the same findings again, across review states, so it is the **Judge's** too rather than a new adjudicator's. The Judge therefore rules in two capacities — the findings of one review, here; the repair history past §1.4's trigger, there — with the caller deriving the occasion, supplying the input, and consuming the result deterministically in both, and with **one** fail direction across both: closed, since each capacity withholds something on its own evidence — stated here for this one, and at §1.4 for that one, where §3.9's keying rule allocates the postures inside that closed direction and reaches the Judge dependency in every shape.
 
-**The findings-free path.** A complete panel with an empty bundle is **Review APPROVED** for that head, and the Judge never runs — nothing was discovered, so there is nothing to adjudicate (the sleeping-gate shape, §5.3). What that approval settles is the review and only the review: AC closeout (§2.2) and the landing gates (§2.3, §3.3) are untouched by it, and nothing on this path is evidence about any other head.
+**The findings-free path.** A complete panel with an empty bundle is **Review APPROVED** for that head (completeness presupposing §1.7's routing coverage — on that rule's own activation terms, no panel convenes over an empty or unrouted required-review surface), and the Judge never runs — nothing was discovered, so there is nothing to adjudicate (the sleeping-gate shape, §5.3). What that approval settles is the review and only the review: AC closeout (§2.2) and the landing gates (§2.3, §3.3) are untouched by it, and nothing on this path is evidence about any other head.
 
 **The Judge.** The **Judge** — coined here as this actor's durable name (§2.7), and a different actor from §1.8's plan-contest judge, which rules candidate plans and never a panel's findings — is dispatched independently of the panel. It first performs **deduplication**, the one bundle-level operation: raw findings that are semantically one finding become one **effective finding**, with **every raw finding's provenance preserved**. Dedup merges and never discards — the surviving effective finding carries which slots reported it, so a later reader can tell one reviewer's finding from four reviewers' agreement without the merge having been a vote — and it is owed on the whole bundle, whatever the rulings that follow, with its performance attested in the return so the Resolver can read completeness without judging it. Honest residual, stated: nothing detects a Judge that attests a dedup it did not perform — what is retained instead is the surface a later reader checks it on, the preserved per-slot provenance above, alongside §3.7(d)'s requirement that the adjudication come from a real Judge run. It then rules **each effective finding** on four axes and no others. Its input is the bundle plus a **caller-derived criterion manifest** — the criterion set the AC-impact axis below reads, derived at dispatch from existing SSOT on §1.8's manifest pattern, never invented by the Judge and never assembled by the author, and crossing into the brief as §1.5's dispatch-facts form (i), derived at dispatch by a command. The manifest is what makes the AC-impact ruling reachable at all: a provisioned tree cannot reach the platform record where the criteria live (the dispatch clause below), so an axis whose input the caller does not supply is an axis the Judge cannot rule. **Absent and empty are distinct states here, as they are at the defer disposition below (§2.6).** An *absent* manifest — none supplied — is a missing input, and the review is incomplete on the availability rule below rather than adjudicated without it. An *empty* manifest is a manifest: a change with no closing issue, or one whose criteria are empty however they came to be empty, yields the empty set with an attestation of what was checked — never a withholding and never a block, §1.8's rule for its own manifest — on which the AC-impact axis rules every finding to sit on no criterion, and the adjudication completes.
 
