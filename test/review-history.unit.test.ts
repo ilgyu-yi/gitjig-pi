@@ -383,6 +383,121 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 			"the brief dropped OSCILLATION's discriminator clause — §1.4 rules on the corrections' EFFECT, not the labels",
 		);
 	});
+
+	// Round 5's S1: every arm above passes a ONE-state history, so the whole
+	// multi-state rendering is unmeasured — slice(-1), reverse(), a constant
+	// "1." ordinal, a filter to repair, and a duplicated first state all
+	// survived the suite 8-for-8. §1.4's diagnosis reads the same findings
+	// ACROSS states, oldest first: a brief free to carry one state, or to
+	// carry them reordered, makes STAGNATION and OSCILLATION unrulable, and
+	// the Judge's likely NONE routes to a further autonomous repair on a
+	// history that warranted a park — a silent wrong-allow.
+	const multi = (): StateSummary[] =>
+		(
+			[
+				["b", "repair", "oldest"],
+				["c", "clear", "middle"],
+				["d", "repair", "newest"],
+			] as const
+		).map(([fill, outcome, position]) =>
+			state({
+				head: fill.repeat(40),
+				outcome,
+				findings: [`zq ${position} finding`],
+				rulings: [
+					{
+						finding: `zq ${position} finding`,
+						validity: "CONFIRMED",
+						severity: "SUBSTANTIVE",
+						evidence: `zq ${position} evidence`,
+					},
+				],
+			}),
+		);
+
+	const headerLines = (text: string): string[] =>
+		text.split("\n").filter((line) => /^ {2}\d+\. head \S+ resolved /.test(line));
+
+	it("renders EVERY state, not only one — each state's own finding and ruling evidence appears", () => {
+		const history = multi();
+		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
+		for (const position of ["oldest", "middle", "newest"]) {
+			for (const needle of [`zq ${position} finding`, `zq ${position} evidence`]) {
+				assert.ok(
+					text.includes(needle),
+					`the brief dropped the ${position} state (missing: ${JSON.stringify(needle)}) — a renderer free to ` +
+						"keep only the last state, only the first, or only the repair states hands the Judge a history " +
+						"STAGNATION and OSCILLATION cannot be read from",
+				);
+			}
+		}
+	});
+
+	it("renders the states OLDEST FIRST — rendered position increases in history order", () => {
+		const text = mod().composeDiagnosisBrief(multi(), { changeDescription: "d" });
+		const at = (position: string) => text.indexOf(`zq ${position} finding`);
+		assert.ok(
+			at("oldest") < at("middle") && at("middle") < at("newest"),
+			"the brief did not render the states oldest first — OSCILLATION is the A→B→A reading of the ORDERED " +
+				"states, so a reversed or shuffled brief inverts the very sequence being ruled on",
+		);
+	});
+
+	it("numbers each state with ITS OWN ordinal, paired with ITS OWN head and outcome", () => {
+		const history = multi();
+		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
+		history.forEach((expected, index) => {
+			assert.ok(
+				text.includes(`${index + 1}. head ${expected.head} resolved ${expected.outcome}`),
+				`state ${index + 1} lost its own header — ordinal, head, and outcome must ride ONE line together, or a ` +
+					"constant ordinal (every state \"1.\") or a cross-paired header (one state's head, another's outcome) " +
+					"renders a history the Judge cannot index",
+			);
+		});
+	});
+
+	it("renders exactly one header line per state — no drop, no duplication", () => {
+		const history = multi();
+		assert.equal(
+			headerLines(mod().composeDiagnosisBrief(history, { changeDescription: "d" })).length,
+			history.length,
+			"the rendered header-line count is not the history length — a dropped state shortens the history the " +
+				"diagnosis rules on, and a duplicated one manufactures a recurrence that never happened",
+		);
+	});
+
+	it("a findings-free state renders ITS OWN (none) line rather than nothing", () => {
+		const history = [state({ head: "b".repeat(40), findings: [], rulings: [] }), ...multi().slice(1)];
+		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
+		assert.ok(
+			text.includes("findings: (none)"),
+			"a state with no findings rendered nothing at all — an absent line reads as an absent STATE, and §1.4 " +
+				"counts a findings-free review as a state that resets, not as a gap in the history",
+		);
+	});
+
+	it("a ruling's severity rides its line; a ruling carrying none renders without the suffix", () => {
+		const text = mod().composeDiagnosisBrief(
+			[
+				state({
+					rulings: [
+						{ finding: "zq graded", validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "zq graded evidence" },
+						{ finding: "zq ungraded", validity: "REFUTED", evidence: "zq ungraded evidence" },
+					],
+				}),
+			],
+			{ changeDescription: "d" },
+		);
+		assert.ok(
+			text.includes("CONFIRMED/SUBSTANTIVE"),
+			"the ruling line dropped the SEVERITY — §1.4 weighs a recurrence by what it was graded, so a validity " +
+				"token alone cannot carry the ruling",
+		);
+		assert.ok(
+			/REFUTED on zq ungraded/.test(text),
+			"a ruling carrying no severity did not render bare — the suffix is conditional, not a constant",
+		);
+	});
 });
 
 describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (issue #186)", () => {
