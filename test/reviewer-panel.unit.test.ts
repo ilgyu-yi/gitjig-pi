@@ -1140,26 +1140,65 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
-	it("a bare name equal to a directory prefix minus its slash does not route — for every such prefix the policy carries", () => {
+	it("a bare name equal to a directory prefix minus its slash never routes through its OWN row — for every such prefix the policy carries", () => {
 		const p = orchestrator();
 		// Derived from the committed policy's own rows rather than hardcoded,
-		// so a row added later is covered without this arm changing. The
-		// mutant this kills: underPrefix's trailing-slash branch also
+		// and asserted PER ROW rather than over a global unclaimed set: round
+		// 2 adjudicated the global shape as redding against correct code the
+		// moment a nested row (say `test/fixtures/`) makes some bare name a
+		// true segment child of ANOTHER row's prefix. The invariant property
+		// is only this: the trailing-slash prefix itself never claims its
+		// bare name — whether that name refuses as unclaimed or routes
+		// through some other row is the policy's business, not this arm's.
+		// The mutant this kills: underPrefix's trailing-slash branch also
 		// matching the bare name, under which a constituent no explicit row
 		// claims is treated as claimed and §1.7's routing failure never
 		// derives.
 		const policy = p.loadPolicy();
-		const bareNames = policy.rows.flatMap((row) =>
-			row.prefixes.filter((prefix) => prefix.endsWith("/")).map((prefix) => prefix.slice(0, -1)),
-		);
-		assert.ok(bareNames.length > 0, "the committed policy carries no directory prefix — this arm's subject is gone");
-		const refused = refusal(() => p.deriveRequiredSlots(paths(bareNames), policy));
+		let examined = 0;
+		for (const row of policy.rows) {
+			for (const prefix of row.prefixes.filter((candidate) => candidate.endsWith("/"))) {
+				examined += 1;
+				const bare = prefix.slice(0, -1);
+				let lenses: string[];
+				try {
+					lenses = p.deriveRequiredSlots(paths([bare]), policy).map((slot) => slot.lens);
+				} catch (error) {
+					const refused = error as Error & { limb?: unknown; unclaimed?: unknown };
+					assert.equal(
+						refused.limb,
+						"routing-failure",
+						`the bare name ${JSON.stringify(bare)} neither routed nor refused as a routing failure — the ` +
+							"derivation broke on an input this arm owns",
+					);
+					continue;
+				}
+				assert.ok(
+					!lenses.includes(row.lens),
+					`the bare name ${JSON.stringify(bare)} routed through its own trailing-slash row — a match rule ` +
+						"that claims the bare name broadens claiming past the explicit rows, and a routing failure §1.7 " +
+						"requires would convene a panel instead of refusing",
+				);
+			}
+		}
+		assert.ok(examined > 0, "the committed policy carries no directory prefix — this arm's subject is gone");
+	});
+
+	it("a refusal's named constituents are fixed at construction — mutating the caller's array changes nothing", () => {
+		const p = orchestrator();
+		// Round 2's F1: the class is exported, so a holder of the passed
+		// array could otherwise rewrite what a thrown refusal names — and
+		// the refusal's one remedy is a policy amendment aimed at exactly
+		// that set. The same copy-on-record discipline receive() pins.
+		const caller = ["zz-unowned.md"];
+		const thrown = new p.RoutingRefusal("routing-failure", caller);
+		caller.push("forged.md");
+		caller[0] = "rewritten.md";
 		assert.deepEqual(
-			refused.unclaimed,
-			bareNames,
-			"a bare directory name routed through the prefix that claims only its segment children — a match rule " +
-				"that also claims the bare name broadens claiming past the explicit rows, and a routing failure §1.7 " +
-				"requires would convene a panel instead of refusing",
+			[...thrown.unclaimed],
+			["zz-unowned.md"],
+			"a mutation of the caller's array after construction reached the refusal's named set — the policy " +
+				"amendment the refusal directs would aim at constituents nothing validated",
 		);
 	});
 

@@ -253,6 +253,7 @@ export class RoutingRefusal extends Error {
 				: "empty change surface: nothing to route, so no panel convenes and no APPROVED derives — this is " +
 						"not a routing failure and no policy amendment is owed (§1.7)",
 		);
+		this.name = "RoutingRefusal";
 		this.limb = limb;
 		this.unclaimed = [...unclaimed];
 	}
