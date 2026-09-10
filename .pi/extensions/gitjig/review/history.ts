@@ -46,7 +46,22 @@ import type { ReviewRecord } from "./record.ts";
 
 /** One review state's outcome, mapped from a record's ReviewState. */
 export type StateOutcome = "repair" | "measure-escalate" | "clear" | "approved" | "incomplete";
-export type StateSummary = { head: string; outcome: StateOutcome };
+
+/** One ruling as the diagnosis reads it — §1.4's "same findings the Judge already ruled". */
+export type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
+
+/**
+ * One review state: head and outcome (what the trigger reads) plus the
+ * findings and rulings the diagnosis reads (§1.4 — the diagnosis reads
+ * the same findings the Judge already ruled, undecidable from an
+ * outcome label alone).
+ */
+export type StateSummary = {
+	head: string;
+	outcome: StateOutcome;
+	findings: string[];
+	rulings: StateRuling[];
+};
 
 /** §1.4's four-value taxonomy and the invalidation finding. */
 export type DiagnosisValue = "NONE" | "STAGNATION" | "OSCILLATION" | "INDETERMINATE";
@@ -68,7 +83,7 @@ export type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "
  * `incomplete` are their own states.
  */
 export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] {
-	const byHead = new Map<string, StateOutcome>();
+	const byHead = new Map<string, StateSummary>();
 	const order: string[] = [];
 	for (const record of records) {
 		const outcome: StateOutcome =
@@ -77,12 +92,30 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 				: record.review.state === "approved"
 					? "approved"
 					: "incomplete";
+		const findings = record.bundle.map((entry) => entry.finding);
+		const rulings: StateRuling[] =
+			record.adjudication === null
+				? []
+				: record.adjudication.rulings.map((ruling) => {
+						const summary: StateRuling = {
+							finding: ruling.finding,
+							validity: ruling.validity,
+							evidence: ruling.evidence,
+						};
+						if (ruling.severity !== undefined) {
+							summary.severity = ruling.severity;
+						}
+						return summary;
+					});
 		if (!byHead.has(record.head)) {
 			order.push(record.head);
 		}
-		byHead.set(record.head, outcome);
+		// One head is one state, taken from its LAST record — position and
+		// outcome from the same record so the collapse stays coherent (a
+		// re-dispatched slot re-posts the head's settled record).
+		byHead.set(record.head, { head: record.head, outcome, findings, rulings });
 	}
-	return order.map((head) => ({ head, outcome: byHead.get(head) as StateOutcome }));
+	return order.map((head) => byHead.get(head) as StateSummary);
 }
 
 /**
@@ -116,7 +149,18 @@ export function composeDiagnosisBrief(
 	history: readonly StateSummary[],
 	context: { changeDescription: string },
 ): string {
-	const lines = history.map((state, index) => `  ${index + 1}. head ${state.head} resolved ${state.outcome}`);
+	const lines = history.flatMap((state, index) => {
+		const header = `  ${index + 1}. head ${state.head} resolved ${state.outcome}`;
+		const findings =
+			state.findings.length === 0
+				? ["       findings: (none)"]
+				: state.findings.map((finding) => `       finding: ${finding}`);
+		const rulings = state.rulings.map(
+			(ruling) =>
+				`       ruling: ${ruling.validity}${ruling.severity ? `/${ruling.severity}` : ""} on ${ruling.finding} — evidence: ${ruling.evidence}`,
+		);
+		return [header, ...findings, ...rulings];
+	});
 	return [
 		"You are the JUDGE performing §1.4's repair-history diagnosis — the Judge's second capacity, a semantic",
 		"reading of the same findings across review states. You rule and stop; the caller consumes your two",
@@ -124,7 +168,11 @@ export function composeDiagnosisBrief(
 		"",
 		`CHANGE UNDER REVIEW: ${context.changeDescription}`,
 		"",
-		"THE REPAIR HISTORY (each line one resolved review state at one head, oldest first):",
+		"THE REPAIR HISTORY (each state at one head, oldest first, with the findings and the rulings the Judge",
+		"already made — embedded verbatim and LABELLED UNVERIFIED, §1.5 form iii; re-verify against the artifact",
+		"rather than trusting the text). §1.4's diagnosis reads the SAME findings across states: STAGNATION is",
+		"the same problem met by a materially equivalent repair, and OSCILLATION is the corrections' effect on",
+		"the artifact — the labels the reviews wore are not the discriminator.",
 		...lines,
 		"",
 		"Return TWO things and no third:",

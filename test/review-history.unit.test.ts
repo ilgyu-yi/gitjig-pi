@@ -35,7 +35,13 @@ type DispatchOutcome =
 	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
 	| { disposition: "refused"; cause: string };
 
-type StateSummary = { head: string; outcome: "repair" | "measure-escalate" | "clear" | "approved" | "incomplete" };
+type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
+type StateSummary = {
+	head: string;
+	outcome: "repair" | "measure-escalate" | "clear" | "approved" | "incomplete";
+	findings: string[];
+	rulings: StateRuling[];
+};
 type DiagnosisValue = "NONE" | "STAGNATION" | "OSCILLATION" | "INDETERMINATE";
 type Invalidation = "nothing" | "plan" | "authorization";
 type DiagnosisInput = { value: DiagnosisValue; invalidation: Invalidation; evidence: string };
@@ -97,7 +103,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		const h = mod();
 		const out = h.repairHistory([repair("a".repeat(40)), clear("b".repeat(40)), approved("c".repeat(40))]);
 		assert.deepEqual(
-			out,
+			out.map((s) => ({ head: s.head, outcome: s.outcome })),
 			[
 				{ head: "a".repeat(40), outcome: "repair" },
 				{ head: "b".repeat(40), outcome: "clear" },
@@ -108,15 +114,65 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("the panel's slots at one head collapse into one state — a duplicated head is one state", () => {
+	it("each state carries the record's findings and rulings — the diagnosis reads the same findings (round 1's E1)", () => {
+		const h = mod();
+		const head = "a".repeat(40);
+		const record: ReviewRecord = {
+			head,
+			slots: [],
+			bundle: [{ finding: "zq the recurring finding", slot: { lens: "runtime", surface: "s" } }],
+			adjudication: {
+				dedupAttested: true,
+				rulings: [
+					{
+						finding: "zq the recurring finding",
+						provenance: [{ lens: "runtime", surface: "s" }],
+						validity: "CONFIRMED",
+						severity: "SUBSTANTIVE",
+						evidence: "zq the ruling's evidence",
+					},
+				],
+			},
+			review: { state: "resolved", resolution: { dispositions: [], outcome: "repair" } },
+		} as unknown as ReviewRecord;
+		const [state] = h.repairHistory([record]);
+		assert.deepEqual(
+			state.findings,
+			["zq the recurring finding"],
+			"the state dropped the record's bundle findings — §1.4's diagnosis reads the same findings the Judge " +
+				"already ruled, undecidable from an outcome label alone",
+		);
+		assert.deepEqual(
+			state.rulings,
+			[
+				{
+					finding: "zq the recurring finding",
+					validity: "CONFIRMED",
+					severity: "SUBSTANTIVE",
+					evidence: "zq the ruling's evidence",
+				},
+			],
+			"the state dropped the record's rulings and their evidence — STAGNATION and OSCILLATION are undecidable " +
+				"without them",
+		);
+	});
+
+	it("the panel's slots at one head collapse into one state — a duplicated head is one state, last record wins", () => {
 		const h = mod();
 		// Two records at one head (a re-dispatched slot re-posts the record):
 		// §1.7 says simultaneous results at one head are one decision, not N.
-		const out = h.repairHistory([repair("a".repeat(40)), repair("a".repeat(40)), clear("b".repeat(40))]);
+		const head = "a".repeat(40);
+		const out = h.repairHistory([repair(head), clear(head), clear("b".repeat(40))]);
 		assert.deepEqual(
 			out.map((s) => s.head),
-			["a".repeat(40), "b".repeat(40)],
+			[head, "b".repeat(40)],
 			"two records at one head produced two states — a head individuates one review state (§1.4/§1.7)",
+		);
+		assert.equal(
+			out[0].outcome,
+			"clear",
+			"the collapse did not take the LAST record's outcome — a re-posted head's settled record is the last, " +
+				"and position and outcome must come from the same record (round 1's E4)",
 		);
 	});
 
@@ -134,15 +190,18 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 describe("§1.4 the coarse deterministic trigger (issue #186)", () => {
 	const h = () => mod();
 	const heads = (n: number) => Array.from({ length: n }, (_, i) => String(i).padStart(40, "0"));
+	const sm = (head: string, outcome: StateSummary["outcome"]): StateSummary => ({
+		head,
+		outcome,
+		findings: [],
+		rulings: [],
+	});
 
 	it("fires at the SECOND consecutive repair, not the first", () => {
 		const [a, b] = heads(2);
-		assert.equal(h().triggerFires([{ head: a, outcome: "repair" }]), false, "the first repair fired the trigger");
+		assert.equal(h().triggerFires([sm(a, "repair")]), false, "the first repair fired the trigger");
 		assert.equal(
-			h().triggerFires([
-				{ head: a, outcome: "repair" },
-				{ head: b, outcome: "repair" },
-			]),
+			h().triggerFires([sm(a, "repair"), sm(b, "repair")]),
 			true,
 			"the second consecutive repair did not fire the trigger",
 		);
@@ -151,11 +210,7 @@ describe("§1.4 the coarse deterministic trigger (issue #186)", () => {
 	it("a non-repair state interposed RESETS the count", () => {
 		const [a, b, c] = heads(3);
 		assert.equal(
-			h().triggerFires([
-				{ head: a, outcome: "repair" },
-				{ head: b, outcome: "clear" },
-				{ head: c, outcome: "repair" },
-			]),
+			h().triggerFires([sm(a, "repair"), sm(b, "clear"), sm(c, "repair")]),
 			false,
 			"an interposed clear did not reset the consecutive-repair count — the trailing run is one repair",
 		);
@@ -164,17 +219,60 @@ describe("§1.4 the coarse deterministic trigger (issue #186)", () => {
 	it("the findings-free path never fires it — approved is not a repair state", () => {
 		const [a, b] = heads(2);
 		assert.equal(
-			h().triggerFires([
-				{ head: a, outcome: "approved" },
-				{ head: b, outcome: "approved" },
-			]),
+			h().triggerFires([sm(a, "approved"), sm(b, "approved")]),
 			false,
 			"a run of approved states fired the repair trigger",
 		);
 	});
 
+	it("three consecutive repairs still fire — the boundary is at-least-two, not exactly-two", () => {
+		const [a, b, c] = heads(3);
+		assert.equal(
+			h().triggerFires([sm(a, "repair"), sm(b, "repair"), sm(c, "repair")]),
+			true,
+			"a third consecutive repair did not fire — §1.4 fires at the second and each BEYOND it",
+		);
+	});
+
 	it("the empty history does not fire", () => {
 		assert.equal(h().triggerFires([]), false, "an empty history fired the trigger");
+	});
+});
+
+describe("§1.4 the diagnosis brief carries the findings and asks both outputs (issue #186; round 1's E1/E3)", () => {
+	const state = (over: Partial<StateSummary> = {}): StateSummary => ({
+		head: "a".repeat(40),
+		outcome: "repair",
+		findings: ["zq the recurring finding"],
+		rulings: [
+			{
+				finding: "zq the recurring finding",
+				validity: "CONFIRMED",
+				severity: "SUBSTANTIVE",
+				evidence: "zq the evidence",
+			},
+		],
+		...over,
+	});
+
+	it("embeds each state's findings and rulings verbatim, labelled unverified", () => {
+		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
+		for (const [needle, why] of [
+			["zq the recurring finding", "the state's finding text — the diagnosis reads the same findings the Judge ruled"],
+			["zq the evidence", "the ruling's evidence verbatim (F15's discipline carried into the history)"],
+			["CONFIRMED", "the ruling's validity"],
+			["UNVERIFIED", "the §1.5 form-iii label — a provisioned tree re-verifies, never trusts"],
+			["effect on", "OSCILLATION's discriminator is the artifact's effect, not the labels the reviews wore"],
+		] as const) {
+			assert.ok(text.includes(needle), `the diagnosis brief lost ${why} (missing: ${JSON.stringify(needle)})`);
+		}
+	});
+
+	it("asks for BOTH the taxonomy value and the invalidation finding, and says absence is not NONE", () => {
+		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
+		for (const needle of ["taxonomy VALUE", "INVALIDATION finding", "absence is not NONE"]) {
+			assert.ok(text.includes(needle), `the diagnosis brief no longer states ${JSON.stringify(needle)}`);
+		}
 	});
 });
 
@@ -193,6 +291,22 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		assert.ok(
 			!admission.available && admission.disposition === "hand-off",
 			"a refused diagnosis dispatch was not a hand-off — an unavailable Judge is not NONE (§1.4)",
+		);
+	});
+
+	it("an ok:false admitted return hands off — a delegate-disowned diagnosis is not a value (round 1's E3)", () => {
+		const h = mod();
+		const admission = h.admitDiagnosis({
+			disposition: "admitted",
+			ok: false,
+			summary: "x",
+			payload: JSON.stringify({ value: "NONE", invalidation: "nothing", evidence: "e" }),
+			compare: "confirmed",
+		});
+		assert.ok(
+			!admission.available && admission.disposition === "hand-off",
+			"an ok:false diagnosis with a well-formed payload was read as a value — §1.4's present-but-cannot-measure " +
+				"limb takes the delegate-disowned shape too, and it must hand off",
 		);
 	});
 
@@ -232,6 +346,38 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		const h = mod();
 		const admission = h.admitDiagnosis(admittedPayload({ value: "OSCILLATION", invalidation: "plan", evidence: "" }));
 		assert.ok(!admission.available, "a diagnosis with empty evidence was admitted");
+	});
+
+	it("an extra key in the payload hands off — the shape is closed (round 1's E4)", () => {
+		const h = mod();
+		const admission = h.admitDiagnosis({
+			disposition: "admitted",
+			ok: true,
+			summary: "x",
+			payload: JSON.stringify({ value: "NONE", invalidation: "nothing", evidence: "e", extra: true }),
+			compare: "confirmed",
+		});
+		assert.ok(
+			!admission.available && admission.disposition === "hand-off",
+			"an extra-keyed payload was admitted — the diagnosis shape is closed, and an unknown key is a surface no " +
+				"contract bounds",
+		);
+	});
+
+	it("a hand-off carries a non-empty reason — neither fail limb is silent (round 1's E4)", () => {
+		const h = mod();
+		const admission = h.admitDiagnosis({
+			disposition: "admitted",
+			ok: true,
+			summary: "x",
+			payload: "{}",
+			compare: "confirmed",
+		});
+		assert.ok(
+			!admission.available && admission.reason.length > 0,
+			"the malformed-return hand-off carried an empty reason — §1.4's 'neither limb is silent' reaches the " +
+				"closed limb too; the handoff's recipient must know why it received the change",
+		);
 	});
 });
 
