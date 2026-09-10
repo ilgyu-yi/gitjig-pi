@@ -1,7 +1,7 @@
 /**
  * The dispatch→slot join (issue #177, subsuming issue #173's checklist;
  * Directive #166) — the caller side of §1.6 mapped onto §4.9's dispatcher:
- * the widened `payload` channel's one reader, and the panel's one producer.
+ * the widened `payload` channel's reviewer-side reader, and the panel's one producer.
  * It enforces §1.6 and §1.7's invalidity causes at the seam; read those
  * sections for what a result owes, and expect comments here to point at a
  * clause rather than restate it (§2.8).

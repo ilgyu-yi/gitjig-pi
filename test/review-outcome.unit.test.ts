@@ -217,10 +217,10 @@ function bundleOutcome(): PanelOutcome {
 }
 
 // ---------------------------------------------------------------------------
-// The join: DispatchOutcome → SlotResult (§1.6, §1.7; issue #173 EF-17/EF-18).
+// The join: DispatchOutcome → SlotResult (§1.6, §1.7; issue #173).
 // ---------------------------------------------------------------------------
 
-describe("§1.6/§1.7 the dispatch→slot join — the widened channel's one reader (issues #177, #173)", () => {
+describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewer-side reader (issues #177, #173)", () => {
 	it("the three compare states map distinctly, and only `confirmed` is valid — the absent case has a home", () => {
 		const j = joins();
 		const p = panel();
@@ -235,7 +235,7 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's one rea
 				mapped,
 				`a DispatchOutcome compare of ${String(wire)} did not map to ${mapped} — §1.6 rules a mismatched, ` +
 					"ABSENT, or unconfirmable head invalid, and a mapping that collapses absent into invalid (or " +
-					"either into confirmed) loses the state §1.6 names, which is EF-18's measured gap",
+					"either into confirmed) loses the state §1.6 names",
 			);
 			const verdict = p.decideValidity(result, SLOT);
 			assert.equal(
@@ -279,6 +279,7 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's one rea
 			["a missing payload on an admitted return", undefined],
 			["non-JSON bytes", "zq not json"],
 			["a JSON scalar", JSON.stringify(7)],
+			["a JSON null", "null"],
 			["an unknown key", JSON.stringify({ token: "APPROVED", findings: [], zqExtra: 1 })],
 			["a token outside the two-token set", JSON.stringify({ token: "MAYBE", findings: [] })],
 			["findings that are not an array", JSON.stringify({ token: "FINDINGS", findings: "zq" })],
@@ -360,7 +361,7 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's one rea
 		assert.deepEqual(novel.returned, { failure: "malformed" }, "an unenumerated refusal cause escaped the mapping");
 	});
 
-	it("the success path is measured through runDispatch: a stub delegate's payload joins to a valid SlotResult (EF-17)", async () => {
+	it("the success path is measured through runDispatch: a stub delegate's payload joins to a valid SlotResult (#173)", async () => {
 		const j = joins();
 		const p = panel();
 		// The reviewer result crosses as committed tree content (the dispatch
@@ -427,8 +428,9 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 				"and an absent manifest is the missing input the review is incomplete on, never adjudicated without",
 		);
 		assert.ok(
-			!admission.complete && admission.gaps.some((gap) => /manifest/.test(gap)),
-			"the absent-manifest gap is not named in the admission's own gaps",
+			!admission.complete && admission.gaps.some((gap) => /^the criterion manifest is absent/.test(gap)),
+			"the absent-manifest gap is not named in the admission's own gaps — the matcher anchors the authored " +
+				"sentence, because a single loose word is satisfied by an omnibus message naming no axis at all",
 		);
 	});
 
@@ -437,8 +439,8 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 		const admission = r.admitAdjudication({ dedupAttested: false, rulings: [ruling()] }, MANIFEST);
 		assert.equal(admission.complete, false, "an adjudication without attested dedup was admitted (§1.9)");
 		assert.ok(
-			!admission.complete && admission.gaps.some((gap) => /dedup/.test(gap)),
-			"the unattested-dedup gap is not named",
+			!admission.complete && admission.gaps.some((gap) => /^dedup is not attested/.test(gap)),
+			"the unattested-dedup gap is not named in its authored words",
 		);
 	});
 
@@ -450,6 +452,10 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 			false,
 			"an effective finding carrying no raw provenance was admitted — provenance is what lets a later reader " +
 				"tell one reviewer's finding from four reviewers' agreement without the merge having been a vote",
+		);
+		assert.ok(
+			!admission.complete && admission.gaps.some((gap) => /^ruling 0: provenance is empty/.test(gap)),
+			"the empty-provenance gap is not named in its authored words",
 		);
 	});
 
@@ -463,7 +469,11 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 				"a bare NIT token with no remedy was admitted — §1.9 makes the remedy part of the ruling, not a note " +
 					"beside it, and a NIT without one leaves the axis unruled",
 			);
-			assert.ok(!admission.complete && admission.gaps.some((gap) => /remedy/.test(gap)), "the NIT gap is not named");
+			assert.ok(
+				!admission.complete &&
+					admission.gaps.some((gap) => /^ruling 0: a NIT ruling carries no exact mechanical remedy/.test(gap)),
+				"the NIT gap is not named in its authored words",
+			);
 		}
 	});
 
@@ -480,16 +490,16 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 				"missing ruling, not a value, and it is never filled in by whoever reads the record next",
 		);
 		assert.ok(
-			!admission.complete && admission.gaps.some((gap) => /direction/.test(gap)),
-			"the unruled-direction gap is not named",
+			!admission.complete && admission.gaps.some((gap) => /^ruling 0: harm direction is unruled/.test(gap)),
+			"the unruled-direction gap is not named in its authored words",
 		);
 	});
 
 	it("a CONFIRMED finding missing severity or AC impact is incomplete — all four axes are owed", () => {
 		const r = resolves();
 		for (const [axis, bad, pattern] of [
-			["severity", ruling({ severity: undefined }), /severity/],
-			["AC impact", ruling({ onCriterion: undefined }), /AC impact|criterion/],
+			["severity", ruling({ severity: undefined }), /^ruling 0: severity is unruled/],
+			["AC impact", ruling({ onCriterion: undefined }), /^ruling 0: AC impact is unruled/],
 		] as [string, Ruling, RegExp][]) {
 			const admission = r.admitAdjudication({ dedupAttested: true, rulings: [bad] }, MANIFEST);
 			assert.equal(admission.complete, false, `a confirmed finding with ${axis} unruled was admitted`);
@@ -519,11 +529,37 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 
 	it("the Judge payload parse admits only the closed shape — anything else is no adjudication", () => {
 		const r = resolves();
-		const good = JSON.stringify({ dedupAttested: true, rulings: [ruling()] });
-		assert.ok(r.adjudicationFromPayload(good), "a well-formed Judge payload did not parse");
+		// deepEqual against the authored input, never a truthy check: a parse
+		// that EMPTIES the ruling set or FORGES the dedup attestation is
+		// truthy, and the attestation is §1.9's one readable completeness
+		// fact — the fixture carries `false` so a forging parse cannot hide
+		// behind the common case.
+		const authored = { dedupAttested: false, rulings: [ruling()] };
+		assert.deepEqual(
+			r.adjudicationFromPayload(JSON.stringify(authored)),
+			authored,
+			"the parse did not return the authored input intact — a parse that rewrites the rulings or the dedup " +
+				"attestation forges the facts §1.9 makes the Resolver read",
+		);
 		for (const [shape, payload] of [
 			["a missing payload", undefined],
 			["non-JSON bytes", "zq not json"],
+			["a JSON null", "null"],
+			["a non-boolean dedupAttested", JSON.stringify({ dedupAttested: "no", rulings: [] })],
+			["a non-set severity", JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), severity: "MEDIUM" }] })],
+			["a non-string remedy", JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), remedy: 7 }] })],
+			[
+				"a non-boolean onCriterion",
+				JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), onCriterion: "yes" }] }),
+			],
+			[
+				"a non-object provenance element",
+				JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), provenance: [7] }] }),
+			],
+			[
+				"a provenance element with a non-string lens",
+				JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), provenance: [{ lens: 1, surface: "s" }] }] }),
+			],
 			["an unknown top-level key", JSON.stringify({ dedupAttested: true, rulings: [], zqExtra: 1 })],
 			["an unknown ruling key", JSON.stringify({ dedupAttested: true, rulings: [{ ...ruling(), zqExtra: 1 }] })],
 			[
@@ -546,6 +582,58 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 					"reason admit.ts's schema is: a minimum-match admits a surface no contract bounds",
 			);
 		}
+	});
+
+	it("the wire path carries the attestation end to end — an unattested payload parses and is refused at admission", () => {
+		const r = resolves();
+		// The direct-call arms above feed admitAdjudication literals; this one
+		// walks payload → parse → admission, so a parse that forges the
+		// attestation cannot pass while the direct arms stay green.
+		const parsed = r.adjudicationFromPayload(JSON.stringify({ dedupAttested: false, rulings: [ruling()] }));
+		assert.ok(parsed, "the well-formed unattested payload did not parse");
+		const admission = r.admitAdjudication(parsed as AdjudicationInput, MANIFEST);
+		assert.equal(
+			admission.complete,
+			false,
+			"an unattested dedup crossed the wire into a complete admission — the attestation is a recorded fact " +
+				"the Resolver reads, and the wire must carry it faithfully end to end",
+		);
+		assert.ok(
+			!admission.complete && admission.gaps.some((gap) => /^dedup is not attested/.test(gap)),
+			"the wire-carried unattested dedup is not named in its authored words",
+		);
+	});
+
+	it("the admitted adjudication is detached — post-admission mutation of the caller's input reaches nothing", () => {
+		const r = resolves();
+		const input = { dedupAttested: true, rulings: [ruling({ direction: "fail-closed", onCriterion: false })] };
+		const admission = r.admitAdjudication(input, MANIFEST);
+		assert.ok(admission.complete, "fixture admission unexpectedly incomplete");
+		const before = r.resolve(admission.adjudication);
+		// The exploit class the panel's constructors are cured of: rewrite
+		// the ruling the caller still holds, empty its provenance, and push a
+		// forged ruling — none of it may reach the branded snapshot.
+		const held = input.rulings[0] as Ruling;
+		held.validity = "REFUTED";
+		held.provenance.length = 0;
+		input.rulings.push(ruling({ finding: "zq forged after admission" }));
+		assert.deepEqual(
+			r.resolve(admission.adjudication),
+			before,
+			"a post-admission mutation of the caller's rulings array, a ruling object, or a provenance array reached " +
+				"the branded adjudication — the brand certifies a snapshot the completeness test never ruled on",
+		);
+		assert.equal(before.dispositions.length, 1, "the forged ruling entered the disposition set");
+		// The Resolver never reads provenance, so the resolve() comparison
+		// above cannot see a provenance-only alias — assert the snapshot
+		// directly: it is §1.9's load-bearing record of which slots reported
+		// the finding, and an aliased array is one the caller just emptied.
+		assert.deepEqual(
+			(admission.adjudication as unknown as { rulings: Ruling[] }).rulings[0]?.provenance,
+			[SLOT],
+			"emptying the caller's provenance array reached the branded adjudication — the provenance the Judge " +
+				"attested dedup on is rewritable after admission",
+		);
 	});
 
 	it("a Judge return is admitted only off a confirmed compare — the Judge rides §1.6 like any reviewer", () => {
@@ -730,6 +818,43 @@ describe("§1.9 the Resolver — five dispositions, fixed precedence, no semanti
 		);
 	});
 
+	it("validity precedes severity — a non-CONFIRMED ruling carrying NIT axes still leaves nothing behind", () => {
+		const r = resolves();
+		// ADMISSIBLE input, not a contrivance: §1.9 owes validity alone on a
+		// REFUTED or INDETERMINATE ruling and forbids no extra axis, so a
+		// ruling carrying NIT + remedy beside a non-CONFIRMED validity passes
+		// admission — and a disposition that reads severity first hands the
+		// author work off a false positive ("REFUTED … leaves nothing
+		// behind" inverted).
+		const resolution = r.resolve(
+			completeAdjudication([
+				ruling({
+					finding: "zq refuted with nit axes",
+					validity: "REFUTED",
+					severity: "NIT",
+					remedy: "zq remedy",
+					direction: undefined,
+					onCriterion: undefined,
+				}),
+				ruling({
+					finding: "zq undecided with nit axes",
+					validity: "INDETERMINATE",
+					severity: "NIT",
+					remedy: "zq remedy",
+					direction: undefined,
+					onCriterion: undefined,
+				}),
+			]),
+		);
+		assert.deepEqual(
+			resolution.dispositions.map((entry) => entry.disposition),
+			["none", "measure-escalate"],
+			"a non-CONFIRMED ruling carrying NIT axes was disposed by its severity — §1.9's dispositions key on " +
+				"validity FIRST, and a hoisted severity branch applies a remedy nothing confirmed",
+		);
+		assert.equal(resolution.outcome, "measure-escalate", "the outcome followed the hoisted branch");
+	});
+
 	it("the Resolver is deterministic and order-independent for a fixed adjudicated input", () => {
 		const r = resolves();
 		const set = [
@@ -846,6 +971,25 @@ describe("§1.9 the composed review outcome — Judge availability is review com
 			"panel",
 			"the incompleteness is not attributed to the panel",
 		);
+		assert.deepEqual(
+			state.state === "incomplete" ? state.missing : [],
+			[SLOT],
+			"the incomplete state does not carry the missing slots — `missing` is the caller's re-dispatch brief, " +
+				"and a state without it stops a review no caller can restart",
+		);
+		// The brief must be DETACHED from the caller's panel outcome: an
+		// aliased entry is a required slot a later mutation can drop or
+		// redirect, after the state was computed.
+		if (incomplete.outcome === "incomplete") {
+			(incomplete.missing[0] as Slot).lens = "zq rewritten";
+			incomplete.missing.push({ lens: "zq forged", surface: "zq" });
+		}
+		assert.deepEqual(
+			state.state === "incomplete" ? state.missing : [],
+			[SLOT],
+			"a post-hoc mutation of the caller's panel outcome rewrote the re-dispatch brief — the missing list " +
+				"must be fixed when the state is computed, not aliased to whatever the caller's object says later",
+		);
 	});
 
 	it("a non-empty bundle with no adjudication is an incomplete review — never the raw-findings path", () => {
@@ -874,8 +1018,42 @@ describe("§1.9 the composed review outcome — Judge availability is review com
 				"around a gap, so ONE unruled axis on ONE finding holds the whole review",
 		);
 		assert.ok(
-			state.state === "incomplete" && (state.gaps?.length ?? 0) > 0,
-			"the incomplete state does not carry the named gaps the caller re-dispatches the Judge on",
+			state.state === "incomplete" && state.gaps?.some((gap) => /^ruling 1: harm direction is unruled/.test(gap)),
+			"the incomplete state does not carry the named gap the caller re-dispatches the Judge on — anchored to " +
+				"the authored axis-and-index sentence, since a bare length check accepts a wrong-axis message",
+		);
+		// The gaps are DETACHED from the admission: a later rewrite of the
+		// admission's array must not reach the state the caller already holds.
+		if (!admission.complete) {
+			admission.gaps.length = 0;
+			admission.gaps.push("zq rewritten after the state was computed");
+		}
+		assert.ok(
+			state.state === "incomplete" && state.gaps?.some((gap) => /^ruling 1: harm direction is unruled/.test(gap)),
+			"a post-hoc rewrite of the admission's gaps reached the state — the re-dispatch brief must be fixed " +
+				"when the state is computed",
+		);
+	});
+
+	it("an adjudication that rules NOTHING over a non-empty bundle is incomplete — the emptiest invalid return", () => {
+		const r = resolves();
+		// Entailed arithmetic at the seam: dedup merges and never discards
+		// (§1.9) and a bundle that dropped a finding is defective (§1.7), so
+		// N ≥ 1 raw findings yield ≥ 1 effective finding as a theorem — a
+		// complete-looking admission with zero rulings adjudicated nothing.
+		const admission = r.admitAdjudication({ dedupAttested: true, rulings: [] }, MANIFEST);
+		assert.ok(admission.complete, "an empty ruling set should pass admission — the seam owns this check");
+		const state = r.reviewOutcome(bundleOutcome(), admission);
+		assert.equal(
+			state.state,
+			"incomplete",
+			"a Judge return with zero rulings over a non-empty bundle resolved — two real findings adjudicated by " +
+				"nothing let the change proceed, at the layer §1.9 says fails closed on its own evidence",
+		);
+		assert.ok(
+			state.state === "incomplete" &&
+				state.gaps?.some((gap) => /^the adjudication rules no effective finding/.test(gap)),
+			"the empty-adjudication refusal is not named in its authored words",
 		);
 	});
 

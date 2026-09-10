@@ -206,6 +206,13 @@ export function adjudicationFromDispatch(outcome: DispatchOutcome): Adjudication
  * Where it fails, the named gaps are the caller's re-dispatch brief; where
  * it passes, the returned value is DETACHED from the caller's input (the
  * aliasing discipline the panel's own constructors carry) and branded.
+ *
+ * Token MEMBERSHIP is deliberately not ruled here: structure is the
+ * parse's surface and completeness — ruled versus unruled — is this
+ * one's (the header's §3.11 decision), so an out-of-set token can reach
+ * this function only by casting past the exported types, which is
+ * outside the typed contract — the brand's documented bound, stated so
+ * the absence reads as a decision rather than an omission (§3.11).
  */
 export function admitAdjudication(input: AdjudicationInput, manifest: Manifest): AdmitResult {
 	const gaps: string[] = [];
@@ -220,9 +227,6 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 	input.rulings.forEach((ruling, index) => {
 		if (ruling.provenance.length === 0) {
 			gaps.push(`ruling ${index}: provenance is empty — dedup merges and never discards (§1.9)`);
-		}
-		if (!VALIDITIES.has(ruling.validity)) {
-			gaps.push(`ruling ${index}: validity is outside the three-token set`);
 		}
 		if (ruling.validity !== "CONFIRMED") {
 			// REFUTED and INDETERMINATE owe validity alone (§1.9).
@@ -303,7 +307,16 @@ export function resolve(adjudication: Adjudication): Resolution {
  */
 export function reviewOutcome(panel: PanelOutcome, admission: AdmitResult | undefined): ReviewState {
 	if (panel.outcome === "incomplete") {
-		return { state: "incomplete", cause: "panel", missing: panel.missing };
+		// A COPY, the array and its slot objects both: `missing` is the
+		// caller's re-dispatch brief, and an aliased entry is a required slot
+		// a later mutation of the caller's panel outcome can drop or redirect
+		// — the post-hoc-mutation class the panel's own constructors are
+		// cured of, applied at this module's one outward-facing slot list.
+		return {
+			state: "incomplete",
+			cause: "panel",
+			missing: panel.missing.map((slot) => ({ lens: slot.lens, surface: slot.surface })),
+		};
 	}
 	if (panel.outcome === "approved") {
 		return { state: "approved" };
@@ -313,6 +326,25 @@ export function reviewOutcome(panel: PanelOutcome, admission: AdmitResult | unde
 	}
 	if (!admission.complete) {
 		return { state: "incomplete", cause: "adjudication-incomplete", gaps: [...admission.gaps] };
+	}
+	if (admission.adjudication.rulings.length === 0) {
+		// Entailed arithmetic, never adjudication: dedup merges and never
+		// discards (§1.9) and a bundle that dropped a finding is defective
+		// (§1.7), so a non-empty bundle — which the bundle outcome is by
+		// construction — yields at least one effective finding as a theorem.
+		// A Judge return that rules NOTHING over real findings is the
+		// emptiest shape of §1.9's returned-invalid limb, refused at the one
+		// seam where both operands are in hand; this branch reads two lengths
+		// and no finding's text. The alternative — widening admitAdjudication
+		// to take the bundle so completeness stays one test — is recorded and
+		// not taken: the admission deliberately never sees the bundle.
+		return {
+			state: "incomplete",
+			cause: "adjudication-incomplete",
+			gaps: [
+				"the adjudication rules no effective finding over a non-empty bundle — dedup merges and never discards (§1.9)",
+			],
+		};
 	}
 	return { state: "resolved", resolution: resolve(admission.adjudication) };
 }
