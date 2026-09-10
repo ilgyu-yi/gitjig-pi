@@ -1,0 +1,25 @@
+{
+	"$comment": "The reviewer-lens policy surface this repository commits (SPEC §1.7; issue #169, Directive #166). What the section requires of this file, and why, is stated there and is not restated here (§2.8). Local facts a reader needs and the SPEC does not carry: rows are matched against the change's own changed-path set by path prefix, segment-aware, so a name that merely begins with a prefix does not route; a row's prefixes and its lens are validated non-empty and its lens unique at load, by .pi/extensions/gitjig/review/panel.ts's validatePolicy. The CONTENT below is deliberately a minimal working set rather than a curated taxonomy — issue #169 scopes the surface, not its rows.",
+	"rows": [
+		{
+			"lens": "spec-contract",
+			"surface": "the behavioural SSOT and the direction document",
+			"prefixes": ["SPEC.md", "MISSION.md"]
+		},
+		{
+			"lens": "runtime",
+			"surface": "the shell's runtime extensions",
+			"prefixes": [".pi/"]
+		},
+		{
+			"lens": "enforcement",
+			"surface": "the local and platform enforcement tiers",
+			"prefixes": [".githooks/", ".github/"]
+		},
+		{
+			"lens": "suite",
+			"surface": "the test suite",
+			"prefixes": ["test/"]
+		}
+	]
+}

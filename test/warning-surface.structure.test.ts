@@ -152,6 +152,53 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	},
 	{ file: "gitjig/locate.ts", allow: [] },
 	{
+		file: "gitjig/review/panel.ts",
+		allow: [
+			// The two git revision operands, composed into ONE argv element of
+			// an execFileSync call: `git diff --name-only -z <base>...<head>`.
+			//
+			// The ground is NOT that they never reach a message — an earlier
+			// revision of this entry claimed that and it was false, measured
+			// twice: execFileSync synthesizes an Error whose `message` begins
+			// "Command failed: git diff --name-only -z <base>...<head>", and
+			// its default stdio leaves the child's stderr inherited, so git's
+			// own diagnostic echoes the operand onto the PARENT's stderr.
+			//
+			// The ground that does hold is provenance. Issue #47's lock exists
+			// for text an ACTOR influences — a path component an outside party
+			// names. These two are refs the caller resolves for the change it
+			// is reviewing; they are never read from a delegate's return, from
+			// a policy file, or from any surface a reviewed party writes. What
+			// reaches the throw path is the caller's own operand, and a caller
+			// that cannot trust its own refs has lost the compare before this.
+			// If a later change ever routes an outside-supplied ref here, this
+			// entry stops holding and the interpolation goes through `quoted`.
+			"baseRef",
+			"headRef",
+			// A policy prefix, composed into a comparison operand for the
+			// segment-aware match (`path.startsWith(`${prefix}/`)`). It does
+			// carry a path, and that is why it is allowlisted on the second
+			// ground the lock offers rather than the first: the composed value
+			// is compared and discarded, never warned, thrown, or printed.
+			// Verified by reading `underPrefix`, whose only use of the
+			// composed string is the comparison itself.
+			"prefix",
+			// NOT allowlisted, and named here so the absence is legible: the
+			// lens name reaches three validation throws and goes through
+			// `quoted` at each, the tree's single escaper. An earlier revision
+			// of this module minted its own one-line escaper instead; the lock
+			// refused it, correctly — a second escaper is the divergence
+			// engine §3.11 names.
+		],
+	},
+	// The committed lens-policy surface is DATA, not a module, and it is
+	// the first data file this walk has returned. It is rostered rather
+	// than exempted because a data file cannot carry a leading block
+	// comment for the exemption marker to live in, and because rostering
+	// is the stronger state: the escaping lock scans it and finds nothing,
+	// which stays true only while it holds no interpolation at all.
+	{ file: "gitjig/review/lens-policy.json", allow: [] },
+	{
 		file: "gitjig/state-root.ts",
 		allow: [
 			// The seam's NAME is a constant of this module, not a value an

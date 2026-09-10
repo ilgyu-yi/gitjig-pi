@@ -177,7 +177,9 @@ interface ExecutorModule {
 interface AdmitModule {
 	admitReturn(
 		returnPath: string,
-	): { admitted: true; ok: boolean; summary: string; reviewedHead?: string } | { admitted: false; cause: string };
+	):
+		| { admitted: true; ok: boolean; summary: string; reviewedHead?: string; payload?: string }
+		| { admitted: false; cause: string };
 	REFUSAL_CAUSES: { delegateAbsent: string; missingReturn: string; malformedReturn: string };
 }
 
@@ -371,6 +373,12 @@ const PAYLOADS: Record<string, string> = {
 	"payload-junk.json": `${JUNK_MARKER} not json at all\n`,
 	"payload-partial.json": `{"ok":true,"summary":"${PARTIAL_MARKER}`,
 	"payload-unknown.json": `{"ok":true,"summary":"zq","zqExtraKey":"${UNKNOWN_MARKER}"}`,
+	// The opaque caller-interpreted slot (issue #169). The dispatcher fixes
+	// its TYPE and its bound and scans its bytes; it never reads its meaning,
+	// which is what keeps review policy above the dispatcher rather than in
+	// it (Directive #166's non-goal).
+	"payload-carrier.json": `{"ok":true,"summary":"${CLEAN_SUMMARY}","payload":"{\\"opaque\\":\\"zqcarried\\"}"}`,
+	"payload-carrier-nonstring.json": `{"ok":true,"summary":"zq","payload":{"zq":1}}`,
 	"payload-oversize.json": `{"ok":true,"summary":"${OVERSIZE_MARKER}${"z".repeat(RETURN_LIMIT)}"}`,
 	"payload-misreported-head.json": `{"ok":true,"summary":"zqcompare misreported summary","reviewedHead":"${MISREPORTED_HEAD}"}`,
 	"payload-unrelated-hex.json": `{"ok":true,"summary":"zq run alongside deadbee7 stays inert"}`,
@@ -1094,6 +1102,92 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 				[headOf(repo).slice(0, 7), "the held hash's prefix"],
 			],
 			"unknown-key",
+		);
+	});
+
+	it("an opaque payload string is admitted — the schema is widened by one caller-interpreted slot", async () => {
+		const admit = await requireModule<AdmitModule>("admit.ts", "payload-carrier");
+		const dir = mintDir("gitjig-dispatch-slot-");
+		const slot = join(dir, "return.json");
+		writeFileSync(slot, PAYLOADS["payload-carrier.json"] as string);
+		const verdict = admit.admitReturn(slot);
+		assert.ok(
+			verdict.admitted,
+			"payload-carrier: a return carrying the opaque `payload` slot was refused — issue #169 widens the closed " +
+				"schema by exactly one caller-interpreted string so a panel result can cross without the dispatcher " +
+				"learning any review vocabulary (SPEC §4.9's bounded return; Directive #166's non-goal that review " +
+				"policy lives above the dispatcher, never in it)",
+		);
+		assert.equal(
+			(verdict as { payload?: string }).payload,
+			'{"opaque":"zqcarried"}',
+			"payload-carrier: the payload did not cross intact — the dispatcher fixes its type and scans its " +
+				"bytes, and parses nothing of its meaning",
+		);
+	});
+
+	it("a non-string payload refuses malformedReturn — the slot's TYPE is the dispatcher's business", async () => {
+		const admit = await requireModule<AdmitModule>("admit.ts", "payload-nonstring");
+		const dir = mintDir("gitjig-dispatch-slot-");
+		const slot = join(dir, "return.json");
+		writeFileSync(slot, PAYLOADS["payload-carrier-nonstring.json"] as string);
+		const verdict = admit.admitReturn(slot);
+		assert.ok(!verdict.admitted, "payload-nonstring: an object at the payload slot was admitted");
+		assert.equal(
+			(verdict as { cause: string }).cause,
+			admit.REFUSAL_CAUSES.malformedReturn,
+			"payload-nonstring: a non-string payload did not refuse whole — widening the schema by one slot widens it " +
+				"by one STRING slot, and an unbounded shape at that key is a surface no contract bounds",
+		);
+	});
+
+	it("a clean payload crosses runDispatch onto the outcome — the widening has a success path", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "payload-crosses");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-carrier.json")],
+			timeoutMs: 30_000,
+		});
+		assert.equal(
+			outcome.disposition,
+			"admitted",
+			"payload-crosses: a return carrying a clean opaque payload was refused — a dispatcher that refuses every " +
+				"payload passes every arm that only asserts the refusal direction, and the slot exists to carry a " +
+				"value ACROSS, not to be rejected",
+		);
+		assert.equal(
+			(outcome as { payload?: string }).payload,
+			'{"opaque":"zqcarried"}',
+			"payload-crosses: the payload did not reach the caller on the dispatch outcome — admitting it and then " +
+				"dropping it at the dispatcher's own boundary is indistinguishable from never widening the schema",
+		);
+	});
+
+	it("the outgoing-operand scan reaches the payload — a widened slot is not a scan bypass", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "payload-operand");
+		const repo = mintRepo(PAYLOADS);
+		const held = headOf(repo);
+		const dir = mintDir("gitjig-dispatch-payload-");
+		const returnDoc = join(dir, "payload-operand.json");
+		writeFileSync(returnDoc, `{"ok":true,"summary":"zq clean","payload":"${held}"}`);
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", `cat ${JSON.stringify(returnDoc)} > "$(dirname "$PWD")/return.json"`],
+			timeoutMs: 30_000,
+		});
+		assert.equal(
+			outcome.disposition,
+			"refused",
+			"payload-operand: a caller-held operand rode out in the payload and was admitted — §4.9's content-free " +
+				"return channel binds every byte that crosses, and a slot the scan does not reach is a hole the " +
+				"widening opened",
 		);
 	});
 
