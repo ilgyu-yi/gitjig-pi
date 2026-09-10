@@ -448,7 +448,11 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 		// forbids the catch-all but names no discharging act forecloses
 		// nothing.
 		assert.ok(
-			refused.message.includes("reviewed amendment to the committed lens policy"),
+			// Round 5: the pin carries the affirmative framing and the
+			// exclusivity, not a bare polarity-blind fragment — a reworded
+			// "never a reviewed amendment" or "one remedy among others" must
+			// red here.
+			refused.message.includes("the one remedy is a reviewed amendment to the committed lens policy"),
 			"the refusal's text no longer states the one discharging act — §1.7 makes a reviewed policy amendment " +
 				"the ONE remedy, and a refusal that names no remedy forecloses none of the routes the clause closes",
 		);
