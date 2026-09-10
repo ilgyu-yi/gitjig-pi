@@ -50,7 +50,10 @@ type HistoryModule = {
 	composeDiagnosisBrief(history: StateSummary[], context: { changeDescription: string }): string;
 	admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission;
 	diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence;
-	historyAvailability(storeInstalled: boolean, records: ReviewRecord[] | undefined):
+	historyAvailability(
+		storeInstalled: boolean,
+		records: ReviewRecord[] | undefined,
+	):
 		| { available: true; records: ReviewRecord[] }
 		| { available: false; disposition: "hand-off" | "fail-open"; reason: string };
 };
@@ -211,7 +214,13 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 	it("a malformed or out-of-set payload hands off, never defaults to a value", () => {
 		const h = mod();
 		for (const payload of ['{"value":"MAYBE","invalidation":"nothing","evidence":"e"}', "not json", "{}"]) {
-			const admission = h.admitDiagnosis({ disposition: "admitted", ok: true, summary: "x", payload, compare: "confirmed" });
+			const admission = h.admitDiagnosis({
+				disposition: "admitted",
+				ok: true,
+				summary: "x",
+				payload,
+				compare: "confirmed",
+			});
 			assert.ok(
 				!admission.available && admission.disposition === "hand-off",
 				`a malformed diagnosis payload (${payload.slice(0, 12)}…) was admitted — the four values are closed`,
@@ -221,9 +230,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 
 	it("an empty evidence string is not admissible — every ruling carries its evidence (F15's discipline)", () => {
 		const h = mod();
-		const admission = h.admitDiagnosis(
-			admittedPayload({ value: "OSCILLATION", invalidation: "plan", evidence: "" }),
-		);
+		const admission = h.admitDiagnosis(admittedPayload({ value: "OSCILLATION", invalidation: "plan", evidence: "" }));
 		assert.ok(!admission.available, "a diagnosis with empty evidence was admitted");
 	});
 });
@@ -238,7 +245,10 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 		);
 		for (const value of ["STAGNATION", "OSCILLATION", "INDETERMINATE"] as const) {
 			const c = h.diagnosisConsequence(value, "nothing");
-			assert.ok(!c.proceed && c.park, `${value} did not hand off to a park — only NONE admits a further attempt (§1.4)`);
+			assert.ok(
+				!c.proceed && c.park,
+				`${value} did not hand off to a park — only NONE admits a further attempt (§1.4)`,
+			);
 		}
 	});
 

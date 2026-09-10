@@ -1,0 +1,259 @@
+/**
+ * §1.4's cross-review-repair history instruments (issue #186,
+ * Directive #183) — the repair-history record, the coarse
+ * deterministic trigger, the diagnosis dispatch's admission, and the
+ * deterministic consumer. Read §1.4 for what each owes; the comments
+ * here name the local decision, not a second copy of the clause
+ * (§2.8).
+ *
+ * §1.4's clause sleeps on its own subject's absence (§5.3) until these
+ * derive; this module is that derivation. The history's unit is
+ * Execution (a)'s durable review record (record.ts): one resolved
+ * review at one head is one review state, and the panel's slots at one
+ * head collapse into one state (§1.7).
+ *
+ * DECISION — the history is ASSEMBLED from the durable records, never
+ * authored. §1.4 holds the history in "a durable record the acting
+ * agent does not author — since a self-kept record reproduces exactly
+ * the failure it exists to prevent." `repairHistory` reads the parsed
+ * records (record.ts's shape) and derives the state sequence; nothing
+ * here takes a caller's running tally. That is the whole point of the
+ * instrument, so it is the one property with no fallback.
+ *
+ * DECISION — the diagnosis is admitted fail-closed, and absence is
+ * NEVER read as NONE. §1.4: "absence is not NONE, and an unreadable
+ * history is never read as STAGNATION." A refused, unconfirmed, or
+ * malformed diagnosis dispatch is a hand-off (the change parks exactly
+ * as a non-NONE value would), never a value. The one open-direction
+ * limb is the substrate's absence in a clone, which fails open with a
+ * warning — a property of a clone, not of a moment.
+ *
+ * NOT here: the diagnosis's own semantics (that is the Judge's, and
+ * this module composes its brief and admits its return, never rules);
+ * the trigger's occasion (the caller derives it from the resolver
+ * disposition it already reads); §1.8's plan contest and §1.2/§2.2's
+ * gates the invalidation finding routes to (this module names the
+ * route, the caller performs it).
+ *
+ * Warning-surface roster: EXEMPT — like briefs.ts, the one
+ * path-adjacent interpolation (composeDiagnosisBrief) embeds a
+ * caller-derived commit hash and a closed-union outcome into a
+ * delegate brief, never a warned/thrown/printed message; the head is
+ * the caller's own operand and the outcome is one of five literals.
+ */
+import type { DispatchOutcome } from "../dispatch/index.ts";
+import type { ReviewRecord } from "./record.ts";
+
+/** One review state's outcome, mapped from a record's ReviewState. */
+export type StateOutcome = "repair" | "measure-escalate" | "clear" | "approved" | "incomplete";
+export type StateSummary = { head: string; outcome: StateOutcome };
+
+/** §1.4's four-value taxonomy and the invalidation finding. */
+export type DiagnosisValue = "NONE" | "STAGNATION" | "OSCILLATION" | "INDETERMINATE";
+export type Invalidation = "nothing" | "plan" | "authorization";
+export type DiagnosisInput = { value: DiagnosisValue; invalidation: Invalidation; evidence: string };
+
+export type DiagnosisAdmission =
+	| { available: true; diagnosis: DiagnosisInput }
+	| { available: false; disposition: "hand-off" | "fail-open"; reason: string };
+
+export type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
+
+/**
+ * Assemble the repair history from the durable review records, in the
+ * order posted, one state per head. Two records at one head are one
+ * state (§1.7's collapse); the later record wins, since a re-dispatched
+ * slot re-posts the completed state. A record maps to its outcome:
+ * `resolved` takes its resolution's outcome, `approved` and
+ * `incomplete` are their own states.
+ */
+export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] {
+	const byHead = new Map<string, StateOutcome>();
+	const order: string[] = [];
+	for (const record of records) {
+		const outcome: StateOutcome =
+			record.review.state === "resolved"
+				? record.review.resolution.outcome
+				: record.review.state === "approved"
+					? "approved"
+					: "incomplete";
+		if (!byHead.has(record.head)) {
+			order.push(record.head);
+		}
+		byHead.set(record.head, outcome);
+	}
+	return order.map((head) => ({ head, outcome: byHead.get(head) as StateOutcome }));
+}
+
+/**
+ * The coarse deterministic trigger (§1.4): fires on every consecutive
+ * review state resolved to `repair` after the first — the second and
+ * each beyond it. A non-`repair` state resets the count, so what
+ * decides the fire is the length of the TRAILING run of `repair`
+ * states: two or more fires. The findings-free path never fires it —
+ * an `approved` state is not `repair`. A pure function of the history.
+ */
+export function triggerFires(history: readonly StateSummary[]): boolean {
+	let trailingRepairs = 0;
+	for (let i = history.length - 1; i >= 0 && history[i].outcome === "repair"; i -= 1) {
+		trailingRepairs += 1;
+	}
+	return trailingRepairs >= 2;
+}
+
+const DIAGNOSIS_VALUES = new Set<string>(["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]);
+const INVALIDATIONS = new Set<string>(["nothing", "plan", "authorization"]);
+const DIAGNOSIS_KEYS = new Set(["value", "invalidation", "evidence"]);
+
+/**
+ * Compose the diagnosis brief (§1.4's Judge dispatch, the actor's
+ * second capacity). The history crosses as §1.5's dispatch-facts form
+ * (i), derived at composition from the records. The brief asks for
+ * BOTH outputs — the taxonomy value and the invalidation finding —
+ * which answer different questions and never compete (§1.4).
+ */
+export function composeDiagnosisBrief(
+	history: readonly StateSummary[],
+	context: { changeDescription: string },
+): string {
+	const lines = history.map((state, index) => `  ${index + 1}. head ${state.head} resolved ${state.outcome}`);
+	return [
+		"You are the JUDGE performing §1.4's repair-history diagnosis — the Judge's second capacity, a semantic",
+		"reading of the same findings across review states. You rule and stop; the caller consumes your two",
+		"outputs deterministically.",
+		"",
+		`CHANGE UNDER REVIEW: ${context.changeDescription}`,
+		"",
+		"THE REPAIR HISTORY (each line one resolved review state at one head, oldest first):",
+		...lines,
+		"",
+		"Return TWO things and no third:",
+		"1. the taxonomy VALUE, exactly one of NONE / STAGNATION / OSCILLATION / INDETERMINATE —",
+		"   NONE: repair advanced, each attempt addressed ground the previous had not closed;",
+		"   STAGNATION: the same problem met by a materially equivalent repair, still open;",
+		"   OSCILLATION: two corrections causally opposed, the artifact reversed A→B→A;",
+		"   INDETERMINATE: the history supports none of the three (a ruled outcome, never a default).",
+		"2. the INVALIDATION finding, exactly one of nothing / plan / authorization — whether the history shows",
+		"   the selected plan no longer holds, or the authorization no longer holds, or neither.",
+		"",
+		'Your ruling rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+		'{"value": <one of the four>, "invalidation": <one of the three>, "evidence": <non-empty command or citation>}.',
+		"An unstated value is never inferred; absence is not NONE.",
+	].join("\n");
+}
+
+/**
+ * Parse the diagnosis out of the opaque payload, fail-closed. The
+ * closed shape and out-of-set values refuse, since §1.4 forbids a
+ * value inferred from a failure.
+ */
+function diagnosisFromPayload(payload: string | undefined): DiagnosisInput | undefined {
+	if (typeof payload !== "string") {
+		return undefined;
+	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(payload);
+	} catch {
+		return undefined;
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		return undefined;
+	}
+	const keys = Object.keys(parsed);
+	if (keys.length !== DIAGNOSIS_KEYS.size || !keys.every((key) => DIAGNOSIS_KEYS.has(key))) {
+		return undefined;
+	}
+	const { value, invalidation, evidence } = parsed as { value: unknown; invalidation: unknown; evidence: unknown };
+	if (typeof value !== "string" || !DIAGNOSIS_VALUES.has(value)) {
+		return undefined;
+	}
+	if (typeof invalidation !== "string" || !INVALIDATIONS.has(invalidation)) {
+		return undefined;
+	}
+	if (typeof evidence !== "string" || evidence.length === 0) {
+		return undefined;
+	}
+	return { value: value as DiagnosisValue, invalidation: invalidation as Invalidation, evidence };
+}
+
+/**
+ * Admit a diagnosis dispatch, fail-closed (§1.4/§1.6). A refused,
+ * `ok:false`, unconfirmed-compare, or malformed return is a HAND-OFF —
+ * the change parks exactly as a non-NONE value would — never read as
+ * NONE. This is the present-but-cannot-measure limb; the caller supplies
+ * the absent-substrate limb through `historyAvailability`.
+ */
+export function admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission {
+	if (outcome.disposition !== "admitted" || !outcome.ok || outcome.compare !== "confirmed") {
+		return {
+			available: false,
+			disposition: "hand-off",
+			reason:
+				"the diagnosis dispatch is unavailable (refused, failed, or failed the blind compare) — the change " +
+				"hands off; an unavailable Judge is never read as NONE (§1.4)",
+		};
+	}
+	const diagnosis = diagnosisFromPayload(outcome.payload);
+	if (diagnosis === undefined) {
+		return {
+			available: false,
+			disposition: "hand-off",
+			reason: "the diagnosis return is malformed against the closed shape — absence is not NONE (§1.4)",
+		};
+	}
+	return { available: true, diagnosis };
+}
+
+/**
+ * The deterministic consumer (§1.4). NONE admits a further autonomous
+ * repair; STAGNATION, OSCILLATION and INDETERMINATE each hand the
+ * change off to §5.7's park (every mode). The invalidation finding
+ * routes the re-entry gate independently of the value — plan → §1.8,
+ * authorization → §1.2/§2.2, nothing → no re-entry. There is no
+ * workflow-effective progress value beyond NONE.
+ */
+export function diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence {
+	const reentry = invalidation === "plan" ? "plan" : invalidation === "authorization" ? "authorization" : "none";
+	if (value === "NONE") {
+		return { proceed: true, park: false, reentry };
+	}
+	return { proceed: false, park: true, reentry };
+}
+
+/**
+ * The two fail limbs of §1.4's history dependency, keyed on the clone
+ * property they turn on. `storeInstalled` is whether the durable-record
+ * substrate exists in this clone; `records` is the fetched set, or
+ * undefined where the fetch could not be read. An installed store whose
+ * records are unreadable is present-but-cannot-measure and hands off
+ * (fail-closed); an uninstalled store is absent and fails open with a
+ * warning — the acting party neither caused it nor can repair it from
+ * inside a block.
+ */
+export function historyAvailability(
+	storeInstalled: boolean,
+	records: ReviewRecord[] | undefined,
+):
+	| { available: true; records: ReviewRecord[] }
+	| { available: false; disposition: "hand-off" | "fail-open"; reason: string } {
+	if (!storeInstalled) {
+		return {
+			available: false,
+			disposition: "fail-open",
+			reason:
+				"the repair-history substrate is not installed in this clone — the enforcement was never installed, so " +
+				"the flow continues on its ordinary terms with this warning (§1.4, §5.2)",
+		};
+	}
+	if (records === undefined) {
+		return {
+			available: false,
+			disposition: "hand-off",
+			reason:
+				"the repair-history substrate is installed but its records could not be read — present-but-cannot-measure " +
+				"fails closed and the change hands off (§1.4)",
+		};
+	}
+	return { available: true, records };
+}
