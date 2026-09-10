@@ -9,25 +9,26 @@
  * mechanically account for against the ruling text refuses to fresh
  * review — the ordinary, always-available cost.
  *
- * DECISION — the accounting unit is the OPERATION, a (removed, added)
- * pair, not two independent multisets. Round 2's multiset-of-lines
- * premise carried cardinality but not per-ruling PAIRING: a swapped
- * cross-ruling hybrid (-AAA/+DDD/-CCC/+BBB against replace AAA→BBB and
- * CCC→DDD) balanced a removed-multiset {AAA,CCC} and an added-multiset
- * {BBB,DDD} and admitted a delta that was neither remedy. Pairing each
- * removed line to the added line that replaced it, per hunk, and
- * comparing the OPERATION multiset to the remedy operation multiset,
- * closes the swap by construction: (AAA→DDD),(CCC→BBB) is not
- * (AAA→BBB),(CCC→DDD).
+ * DECISION — the accounting is TWO MULTISETS, not paired operations.
+ * A unified diff is a block transform that groups every removed line
+ * before every added line, so it does not encode which removed line a
+ * given added line replaced — `-A`/`-C`/`+D` is byte-identical
+ * whether the author replaced C with D and deleted A or replaced A
+ * with D and deleted C, and no consumer of a diff can recover the
+ * pairing. Rather than chase an input that carries no answer, the
+ * check verifies the property a diff DOES carry: the patch's
+ * removed-line multiset equals the recorded NIT remedies' `old`
+ * multiset, and the added-line multiset equals their `new` multiset —
+ * exact, with multiplicity, so N copies of an applied line unbalance
+ * the count.
  *
- * DECISION — NO trimming, and the remedy quotes the FULL line. Round 2
- * trimmed both sides, so a re-indentation (a real change on the YAML
- * and Markdown surfaces the shell ships) applied as a "verbatim"
- * replacement. The operation compares exact line text, and the Judge
- * brief (briefs.ts) states that a NIT remedy carry-forward can apply
- * must quote the full line verbatim, leading whitespace included —
- * which is what makes the exception LIVE rather than dead: the
- * producer of the remedy is told the grammar its consumer parses.
+ * DECISION — NO trimming, and the remedy quotes the FULL line. A
+ * re-indentation is a real change on the YAML and Markdown surfaces
+ * the shell ships, so the multisets compare exact line text; the
+ * Judge brief (briefs.ts) states that a NIT remedy carry-forward can
+ * apply must quote the full line verbatim, leading whitespace
+ * included — which is what makes the exception LIVE rather than dead:
+ * the producer of the remedy is told the grammar its consumer parses.
  *
  * DECISION — a NIT ruling that carries no parseable full-line remedy
  * REFUSES the whole carry-forward, uniformly, whether the remedy is
@@ -36,11 +37,29 @@
  * record carrying one is not a clean re-issue however its other
  * rulings read.
  *
- * Enumerated residual (§3.11): an operation carries no file binding —
- * the ruling's free text names no path this check can trust — so a
- * delta applying the ruled operations in a DIFFERENT file than the
- * flagged one still admits. What bounds it: the admitted operations
- * are still exactly the ones the Judge ruled, paired, nothing more.
+ * DECISION — when the recorded remedies' `old` multiset and their
+ * `new` multiset SHARE a line, the check refuses. That intersection
+ * is exactly where arrangement becomes semantically load-bearing and
+ * the two-multiset match cannot pin it: two remedies (A→B and B→A
+ * across two files) admit a byte-multiset-equal delta that INVERTS
+ * each ruling, a semantic negation carried forward as if verbatim.
+ * Where the old and new sets are disjoint the residual below is a
+ * benign permutation of distinct ruled lines; where they intersect it
+ * would be an inversion, so the intersecting case is refused.
+ *
+ * Enumerated residuals (§3.11), bounded by two invariants together —
+ * every removed line is a ruled `old` and every added line a ruled
+ * `new` with exact multiplicity (no UNRULED content enters or
+ * leaves), AND no line is both ruled off and onto the artifact (the
+ * intersection refusal above):
+ *   (a) ARRANGEMENT — with disjoint old/new sets, a set-equal delta
+ *       that lands distinct ruled `new` lines in a different order or
+ *       file than the strict application admits; its post-image is the
+ *       same multiset of Judge-ruled replacement text, only permuted,
+ *       which is not a semantic change a review would catch.
+ *   (b) FILE BINDING — a ruling's free text names no path this check
+ *       can trust, so the ruled multiset applied in a DIFFERENT file
+ *       than the flagged one still admits.
  */
 import type { ReviewRecord } from "./record.ts";
 
@@ -167,6 +186,17 @@ export function carryForwardAdmissible(record: ReviewRecord, patch: string): Car
 		remedyRemoved.push(spans.removed);
 		if (spans.added !== null) {
 			remedyAdded.push(spans.added);
+		}
+	}
+	// A line that is both some remedy's `old` and some remedy's `new`
+	// makes arrangement load-bearing (an A→B / B→A inversion the diff
+	// cannot pin); refuse rather than admit a possible semantic negation.
+	if (reasons.length === 0) {
+		const newSet = new Set(remedyAdded);
+		if (remedyRemoved.some((old) => newSet.has(old))) {
+			reasons.push(
+				"a recorded remedy's old line is another's new line — the arrangement is semantically load-bearing and a unified diff cannot pin it, so the carry-forward refuses rather than risk an inversion",
+			);
 		}
 	}
 	if (

@@ -1040,7 +1040,32 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		assert.ok(
 			!c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+ZZZ")).admissible,
 			"an added line no remedy specifies (ZZZ) was admitted — the multiset equality is what keeps unruled " +
-				"content out, and it must hold even while pairing is a residual",
+				"content out, and it must hold even while arrangement is a residual",
+		);
+	});
+
+	it("an inversion refuses — when a remedy's old is another's new, arrangement is load-bearing (round 5's EF2)", () => {
+		const c = carry();
+		// Two remedies whose old/new sets INTERSECT: `debug: false` is one's
+		// new and the other's old. A byte-multiset-equal delta could invert
+		// each ruling (flip the flag the opposite way per file), which a
+		// unified diff cannot pin — so the intersecting case refuses outright.
+		const record = clearRecord("replace the line `  debug: true` with `  debug: false`");
+		(record.adjudication as AdjudicationInput).rulings.push({
+			finding: "g",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "CONFIRMED",
+			severity: "NIT",
+			remedy: "replace the line `  debug: false` with `  debug: true`",
+			direction: "fail-closed",
+			onCriterion: false,
+			evidence: "e",
+		});
+		assert.ok(
+			!c.carryForwardAdmissible(record, patch("-  debug: true", "+  debug: false", "-  debug: false", "+  debug: true"))
+				.admissible,
+			"an intersecting old/new set (an inversion is representable) admitted — the check must refuse where " +
+				"arrangement can negate a ruling and the diff cannot distinguish it from a verbatim application",
 		);
 	});
 
@@ -1051,6 +1076,32 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			!c.carryForwardAdmissible(record, patch("- ", "+x")).admissible,
 			"a remedy whose old span is whitespace was applied — a blank line is not an exact mechanical span, and " +
 				"admitting it lets blank churn balance the operation set",
+		);
+		// Round 5's EF3: the NEW-span whitespace guard, not just the old side.
+		const blankNew = clearRecord("replace the line `AAA` with ` `");
+		assert.ok(
+			!c.carryForwardAdmissible(blankNew, patch("-AAA", "+ ")).admissible,
+			"a remedy whose NEW span is whitespace was applied — replacing a line with a blank line is not an exact " +
+				"mechanical span either, and the added-side guard must refuse it",
+		);
+	});
+
+	it("the canonical grammar is case-insensitive and space-tolerant — both live, so both are pinned (round 5's EF3)", () => {
+		const c = carry();
+		// REPLACE_FORM's /i flag and the remedy.trim() are live affordances an
+		// ordinary Judge phrasing reaches; an arm pins them so a later edit
+		// removing either turns liveness into a silent false-refuse.
+		const capitalized = clearRecord("Replace the line `AAA` with `BBB`");
+		assert.ok(
+			c.carryForwardAdmissible(capitalized, patch("-AAA", "+BBB")).admissible,
+			"a capitalized 'Replace' was refused — REPLACE_FORM's case-insensitivity is live and an ordinary Judge " +
+				"sentence starts with a capital",
+		);
+		const padded = clearRecord("  replace the line `AAA` with `BBB`  ");
+		assert.ok(
+			c.carryForwardAdmissible(padded, patch("-AAA", "+BBB")).admissible,
+			"a remedy with surrounding whitespace was refused — remedy.trim() is live and a stored ruling may carry " +
+				"incidental padding",
 		);
 	});
 
