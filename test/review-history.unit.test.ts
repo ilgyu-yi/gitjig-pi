@@ -87,6 +87,8 @@ const repair = (head: string): ReviewRecord =>
 	rec(head, { state: "resolved", resolution: { dispositions: [], outcome: "repair" } });
 const clear = (head: string): ReviewRecord =>
 	rec(head, { state: "resolved", resolution: { dispositions: [], outcome: "clear" } });
+const measureEscalate = (head: string): ReviewRecord =>
+	rec(head, { state: "resolved", resolution: { dispositions: [], outcome: "measure-escalate" } });
 const approved = (head: string): ReviewRecord => rec(head, { state: "approved" });
 const incomplete = (head: string): ReviewRecord => rec(head, { state: "incomplete", cause: "panel" });
 
@@ -101,12 +103,18 @@ const admittedPayload = (input: DiagnosisInput): DispatchOutcome => ({
 describe("§1.4 the repair history is assembled from the durable records, not authored (issue #186)", () => {
 	it("one record per head becomes one review state, in order, outcome mapped from the resolution", () => {
 		const h = mod();
-		const out = h.repairHistory([repair("a".repeat(40)), clear("b".repeat(40)), approved("c".repeat(40))]);
+		const out = h.repairHistory([
+			repair("a".repeat(40)),
+			clear("b".repeat(40)),
+			measureEscalate("d".repeat(40)),
+			approved("c".repeat(40)),
+		]);
 		assert.deepEqual(
 			out.map((s) => ({ head: s.head, outcome: s.outcome })),
 			[
 				{ head: "a".repeat(40), outcome: "repair" },
 				{ head: "b".repeat(40), outcome: "clear" },
+				{ head: "d".repeat(40), outcome: "measure-escalate" },
 				{ head: "c".repeat(40), outcome: "approved" },
 			],
 			"the history did not map each record to a head+outcome state in order — the history is the record " +
@@ -196,6 +204,39 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 			true,
 			"the trigger under-fired on a non-contiguous re-post — a change could then repair indefinitely (§1.4)",
 		);
+	});
+
+	it("a resolved measure-escalate maps as itself, and interposed it RESETS the repair run (round 4's S1)", () => {
+		const h = mod();
+		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+		const mapped = h.repairHistory([measureEscalate(a)]);
+		assert.equal(
+			mapped[0].outcome,
+			"measure-escalate",
+			"a resolved measure-escalate did not map to its own outcome — §1.4 maps a resolved review to its " +
+				"resolution outcome, and measure-escalate is one",
+		);
+		assert.equal(
+			h.triggerFires(h.repairHistory([repair(a), measureEscalate(b), repair(c)])),
+			false,
+			"an interposed measure-escalate did not reset the consecutive-repair run — §1.4: a review resolving to " +
+				"anything else does not feed the count and, being interposed, resets it",
+		);
+	});
+
+	it("a later incomplete does not erase a head's already-resolved state (round 4's S1)", () => {
+		const h = mod();
+		const [a, b] = ["a".repeat(40), "b".repeat(40)];
+		// A resolved to repair, B repaired, then A re-posts an incomplete.
+		// The incomplete must not subtract A's resolved state — the two
+		// repairs stay two consecutive states and the trigger fires.
+		const out = h.repairHistory([repair(a), repair(b), incomplete(a)]);
+		assert.deepEqual(
+			out.map((s) => s.outcome),
+			["repair", "repair"],
+			"a later incomplete erased a head's resolved state — an incomplete contributes no state and subtracts none",
+		);
+		assert.equal(h.triggerFires(out), true, "the trigger under-fired after a later incomplete — the two repairs stand");
 	});
 
 	it("an incomplete review is NOT a review state — it is dropped, never a resetting state (round 3's EF1)", () => {

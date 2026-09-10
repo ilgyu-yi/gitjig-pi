@@ -85,9 +85,9 @@ export type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "
  * Assemble the repair history from the durable review records, in the
  * order posted, one state per head. Two records at one head are one
  * state (§1.7's collapse); the later record wins, since a re-dispatched
- * slot re-posts the completed state. A record maps to its outcome:
- * `resolved` takes its resolution's outcome, `approved` and
- * `incomplete` are their own states.
+ * slot re-posts the completed state. A resolved record maps to its
+ * resolution's outcome and `approved` is its own state; an
+ * `incomplete` record is no review state (§1.4/§1.7) and is dropped.
  */
 export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] {
 	const byHead = new Map<string, StateSummary>();
