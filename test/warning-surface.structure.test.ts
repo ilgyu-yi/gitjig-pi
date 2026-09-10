@@ -198,6 +198,22 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// is the stronger state: the escaping lock scans it and finds nothing,
 	// which stays true only while it holds no interpolation at all.
 	{ file: "gitjig/review/lens-policy.json", allow: [] },
+	// No interpolation exists in join.ts today; it is rostered so the module
+	// that parses a DELEGATE-authored payload — the surface most exposed to
+	// actor bytes in the review layer — cannot grow a raw rendering of one.
+	{ file: "gitjig/review/join.ts", allow: [] },
+	{
+		file: "gitjig/review/resolve.ts",
+		allow: [
+			// The gap renderings' one interpolation: a local array index this
+			// module derives from its own iteration — a number, never a byte an
+			// actor supplies. The finding TEXT deliberately rides no gap: a gap
+			// names the axis and the position, and the Judge's words stay in
+			// the rulings where the caller reads them, so no delegate-authored
+			// byte reaches these carriers at all.
+			"index",
+		],
+	},
 	{
 		file: "gitjig/state-root.ts",
 		allow: [
