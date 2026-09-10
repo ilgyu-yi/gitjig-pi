@@ -344,6 +344,16 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				"replace `<old line>` with `<new line>`",
 				"the exact canonical replace form the Judge must quote for a nit to carry forward",
 			],
+			[
+				"delete `<old line>`",
+				"the delete limb of the canonical grammar — round 4's EF5: unstated, the delete-form half is " +
+					"removable on the producer face with the suite green",
+			],
+			[
+				"leading whitespace included",
+				"the FULL-line requirement — round 4's EF4: without it the brief instructs a grammar the consumer " +
+					"refuses for every indented line (it compares exact line text, no trim)",
+			],
 			["NO hex run of 6 or more characters", "the no-hex PROHIBITION itself (round 1's EF8)"],
 		] as const) {
 			assert.ok(text.includes(needle), `the judge brief lost ${why} (missing: ${JSON.stringify(needle)})`);
@@ -1148,6 +1158,64 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			"a compound remedy carrying a negated 'do not remove `baz`' promoted `baz` into the removable set — a " +
 				"prose scan reads the verb inside a clause that forbade the very removal, so the delta removed the " +
 				"span the ruling told the author to keep",
+		);
+	});
+
+	it("a delete-form remedy applied verbatim admits; an unruled removal does not (round 4's EF5)", () => {
+		const c = carry();
+		const record = clearRecord("delete the line `const dead = true;`");
+		assert.ok(
+			c.carryForwardAdmissible(record, patch("-const dead = true;")).admissible,
+			"a verbatim delete-form application was refused — the delete limb of the canonical grammar must admit " +
+				"its own verbatim application",
+		);
+		assert.ok(
+			!c.carryForwardAdmissible(record, patch("-const other = 1;")).admissible,
+			"a removal of a line the delete remedy does not name was admitted — the removed multiset must equal " +
+				"the ruled `old` set",
+		);
+	});
+
+	it("the check runs on real `git diff` output, not only hand-built patches (round 4's EF2)", () => {
+		const c = carry();
+		// A real repository, a real one-line replacement, a real `git diff` —
+		// the shape round 4's EF1 lived in and the hand-built patch() helper
+		// cannot express (interior context, real hunk headers).
+		const repo = fixtureRepo({ "f.txt": "alpha\nbeta\ngamma\n" });
+		execFileSync("git", ["-C", repo, "config", "user.email", "t@example.invalid"]);
+		writeFileSync(join(repo, "f.txt"), "alpha\nBETA\ngamma\n");
+		const realDiff = execFileSync("git", ["-C", repo, "diff", "--", "f.txt"], { encoding: "utf8" });
+		const record = clearRecord("replace the line `beta` with `BETA`");
+		assert.ok(
+			c.carryForwardAdmissible(record, realDiff).admissible,
+			"a real one-line git-diff verbatim application was refused — the check must run on the diff shape git " +
+				"actually emits (interior context, real hunk header), not only the single-hunk patch() helper",
+		);
+		writeFileSync(join(repo, "f.txt"), "alpha\nBETA\nGAMMA\n");
+		const exceeding = execFileSync("git", ["-C", repo, "diff", "--", "f.txt"], { encoding: "utf8" });
+		assert.ok(
+			!c.carryForwardAdmissible(record, exceeding).admissible,
+			"a real git-diff whose delta exceeds the one recorded remedy (a second line changed) was admitted — " +
+				"the multiset equality must catch the excess in real output too",
+		);
+	});
+
+	it("an all-REFUTED clear record against an empty delta refuses on the empty-delta conjunct (round 4's EF2)", () => {
+		const c = carry();
+		const record = clearRecord("replace `a` with `b`");
+		// Make the sole ruling REFUTED: no remedy operations remain, so only
+		// the empty-delta conjunct stands between this and a vacuous admit.
+		const rulings = (record.adjudication as AdjudicationInput).rulings;
+		rulings[0] = {
+			finding: "f",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "REFUTED",
+			evidence: "the refuting command",
+		};
+		assert.ok(
+			!c.carryForwardAdmissible(record, "").admissible,
+			"an all-REFUTED clear record with an empty delta admitted — the empty-delta refusal is the only guard " +
+				"here (no remedy operations exist), and it must hold",
 		);
 	});
 });
