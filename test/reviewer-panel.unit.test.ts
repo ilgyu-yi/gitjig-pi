@@ -442,6 +442,16 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 			"the refusal's text no longer forbids the catch-all row — §1.7 records that row as the rejected design, " +
 				"and the refusal is where the operator authoring the amendment reads it",
 		);
+		// Round 4's A: the remedy-stating clause is the exclusivity and
+		// auditability guarantee — §1.7's "its ONE remedy is an amendment to
+		// the committed policy — itself a reviewed change". A refusal that
+		// forbids the catch-all but names no discharging act forecloses
+		// nothing.
+		assert.ok(
+			refused.message.includes("reviewed amendment to the committed lens policy"),
+			"the refusal's text no longer states the one discharging act — §1.7 makes a reviewed policy amendment " +
+				"the ONE remedy, and a refusal that names no remedy forecloses none of the routes the clause closes",
+		);
 	});
 
 	it("the empty change surface refuses distinctly — not a routing failure, no amendment owed", () => {
