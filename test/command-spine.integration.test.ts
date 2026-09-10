@@ -102,6 +102,7 @@ import {
 	readdirSync,
 	readFileSync,
 	realpathSync,
+	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -890,6 +891,21 @@ describe("/review's bound token is consumed from first position only (issue #94,
 		run(args: string): Promise<void>;
 	}
 
+	// Every scratch directory this describe mints, swept once when it ends —
+	// without the registry each of the six drive() arms leaked a fixture
+	// repository and a state root into TMPDIR.
+	const scratchDirs: string[] = [];
+	after(() => {
+		for (const dir of scratchDirs) {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+	function scratch(prefix: string): string {
+		const dir = mkdtempSync(join(tmpdir(), prefix));
+		scratchDirs.push(dir);
+		return dir;
+	}
+
 	/**
 	 * A fixture repository whose committed delegate REPORTS THE ARGV ELEMENT it
 	 * received as `$1`. That report is the only way to tell an argv element that
@@ -897,7 +913,7 @@ describe("/review's bound token is consumed from first position only (issue #94,
 	 * proves nothing about which tokens the delegate was handed.
 	 */
 	function mintCallerRepo(): string {
-		const dir = mkdtempSync(join(tmpdir(), "zq-review-grammar-"));
+		const dir = scratch("zq-review-grammar-");
 		const git = (...args: string[]): void => {
 			execFileSync("git", ["-C", dir, ...GIT_FLAGS, ...args], { encoding: "utf8" });
 		};
@@ -935,7 +951,7 @@ describe("/review's bound token is consumed from first position only (issue #94,
 		(module as { registerReviewCommand: (pi: unknown, repo: string, state: string) => void }).registerReviewCommand(
 			pi,
 			mintCallerRepo(),
-			mkdtempSync(join(tmpdir(), "zq-review-state-")),
+			scratch("zq-review-state-"),
 		);
 		assert.ok(handler !== undefined, `${arm}: the module registered no review command — the arm is vacuous`);
 		// Bound to a const so the assertion above is what the call below rests

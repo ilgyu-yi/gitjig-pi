@@ -13,8 +13,13 @@
  * NOT measured here, so a reader does not over-read it: the Judge's own
  * conduct (a dispatched semantic actor — this file pins what the CALLER
  * admits of its return, never how it rules); §1.4's history-diagnosis
- * capacity (asleep, §5.3); and the dispatcher's own arms, which live in
- * `dispatch-module` and which issue #177 must leave untouched.
+ * capacity (asleep, §5.3); the dispatcher's own arms, which live in
+ * `dispatch-module` and which issue #177 must leave untouched; and
+ * whether admission leaves the CALLER's input untouched on the GAP path
+ * — no clause or comment claims that guard (the stated aliasing
+ * discipline detaches the value admission MINTS, and the gap path mints
+ * none), so the absence is a recorded decision, not an unmeasured
+ * promise (§3.12 binds where a mutant kills a guard).
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -56,6 +61,7 @@ type Ruling = {
 	remedy?: string;
 	direction?: Direction;
 	onCriterion?: boolean;
+	evidence: string;
 };
 type Manifest = { state: "absent" } | { state: "present"; criteria: readonly string[] };
 type AdjudicationInput = { dedupAttested: boolean; rulings: Ruling[] };
@@ -198,6 +204,7 @@ const ruling = (over: Partial<Ruling> = {}): Ruling => ({
 	severity: "SUBSTANTIVE",
 	direction: "live-harm",
 	onCriterion: true,
+	evidence: "zq evidence: the command that ran, and what it printed",
 	...over,
 });
 
@@ -451,7 +458,12 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 				dedupAttested: true,
 				rulings: [
 					ruling({ provenance: [] }),
-					{ finding: "zq refuted with no provenance", provenance: [], validity: "REFUTED" },
+					{
+						finding: "zq refuted with no provenance",
+						provenance: [],
+						validity: "REFUTED",
+						evidence: "zq: the refuting command",
+					},
 				],
 			},
 			MANIFEST,
@@ -522,14 +534,19 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 		}
 	});
 
-	it("REFUTED and INDETERMINATE owe validity alone — a ruling without the other axes is complete", () => {
+	it("REFUTED and INDETERMINATE owe validity and its evidence alone — a ruling without the other axes is complete", () => {
 		const r = resolves();
 		const admission = r.admitAdjudication(
 			{
 				dedupAttested: true,
 				rulings: [
-					{ finding: "zq refuted", provenance: [SLOT], validity: "REFUTED" },
-					{ finding: "zq undecided", provenance: [OTHER_SLOT], validity: "INDETERMINATE" },
+					{ finding: "zq refuted", provenance: [SLOT], validity: "REFUTED", evidence: "zq: the refuting command" },
+					{
+						finding: "zq undecided",
+						provenance: [OTHER_SLOT],
+						validity: "INDETERMINATE",
+						evidence: "zq: the citation it rests on",
+					},
 				],
 			},
 			MANIFEST,
@@ -538,7 +555,7 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 			admission.complete,
 			true,
 			"a REFUTED or INDETERMINATE ruling was held to axes §1.9 does not owe on it — completeness is all four " +
-				"axes on a CONFIRMED finding and validity alone otherwise",
+				"axes on a CONFIRMED finding and validity plus its evidence otherwise",
 		);
 	});
 
@@ -676,6 +693,135 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 					"rides' as Judge unavailability, and an unavailable Judge is an incomplete review, never a ruling",
 			);
 		}
+	});
+});
+
+describe("§1.9 validity evidence rides the ruling (issue #179)", () => {
+	// The ruling (issue #179): evidence is part of the Judge ruling itself,
+	// owed on EVERY validity — §1.9's own words retain a REFUTED finding
+	// "with its refuting command" and record each validity ruling "with the
+	// command it ran or the citation it rests on". Admission checks presence
+	// only; nothing deterministic evaluates the content; the field rides the
+	// snapshot verbatim as the reconsideration anchor.
+	it("the closed wire shape REQUIRES evidence — a ruling without it, or with a non-string one, is no adjudication", () => {
+		const r = resolves();
+		const good = { dedupAttested: true, rulings: [ruling()] };
+		assert.deepEqual(
+			r.adjudicationFromPayload(JSON.stringify(good)),
+			good,
+			"an evidence-bearing payload did not parse intact — the wire shape must carry the field the ruling " +
+				"makes part of the ruling itself",
+		);
+		const { evidence: _dropped, ...bare } = ruling();
+		for (const [shape, rulings] of [
+			["a ruling with no evidence key", [bare]],
+			["a ruling with a non-string evidence", [ruling({ evidence: 7 as never })]],
+		] as [string, unknown[]][]) {
+			assert.equal(
+				r.adjudicationFromPayload(JSON.stringify({ dedupAttested: true, rulings })),
+				undefined,
+				`${shape} parsed as an adjudication — evidence is a required key of the closed shape, and a ruling ` +
+					"that cannot say what it rests on is not a ruling this layer admits",
+			);
+		}
+	});
+
+	it("empty evidence is an incomplete adjudication on EVERY validity — a REFUTED retention owes its refuting command too", () => {
+		const r = resolves();
+		for (const validity of ["CONFIRMED", "REFUTED", "INDETERMINATE"] as Validity[]) {
+			const one =
+				validity === "CONFIRMED"
+					? ruling({ evidence: "" })
+					: ({ finding: "zq bare", provenance: [SLOT], validity, evidence: "" } as Ruling);
+			const admission = r.admitAdjudication({ dedupAttested: true, rulings: [one] }, MANIFEST);
+			assert.equal(
+				admission.complete,
+				false,
+				`a ${validity} ruling with empty evidence was admitted — §1.9 records each validity ruling with the ` +
+					"command it ran or the citation it rests on, and there is no validity whose ruling owes none",
+			);
+			assert.ok(
+				!admission.complete && admission.gaps.some((gap) => /^ruling 0: validity evidence is empty/.test(gap)),
+				`the ${validity} empty-evidence gap is not named in its authored words`,
+			);
+		}
+		// Per RULING, not per adjudication: the gap must fire at every index,
+		// or an implementation that owes evidence only on the first ruling
+		// admits a real gap and the Resolver disposes around it.
+		const multi = r.admitAdjudication({ dedupAttested: true, rulings: [ruling(), ruling({ evidence: "" })] }, MANIFEST);
+		assert.equal(multi.complete, false, "an empty evidence at index 1 was admitted — the check is per ruling");
+		assert.ok(
+			!multi.complete && multi.gaps.some((gap) => /^ruling 1: validity evidence is empty/.test(gap)),
+			"the index-1 empty-evidence gap is not named at its own index",
+		);
+	});
+
+	it("presence, not content: a minimal and a whitespace-only evidence both admit — nothing evaluates the text", () => {
+		const r = resolves();
+		// The ruling's boundary, pinned from the admitting side: "" is the one
+		// refusal, and ANY other string — one byte, or whitespace the ruling
+		// forbids anything deterministic from trimming into emptiness — is
+		// present. A length gate or a trim here is content evaluation.
+		for (const evidence of ["x", "   "]) {
+			const admission = r.admitAdjudication({ dedupAttested: true, rulings: [ruling({ evidence })] }, MANIFEST);
+			assert.equal(
+				admission.complete,
+				true,
+				`evidence ${JSON.stringify(evidence)} was refused — admission checks presence, and evaluating the ` +
+					"content (a minimum length, a trim) is the act the ruling forbids",
+			);
+		}
+	});
+
+	it("the parse does not usurp admission's emptiness ruling — an empty evidence crosses the wire into the anchored gap", () => {
+		const r = resolves();
+		// The §3.11 split, walked end to end on this field: structure (a
+		// string) is the parse's, presence (non-empty) is admission's. A parse
+		// that refuses "" converts the anchored completeness gap into a
+		// no-adjudication, and the caller loses the re-dispatch brief.
+		const parsed = r.adjudicationFromPayload(
+			JSON.stringify({ dedupAttested: true, rulings: [ruling({ evidence: "" })] }),
+		);
+		assert.ok(parsed, "an empty-string evidence did not PARSE — emptiness is admission's ruling, not the parse's");
+		const admission = r.admitAdjudication(parsed as AdjudicationInput, MANIFEST);
+		assert.equal(admission.complete, false, "the wire-carried empty evidence was admitted");
+		assert.ok(
+			!admission.complete && admission.gaps.some((gap) => /^ruling 0: validity evidence is empty/.test(gap)),
+			"the wire-carried empty evidence is not named in the anchored gap",
+		);
+	});
+
+	it("the Resolver never reads the evidence — two adjudications differing only in its text resolve identically", () => {
+		const r = resolves();
+		const admit = (evidence: string) =>
+			r.admitAdjudication(
+				{ dedupAttested: true, rulings: [ruling({ direction: "fail-closed", onCriterion: false, evidence })] },
+				MANIFEST,
+			);
+		const one = admit("x");
+		const other = admit("zq: an entirely different command trail");
+		assert.ok(one.complete && other.complete, "the evidence-bearing fixtures should admit");
+		assert.deepEqual(
+			one.complete && r.resolve(one.adjudication),
+			other.complete && r.resolve(other.adjudication),
+			"the Resolver's answer moved with the evidence TEXT — evaluating evidence is a semantic act, and the " +
+				"ruling assigns it to no deterministic component",
+		);
+	});
+
+	it("the admitted evidence rides the branded snapshot verbatim — the reconsideration anchor survives the copy", () => {
+		const r = resolves();
+		const anchor = "  zQ\tANCHOR — bytes intact  ";
+		const input = { dedupAttested: true, rulings: [ruling({ evidence: anchor })] };
+		const admission = r.admitAdjudication(input, MANIFEST);
+		assert.ok(admission.complete, "the fixture admission should be complete");
+		(input.rulings[0] as Ruling).evidence = "zq rewritten after admission";
+		assert.equal(
+			(admission.adjudication as unknown as { rulings: Ruling[] }).rulings[0]?.evidence,
+			anchor,
+			"the evidence did not survive the detachment copy verbatim — it is §1.9 reconsideration's anchor, and " +
+				"an aliased or dropped field hands the anchor to whoever still holds the caller's object",
+		);
 	});
 });
 
