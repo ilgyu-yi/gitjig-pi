@@ -80,8 +80,8 @@ try {
 function orchestrator(): PanelModule {
 	assert.ok(
 		panel,
-		`the reviewer panel orchestrator does not exist at ${REVIEW_DIR}panel.ts — SPEC §1.7 leaves "slot derivation ` +
-			`and bundle construction as the half still deriving", and issue #169 is the derivation. Import reported: ` +
+		`the reviewer panel orchestrator does not exist at ${REVIEW_DIR}panel.ts — SPEC §1.7 lands "slot derivation ` +
+			`and bundle construction" at that path, and issue #169 is the derivation. Import reported: ` +
 			`${loadError}`,
 	);
 	return panel;
@@ -369,21 +369,24 @@ describe("§1.7 completeness, re-dispatch, and the unrouted case (issue #169)", 
 		assert.ok(!("bundle" in outcome), "the findings-free path produced a bundle — the Judge must have no input");
 	});
 
-	it("an empty required set takes the SSOT's derived answer — APPROVED, with the concern filed as #172", () => {
+	it("an empty required set still takes §1.9's derived answer — the settled §1.7 refusal sleeps until derived (#172)", () => {
 		const p = orchestrator();
-		// §1.7's completeness test is vacuously true over an empty set, and
-		// §1.9's findings-free path then determines Review APPROVED. Two
-		// earlier shapes are pinned OUT here because each was reviewed and
-		// ruled a divergence: a minted `unrouted` token, and a thrown
-		// refusal. The zero-reviewer-approval concern is real and it is
-		// issue #172's, not this module's, while the question is open.
+		// §1.7's landed routing-coverage clause refuses the unrouted surface
+		// UPSTREAM of completeness and rules its refusal asleep until the
+		// deriving instrument lands (§5.3) — the derivation issue #172
+		// tracks. Until that lands, this module's behaviour is §0.3's
+		// spec-ahead lag, pinned here so the derivation is a visible act:
+		// completeness stays vacuously true over an empty set and §1.9's
+		// findings-free path determines APPROVED. Two shapes stay pinned OUT:
+		// a minted `unrouted` token and a thrown refusal, each ruled a
+		// divergence when tried.
 		const outcome = p.panelOutcome([], []);
 		assert.equal(
 			outcome.outcome,
 			"approved",
-			"an empty required set yielded something other than the SSOT's own derived answer — a token or a " +
-				"behaviour the SSOT does not carry is a divergence however well-motivated, and the motivation lives " +
-				"on issue #172 until the operator settles it",
+			"an empty required set yielded something other than the derived answer this head still carries — the " +
+				"settled §1.7 refusal activates with its deriving instrument (issue #172's derivation), and until that " +
+				"lands a minted token or a thrown refusal here is a divergence, not an implementation of it",
 		);
 	});
 });

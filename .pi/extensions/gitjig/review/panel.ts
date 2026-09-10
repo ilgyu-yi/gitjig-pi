@@ -29,12 +29,14 @@
  * Collecting every valid result is order-independent and cannot drop;
  * two answers that are really one finding are the Judge's to merge.
  *
- * DECISION — the empty required set follows the SSOT as written, and
- * the concern is filed rather than decided. Two rejected alternatives
- * are recorded at the branch itself so neither returns silently: a
- * minted `unrouted` token (a contract the SSOT does not carry) and a
- * thrown refusal (a behaviour it does not carry either). Issue #172
- * holds the open §1.7/§1.9 question.
+ * DECISION — the empty required set takes §1.9's derived answer, as a
+ * recorded LAG behind the settled §1.7 routing-coverage clause: that
+ * clause refuses the unrouted surface upstream of this module and rules
+ * its own refusal asleep until the deriving instrument lands (§5.3) —
+ * the derivation issue #172 tracks, §0.3's spec-ahead disposition. Two
+ * rejected alternatives are recorded at the branch itself so neither
+ * returns silently: a minted `unrouted` token and a thrown refusal,
+ * each ruled a divergence.
  *
  * DECISION — the policy is read from the committed file and from
  * nowhere else. `loadPolicy` takes no path, so routing cannot derive
@@ -421,18 +423,15 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
  * outcome independent of the order results are supplied in.
  */
 export function panelOutcome(results: readonly SlotResult[], required: readonly Slot[]): PanelOutcome {
-	// The empty required set follows the SSOT as written (§1.7, §1.9), and
-	// the concern with doing so is FILED, not decided here. Read those
-	// sections for the outcome; the local facts are why this is not the
-	// module's call. §1.7 names the gap as its own open residual — it
-	// "sets no floor on the required slot set" and says closing it "is an
-	// amendment to §5.6's substitution reach and is not made here" — and
-	// §0.3 forbids code leading that amendment (drift is surfaced, never
-	// auto-corrected; an SSOT correction is attended-only). So the concern
-	// that this can approve a head no reviewer examined is on issue #172
-	// for the operator, and the code follows the contract meanwhile. A
-	// minted fourth token and a thrown refusal were both tried and both
-	// ruled behaviours the SSOT does not carry.
+	// The empty required set still takes §1.9's derived answer HERE, and
+	// that is a recorded lag, not an open question: §1.7's landed
+	// routing-coverage clause (the operator's #172 ruling) refuses the
+	// unrouted surface UPSTREAM of this function and rules the refusal
+	// asleep until its deriving instrument lands (§5.3) — the derivation
+	// issue #172 tracks. §0.3's spec-ahead disposition, recorded in place:
+	// code lags a settled section, tracked as ordinary work. A minted
+	// fourth token and a thrown refusal were both tried and both ruled
+	// divergences from the contract in force when they were tried.
 	const missing = required
 		.filter((slot) => validResultsFor(results, slot).length === 0)
 		.map((slot) => ({ lens: slot.lens, surface: slot.surface }));
