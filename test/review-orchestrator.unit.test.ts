@@ -1008,7 +1008,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("the pairing residual is enumerated — a set-equal delta admits; unruled content never does (round 4)", () => {
+	it("the arrangement residual is enumerated — a set-equal delta admits; unruled content never does (round 4)", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `AAA` with `BBB`");
 		(record.adjudication as AdjudicationInput).rulings.push({
@@ -1021,15 +1021,16 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			onCriterion: false,
 			evidence: "e",
 		});
-		// Round 4 abandoned pairing: a unified diff does not encode which
-		// removed line a given added line replaced, so the swap and the
-		// strict application are byte-identical diffs. The enumerated
-		// residual (carry-forward.ts header) admits the set-equal swap —
-		// bounded because its post-image is composed ENTIRELY of Judge-ruled
-		// `new` lines, only re-arranged; no unruled content enters.
+		// A unified diff does not encode which removed line a given added
+		// line replaced, so the swap and the strict application are
+		// byte-identical diffs. The enumerated ARRANGEMENT residual
+		// (carry-forward.ts header) admits the set-equal swap — bounded
+		// because its post-image is composed ENTIRELY of Judge-ruled `new`
+		// lines, only re-arranged; no unruled content enters, and an
+		// intersecting old/new set (an inversion) refuses separately.
 		assert.ok(
 			c.carryForwardAdmissible(record, patch("-AAA", "+DDD", "-CCC", "+BBB")).admissible,
-			"the set-equal swap did not admit — the enumerated pairing residual is the documented disposition",
+			"the set-equal swap did not admit — the enumerated arrangement residual is the documented disposition",
 		);
 		assert.ok(
 			c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+DDD")).admissible,
@@ -1225,6 +1226,44 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			"a removal of a line the delete remedy does not name was admitted — the removed multiset must equal " +
 				"the ruled `old` set",
 		);
+		// Round 6's EF-S2: the delete limb's case-insensitivity and its
+		// `remove` alternative are live affordances a Judge reaches; pin both.
+		assert.ok(
+			c.carryForwardAdmissible(clearRecord("Delete the line `const dead = true;`"), patch("-const dead = true;"))
+				.admissible,
+			"a capitalized 'Delete' was refused — DELETE_FORM's /i is live and an ordinary Judge sentence capitalizes",
+		);
+		assert.ok(
+			c.carryForwardAdmissible(clearRecord("remove the line `const dead = true;`"), patch("-const dead = true;"))
+				.admissible,
+			"a 'remove'-phrased delete remedy was refused — the `remove` alternative is a live limb of the grammar",
+		);
+	});
+
+	it("a compound remedy with an extra span is not canonical — the backtick span class is exact (round 6's EF-R2)", () => {
+		const c = carry();
+		// `[^`]+` (not `.+`) is what keeps a span from swallowing a second
+		// "with `...`" clause. A greedy class would parse this compound
+		// remedy as old="AAA` with `BBB", new="ZZZ" and admit a delta.
+		const record = clearRecord("replace the line `AAA` with `BBB` with `ZZZ`");
+		assert.ok(
+			!c.carryForwardAdmissible(record, patch("-AAA` with `BBB", "+ZZZ")).admissible,
+			"a compound remedy carrying a second `with` span parsed and admitted — the span class must be " +
+				"backtick-exclusive so a non-canonical remedy refuses uniformly",
+		);
+	});
+
+	it("the canonical replace form's optional parts are live — both phrasings admit (round 6's EF-S3)", () => {
+		const c = carry();
+		assert.ok(
+			c.carryForwardAdmissible(clearRecord("replace `AAA` with `BBB`"), patch("-AAA", "+BBB")).admissible,
+			"the bare 'replace `x` with `y`' (no 'the line') was refused — the (?: the line)? group is optional and " +
+				"an ordinary Judge omits it",
+		);
+		assert.ok(
+			c.carryForwardAdmissible(clearRecord("replace the line `AAA` with `BBB`."), patch("-AAA", "+BBB")).admissible,
+			"a trailing period was refused — the trailing `\\.?` is live and a Judge may end the sentence with one",
+		);
 	});
 
 	it("the check runs on real `git diff` output, not only hand-built patches (round 4's EF2)", () => {
@@ -1233,7 +1272,6 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		// the shape round 4's EF1 lived in and the hand-built patch() helper
 		// cannot express (interior context, real hunk headers).
 		const repo = fixtureRepo({ "f.txt": "alpha\nbeta\ngamma\n" });
-		execFileSync("git", ["-C", repo, "config", "user.email", "t@example.invalid"]);
 		writeFileSync(join(repo, "f.txt"), "alpha\nBETA\ngamma\n");
 		const realDiff = execFileSync("git", ["-C", repo, "diff", "--", "f.txt"], { encoding: "utf8" });
 		const record = clearRecord("replace the line `beta` with `BETA`");
@@ -1248,6 +1286,33 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			!c.carryForwardAdmissible(record, exceeding).admissible,
 			"a real git-diff whose delta exceeds the one recorded remedy (a second line changed) was admitted — " +
 				"the multiset equality must catch the excess in real output too",
+		);
+	});
+
+	it("a real MULTI-FILE git diff admits a verbatim two-remedy application — file headers are not content (round 6's EF-R3)", () => {
+		const c = carry();
+		// The `inHunk = false` reset on each diff-header line is what keeps
+		// the SECOND file's ---/+++ headers out of the content multisets; a
+		// single-file diff cannot exercise it, so this uses two files.
+		const repo = fixtureRepo({ "one.txt": "AAA\n", "two.txt": "CCC\n" });
+		writeFileSync(join(repo, "one.txt"), "BBB\n");
+		writeFileSync(join(repo, "two.txt"), "DDD\n");
+		const realDiff = execFileSync("git", ["-C", repo, "diff", "--", "one.txt", "two.txt"], { encoding: "utf8" });
+		const record = clearRecord("replace the line `AAA` with `BBB`");
+		(record.adjudication as AdjudicationInput).rulings.push({
+			finding: "g",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "CONFIRMED",
+			severity: "NIT",
+			remedy: "replace the line `CCC` with `DDD`",
+			direction: "fail-closed",
+			onCriterion: false,
+			evidence: "e",
+		});
+		assert.ok(
+			c.carryForwardAdmissible(record, realDiff).admissible,
+			"a verbatim two-file application was refused — the second file's diff headers were read as content " +
+				"because the per-entry hunk reset is unpinned",
 		);
 	});
 

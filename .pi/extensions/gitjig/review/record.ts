@@ -169,10 +169,10 @@ function isReviewState(value: unknown): boolean {
 /**
  * Parse a posted body back into the record, fail-closed: no marker, no
  * fence, unparseable JSON, an open shape at ANY depth the consumers
- * read (round 1's EF3 — a shallow gate handed carry-forward a
- * resolution-less record it crashed on), or a marker head disagreeing
- * with the record's own head (round 1's EF5 — the selector and the
- * payload must not pin two different reviews) all yield `undefined`.
+ * read (a shallow gate would hand carry-forward a resolution-less
+ * record it crashes on), or a marker head disagreeing with the
+ * record's own head (the selector and the payload must not pin two
+ * different reviews) all yield `undefined`.
  */
 export function parseReviewRecord(body: string): ReviewRecord | undefined {
 	const marker = new RegExp(`<!-- ${REVIEW_RECORD_MARKER}: (\\S+) -->`).exec(body);

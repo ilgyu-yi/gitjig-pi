@@ -62,9 +62,9 @@ export type RoundOptions = {
 	 * The one seam to §4.9's dispatcher — `makeDispatcher` for the real
 	 * one. The second argument is the round's OWN resolved head, passed
 	 * on every dispatch so the panel slots, the Judge, and the record all
-	 * carry one pin — round 1's EF7: a seam with no per-dispatch pin let
-	 * a mutable ref hand each dispatch a different held hash with every
-	 * compare confirming.
+	 * carry one pin: a seam with no per-dispatch pin would let a mutable
+	 * ref hand each dispatch a different held hash with every compare
+	 * confirming (issue #184).
 	 */
 	dispatch: (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 };
@@ -79,14 +79,14 @@ export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBod
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
 	// The real dispatcher, injectable so a test can pin the wiring without
-	// running a delegate (round 2's EF-A: the pin-forwarding was killed by
-	// no arm because runDispatch was a static import nothing could observe).
+	// running a delegate — a statically-imported runDispatch is a wiring an
+	// arm cannot observe (issue #184).
 	run: (options: RunDispatchOptions) => Promise<DispatchOutcome> = runDispatch,
 ): (brief: string, expectedHead: string) => Promise<DispatchOutcome> {
 	// The held operand is the round's resolved head, never a caller-fixed
 	// ref: provision resolves the expectedRef once per dispatch, so only a
 	// hash already resolved by the round makes every dispatch's pin the
-	// same pin (round 1's EF7).
+	// same pin (issue #184).
 	return (brief, expectedHead) => run({ ...options, brief, expectedRef: expectedHead });
 }
 
@@ -149,10 +149,9 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 		// The findings-free fast path and the incomplete panel: the Judge
 		// never runs — nothing to adjudicate on the first, completeness
 		// precedes adjudication on the second (§1.7, §1.9). The ABSENT
-		// manifest stops here too (round 1's EF4): §1.9 rules it a missing
-		// input the review is incomplete on, so a Judge dispatched anyway
-		// would be run to rule what the caller already knows cannot
-		// complete.
+		// manifest stops here too: §1.9 rules it a missing input the review
+		// is incomplete on, so a Judge dispatched anyway would be run to
+		// rule what the caller already knows cannot complete.
 		review = reviewOutcome(panel, undefined);
 	}
 
@@ -162,7 +161,7 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 		// From every VALID slot, whatever the panel outcome — §1.7 builds
 		// the bundle from valid slots, not from complete panels, and a
 		// record that understates what was discovered misleads the history
-		// reader (round 1's EF6).
+		// reader (§1.4).
 		bundle: buildBundle(results, required),
 		adjudication,
 		review,
