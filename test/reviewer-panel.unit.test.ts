@@ -53,6 +53,10 @@ type ChangedPaths = readonly string[];
 type Policy = { rows: { lens: string; surface: string; prefixes: string[] }[] };
 
 type PanelModule = {
+	RoutingRefusal: new (
+		limb: "routing-failure" | "empty-surface",
+		unclaimed: readonly string[],
+	) => Error & { limb: string; unclaimed: readonly string[] };
 	loadPolicy(): Policy;
 	validatePolicy(policy: Policy): Policy;
 	deriveRequiredSlots(changedPaths: ChangedPaths, policy: Policy): Slot[];
@@ -99,6 +103,27 @@ function orchestrator(): PanelModule {
  * seam's use in its own.
  */
 const paths = (literal: string[]): ChangedPaths => literal as unknown as ChangedPaths;
+
+/**
+ * Run a derivation the arm expects §1.7's coverage rule to refuse, and
+ * hand back the refusal's own facts. Failing here rather than returning
+ * undefined keeps every consuming arm's message about ITS mutation, not
+ * about a missing throw it never asserted.
+ */
+function refusal(act: () => unknown): { limb: string; unclaimed: readonly string[]; message: string } {
+	try {
+		act();
+	} catch (error) {
+		const refused = error as Error & { limb?: unknown; unclaimed?: unknown };
+		assert.ok(
+			typeof refused.limb === "string" && Array.isArray(refused.unclaimed),
+			"the routing refusal does not carry its limb and its unclaimed set — a downstream caller cannot map " +
+				"a routing failure to its one remedy (a reviewed policy amendment) without them",
+		);
+		return { limb: refused.limb, unclaimed: refused.unclaimed as readonly string[], message: refused.message };
+	}
+	assert.fail("the derivation returned instead of refusing — §1.7's coverage refusal is not live at this input");
+}
 
 /**
  * Every scratch directory this file mints, removed once when the file's
@@ -369,24 +394,145 @@ describe("§1.7 completeness, re-dispatch, and the unrouted case (issue #169)", 
 		assert.ok(!("bundle" in outcome), "the findings-free path produced a bundle — the Judge must have no input");
 	});
 
-	it("an empty required set still takes §1.9's derived answer — the settled §1.7 refusal sleeps until derived (#172)", () => {
+	it("an empty required set refuses — the vacuous APPROVED is retired with #172's derivation", () => {
 		const p = orchestrator();
-		// §1.7's landed routing-coverage clause refuses the unrouted surface
-		// UPSTREAM of completeness and rules its refusal asleep until the
-		// deriving instrument lands (§5.3) — the derivation issue #172
-		// tracks. Until that lands, this module's behaviour is §0.3's
-		// spec-ahead lag, pinned here so the derivation is a visible act:
-		// completeness stays vacuously true over an empty set and §1.9's
-		// findings-free path determines APPROVED. Two shapes stay pinned OUT:
-		// a minted `unrouted` token and a thrown refusal, each ruled a
-		// divergence when tried.
-		const outcome = p.panelOutcome([], []);
+		// §1.7's routing-coverage clause is derived as of issue #172: no
+		// APPROVED derives from an empty required-review surface, and under
+		// full coverage a non-empty change surface derives at least one slot
+		// — so an empty set HERE means the change surface was empty (refused
+		// at the derivation seam) or the derivation was bypassed, and either
+		// way the answer is a refusal, never an approval no reviewer
+		// produced.
+		assert.throws(
+			() => p.panelOutcome([], []),
+			(error: unknown) => error instanceof Error && /required slot set is empty/.test(error.message),
+			"an empty required set produced a panel outcome — the vacuous APPROVED this arm once pinned as §0.3 " +
+				"spec-ahead lag is retired by issue #172's derivation, and an approval no reviewer produced must not " +
+				"derive from an empty required-review surface",
+		);
+	});
+});
+
+describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
+	it("an unclaimed constituent is a routing failure naming exactly the unowned paths", () => {
+		const p = orchestrator();
+		const refused = refusal(() => p.deriveRequiredSlots(paths([".pi/x.ts", "zz-unowned.md"]), p.loadPolicy()));
 		assert.equal(
-			outcome.outcome,
-			"approved",
-			"an empty required set yielded something other than the derived answer this head still carries — the " +
-				"settled §1.7 refusal activates with its deriving instrument (issue #172's derivation), and until that " +
-				"lands a minted token or a thrown refusal here is a divergence, not an implementation of it",
+			refused.limb,
+			"routing-failure",
+			"an unowned constituent did not surface as the routing-failure limb — the two limbs are distinct states " +
+				"and only this one owes a policy amendment",
+		);
+		assert.deepEqual(
+			refused.unclaimed,
+			["zz-unowned.md"],
+			"the refusal did not name exactly the unowned constituents — a claimed path in the list misdirects the " +
+				"policy amendment, and a missing unowned one hides what must be claimed",
+		);
+		assert.ok(
+			refused.message.includes("zz-unowned.md"),
+			"the refusal's own text does not name the unowned constituent — §1.7's remedy is an amendment to the " +
+				"committed policy, and an operator reading the refusal must see what to claim",
+		);
+	});
+
+	it("the empty change surface refuses distinctly — not a routing failure, no amendment owed", () => {
+		const p = orchestrator();
+		const refused = refusal(() => p.deriveRequiredSlots(paths([]), p.loadPolicy()));
+		assert.equal(
+			refused.limb,
+			"empty-surface",
+			"an empty change surface refused as a routing failure — §1.7: there is nothing to route, a row cannot " +
+				"claim a constituent that does not exist, and no policy amendment is owed on it",
+		);
+		assert.deepEqual(
+			refused.unclaimed,
+			[],
+			"the empty-surface refusal named unclaimed constituents — an empty surface has none, and naming any " +
+				"conflates the two limbs the clause keeps distinct",
+		);
+	});
+
+	it("the refusal is upstream of review — a thrown typed refusal, never a panel state", () => {
+		const p = orchestrator();
+		try {
+			p.deriveRequiredSlots(paths(["zz-unowned.md"]), p.loadPolicy());
+			assert.fail("a routing failure derived a slot set — the refusal must sit upstream of review");
+		} catch (error) {
+			assert.ok(
+				error instanceof p.RoutingRefusal,
+				"the refusal is not the module's own typed refusal — a downstream caller cannot distinguish a " +
+					"routing failure from an ordinary crash, and §1.7 gives the two different consequences",
+			);
+			assert.ok(
+				!("outcome" in (error as object)),
+				"the refusal carries a panel-outcome shape — a routing failure is a refusal upstream of review, " +
+					"never a review state, and it must not be readable as one",
+			);
+		}
+	});
+
+	it("full coverage of a non-empty surface derives a non-empty required set", () => {
+		const p = orchestrator();
+		const derived = p.deriveRequiredSlots(paths([".pi/x.ts"]), p.loadPolicy());
+		assert.ok(
+			derived.length > 0,
+			"a fully claimed non-empty surface derived no slot — §1.7: full coverage of a non-empty change surface " +
+				"derives a non-empty required slot set",
+		);
+	});
+
+	it("the committed policy claims every top-level constituent of this repository — membership drift fails loudly", () => {
+		const p = orchestrator();
+		// Parsed structurally (mode, type, hash \t name), never through git's
+		// localized prose. A tree entry is probed through a representative
+		// child, since the change surface carries file paths.
+		const entries = execFileSync("git", ["ls-tree", "HEAD"], { cwd: repoRoot(), encoding: "utf8" })
+			.split("\n")
+			.filter((line) => line.length > 0)
+			.map((line) => {
+				const [meta, name] = line.split("\t");
+				return { name, isTree: meta.split(" ")[1] === "tree" };
+			});
+		assert.ok(entries.length > 0, "the toplevel read returned nothing — the probe itself is broken");
+		const probes = entries.map((entry) => (entry.isTree ? `${entry.name}/probe` : entry.name));
+		const derived = p.deriveRequiredSlots(paths(probes), p.loadPolicy());
+		assert.ok(
+			derived.length > 0,
+			"the whole-tree probe derived nothing — the committed policy no longer routes this repository",
+		);
+	});
+
+	it("no catch-all row hides an omission — a name outside every claimed surface refuses", () => {
+		const p = orchestrator();
+		const refused = refusal(() => p.deriveRequiredSlots(paths(["zz-no-such-surface"]), p.loadPolicy()));
+		assert.equal(
+			refused.limb,
+			"routing-failure",
+			"a name outside every claimed surface routed anyway — a catch-all row discharges coverage as " +
+				"decoration, and §1.7 records it as the rejected design",
+		);
+	});
+
+	it("the docs and toolchain rows claim their own constituents, through their own lens alone", () => {
+		const p = orchestrator();
+		const policy = p.loadPolicy();
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["README.md", "changelog_unreleased/added/1.md"]), policy).map((s) => s.lens),
+			["docs"],
+			"the adopter-facing prose constituents did not route to the docs lens alone — either they are unclaimed " +
+				"or a broader row swallows them",
+		);
+		assert.deepEqual(
+			p
+				.deriveRequiredSlots(
+					paths(["package.json", "package-lock.json", "tsconfig.json", "biome.jsonc", ".gitignore"]),
+					policy,
+				)
+				.map((s) => s.lens),
+			["toolchain"],
+			"the toolchain constituents did not route to the toolchain lens alone — either one is unclaimed or a " +
+				"broader row swallows them",
 		);
 	});
 });
@@ -870,9 +1016,10 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 				"implementation without an exact-path branch routes that whole row nowhere and every arm that only " +
 				"asserts an empty set stays green",
 		);
+		const refused = refusal(() => p.deriveRequiredSlots(paths(["spec.md"]), policy));
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths(["spec.md"]), policy),
-			[],
+			refused.unclaimed,
+			["spec.md"],
 			"a differently-cased name selected the lens — paths are case-significant here and a case-folding match " +
 				"routes files the policy does not name",
 		);
@@ -881,16 +1028,18 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 	it("matching is path-segment aware — a near-miss name routes nothing", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
+		const nearMiss = refusal(() => p.deriveRequiredSlots(paths(["SPEC.md.bak"]), policy));
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths(["SPEC.md.bak"]), policy),
-			[],
+			nearMiss.unclaimed,
+			["SPEC.md.bak"],
 			"a path that merely BEGINS with a policy prefix selected that lens — `SPEC.md.bak` is not `SPEC.md`, " +
 				"and a bare prefix test routes a change by a name it resembles",
 		);
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths(["README.md", "package.json"]), policy),
-			[],
-			"a change the policy routes nowhere derived a lens anyway",
+			p.deriveRequiredSlots(paths(["README.md", "package.json"]), policy).map((s) => s.lens),
+			["docs", "toolchain"],
+			"the once-unrouted adopter constituents did not derive their own lenses — issue #172's first-satisfying " +
+				"rows claim them, and losing either row reopens the coverage hole the derivation closed",
 		);
 	});
 
@@ -953,9 +1102,10 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			"a bare directory prefix did not route its own segment child — the non-slash branch of underPrefix is " +
 				"dead, so a policy row naming a directory routes nothing",
 		);
+		const refused = refusal(() => p.deriveRequiredSlots(paths(["docsy/x.md", "DOCS/x.md"]), policy));
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths(["docsy/x.md", "DOCS/x.md"]), policy),
-			[],
+			refused.unclaimed,
+			["docsy/x.md", "DOCS/x.md"],
 			"a near-miss (`docsy`) or a case-fold (`DOCS`) matched a bare directory prefix — the branch is not " +
 				"segment-aware or not case-significant",
 		);
@@ -966,9 +1116,10 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		// `.PI/x.ts` against the prefix ".pi/" reaches the trailing-slash
 		// branch of underPrefix, which the `spec.md` arm cannot: that
 		// fixture only reaches the exact-equality branch.
+		const refused = refusal(() => p.deriveRequiredSlots(paths([".PI/x.ts"]), p.loadPolicy()));
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths([".PI/x.ts"]), p.loadPolicy()),
-			[],
+			refused.unclaimed,
+			[".PI/x.ts"],
 			"an upper-cased path selected a lens through the prefix branch — a case-folding match routes files the " +
 				"policy does not name, and the equality-branch arm cannot see it",
 		);
@@ -977,11 +1128,13 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 	it("nothing a delegate says can add or remove a required slot", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
+		const refused = refusal(() => p.deriveRequiredSlots(paths(["SPEC.md", "lens=runtime", "runtime"]), policy));
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths(["SPEC.md", "lens=runtime", "runtime", ".pi"]), policy).map((s) => s.lens),
-			p.deriveRequiredSlots(paths(["SPEC.md"]), policy).map((s) => s.lens),
+			refused.unclaimed,
+			["lens=runtime", "runtime"],
 			"a lens claim riding in the input selected a slot — §1.7: no reviewer selects the lens it will be graded " +
-				"on and no model selects one at dispatch time",
+				"on and no model selects one at dispatch time; under the coverage rule a smuggled token surfaces as an " +
+				"unclaimed constituent, never as a slot",
 		);
 	});
 
