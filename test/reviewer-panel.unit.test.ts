@@ -1129,13 +1129,37 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 	it("nothing a delegate says can add or remove a required slot", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
-		const refused = refusal(() => p.deriveRequiredSlots(paths(["SPEC.md", "lens=runtime", "runtime"]), policy));
+		const refused = refusal(() => p.deriveRequiredSlots(paths(["SPEC.md", "lens=runtime", "runtime", ".pi"]), policy));
 		assert.deepEqual(
 			refused.unclaimed,
-			["lens=runtime", "runtime"],
+			["lens=runtime", "runtime", ".pi"],
 			"a lens claim riding in the input selected a slot — §1.7: no reviewer selects the lens it will be graded " +
 				"on and no model selects one at dispatch time; under the coverage rule a smuggled token surfaces as an " +
-				"unclaimed constituent, never as a slot",
+				"unclaimed constituent, never as a slot — including the bare `.pi`, which resembles a directory prefix " +
+				"but is not a segment child of it",
+		);
+	});
+
+	it("a bare name equal to a directory prefix minus its slash does not route — for every such prefix the policy carries", () => {
+		const p = orchestrator();
+		// Derived from the committed policy's own rows rather than hardcoded,
+		// so a row added later is covered without this arm changing. The
+		// mutant this kills: underPrefix's trailing-slash branch also
+		// matching the bare name, under which a constituent no explicit row
+		// claims is treated as claimed and §1.7's routing failure never
+		// derives.
+		const policy = p.loadPolicy();
+		const bareNames = policy.rows.flatMap((row) =>
+			row.prefixes.filter((prefix) => prefix.endsWith("/")).map((prefix) => prefix.slice(0, -1)),
+		);
+		assert.ok(bareNames.length > 0, "the committed policy carries no directory prefix — this arm's subject is gone");
+		const refused = refusal(() => p.deriveRequiredSlots(paths(bareNames), policy));
+		assert.deepEqual(
+			refused.unclaimed,
+			bareNames,
+			"a bare directory name routed through the prefix that claims only its segment children — a match rule " +
+				"that also claims the bare name broadens claiming past the explicit rows, and a routing failure §1.7 " +
+				"requires would convene a panel instead of refusing",
 		);
 	});
 
