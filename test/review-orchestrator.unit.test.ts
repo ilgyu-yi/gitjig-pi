@@ -94,7 +94,19 @@ type CarryModule = {
 		patch: string,
 	): { admissible: true } | { admissible: false; reasons: string[] };
 };
+type RunDispatchOptions = {
+	callerRepoRoot: string;
+	stateRoot: string;
+	brief: string;
+	delegateArgv: string[];
+	expectedRef?: string;
+	timeoutMs?: number;
+};
 type OrchestrateModule = {
+	makeDispatcher(
+		options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
+		run?: (options: RunDispatchOptions) => Promise<DispatchOutcome>,
+	): (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	reviewRound(options: {
 		repoRoot: string;
 		baseRef: string;
@@ -244,6 +256,11 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				"NO hex run of 6 or more characters",
 				"the no-hex PROHIBITION itself — round 1's EF8: the bare needle `hex` was satisfied by the unrelated " +
 					"reviewedHead sentence, so the prohibition could vanish while the arm stayed green",
+			],
+			[
+				"You do not rule validity, severity, cost direction, or",
+				"§1.7's discovery-only restriction — round 2's EF-F: the APPROVED/FINDINGS needles are satisfied by " +
+					"the payload-shape line, so the restriction sentence could be deleted whole while the arm stayed green",
 			],
 			["reviewedHead", "the one home the head hash is allowed"],
 			["a change description", "the caller's change description"],
@@ -407,6 +424,25 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(result.review.state, "incomplete", "an absent manifest did not leave the review incomplete");
 	});
 
+	it("makeDispatcher forwards the round's resolved head as the dispatch pin (round 2's EF-A)", async () => {
+		const o = orchestrate();
+		const seen: RunDispatchOptions[] = [];
+		const spy = (options: RunDispatchOptions): Promise<DispatchOutcome> => {
+			seen.push(options);
+			return Promise.resolve(admitted(approvedPayload));
+		};
+		const dispatch = o.makeDispatcher({ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] }, spy);
+		await dispatch("the brief text", "the-resolved-head");
+		assert.equal(seen.length, 1, "makeDispatcher did not call the dispatcher exactly once");
+		assert.equal(
+			seen[0].expectedRef,
+			"the-resolved-head",
+			"makeDispatcher did not forward its expectedHead as the dispatcher's expectedRef — the per-dispatch " +
+				"pin is discarded and a mutable ref would be re-resolved per dispatch (round 1's EF7)",
+		);
+		assert.equal(seen[0].brief, "the brief text", "makeDispatcher did not forward the brief");
+	});
+
 	it("the round hands the ADMISSION the caller's manifest — a deferrable ruling defers only on the real one", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
@@ -446,6 +482,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 	it("a finding draws the Judge with the bundle embedded, and a valid adjudication resolves", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
+		const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
 		const finding = "zq the dispatched finding";
 		const ruling: Ruling = {
 			finding,
@@ -475,6 +512,14 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			fake.judgeBriefs[0].includes("AC1"),
 			"the caller's manifest did not cross into the judge brief — round 1's EF11: a substituted manifest " +
 				"survived because no round arm read the composed content",
+		);
+		// Round 2's EF-A/S1: the Judge dispatch is pinned to the round's own
+		// resolved head, exactly as the reviewer dispatches are — not to a
+		// mutable ref the dispatcher would re-resolve.
+		assert.ok(
+			fake.pins.length === 2 && fake.pins.every((pin) => pin === head),
+			"a dispatch (reviewer or Judge) was pinned to something other than the round's one resolved head — " +
+				"the Judge adjudicating a head other than the panel's breaks the one-head guarantee silently",
 		);
 		assert.equal(result.review.state, "resolved", "an admitted adjudication did not resolve");
 		assert.ok(
@@ -545,6 +590,14 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			["f"],
 			"the record of an incomplete panel dropped a valid slot's finding — a later reader cannot tell it " +
 				"from the findings-free shape",
+		);
+		// Round 2's EF-D: the invalid slot's disposition and reason are
+		// recorded as the round measured them, not as a constant.
+		const invalid = result.record.slots.find((entry) => !entry.valid);
+		assert.ok(
+			invalid !== undefined && invalid.reason === "malformed return",
+			"the record did not carry the invalid slot's valid:false disposition and its reason — a mis-report of " +
+				"a refused slot as valid, or a dropped reason, is a false recorded fact the history reader consumes",
 		);
 	});
 
@@ -896,14 +949,69 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a remedy outside the recognized grammar refuses — uncheckable is not admissible", () => {
+	it("a remedy outside the recognized grammar refuses — even when the delta is a substring of its prose (round 2's EF-E)", () => {
 		const c = carry();
-		const record = clearRecord("adjust the wording of the sentence to be clearer");
-		const verdict = c.carryForwardAdmissible(record, patch("-old sentence", "+new sentence"));
+		// The changed lines ARE substrings of the remedy prose, so a check
+		// that fell open by treating the raw prose as the ruled corpus would
+		// admit this — the canonical-grammar refusal must not.
+		const record = clearRecord("reword `old wording` to `new wording` somehow");
+		const verdict = c.carryForwardAdmissible(record, patch("-old wording", "+new wording"));
 		assert.ok(
 			!verdict.admissible,
-			"a remedy that parses to no span admitted a delta — a derivation-phrased remedy is exactly what the " +
-				"check cannot verify, and the conservative cost is one fresh review",
+			"a non-canonical remedy admitted a delta drawn from its own prose — a derivation-phrased remedy is " +
+				"exactly what the check cannot verify, and the conservative cost is one fresh review",
+		);
+	});
+
+	it("one ruled span does not license repeated application — the multiset carries cardinality (round 2's EF-B)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const verdict = c.carryForwardAdmissible(
+			record,
+			patch("-const a = 1;", "+const a = 2;", "+const a = 2;", "+const a = 2;"),
+		);
+		assert.ok(
+			!verdict.admissible,
+			"three applications of a one-line remedy were admitted — a containment check with no cardinality lets " +
+				"one ruled span license an unbounded delta the ruling never specified",
+		);
+	});
+
+	it("remedies are per-ruling, not pooled — a hybrid of two remedies is neither (round 2's EF-B)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `AAA` with `BBB`");
+		const rulings = (record.adjudication as AdjudicationInput).rulings;
+		rulings.push({
+			finding: "g",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "CONFIRMED",
+			severity: "NIT",
+			remedy: "replace the line `CCC` with `DDD`",
+			direction: "fail-closed",
+			onCriterion: false,
+			evidence: "e",
+		});
+		const hybrid = c.carryForwardAdmissible(record, patch("-AAA", "+DDD"));
+		assert.ok(
+			!hybrid.admissible,
+			"a hybrid delta (-AAA/+DDD) that is neither recorded remedy was admitted — pooling spans across rulings " +
+				"loses the per-ruling binding, so the delta matched a union no single ruling specified",
+		);
+		// Applying BOTH remedies fully is the admissible case, so the arm
+		// pins the refusal to the hybrid, not to two-ruling records at large.
+		const both = c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+DDD"));
+		assert.ok(both.admissible, "applying both recorded remedies verbatim was refused — the exception never admits");
+	});
+
+	it("a negated or compound remedy is not canonical — the span it says to KEEP cannot be removed (round 2's EF-C)", () => {
+		const c = carry();
+		const record = clearRecord("replace `foo` with `bar`; do not remove `baz`");
+		const verdict = c.carryForwardAdmissible(record, patch("-baz"));
+		assert.ok(
+			!verdict.admissible,
+			"a compound remedy carrying a negated 'do not remove `baz`' promoted `baz` into the removable set — a " +
+				"prose scan reads the verb inside a clause that forbade the very removal, so the delta removed the " +
+				"span the ruling told the author to keep",
 		);
 	});
 });

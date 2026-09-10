@@ -78,12 +78,16 @@ export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBod
  */
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
+	// The real dispatcher, injectable so a test can pin the wiring without
+	// running a delegate (round 2's EF-A: the pin-forwarding was killed by
+	// no arm because runDispatch was a static import nothing could observe).
+	run: (options: RunDispatchOptions) => Promise<DispatchOutcome> = runDispatch,
 ): (brief: string, expectedHead: string) => Promise<DispatchOutcome> {
 	// The held operand is the round's resolved head, never a caller-fixed
 	// ref: provision resolves the expectedRef once per dispatch, so only a
 	// hash already resolved by the round makes every dispatch's pin the
 	// same pin (round 1's EF7).
-	return (brief, expectedHead) => runDispatch({ ...options, brief, expectedRef: expectedHead });
+	return (brief, expectedHead) => run({ ...options, brief, expectedRef: expectedHead });
 }
 
 /**
