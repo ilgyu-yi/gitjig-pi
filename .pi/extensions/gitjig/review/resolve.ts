@@ -53,8 +53,8 @@ export type Direction = "fail-closed" | "live-harm";
 
 /**
  * One effective finding as the Judge ruled it. The optional axes are owed
- * exactly when §1.9 owes them — all four on CONFIRMED, validity alone
- * otherwise — and `admitAdjudication` is where owed-but-absent becomes a
+ * exactly when §1.9 owes them — all four on CONFIRMED, validity plus
+ * its evidence otherwise — and `admitAdjudication` is where owed-but-absent becomes a
  * named gap rather than a silent default.
  */
 export type Ruling = {
@@ -253,7 +253,7 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 		// Presence alone, owed on every validity like provenance — the parse
 		// rules the field's type, this checks only that a ruling says what it
 		// rests on, and nothing here reads what it says (issue #179's ruling:
-		// admission checks presence and shape, never evaluates).
+		// admission checks presence, never evaluates).
 		if (!ruling.evidence) {
 			gaps.push(
 				`ruling ${index}: validity evidence is empty — each ruling records the command it ran or the citation it rests on (§1.9)`,
