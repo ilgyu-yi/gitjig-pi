@@ -9,117 +9,134 @@
  * mechanically account for against the ruling text refuses to fresh
  * review — the ordinary, always-available cost.
  *
- * DECISION — the accounting is EXACT MULTISET EQUALITY, not
- * containment. Round 2 adjudicated the containment premise unsound in
- * two ways one guard cannot both fix: it carried no cardinality (one
- * ruled span admitted N copies of the applied line) and no per-ruling
- * binding (spans pooled across rulings admitted a hybrid that was
- * neither remedy). The sound predicate is that the patch's removed
- * lines, as a multiset, EQUAL the union of every applied remedy's
- * removed spans, and likewise for added lines — a carry-forward
- * applies ALL the Judge's NIT remedies and nothing else, so the whole
- * delta is exactly their union. Equality closes both: an extra copy
- * unbalances the multiset, and a hybrid's removed/added multisets
- * match no remedy union.
+ * DECISION — the accounting unit is the OPERATION, a (removed, added)
+ * pair, not two independent multisets. Round 2's multiset-of-lines
+ * premise carried cardinality but not per-ruling PAIRING: a swapped
+ * cross-ruling hybrid (-AAA/+DDD/-CCC/+BBB against replace AAA→BBB and
+ * CCC→DDD) balanced a removed-multiset {AAA,CCC} and an added-multiset
+ * {BBB,DDD} and admitted a delta that was neither remedy. Pairing each
+ * removed line to the added line that replaced it, per hunk, and
+ * comparing the OPERATION multiset to the remedy operation multiset,
+ * closes the swap by construction: (AAA→DDD),(CCC→BBB) is not
+ * (AAA→BBB),(CCC→DDD).
  *
- * DECISION — a remedy is parsed only in a CANONICAL, WHOLE-STRING
- * form. Round 2 adjudicated the prose-scanning delete form as
- * promoting a span out of a NEGATED clause ("do not remove `baz`").
- * A remedy is recognized only when its trimmed text matches one
- * canonical shape end to end — "replace `old` with `new`" or
- * "delete `old`" (with the optional "the line" the panel writes) —
- * so a compound or negated remedy matches nothing, is unparseable,
- * and refuses. §1.9 licenses this: a NIT remedy is "a verbatim
- * replacement fully specified by the ruling itself", and a canonical
- * form is exactly that specification. A remedy outside the grammar
- * costs one fresh review, never an unreviewed change.
+ * DECISION — NO trimming, and the remedy quotes the FULL line. Round 2
+ * trimmed both sides, so a re-indentation (a real change on the YAML
+ * and Markdown surfaces the shell ships) applied as a "verbatim"
+ * replacement. The operation compares exact line text, and the Judge
+ * brief (briefs.ts) states that a NIT remedy carry-forward can apply
+ * must quote the full line verbatim, leading whitespace included —
+ * which is what makes the exception LIVE rather than dead: the
+ * producer of the remedy is told the grammar its consumer parses.
  *
- * Enumerated residual (§3.11): a span carries no file binding — the
- * ruling's free text names no path this check can trust — so a delta
- * applying the ruled multiset in a DIFFERENT file than the flagged
- * one still admits. What bounds it: the admitted lines are still
- * exactly the multiset the Judge ruled, nothing more and nothing
- * fewer.
+ * DECISION — a NIT ruling that carries no parseable full-line remedy
+ * REFUSES the whole carry-forward, uniformly, whether the remedy is
+ * missing, whitespace, or out of the canonical grammar. §1.9 rules a
+ * NIT with no exact mechanical remedy an incomplete adjudication, so a
+ * record carrying one is not a clean re-issue however its other
+ * rulings read.
+ *
+ * Enumerated residual (§3.11): an operation carries no file binding —
+ * the ruling's free text names no path this check can trust — so a
+ * delta applying the ruled operations in a DIFFERENT file than the
+ * flagged one still admits. What bounds it: the admitted operations
+ * are still exactly the ones the Judge ruled, paired, nothing more.
  */
 import type { ReviewRecord } from "./record.ts";
 
 export type CarryForwardVerdict = { admissible: true } | { admissible: false; reasons: string[] };
 
-type RemedySpans = { removed: string[]; added: string[] };
+/** One replacement: a removed line, and the line that replaced it (null = a deletion). */
+type Operation = { removed: string; added: string | null };
 
 const REPLACE_FORM = /^replace(?: the line)? `([^`]+)` with `([^`]+)`\.?$/i;
 const DELETE_FORM = /^(?:delete|remove)(?: the line)? `([^`]+)`\.?$/i;
 
-/**
- * Parse one remedy's canonical whole-string form; undefined = not in
- * the grammar, which refuses the whole carry-forward.
- */
-function spansFromRemedy(remedy: string): RemedySpans | undefined {
+/** Parse one remedy's canonical whole-string form into an operation; undefined = not checkable. */
+function operationFromRemedy(remedy: string): Operation | undefined {
 	const trimmed = remedy.trim();
 	const replace = REPLACE_FORM.exec(trimmed);
 	if (replace !== null) {
-		return { removed: [replace[1]], added: [replace[2]] };
+		return { removed: replace[1], added: replace[2] };
 	}
 	const del = DELETE_FORM.exec(trimmed);
 	if (del !== null) {
-		return { removed: [del[1]], added: [] };
+		return { removed: del[1], added: null };
 	}
 	return undefined;
 }
 
-/** A trimmed-line multiset, as a count map. */
-function multiset(lines: readonly string[]): Map<string, number> {
-	const counts = new Map<string, number>();
-	for (const line of lines) {
-		counts.set(line, (counts.get(line) ?? 0) + 1);
-	}
-	return counts;
-}
-
-function multisetsEqual(a: Map<string, number>, b: Map<string, number>): boolean {
-	if (a.size !== b.size) {
-		return false;
-	}
-	for (const [key, count] of a) {
-		if (b.get(key) !== count) {
-			return false;
-		}
-	}
-	return true;
-}
-
-type ChangedLine = { direction: "removed" | "added"; text: string };
-
 /**
- * The hunk-aware walk: only lines INSIDE a hunk count as delta, so a
- * file header ("--- a/x", "+++ b/x") is never confused with a content
- * line that happens to begin with "--" or "++".
+ * Decompose the patch into operations, hunk by hunk: within a hunk git
+ * emits removed lines then added lines, so the i-th removed line is
+ * paired with the i-th added line; a leftover removed line is a
+ * deletion (added null), and a leftover ADDED line with no removed
+ * partner is an insertion, represented with removed "" so it can match
+ * no replace/delete operation and forces a refusal (an insertion is
+ * never a verbatim application of a replacement).
  */
-function changedLines(patch: string): ChangedLine[] {
-	const changed: ChangedLine[] = [];
+function operationsFromPatch(patch: string): Operation[] {
+	const operations: Operation[] = [];
+	let removed: string[] = [];
+	let added: string[] = [];
 	let inHunk = false;
+	const flush = () => {
+		const span = Math.max(removed.length, added.length);
+		for (let i = 0; i < span; i += 1) {
+			operations.push({ removed: removed[i] ?? "", added: i < added.length ? added[i] : null });
+		}
+		removed = [];
+		added = [];
+	};
 	for (const line of patch.split("\n")) {
 		if (line.startsWith("diff --git") || line.startsWith("index ")) {
+			flush();
 			inHunk = false;
 			continue;
 		}
 		if (line.startsWith("@@")) {
+			flush();
 			inHunk = true;
 			continue;
 		}
-		if (!inHunk) {
+		if (!inHunk || line.startsWith("\\")) {
 			continue;
 		}
-		if (line.startsWith("\\")) {
-			continue; // "\ No newline at end of file"
-		}
 		if (line.startsWith("+")) {
-			changed.push({ direction: "added", text: line.slice(1) });
+			added.push(line.slice(1));
 		} else if (line.startsWith("-")) {
-			changed.push({ direction: "removed", text: line.slice(1) });
+			removed.push(line.slice(1));
 		}
 	}
-	return changed;
+	flush();
+	return operations;
+}
+
+/** A stable key for an operation, so two operation lists compare as multisets. */
+function key(op: Operation): string {
+	return JSON.stringify([op.removed, op.added]);
+}
+
+function sameMultiset(a: Operation[], b: Operation[]): boolean {
+	if (a.length !== b.length) {
+		return false;
+	}
+	const counts = new Map<string, number>();
+	for (const op of a) {
+		counts.set(key(op), (counts.get(key(op)) ?? 0) + 1);
+	}
+	for (const op of b) {
+		const k = key(op);
+		const count = counts.get(k);
+		if (count === undefined) {
+			return false;
+		}
+		counts.set(k, count - 1);
+		if (count - 1 === 0) {
+			counts.delete(k);
+		}
+	}
+	return counts.size === 0;
 }
 
 /**
@@ -136,51 +153,40 @@ export function carryForwardAdmissible(record: ReviewRecord, patch: string): Car
 	if (record.adjudication === null) {
 		reasons.push("the record carries no adjudication — there is no ruling text to check the delta against");
 	}
-	const changed = changedLines(patch);
-	if (changed.length === 0) {
+	const patchOps = operationsFromPatch(patch);
+	if (patchOps.length === 0) {
 		reasons.push(
 			"the delta is empty — the head did not advance, so the original review stands and the exception has no subject",
 		);
 	}
-	// Only a NIT ruling carries §1.9's exact mechanical remedy; a
-	// SUBSTANTIVE ruling's text specifies nothing a delta may apply. A
-	// whitespace-only ruled span is dropped: an empty line cannot be a
-	// verbatim mechanical replacement, and admitting it would let blank
-	// churn balance the multiset.
-	const remedyRemoved: string[] = [];
-	const remedyAdded: string[] = [];
-	let unparseable = false;
+	// Every ruling that is not a refutation must be a NIT carrying a
+	// parseable full-line remedy; anything else — a SUBSTANTIVE ruling, a
+	// bare NIT, an out-of-grammar or whitespace remedy — makes the record
+	// something other than a clean nit-only re-issue and refuses (§1.9).
+	const remedyOps: Operation[] = [];
 	for (const ruling of record.adjudication?.rulings ?? []) {
-		if (ruling.severity !== "NIT" || typeof ruling.remedy !== "string") {
-			continue;
+		if (ruling.validity === "REFUTED") {
+			continue; // a refutation leaves nothing behind (§1.9); it is no part of the delta
 		}
-		const parsed = spansFromRemedy(ruling.remedy);
-		if (
-			parsed === undefined ||
-			parsed.removed.some((s) => s.trim().length === 0) ||
-			parsed.added.some((s) => s.trim().length === 0)
-		) {
-			unparseable = true;
-			continue;
-		}
-		remedyRemoved.push(...parsed.removed.map((s) => s.trim()));
-		remedyAdded.push(...parsed.added.map((s) => s.trim()));
-	}
-	if (unparseable) {
-		reasons.push(
-			"a recorded NIT remedy is not in the canonical grammar — an uncheckable remedy draws fresh review rather than admitting a delta the check cannot verify",
-		);
-	}
-	// Exact multiset equality: the whole delta is the union of every
-	// applied remedy, no more and no fewer.
-	if (reasons.length === 0) {
-		const patchRemoved = multiset(changed.filter((l) => l.direction === "removed").map((l) => l.text.trim()));
-		const patchAdded = multiset(changed.filter((l) => l.direction === "added").map((l) => l.text.trim()));
-		if (!multisetsEqual(patchRemoved, multiset(remedyRemoved)) || !multisetsEqual(patchAdded, multiset(remedyAdded))) {
+		if (ruling.severity !== "NIT") {
 			reasons.push(
-				"the delta's changed lines are not exactly the multiset the recorded NIT remedies specify — the delta exceeds its finding",
+				"a ruling is not a NIT — a substantive or unresolved finding is not carried forward, it draws fresh review",
 			);
+			break;
 		}
+		const op = typeof ruling.remedy === "string" ? operationFromRemedy(ruling.remedy) : undefined;
+		if (op === undefined || op.removed.trim().length === 0 || (op.added !== null && op.added.trim().length === 0)) {
+			reasons.push(
+				"a NIT ruling carries no parseable full-line remedy — a missing, whitespace, or out-of-grammar remedy is an incomplete adjudication and draws fresh review",
+			);
+			break;
+		}
+		remedyOps.push(op);
+	}
+	if (reasons.length === 0 && !sameMultiset(patchOps, remedyOps)) {
+		reasons.push(
+			"the delta's operations are not exactly the recorded NIT remedies, paired removed-to-added — the delta exceeds its finding",
+		);
 	}
 	return reasons.length === 0 ? { admissible: true } : { admissible: false, reasons };
 }

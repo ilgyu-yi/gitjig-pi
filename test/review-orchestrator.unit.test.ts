@@ -335,6 +335,15 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			["live-harm", "the harm-direction axis's second token"],
 			["exact mechanical remedy", "the NIT discipline"],
 			["designs no substantive repair", "the Judge's stop rule"],
+			[
+				"NIT REMEDY GRAMMAR",
+				"the canonical remedy grammar carry-forward parses — round 3's EF2: unstated, the exception is live " +
+					"only by coincidence of phrasing, an unstated contract between the brief and carry-forward.ts",
+			],
+			[
+				"replace `<old line>` with `<new line>`",
+				"the exact canonical replace form the Judge must quote for a nit to carry forward",
+			],
 			["NO hex run of 6 or more characters", "the no-hex PROHIBITION itself (round 1's EF8)"],
 		] as const) {
 			assert.ok(text.includes(needle), `the judge brief lost ${why} (missing: ${JSON.stringify(needle)})`);
@@ -598,6 +607,36 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			invalid !== undefined && invalid.reason === "malformed return",
 			"the record did not carry the invalid slot's valid:false disposition and its reason — a mis-report of " +
 				"a refused slot as valid, or a dropped reason, is a false recorded fact the history reader consumes",
+		);
+	});
+
+	it("the recorded reason is the MEASURED cause, not a constant — a distinct cause records distinctly (round 3's EF-D)", async () => {
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
+		// A slot whose blind compare did not confirm — a different §1.6 cause
+		// from the malformed-return one the sibling arm records, so a constant
+		// reason cannot satisfy both arms at once.
+		const fake = fakeDispatch(() => ({
+			disposition: "admitted",
+			ok: true,
+			summary: "RESULT",
+			payload: approvedPayload,
+			compare: "invalid",
+		}));
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: [] },
+			fences: FENCES,
+			changeDescription: "d",
+			dispatch: fake.dispatch,
+		});
+		const invalid = result.record.slots.find((entry) => !entry.valid);
+		assert.ok(
+			invalid !== undefined && invalid.reason === "blind compare not confirmed",
+			"a blind-compare failure was not recorded with its own reason — a constant reason string would record " +
+				"every invalid cause as the same, and the history reader cannot tell a stale head from malformed output",
 		);
 	});
 
@@ -938,14 +977,90 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("indentation is the file's, not the ruling's — an indented application still accounts (round 1's EF2)", () => {
+	it("a re-indentation is a real change, not a verbatim application — the full line is the span (round 3's EF1)", () => {
 		const c = carry();
-		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
-		const verdict = c.carryForwardAdmissible(record, patch("-\tconst a = 1;", "+\tconst a = 2;"));
+		// Round 2 trimmed both sides, so a re-indent rode the exception. The
+		// remedy now quotes the FULL line (leading whitespace included), so a
+		// remedy without indentation is not satisfied by a delta that adds it.
+		const spanOnly = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		assert.ok(
-			verdict.admissible,
-			"an indented verbatim application was refused — the remedy quotes the span, the file supplies the " +
-				"indentation, and a check without the trim refuses every indented remedy",
+			!c.carryForwardAdmissible(spanOnly, patch("-\tconst a = 1;", "+\tconst a = 2;")).admissible,
+			"a re-indented application of a span-only remedy was admitted — changed indentation is a real change " +
+				"to the YAML and Markdown surfaces the shell ships, not a verbatim replacement",
+		);
+		// A full-line remedy that DOES quote the indentation, applied
+		// verbatim, is the admissible case — the exception stays live.
+		const fullLine = clearRecord("replace the line `\tconst a = 1;` with `\tconst a = 2;`");
+		assert.ok(
+			c.carryForwardAdmissible(fullLine, patch("-\tconst a = 1;", "+\tconst a = 2;")).admissible,
+			"a full-line remedy quoting its indentation, applied verbatim, was refused — the exception must stay " +
+				"live for the case it exists for",
+		);
+	});
+
+	it("a swapped cross-ruling hybrid refuses — operations pair removed-to-added (round 3's EF1)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `AAA` with `BBB`");
+		(record.adjudication as AdjudicationInput).rulings.push({
+			finding: "g",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "CONFIRMED",
+			severity: "NIT",
+			remedy: "replace the line `CCC` with `DDD`",
+			direction: "fail-closed",
+			onCriterion: false,
+			evidence: "e",
+		});
+		const swapped = c.carryForwardAdmissible(record, patch("-AAA", "+DDD", "-CCC", "+BBB"));
+		assert.ok(
+			!swapped.admissible,
+			"a swapped hybrid (AAA→DDD, CCC→BBB) balanced the removed and added multisets and admitted a delta " +
+				"that is NEITHER remedy — pooled multisets lose the removed-to-added pairing",
+		);
+		const applied = c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+DDD"));
+		assert.ok(applied.admissible, "the two remedies applied verbatim were refused — the exception never admits");
+	});
+
+	it("a whitespace-only ruled span refuses — an empty span is no verbatim replacement (round 3's EF3)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line ` ` with `x`");
+		assert.ok(
+			!c.carryForwardAdmissible(record, patch("- ", "+x")).admissible,
+			"a remedy whose old span is whitespace was applied — a blank line is not an exact mechanical span, and " +
+				"admitting it lets blank churn balance the operation set",
+		);
+	});
+
+	it("a NIT ruling with a missing remedy refuses the whole carry-forward (round 3's EF4)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `AAA` with `BBB`");
+		(record.adjudication as AdjudicationInput).rulings.push({
+			finding: "g",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "CONFIRMED",
+			severity: "NIT",
+			evidence: "e",
+		});
+		assert.ok(
+			!c.carryForwardAdmissible(record, patch("-AAA", "+BBB")).admissible,
+			"a record with a bare NIT (no remedy) carried forward — §1.9 rules a remedy-less NIT an incomplete " +
+				"adjudication, so the record is not a clean nit-only re-issue and must refuse",
+		);
+	});
+
+	it("a REFUTED ruling is no part of the delta — it neither contributes an operation nor blocks (round 3's EF4)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `AAA` with `BBB`");
+		(record.adjudication as AdjudicationInput).rulings.push({
+			finding: "g",
+			provenance: [{ lens: "runtime", surface: "s" }],
+			validity: "REFUTED",
+			evidence: "the refuting command",
+		});
+		assert.ok(
+			c.carryForwardAdmissible(record, patch("-AAA", "+BBB")).admissible,
+			"a refuted ruling beside a verbatim-applied NIT blocked the carry-forward — a refutation leaves " +
+				"nothing behind (§1.9) and is no part of the delta",
 		);
 	});
 
@@ -960,6 +1075,14 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			!verdict.admissible,
 			"a non-canonical remedy admitted a delta drawn from its own prose — a derivation-phrased remedy is " +
 				"exactly what the check cannot verify, and the conservative cost is one fresh review",
+		);
+		// Round 3's EF3: an unanchored REPLACE_FORM would parse a negated
+		// "do not replace `a` with `b`" and reopen EF-C; this pins the anchor.
+		const negated = clearRecord("do not replace `a` with `b`");
+		assert.ok(
+			!c.carryForwardAdmissible(negated, patch("-a", "+b")).admissible,
+			"a negated 'do not replace `a` with `b`' parsed as a replace operation — REPLACE_FORM's whole-string " +
+				"anchor is what keeps a negated clause out of the grammar",
 		);
 	});
 
