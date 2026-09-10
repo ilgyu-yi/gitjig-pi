@@ -998,7 +998,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a swapped cross-ruling hybrid refuses — operations pair removed-to-added (round 3's EF1)", () => {
+	it("the pairing residual is enumerated — a set-equal delta admits; unruled content never does (round 4)", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `AAA` with `BBB`");
 		(record.adjudication as AdjudicationInput).rulings.push({
@@ -1011,14 +1011,27 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			onCriterion: false,
 			evidence: "e",
 		});
-		const swapped = c.carryForwardAdmissible(record, patch("-AAA", "+DDD", "-CCC", "+BBB"));
+		// Round 4 abandoned pairing: a unified diff does not encode which
+		// removed line a given added line replaced, so the swap and the
+		// strict application are byte-identical diffs. The enumerated
+		// residual (carry-forward.ts header) admits the set-equal swap —
+		// bounded because its post-image is composed ENTIRELY of Judge-ruled
+		// `new` lines, only re-arranged; no unruled content enters.
 		assert.ok(
-			!swapped.admissible,
-			"a swapped hybrid (AAA→DDD, CCC→BBB) balanced the removed and added multisets and admitted a delta " +
-				"that is NEITHER remedy — pooled multisets lose the removed-to-added pairing",
+			c.carryForwardAdmissible(record, patch("-AAA", "+DDD", "-CCC", "+BBB")).admissible,
+			"the set-equal swap did not admit — the enumerated pairing residual is the documented disposition",
 		);
-		const applied = c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+DDD"));
-		assert.ok(applied.admissible, "the two remedies applied verbatim were refused — the exception never admits");
+		assert.ok(
+			c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+DDD")).admissible,
+			"the two remedies applied verbatim were refused — the exception never admits",
+		);
+		// The invariant that bounds the residual: an UNRULED added line —
+		// content no remedy's `new` names — is never admitted.
+		assert.ok(
+			!c.carryForwardAdmissible(record, patch("-AAA", "+BBB", "-CCC", "+ZZZ")).admissible,
+			"an added line no remedy specifies (ZZZ) was admitted — the multiset equality is what keeps unruled " +
+				"content out, and it must hold even while pairing is a residual",
+		);
 	});
 
 	it("a whitespace-only ruled span refuses — an empty span is no verbatim replacement (round 3's EF3)", () => {

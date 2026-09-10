@@ -46,14 +46,14 @@ import type { ReviewRecord } from "./record.ts";
 
 export type CarryForwardVerdict = { admissible: true } | { admissible: false; reasons: string[] };
 
-/** One replacement: a removed line, and the line that replaced it (null = a deletion). */
-type Operation = { removed: string; added: string | null };
+/** A remedy's spans: the line it removes, and the line it adds (null = a deletion). */
+type RemedySpans = { removed: string; added: string | null };
 
 const REPLACE_FORM = /^replace(?: the line)? `([^`]+)` with `([^`]+)`\.?$/i;
 const DELETE_FORM = /^(?:delete|remove)(?: the line)? `([^`]+)`\.?$/i;
 
-/** Parse one remedy's canonical whole-string form into an operation; undefined = not checkable. */
-function operationFromRemedy(remedy: string): Operation | undefined {
+/** Parse one remedy's canonical whole-string form; undefined = not checkable. */
+function spansFromRemedy(remedy: string): RemedySpans | undefined {
 	const trimmed = remedy.trim();
 	const replace = REPLACE_FORM.exec(trimmed);
 	if (replace !== null) {
@@ -67,35 +67,21 @@ function operationFromRemedy(remedy: string): Operation | undefined {
 }
 
 /**
- * Decompose the patch into operations, hunk by hunk: within a hunk git
- * emits removed lines then added lines, so the i-th removed line is
- * paired with the i-th added line; a leftover removed line is a
- * deletion (added null), and a leftover ADDED line with no removed
- * partner is an insertion, represented with removed "" so it can match
- * no replace/delete operation and forces a refusal (an insertion is
- * never a verbatim application of a replacement).
+ * The patch's changed lines, split by direction, hunk-aware: a file
+ * header ("--- a/x" / "+++ b/x") is not a content line, and a context
+ * line is neither removed nor added. No pairing is attempted — a
+ * unified diff does not encode it (see the header's DECISION).
  */
-function operationsFromPatch(patch: string): Operation[] {
-	const operations: Operation[] = [];
-	let removed: string[] = [];
-	let added: string[] = [];
+function changedLines(patch: string): { removed: string[]; added: string[] } {
+	const removed: string[] = [];
+	const added: string[] = [];
 	let inHunk = false;
-	const flush = () => {
-		const span = Math.max(removed.length, added.length);
-		for (let i = 0; i < span; i += 1) {
-			operations.push({ removed: removed[i] ?? "", added: i < added.length ? added[i] : null });
-		}
-		removed = [];
-		added = [];
-	};
 	for (const line of patch.split("\n")) {
 		if (line.startsWith("diff --git") || line.startsWith("index ")) {
-			flush();
 			inHunk = false;
 			continue;
 		}
 		if (line.startsWith("@@")) {
-			flush();
 			inHunk = true;
 			continue;
 		}
@@ -108,35 +94,27 @@ function operationsFromPatch(patch: string): Operation[] {
 			removed.push(line.slice(1));
 		}
 	}
-	flush();
-	return operations;
+	return { removed, added };
 }
 
-/** A stable key for an operation, so two operation lists compare as multisets. */
-function key(op: Operation): string {
-	return JSON.stringify([op.removed, op.added]);
+function multiset(lines: readonly string[]): Map<string, number> {
+	const counts = new Map<string, number>();
+	for (const line of lines) {
+		counts.set(line, (counts.get(line) ?? 0) + 1);
+	}
+	return counts;
 }
 
-function sameMultiset(a: Operation[], b: Operation[]): boolean {
-	if (a.length !== b.length) {
+function multisetsEqual(a: Map<string, number>, b: Map<string, number>): boolean {
+	if (a.size !== b.size) {
 		return false;
 	}
-	const counts = new Map<string, number>();
-	for (const op of a) {
-		counts.set(key(op), (counts.get(key(op)) ?? 0) + 1);
-	}
-	for (const op of b) {
-		const k = key(op);
-		const count = counts.get(k);
-		if (count === undefined) {
+	for (const [k, count] of a) {
+		if (b.get(k) !== count) {
 			return false;
 		}
-		counts.set(k, count - 1);
-		if (count - 1 === 0) {
-			counts.delete(k);
-		}
 	}
-	return counts.size === 0;
+	return true;
 }
 
 /**
@@ -153,8 +131,8 @@ export function carryForwardAdmissible(record: ReviewRecord, patch: string): Car
 	if (record.adjudication === null) {
 		reasons.push("the record carries no adjudication — there is no ruling text to check the delta against");
 	}
-	const patchOps = operationsFromPatch(patch);
-	if (patchOps.length === 0) {
+	const changed = changedLines(patch);
+	if (changed.removed.length === 0 && changed.added.length === 0) {
 		reasons.push(
 			"the delta is empty — the head did not advance, so the original review stands and the exception has no subject",
 		);
@@ -163,7 +141,8 @@ export function carryForwardAdmissible(record: ReviewRecord, patch: string): Car
 	// parseable full-line remedy; anything else — a SUBSTANTIVE ruling, a
 	// bare NIT, an out-of-grammar or whitespace remedy — makes the record
 	// something other than a clean nit-only re-issue and refuses (§1.9).
-	const remedyOps: Operation[] = [];
+	const remedyRemoved: string[] = [];
+	const remedyAdded: string[] = [];
 	for (const ruling of record.adjudication?.rulings ?? []) {
 		if (ruling.validity === "REFUTED") {
 			continue; // a refutation leaves nothing behind (§1.9); it is no part of the delta
@@ -174,18 +153,29 @@ export function carryForwardAdmissible(record: ReviewRecord, patch: string): Car
 			);
 			break;
 		}
-		const op = typeof ruling.remedy === "string" ? operationFromRemedy(ruling.remedy) : undefined;
-		if (op === undefined || op.removed.trim().length === 0 || (op.added !== null && op.added.trim().length === 0)) {
+		const spans = typeof ruling.remedy === "string" ? spansFromRemedy(ruling.remedy) : undefined;
+		if (
+			spans === undefined ||
+			spans.removed.trim().length === 0 ||
+			(spans.added !== null && spans.added.trim().length === 0)
+		) {
 			reasons.push(
 				"a NIT ruling carries no parseable full-line remedy — a missing, whitespace, or out-of-grammar remedy is an incomplete adjudication and draws fresh review",
 			);
 			break;
 		}
-		remedyOps.push(op);
+		remedyRemoved.push(spans.removed);
+		if (spans.added !== null) {
+			remedyAdded.push(spans.added);
+		}
 	}
-	if (reasons.length === 0 && !sameMultiset(patchOps, remedyOps)) {
+	if (
+		reasons.length === 0 &&
+		(!multisetsEqual(multiset(changed.removed), multiset(remedyRemoved)) ||
+			!multisetsEqual(multiset(changed.added), multiset(remedyAdded)))
+	) {
 		reasons.push(
-			"the delta's operations are not exactly the recorded NIT remedies, paired removed-to-added — the delta exceeds its finding",
+			"the delta's removed and added lines are not exactly the recorded NIT remedies' old and new lines — the delta exceeds its finding",
 		);
 	}
 	return reasons.length === 0 ? { admissible: true } : { admissible: false, reasons };
