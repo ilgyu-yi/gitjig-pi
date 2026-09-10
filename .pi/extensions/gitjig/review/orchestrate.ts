@@ -1,0 +1,146 @@
+/**
+ * The review round driver (issue #184, Directive #183) — ONE composed
+ * round of §1.7/§1.9's pipeline at one head:
+ *
+ *   policy → coverage → panel dispatch (composed briefs) → join →
+ *   bundle → findings-free fast path | Judge dispatch (manifest) →
+ *   admission → Resolver → the durable review record.
+ *
+ * What is deliberately NOT here: the repair (the author's act, §1.9);
+ * driving successive rounds (the caller's loop — a fresh head draws a
+ * fresh required panel, §1.6/§1.7); posting the record (the landed
+ * egress boundary's, through whichever call site drives the round);
+ * and dispatch mechanics (§4.9's — the driver takes a dispatch
+ * function, and `makeDispatcher` is the one wiring to the real
+ * dispatcher, so unit arms measure the composition without running a
+ * delegate).
+ *
+ * DECISION — the Judge dispatch is keyed on the brief's own composed
+ * subject line ("You are the JUDGE"), which briefs.ts owns as part of
+ * its contract; the driver never re-reads a delegate's text to decide
+ * what it dispatched — it knows, because it composed it.
+ *
+ * DECISION — the panel's slots dispatch concurrently. Mutual blindness
+ * is the dispatcher's isolation (§1.7: every slot in its own execution
+ * context); concurrency here neither adds nor subtracts from it, and a
+ * serial loop would only make one round slower.
+ */
+import { execFileSync } from "node:child_process";
+import type { DispatchOutcome, RunDispatchOptions } from "../dispatch/index.ts";
+import { runDispatch } from "../dispatch/index.ts";
+import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
+import { type BriefTiming, composeJudgeBrief, composeReviewerBrief, type ReviewFences } from "./briefs.ts";
+import { slotResultFromDispatch } from "./join.ts";
+import {
+	changedPathsFromRepo,
+	decideValidity,
+	deriveRequiredSlots,
+	loadPolicy,
+	panelOutcome,
+	type SlotResult,
+} from "./panel.ts";
+import { composeReviewRecord, type ReviewRecord, type SlotRecord } from "./record.ts";
+import {
+	type AdjudicationInput,
+	adjudicationFromDispatch,
+	admitAdjudication,
+	type Manifest,
+	type ReviewState,
+	reviewOutcome,
+} from "./resolve.ts";
+
+export type RoundOptions = {
+	repoRoot: string;
+	baseRef: string;
+	headRef: string;
+	manifest: Manifest;
+	fences: ReviewFences;
+	changeDescription: string;
+	timing?: BriefTiming;
+	/** The one seam to §4.9's dispatcher — `makeDispatcher` for the real one. */
+	dispatch: (brief: string) => Promise<DispatchOutcome>;
+};
+
+export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBody: string };
+
+/**
+ * Wire the round to the real dispatcher: one brief in, one outcome
+ * back, everything else — provision, isolation, bounded return, blind
+ * compare — the dispatcher's own (§4.9).
+ */
+export function makeDispatcher(
+	options: Omit<RunDispatchOptions, "brief">,
+): (brief: string) => Promise<DispatchOutcome> {
+	return (brief) => runDispatch({ ...options, brief });
+}
+
+/**
+ * One composed review round at one head. Throws panel.ts's
+ * RoutingRefusal upstream of any dispatch where §1.7 refuses the
+ * surface — a routing failure produces no panel state and no brief.
+ */
+export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
+	const policy = loadPolicy();
+	const changed = changedPathsFromRepo(options.baseRef, options.headRef, options.repoRoot);
+	const required = deriveRequiredSlots(changed, policy);
+	// The record's pin is the resolved head, not the caller's spelling of
+	// it — §1.6's reviewed-head rule. Same env discipline as the
+	// changed-path read: an ambient GIT_DIR must not redirect the pin.
+	const head = execFileSync("git", ["rev-parse", "--verify", options.headRef], {
+		cwd: options.repoRoot,
+		encoding: "utf8",
+		env: withoutRepoLocatingGitEnv(process.env),
+	}).trim();
+
+	const results: SlotResult[] = await Promise.all(
+		required.map(async (slot) => {
+			const brief = composeReviewerBrief(
+				slot,
+				{ changeDescription: options.changeDescription },
+				options.fences,
+				options.timing,
+			);
+			return slotResultFromDispatch(slot, await options.dispatch(brief));
+		}),
+	);
+	const slots: SlotRecord[] = results.map((result) => {
+		const ruled = decideValidity(result, result.slot);
+		const entry: SlotRecord = { slot: result.slot, valid: ruled.valid };
+		if (ruled.reason !== undefined) {
+			entry.reason = ruled.reason;
+		}
+		return entry;
+	});
+	const panel = panelOutcome(results, required);
+
+	let adjudication: AdjudicationInput | null = null;
+	let review: ReviewState;
+	if (panel.outcome === "bundle") {
+		const judgeBrief = composeJudgeBrief(
+			panel.bundle,
+			options.manifest,
+			{ changeDescription: options.changeDescription },
+			options.fences,
+			options.timing,
+		);
+		const outcome = await options.dispatch(judgeBrief);
+		const input = adjudicationFromDispatch(outcome);
+		adjudication = input ?? null;
+		const admission = input === undefined ? undefined : admitAdjudication(input, options.manifest);
+		review = reviewOutcome(panel, admission);
+	} else {
+		// The findings-free fast path and the incomplete panel: the Judge
+		// never runs — nothing to adjudicate on the first, completeness
+		// precedes adjudication on the second (§1.7, §1.9).
+		review = reviewOutcome(panel, undefined);
+	}
+
+	const record: ReviewRecord = {
+		head,
+		slots,
+		bundle: panel.outcome === "bundle" ? panel.bundle : [],
+		adjudication,
+		review,
+	};
+	return { review, record, recordBody: composeReviewRecord(record) };
+}

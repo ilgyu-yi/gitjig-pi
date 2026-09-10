@@ -123,7 +123,10 @@ function briefs(): BriefsModule {
 	return briefsLoad.mod;
 }
 function records(): RecordModule {
-	assert.ok(recordLoad.mod, `record.ts did not load — the durable review record is absent or broken: ${recordLoad.error}`);
+	assert.ok(
+		recordLoad.mod,
+		`record.ts did not load — the durable review record is absent or broken: ${recordLoad.error}`,
+	);
 	return recordLoad.mod;
 }
 function carry(): CarryModule {
@@ -443,7 +446,9 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 				dispatch: fake.dispatch,
 			}),
 			(error: unknown) =>
-				error instanceof Error && "limb" in (error as object) && (error as { limb: string }).limb === "routing-failure",
+				error instanceof Error &&
+				"limb" in (error as object) &&
+				(error as unknown as { limb: string }).limb === "routing-failure",
 			"an unclaimed constituent did not refuse as §1.7's routing failure upstream of the panel",
 		);
 		assert.equal(fake.briefs.length, 0, "a routing failure dispatched reviewer slots — the refusal is pre-review");
@@ -464,7 +469,11 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			changeDescription: "d",
 			dispatch: fake.dispatch,
 		});
-		assert.equal(result.record.head, head, "the record's head is not the reviewed head's full hash — the pin is §1.6's");
+		assert.equal(
+			result.record.head,
+			head,
+			"the record's head is not the reviewed head's full hash — the pin is §1.6's",
+		);
 		const parsed = r.parseReviewRecord(result.recordBody);
 		assert.ok(parsed, "the composed record body did not parse back — the machine reader cannot consume the record");
 		assert.deepEqual(
@@ -582,8 +591,11 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			record,
 			patch("-const a = 1;", "+const a = 2;", "+const smuggled = true;"),
 		);
-		assert.ok(!verdict.admissible, "an unaccounted added line was admitted — the carry-forward's whole justification " +
-			"is that the delta is mechanically re-checkable against the ruling text");
+		assert.ok(
+			!verdict.admissible,
+			"an unaccounted added line was admitted — the carry-forward's whole justification " +
+				"is that the delta is mechanically re-checkable against the ruling text",
+		);
 	});
 
 	it("a non-clear outcome admits nothing, whatever the delta", () => {
@@ -597,8 +609,11 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 	it("an empty delta admits nothing — with no change there is nothing to carry", () => {
 		const c = carry();
 		const verdict = c.carryForwardAdmissible(clearRecord("replace `a` with `b`"), "");
-		assert.ok(!verdict.admissible, "an empty delta was admitted — the head did not advance, so the original review " +
-			"stands on its own and the exception has no subject");
+		assert.ok(
+			!verdict.admissible,
+			"an empty delta was admitted — the head did not advance, so the original review " +
+				"stands on its own and the exception has no subject",
+		);
 	});
 
 	it("a record with no adjudication admits nothing", () => {
@@ -606,7 +621,10 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		const record = clearRecord("replace `a` with `b`");
 		record.adjudication = null;
 		const verdict = c.carryForwardAdmissible(record, patch("-a", "+b"));
-		assert.ok(!verdict.admissible, "a record with no adjudication carried forward — there is no ruling text to " +
-			"check the delta against, and the check must fail closed");
+		assert.ok(
+			!verdict.admissible,
+			"a record with no adjudication carried forward — there is no ruling text to " +
+				"check the delta against, and the check must fail closed",
+		);
 	});
 });

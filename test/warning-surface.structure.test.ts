@@ -202,6 +202,17 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// that parses a DELEGATE-authored payload — the surface most exposed to
 	// actor bytes in the review layer — cannot grow a raw rendering of one.
 	{ file: "gitjig/review/join.ts", allow: [] },
+	{ file: "gitjig/review/carry-forward.ts", allow: [] },
+	{ file: "gitjig/review/orchestrate.ts", allow: [] },
+	{
+		file: "gitjig/review/record.ts",
+		allow: [
+			// The record marker — a module-level string constant, no byte of it
+			// from a path or a delegate; interpolated only into the parse's own
+			// needle.
+			"REVIEW_RECORD_MARKER",
+		],
+	},
 	{
 		file: "gitjig/review/resolve.ts",
 		allow: [
