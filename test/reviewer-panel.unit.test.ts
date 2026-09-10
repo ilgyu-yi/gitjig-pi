@@ -35,7 +35,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -811,6 +811,19 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
+	it("a non-object policy that is not null is refused in the same words — the typeof half is pinned", () => {
+		const p = orchestrator();
+		for (const parsed of [undefined, 7, "x"]) {
+			assert.throws(
+				() => p.validatePolicy(parsed as never),
+				/did not parse to an object/,
+				"a non-object, non-null policy did not reach this module's authored refusal — every value that " +
+					"reaches the predicate came from JSON.parse of a file, so the typeof half of the guard is what " +
+					"stands between a scalar or absent surface and an unauthored TypeError",
+			);
+		}
+	});
+
 	it("derivation is a function of the change surface, ordered by the policy and never by the input", () => {
 		const p = orchestrator();
 		const policy = p.loadPolicy();
@@ -1075,6 +1088,27 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			/own toplevel/,
 			"a directory inside the fixture repository was answered instead of refused — `cwd` is not a pin, and an " +
 				"unpinned read routes a review from a repository other than the one the caller named (§4.7)",
+		);
+	});
+
+	it("a symlinked root still reads — the toplevel pin compares resolved paths, never spellings", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		// The pin's realpath half is what this arm names. git answers
+		// `--show-toplevel` with the RESOLVED path, so a caller that names the
+		// same repository through a symlink is handed two spellings of one
+		// directory; a pin comparing spellings refuses a root that is the
+		// toplevel, which is §4.7's resolved-values rule read backwards. The
+		// arm exists because on a host whose temporary root is itself a
+		// symlink the drop-realpath mutant dies incidentally, and an
+		// incidental kill is not a pinned guard (§3.12).
+		const link = join(scratchDir("gitjig-symlink-root-"), "link-to-repo");
+		symlinkSync(repo, link);
+		assert.deepEqual(
+			[...p.changedPathsFromRepo("HEAD~1", "HEAD", link)],
+			["SPEC.md"],
+			"the same repository named through a symlink was refused as an interior directory — the toplevel pin " +
+				"must compare resolved values, never raw spellings (§4.7)",
 		);
 	});
 

@@ -281,9 +281,10 @@ export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot:
 		// act on (a nonexistent directory surfaces as a bare spawn ENOENT), so
 		// the refusal is authored here, in the same voice as validatePolicy's.
 		throw new Error(
-			"changed-path read: the supplied repository root cannot be probed for a toplevel — it does not exist, or " +
-				"git cannot resolve a repository there; the read refuses rather than answering about a repository it " +
-				"cannot pin (§4.7)",
+			"changed-path read: the supplied repository root cannot be probed for a toplevel — the probe itself " +
+				"failed, and this arm does not distinguish its causes: the root does not exist, git cannot resolve " +
+				"a repository there, or git could not be run at all; the read refuses rather than answering about " +
+				"a repository it cannot pin (§4.7)",
 		);
 	}
 	if (realpathSync(toplevel) !== realpathSync(repoRoot)) {
