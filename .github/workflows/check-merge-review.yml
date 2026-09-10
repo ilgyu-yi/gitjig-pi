@@ -1,0 +1,61 @@
+name: check-merge-review
+
+# The platform half of SPEC §3.3's `merge-review` gate (issue #190,
+# Directive #28). The gate's contract is homed in that row and in §3.7;
+# it is not restated here (§2.8).
+#
+# DEVELOPMENT AND CI ONLY, the same class suite.yml and source-checks.yml
+# declare: not substrate, and an adopting repository is not meant to
+# receive it (#118/#134 own turning that statement into an arm). The
+# ground is #134's own excision test — a handed-over asset must be
+# meaningful with the shell gone, and this gate is not: the shell is what
+# produces the review record it reads.
+#
+# ADVISORY BY DECISION (§3.6's born-advisory → measure → harden; issue
+# #190 decision 6). The job reports and exits 0 on refusal, and it is
+# deliberately NOT in the branch ruleset's required-check set. Its
+# wrong-BLOCK cost is the highest available here — a false refusal blocks
+# every merge to the default branch, including the merge that would fix
+# it — and its firing history is empty. Hardening it is server
+# configuration and the operator's act, on the evidence this job
+# accumulates.
+#
+# No third-party Actions; actions/checkout and actions/setup-node are
+# GitHub-shipped.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  merge-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Evaluate the merge-review predicate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # The head under review is the PR's own head SHA — the head that
+          # would be merged, which is what §3.3's row binds the review to.
+          node .github/workflows/check-merge-review.mjs \
+            "${{ github.event.pull_request.number }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            "$GITHUB_TOKEN" \
+            "${{ github.repository }}"

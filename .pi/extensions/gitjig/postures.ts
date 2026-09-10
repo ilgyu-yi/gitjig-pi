@@ -392,6 +392,24 @@ export const POSTURES: readonly PostureRow[] = [
 			"label step's un-armed gh call fails the job with no message of the gate's.",
 	},
 	{
+		dependency: "merge-review-record-lookup",
+		failureShape:
+			"the review-record lookup degrades at merge-review — the comment fetch throws or answers non-2xx, a page is " +
+			"not JSON or not an array, the list exceeds the pages the reader walks, no record opens its own comment at " +
+			"the head under review, or a record at that head does not parse",
+		posture: "closed",
+		justification:
+			"Decided at .pi/extensions/gitjig/review/merge-gate.ts on \u00a73.7(c)'s fail-closed-lookup rule and \u00a75.2: the " +
+			"guarded act is a merge to the default branch, where a wrong ALLOW is irreversible, so absence is never read " +
+			"as approval and each limb refuses under its own named reason rather than a shared one. The truncated-list " +
+			"limb is the same choice: a gate that judged a partial comment list would approve on evidence it did not " +
+			"finish reading. NOT ENFORCED TODAY, stated plainly per this section's own rule: the job is advisory by " +
+			"decision (\u00a73.6's born-advisory face, issue #190 decision 6) and exits 0 on refusal, so this closed posture " +
+			"describes the predicate's verdict and not yet the merge's fate \u2014 \u00a72.3's review enforcement is what still " +
+			"stands at the act. Hardening it into a required check is server configuration and the operator's act, on " +
+			"the firing evidence this job accumulates.",
+	},
+	{
 		dependency: "fragment-gate-draft-sleep",
 		failureShape:
 			"the PR is a draft at fragment-gate — the one clean-skip path, taken only when the event payload AND a " +
