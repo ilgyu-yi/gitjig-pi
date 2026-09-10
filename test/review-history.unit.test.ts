@@ -38,7 +38,7 @@ type DispatchOutcome =
 type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
 type StateSummary = {
 	head: string;
-	outcome: "repair" | "measure-escalate" | "clear" | "approved" | "incomplete";
+	outcome: "repair" | "measure-escalate" | "clear" | "approved";
 	findings: string[];
 	rulings: StateRuling[];
 };
@@ -198,13 +198,26 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("an incomplete head is a review state, distinct from repair", () => {
+	it("an incomplete review is NOT a review state — it is dropped, never a resetting state (round 3's EF1)", () => {
 		const h = mod();
-		const out = h.repairHistory([incomplete("a".repeat(40)), repair("b".repeat(40))]);
+		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+		const out = h.repairHistory([incomplete(a), repair(b), clear(c)]);
 		assert.deepEqual(
-			out.map((s) => s.outcome),
-			["incomplete", "repair"],
-			"an incomplete review state was dropped or mis-mapped — it is a state, distinct from repair",
+			out.map((s) => ({ head: s.head, outcome: s.outcome })),
+			[
+				{ head: b, outcome: "repair" },
+				{ head: c, outcome: "clear" },
+			],
+			"an incomplete review contributed a state — §1.4 counts resolved reviews only, and §1.7 rules an " +
+				"incomplete panel no review outcome at all; it must be dropped, not mapped to a state",
+		);
+		// The load-bearing consequence: an interposed incomplete must not reset
+		// the consecutive-repair run, or a change repairs indefinitely (§1.4).
+		assert.equal(
+			h.triggerFires(h.repairHistory([repair(a), incomplete(b), repair(c)])),
+			true,
+			"an interposed incomplete reset the consecutive-repair run — the two resolved repairs are consecutive " +
+				"states and the trigger must fire; an incomplete contributes none",
 		);
 	});
 });
@@ -307,16 +320,39 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 			assert.ok(text.includes(needle), `the diagnosis brief no longer states ${JSON.stringify(needle)}`);
 		}
 	});
+
+	it("pins the per-state header and the change description — the head/outcome sequence IS the history (round 3's EF4)", () => {
+		const text = mod().composeDiagnosisBrief([state({ head: "f".repeat(40), outcome: "repair" })], {
+			changeDescription: "zq the change description",
+		});
+		assert.ok(
+			text.includes("f".repeat(40)),
+			"the brief dropped the state's HEAD — the diagnosis reads the history's heads",
+		);
+		assert.ok(
+			/resolved repair/.test(text),
+			"the brief dropped the state's OUTCOME — OSCILLATION's A→B→A reading needs the ordered outcomes",
+		);
+		assert.ok(
+			text.includes("zq the change description"),
+			"the brief dropped the change description — the Judge cannot situate the history without it",
+		);
+		assert.ok(
+			text.includes("the labels the reviews wore are not the discriminator"),
+			"the brief dropped OSCILLATION's discriminator clause — §1.4 rules on the corrections' EFFECT, not the labels",
+		);
+	});
 });
 
 describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (issue #186)", () => {
 	it("a valid confirmed diagnosis is available with its two outputs and evidence", () => {
 		const h = mod();
-		const input = { value: "STAGNATION" as const, invalidation: "nothing" as const, evidence: "the method repeated" };
+		// Round 3's EF2: use a NON-identity invalidation ("plan", not the
+		// default "nothing"), so a constant-"nothing" mutant that discards the
+		// payload's invalidation cannot pass this deepEqual.
+		const input = { value: "STAGNATION" as const, invalidation: "plan" as const, evidence: "the method repeated" };
 		const admission = h.admitDiagnosis(admittedPayload(input));
 		assert.ok(admission.available, "a valid diagnosis was not admitted");
-		// Round 2's S2: all three fields must be the payload's, not just the
-		// value — a forged invalidation drops a §1.4 re-entry route.
 		assert.deepEqual(
 			admission.available ? admission.diagnosis : undefined,
 			input,
@@ -329,8 +365,9 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		const h = mod();
 		const admission = h.admitDiagnosis({ disposition: "refused", cause: "any" });
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off",
-			"a refused diagnosis dispatch was not a hand-off — an unavailable Judge is not NONE (§1.4)",
+			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			"a refused diagnosis dispatch was not a hand-off with a non-empty reason — an unavailable Judge is not " +
+				"NONE, and §1.4's 'neither limb is silent' reaches this closed limb too",
 		);
 	});
 
@@ -344,9 +381,9 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 			compare: "confirmed",
 		});
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off",
+			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
 			"an ok:false diagnosis with a well-formed payload was read as a value — §1.4's present-but-cannot-measure " +
-				"limb takes the delegate-disowned shape too, and it must hand off",
+				"limb takes the delegate-disowned shape too, and it must hand off with a reason",
 		);
 	});
 
@@ -360,14 +397,22 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 			compare: "invalid",
 		});
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off",
-			"a diagnosis that failed the blind compare was read anyway — §1.6's compare gates it",
+			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			"a diagnosis that failed the blind compare was read anyway, or handed off silently — §1.6's compare gates " +
+				"it and §1.4's hand-off is never silent",
 		);
 	});
 
 	it("a malformed or out-of-set payload hands off, never defaults to a value", () => {
 		const h = mod();
-		for (const payload of ['{"value":"MAYBE","invalidation":"nothing","evidence":"e"}', "not json", "{}"]) {
+		for (const payload of [
+			'{"value":"MAYBE","invalidation":"nothing","evidence":"e"}',
+			// Round 3's EF2: an out-of-set INVALIDATION, not just an out-of-set
+			// value — the invalidation set is closed too.
+			'{"value":"NONE","invalidation":"maybe","evidence":"e"}',
+			"not json",
+			"{}",
+		]) {
 			const admission = h.admitDiagnosis({
 				disposition: "admitted",
 				ok: true,
@@ -455,8 +500,9 @@ describe("§1.4 the two fail limbs — present-but-cannot-measure vs absent subs
 		const h = mod();
 		const availability = h.historyAvailability(true, undefined);
 		assert.ok(
-			!availability.available && availability.disposition === "hand-off",
-			"an installed store whose records could not be read failed open — present-but-cannot-measure is fail-closed",
+			!availability.available && availability.disposition === "hand-off" && availability.reason.length > 0,
+			"an installed store whose records could not be read failed open, or handed off silently — " +
+				"present-but-cannot-measure is fail-closed and §1.4's hand-off carries a reason (round 3's EF3)",
 		);
 	});
 

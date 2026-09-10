@@ -45,8 +45,14 @@
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import type { ReviewRecord } from "./record.ts";
 
-/** One review state's outcome, mapped from a record's ReviewState. */
-export type StateOutcome = "repair" | "measure-escalate" | "clear" | "approved" | "incomplete";
+/**
+ * One review state's outcome, mapped from a RESOLVED record's
+ * ReviewState. §1.4 counts the history in resolved reviews; an
+ * `incomplete` review is not a review outcome at all (§1.7) and
+ * contributes no state, so it has no member here — `repairHistory`
+ * drops it rather than mapping it.
+ */
+export type StateOutcome = "repair" | "measure-escalate" | "clear" | "approved";
 
 /** One ruling as the diagnosis reads it — §1.4's "same findings the Judge already ruled". */
 export type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
@@ -87,12 +93,13 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 	const byHead = new Map<string, StateSummary>();
 	const order: string[] = [];
 	for (const record of records) {
-		const outcome: StateOutcome =
-			record.review.state === "resolved"
-				? record.review.resolution.outcome
-				: record.review.state === "approved"
-					? "approved"
-					: "incomplete";
+		// An incomplete review is not a resolved review, so it is not a
+		// review state and contributes NONE to the counted history (§1.4,
+		// §1.7) — dropped, never a resetting state.
+		if (record.review.state === "incomplete") {
+			continue;
+		}
+		const outcome: StateOutcome = record.review.state === "resolved" ? record.review.resolution.outcome : "approved";
 		const findings = record.bundle.map((entry) => entry.finding);
 		const rulings: StateRuling[] =
 			record.adjudication === null
