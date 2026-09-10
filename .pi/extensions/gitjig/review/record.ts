@@ -2,7 +2,7 @@
  * The durable review record (issue #184, Directive #183) — §1.4's
  * record surface for one review state: machine-composed from admitted
  * returns, pinned to the reviewed head, preserving every admitted
- * Ruling's `evidence` verbatim (F15's anchor), and parseable back so a
+ * Ruling's `evidence` verbatim, and parseable back so a
  * later reader — §1.4's history instruments among them — consumes a
  * recorded fact, never a remembered one.
  *

@@ -148,7 +148,7 @@ export function composeReviewerBrief(
 /**
  * The Judge's brief: the bundle verbatim (labelled unverified), the
  * caller-derived criterion manifest, the four axes, the evidence
- * obligation (F15), the NIT discipline, and the defer conjunction. The
+ * obligation, the NIT discipline, and the defer conjunction. The
  * subject line is the round driver's dispatch key and part of this
  * module's contract.
  */

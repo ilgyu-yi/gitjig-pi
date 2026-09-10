@@ -709,6 +709,46 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			"the record round-trip lost content — what Execution (b)'s history instruments read is not what was written",
 		);
 	});
+
+	it("the head pin is scrubbed of the ambient repo-locating env — a bystander GIT_DIR cannot redirect it (round 7)", async () => {
+		const o = orchestrate();
+		// The pin resolves via `git rev-parse` under withoutRepoLocatingGitEnv;
+		// without the scrub an ambient GIT_DIR beats cwd and the record would
+		// pin a repository the caller never named (§1.6, §4.7). A second real
+		// repo is the bystander the ambient variable would redirect to.
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
+		const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+		const bystander = fixtureRepo({ ".pi/y.ts": "y\n" });
+		const bystanderHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: bystander, encoding: "utf8" }).trim();
+		assert.notEqual(head, bystanderHead, "the two fixture repos share a head — the bystander cannot show a redirect");
+		const savedGitDir = process.env.GIT_DIR;
+		process.env.GIT_DIR = join(bystander, ".git");
+		try {
+			const fake = fakeDispatch(() => admitted(approvedPayload));
+			const result = await o.reviewRound({
+				repoRoot: repo,
+				baseRef: "HEAD~1",
+				headRef: "HEAD",
+				manifest: { state: "present", criteria: [] },
+				fences: FENCES,
+				changeDescription: "d",
+				dispatch: fake.dispatch,
+			});
+			assert.equal(
+				result.record.head,
+				head,
+				"the record pinned a head other than the reviewed repo's — an ambient GIT_DIR redirected the pin, so " +
+					"the env scrub on reviewRound's rev-parse is not doing its job (a bystander repository's commit " +
+					"would key the record and every dispatch)",
+			);
+		} finally {
+			if (savedGitDir === undefined) {
+				delete process.env.GIT_DIR;
+			} else {
+				process.env.GIT_DIR = savedGitDir;
+			}
+		}
+	});
 });
 
 describe("the durable review record (issue #184; §1.4, F15)", () => {
