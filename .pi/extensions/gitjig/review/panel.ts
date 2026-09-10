@@ -269,11 +269,23 @@ export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot:
 	// pin they cannot redirect the answer — a true toplevel resolves at its
 	// own `.git` before any walk begins, and on anything else they can only
 	// turn one refusal into another.
-	const toplevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-		cwd: repoRoot,
-		encoding: "utf8",
-		env,
-	}).trim();
+	let toplevel: string;
+	try {
+		toplevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env,
+		}).trim();
+	} catch {
+		// The child's diagnostic is localized and names no cause a caller can
+		// act on (a nonexistent directory surfaces as a bare spawn ENOENT), so
+		// the refusal is authored here, in the same voice as validatePolicy's.
+		throw new Error(
+			"changed-path read: the supplied repository root cannot be probed for a toplevel — it does not exist, or " +
+				"git cannot resolve a repository there; the read refuses rather than answering about a repository it " +
+				"cannot pin (§4.7)",
+		);
+	}
 	if (realpathSync(toplevel) !== realpathSync(repoRoot)) {
 		throw new Error(
 			"changed-path read: the supplied repository root is a directory inside a repository, not the repository's " +

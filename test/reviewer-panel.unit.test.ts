@@ -38,7 +38,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
 
@@ -101,6 +101,25 @@ function orchestrator(): PanelModule {
 const paths = (literal: string[]): ChangedPaths => literal as unknown as ChangedPaths;
 
 /**
+ * Every scratch directory this file mints, removed once when the file's
+ * tests finish — without the registry each run leaks one directory per
+ * fixture into TMPDIR, measured in the hundreds on a working tree. The
+ * two probes whose cleanup is load-bearing MID-test (the ambient env dir
+ * and the dash-ref side-effect dir) keep their own `finally` blocks.
+ */
+const scratchDirs: string[] = [];
+after(() => {
+	for (const dir of scratchDirs) {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+function scratchDir(prefix: string): string {
+	const dir = mkdtempSync(join(tmpdir(), prefix));
+	scratchDirs.push(dir);
+	return dir;
+}
+
+/**
  * A throwaway repository. With `baseOnly` the history DIVERGES: the base
  * ref gets a commit the head does not carry, which is the only shape in
  * which `A..B` and `A...B` differ — on a linear history the two ranges
@@ -109,7 +128,7 @@ const paths = (literal: string[]): ChangedPaths => literal as unknown as Changed
  * apart.
  */
 function fixtureRepo(files: Record<string, string>, baseOnly?: Record<string, string>): string {
-	const dir = mkdtempSync(join(tmpdir(), "gitjig-panel-repo-"));
+	const dir = scratchDir("gitjig-panel-repo-");
 	const git = (...argv: string[]) => execFileSync("git", argv, { cwd: dir, encoding: "utf8" });
 	git("init", "-q");
 	git("config", "user.email", "t@example.invalid");
@@ -379,6 +398,15 @@ describe("§1.6/§1.7 an invalid slot is a missing result, never a verdict (issu
 			"blind compare not confirmed",
 		],
 		[
+			// Two causes at once, pinning their ORDER: a failure return reports
+			// the failure, never the compare — without a fixture that carries
+			// both, which cause the module names first is unmeasured and the
+			// table's own fallthrough rationale is unenforced on this pair.
+			"timed out AND failed the blind compare",
+			(p) => p.receive(LENS_A, "invalid", { failure: "timeout" }),
+			"timed out",
+		],
+		[
 			"reviewed the wrong surface",
 			(p) =>
 				p.receive({ lens: "spec-contract", surface: "test/" }, "confirmed", {
@@ -556,7 +584,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		// The rejected loader shape was `loadPolicy(path = POLICY_PATH)`,
 		// whose arity is 0 — so an arity assertion cannot see it. This one
 		// can: a loader that honoured an argument would read the decoy.
-		const decoy = join(mkdtempSync(join(tmpdir(), "gitjig-decoy-")), "lens-policy.json");
+		const decoy = join(scratchDir("gitjig-decoy-"), "lens-policy.json");
 		writeFileSync(decoy, JSON.stringify({ rows: [{ lens: "decoy", surface: "s", prefixes: ["x/"] }] }));
 		const loaded = (p.loadPolicy as (path?: string) => Policy)(decoy);
 		assert.ok(
@@ -604,27 +632,43 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 
 	it("a policy that routes nothing, or whose rows cannot route, is refused at load", () => {
 		const p = orchestrator();
-		// Each of these is a guard an earlier suite left unmeasured, so each
-		// is exercised directly against deriveRequiredSlots' own validator
-		// through loadPolicy's contract: the module must not accept them.
-		for (const [why, rows] of [
-			["no rows at all", []],
-			["a row with no prefixes", [{ lens: "a", surface: "s", prefixes: [] }]],
-			["a row with an empty prefix", [{ lens: "a", surface: "s", prefixes: [""] }]],
-			["a row with no lens name", [{ lens: "", surface: "s", prefixes: ["x/"] }]],
+		// Each guard is exercised on BOTH its halves — the well-typed-but-
+		// empty value and the wrong-TYPE value — because every input reaches
+		// the predicate from JSON.parse of a file, so a fixture set of only
+		// well-typed shapes leaves the typeof/Array.isArray halves unmeasured
+		// and a raw TypeError can wear an authored refusal's green. Each row
+		// carries a matcher on the module's own words for the same reason: a
+		// bare-message assert.throws accepts ANY error, including the crash
+		// the guard exists to replace.
+		for (const [why, rows, refusal] of [
+			["no rows at all", [], /no rows/],
+			["rows that are not an array", {} as never, /no rows/],
+			["a row with no prefixes", [{ lens: "a", surface: "s", prefixes: [] }], /declares no prefix/],
+			[
+				"a row whose prefixes are not an array",
+				[{ lens: "a", surface: "s", prefixes: "x/" } as never],
+				/declares no prefix/,
+			],
+			["a row with an empty prefix", [{ lens: "a", surface: "s", prefixes: [""] }], /empty prefix/],
+			["a row with a non-string prefix", [{ lens: "a", surface: "s", prefixes: [7] } as never], /empty prefix/],
+			["a row with no lens name", [{ lens: "", surface: "s", prefixes: ["x/"] }], /no lens name/],
+			["a row with a non-string lens", [{ lens: 7, surface: "s", prefixes: ["x/"] } as never], /no lens name/],
 			[
 				"two rows sharing one lens",
 				[
 					{ lens: "a", surface: "s1", prefixes: ["x/"] },
 					{ lens: "a", surface: "s2", prefixes: ["y/"] },
 				],
+				/appears twice/,
 			],
-		] as [string, Policy["rows"]][]) {
+		] as [string, Policy["rows"], RegExp][]) {
 			assert.throws(
 				() => p.validatePolicy({ rows }),
-				`a policy with ${why} was accepted — each of these breaks a guarantee §1.7 states: a policy that ` +
-					"routes nothing derives an empty required set, an empty prefix matches every string, and two " +
-					"rows sharing a lens make a slot no caller can pair a dispatch to",
+				refusal,
+				`a policy with ${why} was accepted, or refused in words this repository did not author — each of ` +
+					"these breaks a guarantee §1.7 states: a policy that routes nothing derives an empty required " +
+					"set, an empty prefix matches every string, and two rows sharing a lens make a slot no caller can " +
+					"pair a dispatch to",
 			);
 		}
 		// The committed surface passes its own validator — the predicate has
@@ -634,11 +678,23 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 
 	it("a row's surface is validated and carried — a slot's identity is the pair, so half of it is not enough", () => {
 		const p = orchestrator();
-		assert.throws(
-			() => p.validatePolicy({ rows: [{ lens: "a", prefixes: ["x/"] } as never] }),
-			"a row with no surface was accepted — two such rows produce slots that compare equal on a field that is " +
-				"undefined in both, which is the same unpairable slot the lens-uniqueness check exists to prevent",
-		);
+		// All three invalid shapes — absent, empty-string, wrong-type — with a
+		// matcher on the module's own words: fixtures that only omit the field
+		// leave the typeof and length halves of the guard unmeasured, and a
+		// matcher-less throws accepts the raw TypeError the guard replaces.
+		for (const row of [
+			{ lens: "a", prefixes: ["x/"] } as never,
+			{ lens: "a", surface: "", prefixes: ["x/"] },
+			{ lens: "a", surface: 7, prefixes: ["x/"] } as never,
+		]) {
+			assert.throws(
+				() => p.validatePolicy({ rows: [row] }),
+				/declares no surface/,
+				"a row without a usable surface was accepted, or refused in unauthored words — two such rows produce " +
+					"slots that compare equal on a field neither carries, which is the same unpairable slot the " +
+					"lens-uniqueness check exists to prevent",
+			);
+		}
 		// Two rows, two DIFFERENT surfaces, one derivation: a constant surface
 		// equal to either row's cannot satisfy both, which is what a
 		// single-row single-string assertion could not catch.
@@ -698,18 +754,29 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
-	it("the authoritative read ignores an ambient GIT_DIR — the routing query is pinned to its cwd", () => {
+	it("the authoritative read ignores the ambient repo-locating and config-injection families — the routing query is pinned to its cwd", () => {
 		const p = orchestrator();
 		const repo = fixtureRepo({ "SPEC.md": "x\n" });
-		// Three of the repo-locating family, not GIT_DIR alone: the scrub is
-		// the shared dispatcher helper whose full seven-key list is measured
-		// in dispatch-module's own arms, and what THIS arm kills is a panel
-		// that stopped calling it — or replaced it with a one-key local copy.
+		// Six of the shared scrub's seven keys, each set to a value this read
+		// OBSERVES if it leaks: GIT_DIR / GIT_WORK_TREE redirect the answer,
+		// GIT_OBJECT_DIRECTORY / GIT_COMMON_DIR turn the fixture into "not a
+		// repository", and a malformed GIT_CONFIG_PARAMETERS / GIT_CONFIG_COUNT
+		// is a fatal parse — so dropping any ONE of the six scrub lines reds
+		// this arm. What is measured where, stated so no reader over-credits a
+		// corpus: dispatch-module's own arms measure GIT_DIR and the
+		// well-formed GIT_CONFIG_COUNT channel; the other four of these six are
+		// measured HERE and nowhere else. GIT_INDEX_FILE, the seventh key, is
+		// deliberately NOT set: a commit-to-commit read never opens the index,
+		// so its scrub is unobservable through this module — that residual is
+		// the dispatch suite's to measure, filed under Directive #166's line.
 		const ambientDir = mkdtempSync(join(tmpdir(), "gitjig-ambient-"));
 		const hostile: Record<string, string> = {
 			GIT_DIR: join(ambientDir, "nonexistent.git"),
 			GIT_WORK_TREE: ambientDir,
-			GIT_INDEX_FILE: join(ambientDir, "nonexistent-index"),
+			GIT_OBJECT_DIRECTORY: join(ambientDir, "no-objects"),
+			GIT_COMMON_DIR: join(ambientDir, "no-common"),
+			GIT_CONFIG_PARAMETERS: "not a parseable configuration",
+			GIT_CONFIG_COUNT: "1",
 		};
 		const saved = new Map(Object.keys(hostile).map((key) => [key, process.env[key]]));
 		Object.assign(process.env, hostile);
@@ -717,9 +784,9 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			assert.deepEqual(
 				[...p.changedPathsFromRepo("HEAD~1", "HEAD", repo)],
 				["SPEC.md"],
-				"an ambient repo-locating variable reached the authoritative read — §4.6 keeps the ambient " +
-					"environment off the routing path, and an unscrubbed GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE answers " +
-					"about a different repository than the one under review",
+				"an ambient repo-locating or config-injection variable reached the authoritative read — §4.6 keeps " +
+					"the ambient environment off the routing path, and an unscrubbed key either answers about a " +
+					"different repository than the one under review or refuses a read that should answer",
 			);
 		} finally {
 			rmSync(ambientDir, { recursive: true, force: true });
@@ -1008,6 +1075,23 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			/own toplevel/,
 			"a directory inside the fixture repository was answered instead of refused — `cwd` is not a pin, and an " +
 				"unpinned read routes a review from a repository other than the one the caller named (§4.7)",
+		);
+	});
+
+	it("a root that cannot be probed refuses in this module's own words — never a raw child error", () => {
+		const p = orchestrator();
+		// A plain directory outside any repository: the probe's child fails,
+		// and the module must speak for it — the child's diagnostic is
+		// localized and names no cause a caller can act on (a nonexistent
+		// directory surfaces as a bare spawn ENOENT), while validatePolicy
+		// eleven guards over holds itself to authored refusals for exactly
+		// this reason.
+		const outside = scratchDir("gitjig-nonrepo-");
+		assert.throws(
+			() => p.changedPathsFromRepo("HEAD~1", "HEAD", outside),
+			/cannot be probed/,
+			"a non-repository root threw something this repository did not author — the refusal direction is right " +
+				"either way, but an unauthored, localized diagnostic is not a refusal a caller can act on",
 		);
 	});
 
