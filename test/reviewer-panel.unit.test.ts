@@ -434,6 +434,14 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 			"the refusal's own text does not name the unowned constituent — §1.7's remedy is an amendment to the " +
 				"committed policy, and an operator reading the refusal must see what to claim",
 		);
+		// Round 3's B: the clause is the operator-facing carrier of §1.7's
+		// recorded rejected design — lost, the refusal directs an amendment
+		// without naming the shape it may not take.
+		assert.ok(
+			refused.message.includes("never a catch-all row"),
+			"the refusal's text no longer forbids the catch-all row — §1.7 records that row as the rejected design, " +
+				"and the refusal is where the operator authoring the amendment reads it",
+		);
 	});
 
 	it("the empty change surface refuses distinctly — not a routing failure, no amendment owed", () => {
@@ -450,6 +458,19 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 			[],
 			"the empty-surface refusal named unclaimed constituents — an empty surface has none, and naming any " +
 				"conflates the two limbs the clause keeps distinct",
+		);
+		// Round 3's C: without these two facts in the thrown text, a
+		// contentless empty-surface refusal is indistinguishable from a
+		// routing failure and can mint the amendment §1.7 says is not owed.
+		assert.ok(
+			refused.message.includes("not a routing failure"),
+			"the empty-surface refusal's text no longer distinguishes itself from a routing failure — the operator " +
+				"reading it cannot tell which limb refused",
+		);
+		assert.ok(
+			refused.message.includes("no policy amendment is owed"),
+			"the empty-surface refusal's text no longer says no amendment is owed — an operator may mint the policy " +
+				"amendment §1.7 says this limb never obligates",
 		);
 	});
 
