@@ -43,17 +43,19 @@
  * directly, which is derivation under test, not the policy surface.
  *
  * What "committed" is NOT: it is not a runtime cleanliness check.
- * A round-3 repair had `loadPolicy` shell `git status` to refuse a
- * worktree-modified policy; that one mechanism drew a §4.6 ambient-env
- * exposure onto the routing path, an undeclared §3.9 git dependency,
- * and `git status` proxies with measured false-clean bypasses — a patch
- * cascade whose root was the premise. §1.7's committed property is that
- * the policy is a reviewed repository artifact, diffable and auditable
- * like any other; that is enforced by the file being tracked and going
- * through review and the merge gate, exactly as this module's own source
- * is, not by the module re-policing its own bytes at every call. An
- * operator's uncommitted local edit to it is outside the threat model
- * the same way an edit to any gate's own source is (§5.5, §4.6).
+ * The rejected alternative is `loadPolicy` shelling `git status` to
+ * refuse a worktree-modified policy; that one mechanism draws a §4.6
+ * ambient-env exposure onto the routing path, an undeclared §3.9 git
+ * dependency, and `git status` proxies with measured false-clean
+ * bypasses — a patch cascade whose root is the premise. §1.7's committed
+ * property is that the policy is a reviewed repository artifact,
+ * diffable and auditable like any other; that is enforced by the file
+ * being tracked and going through review and the merge gate, exactly as
+ * this module's own source is, not by the module re-policing its own
+ * bytes at every call. The residual is enumerated in place rather than
+ * defended (§3.11): an uncommitted local edit to the policy file changes
+ * what this process routes and nothing here detects it — the same power
+ * an uncommitted edit to this module's own source carries, and no more.
  *
  * NOT here, by design: the Judge and the Resolver. A non-empty bundle is
  * this module's terminal output. Nothing below reads what a finding
@@ -61,34 +63,11 @@
  * the semantic act §1.7 reserves for exactly one downstream point.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import { quoted } from "../quote.ts";
-
-/**
- * The parent environment with git's repo-locating and config-injection
- * families removed, so a shelled read answers about the repository `cwd`
- * names and not one an ambient variable points at (§4.6, §4.7). The same
- * families §4.9's executor strips; the panel does not import that helper
- * because the dispatcher's dependency boundary is severed from it, so the
- * one list lives here for the panel's own git calls.
- */
-function withoutRepoLocatingGitEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-	const scrubbed = { ...env };
-	for (const key of [
-		"GIT_DIR",
-		"GIT_WORK_TREE",
-		"GIT_INDEX_FILE",
-		"GIT_OBJECT_DIRECTORY",
-		"GIT_COMMON_DIR",
-		"GIT_CONFIG_PARAMETERS",
-		"GIT_CONFIG_COUNT",
-	]) {
-		delete scrubbed[key];
-	}
-	return scrubbed;
-}
 
 /** A required review slot: one lens over one declared surface (§1.7). */
 export type Slot = { lens: string; surface: string };
@@ -144,7 +123,7 @@ type PolicyRow = { lens: string; surface: string; prefixes: string[] };
 declare const validated: unique symbol;
 
 /** The policy's parsed shape, before its validity predicate has run. */
-export type PolicyInput = { version: number; rows: PolicyRow[] };
+export type PolicyInput = { rows: PolicyRow[] };
 
 /**
  * A policy the predicate has ruled on. Branded like the other two
@@ -231,7 +210,6 @@ export function validatePolicy(parsed: PolicyInput): Policy {
 	// the aliasing class receive and buildBundle were cured of, at the
 	// boundary where the routing table itself ships.
 	return {
-		version: parsed.version,
 		rows: parsed.rows.map((row) => ({ lens: row.lens, surface: row.surface, prefixes: [...row.prefixes] })),
 	} as Policy;
 }
@@ -274,15 +252,38 @@ export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot:
 	// '--output=...' must come before non-option arguments` — the refusal
 	// direction, never the silent-empty one.
 	//
-	// The repo-locating GIT_* families are stripped from the child's
-	// environment, the same scrub §4.9's executor applies: without it an
-	// ambient GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE would redirect this
-	// read at a repository other than the one under review, while `cwd`
-	// still points here — an ambient value on the routing path (§4.6).
+	// The repo-locating GIT_* families are stripped from every child's
+	// environment through the dispatcher's own helper (§3.11: one hazard,
+	// one spelling — `commands/ship.ts` already imports it across the same
+	// boundary): without the scrub an ambient GIT_DIR / GIT_WORK_TREE /
+	// GIT_INDEX_FILE would redirect this read at a repository other than
+	// the one under review, while `cwd` still points here (§4.6).
+	const env = withoutRepoLocatingGitEnv(process.env);
+	// `cwd` is not a pin: git discovers its repository by walking UP from
+	// `cwd`, so a `repoRoot` naming any directory INSIDE a repository would
+	// silently answer about the enclosing one — §4.7's unpinned lookup. The
+	// read is pinned by deriving the toplevel the way `bind-state.ts` and
+	// `.githooks/_lib.sh` do and refusing on mismatch. Residual, enumerated
+	// (§3.11): the discovery-walk governors GIT_CEILING_DIRECTORIES and
+	// GIT_DISCOVERY_ACROSS_FILESYSTEM stay in the child env, and under the
+	// pin they cannot redirect the answer — a true toplevel resolves at its
+	// own `.git` before any walk begins, and on anything else they can only
+	// turn one refusal into another.
+	const toplevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+		cwd: repoRoot,
+		encoding: "utf8",
+		env,
+	}).trim();
+	if (realpathSync(toplevel) !== realpathSync(repoRoot)) {
+		throw new Error(
+			"changed-path read: the supplied repository root is a directory inside a repository, not the repository's " +
+				"own toplevel — an unpinned read would silently answer about the enclosing repository (§4.7)",
+		);
+	}
 	const out = execFileSync("git", ["diff", "--name-only", "-z", "--end-of-options", `${baseRef}...${headRef}`], {
 		cwd: repoRoot,
 		encoding: "utf8",
-		env: withoutRepoLocatingGitEnv(process.env),
+		env,
 	});
 	return out.split("\0").filter((entry) => entry.length > 0) as unknown as ChangedPaths;
 }
@@ -417,8 +418,8 @@ export function panelOutcome(results: readonly SlotResult[], required: readonly 
 	// auto-corrected; an SSOT correction is attended-only). So the concern
 	// that this can approve a head no reviewer examined is on issue #172
 	// for the operator, and the code follows the contract meanwhile. A
-	// minted fourth token and a thrown refusal were both tried in earlier
-	// rounds and both ruled behaviours the SSOT does not carry.
+	// minted fourth token and a thrown refusal were both tried and both
+	// ruled behaviours the SSOT does not carry.
 	const missing = required
 		.filter((slot) => validResultsFor(results, slot).length === 0)
 		.map((slot) => ({ lens: slot.lens, surface: slot.surface }));

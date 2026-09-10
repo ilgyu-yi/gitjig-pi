@@ -50,7 +50,7 @@ type Compare = "confirmed" | "invalid" | "absent";
 /** The module brands this; the suite mirrors its shape and casts at `receive`. */
 type SlotResult = { slot: Slot; compare: Compare; returned: ReviewerReturn };
 type ChangedPaths = readonly string[];
-type Policy = { version: number; rows: { lens: string; surface: string; prefixes: string[] }[] };
+type Policy = { rows: { lens: string; surface: string; prefixes: string[] }[] };
 
 type PanelModule = {
 	loadPolicy(): Policy;
@@ -553,11 +553,11 @@ describe("§1.6 validity is the caller's fact — a reviewer cannot vouch for it
 describe("§1.7 required slots derive from a committed, caller-owned policy (issue #169)", () => {
 	it("loadPolicy reads the committed file and nothing a caller names", () => {
 		const p = orchestrator();
-		// The round-1 defect was `loadPolicy(path = POLICY_PATH)`, whose
-		// arity is 0 — so an arity assertion cannot see it. This one can:
-		// a loader that honoured an argument would read the decoy.
+		// The rejected loader shape was `loadPolicy(path = POLICY_PATH)`,
+		// whose arity is 0 — so an arity assertion cannot see it. This one
+		// can: a loader that honoured an argument would read the decoy.
 		const decoy = join(mkdtempSync(join(tmpdir(), "gitjig-decoy-")), "lens-policy.json");
-		writeFileSync(decoy, JSON.stringify({ version: 1, rows: [{ lens: "decoy", surface: "s", prefixes: ["x/"] }] }));
+		writeFileSync(decoy, JSON.stringify({ rows: [{ lens: "decoy", surface: "s", prefixes: ["x/"] }] }));
 		const loaded = (p.loadPolicy as (path?: string) => Policy)(decoy);
 		assert.ok(
 			!loaded.rows.some((row) => row.lens === "decoy"),
@@ -569,10 +569,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 
 	it("loadPolicy runs the validator, and it is the same one the suite exercises", () => {
 		const p = orchestrator();
-		assert.throws(
-			() => p.validatePolicy({ version: 1, rows: [] }),
-			"the exported predicate accepted a policy that routes nothing",
-		);
+		assert.throws(() => p.validatePolicy({ rows: [] }), "the exported predicate accepted a policy that routes nothing");
 		// The binding: a loader that skipped the predicate would pass every
 		// arm that only checks the predicate and the committed file apart.
 		assert.equal(
@@ -624,7 +621,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			],
 		] as [string, Policy["rows"]][]) {
 			assert.throws(
-				() => p.validatePolicy({ version: 1, rows }),
+				() => p.validatePolicy({ rows }),
 				`a policy with ${why} was accepted — each of these breaks a guarantee §1.7 states: a policy that ` +
 					"routes nothing derives an empty required set, an empty prefix matches every string, and two " +
 					"rows sharing a lens make a slot no caller can pair a dispatch to",
@@ -638,7 +635,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 	it("a row's surface is validated and carried — a slot's identity is the pair, so half of it is not enough", () => {
 		const p = orchestrator();
 		assert.throws(
-			() => p.validatePolicy({ version: 1, rows: [{ lens: "a", prefixes: ["x/"] } as never] }),
+			() => p.validatePolicy({ rows: [{ lens: "a", prefixes: ["x/"] } as never] }),
 			"a row with no surface was accepted — two such rows produce slots that compare equal on a field that is " +
 				"undefined in both, which is the same unpairable slot the lens-uniqueness check exists to prevent",
 		);
@@ -646,7 +643,6 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		// equal to either row's cannot satisfy both, which is what a
 		// single-row single-string assertion could not catch.
 		const twoRow = p.validatePolicy({
-			version: 1,
 			rows: [
 				{ lens: "one", surface: "surface one", prefixes: ["a/"] },
 				{ lens: "two", surface: "surface two", prefixes: ["b/"] },
@@ -665,7 +661,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 
 	it("validatePolicy returns a detached policy — a post-validation push to the caller's rows does not route", () => {
 		const p = orchestrator();
-		const input = { version: 1, rows: [{ lens: "a", surface: "s", prefixes: ["a/"] }] };
+		const input = { rows: [{ lens: "a", surface: "s", prefixes: ["a/"] }] };
 		const validated = p.validatePolicy(input);
 		// The row this pushes would be REFUSED by the validator (empty lens,
 		// empty prefixes); if the branded value aliased the caller's array it
@@ -678,29 +674,61 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 				"return a fresh object, or the brand certifies a snapshot the predicate never ruled on (the aliasing " +
 				"class receive and buildBundle were cured of, at the table boundary)",
 		);
+		// The detach must be DEEP: a shallow copy shares the row and prefix
+		// objects, so mutating either after validation rewrites what the brand
+		// certifies — the reproduced exploit routed an empty-lens slot the
+		// validator refuses, through a post-validation write to the caller's
+		// row object.
+		const row = input.rows[0] as Policy["rows"][number];
+		row.lens = "";
+		row.surface = "forged";
+		row.prefixes[0] = "forged/";
+		row.prefixes.push("");
+		assert.deepEqual(
+			validated.rows,
+			[{ lens: "a", surface: "s", prefixes: ["a/"] }],
+			"a post-validation mutation of the caller's row or prefix objects reached the branded policy — the copy " +
+				"is shallow, so the brand certifies rows the predicate never ruled on",
+		);
+		assert.deepEqual(
+			p.deriveRequiredSlots(paths(["forged/x"]), validated),
+			[],
+			"a prefix written into the caller's array after validation ROUTED — derivation consulted an aliased " +
+				"prefix list rather than the snapshot the predicate ruled on",
+		);
 	});
 
 	it("the authoritative read ignores an ambient GIT_DIR — the routing query is pinned to its cwd", () => {
 		const p = orchestrator();
 		const repo = fixtureRepo({ "SPEC.md": "x\n" });
-		const saved = process.env.GIT_DIR;
-		// An ambient GIT_DIR would, unscrubbed, redirect the committedness/
-		// diff query at another repository while cwd still points here. The
-		// scrub must strip it; the read must still report the fixture's path.
-		process.env.GIT_DIR = join(mkdtempSync(join(tmpdir(), "gitjig-ambient-")), "nonexistent.git");
+		// Three of the repo-locating family, not GIT_DIR alone: the scrub is
+		// the shared dispatcher helper whose full seven-key list is measured
+		// in dispatch-module's own arms, and what THIS arm kills is a panel
+		// that stopped calling it — or replaced it with a one-key local copy.
+		const ambientDir = mkdtempSync(join(tmpdir(), "gitjig-ambient-"));
+		const hostile: Record<string, string> = {
+			GIT_DIR: join(ambientDir, "nonexistent.git"),
+			GIT_WORK_TREE: ambientDir,
+			GIT_INDEX_FILE: join(ambientDir, "nonexistent-index"),
+		};
+		const saved = new Map(Object.keys(hostile).map((key) => [key, process.env[key]]));
+		Object.assign(process.env, hostile);
 		try {
 			assert.deepEqual(
 				[...p.changedPathsFromRepo("HEAD~1", "HEAD", repo)],
 				["SPEC.md"],
-				"an ambient GIT_DIR reached the authoritative read — §4.6 keeps the ambient environment off the " +
-					"routing path, and an unscrubbed GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE answers about a different " +
-					"repository than the one under review",
+				"an ambient repo-locating variable reached the authoritative read — §4.6 keeps the ambient " +
+					"environment off the routing path, and an unscrubbed GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE answers " +
+					"about a different repository than the one under review",
 			);
 		} finally {
-			if (saved === undefined) {
-				delete process.env.GIT_DIR;
-			} else {
-				process.env.GIT_DIR = saved;
+			rmSync(ambientDir, { recursive: true, force: true });
+			for (const [key, value] of saved) {
+				if (value === undefined) {
+					delete process.env[key];
+				} else {
+					process.env[key] = value;
+				}
 			}
 		}
 	});
@@ -783,22 +811,23 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
-	it("loadPolicy runs no git subprocess — committedness is a review property, not a runtime probe", () => {
-		// A round-3 repair had loadPolicy shell `git status` to refuse a
-		// worktree-modified policy; that one mechanism drew a §4.6 ambient
+	it("loadPolicy runs no subprocess — committedness is a review property, not a runtime probe", () => {
+		// The rejected repair had loadPolicy shell `git status` to refuse a
+		// worktree-modified policy; that one mechanism draws a §4.6 ambient
 		// exposure, an undeclared §3.9 git dependency, and false-clean
-		// bypasses — a patch cascade whose root was the premise. §1.7's
+		// bypasses — a patch cascade whose root is the premise. §1.7's
 		// committed property is enforced by the file being a reviewed,
 		// tracked artifact, exactly as this module's own source is, so
 		// loadPolicy reads its committed bytes and shells nothing. The pin
 		// is over source text, labelled as the weak lock it is, and its job
-		// is to make re-adding a status probe here a visible act.
+		// is to make re-adding ANY subprocess probe here a visible act — a
+		// pin on the literal "status" alone let a `rev-parse` probe back in.
 		const source = readFileSync(`${repoRoot()}${REVIEW_DIR}panel.ts`, "utf8");
 		const loadBody = source.slice(source.indexOf("export function loadPolicy"));
 		assert.ok(
-			!/loadPolicy[\s\S]*?"status"/.test(loadBody.slice(0, loadBody.indexOf("\n}"))),
-			"loadPolicy shells `git status` again — committedness belongs to review and the merge gate, not to a " +
-				"runtime subprocess on the routing path, and a status probe here re-opens the §4.6/§3.9 cascade",
+			!/execFileSync|execSync|spawn/.test(loadBody.slice(0, loadBody.indexOf("\n}"))),
+			"loadPolicy runs a subprocess again — committedness belongs to review and the merge gate, not to a " +
+				"runtime probe on the routing path, and any subprocess here re-opens the §4.6/§3.9 cascade",
 		);
 	});
 
@@ -833,7 +862,6 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		// slash matched against `prefix/child` — has no positive fixture
 		// there. A synthetic bare directory prefix exercises it.
 		const policy = p.validatePolicy({
-			version: 1,
 			rows: [{ lens: "docs", surface: "the docs tree", prefixes: ["docs"] }],
 		});
 		assert.deepEqual(
@@ -930,12 +958,30 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		const probeDir = mkdtempSync(join(tmpdir(), "gitjig-a1-"));
 		const sideEffect = `${join(probeDir, "written")}...HEAD`;
 		try {
-			assert.throws(
-				() => p.changedPathsFromRepo(`--output=${join(probeDir, "written")}`, "HEAD", repo),
-				/must come before non-option arguments|end.?of.?options|ambiguous|unknown|fatal/i,
+			// The discrimination is STRUCTURAL — a git child's non-zero exit
+			// plus the absent side effect — never a diagnostic-text match:
+			// git's diagnostics are localized, and execFileSync echoes the
+			// argv (`--end-of-options` included) into every Error message it
+			// raises, so any English or argv-token regex here matches every
+			// throw and discriminates nothing.
+			let refusal: unknown;
+			try {
+				p.changedPathsFromRepo(`--output=${join(probeDir, "written")}`, "HEAD", repo);
+			} catch (error) {
+				refusal = error;
+			}
+			assert.ok(
+				refusal !== undefined,
 				"a dash-leading base ref did not refuse — git either consumed it as an option or the read returned " +
 					"empty, and a routing input that cannot be a revision must refuse, not degrade into an empty " +
 					"change surface",
+			);
+			const status = (refusal as { status?: unknown }).status;
+			assert.ok(
+				typeof status === "number" && status !== 0,
+				"the refusal is not a git child's non-zero exit — the guard's job is to make GIT refuse the operand " +
+					"while parsing options, and a throw from anywhere else is a different failure wearing this arm's " +
+					"green",
 			);
 			assert.ok(
 				!existsSync(sideEffect),
@@ -945,6 +991,24 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		} finally {
 			rmSync(probeDir, { recursive: true, force: true });
 		}
+	});
+
+	it("a repository-interior directory refuses — the read is pinned to the toplevel git discovers, not to whatever encloses cwd", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		// The measured wrong answer: git discovers its repository by walking
+		// UP from cwd, so an unpinned read handed an empty directory INSIDE a
+		// repository silently reports the ENCLOSING repository's change
+		// surface (§4.7). The pin must turn that into a refusal, matched on
+		// this module's own authored message rather than git's localized text.
+		const inner = join(repo, "empty-inner");
+		mkdirSync(inner);
+		assert.throws(
+			() => p.changedPathsFromRepo("HEAD~1", "HEAD", inner),
+			/own toplevel/,
+			"a directory inside the fixture repository was answered instead of refused — `cwd` is not a pin, and an " +
+				"unpinned read routes a review from a repository other than the one the caller named (§4.7)",
+		);
 	});
 
 	it("the authoritative read is what derivation consumes — a hand-built array needs a named cast", () => {
