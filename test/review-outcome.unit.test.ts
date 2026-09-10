@@ -13,8 +13,13 @@
  * NOT measured here, so a reader does not over-read it: the Judge's own
  * conduct (a dispatched semantic actor — this file pins what the CALLER
  * admits of its return, never how it rules); §1.4's history-diagnosis
- * capacity (asleep, §5.3); and the dispatcher's own arms, which live in
- * `dispatch-module` and which issue #177 must leave untouched.
+ * capacity (asleep, §5.3); the dispatcher's own arms, which live in
+ * `dispatch-module` and which issue #177 must leave untouched; and
+ * whether admission leaves the CALLER's input untouched on the GAP path
+ * — no clause or comment claims that guard (the stated aliasing
+ * discipline detaches the value admission MINTS, and the gap path mints
+ * none), so the absence is a recorded decision, not an unmeasured
+ * promise (§3.12 binds where a mutant kills a guard).
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -692,13 +697,12 @@ describe("§1.9 the adjudication contract — what the caller admits of a Judge 
 });
 
 describe("§1.9 validity evidence rides the ruling (issue #179)", () => {
-	// The ruling (issue #179): evidence is
-	// part of the Judge ruling itself, owed on EVERY validity — §1.9's own
-	// words retain a REFUTED finding "with its refuting command" and record
-	// each validity ruling "with the command it ran or the citation it
-	// rests on". Admission checks presence only; nothing
-	// deterministic evaluates the content; the field rides the snapshot
-	// verbatim as the reconsideration anchor.
+	// The ruling (issue #179): evidence is part of the Judge ruling itself,
+	// owed on EVERY validity — §1.9's own words retain a REFUTED finding
+	// "with its refuting command" and record each validity ruling "with the
+	// command it ran or the citation it rests on". Admission checks presence
+	// only; nothing deterministic evaluates the content; the field rides the
+	// snapshot verbatim as the reconsideration anchor.
 	it("the closed wire shape REQUIRES evidence — a ruling without it, or with a non-string one, is no adjudication", () => {
 		const r = resolves();
 		const good = { dedupAttested: true, rulings: [ruling()] };
@@ -794,7 +798,7 @@ describe("§1.9 validity evidence rides the ruling (issue #179)", () => {
 				{ dedupAttested: true, rulings: [ruling({ direction: "fail-closed", onCriterion: false, evidence })] },
 				MANIFEST,
 			);
-		const one = admit("zq: grep returned zero hits");
+		const one = admit("x");
 		const other = admit("zq: an entirely different command trail");
 		assert.ok(one.complete && other.complete, "the evidence-bearing fixtures should admit");
 		assert.deepEqual(
@@ -807,7 +811,7 @@ describe("§1.9 validity evidence rides the ruling (issue #179)", () => {
 
 	it("the admitted evidence rides the branded snapshot verbatim — the reconsideration anchor survives the copy", () => {
 		const r = resolves();
-		const anchor = "  zq\tanchor — bytes intact  ";
+		const anchor = "  zQ\tANCHOR — bytes intact  ";
 		const input = { dedupAttested: true, rulings: [ruling({ evidence: anchor })] };
 		const admission = r.admitAdjudication(input, MANIFEST);
 		assert.ok(admission.complete, "the fixture admission should be complete");

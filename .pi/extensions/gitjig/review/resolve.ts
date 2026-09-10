@@ -53,9 +53,9 @@ export type Direction = "fail-closed" | "live-harm";
 
 /**
  * One effective finding as the Judge ruled it. The optional axes are owed
- * exactly when §1.9 owes them — all four on CONFIRMED, validity plus
- * its evidence otherwise — and `admitAdjudication` is where owed-but-absent becomes a
- * named gap rather than a silent default.
+ * exactly when §1.9 owes them — all four on CONFIRMED, validity plus its
+ * evidence otherwise — and `admitAdjudication` is where owed-but-absent
+ * becomes a named gap rather than a silent default.
  */
 export type Ruling = {
 	finding: string;
