@@ -1,5 +1,5 @@
 {
-	"$comment": "The reviewer-lens policy surface this repository commits (SPEC §1.7; issue #169, Directive #166). What the section requires of this file, and why, is stated there and is not restated here (§2.8). Local facts a reader needs and the SPEC does not carry: rows are matched against the change's own changed-path set by path prefix, segment-aware, so a name that merely begins with a prefix does not route; a row's prefixes and its lens are validated non-empty and its lens unique at load, by .pi/extensions/gitjig/review/panel.ts's validatePolicy. The CONTENT below is deliberately a minimal working set rather than a curated taxonomy — issue #169 scopes the surface, not its rows.",
+	"$comment": "The reviewer-lens policy surface this repository commits (SPEC §1.7; issue #169, Directive #166). What the section requires of this file, and why, is stated there and is not restated here (§2.8). Local facts a reader needs and the SPEC does not carry: rows are matched against the change's own changed-path set by path prefix, segment-aware, so a name that merely begins with a prefix does not route; a row's prefixes and its lens are validated non-empty and its lens unique at load, by .pi/extensions/gitjig/review/panel.ts's validatePolicy. The CONTENT below is deliberately a minimal working set rather than a curated taxonomy — issue #169 scopes the surface, not its rows — under one obligation issue #172's derivation added: §1.7's coverage rule requires every top-level constituent of this repository to be claimed by some row, with no catch-all, and the suite fails loudly when membership drifts.",
 	"rows": [
 		{
 			"lens": "spec-contract",
@@ -20,6 +20,16 @@
 			"lens": "suite",
 			"surface": "the test suite",
 			"prefixes": ["test/"]
+		},
+		{
+			"lens": "docs",
+			"surface": "adopter-facing prose and the changelog fragments",
+			"prefixes": ["README.md", "changelog_unreleased/"]
+		},
+		{
+			"lens": "toolchain",
+			"surface": "the toolchain and repository configuration",
+			"prefixes": ["package.json", "package-lock.json", "tsconfig.json", "biome.jsonc", ".gitignore"]
 		}
 	]
 }

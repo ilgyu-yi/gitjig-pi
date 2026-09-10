@@ -29,14 +29,21 @@
  * Collecting every valid result is order-independent and cannot drop;
  * two answers that are really one finding are the Judge's to merge.
  *
- * DECISION — the empty required set takes §1.9's derived answer, as a
- * recorded LAG behind the settled §1.7 routing-coverage clause: that
- * clause refuses the unrouted surface upstream of this module and rules
- * its own refusal asleep until the deriving instrument lands (§5.3) —
- * the derivation issue #172 tracks, §0.3's spec-ahead disposition. Two
- * rejected alternatives are recorded at the branch itself so neither
- * returns silently: a minted `unrouted` token and a thrown refusal,
- * each ruled a divergence.
+ * DECISION — §1.7's routing-coverage refusal is a THROWN, typed
+ * refusal at the derivation seam (issue #172's derivation; both limbs
+ * of the clause woke together with it). A refusal the caller receives
+ * as a return value can be ignored and the loop below it proceeds
+ * fail-open; a throw makes an unaware caller crash rather than convene
+ * a panel over an unrouted surface — the fail-closed direction the
+ * clause's own gates take. The refusal is `RoutingRefusal`, never a
+ * PanelOutcome: §1.7 rules a routing failure upstream of review, not a
+ * review state, so it must not be readable as one. The pre-#172 lag —
+ * completeness vacuously true over an empty set, §1.9's findings-free
+ * APPROVED — is retired; `panelOutcome` refuses the empty required set
+ * outright, since under full coverage a non-empty change surface
+ * derives at least one slot, so an empty set there means the change
+ * surface was empty (already refused here) or the derivation was
+ * bypassed.
  *
  * DECISION — the policy is read from the committed file and from
  * nowhere else. `loadPolicy` takes no path, so routing cannot derive
@@ -225,6 +232,32 @@ export function loadPolicy(): Policy {
 	return validatePolicy(JSON.parse(readFileSync(POLICY_PATH, "utf8")) as PolicyInput);
 }
 
+/**
+ * §1.7's pre-review refusal, one class for the clause's two limbs —
+ * they woke together on one activation story, and a downstream caller
+ * maps them to different consequences: `routing-failure` owes a
+ * reviewed amendment to the committed policy claiming `unclaimed`;
+ * `empty-surface` owes nothing — there is nothing to route, and it is
+ * not a routing failure. The limb is a field rather than two classes
+ * so one `instanceof` catches the seam's whole refusal surface.
+ */
+export class RoutingRefusal extends Error {
+	readonly limb: "routing-failure" | "empty-surface";
+	readonly unclaimed: readonly string[];
+	constructor(limb: "routing-failure" | "empty-surface", unclaimed: readonly string[]) {
+		super(
+			limb === "routing-failure"
+				? `routing failure: no committed policy row claims ${JSON.stringify(unclaimed)} — ` +
+						"no panel convenes and no review state exists; the one remedy is a reviewed amendment to the " +
+						"committed lens policy claiming the constituents, never a catch-all row (§1.7)"
+				: "empty change surface: nothing to route, so no panel convenes and no APPROVED derives — this is " +
+						"not a routing failure and no policy amendment is owed (§1.7)",
+		);
+		this.limb = limb;
+		this.unclaimed = [...unclaimed];
+	}
+}
+
 declare const authoritative: unique symbol;
 
 /**
@@ -317,12 +350,26 @@ function underPrefix(path: string, prefix: string): boolean {
 }
 
 /**
- * Derive the required slot set. A pure function of its arguments, and
- * ordered by the POLICY rather than by the input, so two orderings of
- * one change surface cannot derive two different-looking sets. Each
- * lens appears at most once however many paths matched it.
+ * Derive the required slot set — and, first, §1.7's pre-review
+ * coverage check, which lives at this seam because the derivation is
+ * the one point every sanctioned path routes through. A pure function
+ * of its arguments, and ordered by the POLICY rather than by the
+ * input, so two orderings of one change surface cannot derive two
+ * different-looking sets. Each lens appears at most once however many
+ * paths matched it. When this function returns rather than refuses,
+ * the set is non-empty: every path is claimed by at least one row, so
+ * at least one row matched.
  */
 export function deriveRequiredSlots(changedPaths: ChangedPaths, policy: Policy): Slot[] {
+	if (changedPaths.length === 0) {
+		throw new RoutingRefusal("empty-surface", []);
+	}
+	const unclaimed = changedPaths.filter(
+		(path) => !policy.rows.some((row) => row.prefixes.some((prefix) => underPrefix(path, prefix))),
+	);
+	if (unclaimed.length > 0) {
+		throw new RoutingRefusal("routing-failure", unclaimed);
+	}
 	const required: Slot[] = [];
 	for (const row of policy.rows) {
 		const matched = changedPaths.some((path) => row.prefixes.some((prefix) => underPrefix(path, prefix)));
@@ -423,15 +470,18 @@ export function buildBundle(results: readonly SlotResult[], required: readonly S
  * outcome independent of the order results are supplied in.
  */
 export function panelOutcome(results: readonly SlotResult[], required: readonly Slot[]): PanelOutcome {
-	// The empty required set still takes §1.9's derived answer HERE, and
-	// that is a recorded lag, not an open question: §1.7's landed
-	// routing-coverage clause (the operator's #172 ruling) refuses the
-	// unrouted surface UPSTREAM of this function and rules the refusal
-	// asleep until its deriving instrument lands (§5.3) — the derivation
-	// issue #172 tracks. §0.3's spec-ahead disposition, recorded in place:
-	// code lags a settled section, tracked as ordinary work. A minted
-	// fourth token and a thrown refusal were both tried and both ruled
-	// divergences from the contract in force when they were tried.
+	// §1.7: no APPROVED derives from an empty required-review surface.
+	// Under the live coverage check a non-empty change surface derives a
+	// non-empty set at the seam above, so an empty set HERE means the
+	// change surface was empty (refused there) or the derivation was
+	// bypassed — either way a refusal, never the retired vacuous APPROVED.
+	if (required.length === 0) {
+		throw new Error(
+			"panel outcome: the required slot set is empty — §1.7 derives no APPROVED from an empty " +
+				"required-review surface; an empty change surface refuses at the derivation seam, so an empty set " +
+				"here means the derivation was bypassed",
+		);
+	}
 	const missing = required
 		.filter((slot) => validResultsFor(results, slot).length === 0)
 		.map((slot) => ({ lens: slot.lens, surface: slot.surface }));

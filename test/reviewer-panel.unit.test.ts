@@ -895,9 +895,10 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 			"a post-validation mutation of the caller's row or prefix objects reached the branded policy — the copy " +
 				"is shallow, so the brand certifies rows the predicate never ruled on",
 		);
+		const refused = refusal(() => p.deriveRequiredSlots(paths(["forged/x"]), validated));
 		assert.deepEqual(
-			p.deriveRequiredSlots(paths(["forged/x"]), validated),
-			[],
+			refused.unclaimed,
+			["forged/x"],
 			"a prefix written into the caller's array after validation ROUTED — derivation consulted an aliased " +
 				"prefix list rather than the snapshot the predicate ruled on",
 		);
