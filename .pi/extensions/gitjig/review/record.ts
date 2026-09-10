@@ -58,12 +58,125 @@ export function composeReviewRecord(record: ReviewRecord): string {
 	);
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isSlot(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		Object.keys(value).length === 2 &&
+		typeof value.lens === "string" &&
+		typeof value.surface === "string"
+	);
+}
+
+function isSlotRecord(value: unknown): boolean {
+	if (!isObject(value) || !isSlot(value.slot) || typeof value.valid !== "boolean") {
+		return false;
+	}
+	return (
+		Object.keys(value).every((key) => key === "slot" || key === "valid" || key === "reason") &&
+		(value.reason === undefined || typeof value.reason === "string")
+	);
+}
+
+function isBundleEntry(value: unknown): boolean {
+	return isObject(value) && Object.keys(value).length === 2 && typeof value.finding === "string" && isSlot(value.slot);
+}
+
+const VALIDITIES = new Set(["CONFIRMED", "REFUTED", "INDETERMINATE"]);
+const SEVERITIES = new Set(["SUBSTANTIVE", "NIT"]);
+const DIRECTIONS = new Set(["fail-closed", "live-harm"]);
+const RULING_KEYS = new Set([
+	"finding",
+	"provenance",
+	"validity",
+	"severity",
+	"remedy",
+	"direction",
+	"onCriterion",
+	"evidence",
+]);
+
+function isRuling(value: unknown): boolean {
+	if (!isObject(value) || !Object.keys(value).every((key) => RULING_KEYS.has(key))) {
+		return false;
+	}
+	return (
+		typeof value.finding === "string" &&
+		Array.isArray(value.provenance) &&
+		value.provenance.every(isSlot) &&
+		VALIDITIES.has(value.validity as string) &&
+		(value.severity === undefined || SEVERITIES.has(value.severity as string)) &&
+		(value.remedy === undefined || typeof value.remedy === "string") &&
+		(value.direction === undefined || DIRECTIONS.has(value.direction as string)) &&
+		(value.onCriterion === undefined || typeof value.onCriterion === "boolean") &&
+		typeof value.evidence === "string"
+	);
+}
+
+function isAdjudication(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		Object.keys(value).length === 2 &&
+		typeof value.dedupAttested === "boolean" &&
+		Array.isArray(value.rulings) &&
+		value.rulings.every(isRuling)
+	);
+}
+
+const DISPOSITIONS = new Set(["repair", "defer", "remedy", "measure-escalate", "none"]);
+const OUTCOMES = new Set(["repair", "measure-escalate", "clear"]);
+
+function isReviewState(value: unknown): boolean {
+	if (!isObject(value)) {
+		return false;
+	}
+	if (value.state === "approved") {
+		return Object.keys(value).length === 1;
+	}
+	if (value.state === "incomplete") {
+		return (
+			Object.keys(value).every((key) => key === "state" || key === "cause" || key === "missing" || key === "gaps") &&
+			typeof value.cause === "string" &&
+			(value.missing === undefined || (Array.isArray(value.missing) && value.missing.every(isSlot))) &&
+			(value.gaps === undefined || (Array.isArray(value.gaps) && value.gaps.every((gap) => typeof gap === "string")))
+		);
+	}
+	if (value.state === "resolved") {
+		if (Object.keys(value).length !== 2 || !isObject(value.resolution)) {
+			return false;
+		}
+		const resolution = value.resolution;
+		return (
+			Object.keys(resolution).length === 2 &&
+			OUTCOMES.has(resolution.outcome as string) &&
+			Array.isArray(resolution.dispositions) &&
+			resolution.dispositions.every(
+				(entry: unknown) =>
+					isObject(entry) &&
+					Object.keys(entry).every((key) => key === "finding" || key === "disposition" || key === "remedy") &&
+					typeof entry.finding === "string" &&
+					DISPOSITIONS.has(entry.disposition as string) &&
+					(entry.remedy === undefined || typeof entry.remedy === "string"),
+			)
+		);
+	}
+	return false;
+}
+
 /**
  * Parse a posted body back into the record, fail-closed: no marker, no
- * fence, unparseable JSON, or an open shape all yield `undefined`.
+ * fence, unparseable JSON, an open shape at ANY depth the consumers
+ * read (round 1's EF3 — a shallow gate handed carry-forward a
+ * resolution-less record it crashed on), or a marker head disagreeing
+ * with the record's own head (round 1's EF5 — the selector and the
+ * payload must not pin two different reviews) all yield `undefined`.
  */
 export function parseReviewRecord(body: string): ReviewRecord | undefined {
-	if (!body.includes(`<!-- ${REVIEW_RECORD_MARKER}: `)) {
+	const marker = new RegExp(`<!-- ${REVIEW_RECORD_MARKER}: (\\S+) -->`).exec(body);
+	if (marker === null) {
 		return undefined;
 	}
 	const fenceOpen = body.indexOf("```json\n");
@@ -81,24 +194,27 @@ export function parseReviewRecord(body: string): ReviewRecord | undefined {
 	} catch {
 		return undefined;
 	}
-	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+	if (!isObject(parsed)) {
 		return undefined;
 	}
 	const keys = Object.keys(parsed);
 	if (keys.length !== RECORD_KEYS.size || !keys.every((key) => RECORD_KEYS.has(key))) {
 		return undefined;
 	}
-	const candidate = parsed as ReviewRecord;
-	if (typeof candidate.head !== "string" || candidate.head.length === 0) {
+	const candidate = parsed as unknown as ReviewRecord;
+	if (typeof candidate.head !== "string" || candidate.head.length === 0 || candidate.head !== marker[1]) {
 		return undefined;
 	}
-	if (!Array.isArray(candidate.slots) || !Array.isArray(candidate.bundle)) {
+	if (!Array.isArray(candidate.slots) || !candidate.slots.every(isSlotRecord)) {
 		return undefined;
 	}
-	if (candidate.adjudication !== null && typeof candidate.adjudication !== "object") {
+	if (!Array.isArray(candidate.bundle) || !candidate.bundle.every(isBundleEntry)) {
 		return undefined;
 	}
-	if (typeof candidate.review !== "object" || candidate.review === null) {
+	if (candidate.adjudication !== null && !isAdjudication(candidate.adjudication)) {
+		return undefined;
+	}
+	if (!isReviewState(candidate.review)) {
 		return undefined;
 	}
 	return candidate;

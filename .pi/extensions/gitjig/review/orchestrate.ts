@@ -32,6 +32,7 @@ import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import { type BriefTiming, composeJudgeBrief, composeReviewerBrief, type ReviewFences } from "./briefs.ts";
 import { slotResultFromDispatch } from "./join.ts";
 import {
+	buildBundle,
 	changedPathsFromRepo,
 	decideValidity,
 	deriveRequiredSlots,
@@ -57,8 +58,15 @@ export type RoundOptions = {
 	fences: ReviewFences;
 	changeDescription: string;
 	timing?: BriefTiming;
-	/** The one seam to §4.9's dispatcher — `makeDispatcher` for the real one. */
-	dispatch: (brief: string) => Promise<DispatchOutcome>;
+	/**
+	 * The one seam to §4.9's dispatcher — `makeDispatcher` for the real
+	 * one. The second argument is the round's OWN resolved head, passed
+	 * on every dispatch so the panel slots, the Judge, and the record all
+	 * carry one pin — round 1's EF7: a seam with no per-dispatch pin let
+	 * a mutable ref hand each dispatch a different held hash with every
+	 * compare confirming.
+	 */
+	dispatch: (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 };
 
 export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBody: string };
@@ -69,9 +77,13 @@ export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBod
  * compare — the dispatcher's own (§4.9).
  */
 export function makeDispatcher(
-	options: Omit<RunDispatchOptions, "brief">,
-): (brief: string) => Promise<DispatchOutcome> {
-	return (brief) => runDispatch({ ...options, brief });
+	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
+): (brief: string, expectedHead: string) => Promise<DispatchOutcome> {
+	// The held operand is the round's resolved head, never a caller-fixed
+	// ref: provision resolves the expectedRef once per dispatch, so only a
+	// hash already resolved by the round makes every dispatch's pin the
+	// same pin (round 1's EF7).
+	return (brief, expectedHead) => runDispatch({ ...options, brief, expectedRef: expectedHead });
 }
 
 /**
@@ -84,9 +96,10 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 	const changed = changedPathsFromRepo(options.baseRef, options.headRef, options.repoRoot);
 	const required = deriveRequiredSlots(changed, policy);
 	// The record's pin is the resolved head, not the caller's spelling of
-	// it — §1.6's reviewed-head rule. Same env discipline as the
-	// changed-path read: an ambient GIT_DIR must not redirect the pin.
-	const head = execFileSync("git", ["rev-parse", "--verify", options.headRef], {
+	// it — §1.6's reviewed-head rule — resolved BEFORE any dispatch so the
+	// same hash pins every dispatch of the round. Same env discipline as
+	// the changed-path read: an ambient GIT_DIR must not redirect the pin.
+	const head = execFileSync("git", ["rev-parse", "--verify", `${options.headRef}^{commit}`], {
 		cwd: options.repoRoot,
 		encoding: "utf8",
 		env: withoutRepoLocatingGitEnv(process.env),
@@ -100,7 +113,7 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 				options.fences,
 				options.timing,
 			);
-			return slotResultFromDispatch(slot, await options.dispatch(brief));
+			return slotResultFromDispatch(slot, await options.dispatch(brief, head));
 		}),
 	);
 	const slots: SlotRecord[] = results.map((result) => {
@@ -115,7 +128,7 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 
 	let adjudication: AdjudicationInput | null = null;
 	let review: ReviewState;
-	if (panel.outcome === "bundle") {
+	if (panel.outcome === "bundle" && options.manifest.state !== "absent") {
 		const judgeBrief = composeJudgeBrief(
 			panel.bundle,
 			options.manifest,
@@ -123,7 +136,7 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 			options.fences,
 			options.timing,
 		);
-		const outcome = await options.dispatch(judgeBrief);
+		const outcome = await options.dispatch(judgeBrief, head);
 		const input = adjudicationFromDispatch(outcome);
 		adjudication = input ?? null;
 		const admission = input === undefined ? undefined : admitAdjudication(input, options.manifest);
@@ -131,14 +144,22 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 	} else {
 		// The findings-free fast path and the incomplete panel: the Judge
 		// never runs — nothing to adjudicate on the first, completeness
-		// precedes adjudication on the second (§1.7, §1.9).
+		// precedes adjudication on the second (§1.7, §1.9). The ABSENT
+		// manifest stops here too (round 1's EF4): §1.9 rules it a missing
+		// input the review is incomplete on, so a Judge dispatched anyway
+		// would be run to rule what the caller already knows cannot
+		// complete.
 		review = reviewOutcome(panel, undefined);
 	}
 
 	const record: ReviewRecord = {
 		head,
 		slots,
-		bundle: panel.outcome === "bundle" ? panel.bundle : [],
+		// From every VALID slot, whatever the panel outcome — §1.7 builds
+		// the bundle from valid slots, not from complete panels, and a
+		// record that understates what was discovered misleads the history
+		// reader (round 1's EF6).
+		bundle: buildBundle(results, required),
 		adjudication,
 		review,
 	};

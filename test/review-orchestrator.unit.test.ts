@@ -102,7 +102,7 @@ type OrchestrateModule = {
 		manifest: Manifest;
 		fences: Fences;
 		changeDescription: string;
-		dispatch: (brief: string) => Promise<DispatchOutcome>;
+		dispatch: (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	}): Promise<RoundResult>;
 };
 
@@ -198,13 +198,21 @@ const judgePayload = (rulings: Ruling[]): string => JSON.stringify({ dedupAttest
 function fakeDispatch(
 	perSlot: (brief: string) => DispatchOutcome,
 	judge?: (brief: string) => DispatchOutcome,
-): { dispatch: (brief: string) => Promise<DispatchOutcome>; briefs: string[]; judgeBriefs: string[] } {
+): {
+	dispatch: (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
+	briefs: string[];
+	judgeBriefs: string[];
+	pins: string[];
+} {
 	const seen: string[] = [];
 	const judgeSeen: string[] = [];
+	const pins: string[] = [];
 	return {
 		briefs: seen,
 		judgeBriefs: judgeSeen,
-		dispatch: (brief: string) => {
+		pins,
+		dispatch: (brief: string, expectedHead: string) => {
+			pins.push(expectedHead);
 			// The judge brief is recognized by its own composed subject —
 			// the arms below pin that subject's presence.
 			if (brief.includes("You are the JUDGE")) {
@@ -232,7 +240,11 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			['"token"', "the payload's closed reviewer shape"],
 			["APPROVED", "the result grammar's first token"],
 			["FINDINGS", "the result grammar's second token"],
-			["hex", "the no-hex rule — two returns were refused whole for a hash in a summary"],
+			[
+				"NO hex run of 6 or more characters",
+				"the no-hex PROHIBITION itself — round 1's EF8: the bare needle `hex` was satisfied by the unrelated " +
+					"reviewedHead sentence, so the prohibition could vanish while the arm stayed green",
+			],
 			["reviewedHead", "the one home the head hash is allowed"],
 			["a change description", "the caller's change description"],
 			["the dispatcher's own internals", "the caller's out-of-scope fence"],
@@ -284,6 +296,11 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				text.includes(entry.slot.lens),
 				"a finding's provenance lens is missing — dedup preserves which slots reported it",
 			);
+			assert.ok(
+				text.includes(entry.slot.surface),
+				"a finding's provenance surface is missing — slot identity is the lens+surface PAIR, and an " +
+					"under-provenanced bundle reaches the Judge (round 1's EF10)",
+			);
 		}
 		for (const criterion of manifest.criteria) {
 			assert.ok(
@@ -301,7 +318,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			["live-harm", "the harm-direction axis's second token"],
 			["exact mechanical remedy", "the NIT discipline"],
 			["designs no substantive repair", "the Judge's stop rule"],
-			["hex", "the no-hex rule"],
+			["NO hex run of 6 or more characters", "the no-hex PROHIBITION itself (round 1's EF8)"],
 		] as const) {
 			assert.ok(text.includes(needle), `the judge brief lost ${why} (missing: ${JSON.stringify(needle)})`);
 		}
@@ -326,6 +343,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 	it("a findings-free complete round is APPROVED and the Judge is never dispatched", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+		const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
 		const fake = fakeDispatch(() => admitted(approvedPayload));
 		const result = await o.reviewRound({
 			repoRoot: repo,
@@ -333,7 +351,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			headRef: "HEAD",
 			manifest: { state: "present", criteria: ["AC1"] },
 			fences: FENCES,
-			changeDescription: "d",
+			changeDescription: "zq the round's own change description",
 			dispatch: fake.dispatch,
 		});
 		assert.equal(result.review.state, "approved", "a complete findings-free panel did not end the review APPROVED");
@@ -342,6 +360,86 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			fake.briefs.length,
 			2,
 			"the derived slot set was not dispatched one brief per slot — the fixture routes runtime and suite",
+		);
+		// Round 1's EF11: the round arms never inspected composed CONTENT, so
+		// wiring substitutions (empty description, empty fences) survived.
+		for (const brief of fake.briefs) {
+			assert.ok(
+				brief.includes("zq the round's own change description"),
+				"a dispatched reviewer brief lost the caller's change description — the round composed with an " +
+					"operand the caller never supplied",
+			);
+			assert.ok(
+				brief.includes("the dispatcher's own internals"),
+				"a dispatched reviewer brief lost the caller's fences — a slot dispatched unfenced re-litigates " +
+					"what the caller already closed",
+			);
+		}
+		// Round 1's EF7: every dispatch of the round is pinned to the round's
+		// own resolved head.
+		assert.deepEqual(
+			fake.pins,
+			[head, head],
+			"a dispatch was pinned to something other than the round's resolved head — a mutable ref advancing " +
+				"mid-round would hand each dispatch a different held hash with every compare confirming",
+		);
+	});
+
+	it("an ABSENT manifest stops the round before any Judge dispatch — a missing input, not an adjudication", async () => {
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
+		const fake = fakeDispatch(() => admitted(findingsPayload("f")));
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "absent" },
+			fences: FENCES,
+			changeDescription: "d",
+			dispatch: fake.dispatch,
+		});
+		assert.equal(
+			fake.judgeBriefs.length,
+			0,
+			"the Judge was dispatched under an absent manifest — round 1's EF4: a delegate run to rule what the " +
+				"caller already knows cannot complete",
+		);
+		assert.equal(result.review.state, "incomplete", "an absent manifest did not leave the review incomplete");
+	});
+
+	it("the round hands the ADMISSION the caller's manifest — a deferrable ruling defers only on the real one", async () => {
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
+		const finding = "zq deferrable finding";
+		const ruling: Ruling = {
+			finding,
+			provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			direction: "fail-closed",
+			onCriterion: false,
+			evidence: "e",
+		};
+		const fake = fakeDispatch(
+			() => admitted(findingsPayload(finding)),
+			() => admitted(judgePayload([ruling])),
+		);
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: ["a real criterion"] },
+			fences: FENCES,
+			changeDescription: "d",
+			dispatch: fake.dispatch,
+		});
+		assert.ok(
+			result.review.state === "resolved" &&
+				result.review.resolution.outcome === "clear" &&
+				result.review.resolution.dispositions[0].disposition === "defer",
+			"a CONFIRMED+SUBSTANTIVE+fail-closed+off-criterion ruling under a NON-EMPTY manifest did not defer — " +
+				"round 1's EF11: an admission run against a substituted empty manifest turns defer into repair, and " +
+				"no arm could see it",
 		);
 	});
 
@@ -373,10 +471,20 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			fake.judgeBriefs[0].includes(finding),
 			"the finding did not cross into the judge brief — the Judge adjudicated a bundle it never saw",
 		);
+		assert.ok(
+			fake.judgeBriefs[0].includes("AC1"),
+			"the caller's manifest did not cross into the judge brief — round 1's EF11: a substituted manifest " +
+				"survived because no round arm read the composed content",
+		);
 		assert.equal(result.review.state, "resolved", "an admitted adjudication did not resolve");
 		assert.ok(
 			result.review.state === "resolved" && result.review.resolution.outcome === "clear",
 			"a REFUTED-only set did not resolve clear — refutation leaves nothing behind (§1.9)",
+		);
+		assert.deepEqual(
+			result.record.bundle,
+			[{ finding, slot: { lens: "runtime", surface: "the shell's runtime extensions" } }],
+			"the record's bundle is not the panel's — what the history reader consumes must be what was discovered",
 		);
 		assert.ok(
 			result.recordBody.includes("zq the refuting command and its output"),
@@ -429,6 +537,15 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			0,
 			"the Judge was dispatched under an incomplete panel — completeness precedes adjudication (§1.7)",
 		);
+		// Round 1's EF6: §1.7 builds the bundle from every VALID slot, not
+		// from complete panels — the durable record must not understate what
+		// was discovered.
+		assert.deepEqual(
+			result.record.bundle.map((entry) => entry.finding),
+			["f"],
+			"the record of an incomplete panel dropped a valid slot's finding — a later reader cannot tell it " +
+				"from the findings-free shape",
+		);
 	});
 
 	it("a routing refusal propagates upstream of any dispatch — no panel state, zero briefs", async () => {
@@ -473,6 +590,14 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			result.record.head,
 			head,
 			"the record's head is not the reviewed head's full hash — the pin is §1.6's",
+		);
+		// Round 1's EF12: the round-trip alone is a tautology over whatever
+		// the round chose to record — the slots are asserted independently.
+		assert.deepEqual(
+			result.record.slots,
+			[{ slot: { lens: "runtime", surface: "the shell's runtime extensions" }, valid: true }],
+			"the record's slot dispositions are not the round's measured ones — an always-empty slots field " +
+				"round-trips losslessly and records nothing",
 		);
 		const parsed = r.parseReviewRecord(result.recordBody);
 		assert.ok(parsed, "the composed record body did not parse back — the machine reader cannot consume the record");
@@ -537,6 +662,81 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 			undefined,
 			"an unmarked body parsed as a record — any comment could then impersonate the machine record",
 		);
+		// Round 1's EF9: the prose fixture above also lacks a fence, so the
+		// fence guard alone answered it and the marker check was deletable.
+		const fencedUnmarked = r.composeReviewRecord(sample).replace(/<!--[^\n]*-->\n/, "");
+		assert.equal(
+			r.parseReviewRecord(fencedUnmarked),
+			undefined,
+			"a fenced but UNMARKED body parsed as a record — the marker is the selector, and without it any " +
+				"JSON-bearing comment impersonates the machine record",
+		);
+	});
+
+	it("a marker head disagreeing with the record's own head parses to nothing (round 1's EF5)", () => {
+		const r = records();
+		const body = r
+			.composeReviewRecord(sample)
+			.replace(`${sample.head} -->`, "9999999999999999999999999999999999999999 -->");
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"a body whose selector names one head and whose payload pins another parsed anyway — a reader " +
+				"selecting by the marker consumes a record for a different review state",
+		);
+	});
+
+	it("the shape gate is deep — what a consumer reads is what the parse vouched for (round 1's EF3)", () => {
+		const r = records();
+		const tamper = (edit: (parsed: Record<string, unknown>) => void): string => {
+			const body = r.composeReviewRecord(sample);
+			const open = body.indexOf("```json\n") + "```json\n".length;
+			const close = body.indexOf("\n```", open);
+			const parsed = JSON.parse(body.slice(open, close)) as Record<string, unknown>;
+			edit(parsed);
+			return body.slice(0, open) + JSON.stringify(parsed, null, "\t") + body.slice(close);
+		};
+		const cases: [string, string][] = [
+			[
+				"a resolved review without its resolution",
+				tamper((parsed) => {
+					parsed.review = { state: "resolved" };
+				}),
+			],
+			[
+				"an extra top-level key",
+				tamper((parsed) => {
+					parsed.zz = true;
+				}),
+			],
+			[
+				"an adjudication that is a truthy non-object",
+				tamper((parsed) => {
+					parsed.adjudication = "attested";
+				}),
+			],
+			[
+				"a ruling with an empty-object provenance entry",
+				tamper((parsed) => {
+					((parsed.adjudication as { rulings: { provenance: unknown[] }[] }).rulings[0].provenance as unknown[])[0] =
+						{};
+				}),
+			],
+			[
+				"a review state outside the three-state set",
+				tamper((parsed) => {
+					parsed.review = { state: "vibes" };
+				}),
+			],
+		];
+		for (const [what, body] of cases) {
+			assert.equal(
+				r.parseReviewRecord(body),
+				undefined,
+				`a marked body carrying ${JSON.stringify(what)} parsed — the consumer then reads a shape the gate ` +
+					"never vouched for and crashes or misreads instead of refusing",
+			);
+		}
 	});
 
 	it("a marked body whose JSON is tampered into malformation parses to nothing, never to a guess", () => {
@@ -625,6 +825,85 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			!verdict.admissible,
 			"a record with no adjudication carried forward — there is no ruling text to " +
 				"check the delta against, and the check must fail closed",
+		);
+	});
+
+	it("the REVERSE application refuses — the remedy grammar is directional (round 1's EF1)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const verdict = c.carryForwardAdmissible(record, patch("-const a = 2;", "+const a = 1;"));
+		assert.ok(
+			!verdict.admissible,
+			"undoing the fix was admitted — an undirected substring check reads both spans as interchangeable, " +
+				"and the exception then carries the artifact BACK past the review that demanded the fix",
+		);
+	});
+
+	it("a substring of the remedy's PROSE does not account — only backticked spans rule (round 1's EF1)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;", "+with"));
+		assert.ok(
+			!verdict.admissible,
+			"a line that is a substring of the remedy's connective prose was admitted — the ruling's spans, not " +
+				"its sentence, are what specified the delta",
+		);
+	});
+
+	it("a whitespace-only changed line refuses — nothing can specify the empty span (round 1's EF1)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;", "+", "+\t"));
+		assert.ok(
+			!verdict.admissible,
+			"blank-line churn rode the exception — an empty span is a substring of everything, so a guard that " +
+				"skips it admits a delta no ruling specified",
+		);
+	});
+
+	it("a content line beginning ++ is still delta — the walk is hunk-aware, not prefix-fooled (round 1's EF1)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;", "+++smuggled"));
+		assert.ok(
+			!verdict.admissible,
+			"an added line whose own content begins with ++ was dropped from the changed set — a prefix-only " +
+				"header test reads it as a file header and the smuggled line rides the exception",
+		);
+	});
+
+	it("a SUBSTANTIVE ruling's remedy text accounts for nothing (round 1's EF2)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const rulings = (record.adjudication as AdjudicationInput).rulings;
+		rulings[0].severity = "SUBSTANTIVE";
+		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;"));
+		assert.ok(
+			!verdict.admissible,
+			"a substantive ruling's text specified a delta — only a NIT carries §1.9's exact mechanical remedy, " +
+				"and a substantive repair always draws fresh review",
+		);
+	});
+
+	it("indentation is the file's, not the ruling's — an indented application still accounts (round 1's EF2)", () => {
+		const c = carry();
+		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
+		const verdict = c.carryForwardAdmissible(record, patch("-\tconst a = 1;", "+\tconst a = 2;"));
+		assert.ok(
+			verdict.admissible,
+			"an indented verbatim application was refused — the remedy quotes the span, the file supplies the " +
+				"indentation, and a check without the trim refuses every indented remedy",
+		);
+	});
+
+	it("a remedy outside the recognized grammar refuses — uncheckable is not admissible", () => {
+		const c = carry();
+		const record = clearRecord("adjust the wording of the sentence to be clearer");
+		const verdict = c.carryForwardAdmissible(record, patch("-old sentence", "+new sentence"));
+		assert.ok(
+			!verdict.admissible,
+			"a remedy that parses to no span admitted a delta — a derivation-phrased remedy is exactly what the " +
+				"check cannot verify, and the conservative cost is one fresh review",
 		);
 	});
 });
