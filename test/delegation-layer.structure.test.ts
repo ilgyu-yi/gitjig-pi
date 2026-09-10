@@ -15,8 +15,8 @@
  *   3. §4.9 has exactly one row in the generated table of contents;
  *   4. §1.5's leaning paragraph — "the delegate roles are instruments that
  *      derive later" — carries a §4.9 pointer;
- *   5. §1.7's leaning paragraph — "the panel and dispatch instruments
- *      derive later" — carries a §4.9 pointer;
+ *   5. §1.7's leaning paragraph — "slot derivation and bundle
+ *      construction are landed" — carries a §4.9 pointer;
  *   6. §1.8's leaning paragraph — the one assigning challenger axes
  *      "upstream by the dispatcher" — carries a §4.9 pointer;
  *   7. §4.8's span carries the reciprocal §4.9 pointer (issue #81 signal-2
@@ -115,7 +115,7 @@ const DELEGATION_LAYER = "4.9";
 
 /** The leaning-site phrases the amendments anchor on, each verbatim from SPEC.md as it stands. */
 const LEAN_1_5 = "the delegate roles are instruments that derive later";
-const LEAN_1_7 = "the panel and dispatch instruments derive later";
+const LEAN_1_7 = "slot derivation and bundle construction are landed";
 const LEAN_1_8 = "upstream by the dispatcher";
 
 const TOC_START = "<!-- TOC START";
@@ -246,7 +246,7 @@ describe("SPEC §4.9 delegation layer — structure (issue #81)", () => {
 				paragraphWith(sectionSpan(spec, "1.8"), LEAN_1_8) !== "" &&
 				bodyParagraphs(sectionSpan(spec, "4")).length > 0,
 			"the readers lost a landmark that exists on the pre-change tree (§4.8's TOC row; §1.5's delegate-roles " +
-				"deferral, §1.7's panel-and-dispatch-instruments deferral, and §1.8's dispatcher phrase, each verbatim; §4's " +
+				"deferral, §1.7's derivation-state sentence, and §1.8's dispatcher phrase, each verbatim; §4's " +
 				"intro) — the arms below would then red because this suite cannot read SPEC.md, not because the " +
 				"subject is absent",
 		);
@@ -285,8 +285,8 @@ describe("SPEC §4.9 delegation layer — structure (issue #81)", () => {
 	it("§1.7's leaning paragraph points at §4.9", () => {
 		assert.ok(
 			carriesPointer(paragraphWith(sectionSpan(readSpec(), "1.7"), LEAN_1_7), DELEGATION_LAYER),
-			`§1.7 defers "${LEAN_1_7}" and points nowhere — the panel's dispatch instruments have no section ` +
-				`stating what they are. Point the deferral at §${DELEGATION_LAYER} (issue #81 signal-3 criterion), ` +
+			`§1.7 says "${LEAN_1_7}" and points nowhere — the panel's derivation home has no section ` +
+				`stating what it is. Point the sentence at §${DELEGATION_LAYER} (issue #81 signal-3 criterion), ` +
 				"norm content untouched.",
 		);
 	});
