@@ -14,9 +14,12 @@
  * the brief's own words, the CLOSED return schema, the no-hex rule,
  * self-enforced deadlines inside the run bound, out-of-scope and
  * forbidden-remedy fences, deferral homes by number, prior findings
- * labelled UNVERIFIED with the per-finding re-verification demand, and
- * the permission for a clean review to be clean. Each is a sentence a
- * real dispatch was once refused or degraded for lacking.
+ * labelled UNVERIFIED with the per-finding re-verification demand,
+ * the permission for a clean review to be clean, and the
+ * provisioned-tree facts (issue #197): no node_modules, no local main
+ * ref, private scratch, the archive and git-state bans, and the
+ * serial re-run rule. Each is a sentence a real dispatch was once
+ * refused or degraded for lacking.
  *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;
@@ -61,6 +64,19 @@ export type ReviewFences = {
 };
 
 export type BriefContext = { changeDescription: string };
+
+const PROVISIONED_TREE_FACTS = [
+	"YOUR PROVISIONED TREE — facts, each learned from a round that went wrong first:",
+	"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
+	"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
+	"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
+	"- Scratch space is a private `mktemp -d`, never a bare /tmp path: parallel delegates SHARE /tmp —",
+	"  treat any /tmp file you did not create as hostile.",
+	"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
+	"  any copy you make.",
+	"- Re-run serially before believing a mutant kill or reporting a suite failure — the suite is not",
+	"  all-green under parallel load (#119).",
+].join("\n");
 
 const RETURN_CONTRACT = [
 	"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
@@ -139,6 +155,8 @@ export function composeReviewerBrief(
 		fenceBlock(fences),
 		priorFindingsBlock(fences),
 		"",
+		PROVISIONED_TREE_FACTS,
+		"",
 		RETURN_CONTRACT,
 		"",
 		deadlines(timing),
@@ -215,6 +233,8 @@ export function composeJudgeBrief(
 		"   and not against the change's own contract.",
 		"",
 		fenceBlock(fences),
+		"",
+		PROVISIONED_TREE_FACTS,
 		"",
 		'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"dedupAttested": boolean, "rulings": [{"finding": string, "provenance": [{"lens": string,',

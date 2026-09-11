@@ -360,6 +360,48 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	it("both briefs carry the provisioned-tree hygiene ledger (issue #197)", () => {
+		const b = briefs();
+		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		for (const [who, text] of [
+			["reviewer", reviewer],
+			["judge", judge],
+		] as const) {
+			for (const [needle, why] of [
+				["NO node_modules", "the provisioned tree lands uninstalled — every early slot hit this"],
+				["no local `main` ref", "a clone has none; 'compare against main' silently compares against nothing"],
+				["npm ci", "the install instruction"],
+				[
+					"resolves a DIFFERENT package and exits 0",
+					"the REASON beside the instruction — an instruction without its cost gets skipped",
+				],
+				["mktemp -d", "the private-scratch instruction"],
+				[
+					"/tmp file you did not create as hostile",
+					"parallel delegates share /tmp — one mutator was overwritten mid-run by a sibling",
+				],
+				["git archive", "the archive ban — a copy without .git reds arms by itself"],
+				["never mutate git state", "the git-state ban for copies"],
+				[
+					"Re-run serially",
+					"the suite is not all-green under parallel load (#119) — a kill or a red must survive a serial re-run",
+				],
+			] as const) {
+				assert.ok(text.includes(needle), `the ${who} brief lost ${why} (missing: ${JSON.stringify(needle)})`);
+			}
+		}
+		assert.ok(
+			judge.includes("embedded verbatim"),
+			"the judge brief no longer states the bundle reaches it verbatim — a ruling on a summary of a summary",
+		);
+	});
+
 	it("an empty manifest crosses as an empty manifest, never as absent", () => {
 		const b = briefs();
 		const text = b.composeJudgeBrief(
