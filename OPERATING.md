@@ -95,7 +95,7 @@ that it landed* and *titling a check over a domain instead of measuring the doma
   check that omits a clause's polarity or qualifiers stays green while the instruction inverts;
   and substring pinning as a class is defeated by appended negating qualifiers, so a guard over
   normative prose wants whole-string equality where it wants anything.
-- **§1.2's Doc→Test→Code re-maps for a pure-document deliverable** — Test is the pre-existing
+- **§1.2's failing-first evidence obligation covers a pure-document deliverable** — the pre-existing
   gates exercised failing-first. "No test owed, because the clause is advisory" answers a
   question §1.2 does not ask.
 - **Do not reach for §3.11 to license not doing the work.** It forbids a second implementation
@@ -132,8 +132,8 @@ know about the transport:
   `summary` string — **only the summary crosses back to the caller**. A structured payload a
   brief asks for is readable by the orchestrator's own driver, not by the tool's caller, so a
   brief written for tool-side dispatch must demand the complete result inside `summary`.
-- Return schema is closed; a stray hexadecimal run of six or more characters anywhere outside
-  the head field refuses the whole return — demand commit position-labels.
+- Return schema is closed; outside the head field a hexadecimal run that names the held head —
+  one the held hash contains at six or more characters, or one containing its 7-prefix — refuses the whole return; demand commit position-labels.
 - Give delegates a self-enforced deadline well inside the run bound, a private `mktemp -d`, and
   the instruction to run `npm ci` first with the reason (a bare `npx biome` on an uninstalled
   tree resolves a different package and exits 0; a bare suite run silently skips the arms that
@@ -146,24 +146,24 @@ know about the transport:
 
 ## Working in this repository
 
-- Branch `ilgyu-yi/<type>/<issue#>-<slug>`; the draft PR opens with the first real commit, body
-  first line `Closes #N`.
-- A SPEC edit regenerates the TOC in the same commit (`.github/workflows/build_toc.sh`) or CI
+- Branch `ilgyu-yi/<type>/[<issue#>-]<slug>`; the draft PR opens with the first real commit, and
+  the body's first line carries `Closes #N` (§1.1).
+- A SPEC edit regenerates the TOC in the same commit (`.github/workflows/build_toc.sh`, §0.3) or CI
   fails.
 - Commit grammar is gated at tier 2 in this clone: do not re-check it by hand and do not push
-  past it with `--no-verify` — an escape is accountable and observable (§3.8).
+  past it with `--no-verify` — §3.8 records that escape as traceless, so nothing catches it.
 - No mutation harness exists: weaken a guard in a throwaway isolated copy (never `git archive`;
   never mutate git state in a copy) and run the suite there by hand, serially.
 - Egress for repository-derived text going to an issue or PR is the publish instrument — the
   one landed tier-1 gate; composing a comment and posting it another way routes around the only
   egress boundary that exists. It has no draft option: create, then `gh pr ready N --undo`.
-- Name the changelog fragment by the issue number and never close the issue by hand —
-  `Closes #N` on the body's first line populates the closing reference.
+- Name the changelog fragment by the issue number (§1.3) and never close the issue by hand —
+  `Closes #N` on the body's first line populates the closing reference (§1.1).
 - Merging needs a beat after `gh pr ready`: the first merge attempt can report a base-branch
   policy refusal while the draft transition settles, then succeeds shortly after.
-- Suite facts that mislead if unknown: five arms in `test/egress-publish.integration.test.ts`
-  announce a SKIP without `npm ci` (bare 29/5 skipped, installed 34/34, both intended and
-  pinned in that file's own header), and the suite is not all-green under parallel load — a
+- Suite facts that mislead if unknown: arms in `test/egress-publish.integration.test.ts`
+  announce a SKIP without `npm ci` rather than reddening (the skip and its reason are stated
+  in that file's own header), and the suite is not all-green under parallel load — a
   kill or a red must survive a serial re-run.
 
 ## Modes, the park, and the own-behalf grant
@@ -186,9 +186,9 @@ know about the transport:
   adjudication for real — §5.7 binds §1.6's evidence rules to an own-artifact approval in full.
   On any doubt about scope, it is the operator's: an autonomy toggle fails safe toward more
   human (§5.6).
-- Four acts are never side effects of a run (§5.7, §0.3): applying an SSOT correction; reversing
-  a deliberate human act; re-adjudicating an unchanged artifact; closing or discarding another
-  party's filed work.
+- Five acts are never side effects of a run (§5.7, §0.3): completing a scoping-tier item;
+  applying an SSOT correction; reversing a deliberate human act; re-adjudicating an unchanged
+  artifact; closing or discarding another party's filed work.
 
 ## Reading the SPEC
 
