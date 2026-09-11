@@ -33,11 +33,24 @@ name: check-merge-review
 # remove its own body wakes the job only on `edited`, which is in the
 # type set for that reason.
 #
-# Residual (§3.11), enumerated: the tree this job runs is the PR's MERGE
-# REF, so a pull request that weakens the predicate is graded by its own
-# weakened predicate. This is inherent to `pull_request` CI and is shared
-# with suite.yml; it is the residual that matters most at hardening, and
-# issue #192 carries it as a conjunct of its trigger.
+# Residual (§3.11), enumerated PER TRIGGER PATH, because the two paths do
+# not check out the same tree and an enumeration that says otherwise is
+# worse than none:
+#   - `pull_request`: the checkout resolves the PR's MERGE REF, so a pull
+#     request that weakens the predicate is graded by its own weakened
+#     predicate. Inherent to `pull_request` CI, shared with suite.yml, and
+#     the residual that matters most at hardening; issue #192 carries it
+#     as a conjunct of its trigger.
+#   - `issue_comment`: the workflow is taken from the DEFAULT BRANCH and
+#     the checkout resolves `github.ref`, which on that event is also the
+#     default branch. So this path grades the PR's head using the default
+#     branch's predicate, and no pull-request-authored code executes.
+#     That is why the two paths can reach different verdicts at one head.
+#
+# NOT to be "fixed" by adding a merge-ref `ref:` so the step name reads
+# true on both paths. That change would make the comment path check out
+# and execute pull-request-authored code while holding a base-repository
+# token — the shape this job is currently, if accidentally, clear of.
 #
 # No third-party Actions; actions/checkout and actions/setup-node are
 # GitHub-shipped.
@@ -50,6 +63,19 @@ on:
     types: [opened, synchronize, reopened]
   issue_comment:
     types: [created, edited]
+
+# One run per pull request (the idiom check-changelog.yml commits to, on
+# the same ground): a head can carry several runs of this gate, the
+# rollup returns them undeduplicated, and a run queued earlier can
+# COMPLETE later — so a stale `no-record-at-head` notice could be the last
+# verdict a reader sees at a head whose record has since arrived, which is
+# by ordering the very defect the `issue_comment` trigger was added to fix.
+# `cancel-in-progress` is deliberate and is the contestable half: it can
+# cancel an in-flight run, but the run it cancels is always the one reading
+# the OLDER comment list, since a newer event implies a newer list.
+concurrency:
+  group: check-merge-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -69,8 +95,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout the PR merge ref
+      - name: Checkout (the PR merge ref on a push event; the default branch on a comment)
         uses: actions/checkout@v4
+
+      # Pinned, as suite.yml and source-checks.yml pin it. This is the one
+      # workflow here that invokes `node` directly, and its entry point
+      # statically imports TypeScript resolved by native type stripping —
+      # a version-gated capability. Left to the runner image's default,
+      # the gate's ability to evaluate at all would drift with the image.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - name: Evaluate the merge-review predicate
         env:
@@ -88,5 +124,15 @@ jobs:
           GITJIG_PR: ${{ github.event.pull_request.number || github.event.issue.number }}
           GITJIG_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          set -euo pipefail
-          node .github/workflows/check-merge-review.mjs
+          set -uo pipefail
+
+          # The script renders its own advisory notices and exits 0 on
+          # every verdict. A NON-ZERO exit is therefore machinery, not a
+          # verdict — a torn checkout whose predicate module is absent is
+          # the decided loud case — and every sibling workflow maps a
+          # machinery failure to an authored annotation rather than a raw
+          # runtime stack (§3.9's uniform observability).
+          if ! node .github/workflows/check-merge-review.mjs; then
+            echo "::error::check-merge-review could not evaluate: the gate's own machinery failed before it reached a verdict. This is NOT a merge-review refusal. Most likely the checkout is missing .pi/extensions/gitjig/review/merge-gate.ts, or the runner's Node cannot resolve a TypeScript import. Reproduce locally with: node .github/workflows/check-merge-review.mjs (with GITHUB_TOKEN, GITJIG_REPO and GITJIG_PR set)." >&2
+            exit 1
+          fi

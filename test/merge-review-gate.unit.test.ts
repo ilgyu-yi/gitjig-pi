@@ -94,7 +94,7 @@ function gate(): GateModule {
 // differing at position 0 cannot: a prefix comparison of any length
 // still tells them apart. These share 39 characters and differ only at
 // the LAST, which is the shape a hash domain actually invites.
-const HEAD_BASE = "7c4e1b9a02d53f86" + "e".repeat(23);
+const HEAD_BASE = `7c4e1b9a02d53f86${"e".repeat(23)}`;
 const HEAD_A = `${HEAD_BASE}1`;
 const HEAD_B = `${HEAD_BASE}2`;
 /** A strict prefix of HEAD_A — must not match it. */
@@ -465,5 +465,146 @@ describe("§3.11 — the record's shape rule has ONE home (issue #190 AC5)", () 
 			"the gate's returned record is not the one record.ts's parser produces — a gate that rebuilds the record " +
 				"has re-implemented the shape rule it was supposed to call",
 		);
+	});
+});
+
+describe("§3.10 the gate cannot be made to forge its own verdict (round-2 finding E3)", () => {
+	// The record's fields are parsed from a PR comment and the gate does
+	// not model authorship, so any party who can comment chooses them.
+	// The one consumer prints the detail to a run log. An unescaped
+	// control character therefore renders a SECOND physical line, and a
+	// second line shaped like this gate's PASS line is indistinguishable
+	// from one. §3.10 forbids a guarded surface from hosting an input
+	// that can forge the guard's own decisions.
+	const FORGERIES: [string, string][] = [
+		[
+			"a newline plus a forged PASS line",
+			`panel\nmerge-review: PASS — a complete, adjudicated review is pinned at ${HEAD_A}.`,
+		],
+		["a newline plus a forged notice annotation", "panel\n::notice::merge-review: PASS"],
+		["a carriage return", "panel\rmerge-review: PASS"],
+		["a line separator", "panel\u2028merge-review: PASS"],
+		["a paragraph separator", "panel\u2029merge-review: PASS"],
+	];
+
+	for (const [shape, cause] of FORGERIES) {
+		it(`renders no second line from a record carrying ${shape}`, () => {
+			const record = adjudicatedRecord(HEAD_A, {
+				review: { state: "incomplete", cause: cause as "panel" },
+			});
+			const verdict = gate().mergeReviewGate({ ok: true, bodies: [body(record)] }, HEAD_A);
+			assert.equal(verdict.pass, false, `a record carrying ${shape} was read as a pass`);
+			const detail = verdict.pass === false ? verdict.detail : "";
+			assert.equal(
+				detail.split(/\r?\n|\u2028|\u2029/).length,
+				1,
+				`a record carrying ${shape} split the refusal detail across physical lines — §3.10 forbids an input ` +
+					"that can forge the guard's own decisions, and a second line is what makes a forged verdict renderable",
+			);
+			assert.ok(
+				!/(^|[\n\r\u2028\u2029])(::[a-z]+::)?merge-review: PASS/.test(detail),
+				`a record carrying ${shape} produced a line beginning with this gate's own PASS rendering`,
+			);
+		});
+	}
+
+	it("still reports WHICH cause it refused on — escaping must not cost the authored reason (§3.7(b))", () => {
+		const record = adjudicatedRecord(HEAD_A, {
+			review: { state: "incomplete", cause: "panel\nzq injected" as "panel" },
+		});
+		const verdict = gate().mergeReviewGate({ ok: true, bodies: [body(record)] }, HEAD_A);
+		assert.ok(
+			verdict.pass === false && verdict.detail.includes("panel") && verdict.detail.includes("zq injected"),
+			"escaping dropped the cause instead of neutralising it — the refusal must still name what was missing, " +
+				"or the fix for a forgery becomes a silent refusal",
+		);
+	});
+});
+
+describe("§3.11 the head is a REF — spelling folds, syntax does not (round-2 finding E4)", () => {
+	// §3.11: "a differently-cased or aliased spelling of the same ref is
+	// the same ref". A head is a ref, so refusing a genuine record because
+	// its hex arrived upper-cased is a wrong-BLOCK on an identity that
+	// never changed. Both directions are pinned, so the decision is
+	// recorded in the arms rather than left to whichever way the code drifts.
+	const record = adjudicatedRecord(HEAD_A);
+
+	it("ACCEPTS a record whose head is the same ref differently cased, in both directions", () => {
+		const cases: [string, string, string][] = [
+			["record upper-cased, query lower-cased", HEAD_A.toUpperCase(), HEAD_A],
+			["record lower-cased, query upper-cased", HEAD_A, HEAD_A.toUpperCase()],
+			["mixed case on both sides", HEAD_A.toUpperCase(), HEAD_A.toLowerCase()],
+		];
+		for (const [shape, recordHead, queryHead] of cases) {
+			const rec = adjudicatedRecord(recordHead);
+			assert.equal(
+				gate().mergeReviewGate({ ok: true, bodies: [body(rec)] }, queryHead).pass,
+				true,
+				`${shape} was refused — §3.11 makes a differently-cased spelling of the same ref the SAME ref, and a ` +
+					"head is a ref, so this refusal blocks an identity that never changed",
+			);
+		}
+	});
+
+	it("does NOT fold the marker's own syntax — that is format, not a ref", () => {
+		const upperMarker = body(record).replace(MARKER_AT(HEAD_A), MARKER_AT(HEAD_A).toUpperCase());
+		const verdict = gate().mergeReviewGate({ ok: true, bodies: [upperMarker] }, HEAD_A);
+		assert.deepEqual(
+			verdict.pass === false ? { pass: verdict.pass, reason: verdict.reason } : { pass: true },
+			{ pass: false, reason: "no-record-at-head" },
+			"an upper-cased MARKER was not refused AS ABSENT — the marker's bytes are this format's literal syntax, " +
+				"not a ref, so a folded marker must fail to OPEN a record rather than open one the parser then " +
+				"happens to reject; asserting the reason is what stops the parser from masking the gate's own fold",
+		);
+	});
+
+	it("folding does not weaken the head binding — a different head still refuses at every casing", () => {
+		for (const [shape, recordHead] of [
+			["a different head, upper-cased", HEAD_B.toUpperCase()],
+			["a strict prefix, upper-cased", HEAD_PREFIX.toUpperCase()],
+			["an extending head, upper-cased", HEAD_EXTENDED.toUpperCase()],
+		] as const) {
+			assert.equal(
+				gate().mergeReviewGate({ ok: true, bodies: [body(adjudicatedRecord(recordHead))] }, HEAD_A).pass,
+				false,
+				`${shape} satisfied the gate — case folding must widen the SPELLING axis only, never the identity`,
+			);
+		}
+	});
+});
+
+describe("§1.9 the PASS path does not read the Resolver's outcome or the slots (round-2 finding E11)", () => {
+	// Both are closed domains the PASS fixtures held at one point.
+	// Iterating them records the decision — this gate passes on all three
+	// outcomes — rather than leaving it unmeasured. Issue #193 asks
+	// whether that decision is right; this arm pins what it currently IS,
+	// so #193's change cannot land silently.
+	for (const outcome of ["repair", "measure-escalate", "clear"] as const) {
+		it(`passes a resolved review whose outcome is ${outcome} — pinned, and #193 owns whether it should`, () => {
+			const record = adjudicatedRecord(HEAD_A, {
+				review: { state: "resolved", resolution: { dispositions: [], outcome } },
+			});
+			assert.deepEqual(
+				gate().mergeReviewGate({ ok: true, bodies: [body(record)] }, HEAD_A),
+				{ pass: true, record },
+				`a resolved review with outcome ${outcome} changed the gate's verdict — §3.3's row consumes ` +
+					"completeness, adjudication and the head binding, and NOT the Resolver's outcome; if that is to " +
+					"change it is issue #193's amendment, and it must red this arm rather than slip through",
+			);
+		});
+	}
+
+	it("passes regardless of a slot's own validity flag — the panel's completeness is the review state's business", () => {
+		for (const valid of [true, false]) {
+			const record = adjudicatedRecord(HEAD_A, {
+				slots: [{ slot: SLOT, valid, reason: valid ? undefined : "zq refused" }],
+			});
+			assert.equal(
+				gate().mergeReviewGate({ ok: true, bodies: [body(record)] }, HEAD_A).pass,
+				true,
+				`a slot with valid=${valid} changed the verdict — the gate reads the resolved review STATE, which ` +
+					"§1.7 makes the collapse of the panel's slots, never the individual slot flags",
+			);
+		}
 	});
 });

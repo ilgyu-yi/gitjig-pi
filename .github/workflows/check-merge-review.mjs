@@ -35,6 +35,7 @@
 // broken checkout rather than §3.9's absent-substrate limb, and a
 // checkout that cannot supply the gate should be loud.
 
+import { pathToFileURL } from "node:url";
 import { mergeReviewGate } from "../../.pi/extensions/gitjig/review/merge-gate.ts";
 import { quoted } from "../../.pi/extensions/gitjig/quote.ts";
 
@@ -71,7 +72,11 @@ function headers(token) {
  * error would hand the posture to whatever catches it.
  */
 async function readJson(url, token, fetchImpl) {
-	const wrap = (error) => redact(quoted(error instanceof Error ? error.message : String(error)), token);
+	// Redact BEFORE escaping, never after: `quoted` rewrites control and
+	// separator characters, so a token containing one is no longer present
+	// as its own bytes when a later `split(token)` runs — it would survive
+	// into the log as a trivially reversible encoding of the credential.
+	const wrap = (error) => quoted(redact(error instanceof Error ? error.message : String(error), token));
 	let response;
 	try {
 		response = await fetchImpl(url, { headers: headers(token) });
@@ -179,7 +184,11 @@ function advisory(reason, detail) {
 
 // Run only when invoked as the entry point, so the arms can import the
 // pieces above without driving a platform read.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// `pathToFileURL` rather than a hand-built `file://` prefix: a path
+// needing percent-encoding makes the two spellings differ, the guard
+// reads false, and the script exits 0 having evaluated nothing — §3.7(b)'s
+// silent skip in its quiet form, in a file every other limb of which is loud.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 	const { code, lines } = await run(process.env);
 	for (const line of lines) {
 		console.log(line);

@@ -394,9 +394,11 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "merge-review-record-lookup",
 		failureShape:
-			"the review-record lookup degrades at merge-review — the comment fetch throws or answers non-2xx, a page is " +
+			"either platform read degrades at merge-review. The COMMENT read: it throws or answers non-2xx, a page is " +
 			"not JSON or not an array, the list exceeds the pages the reader walks, no record opens its own comment at " +
-			"the head under review, or a record at that head does not parse",
+			"the head under review, or a record at that head does not parse. The HEAD-RESOLUTION read, which the " +
+			"issue_comment path makes because that event's payload carries no head: it throws, answers non-2xx, or " +
+			"answers with a body that is not JSON or whose head sha is absent, non-string, or empty",
 		posture: "closed",
 		justification:
 			"Decided at .pi/extensions/gitjig/review/merge-gate.ts on \u00a73.7(c)'s fail-closed-lookup rule and \u00a75.2: the " +

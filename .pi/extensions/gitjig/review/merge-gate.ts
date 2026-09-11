@@ -28,9 +28,16 @@
  *
  * Warning-surface roster: EXEMPT — no message composed here is warned or
  * thrown; `refuse.detail` is a caller-consumed field, and its one
- * consumer prints it as an advisory notice. Embedding the head verbatim
- * is the binding the gate exists to report.
+ * consumer prints it as an advisory notice. The exemption is NOT a
+ * licence to interpolate freely, and the distinction is load-bearing:
+ * every RECORD-AUTHORED operand goes through `authored()` below, because
+ * the consumer renders the detail to a log and §3.10 forbids a guarded
+ * surface from hosting an input that can forge its own decisions.
+ * Caller-derived operands — the head under review, a finding count — are
+ * embedded verbatim: the head binding is the thing the gate exists to
+ * report, and it comes from the platform, not from the record.
  */
+import { quoted } from "../quote.ts";
 import { parseReviewRecord, REVIEW_RECORD_MARKER, type ReviewRecord } from "./record.ts";
 
 /**
@@ -67,7 +74,38 @@ export type CommentLookup = { ok: true; bodies: readonly string[] } | { ok: fals
  * different head is somebody else's round, not this head's evidence.
  */
 function opensRecordFor(body: string, head: string): boolean {
-	return body.startsWith(`<!-- ${REVIEW_RECORD_MARKER}: ${head} -->`);
+	// The head is compared case-INSENSITIVELY and the marker exactly.
+	// §3.11's semantics rule is that a differently-cased spelling of the
+	// same ref is the same ref, and a head IS a ref: refusing a genuine
+	// record because its hex arrived upper-cased is a wrong-BLOCK on an
+	// identity that never changed. The marker's own bytes do not fold —
+	// they are this format's literal syntax, not a ref.
+	const prefix = `<!-- ${REVIEW_RECORD_MARKER}: `;
+	const suffix = " -->";
+	if (!body.startsWith(prefix)) {
+		return false;
+	}
+	// The compared span is the head's own width plus the terminator, so
+	// neither a strict prefix of the head nor a head this one is a prefix
+	// of can satisfy it.
+	const span = body.slice(prefix.length, prefix.length + head.length + suffix.length);
+	return span.toLowerCase() === `${head}${suffix}`.toLowerCase();
+}
+
+/**
+ * Escape a record-authored operand before it reaches a rendered detail.
+ *
+ * The record's fields are parsed from a PR comment, and this gate
+ * deliberately does not model authorship (the residual above), so any
+ * party who can comment chooses them. The one consumer prints the detail
+ * to a run log, and §3.10 forbids a guarded surface from hosting an
+ * input that can forge the guard's own decisions: an unescaped newline
+ * in a record field renders a SECOND physical line, and a second line
+ * shaped like this gate's PASS line is indistinguishable from one.
+ * `quoted` rewrites the controls that make a second line possible.
+ */
+function authored(value: string): string {
+	return quoted(value);
 }
 
 /**
@@ -115,7 +153,7 @@ export function mergeReviewGate(lookup: CommentLookup, head: string): MergeGateV
 		return {
 			pass: false,
 			reason: "panel-incomplete",
-			detail: `the review at ${head} is incomplete (${record.review.cause}) — an incomplete review is not an approval (§1.7)`,
+			detail: `the review at ${head} is incomplete (${authored(record.review.cause)}) — an incomplete review is not an approval (§1.7)`,
 		};
 	}
 
