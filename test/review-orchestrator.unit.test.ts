@@ -360,6 +360,71 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		for (const [needle, why] of [
+			["ADMISSION", "the burden's own header — admission is decided before any axis is ruled"],
+			["A — actual artifact defect", "ground A's name"],
+			[
+				"A state trace suffices; no test is required. Look here FIRST",
+				"ground A's whole relief — the cheapest ground is looked for first",
+			],
+			["POSITION in the corpus", "ground B's key — position, not rhetoric"],
+			[
+				"the claim / the evidence / what it actually observes / why that cannot establish it",
+				"ground B's four-part naming obligation",
+			],
+			["AUTHORITY CITED", "ground C admits nothing without its authority"],
+			[
+				"whose pinning a settled contract requires",
+				"the §3.12 scoping as settled — the brief cites the scoped obligation",
+			],
+			["RECORD, DO NOT ADMIT", "the default — the token that keeps a true observation out of the bundle"],
+			[
+				"Deliberate absences are recorded as decisions, not omissions",
+				"the default's §1.9 ground, quoted — no new disposition is minted",
+			],
+			["DEMOTE BEFORE DEDUP", "the ordering that IS the token"],
+			["no exit but REFUTED", "why the ordering matters — admit first and the token is gone"],
+			["exculpatory claim", "the symmetry rule's subject"],
+			[
+				"An enumeration establishes an enumeration, never a class",
+				"the symmetry rule's teeth — nine kills are not a closure",
+			],
+			["with its enumeration attached", "how an exculpatory claim is recorded"],
+		] as const) {
+			assert.ok(text.includes(needle), `the judge brief lost ${why} (missing: ${JSON.stringify(needle)})`);
+		}
+		assert.ok(
+			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
+			"the admission burden must compose BEFORE the dedup obligation — demote-before-dedup is an ordering, and " +
+				"a burden stated after dedup arrives after the decision it governs",
+		);
+	});
+
+	it("the reviewer brief separates observations from findings without narrowing the search (issue #196)", () => {
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		for (const [needle, why] of [
+			[
+				"search exactly as aggressively",
+				"the NOT-NARROWED half — pinned so a future edit cannot quietly turn this into a licence to review less",
+			],
+			["narrows NOTHING about what you look for", "the not-narrowed half's second spelling, load-bearing"],
+			["reported as an OBSERVATION", "the reporting shape for what establishes no ground"],
+			["listed separately and distinctly labelled", "observations do not ride finding grammar"],
+			["never pressed into finding grammar", "the prohibition itself, with its polarity"],
+		] as const) {
+			assert.ok(text.includes(needle), `the reviewer brief lost ${why} (missing: ${JSON.stringify(needle)})`);
+		}
+	});
+
 	it("an empty manifest crosses as an empty manifest, never as absent", () => {
 		const b = briefs();
 		const text = b.composeJudgeBrief(

@@ -18,6 +18,14 @@
  * the permission for a clean review to be clean. Each is a sentence a
  * real dispatch was once refused or degraded for lacking.
  *
+ * DECISION — the admission burden (issue #196, deriving §3.12's settled
+ * scoping) composes into both briefs: the Judge is told the three
+ * admitting grounds, the record-do-not-admit default on §1.9's own
+ * sentence, the demote-before-dedup ordering, and the symmetry rule
+ * for exculpatory claims; the reviewer is told to report groundless
+ * observations as observations without narrowing the search. No
+ * disposition, state, actor or phase is added — the token is §1.9's.
+ *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;
  * the Judge's rides the same slot as the closed
@@ -61,6 +69,33 @@ export type ReviewFences = {
 };
 
 export type BriefContext = { changeDescription: string };
+
+const OBSERVATION_DISCIPLINE = [
+	"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+	"discipline narrows NOTHING about what you look for. It shapes only the return: an observation",
+	"that establishes no actual artifact defect, no failure of a claim its check's position makes,",
+	"and no absence of contract-required evidence is reported as an OBSERVATION,",
+	"listed separately and distinctly labelled, never pressed into finding grammar.",
+].join("\n");
+
+const ADMISSION_BURDEN = [
+	"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+	"finding at all. A harness or evidence observation is admitted only where you establish one of:",
+	"A — actual artifact defect: given state X the artifact produces Y where a settled contract",
+	"  requires Z. A state trace suffices; no test is required. Look here FIRST.",
+	"B — the check does not establish what its POSITION in the corpus makes it claim. Name",
+	"  the claim / the evidence / what it actually observes / why that cannot establish it.",
+	"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
+	"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
+	"  reaches a guard whose pinning a settled contract requires and no other guard.",
+	"Otherwise: RECORD, DO NOT ADMIT. The ground is §1.9's own sentence —",
+	'"Deliberate absences are recorded as decisions, not omissions" — so no new disposition exists',
+	"or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an effective finding",
+	"has no exit but REFUTED, so the ordering is the whole of the token.",
+	'SYMMETRY: an exculpatory claim ("this defect class is closed") carries a finding\'s burden.',
+	"An enumeration establishes an enumeration, never a class; record such a claim as a claim,",
+	"with its enumeration attached.",
+].join("\n");
 
 const RETURN_CONTRACT = [
 	"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
@@ -136,6 +171,8 @@ export function composeReviewerBrief(
 		'{"token": "APPROVED" | "FINDINGS", "findings": string[]} — findings empty exactly when the token',
 		"is APPROVED. Each finding states what you observed, where, and the command whose output shows it.",
 		"",
+		OBSERVATION_DISCIPLINE,
+		"",
 		fenceBlock(fences),
 		priorFindingsBlock(fences),
 		"",
@@ -193,6 +230,8 @@ export function composeJudgeBrief(
 		...findings,
 		"",
 		manifestBlock,
+		"",
+		ADMISSION_BURDEN,
 		"",
 		"YOUR OBLIGATIONS, all owed (§1.9):",
 		"1. DEDUP over the whole bundle — semantically-one raw findings merge into one effective finding with",
