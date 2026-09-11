@@ -376,21 +376,35 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			for (const [needle, why] of [
 				["NO node_modules", "the provisioned tree lands uninstalled — every early slot hit this"],
 				["no local `main` ref", "a clone has none; 'compare against main' silently compares against nothing"],
-				["npm ci", "the install instruction"],
+				["Run `npm ci` FIRST", "the install instruction WITH its ordering — a bare 'npm ci' needle pinned no polarity"],
 				[
 					"resolves a DIFFERENT package and exits 0",
 					"the REASON beside the instruction — an instruction without its cost gets skipped",
 				],
-				["mktemp -d", "the private-scratch instruction"],
+				[
+					"a private `mktemp -d`, never a bare /tmp path",
+					"the private-scratch instruction WITH both qualifiers — round 3's EF2: 'private' and the /tmp ban were deletable",
+				],
 				[
 					"/tmp file you did not create as hostile",
 					"parallel delegates share /tmp — one mutator was overwritten mid-run by a sibling",
 				],
-				["git archive", "the archive ban — a copy without .git reds arms by itself"],
+				[
+					"Never `git archive` a copy",
+					"the archive ban WITH its polarity — round 3's EF1: 'Never' flipped to 'Prefer' with the suite green",
+				],
 				["never mutate git state", "the git-state ban for copies"],
 				[
-					"Re-run serially",
-					"the suite is not all-green under parallel load (#119) — a kill or a red must survive a serial re-run",
+					"Re-run serially before believing a mutant kill or reporting a suite failure",
+					"the serial re-run rule WITH its trigger — round 3's EF3: 'before believing a kill' was deletable",
+				],
+				[
+					"facts entering unverified (§1.5 form iii)",
+					"the ledger's form-(iii) label — round 2's F-1 repair, unpinned until round 3",
+				],
+				[
+					"Verify a fact with your own command before you rely on it",
+					"the form-(iii) verification demand — round 3's EF5: the label demanded less than the obligation it cited",
 				],
 				[
 					"YOUR PROVISIONED TREE",

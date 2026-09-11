@@ -68,7 +68,7 @@ export type BriefContext = { changeDescription: string };
 
 const PROVISIONED_TREE_FACTS = [
 	"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
-	"went wrong first; confirm one cheaply where it gates your work:",
+	"went wrong first. Verify a fact with your own command before you rely on it:",
 	"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
 	"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
 	"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
@@ -77,7 +77,7 @@ const PROVISIONED_TREE_FACTS = [
 	"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
 	"  any copy you make.",
 	"- Re-run serially before believing a mutant kill or reporting a suite failure — the suite is not",
-	"  all-green under parallel load (#119).",
+	"  all-green under parallel load (#119), and a repaired flake does not retire the rule.",
 ].join("\n");
 
 const RETURN_CONTRACT = [
