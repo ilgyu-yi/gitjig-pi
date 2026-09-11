@@ -13,6 +13,8 @@
  * dynamic import and every arm reds on its own authored message.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -263,6 +265,66 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 	});
 });
 
+describe("§1.4 the assembler carries findings and rulings whole (issue #186)", () => {
+	// The domain here is not a closed union but a CARDINALITY, and round 6
+	// found every fixture standing at 0 or 1 — no record anywhere carried a
+	// bundle of two, and the only two-ruling fixture bypassed the assembler
+	// entirely by being handed straight to the renderer. A fixture at
+	// cardinality 1 cannot falsify "carries them whole": truncation to the
+	// first and preservation of all are the same observation at one entry.
+	//
+	// So: two findings and two rulings, needles distinct by construction,
+	// asserted by deep equality in ORDER. A truncation, a reversal, or a
+	// silent drop each red.
+	const HEAD = "e".repeat(40);
+	const FINDINGS = ["zq alpha finding", "zq beta finding"];
+	const RULINGS = [
+		{ finding: "zq alpha finding", validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "zq alpha evidence" },
+		{ finding: "zq beta finding", validity: "REFUTED", evidence: "zq beta evidence" },
+	];
+	const withBundle = (): ReviewRecord => ({
+		head: HEAD,
+		slots: [],
+		bundle: FINDINGS.map((finding) => ({ finding, slot: { lens: "runtime", surface: "the shell's runtime" } })),
+		adjudication: { dedupAttested: true, rulings: RULINGS },
+		review: { state: "resolved", resolution: { dispositions: [], outcome: "repair" } },
+	});
+
+	it("preserves BOTH findings, in order — truncation and reversal each red", () => {
+		const [assembled] = mod().repairHistory([withBundle()]);
+		assert.deepEqual(
+			assembled?.findings,
+			FINDINGS,
+			"the assembled state's findings are not the record's bundle, in order — §1.4's diagnosis reads the SAME " +
+				"findings across states, so a silently truncated or reordered set is precisely the input the ruling " +
+				"turns on (AC1)",
+		);
+	});
+
+	it("preserves BOTH rulings, in order, each whole — a dropped field reds", () => {
+		const [assembled] = mod().repairHistory([withBundle()]);
+		assert.deepEqual(
+			assembled?.rulings,
+			RULINGS,
+			"the assembled state's rulings are not the adjudication's, in order and whole — the second ruling carries " +
+				"no severity by construction, so a shape that drops an optional field or truncates to the first reds here",
+		);
+	});
+
+	it("a findings-carrying record with a NULL adjudication keeps its findings and empties its rulings", () => {
+		// The shape repairHistory produces by design when a panel gathered
+		// findings the Judge never ruled. Round 6 showed this shape unmeasured
+		// past position one; it is measured here at the assembler.
+		const [assembled] = mod().repairHistory([{ ...withBundle(), adjudication: null }]);
+		assert.deepEqual(
+			{ findings: assembled?.findings, rulings: assembled?.rulings },
+			{ findings: FINDINGS, rulings: [] },
+			"a record with findings and no adjudication did not keep its findings with empty rulings — an adjudication " +
+				"the Judge has not made is not a reason to lose the findings it has not ruled on",
+		);
+	});
+});
+
 describe("§1.4 the coarse deterministic trigger (issue #186)", () => {
 	const h = () => mod();
 	const heads = (n: number) => Array.from({ length: n }, (_, i) => String(i).padStart(40, "0"));
@@ -403,7 +465,14 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 			state({
 				head: fill.repeat(40),
 				outcome,
-				findings: [`zq ${position} finding`],
+				// Round 6's F3/N1: the needle must be distinct BY CONSTRUCTION
+				// from anything another rendered line can produce. Previously the
+				// finding text was identical to the ruling's `finding` field, and
+				// the ruling line renders that field — so a renderer that dropped
+				// the findings line entirely still satisfied the needle from the
+				// ruling line, and every findings mutant survived. These share no
+				// substring: "fq" vs "zq", and different position words.
+				findings: [`fq ${position}-only-in-findings`],
 				rulings: [
 					{
 						finding: `zq ${position} finding`,
@@ -414,6 +483,17 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 				],
 			}),
 		);
+
+	/**
+	 * A history whose SECOND state carries findings and no rulings — the
+	 * shape `repairHistory` produces for a panel the Judge has not ruled.
+	 * Round 6 showed it pinned only at position one, so a renderer emitting
+	 * findings for the first state alone survived every arm.
+	 */
+	const findingsOnlyAtSecond = (): StateSummary[] => {
+		const history = multi();
+		return history.map((entry, index) => (index === 1 ? { ...entry, rulings: [] } : entry));
+	};
 
 	const headerLines = (text: string): string[] =>
 		text.split("\n").filter((line) => /^ {2}\d+\. head \S+ resolved /.test(line));
@@ -431,6 +511,43 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 				);
 			}
 		}
+	});
+
+	it("renders EVERY state's own findings line, at every position — needles distinct by construction", () => {
+		// The falsifier for the findings line specifically: each state's
+		// findings needle appears nowhere else in the render, so a renderer
+		// that emits one state's findings for all, or only the first
+		// state's, or only the last's, cannot satisfy this from a
+		// neighbouring line.
+		const history = multi();
+		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
+		for (const entry of history) {
+			for (const needle of entry.findings) {
+				assert.ok(
+					text.includes(needle),
+					`the brief lost the findings line for ${entry.head.slice(0, 1)} (missing: ${JSON.stringify(needle)}) — ` +
+						"§1.4's diagnosis reads the same findings ACROSS states, so a brief carrying one state's " +
+						"findings makes STAGNATION's recurrence unreadable",
+				);
+			}
+		}
+	});
+
+	it("renders a findings-only state's findings at position TWO — the null-adjudication shape past the first", () => {
+		const history = findingsOnlyAtSecond();
+		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
+		const second = history[1] as StateSummary;
+		assert.ok(
+			text.includes(second.findings[0] as string),
+			"a state carrying findings with NO rulings lost its findings when it sat at position two — this is the " +
+				"shape repairHistory produces for a panel the Judge has not ruled, and the ruling line cannot " +
+				"stand in for the findings line when there are no rulings",
+		);
+		assert.ok(
+			!text.includes(`zq ${"middle"} evidence`),
+			"the fixture's second state still renders a ruling — it is supposed to carry none, so this arm would " +
+				"be measuring the wrong thing",
+		);
 	});
 
 	it("renders the states OLDEST FIRST — rendered position increases in history order", () => {
@@ -622,59 +739,227 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 	});
 });
 
-describe("§1.4 the deterministic consumer (issue #186)", () => {
-	it("NONE admits a further autonomous repair; the other three park", () => {
-		const h = mod();
-		assert.deepEqual(
-			h.diagnosisConsequence("NONE", "nothing"),
-			{ proceed: true, park: false, reentry: "none" },
-			"NONE did not admit a further repair",
-		);
-		for (const value of ["STAGNATION", "OSCILLATION", "INDETERMINATE"] as const) {
-			const c = h.diagnosisConsequence(value, "nothing");
-			assert.ok(
-				!c.proceed && c.park,
-				`${value} did not hand off to a park — only NONE admits a further attempt (§1.4)`,
-			);
+describe("§1.4 the admission's input domain, derived from DispatchOutcome (issue #186)", () => {
+	// The domain is read off the dispatcher's own return type, not off a
+	// finding. `disposition` is admitted|refused (2); on the admitted arm
+	// `ok` is boolean (2) and `compare` is "confirmed"|"invalid"|ABSENT
+	// (3 — the third is the optional's own inhabitant, and the dispatcher
+	// sets compare only when an expected ref was supplied, so it is a real
+	// shape and not a hypothetical). The guard admits exactly one of these
+	// combinations; every other one must hand off.
+	const input: DiagnosisInput = { value: "STAGNATION", invalidation: "plan", evidence: "the method repeated" };
+	const COMPARES = ["confirmed", "invalid", undefined] as const;
+
+	for (const compare of COMPARES) {
+		for (const ok of [true, false]) {
+			const admissible = compare === "confirmed" && ok;
+			it(`admitted/ok=${ok}/compare=${String(compare)} is ${admissible ? "available" : "a hand-off"}`, () => {
+				const outcome = { disposition: "admitted", ok, summary: "RESULT", payload: JSON.stringify(input), compare };
+				const admission = mod().admitDiagnosis(outcome as DispatchOutcome);
+				if (admissible) {
+					assert.deepEqual(
+						admission,
+						{ available: true, diagnosis: input },
+						"the one admissible combination did not yield the payload's own two outputs and evidence",
+					);
+					return;
+				}
+				assert.ok(
+					!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+					`compare=${String(compare)} with ok=${ok} was not handed off — §1.6's blind compare gates this return, ` +
+						"and an UNSET compare is the shape the dispatcher produces when no expected ref was supplied, so " +
+						"reading it as a value admits an unverified diagnosis; absence is never NONE (§1.4)",
+				);
+			});
 		}
+	}
+
+	it("a refused dispatch hands off, whatever else it carries", () => {
+		const admission = mod().admitDiagnosis({ disposition: "refused", cause: "the delegated run reported failure" });
+		assert.ok(
+			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			"a refused dispatch was not handed off",
+		);
 	});
 
-	it("the invalidation finding routes the re-entry gate, independently of the value", () => {
-		const h = mod();
-		assert.equal(h.diagnosisConsequence("NONE", "plan").reentry, "plan", "a plan invalidation did not route to §1.8");
-		assert.equal(
-			h.diagnosisConsequence("STAGNATION", "authorization").reentry,
-			"authorization",
-			"an authorization invalidation did not route to §1.2/§2.2",
-		);
-		assert.equal(h.diagnosisConsequence("NONE", "nothing").reentry, "none", "nothing-invalidated routed a re-entry");
+	// The payload's own inhabited shapes, enumerated rather than sampled.
+	// A JSON `null` is the shape that matters most: the parser's key
+	// extraction raises on it, and an uncaught raise on the admission path
+	// is not §1.4's hand-off at all.
+	const PAYLOADS: [string, string | undefined][] = [
+		["absent", undefined],
+		["empty", ""],
+		["JSON null", "null"],
+		["a JSON array", "[]"],
+		["a JSON scalar", "42"],
+		["a JSON string", '"NONE"'],
+		["unparseable", "{ not json"],
+		["an object missing a key", '{"value":"NONE"}'],
+		["an object with an extra key", '{"value":"NONE","invalidation":"nothing","evidence":"e","extra":1}'],
+		["an out-of-set value", '{"value":"PROGRESS","invalidation":"nothing","evidence":"e"}'],
+		["an out-of-set invalidation", '{"value":"NONE","invalidation":"everything","evidence":"e"}'],
+		["empty evidence", '{"value":"NONE","invalidation":"nothing","evidence":""}'],
+	];
+
+	for (const [shape, payload] of PAYLOADS) {
+		it(`a payload that is ${shape} hands off rather than raising or yielding a value`, () => {
+			const outcome = { disposition: "admitted", ok: true, summary: "RESULT", payload, compare: "confirmed" };
+			let admission: DiagnosisAdmission;
+			try {
+				admission = mod().admitDiagnosis(outcome as DispatchOutcome);
+			} catch (error) {
+				assert.fail(
+					`a payload that is ${shape} made the admission RAISE (${error instanceof Error ? error.message : String(error)}) ` +
+						"— an uncaught raise on the admission path is not §1.4's hand-off, and the caller that consumes " +
+						"this deterministically gets an exception where it expected a closed result",
+				);
+			}
+			assert.ok(
+				!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+				`a payload that is ${shape} was admitted as a value — absence is not NONE (§1.4), and a malformed return ` +
+					"against the closed shape is absence",
+			);
+		});
+	}
+});
+
+describe("§1.4 the deterministic consumer (issue #186)", () => {
+	// The coverage set here is the CROSS-PRODUCT of two closed unions read
+	// off history.ts's own source — DiagnosisValue x Invalidation, 4 x 3 —
+	// not the pairs a reviewer happened to name. Round 6 measured 6 of the
+	// 12 exercised and named 5 survivors; deriving the domain instead found
+	// 6 genuine survivors plus one equivalent mutant, which is the whole
+	// reason the domain is derived rather than sampled.
+	//
+	// The falsifier: a mutant that changes the returned Consequence at
+	// exactly one cell must red. Every cell below is asserted WHOLE, so a
+	// cell-local mutant cannot hide in an unasserted field.
+	const VALUES = ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"] as const;
+	const INVALIDATIONS = ["nothing", "plan", "authorization"] as const;
+
+	/** The contract, restated independently of the implementation (§1.4). */
+	const expected = (value: (typeof VALUES)[number], invalidation: (typeof INVALIDATIONS)[number]) => ({
+		proceed: value === "NONE",
+		park: value !== "NONE",
+		reentry: invalidation === "nothing" ? "none" : invalidation,
+	});
+
+	for (const value of VALUES) {
+		for (const invalidation of INVALIDATIONS) {
+			it(`is total at ${value} x ${invalidation} — the cell asserted whole`, () => {
+				assert.deepEqual(
+					mod().diagnosisConsequence(value, invalidation),
+					expected(value, invalidation),
+					`the consumer's cell ${value} x ${invalidation} does not match §1.4's mapping — NONE alone admits a ` +
+						"further autonomous repair, the other three hand off to §5.7's park, and the invalidation routes " +
+						"the re-entry gate INDEPENDENTLY of the value (AC4: arms pin the total mapping)",
+				);
+			});
+		}
+	}
+
+	it("no fifth progress value exists — the union the consumer ranges over is exactly four", () => {
+		// AC4's last clause. Structurally pinned by the closed union at
+		// compile time; measured here against the SOURCE so a widening that
+		// adds a member cannot land without this arm and the snapshot below
+		// both reding.
+		assert.equal(VALUES.length, 4, "the value domain this suite iterates is no longer four members");
+		assert.equal(INVALIDATIONS.length, 3, "the invalidation domain this suite iterates is no longer three members");
 	});
 });
 
-describe("§1.4 the two fail limbs — present-but-cannot-measure vs absent substrate (issue #186)", () => {
-	it("the store present but a record unreadable hands off (fail-closed)", () => {
-		const h = mod();
-		const availability = h.historyAvailability(true, undefined);
-		assert.ok(
-			!availability.available && availability.disposition === "hand-off" && availability.reason.length > 0,
-			"an installed store whose records could not be read failed open, or handed off silently — " +
-				"present-but-cannot-measure is fail-closed and §1.4's hand-off carries a reason (round 3's EF3)",
-		);
-	});
+describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability (issue #186)", () => {
+	// The domain is derived from the SIGNATURE: storeInstalled is boolean
+	// (2) and records is `ReviewRecord[] | undefined`, whose inhabited
+	// shapes are undefined / empty / non-empty (3). Six cells. Round 6
+	// named two of them (the available limb's payload, and the
+	// empty-but-readable false-block); the signature names all six.
+	const HEAD_A = "a".repeat(40);
+	const HEAD_B = "b".repeat(40);
+	const CELLS = [
+		["absent store, unreadable records", false, undefined],
+		["absent store, empty records", false, []],
+		["absent store, readable records", false, "records"],
+		["installed store, unreadable records", true, undefined],
+		["installed store, empty records", true, []],
+		["installed store, readable records", true, "records"],
+	] as const;
 
-	it("the store absent in this clone fails OPEN with a warning", () => {
-		const h = mod();
-		const availability = h.historyAvailability(false, undefined);
-		assert.ok(
-			!availability.available && availability.disposition === "fail-open" && availability.reason.length > 0,
-			"an uninstalled record substrate did not fail open with a warning — the acting party neither caused it " +
-				"nor can repair it from inside a block (§1.4)",
-		);
-	});
+	for (const [shape, storeInstalled, kind] of CELLS) {
+		it(`${shape} — the cell's whole result, not just its flag`, () => {
+			const h = mod();
+			// Cardinality >= 2 with distinct heads by construction: a
+			// pass-through that silently empties or truncates the set cannot
+			// satisfy a deep equality against both records.
+			const records = kind === "records" ? [repair(HEAD_A), repair(HEAD_B)] : (kind as ReviewRecord[] | undefined);
+			const availability = h.historyAvailability(storeInstalled, records);
 
-	it("the store present and records readable is available", () => {
-		const h = mod();
-		const availability = h.historyAvailability(true, [repair("a".repeat(40))]);
-		assert.ok(availability.available, "a readable installed store was not available");
-	});
+			if (!storeInstalled) {
+				// §1.4's absent-substrate limb: the enforcement was never
+				// installed, so it fails OPEN with a warning — and it does so
+				// whatever the records argument is, since the store's absence
+				// decides before the records are read.
+				assert.ok(
+					!availability.available && availability.disposition === "fail-open" && availability.reason.length > 0,
+					`${shape} did not fail OPEN with a reason — the acting party neither caused an uninstalled substrate ` +
+						"nor can repair it from inside a block (§1.4, §5.2)",
+				);
+				return;
+			}
+			if (records === undefined) {
+				// Present-but-cannot-measure: fail CLOSED, hand off.
+				assert.ok(
+					!availability.available && availability.disposition === "hand-off" && availability.reason.length > 0,
+					`${shape} did not hand off — present-but-cannot-measure fails closed (§1.4)`,
+				);
+				return;
+			}
+			// Readable, empty or not: AVAILABLE, and the records come through
+			// unchanged. An empty history is measurable, not unmeasurable —
+			// treating it as a hand-off parks the FIRST review of every change,
+			// which is the wrong-block direction §3.12 forbids as squarely as
+			// the wrong-allow one.
+			assert.deepEqual(
+				availability,
+				{ available: true, records },
+				`${shape} did not return the records it was handed, in order — a pass-through that silently empties the ` +
+					"set yields an empty history, so the trigger never fires and a change repairs indefinitely, which is " +
+					"what §1.4's opening forbids",
+			);
+		});
+	}
+});
+
+describe("§1.4 the suite's domain lists match the source's unions (drift snapshot, issue #186)", () => {
+	// TypeScript unions are erased at runtime, so the arms above must
+	// hand-list their members. This is the committed-snapshot idiom the
+	// repository already uses (postures.ts's inventory snapshot,
+	// build_toc --check): the source is the authority and this arm reds if
+	// a union gains or loses a member without the iterating arms following.
+	// It is not new machinery and it approves nothing — it only refuses to
+	// let a hand-list drift away from the artifact it claims to cover.
+	const SOURCE = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
+
+	const membersOf = (name: string): string[] => {
+		const declaration = new RegExp(`export type ${name}\\s*=\\s*([^;]+);`).exec(SOURCE);
+		assert.ok(declaration, `history.ts declares no exported type ${name} — the snapshot cannot read its domain`);
+		return [...(declaration[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+	};
+
+	for (const [name, iterated] of [
+		["DiagnosisValue", ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]],
+		["Invalidation", ["nothing", "plan", "authorization"]],
+		["StateOutcome", ["repair", "measure-escalate", "clear", "approved"]],
+	] as const) {
+		it(`${name}'s members are exactly what the arms iterate`, () => {
+			assert.deepEqual(
+				membersOf(name),
+				[...iterated],
+				`history.ts's ${name} no longer matches the member list this suite iterates. A union that gained a ` +
+					"member leaves the new one unexercised by every arm above while they still claim to range over the " +
+					"domain; a union that lost one leaves the arms asserting a member the contract dropped. Update the " +
+					"iterating arms and this snapshot together, or the coverage claim is false in one direction or the other",
+			);
+		});
+	}
 });
