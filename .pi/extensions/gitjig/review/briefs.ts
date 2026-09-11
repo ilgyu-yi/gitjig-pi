@@ -6,7 +6,8 @@
  * derived at composition time from the caller's own inputs (form i),
  * or explicitly labelled unverified (form iii) — the bundle and the
  * prior findings, which a provisioned delegate cannot reach any other
- * way.
+ * way, and the provisioned-tree ledger, whose facts were measured in
+ * prior rounds rather than derived at composition.
  *
  * DECISION — briefs are composed from caller inputs, never hand-typed
  * per round. What the composition owes is the costs already paid in
@@ -66,7 +67,8 @@ export type ReviewFences = {
 export type BriefContext = { changeDescription: string };
 
 const PROVISIONED_TREE_FACTS = [
-	"YOUR PROVISIONED TREE — facts, each learned from a round that went wrong first:",
+	"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+	"went wrong first; confirm one cheaply where it gates your work:",
 	"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
 	"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
 	"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
