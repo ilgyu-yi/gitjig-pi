@@ -224,28 +224,62 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("an UNRECOGNIZED review state is no state at all — it does not reset the trigger (round 8's S-F2)", () => {
-		// The tag union lives upstream in resolve.ts, so tsc cannot make the
-		// outcome decision exhaustive over it. A catch-all else mapped any
-		// unknown tag onto "approved" — the one outcome that RESETS §1.4's
-		// trigger — so a member added in another file silenced a fired
-		// trigger with this whole suite green.
+	it("EVERY unrecognized tag is no state — the complement, not one nominated point (round 9's F-A)", () => {
+		// A complement cannot be enumerated, so this arm is honest only if its
+		// fixture CANNOT be satisfied by a per-point special case. The previous
+		// version nominated one tag, and a production that dropped only that
+		// tag while restoring the catch-all for every other passed all 98 arms
+		// with tsc green — restoring the exact wrong-allow it was authored to
+		// close. Two guards replace it, and neither is a member list:
+		//   (a) several spellings, NONE of which appears in the module source;
+		//   (b) the structural universal — the recognized set is EXACTLY the
+		//       set the module tests for, so anything outside it takes the drop.
 		const h = mod();
-		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
-		const unknown = { head: b, slots: [], bundle: [], adjudication: null, review: { state: "withdrawn" } };
-		const history = h.repairHistory([repair(a), unknown as unknown as ReviewRecord, repair(c)]);
-		assert.deepEqual(
-			history.map((state) => state.head),
-			[a, c],
-			"an unrecognized review state became a state — §1.4 says a head drawing no resolved review contributes " +
-				"no state, and admitting it as `approved` mints a RESETTING state out of a tag this module does not " +
-				"know, from another file",
+		const source = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
+		const [a, c] = ["a".repeat(40), "c".repeat(40)];
+
+		// (a) — adversarially constructed, not nominated. Each is asserted
+		// ABSENT from the source, so no per-tag special case can reach them.
+		const spellings = ["withdrawn", "superseded", "abandoned", "zq-unknown-tag", ""];
+		for (const tag of spellings) {
+			assert.ok(
+				!source.includes(`"${tag}"`) || tag === "",
+				`the fixture tag ${JSON.stringify(tag)} appears in the module source, so this arm could be satisfied ` +
+					"by a special case for it — a complement's fixture must not name anything the production knows",
+			);
+			const b = "b".repeat(40);
+			const unknown = { head: b, slots: [], bundle: [], adjudication: null, review: { state: tag } };
+			const history = h.repairHistory([repair(a), unknown as unknown as ReviewRecord, repair(c)]);
+			assert.deepEqual(
+				history.map((state) => state.head),
+				[a, c],
+				`the tag ${JSON.stringify(tag)} became a review state — §1.4 says a head drawing no resolved review ` +
+					"contributes no state, and admitting it mints a RESETTING state out of a tag this module does not know",
+			);
+			assert.equal(
+				h.triggerFires(history),
+				true,
+				`the tag ${JSON.stringify(tag)} interposed between two repairs silenced the trigger — the wrong-allow ` +
+					"direction §1.4's opening forbids",
+			);
+		}
+
+		// (b) — the structural universal. The module must decide the outcome by
+		// an explicit test per recognized tag, with no catch-all: the tags it
+		// tests for are exactly the upstream declaration's, and every other
+		// input reaches the drop. Read off the source so a per-point special
+		// case cannot satisfy it either.
+		const assembler = /export function repairHistory[\s\S]*?\n}\n/.exec(source);
+		assert.ok(assembler, "history.ts declares no repairHistory — the universal cannot be read");
+		const tested = [...(assembler[1] ?? assembler[0]).matchAll(/record\.review\.state === "([^"]+)"/g)].map(
+			(match) => match[1] as string,
 		);
-		assert.equal(
-			h.triggerFires(history),
-			true,
-			"an unrecognized review state interposed between two repairs silenced the trigger — the wrong-allow " +
-				"direction §1.4's opening forbids, reachable by a one-line widening in resolve.ts",
+		assert.deepEqual(
+			[...tested].sort(),
+			["approved", "incomplete", "resolved"],
+			"the assembler no longer tests exactly the three recognized tags explicitly. A tag tested by a special " +
+				"case beyond these three, or one of these three no longer tested, means the drop branch is not the " +
+				"universal treatment of the complement and this arm's (a) fixtures no longer stand for it",
 		);
 	});
 
@@ -736,7 +770,11 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		const history = [state({ head: "b".repeat(40), findings: [], rulings: [] }), ...multi().slice(1)];
 		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
 		assert.ok(
-			text.includes("findings: (none)"),
+			// Bound to its OWN state's header: whole-text membership let the
+			// literal be misattributed to a state that DOES carry findings while
+			// the findings-free state rendered nothing — which is what this arm's
+			// own message forbids (round 9's F-D).
+			/ {2}1\. head b{40} resolved repair\n {7}findings: \(none\)\n/.test(text),
 			"a state with no findings rendered nothing at all — an absent line reads as an absent STATE, and §1.4 " +
 				"counts a findings-free review as a state that resets, not as a gap in the history",
 		);
@@ -871,20 +909,41 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		);
 	});
 
-	it("a hand-off carries a non-empty reason — neither fail limb is silent (round 1's E4)", () => {
+	it("NEITHER fail limb is silent, and each names its own — both limbs, not one (round 10's audit)", () => {
+		// The title quantifies over BOTH of `admitDiagnosis`'s hand-off limbs
+		// and the fixture exercised one, with `reason.length > 0` standing in
+		// for a structured value — the same two defects round 9's F-C found at
+		// the availability limbs. Found here by auditing the corpus rather
+		// than by a panel. Both limbs are iterated, and each is pinned on a
+		// phrase only its own reason carries, so a swap cannot pass.
 		const h = mod();
-		const admission = h.admitDiagnosis({
-			disposition: "admitted",
-			ok: true,
-			summary: "x",
-			payload: "{}",
-			compare: "confirmed",
-		});
-		assert.ok(
-			!admission.available && admission.reason.length > 0,
-			"the malformed-return hand-off carried an empty reason — §1.4's 'neither limb is silent' reaches the " +
-				"closed limb too; the handoff's recipient must know why it received the change",
-		);
+		const limbs: [string, DispatchOutcome, RegExp][] = [
+			[
+				"the dispatch-unavailable limb",
+				{ disposition: "refused", cause: "the delegated run reported failure" },
+				/blind compare/,
+			],
+			[
+				"the malformed-payload limb",
+				{ disposition: "admitted", ok: true, summary: "x", payload: "{}", compare: "confirmed" },
+				/malformed/,
+			],
+		];
+		for (const [shape, outcome, needle] of limbs) {
+			const admission = h.admitDiagnosis(outcome);
+			assert.ok(!admission.available && admission.disposition === "hand-off", `${shape} did not hand off`);
+			assert.ok(
+				!admission.available && admission.reason.length > 0,
+				`${shape} carried an EMPTY reason — §1.4's "neither limb is silent" reaches the closed limb too; the ` +
+					"handoff's recipient must know why it received the change",
+			);
+			assert.match(
+				admission.available ? "" : admission.reason,
+				needle,
+				`${shape} carried the OTHER limb's reason — §3.11 requires two failure shapes to carry two distinct ` +
+					"messages, and an interchangeable reason names a recovery that is dead at the limb that printed it",
+			);
+		}
 	});
 });
 
@@ -1064,7 +1123,9 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 				// whatever the records argument is, since the store's absence
 				// decides before the records are read.
 				assert.ok(
-					!availability.available && availability.disposition === "fail-open" && availability.reason.length > 0,
+					!availability.available &&
+						availability.disposition === "fail-open" &&
+						/not installed/.test(availability.reason),
 					`${shape} did not fail OPEN with a reason — the acting party neither caused an uninstalled substrate ` +
 						"nor can repair it from inside a block (§1.4, §5.2)",
 				);
@@ -1318,24 +1379,42 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 
 	it("the UPSTREAM review-state tags are exactly the ones the assembler recognizes (round 8's S-F2)", () => {
 		// StateOutcome's INPUT domain does not live in history.ts. The review
-		// state's tag union lives in resolve.ts, and the assembler decides an
-		// outcome per tag. Round 8's derivation named "the assignment in
-		// repairHistory (tsc-checked)" — and tsc does NOT make that decision
-		// exhaustive over a union declared in another file. This reads the
-		// upstream declaration itself, so a member added there reds here
-		// rather than silently becoming a resetting state.
+		// state's tag union lives in resolve.ts, and tsc does not make the
+		// assembler's per-tag decision exhaustive over a union declared in
+		// another file — so this reads the upstream declaration itself.
 		//
-		// The wrong-allow is closed in production (an unrecognized state is
-		// dropped); this arm closes the DETECTION, so the two are not
-		// confused: an arm that reds in CI does not stop a mapping at runtime.
+		// Round 9's F-B: it read only tags spelled as inline literals, so a
+		// member added as a NAMED TYPE REFERENCE passed the whole corpus. The
+		// sibling extractor in this file already refuses a non-literal union
+		// member with an authored message; that closure is carried here.
 		const upstream = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "resolve.ts"), "utf8");
 		// The declaration ends at the next top-level form, not at the first
-		// ";" — its object literals contain semicolons of their own, and a
-		// non-greedy match to ";" reads only the first arm. (The same
-		// extractor fragility S-F4 names, met here while writing S-F4's fix.)
+		// ";" — its object literals contain semicolons of their own.
 		const declaration = /export type ReviewState =([\s\S]*?)\n(?:export |const |type |function |\/\*\*)/.exec(upstream);
 		assert.ok(declaration, "resolve.ts declares no exported ReviewState — the snapshot cannot read the tag domain");
-		const tags = [...(declaration[1] as string).matchAll(/state:\s*"([^"]+)"/g)].map((match) => match[1] as string);
+
+		// REFUSE what cannot be read, rather than reading past it. Every arm of
+		// the union must carry its own `state: "literal"`; an arm that does
+		// not reaches outside this declaration, so the extracted tag list is
+		// NOT the domain and certifying it would be false.
+		const arms = (declaration[1] as string)
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.split(/^\s*\|/m)
+			.map((arm) => arm.trim())
+			.filter((arm) => arm.length > 0);
+		assert.ok(arms.length > 0, "resolve.ts's ReviewState union has no readable arms — the snapshot read nothing");
+		for (const arm of arms) {
+			assert.match(
+				arm,
+				/state:\s*"[^"]+"/,
+				`resolve.ts's ReviewState has a union arm carrying no inline state literal (${JSON.stringify(arm.slice(0, 60))}). ` +
+					"The snapshot reads literals, so a member reached through a type reference would widen the tag " +
+					"domain while the assembler silently dropped it and no arm here noticed. Spell the arm inline, " +
+					"or teach this extractor the shape you are adding",
+			);
+		}
+
+		const tags = arms.map((arm) => (/state:\s*"([^"]+)"/.exec(arm) as RegExpExecArray)[1] as string);
 		assert.deepEqual(
 			tags,
 			["incomplete", "approved", "resolved"],
@@ -1343,6 +1422,39 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 				"falls to the assembler's drop branch and contributes no state — which is safe — but no arm here " +
 				"exercises it, and the intended mapping for it has not been decided. Decide it and extend the " +
 				"assembler's explicit per-tag tests, or the domain is covered by a drop nobody chose",
+		);
+	});
+
+	it("record.ts's OUTCOMES is the second home of the resolution outcomes, and it agrees (round 10's audit)", () => {
+		// Found by auditing the corpus against the four homes this lineage has
+		// now met, NOT by a panel finding. `StateOutcome` is declared in
+		// history.ts, but the resolution outcomes it takes are ENFORCED by
+		// record.ts's own Set — a record whose outcome is outside it does not
+		// parse. Measured before this arm existed: dropping "clear" from that
+		// Set left all 98 arms green, so a `clear`-resolved record would stop
+		// parsing with nothing noticing.
+		//
+		// The invariant, which is not an equality: StateOutcome is the
+		// resolution outcomes PLUS "approved", which comes from the tag rather
+		// than from a resolution.
+		const recordSource = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "record.ts"), "utf8");
+		const enforcing = /const OUTCOMES = new Set\(\[([^\]]*)\]\)/.exec(recordSource);
+		assert.ok(enforcing, "record.ts declares no readable OUTCOMES Set — the enforcing home cannot be read");
+		const enforced = [...(enforcing[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+		assert.deepEqual(
+			enforced,
+			["repair", "measure-escalate", "clear"],
+			"record.ts's OUTCOMES — the Set that decides whether a resolved record PARSES at all — no longer carries " +
+				"the three resolution outcomes this module maps. A member dropped there silently stops a legitimate " +
+				"record from parsing; a member added there reaches the assembler as an outcome StateOutcome does not " +
+				"declare",
+		);
+		assert.deepEqual(
+			[...enforced, "approved"].sort(),
+			[...typeMembers("StateOutcome")].sort(),
+			'StateOutcome is no longer exactly record.ts\'s enforced resolution outcomes plus "approved". The two ' +
+				"are separate homes for one property (§3.11): the resolution outcomes are enforced upstream at parse " +
+				'time, and "approved" is contributed by the review-state tag, not by a resolution',
 		);
 	});
 
