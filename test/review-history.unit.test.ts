@@ -186,26 +186,64 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("a NON-CONTIGUOUS re-post moves the head to its latest position — the trigger does not under-fire (round 2's E1)", () => {
+	it("a re-post keeps its head's FIRST position and takes its LAST content (round 2's E1, re-authored)", () => {
 		const h = mod();
 		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
-		// A repaired, then C cleared, then B repaired, then A re-posted as a
-		// repair. Taking A's position from its FIRST occurrence freezes it at
-		// index 0 (sequence a|c|b, trailing run one repair, trigger silent);
-		// taking position from the LAST occurrence yields c|b|a (trailing run
-		// two repairs, trigger fires) — §1.4 forbids the under-fire.
+		// A repaired, then C cleared, then B repaired, then A re-posted.
+		// POSITION comes from A's first appearance, so the sequence is a|c|b —
+		// review chronology, which is the order heads were first reviewed.
+		// CONTENT comes from A's last record (§1.4's collapse: one head, one
+		// state, later record wins).
+		//
+		// This arm previously asserted the opposite — that the re-post moves A
+		// to the END, giving c|b|a. That rule silences a trigger that has
+		// already fired, which is the arm below; it is rejected in the module
+		// at the line that implements this one.
 		const out = h.repairHistory([repair(a), clear(c), repair(b), repair(a)]);
 		assert.deepEqual(
-			out.map((s) => s.head),
-			[c, b, a],
-			"a re-posted head kept its first position — the sequence is misordered and position/outcome are split " +
-				"across records",
+			out.map((state) => state.head),
+			[a, c, b],
+			"a re-posted head did not keep its FIRST position — moving it to the end asserts that a head reviewed " +
+				"first was reviewed last, and heads advance as the change is repaired, so first appearance IS the " +
+				"chronology §1.4's sequence is counted in",
 		);
 		assert.equal(
-			h.triggerFires(out),
-			true,
-			"the trigger under-fired on a non-contiguous re-post — a change could then repair indefinitely (§1.4)",
+			out[0]?.outcome,
+			"repair",
+			"the re-posted head did not take its LAST record's outcome — §1.4's collapse makes several records at one " +
+				"head one state, and the later record wins",
 		);
+	});
+
+	it("a re-post of an already-resolved head does NOT silence a trigger that has fired (round 7's F-R1)", () => {
+		const h = mod();
+		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+		// The measured defect: under last-occurrence positioning the re-post
+		// moved A to the end and the trailing repair run collapsed from two to
+		// one. §1.4's opening forbids the under-fire, so BOTH directions are
+		// pinned here — the trigger fires before the re-post and still fires
+		// after it, for every re-post outcome the flow can produce.
+		const before = h.repairHistory([approved(a), repair(b), repair(c)]);
+		assert.equal(h.triggerFires(before), true, "the trailing run of two repairs did not fire the trigger");
+		for (const [shape, repost] of [
+			["the same approved state re-posted", approved(a)],
+			["a re-post carrying a clear", clear(a)],
+			["a re-post carrying a repair", repair(a)],
+		] as const) {
+			const after = h.repairHistory([approved(a), repair(b), repair(c), repost]);
+			assert.equal(
+				h.triggerFires(after),
+				true,
+				`${shape} at an OLDER head silenced a trigger that had already fired — a record arriving late about a ` +
+					"head already reviewed is not a new review state (§1.4's collapse), and letting it take the newest " +
+					"position lets a change repair indefinitely, which §1.4's opening forbids",
+			);
+			assert.deepEqual(
+				after.map((state) => state.head),
+				[a, b, c],
+				`${shape} moved its head out of first-appearance order`,
+			);
+		}
 	});
 
 	it("a resolved measure-escalate maps as itself, and interposed it RESETS the repair run (round 4's S1)", () => {
@@ -511,6 +549,54 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 				);
 			}
 		}
+	});
+
+	it("renders EVERY entry of a state's findings AND rulings lists, in order (round 7's E1)", () => {
+		// Round 7: cardinality was derived for the ASSEMBLER and carried to
+		// the renderer only as a per-POSITION axis, so every brief fixture
+		// still held 0 or 1 findings per state and `.slice(0,1)` / `.reverse()`
+		// on the rendered lists survived. Cardinality is an axis of EVERY
+		// function that consumes a list, this one included.
+		//
+		// Needles are distinct by construction across both axes: "fq" for
+		// findings, "zq" for ruling evidence, and an index per entry, so no
+		// entry's needle can be satisfied by another entry or another line.
+		const head = "e".repeat(40);
+		const findings = ["fq finding-one", "fq finding-two", "fq finding-three"];
+		const rulings = [
+			{ finding: "fq finding-one", validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "zq evidence-one" },
+			{ finding: "fq finding-two", validity: "REFUTED", evidence: "zq evidence-two" },
+		];
+		const text = mod().composeDiagnosisBrief([{ head, outcome: "repair", findings, rulings }], {
+			changeDescription: "d",
+		});
+
+		for (const finding of findings) {
+			assert.ok(
+				text.includes(finding),
+				`the brief dropped ${JSON.stringify(finding)} — a renderer free to emit a state's FIRST finding and ` +
+					"stop hands the Judge a history in which a recurrence across states is invisible, which is the " +
+					"wrong-allow the assembler's own cardinality repair closed one level upstream",
+			);
+		}
+		assert.ok(
+			findings.every(
+				(finding, index) => index === 0 || text.indexOf(finding) > text.indexOf(findings[index - 1] as string),
+			),
+			"the brief rendered a state's findings out of order — a reversed list is a different history",
+		);
+		for (const ruling of rulings) {
+			assert.ok(
+				text.includes(ruling.evidence),
+				`the brief dropped the ruling evidence ${JSON.stringify(ruling.evidence)} — F15's discipline is that a ` +
+					"ruling travels with the evidence it rests on",
+			);
+		}
+		assert.ok(
+			text.indexOf(rulings[1]?.evidence as string) > text.indexOf(rulings[0]?.evidence as string),
+			"the brief rendered a state's rulings out of order — §1.4 reads the rulings the Judge already made, and " +
+				"their order is part of what it reads",
+		);
 	});
 
 	it("renders EVERY state's own findings line, at every position — needles distinct by construction", () => {
@@ -885,6 +971,15 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 		["installed store, readable records", true, "records"],
 	] as const;
 
+	it("an empty record list is an empty history — no state is fabricated for it", () => {
+		assert.deepEqual(
+			mod().repairHistory([]),
+			[],
+			"repairHistory fabricated a state for an empty record list — a head that drew no review contributes no " +
+				"state (§1.4), and an invented state feeds the trigger a history nobody reviewed",
+		);
+	});
+
 	for (const [shape, storeInstalled, kind] of CELLS) {
 		it(`${shape} — the cell's whole result, not just its flag`, () => {
 			const h = mod();
@@ -919,9 +1014,12 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 			// treating it as a hand-off parks the FIRST review of every change,
 			// which is the wrong-block direction §3.12 forbids as squarely as
 			// the wrong-allow one.
+			// Round 7's N2: the expected value must NOT be the array that was
+			// passed in, or an in-place `records.reverse()` mutates the
+			// expectation too and survives. Built independently here.
 			assert.deepEqual(
 				availability,
-				{ available: true, records },
+				{ available: true, records: kind === "records" ? [repair(HEAD_A), repair(HEAD_B)] : [] },
 				`${shape} did not return the records it was handed, in order — a pass-through that silently empties the ` +
 					"set yields an empty history, so the trigger never fires and a change repairs indefinitely, which is " +
 					"what §1.4's opening forbids",
@@ -930,36 +1028,147 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 	}
 });
 
-describe("§1.4 the suite's domain lists match the source's unions (drift snapshot, issue #186)", () => {
-	// TypeScript unions are erased at runtime, so the arms above must
-	// hand-list their members. This is the committed-snapshot idiom the
-	// repository already uses (postures.ts's inventory snapshot,
-	// build_toc --check): the source is the authority and this arm reds if
-	// a union gains or loses a member without the iterating arms following.
-	// It is not new machinery and it approves nothing — it only refuses to
-	// let a hand-list drift away from the artifact it claims to cover.
+describe("§1.4 the admission carries EVERY enforced member through the parser (round 7's F-R2)", () => {
+	// TRIPWIRE (g): the coverage set is derived from the expression that
+	// ENFORCES the domain, named here, not from the type declaration beside
+	// it. `admitDiagnosis` enforces over two runtime Set literals —
+	//   const DIAGNOSIS_VALUES = new Set<string>([...]);
+	//   const INVALIDATIONS    = new Set<string>([...]);
+	// read by `DIAGNOSIS_VALUES.has(value)` and `INVALIDATIONS.has(invalidation)`.
+	// Round 7 derived from `export type DiagnosisValue = ...` instead, which
+	// is a DIFFERENT home for the same property (§3.11), so deleting a member
+	// from either Set left 75 arms and tsc green — including deleting "NONE",
+	// which refuses every advancing history's ruling and parks every change
+	// forever.
+	//
+	// The falsifier: deleting ANY single member from either Set must red.
+	// That requires a POSITIVE admission per member, not merely a refusal.
+	const VALUES = ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"] as const;
+	const INVALIDATIONS = ["nothing", "plan", "authorization"] as const;
+
+	for (const value of VALUES) {
+		for (const invalidation of INVALIDATIONS) {
+			it(`admits ${value} × ${invalidation} through the parser, whole`, () => {
+				const input: DiagnosisInput = { value, invalidation, evidence: `zq evidence for ${value}` };
+				assert.deepEqual(
+					mod().admitDiagnosis(admittedPayload(input)),
+					{ available: true, diagnosis: input },
+					`a well-formed ruling of ${value} × ${invalidation} was not admitted with its own two outputs and ` +
+						"evidence — the member is absent from the Set the parser enforces over, so a valid ruling is being " +
+						"refused as malformed; for NONE that parks every change forever, inverting the one relief §1.4 grants",
+				);
+			});
+		}
+	}
+});
+
+describe("§1.4 the suite's domains match the SOURCE — types and the enforcing Sets (drift snapshot, issue #186)", () => {
+	// The committed-snapshot idiom this repository already uses (postures.ts's
+	// inventory, build_toc --check). It approves nothing; it refuses to let a
+	// hand-list drift from the artifact it claims to cover.
+	//
+	// Round 7's version read the TYPE declarations only, and round 7 found two
+	// gaps in it. Both are closed here:
+	//   F-R2 — it now also reads the runtime Sets, which are what enforces.
+	//   S2   — it now refuses a union body carrying anything but quoted
+	//          literals, so a member appended as a type reference
+	//          (`... | "INDETERMINATE" | ExtraValue`) can no longer pass
+	//          while tsc stays green.
 	const SOURCE = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
 
-	const membersOf = (name: string): string[] => {
+	/** Members of `export type NAME = "a" | "b";` — literals only. */
+	const typeMembers = (name: string): string[] => {
 		const declaration = new RegExp(`export type ${name}\\s*=\\s*([^;]+);`).exec(SOURCE);
 		assert.ok(declaration, `history.ts declares no exported type ${name} — the snapshot cannot read its domain`);
+		const body = (declaration[1] as string).trim();
+		// S2's closure: every token between the separators must be a quoted
+		// literal. A bare identifier means the union reaches outside this
+		// declaration, so the extracted member list is NOT the domain and the
+		// snapshot must refuse rather than certify a list it cannot see.
+		// The leading-pipe multi-line form (`=\n\t| "a"\n\t| "b";`) is ordinary
+		// TypeScript and must NOT false-red: splitting on "|" yields an empty
+		// leading token for it, so empties are dropped before the check. What
+		// must still red is a token that is present and is not a literal.
+		const tokens = body
+			.split("|")
+			.map((token) => token.trim())
+			.filter((token) => token.length > 0);
+		assert.ok(tokens.length > 0, `history.ts's ${name} has an empty union body — the snapshot read nothing`);
+		for (const token of tokens) {
+			assert.match(
+				token,
+				/^"[^"]*"$/,
+				`history.ts's ${name} has a union member that is not a quoted literal (${JSON.stringify(token.trim())}). ` +
+					"The snapshot reads literals, so a member reached through a type reference would widen the domain " +
+					"while every arm below still claims to range over it — and tsc would stay green. Spell the members " +
+					"inline, or teach this extractor the shape you are adding",
+			);
+		}
+		return [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+	};
+
+	/** Members of `const NAME = new Set<...>([...]);` — the ENFORCING home. */
+	const setMembers = (name: string): string[] => {
+		const declaration = new RegExp(`const ${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(\\[([^\\]]*)\\]\\)`).exec(SOURCE);
+		assert.ok(declaration, `history.ts declares no Set literal ${name} — the snapshot cannot read what enforces`);
 		return [...(declaration[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
 	};
 
-	for (const [name, iterated] of [
-		["DiagnosisValue", ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]],
-		["Invalidation", ["nothing", "plan", "authorization"]],
-		["StateOutcome", ["repair", "measure-escalate", "clear", "approved"]],
+	for (const [typeName, setName, iterated] of [
+		["DiagnosisValue", "DIAGNOSIS_VALUES", ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]],
+		["Invalidation", "INVALIDATIONS", ["nothing", "plan", "authorization"]],
 	] as const) {
-		it(`${name}'s members are exactly what the arms iterate`, () => {
+		it(`${typeName}: the type, the enforcing Set, and the arms all carry the same members`, () => {
+			// Three-way, deliberately: the type and the Set are two homes for
+			// one property (§3.11), and round 7's defect was exactly that they
+			// could disagree with nothing noticing.
 			assert.deepEqual(
-				membersOf(name),
+				typeMembers(typeName),
 				[...iterated],
-				`history.ts's ${name} no longer matches the member list this suite iterates. A union that gained a ` +
-					"member leaves the new one unexercised by every arm above while they still claim to range over the " +
-					"domain; a union that lost one leaves the arms asserting a member the contract dropped. Update the " +
-					"iterating arms and this snapshot together, or the coverage claim is false in one direction or the other",
+				`history.ts's ${typeName} no longer matches the member list this suite iterates`,
+			);
+			assert.deepEqual(
+				setMembers(setName),
+				[...iterated],
+				`history.ts's ${setName} — the Set the parser actually enforces over — no longer matches the member ` +
+					"list this suite iterates. This is the home round 7's derivation missed: the type declaration can " +
+					"stay correct while the Set loses a member, and every arm stays green",
 			);
 		});
 	}
+
+	it("StateOutcome's members are exactly what the arms iterate", () => {
+		assert.deepEqual(
+			typeMembers("StateOutcome"),
+			["repair", "measure-escalate", "clear", "approved"],
+			"history.ts's StateOutcome no longer matches the member list this suite iterates",
+		);
+	});
+
+	it("the payload's enforced key set matches what the brief instructs the Judge to return (round 7's F-R3)", () => {
+		// A producer/consumer pair with two homes: the brief TELLS the Judge
+		// the shape, DIAGNOSIS_KEYS ENFORCES it. Deleting the brief's shape
+		// line made every return malformed with the suite green.
+		const keys = setMembers("DIAGNOSIS_KEYS");
+		assert.deepEqual(keys, ["value", "invalidation", "evidence"], "the enforced key set changed");
+		const brief = mod().composeDiagnosisBrief(
+			[{ head: "a".repeat(40), outcome: "repair", findings: [], rulings: [] }],
+			{ changeDescription: "d" },
+		);
+		for (const key of keys) {
+			assert.ok(
+				brief.includes(key),
+				`the brief never names the key ${JSON.stringify(key)} that the parser enforces — a Judge told a different ` +
+					"shape than the one admitted returns malformed rulings, and every change then parks (§3.11: one " +
+					"property, one home; where there are two, an arm ties them)",
+			);
+		}
+		for (const value of ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]) {
+			assert.ok(
+				brief.includes(value),
+				`the brief never names the taxonomy value ${value} the parser will accept — the Judge cannot return a ` +
+					"value it was never told exists",
+			);
+		}
+	});
 });

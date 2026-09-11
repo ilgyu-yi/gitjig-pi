@@ -77,7 +77,7 @@ export type DiagnosisInput = { value: DiagnosisValue; invalidation: Invalidation
 
 export type DiagnosisAdmission =
 	| { available: true; diagnosis: DiagnosisInput }
-	| { available: false; disposition: "hand-off" | "fail-open"; reason: string };
+	| { available: false; disposition: "hand-off"; reason: string };
 
 export type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
 
@@ -115,15 +115,34 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 						}
 						return summary;
 					});
-		// One head is one state, taken from its LAST record — position AND
-		// outcome from the same record so the collapse stays coherent. A
-		// re-post moves the head to its latest position (an earlier frozen
-		// position would leave the sequence misordered and the trigger
-		// under-firing, which §1.4 forbids).
-		if (byHead.has(record.head)) {
-			order.splice(order.indexOf(record.head), 1);
+		// One head is one state (§1.4's collapse): its CONTENT comes from the
+		// last record at that head, and its POSITION from the head's FIRST
+		// appearance. The two halves come from different records on purpose,
+		// because they answer different questions — what the review at this
+		// head concluded, and when this head was reviewed relative to the
+		// others.
+		//
+		// REJECTED ALTERNATIVE, recorded where it is rejected: taking the
+		// position from the LAST record too, so a re-post moves its head to
+		// the end. That is what this module did through round 7, and it
+		// silences a trigger that has already fired. Measured: records
+		// [approved(A), repair(B), repair(C)] give A|B|C with a trailing run
+		// of two repairs and the trigger FIRES; appending a re-post of A's
+		// own already-resolved record moves A to the end, giving B|C|A with a
+		// trailing run of one approved state, and the trigger goes SILENT.
+		// §1.4's opening forbids exactly that direction, and §1.9's
+		// nit-carry-forward clause makes a re-post of a completed state an
+		// ordinary event rather than an exotic one.
+		//
+		// The rejected rule was defended on the ground that first-appearance
+		// positioning "leaves the sequence misordered". It is the other way
+		// round: heads advance as the change is repaired, so the order heads
+		// FIRST appear is review chronology, and moving a head to the end
+		// because a record about it arrived late asserts that a head reviewed
+		// first was reviewed last.
+		if (!byHead.has(record.head)) {
+			order.push(record.head);
 		}
-		order.push(record.head);
 		byHead.set(record.head, { head: record.head, outcome, findings, rulings });
 	}
 	return order.map((head) => byHead.get(head) as StateSummary);
