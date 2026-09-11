@@ -49,7 +49,11 @@ type Invalidation = "nothing" | "plan" | "authorization";
 type DiagnosisInput = { value: DiagnosisValue; invalidation: Invalidation; evidence: string };
 type DiagnosisAdmission =
 	| { available: true; diagnosis: DiagnosisInput }
-	| { available: false; disposition: "hand-off" | "fail-open"; reason: string };
+	// Narrowed to match production: `admitDiagnosis` returns "hand-off" on
+	// every unavailable limb, and §1.4 homes the open limb in
+	// `historyAvailability`. This mirror had already drifted from the module
+	// once; the snapshot arm below now pins it against the source.
+	| { available: false; disposition: "hand-off"; reason: string };
 type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
 
 type HistoryModule = {
@@ -183,6 +187,65 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 			"clear",
 			"the collapse did not take the LAST record's outcome — a re-posted head's settled record is the last, " +
 				"and position and outcome must come from the same record (round 1's E4)",
+		);
+	});
+
+	it("a SAME-outcome re-post still takes the last record's findings and rulings", () => {
+		// The collapse's content half was pinned only through `outcome`: a
+		// weakening that wrote the state only when the outcome CHANGED kept
+		// the first record's bundle and no arm saw it. The flow-reachable
+		// shape is a partial first post at a head, then the complete re-post
+		// at the same head with the SAME outcome and a fuller bundle — which
+		// is exactly what a re-dispatched slot produces.
+		const head = "f".repeat(40);
+		const slot = { lens: "runtime", surface: "the shell's runtime" };
+		const withBundle = (findings: string[], rulings: unknown[]): ReviewRecord => ({
+			head,
+			slots: [],
+			bundle: findings.map((finding) => ({ finding, slot })),
+			adjudication: rulings.length === 0 ? null : { dedupAttested: true, rulings },
+			review: { state: "resolved", resolution: { dispositions: [], outcome: "repair" } },
+		});
+		const partial = withBundle(["zq one"], [{ finding: "zq one", validity: "CONFIRMED", evidence: "zq e1" }]);
+		const complete = withBundle(
+			["zq one", "zq two"],
+			[
+				{ finding: "zq one", validity: "CONFIRMED", evidence: "zq e1" },
+				{ finding: "zq two", validity: "REFUTED", evidence: "zq e2" },
+			],
+		);
+		const [state] = mod().repairHistory([partial, complete]);
+		assert.deepEqual(
+			{ findings: state?.findings, rulings: state?.rulings.length },
+			{ findings: ["zq one", "zq two"], rulings: 2 },
+			"a same-outcome re-post did not take the LAST record's content — a re-dispatched slot re-posts the " +
+				"completed state, and keeping the partial one feeds the Judge a truncated bundle at exactly the head " +
+				"that completed (§1.4 reads the same findings the Judge already ruled)",
+		);
+	});
+
+	it("an UNRECOGNIZED review state is no state at all — it does not reset the trigger (round 8's S-F2)", () => {
+		// The tag union lives upstream in resolve.ts, so tsc cannot make the
+		// outcome decision exhaustive over it. A catch-all else mapped any
+		// unknown tag onto "approved" — the one outcome that RESETS §1.4's
+		// trigger — so a member added in another file silenced a fired
+		// trigger with this whole suite green.
+		const h = mod();
+		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+		const unknown = { head: b, slots: [], bundle: [], adjudication: null, review: { state: "withdrawn" } };
+		const history = h.repairHistory([repair(a), unknown as unknown as ReviewRecord, repair(c)]);
+		assert.deepEqual(
+			history.map((state) => state.head),
+			[a, c],
+			"an unrecognized review state became a state — §1.4 says a head drawing no resolved review contributes " +
+				"no state, and admitting it as `approved` mints a RESETTING state out of a tag this module does not " +
+				"know, from another file",
+		);
+		assert.equal(
+			h.triggerFires(history),
+			true,
+			"an unrecognized review state interposed between two repairs silenced the trigger — the wrong-allow " +
+				"direction §1.4's opening forbids, reachable by a one-line widening in resolve.ts",
 		);
 	});
 
@@ -724,7 +787,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		const h = mod();
 		const admission = h.admitDiagnosis({ disposition: "refused", cause: "any" });
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			!admission.available && admission.disposition === "hand-off" && /blind compare/.test(admission.reason),
 			"a refused diagnosis dispatch was not a hand-off with a non-empty reason — an unavailable Judge is not " +
 				"NONE, and §1.4's 'neither limb is silent' reaches this closed limb too",
 		);
@@ -740,7 +803,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 			compare: "confirmed",
 		});
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			!admission.available && admission.disposition === "hand-off" && /blind compare/.test(admission.reason),
 			"an ok:false diagnosis with a well-formed payload was read as a value — §1.4's present-but-cannot-measure " +
 				"limb takes the delegate-disowned shape too, and it must hand off with a reason",
 		);
@@ -756,7 +819,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 			compare: "invalid",
 		});
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			!admission.available && admission.disposition === "hand-off" && /blind compare/.test(admission.reason),
 			"a diagnosis that failed the blind compare was read anyway, or handed off silently — §1.6's compare gates " +
 				"it and §1.4's hand-off is never silent",
 		);
@@ -851,7 +914,7 @@ describe("§1.4 the admission's input domain, derived from DispatchOutcome (issu
 					return;
 				}
 				assert.ok(
-					!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+					!admission.available && admission.disposition === "hand-off" && /blind compare/.test(admission.reason),
 					`compare=${String(compare)} with ok=${ok} was not handed off — §1.6's blind compare gates this return, ` +
 						"and an UNSET compare is the shape the dispatcher produces when no expected ref was supplied, so " +
 						"reading it as a value admits an unverified diagnosis; absence is never NONE (§1.4)",
@@ -863,7 +926,7 @@ describe("§1.4 the admission's input domain, derived from DispatchOutcome (issu
 	it("a refused dispatch hands off, whatever else it carries", () => {
 		const admission = mod().admitDiagnosis({ disposition: "refused", cause: "the delegated run reported failure" });
 		assert.ok(
-			!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
+			!admission.available && admission.disposition === "hand-off" && /blind compare/.test(admission.reason),
 			"a refused dispatch was not handed off",
 		);
 	});
@@ -901,9 +964,15 @@ describe("§1.4 the admission's input domain, derived from DispatchOutcome (issu
 				);
 			}
 			assert.ok(
-				!admission.available && admission.disposition === "hand-off" && admission.reason.length > 0,
-				`a payload that is ${shape} was admitted as a value — absence is not NONE (§1.4), and a malformed return ` +
-					"against the closed shape is absence",
+				// The PAYLOAD limb's own reason, not the dispatch limb's. The
+				// two were interchangeable under a bare `reason.length > 0`
+				// probe, so a swapped message named a recovery that is dead at
+				// the limb that printed it (§3.11: two failure shapes, two
+				// distinct messages).
+				!admission.available && admission.disposition === "hand-off" && /malformed/.test(admission.reason),
+				`a payload that is ${shape} was admitted as a value, or handed off under the DISPATCH limb's reason ` +
+					"instead of its own — absence is not NONE (§1.4), and a malformed return against the closed " +
+					"shape is absence, which is a different failure shape from an unavailable dispatch",
 			);
 		});
 	}
@@ -1004,7 +1073,9 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 			if (records === undefined) {
 				// Present-but-cannot-measure: fail CLOSED, hand off.
 				assert.ok(
-					!availability.available && availability.disposition === "hand-off" && availability.reason.length > 0,
+					!availability.available &&
+						availability.disposition === "hand-off" &&
+						/could not be read/.test(availability.reason),
 					`${shape} did not hand off — present-but-cannot-measure fails closed (§1.4)`,
 				);
 				return;
@@ -1026,6 +1097,96 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 			);
 		});
 	}
+});
+
+describe("§1.7 no drop, no duplication — every list pinned by COUNT (round 8's S-F1)", () => {
+	// Truncation and reversal were killed at all six list-consuming sites,
+	// but only ONE list (the per-state header line) was pinned by COUNT.
+	// The other direction of the same axis — a silent dedup, or a line
+	// emitted twice — passed every arm. §1.7 makes the bundle transport
+	// with no semantic deduplication, and §1.4 rules off the same findings
+	// read across states: a dedup understates what a panel found and biases
+	// the Judge toward NONE; a duplication manufactures a recurrence that
+	// never happened.
+	//
+	// Fixtures carry a DELIBERATE duplicate, so membership cannot stand in
+	// for count.
+	const HEAD = "d".repeat(40);
+	const SLOT = { lens: "runtime", surface: "the shell's runtime" };
+	const DUP = "zq repeated finding";
+	const FINDINGS = [DUP, "zq other finding", DUP];
+	const RULINGS = [
+		{ finding: DUP, validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "zq confirmed evidence" },
+		{ finding: DUP, validity: "REFUTED", evidence: "zq refuted evidence" },
+	];
+	const record = (): ReviewRecord => ({
+		head: HEAD,
+		slots: [],
+		bundle: FINDINGS.map((finding) => ({ finding, slot: SLOT })),
+		adjudication: { dedupAttested: true, rulings: RULINGS },
+		review: { state: "resolved", resolution: { dispositions: [], outcome: "repair" } },
+	});
+
+	it("the ASSEMBLER keeps a repeated finding — transport, not deduplication", () => {
+		const [state] = mod().repairHistory([record()]);
+		assert.deepEqual(
+			state?.findings,
+			FINDINGS,
+			"the assembler changed a bundle's entry COUNT — §1.7 makes the bundle transport with no semantic " +
+				"deduplication, and a bundle that dropped a finding is a defective bundle, not a strict one",
+		);
+	});
+
+	it("the ASSEMBLER keeps two rulings that share a finding text", () => {
+		const [state] = mod().repairHistory([record()]);
+		assert.equal(
+			state?.rulings.length,
+			RULINGS.length,
+			"the assembler dropped a ruling sharing another's finding text — a REFUTED ruling standing beside a " +
+				"CONFIRMED one on the same finding is exactly the pair the diagnosis must see",
+		);
+		assert.deepEqual(
+			state?.rulings.map((ruling) => ruling.validity),
+			["CONFIRMED", "REFUTED"],
+			"the two rulings' validities did not survive in order",
+		);
+	});
+
+	it("the RENDERER emits each findings line and each ruling line exactly once per entry", () => {
+		const [state] = mod().repairHistory([record()]);
+		const text = mod().composeDiagnosisBrief([state as StateSummary], { changeDescription: "d" });
+		const lines = text.split("\n");
+		const count = (predicate: (line: string) => boolean) => lines.filter(predicate).length;
+		assert.equal(
+			count((line) => line.includes("finding: ") && line.includes(DUP)),
+			2,
+			"the repeated finding was not rendered once per entry — a renderer that dedups understates what the " +
+				"panel found, and one that emits each line twice manufactures a recurrence; membership cannot see " +
+				"either, which is why this is a COUNT",
+		);
+		assert.equal(
+			count((line) => line.includes("finding: ")),
+			FINDINGS.length,
+			"the rendered findings-line count is not the state's findings length",
+		);
+		assert.equal(
+			count((line) => line.includes("ruling: ")),
+			RULINGS.length,
+			"the rendered ruling-line count is not the state's rulings length — a doubled or deduped ruling list " +
+				"changes what §1.4's diagnosis reads",
+		);
+	});
+
+	it("the AVAILABILITY pass-through keeps a repeated record — count, not membership", () => {
+		const records = [repair(HEAD), repair(HEAD)];
+		const availability = mod().historyAvailability(true, records);
+		assert.equal(
+			availability.available ? availability.records.length : -1,
+			2,
+			"the availability pass-through changed the record COUNT — it is a pass-through, and collapsing duplicates " +
+				"is the assembler's job under §1.4's own rule, not this limb's",
+		);
+	});
 });
 
 describe("§1.4 the admission carries EVERY enforced member through the parser (round 7's F-R2)", () => {
@@ -1080,7 +1241,11 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 	const typeMembers = (name: string): string[] => {
 		const declaration = new RegExp(`export type ${name}\\s*=\\s*([^;]+);`).exec(SOURCE);
 		assert.ok(declaration, `history.ts declares no exported type ${name} — the snapshot cannot read its domain`);
-		const body = (declaration[1] as string).trim();
+		// Comment spans are stripped before tokenizing: an inline comment
+		// inside a union body is a semantics-preserving spelling, and a check
+		// that reds on it is a false red, which §3.12 calls a defect because
+		// "a red that is not a defect destroys the signal readers act on".
+		const body = (declaration[1] as string).replace(/\/\*[\s\S]*?\*\//g, "").trim();
 		// S2's closure: every token between the separators must be a quoted
 		// literal. A bare identifier means the union reaches outside this
 		// declaration, so the extracted member list is NOT the domain and the
@@ -1109,9 +1274,23 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 
 	/** Members of `const NAME = new Set<...>([...]);` — the ENFORCING home. */
 	const setMembers = (name: string): string[] => {
-		const declaration = new RegExp(`const ${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(\\[([^\\]]*)\\]\\)`).exec(SOURCE);
-		assert.ok(declaration, `history.ts declares no Set literal ${name} — the snapshot cannot read what enforces`);
-		return [...(declaration[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+		// Two spellings are accepted, both semantics-preserving: an inline
+		// literal, and a Set built from a named const array. Refusing the
+		// second was a false red (round 8's S-F4). What still reds is a Set
+		// this extractor cannot resolve at all — refuse rather than certify a
+		// domain it could not read.
+		const inline = new RegExp(`const ${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(\\[([^\\]]*)\\]\\)`).exec(SOURCE);
+		if (inline) {
+			return [...(inline[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+		}
+		const viaConst = new RegExp(`const ${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(([A-Za-z_$][\\w$]*)\\)`).exec(SOURCE);
+		assert.ok(viaConst, `history.ts declares no readable Set ${name} — the snapshot cannot read what enforces`);
+		const backing = new RegExp(`const ${viaConst[1] as string}\\s*=\\s*\\[([^\\]]*)\\]`).exec(SOURCE);
+		assert.ok(
+			backing,
+			`history.ts's ${name} is built from ${viaConst[1] as string}, whose literal the snapshot cannot read`,
+		);
+		return [...(backing[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
 	};
 
 	for (const [typeName, setName, iterated] of [
@@ -1136,6 +1315,36 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 			);
 		});
 	}
+
+	it("the UPSTREAM review-state tags are exactly the ones the assembler recognizes (round 8's S-F2)", () => {
+		// StateOutcome's INPUT domain does not live in history.ts. The review
+		// state's tag union lives in resolve.ts, and the assembler decides an
+		// outcome per tag. Round 8's derivation named "the assignment in
+		// repairHistory (tsc-checked)" — and tsc does NOT make that decision
+		// exhaustive over a union declared in another file. This reads the
+		// upstream declaration itself, so a member added there reds here
+		// rather than silently becoming a resetting state.
+		//
+		// The wrong-allow is closed in production (an unrecognized state is
+		// dropped); this arm closes the DETECTION, so the two are not
+		// confused: an arm that reds in CI does not stop a mapping at runtime.
+		const upstream = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "resolve.ts"), "utf8");
+		// The declaration ends at the next top-level form, not at the first
+		// ";" — its object literals contain semicolons of their own, and a
+		// non-greedy match to ";" reads only the first arm. (The same
+		// extractor fragility S-F4 names, met here while writing S-F4's fix.)
+		const declaration = /export type ReviewState =([\s\S]*?)\n(?:export |const |type |function |\/\*\*)/.exec(upstream);
+		assert.ok(declaration, "resolve.ts declares no exported ReviewState — the snapshot cannot read the tag domain");
+		const tags = [...(declaration[1] as string).matchAll(/state:\s*"([^"]+)"/g)].map((match) => match[1] as string);
+		assert.deepEqual(
+			tags,
+			["incomplete", "approved", "resolved"],
+			"resolve.ts's ReviewState tags are no longer the three this module's assembler recognizes. A new tag " +
+				"falls to the assembler's drop branch and contributes no state — which is safe — but no arm here " +
+				"exercises it, and the intended mapping for it has not been decided. Decide it and extend the " +
+				"assembler's explicit per-tag tests, or the domain is covered by a drop nobody chose",
+		);
+	});
 
 	it("StateOutcome's members are exactly what the arms iterate", () => {
 		assert.deepEqual(

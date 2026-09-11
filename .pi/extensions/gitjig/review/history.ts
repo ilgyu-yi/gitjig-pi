@@ -99,7 +99,22 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 		if (record.review.state === "incomplete") {
 			continue;
 		}
-		const outcome: StateOutcome = record.review.state === "resolved" ? record.review.resolution.outcome : "approved";
+		// The outcome is decided by an EXPLICIT test per recognized tag, never
+		// by a catch-all else. The tag union lives upstream in resolve.ts, so
+		// tsc does not make a two-way ternary exhaustive over it: a member
+		// added there falls through a catch-all onto "approved" — the one
+		// outcome that RESETS §1.4's trigger — and silences a fired trigger
+		// from another file. An unrecognized state is no review state at all,
+		// and is dropped exactly as `incomplete` is: §1.4's own rule that a
+		// head drawing no resolved review contributes no state.
+		let outcome: StateOutcome;
+		if (record.review.state === "resolved") {
+			outcome = record.review.resolution.outcome;
+		} else if (record.review.state === "approved") {
+			outcome = "approved";
+		} else {
+			continue;
+		}
 		const findings = record.bundle.map((entry) => entry.finding);
 		const rulings: StateRuling[] =
 			record.adjudication === null
@@ -124,19 +139,17 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 		//
 		// REJECTED ALTERNATIVE, recorded where it is rejected: taking the
 		// position from the LAST record too, so a re-post moves its head to
-		// the end. That is what this module did through round 7, and it
-		// silences a trigger that has already fired. Measured: records
+		// the end. That rule silences a trigger that has already fired. Measured: records
 		// [approved(A), repair(B), repair(C)] give A|B|C with a trailing run
 		// of two repairs and the trigger FIRES; appending a re-post of A's
 		// own already-resolved record moves A to the end, giving B|C|A with a
 		// trailing run of one approved state, and the trigger goes SILENT.
-		// §1.4's opening forbids exactly that direction, and §1.9's
-		// nit-carry-forward clause makes a re-post of a completed state an
-		// ordinary event rather than an exotic one.
+		// §1.4's opening forbids exactly that direction, and a re-dispatched
+		// slot re-posting a completed record makes that an ordinary event,
+		// not an exotic one.
 		//
-		// The rejected rule was defended on the ground that first-appearance
-		// positioning "leaves the sequence misordered". It is the other way
-		// round: heads advance as the change is repaired, so the order heads
+		// Positioning by first appearance does not misorder the sequence:
+		// heads advance as the change is repaired, so the order heads
 		// FIRST appear is review chronology, and moving a head to the end
 		// because a record about it arrived late asserts that a head reviewed
 		// first was reviewed last.
