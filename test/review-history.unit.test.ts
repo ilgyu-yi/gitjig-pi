@@ -1312,7 +1312,26 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 	//          literals, so a member appended as a type reference
 	//          (`... | "INDETERMINATE" | ExtraValue`) can no longer pass
 	//          while tsc stays green.
-	const SOURCE = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
+	const RAW_SOURCE = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
+	/**
+	 * Comments are stripped from the SOURCE before any declaration regex runs
+	 * — not from an already-captured body (round 11's S-1).
+	 *
+	 * The declaration capture is `([^;]+);`, which stops at the first
+	 * semicolon CHARACTER. A comment carrying a semicolon therefore truncates
+	 * the capture before any body-level strip can see it, and stripping the
+	 * truncated prefix only removes the residue that betrayed the truncation.
+	 * Measured both ways at the introducing head: an inert semicolon-bearing
+	 * comment red a passing union (a false red), and a FIFTH DiagnosisValue
+	 * member hidden behind one landed with the whole suite green (a false
+	 * green certifying a domain the check never read).
+	 *
+	 * Stripping first closes both faces at once, because the regex then never
+	 * sees a comment's semicolon at all. Checked on the guarded file: no string
+	 * literal in history.ts contains `//` or an opening block-comment token, so
+	 * a naive strip corrupts nothing there.
+	 */
+	const SOURCE = RAW_SOURCE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 
 	/** Members of `export type NAME = "a" | "b";` — literals only. */
 	const typeMembers = (name: string): string[] => {
@@ -1322,10 +1341,10 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 		// inside a union body is a semantics-preserving spelling, and a check
 		// that reds on it is a false red, which §3.12 calls a defect because
 		// "a red that is not a defect destroys the signal readers act on".
-		const body = (declaration[1] as string)
-			.replace(/\/\*[\s\S]*?\*\//g, "")
-			.replace(/\/\/[^\n]*/g, "")
-			.trim();
+		// Comment spans are already gone: SOURCE is stripped above, which is
+		// the one home for that (§3.11). A second strip here would be a second
+		// home for the same property and could drift from it.
+		const body = (declaration[1] as string).trim();
 		// S2's closure: every token between the separators must be a quoted
 		// literal. A bare identifier means the union reaches outside this
 		// declaration, so the extracted member list is NOT the domain and the
@@ -1406,7 +1425,10 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 		// member added as a NAMED TYPE REFERENCE passed the whole corpus. The
 		// sibling extractor in this file already refuses a non-literal union
 		// member with an authored message; that closure is carried here.
-		const upstream = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "resolve.ts"), "utf8");
+		// Stripped before the declaration regex, for S-1's reason.
+		const upstream = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "resolve.ts"), "utf8")
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/\/\/[^\n]*/g, "");
 		// The declaration ends at the next top-level form, not at the first
 		// ";" — its object literals contain semicolons of their own.
 		const declaration = /export type ReviewState =([\s\S]*?)\n(?:export |const |type |function |\/\*\*)/.exec(upstream);
@@ -1417,8 +1439,6 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 		// not reaches outside this declaration, so the extracted tag list is
 		// NOT the domain and certifying it would be false.
 		const arms = (declaration[1] as string)
-			.replace(/\/\*[\s\S]*?\*\//g, "")
-			.replace(/\/\/[^\n]*/g, "")
 			.split(/^\s*\|/m)
 			.map((arm) => arm.trim())
 			.filter((arm) => arm.length > 0);
@@ -1457,7 +1477,10 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 		// The invariant, which is not an equality: StateOutcome is the
 		// resolution outcomes PLUS "approved", which comes from the tag rather
 		// than from a resolution.
-		const recordSource = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "record.ts"), "utf8");
+		// Stripped before the declaration regex, for S-1's reason.
+		const recordSource = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "record.ts"), "utf8")
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/\/\/[^\n]*/g, "");
 		const enforcing = /const OUTCOMES = new Set\(\[([^\]]*)\]\)/.exec(recordSource);
 		assert.ok(enforcing, "record.ts declares no readable OUTCOMES Set — the enforcing home cannot be read");
 		const enforced = [...(enforcing[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
