@@ -392,6 +392,25 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 					"Re-run serially",
 					"the suite is not all-green under parallel load (#119) — a kill or a red must survive a serial re-run",
 				],
+				[
+					"YOUR PROVISIONED TREE",
+					"the ledger's header line — deletable with the suite green until pinned (round 1, finding A)",
+				],
+				[
+					"compare against the branch's parent commit",
+					"the no-main-ref INSTRUCTION, not only the fact — its absence silently yields a meaningless comparison",
+				],
+				["any copy you make", "the git-state ban's continuation line (round 1, finding A)"],
+				["all-green under parallel load (#119)", "the serial re-run rule's continuation line (round 1, finding A)"],
+				[
+					'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string}',
+					"the closed four-key schema itself — the reviewedHead token alone was pinned, the SHAPE was not (round 1, finding A)",
+				],
+				["discards the whole return", "the unknown-key consequence sentence (round 1, finding A)"],
+				[
+					"refer to commits by position labels, never by hash",
+					"the commit-label substitute clause beside the no-hex prohibition (round 1, finding A)",
+				],
 			] as const) {
 				assert.ok(text.includes(needle), `the ${who} brief lost ${why} (missing: ${JSON.stringify(needle)})`);
 			}
