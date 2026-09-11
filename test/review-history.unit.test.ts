@@ -264,22 +264,38 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 			);
 		}
 
-		// (b) — the structural universal. The module must decide the outcome by
-		// an explicit test per recognized tag, with no catch-all: the tags it
-		// tests for are exactly the upstream declaration's, and every other
-		// input reaches the drop. Read off the source so a per-point special
-		// case cannot satisfy it either.
+		// (b) — a BOUNDED source claim, narrowed to what this measurement can
+		// observe. Round 10's E1 was a soundness defect, not a coverage gap:
+		// the previous version certified "the assembler tests EXACTLY the
+		// three recognized tags", and a regex over one spelling cannot
+		// establish that. A per-tag test written `"x" === record.review.state`,
+		// or as a Set membership read, left the extracted list at three while
+		// the production special-cased a fourth tag onto `approved`.
+		//
+		// Spellings are unbounded, so the universal is not establishable by
+		// reading source at all. The sound repair is therefore the SMALLER
+		// claim, not a wider derivation: this asserts only what the match
+		// observes — that no per-tag test OF THIS SPELLING exists beyond the
+		// three — and says so in its own message, so a later reader cannot
+		// cite it for the universal it does not hold. The behavioural
+		// universal is carried by limb (a) above, over tags the production
+		// source does not contain, which is where it belongs: a claim about
+		// behaviour is established by exercising behaviour, not by reading
+		// text.
 		const assembler = /export function repairHistory[\s\S]*?\n}\n/.exec(source);
-		assert.ok(assembler, "history.ts declares no repairHistory — the universal cannot be read");
-		const tested = [...(assembler[1] ?? assembler[0]).matchAll(/record\.review\.state === "([^"]+)"/g)].map(
+		assert.ok(assembler, "history.ts declares no repairHistory — the source claim cannot be read");
+		const testedInThisSpelling = [...(assembler[0] as string).matchAll(/record\.review\.state === "([^"]+)"/g)].map(
 			(match) => match[1] as string,
 		);
 		assert.deepEqual(
-			[...tested].sort(),
+			[...testedInThisSpelling].sort(),
 			["approved", "incomplete", "resolved"],
-			"the assembler no longer tests exactly the three recognized tags explicitly. A tag tested by a special " +
-				"case beyond these three, or one of these three no longer tested, means the drop branch is not the " +
-				"universal treatment of the complement and this arm's (a) fixtures no longer stand for it",
+			'the assembler\'s per-tag tests written as `record.review.state === "…"` are no longer exactly the three ' +
+				"recognized tags. SCOPE OF THIS CLAIM, stated so it is not over-cited: it observes ONE spelling of a " +
+				"per-tag test and establishes nothing about any other, so it is not evidence that the drop branch is " +
+				"the universal treatment of the complement — limb (a) above carries that, behaviourally. A fourth tag " +
+				"reached through a different spelling is invisible here BY CONSTRUCTION and is not a gap this arm " +
+				"claims to close",
 		);
 	});
 
@@ -1306,7 +1322,10 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 		// inside a union body is a semantics-preserving spelling, and a check
 		// that reds on it is a false red, which §3.12 calls a defect because
 		// "a red that is not a defect destroys the signal readers act on".
-		const body = (declaration[1] as string).replace(/\/\*[\s\S]*?\*\//g, "").trim();
+		const body = (declaration[1] as string)
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/\/\/[^\n]*/g, "")
+			.trim();
 		// S2's closure: every token between the separators must be a quoted
 		// literal. A bare identifier means the union reaches outside this
 		// declaration, so the extracted member list is NOT the domain and the
@@ -1399,6 +1418,7 @@ describe("§1.4 the suite's domains match the SOURCE — types and the enforcing
 		// NOT the domain and certifying it would be false.
 		const arms = (declaration[1] as string)
 			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/\/\/[^\n]*/g, "")
 			.split(/^\s*\|/m)
 			.map((arm) => arm.trim())
 			.filter((arm) => arm.length > 0);
