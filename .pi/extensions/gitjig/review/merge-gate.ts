@@ -18,10 +18,18 @@
  * verbatim inside somebody else's artifact, which is the exact wrong
  * this clause names.
  *
- * Warning-surface roster: EXEMPT — no message composed here is warned,
- * thrown, or printed. `refuse.detail` is a caller-consumed field whose
- * one consumer renders it; embedding the head verbatim is the binding
- * the gate exists to report.
+ * Residual, enumerated rather than left implicit (§3.11 — a gate
+ * enumerates in place the bypass vectors it deliberately does not
+ * model, so a residual reads as a decision rather than an oversight):
+ * the predicate consumes bodies only. The platform-attested author is
+ * discarded at the boundary, so a record's AUTHORSHIP is not modelled
+ * here; §3.7(d) carries hand-forgery as an amortized deferral with its
+ * detection surfaces retained.
+ *
+ * Warning-surface roster: EXEMPT — no message composed here is warned or
+ * thrown; `refuse.detail` is a caller-consumed field, and its one
+ * consumer prints it as an advisory notice. Embedding the head verbatim
+ * is the binding the gate exists to report.
  */
 import { parseReviewRecord, REVIEW_RECORD_MARKER, type ReviewRecord } from "./record.ts";
 
@@ -75,7 +83,7 @@ export function mergeReviewGate(lookup: CommentLookup, head: string): MergeGateV
 		return {
 			pass: false,
 			reason: "lookup-failed",
-			detail: `the review record could not be looked up (${lookup.cause}) — an unreadable platform is not an approval (§3.7(c))`,
+			detail: `the review record for ${head} could not be looked up (${lookup.cause}) — an unreadable platform is not an approval (§3.7(c))`,
 		};
 	}
 

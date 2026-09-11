@@ -88,8 +88,19 @@ function gate(): GateModule {
 	return gateLoad.mod;
 }
 
-const HEAD_A = "a".repeat(40);
-const HEAD_B = "b".repeat(40);
+// Heads are 40-character hex, and the pair is chosen so the fixture can
+// SEPARATE "compares the whole head" from "compares a prefix of it"
+// (round-1 finding S-F3+R-F4). Two runs of a single repeated letter
+// differing at position 0 cannot: a prefix comparison of any length
+// still tells them apart. These share 39 characters and differ only at
+// the LAST, which is the shape a hash domain actually invites.
+const HEAD_BASE = "7c4e1b9a02d53f86" + "e".repeat(23);
+const HEAD_A = `${HEAD_BASE}1`;
+const HEAD_B = `${HEAD_BASE}2`;
+/** A strict prefix of HEAD_A — must not match it. */
+const HEAD_PREFIX = HEAD_A.slice(0, HEAD_A.length - 1);
+/** A head HEAD_A is a strict prefix OF — must not match it either. */
+const HEAD_EXTENDED = `${HEAD_A}0`;
 const SLOT: Slot = { lens: "runtime", surface: "the shell's runtime extensions" };
 
 /** A complete, adjudicated, findings-carrying record — the pass shape. */
@@ -115,6 +126,9 @@ function adjudicatedRecord(head: string, over: Partial<ReviewRecord> = {}): Revi
 		...over,
 	};
 }
+
+/** The marker line for a head, built from the exported constant (round-1 finding S-N1). */
+const MARKER_AT = (head: string): string => `<!-- ${records().REVIEW_RECORD_MARKER}: ${head} -->`;
 
 function body(record: ReviewRecord): string {
 	return records().composeReviewRecord(record);
@@ -149,15 +163,23 @@ describe("§3.3 merge-review — both arms, on real record bodies (issue #190 AC
 	it("REFUSES a record pinned to a DIFFERENT head — the binding is the head under review, not any review", () => {
 		const other = adjudicatedRecord(HEAD_B);
 		const verdict = gate().mergeReviewGate({ ok: true, bodies: [body(other)] }, HEAD_A);
+		// The expected `detail` is NOT copied from the verdict under test
+		// (round-1 finding S-F4: that asserts a value equals itself). It is
+		// asserted independently below.
+		assert.equal(verdict.pass, false, "a review of a different head satisfied the gate");
 		assert.deepEqual(
-			verdict,
+			verdict.pass === false ? { pass: verdict.pass, reason: verdict.reason } : { pass: true },
 			{
 				pass: false,
 				reason: "no-record-at-head",
-				detail: verdict.pass === false ? verdict.detail : "",
 			},
 			"a review of a different head satisfied the gate — §1.6 pins a review to the head it ran at, so a stale " +
 				"record would let an unreviewed head ride in on its predecessor's approval",
+		);
+		assert.ok(
+			verdict.pass === false && verdict.detail.includes(HEAD_A) && !verdict.detail.includes(HEAD_B),
+			"the refusal names the wrong head — it must report the head UNDER REVIEW, not the head the stale record " +
+				"happens to carry, or an author chases the wrong artifact",
 		);
 	});
 });
@@ -199,33 +221,51 @@ describe("§3.7(e) predicate integrity — canonical position, demonstrated not 
 		}
 	});
 
-	it("distinguishes position from head — each half refuses on its own, so neither can carry the other", () => {
-		// Cross the two halves: right position + wrong head, and wrong
-		// position + right head. If only one half were implemented, one of
-		// these two would pass.
+	it("distinguishes position from head, and compares the head WHOLE — each half refuses on its own", () => {
+		// The cross-product plus the two precision cases. A gate comparing
+		// only a PREFIX of the head, or omitting the marker's closing
+		// delimiter, passes the first two rows and reds on the last two —
+		// which is the whole reason HEAD_A and HEAD_B differ only at their
+		// last character and HEAD_EXTENDED extends HEAD_A.
 		const cases: [string, string, string][] = [
 			["right position, wrong head", body(adjudicatedRecord(HEAD_B)), HEAD_A],
 			["wrong position, right head", `relayed:\n${body(record)}`, HEAD_A],
+			["a record pinned to a head this head is a strict PREFIX of", body(adjudicatedRecord(HEAD_EXTENDED)), HEAD_A],
+			["a head that is a strict prefix of the record's head", body(record), HEAD_PREFIX],
 		];
 		for (const [shape, commentBody, head] of cases) {
 			assert.equal(
 				gate().mergeReviewGate({ ok: true, bodies: [commentBody] }, head).pass,
 				false,
 				`${shape} satisfied the gate — the canonical-position check and the head binding are independent ` +
-					"requirements (§3.7(e)), and an implementation carrying only one of them passes this case",
+					"requirements (§3.7(e)), and the head must be compared WHOLE and terminated: a prefix comparison, or " +
+					"one omitting the marker's closing delimiter, admits a neighbouring head's record",
 			);
 		}
 	});
 
-	it("passes a real record even when a relayed copy sits beside it — the relay neither helps nor blocks", () => {
+	it("selects its artifact from the records AT THE HEAD, at every thread ordering tried", () => {
+		// Round-1 finding S-F1: "beside" is a claim over both orderings, and
+		// the fixture was one. A gate that presence-checks the records at
+		// the head and then parses a body chosen from the WHOLE thread
+		// passes the first row and reds on the second and third.
 		const real = body(record);
-		const relayed = `Quoting a prior round:\n${body(adjudicatedRecord(HEAD_B))}`;
-		assert.deepEqual(
-			gate().mergeReviewGate({ ok: true, bodies: [relayed, real] }, HEAD_A),
-			{ pass: true, record },
-			"a genuine record stopped satisfying the gate because an unrelated relayed record shared the thread — " +
-				"the gate must select its artifact, not scan the thread",
-		);
+		const relayedOther = `Quoting a prior round:\n${body(adjudicatedRecord(HEAD_B))}`;
+		const prose = "## Round 2 — panel record\n\nprose only, no record";
+		const threads: [string, string[]][] = [
+			["the record last", [relayedOther, real]],
+			["the record first", [real, relayedOther]],
+			["the record neither first nor last", [relayedOther, real, prose]],
+			["a non-opening body last", [real, prose]],
+		];
+		for (const [shape, bodies] of threads) {
+			assert.deepEqual(
+				gate().mergeReviewGate({ ok: true, bodies }, HEAD_A),
+				{ pass: true, record },
+				`a genuine record stopped satisfying the gate when the thread was ordered "${shape}" — the gate must ` +
+					"SELECT its artifact from the records at the head, not read whichever body the thread happens to end with",
+			);
+		}
 	});
 });
 
@@ -238,7 +278,7 @@ describe("§3.7(c) fail-closed — the closed limb set, ITERATED not sampled (is
 		["an API failure", { ok: false, cause: "HTTP 503 from the platform" }, "lookup-failed"],
 		[
 			"a malformed record body",
-			{ ok: true, bodies: [`<!-- gitjig-review-record: ${HEAD_A} -->\n\n\`\`\`json\n{ not json\n\`\`\`\n`] },
+			{ ok: true, bodies: [`${MARKER_AT(HEAD_A)}\n\n\`\`\`json\n{ not json\n\`\`\`\n`] },
 			"record-unreadable",
 		],
 		[
@@ -263,9 +303,15 @@ describe("§3.7(c) fail-closed — the closed limb set, ITERATED not sampled (is
 				`${shape} refused under the wrong reason — AC6 owes a DISTINCT authored reason per limb, so a gate ` +
 					"collapsing them into one loses the audit this posture exists for",
 			);
+			// Round-1 finding S-F4: `detail.length > 0` is a bare flag, which
+			// the arm method this file binds itself to forbids — a constant
+			// substituted for any detail survived it. Every detail must carry
+			// the head it is about, which is the binding the gate exists to
+			// report, and the lookup limbs must carry the platform's cause.
 			assert.ok(
-				verdict.pass === false && verdict.detail.length > 0,
-				`${shape} refused with an empty detail — a silent refusal is the "no silent skip" defect (§3.7(b))`,
+				verdict.pass === false && verdict.detail.includes(HEAD_A),
+				`${shape} refused with a detail that does not name the head under review — a refusal an operator cannot ` +
+					'act on is the "no silent skip" defect (§3.7(b)) in its quiet form',
 			);
 		});
 	}
@@ -281,27 +327,38 @@ describe("§3.7(c) fail-closed — the closed limb set, ITERATED not sampled (is
 });
 
 describe("§3.3 completeness and adjudication — the record's own fields (issue #190 AC1)", () => {
-	it("refuses EVERY incomplete cause — the cause set is iterated, not sampled", () => {
+	it("refuses EVERY incomplete cause, CROSSED with the record shapes an incomplete panel yields", () => {
+		// Round-1 finding S-F2: the cause axis was iterated while every
+		// other field was held at one point — and the held point was
+		// incoherent, a one-entry bundle WITH an adjudication handed to an
+		// arm asserting incompleteness. An incomplete panel's real record
+		// has an empty bundle and a null adjudication, so a gate refusing
+		// on `incomplete` only where the bundle is non-empty survived.
 		const causes = ["panel", "adjudication-missing", "adjudication-incomplete"] as const;
+		const contexts: [string, Partial<ReviewRecord>][] = [
+			["the shape an incomplete panel actually yields", { bundle: [], adjudication: null }],
+			[
+				"findings gathered before the panel failed",
+				{ bundle: [{ finding: "zq partial", slot: SLOT }], adjudication: null },
+			],
+			["a bundle and an adjudication both present", {}],
+		];
 		for (const cause of causes) {
-			const record = adjudicatedRecord(HEAD_A, { review: { state: "incomplete", cause } });
-			const verdict = gate().mergeReviewGate({ ok: true, bodies: [body(record)] }, HEAD_A);
-			assert.equal(
-				verdict.pass,
-				false,
-				`an incomplete review (cause: ${cause}) satisfied the merge-review gate — §1.7 makes an incomplete ` +
-					"review no review outcome at all, so it cannot be the complete review this row requires",
-			);
-			assert.equal(
-				verdict.pass === false ? verdict.reason : undefined,
-				"panel-incomplete",
-				`the incomplete cause ${cause} refused under the wrong reason`,
-			);
-			assert.ok(
-				verdict.pass === false && verdict.detail.includes(cause),
-				`the refusal did not name the incomplete cause ${cause} — the detail must distinguish WHICH ` +
-					"incompleteness, or an author cannot tell a missing slot from a missing adjudication",
-			);
+			for (const [context, over] of contexts) {
+				const rec = adjudicatedRecord(HEAD_A, { ...over, review: { state: "incomplete", cause } });
+				const verdict = gate().mergeReviewGate({ ok: true, bodies: [body(rec)] }, HEAD_A);
+				assert.deepEqual(
+					verdict.pass === false ? { pass: verdict.pass, reason: verdict.reason } : { pass: true },
+					{ pass: false, reason: "panel-incomplete" },
+					`an incomplete review (cause ${cause}, ${context}) did not refuse as panel-incomplete — §1.7 makes an ` +
+						"incomplete review no review outcome at all, and the refusal must not be contingent on any other field",
+				);
+				assert.ok(
+					verdict.pass === false && verdict.detail.includes(cause) && verdict.detail.includes(HEAD_A),
+					`the refusal for cause ${cause} (${context}) did not carry BOTH the cause and the head — an author ` +
+						"cannot tell a missing slot from a missing adjudication, nor which head, from a detail that omits them",
+				);
+			}
 		}
 	});
 
@@ -322,6 +379,11 @@ describe("§3.3 completeness and adjudication — the record's own fields (issue
 				verdict.pass === false ? verdict.reason : undefined,
 				"adjudication-missing",
 				`the unadjudicated bundle of ${size} refused under the wrong reason`,
+			);
+			assert.ok(
+				verdict.pass === false && verdict.detail.includes(`${size} finding`) && verdict.detail.includes(HEAD_A),
+				`the refusal for an unadjudicated bundle of ${size} did not carry BOTH the finding count and the head — ` +
+					"a constant detail reports the wrong size and is indistinguishable from a correct one",
 			);
 		}
 	});

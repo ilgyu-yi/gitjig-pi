@@ -17,8 +17,27 @@ name: check-merge-review
 # wrong-BLOCK cost is the highest available here — a false refusal blocks
 # every merge to the default branch, including the merge that would fix
 # it — and its firing history is empty. Hardening it is server
-# configuration and the operator's act, on the evidence this job
-# accumulates.
+# configuration and the operator's act; its decidable trigger and its
+# named owner are issue #192.
+#
+# TRIGGERS — why `issue_comment` is here (issue #190, round-1 finding
+# E-F7). The evidence this gate reads is a review record posted as a PR
+# comment, which lands AFTER the head exists. On the push-shaped events
+# alone, the last verdict at a head is decided before the record arrives
+# and is never revisited, so §3.7(a)'s evidence-before-action ordering is
+# unsatisfiable by construction — the job would evaluate in form and
+# never at the state it is about. Waking on the comment event is what
+# makes the evaluation reachable. Residual, enumerated in place: an
+# `issue_comment` run has no head in its payload, so the head is resolved
+# through a PR read (the script's second lookup), and a record edited to
+# remove its own body wakes the job only on `edited`, which is in the
+# type set for that reason.
+#
+# Residual (§3.11), enumerated: the tree this job runs is the PR's MERGE
+# REF, so a pull request that weakens the predicate is graded by its own
+# weakened predicate. This is inherent to `pull_request` CI and is shared
+# with suite.yml; it is the residual that matters most at hardening, and
+# issue #192 carries it as a conjunct of its trigger.
 #
 # No third-party Actions; actions/checkout and actions/setup-node are
 # GitHub-shipped.
@@ -29,33 +48,45 @@ on:
       - main
       - '*-maintenance'
     types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
   pull-requests: read
+  # The script reads /repos/{repo}/issues/{n}/comments — a PR's
+  # conversation comments live in the ISSUES collection, which the
+  # platform governs under this scope rather than under pull-requests
+  # (issue #190, round-1 finding E-F1). Granted narrowly and read-only.
+  issues: read
 
 jobs:
   merge-review:
+    # On `issue_comment` the payload may be a plain issue, which carries
+    # no PR and no head. The `pull_request` key is present only on a PR's
+    # comment, so this is the documented discriminator.
+    if: github.event_name == 'pull_request' || github.event.issue.pull_request != null
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout PR HEAD
+      - name: Checkout the PR merge ref
         uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
 
       - name: Evaluate the merge-review predicate
         env:
+          # Every value reaches the script through the environment, never
+          # through argv or through `run:` interpolation — the spelling
+          # check-changelog.yml already commits to. A token in argv is
+          # visible in the runner's process table for the life of the
+          # call (issue #190, round-1 finding E-F2).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITJIG_REPO: ${{ github.repository }}
+          # The head under review is the PR's own head SHA — the head
+          # that would be merged, which is what §3.3's row binds the
+          # review to. Empty on `issue_comment`, where the script
+          # resolves it through a PR read instead.
+          GITJIG_PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          GITJIG_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-
-          # The head under review is the PR's own head SHA — the head that
-          # would be merged, which is what §3.3's row binds the review to.
-          node .github/workflows/check-merge-review.mjs \
-            "${{ github.event.pull_request.number }}" \
-            "${{ github.event.pull_request.head.sha }}" \
-            "$GITHUB_TOKEN" \
-            "${{ github.repository }}"
+          node .github/workflows/check-merge-review.mjs
