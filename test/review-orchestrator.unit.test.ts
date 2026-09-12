@@ -85,7 +85,16 @@ type BriefsModule = {
 };
 type RecordModule = {
 	REVIEW_RECORD_MARKER: string;
-	composeReviewRecord(record: ReviewRecord): string;
+	// Mirrored as MUTABLE arrays on purpose. Production declares both
+	// `as const`, which is a type-level word only; the identity and
+	// emptiness laws below perturb the live objects and restore them, and
+	// that reachability is the production module's disclosed residual, not
+	// an accident this mirror invents.
+	OUTCOMES: string[];
+	DISPOSITIONS: string[];
+	// Widened to `unknown` so an adversarial disposition is expressible
+	// without a cast — these arms construct shapes production rejects.
+	composeReviewRecord(record: unknown): string;
 	parseReviewRecord(body: string): ReviewRecord | undefined;
 };
 type CarryModule = {
@@ -1052,6 +1061,121 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 			},
 		},
 	};
+
+	// ISSUE #208 — the disposition domain gets ONE home and the three laws.
+	//
+	// Measured on main before this change: `DISPOSITIONS` was a private
+	// `Set` in record.ts (the runtime enforcement, consulted by the parse)
+	// while resolve.ts hand-spelled the same five members as the `Disposition`
+	// union (which TYPES what the Resolver produces). Two homes, no tie, no
+	// disclosure — and a sixth member added at the type home was fully silent
+	// across the whole corpus AND `tsc --noEmit`. That is the identical shape,
+	// and the identical measurement, that PR #187's EF1 repaired for the
+	// resolution outcomes one type declaration above it.
+	//
+	// The method is the one main settled for that domain and is not re-derived
+	// here: CONTENTS over the live exported home, IDENTITY BY PERTURBATION
+	// (the object an arm reads IS the object the parser consults, proven for
+	// members nobody named), and EMPTINESS (the home is the SOLE accept site).
+	// The type side is welded by derivation rather than by an arm, and that
+	// weld is `tsc`'s — disclosed in place, because nothing here reds on a
+	// SECOND home, only on a divergent one.
+	//
+	// RESIDUAL DISCLOSURE for this describe: the perturbation arms are the
+	// only state-mutating arms in this file. Each restores in a `finally`,
+	// each POST-ASSERTS its restore rather than trusting it, and `node --test`
+	// runs one file's arms serially with no subtest concurrency here.
+	const DISPOSITION_MEMBERS = ["repair", "defer", "remedy", "measure-escalate", "none"] as const;
+	/** A record carrying ONE disposition, over an arbitrary string — no cast, so a non-member is expressible. */
+	const bodyWithDisposition = (disposition: string): string =>
+		records().composeReviewRecord({
+			...sample,
+			review: {
+				state: "resolved",
+				resolution: { dispositions: [{ finding: "zq f", disposition }], outcome: "clear" },
+			},
+		});
+
+	it("CONTENTS — the exported disposition home carries exactly the five committed members (issue #208)", () => {
+		assert.deepEqual(
+			[...records().DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"record.ts's DISPOSITIONS — the home that decides whether a resolved record PARSES at all, and the home " +
+				"resolve.ts's `Disposition` is derived from — no longer carries §1.9's five dispositions. A member " +
+				"dropped here silently stops a legitimate record from parsing; a member added here is a disposition " +
+				"the Resolver's own type does not declare",
+		);
+	});
+
+	it("IDENTITY — a value pushed onto the LIVE DISPOSITIONS starts parsing, and the refusal returns (issue #208)", () => {
+		const r = records();
+		const probe = "zq-not-a-disposition";
+		const body = bodyWithDisposition(probe);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"a record carrying a non-member disposition parsed before any perturbation — the domain is not closed, and " +
+				"this arm's premise is gone",
+		);
+		try {
+			r.DISPOSITIONS.push(probe);
+			assert.notEqual(
+				r.parseReviewRecord(body),
+				undefined,
+				"pushing onto the exported DISPOSITIONS did not change what parseReviewRecord accepts, so the array this " +
+					"arm reads is NOT the object the validator consults — a second, unreachable copy. The CONTENTS " +
+					"assertion above would then certify a home nothing enforces",
+			);
+		} finally {
+			const at = r.DISPOSITIONS.indexOf(probe);
+			if (at !== -1) {
+				r.DISPOSITIONS.splice(at, 1);
+			}
+		}
+		assert.deepEqual(
+			[...r.DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"the perturbation was not restored — later arms are now unsound",
+		);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"the refusal did not return after the restore — the validator is reading something the restore did not reach",
+		);
+	});
+
+	it("EMPTINESS — with DISPOSITIONS emptied, EVERY committed member stops parsing (issue #208)", () => {
+		const r = records();
+		const saved = [...r.DISPOSITIONS];
+		try {
+			r.DISPOSITIONS.length = 0;
+			for (const disposition of DISPOSITION_MEMBERS) {
+				assert.equal(
+					r.parseReviewRecord(bodyWithDisposition(disposition)),
+					undefined,
+					`with the home emptied, a ${disposition}-disposed record still parsed — some OTHER site accepts it, so ` +
+						"the home is not the sole accept site and a member dropped there would be caught by no contents " +
+						"assertion. This is the mutant a probe list cannot name: a second accept site for a member the home " +
+						"already carries is invisible to every positive-parse arm",
+				);
+			}
+		} finally {
+			r.DISPOSITIONS.length = 0;
+			r.DISPOSITIONS.push(...saved);
+		}
+		assert.deepEqual(
+			[...r.DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"the emptied home was not restored — later arms are now unsound",
+		);
+		for (const disposition of DISPOSITION_MEMBERS) {
+			assert.notEqual(
+				records().parseReviewRecord(bodyWithDisposition(disposition)),
+				undefined,
+				`a ${disposition}-disposed record no longer parses after the restore`,
+			);
+		}
+	});
 
 	it("the composed body opens with the content marker carrying the head", () => {
 		const r = records();
