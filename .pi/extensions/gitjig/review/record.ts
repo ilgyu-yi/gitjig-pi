@@ -28,6 +28,38 @@ export const REVIEW_RECORD_MARKER = "gitjig-review-record";
 
 export type SlotRecord = { slot: Slot; valid: boolean; reason?: string };
 
+/**
+ * One actor's return summary, carried VERBATIM (issue #203).
+ *
+ * WHY IT EXISTS. §1.9's admission burden defaults to RECORD, DO NOT
+ * ADMIT, and both composed briefs tell their delegate to carry a
+ * recorded-not-admitted item in the return's `summary`. A caller-mediated
+ * round reads that summary and records it by hand. The orchestrator
+ * dropped it: the reviewer join reads only the payload, the Judge's
+ * closed shape has no slot for prose, and this record had no field for
+ * it — so the RECORD half of the default was unrealizable on that path.
+ *
+ * WHY ONE LIST RATHER THAN A FIELD PER ACTOR. A `summary` on SlotRecord
+ * plus a second field for the Judge would be two homes for one property
+ * (§3.11), drifting independently. `from` discriminates, and the
+ * `slot`-present-iff-`from`-is-`"slot"` agreement is enforced at the
+ * parse rather than disclosed: prose attributed to the wrong actor is
+ * worse than prose dropped.
+ *
+ * WHAT IS DELIBERATELY ABSENT — recorded as a decision, not an omission.
+ * Nothing extracts "the observation part" of a summary. Deciding which
+ * prose is an observation is a semantic act and §1.9 mints no second
+ * adjudicator, so the WHOLE summary crosses and NOTHING READS IT. This
+ * is transport, for the same reason §1.7 makes the bundle transport.
+ *
+ * NAMED RESIDUAL: a delegate can write false prose here, and this
+ * channel neither checks it nor can. What it buys is that the prose
+ * survives the round pinned to the head and to the actor that wrote it,
+ * which is what a later reader — §1.4's diagnosis among them — needs in
+ * order to weigh it at all.
+ */
+export type RoundSummary = { from: "slot" | "judge"; slot?: Slot; text: string };
+
 export type ReviewRecord = {
 	/** The full hash of the head this review state is pinned to (§1.6). */
 	head: string;
@@ -36,9 +68,34 @@ export type ReviewRecord = {
 	/** The admitted Judge input, evidence verbatim — null where no Judge ran. */
 	adjudication: AdjudicationInput | null;
 	review: ReviewState;
+	/**
+	 * The round's durable prose, one entry per admitted return that wrote
+	 * one (issue #203). OPTIONAL, and that is load-bearing rather than
+	 * lax: records already posted as platform comments carry the five keys
+	 * above, and a required sixth would make every one of them unparseable
+	 * — §1.4's history would silently lose those review states.
+	 */
+	summaries?: RoundSummary[];
 };
 
-const RECORD_KEYS = new Set(["head", "slots", "bundle", "adjudication", "review"]);
+const RECORD_KEYS = new Set(["head", "slots", "bundle", "adjudication", "review", "summaries"]);
+
+const SUMMARY_KEYS = new Set(["from", "slot", "text"]);
+
+function isRoundSummary(value: unknown): boolean {
+	if (!isObject(value) || !Object.keys(value).every((key) => SUMMARY_KEYS.has(key))) {
+		return false;
+	}
+	if (typeof value.text !== "string") {
+		return false;
+	}
+	if (value.from === "slot") {
+		return isSlot(value.slot);
+	}
+	// The agreement runs both ways: a judge-sourced entry carrying a slot
+	// would attribute the Judge's words to a reviewer.
+	return value.from === "judge" && value.slot === undefined;
+}
 
 /**
  * Compose the record body: the marker line pinning the head, then the
@@ -283,7 +340,18 @@ export function parseReviewRecord(body: string): ReviewRecord | undefined {
 		return undefined;
 	}
 	const keys = Object.keys(parsed);
-	if (keys.length !== RECORD_KEYS.size || !keys.every((key) => RECORD_KEYS.has(key))) {
+	// An optional key costs the exact-count test, which stated two things at
+	// once: no unknown key, and no missing one. What replaces it is this
+	// known-keys half ALONE, and the other half is deliberately not
+	// re-added — every one of the five that predate `summaries` is already
+	// refused by its own field check below when absent (`head` fails the
+	// string test, `slots` and `bundle` fail `Array.isArray`, `adjudication`
+	// is neither null nor an adjudication, `review` is not a review state).
+	// MEASURED, because a guard nobody can red is decoration: a version of
+	// this gate carrying an explicit required-key list killed no mutant —
+	// deleting that list left the whole suite green, while deleting THIS
+	// half reds two arms.
+	if (!keys.every((key) => RECORD_KEYS.has(key))) {
 		return undefined;
 	}
 	const candidate = parsed as unknown as ReviewRecord;
@@ -301,6 +369,15 @@ export function parseReviewRecord(body: string): ReviewRecord | undefined {
 	}
 	if (!isReviewState(candidate.review)) {
 		return undefined;
+	}
+	// Absent is a state and an EMPTY LIST is a different one: a round in
+	// which every delegate wrote an empty summary records `[]`, and a round
+	// from before this key existed records nothing at all. Refusing the
+	// empty list would make the second unrepresentable.
+	if (candidate.summaries !== undefined) {
+		if (!Array.isArray(candidate.summaries) || !candidate.summaries.every(isRoundSummary)) {
+			return undefined;
+		}
 	}
 	return candidate;
 }
