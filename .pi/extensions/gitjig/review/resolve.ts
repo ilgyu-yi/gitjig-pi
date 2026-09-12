@@ -42,6 +42,20 @@
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import type { PanelOutcome, Slot } from "./panel.ts";
+// The resolution outcomes have ONE home and it is record.ts's `OUTCOMES`
+// (§3.11; round 13's EF1). This is a TYPE-ONLY import, erased before the
+// module runs, so the cycle it completes — record.ts imports this file's
+// types, this file imports that one's — exists only for `tsc` and costs
+// no runtime edge.
+//
+// RESIDUAL DISCLOSURE, stated where the dependency is taken: the home
+// sits in record.ts because that is where the outcome is ENFORCED — a
+// record whose outcome is outside it does not parse — while this file
+// only declares the shape the Resolver produces. The direction is
+// therefore enforcement-first rather than layer-first, and it is
+// deliberate: a declaration deriving from its enforcer cannot drift from
+// it, whereas an enforcer deriving from a declaration can.
+import type { OUTCOMES } from "./record.ts";
 
 /** §1.9's validity axis — INDETERMINATE is a ruling, not an absence. */
 export type Validity = "CONFIRMED" | "REFUTED" | "INDETERMINATE";
@@ -111,7 +125,17 @@ export type Disposition = "repair" | "defer" | "remedy" | "measure-escalate" | "
 
 export type Resolution = {
 	dispositions: { finding: string; disposition: Disposition; remedy?: string }[];
-	outcome: "repair" | "measure-escalate" | "clear";
+	/**
+	 * DERIVED from record.ts's `OUTCOMES`, never re-spelled here (round
+	 * 13's EF1). The hand-spelled union this replaces was a second home
+	 * for the domain, and it was the one that TYPED the value §1.4's
+	 * assembler reads — so a member added here reached that assembler as
+	 * an outcome `StateOutcome` does not declare, and a member added
+	 * there was not accepted here, with no arm tying the two. Measured
+	 * before the repair: widening this union by a fourth member left the
+	 * history suite at 103 pass / 0 fail.
+	 */
+	outcome: (typeof OUTCOMES)[number];
 };
 
 export type ReviewState =
