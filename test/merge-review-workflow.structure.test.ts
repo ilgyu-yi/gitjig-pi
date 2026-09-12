@@ -80,9 +80,13 @@ const RAW = readFileSync(WORKFLOW, "utf8");
  * assertion about a SETTING runs against this; assertions about the
  * file's prose run against RAW and say so.
  */
-const LIVE = RAW.split("\n")
-	.map((line) => (/^\s*#/.test(line) ? "" : line.replace(/\s+#\s.*$/, "")))
-	.join("\n");
+const stripComments = (text: string): string =>
+	text
+		.split("\n")
+		.map((line) => (/^\s*#/.test(line) ? "" : line.replace(/\s+#\s.*$/, "")))
+		.join("\n");
+
+const LIVE = stripComments(RAW);
 
 const HEAD = `7c4e1b9a02d53f86${"e".repeat(23)}1`;
 const TOKEN = "zq-the-token";
@@ -121,11 +125,16 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 		// The meta-arm for round-2 finding E7: it pins the comment-stripping
 		// itself, so a later edit that reverts to matching RAW reds here
 		// rather than silently re-admitting a commented-out setting.
+		//
+		// ROUND 3's EF4: it used to rebuild the stripping expression
+		// locally, which is a SECOND HOME for it (§3.11) — so it pinned a
+		// copy, not the helper every other arm runs through. Measured at
+		// that head: mutating the helper to strip nothing red ONE arm, a
+		// consumer ("bounds the job, pins the toolchain..."), while this
+		// arm — the one authored to guard that helper — stayed GREEN. It
+		// now calls `stripComments`, so the helper is what it exercises.
 		const commented = `${RAW}\n# if: github.event_name == 'pull_request'\n# issues: read\n# timeout-minutes: 99\n`;
-		const stripped = commented
-			.split("\n")
-			.map((line) => (/^\s*#/.test(line) ? "" : line.replace(/\s+#\s.*$/, "")))
-			.join("\n");
+		const stripped = stripComments(commented);
 		assert.equal(
 			stripped.includes("timeout-minutes: 99"),
 			false,

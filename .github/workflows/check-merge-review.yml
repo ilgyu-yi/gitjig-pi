@@ -47,6 +47,30 @@ name: check-merge-review
 #     branch's predicate, and no pull-request-authored code executes.
 #     That is why the two paths can reach different verdicts at one head.
 #
+# The comment path's DOMAIN is UNSCOPED, enumerated here rather than
+# closed (round 2's E17; round 3's EF11 is that this paragraph was
+# recorded as landed and was not). `issue_comment` carries no filter for
+# the commenter, the comment's body, or the thread it sits on, and
+# GitHub offers none in the trigger: every `created` and `edited` comment
+# on every issue and every pull request in this repository wakes this
+# workflow. What bounds it today, and what each bound does NOT do:
+#   - the job-level `if:` drops runs whose thread is a plain issue, so a
+#     non-PR comment queues a run and ends it without an API call. It
+#     does not narrow WHO may wake the job, or on what text.
+#   - the concurrency group is keyed per pull request, so comment traffic
+#     on one PR cannot cancel another's verdict. It bounds interference,
+#     not volume.
+#   - the token is `issues: read` and the script performs two reads and no
+#     write, so a woken run cannot act on the repository whatever the
+#     comment said. It bounds blast radius, not reachability.
+# What stays open, stated so it is not read as covered: an actor who can
+# comment can make this job run at will, and the cost of that is runner
+# minutes and log noise rather than a wrong verdict, because the verdict
+# is derived from the record's own bytes and not from the comment that
+# woke the job. Narrowing the domain is a hardening act on a job that is
+# advisory by decision, and the closure is routed to issue #192 with the
+# rest of the hardening, not taken here.
+#
 # NOT to be "fixed" by adding a merge-ref `ref:` so the step name reads
 # true on both paths. That change would make the comment path check out
 # and execute pull-request-authored code while holding a base-repository
