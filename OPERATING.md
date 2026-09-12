@@ -70,9 +70,23 @@ apply the rules.
    enumeration, never a class closure.** Incident: a panel's claim that a defect class was
    closed rested on nine killed variants; a tenth surviving shape existed, and the unearned
    closure became a load-bearing input to a wrong convergence ruling.
+7. **A claim about which guard catches which shape is a measurement, not a description. Run the
+   mutant, read which arm reds, and let the wording say exactly that and no more.** This is
+   rule 5's discipline over a *particular* claim rather than a universal one, and it is kept
+   separate because the measurement differs: rule 5 sends you to look for a falsifying case,
+   this one sends you to build the case and read the output. Two incidents, carried together
+   because the second happened inside the first one's repair. A test comment asserted that a
+   whole-literal arm red on a duplication mutant; the assertion was a substring check, so it
+   stayed green and a different arm was the one that red — ruled substantive, on the ground
+   that a false record of which arm covers a shape would license a later reader to delete the
+   arm that actually covers it. Then the docstring of the helper written to repair that said
+   the substring blind spot let a second home survive *the whole file*, verbatim or reworded;
+   measured, only the verbatim ones red — on another arm — while the reworded one did survive it.
 
 The unifying shape, as one adjudication put it: *asserting a change landed instead of measuring
-that it landed* and *titling a check over a domain instead of measuring the domain* are one act.
+that it landed* (rule 2) and *titling a check over a domain instead of measuring the domain*
+(rule 7) are one act. The sentence is kept as the tie between those two rules, not as a third
+statement of either — it names no act the numbered rules do not already own.
 
 ## The evidence ledger
 
