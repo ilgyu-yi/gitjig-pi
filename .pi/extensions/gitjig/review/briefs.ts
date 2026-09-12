@@ -52,6 +52,31 @@
  * what a delegate may not do is report a class closed. #203 is not
  * solved here and is not deepened past the class it already records.
  *
+ * DECISION — the coverage-attribution burden (issue #213) is the
+ * SECOND shared claim block, composed into BOTH briefs from one home on
+ * the shape #204 settled. Its authorization is §2.4's machine-pair claim
+ * shape — "this arm refuses X" ships one attempted violation and its red.
+ * The REACH is what makes this a composition rather than a restatement:
+ * §2.4 binds the author across every round, and reaches a delegate only
+ * through a brief. Both roles attribute coverage routinely — a reviewer
+ * in the body of a finding ("no arm covers this"), a Judge in the
+ * non-empty evidence field every ruling owes — so both are told here.
+ *
+ * DECISION — the incident travels COMPRESSED and UNPROVENANCED. The
+ * doctrine this block migrates from carries each rule's incident as a
+ * dated narrative, on the ground that a rule without its incident gets
+ * skimmed; a composed block is terse and §2.4 keeps prior-defect
+ * provenance off a living surface. Both are honored by folding the
+ * incident's SHAPE into the rule's own sentence, present-tense and
+ * generic — which is what the exculpatory block's "nine hiding shapes
+ * killed" line already did silently. Two things the fold must satisfy,
+ * and dropping the round, PR and issue numbers satisfies neither on its
+ * own: the sentence may not be a past-tense narrative of prior defects,
+ * which is the archaeology §2.4 keeps off a living surface however it is
+ * spelled; and it may not lean on an antecedent the composed document
+ * does not contain, since the delegate reads the brief and nothing else.
+ * This binds every later block.
+ *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;
  * the Judge's rides the same slot as the closed
@@ -161,6 +186,27 @@ const EXCULPATORY_BURDEN = [
 	"repair attempt.",
 ].join("\n");
 
+/**
+ * The coverage-attribution burden (issue #213) — the exculpatory
+ * burden's twin over a PARTICULAR claim rather than a universal one,
+ * and the ONE home of the rule for both roles.
+ *
+ * Kept as its own block rather than folded into the exculpatory one
+ * because the measurement differs: that rule sends you to look for a
+ * falsifying case, this one sends you to BUILD the case and read which
+ * arm reds.
+ */
+const COVERAGE_ATTRIBUTION = [
+	"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
+	"description. Build the shape, run the suite, read which arm reds, and let the wording say exactly",
+	"that and no more (§2.4's machine-pair claim: it ships one attempted violation and its red). This is",
+	"the burden above over a PARTICULAR claim rather than a universal one, and the measurement differs —",
+	"that one sends you to look for a falsifying case, this one sends you to BUILD the case. Expectation",
+	"cannot settle it: a pin that reads a SUBSTRING stays green while a DIFFERENT arm is the one that",
+	"reds, and stays green again on a reworded copy of the very text it pins. Name the arm you watched",
+	"red, never the arm you expect to.",
+].join("\n");
+
 const RETURN_CONTRACT = [
 	"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
 	"PARENT directory's return.json. The schema is CLOSED:",
@@ -242,6 +288,11 @@ export function composeReviewerBrief(
 		// below the return contract reads as an afterthought to it.
 		EXCULPATORY_BURDEN,
 		"",
+		// The same discipline over a particular claim: it follows the
+		// universal one it is the narrow case of, and stays ahead of the
+		// mechanics for the same reason.
+		COVERAGE_ATTRIBUTION,
+		"",
 		fenceBlock(fences),
 		priorFindingsBlock(fences),
 		"",
@@ -308,6 +359,10 @@ export function composeJudgeBrief(
 		// at all, so it composes after the grounds it is the complement of and
 		// before the dedup obligation the ordering token turns on.
 		EXCULPATORY_BURDEN,
+		"",
+		// Same ordering as the reviewer's, and ahead of the evidence field
+		// of obligation 3, which is where a Judge makes this claim.
+		COVERAGE_ATTRIBUTION,
 		"",
 		"YOUR OBLIGATIONS, all owed (§1.9):",
 		"1. DEDUP over the whole bundle — semantically-one raw findings merge into one effective finding with",
