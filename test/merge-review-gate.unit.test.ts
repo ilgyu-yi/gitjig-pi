@@ -17,8 +17,13 @@
  *      never a bare flag, never a bare substring probe.
  *
  * The subject-absence anchor: the modules are pulled through guarded
- * dynamic imports and every arm reds on its own authored message rather
- * than a module-resolution crash.
+ * dynamic imports, so an absent module surfaces an authored message and
+ * never a raw module-resolution crash, and no arm goes green on it.
+ * Measured, and narrower than a per-arm claim: with the predicate module
+ * absent every arm reds on its own message; with the record module
+ * absent five arms are never REGISTERED, because the marker fixture is
+ * built in a describe body, so what surfaces is that describe's authored
+ * failure rather than five arms'.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";

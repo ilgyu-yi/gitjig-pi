@@ -65,10 +65,9 @@ name: check-merge-review
 #     does not narrow WHO may wake the job, or on what text.
 #   - the concurrency group is keyed per pull request, so comment traffic
 #     on one PR cannot cancel another's verdict. Within ONE pull request
-#     `cancel-in-progress: true` cuts both ways, and the setting's own
-#     comment carries the whole reading: repeated comments cancel that
-#     PR's OWN in-flight run, which ends its runner minutes and can also
-#     keep a fresh verdict from completing at all.
+#     `cancel-in-progress: true` cuts both ways: repeated comments cancel
+#     that PR's OWN in-flight run, which ends its runner minutes and can
+#     also keep a fresh verdict from completing at all.
 #   - `timeout-minutes: 10` bounds how long ONE woken run may spend. It
 #     is not the only bound on that cost — the `if:` above ends a
 #     plain-issue run before a job is allocated, and cancellation ends
@@ -131,7 +130,7 @@ on:
 # `cancel-in-progress` is deliberate and is the contestable half, and it
 # is an EXPOSURE as well as a cost saving — the two readings this file
 # used to carry separately, reconciled here so the setting and the
-# domain paragraph below say one thing. The saving: on the
+# domain paragraph above say one thing. The saving: on the
 # `issue_comment` path a cancelled run is the one reading the OLDER
 # comment list, since a newer comment event implies a newer list. That
 # premise does NOT extend to `pull_request` events, which carry no
