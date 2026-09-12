@@ -245,11 +245,15 @@ describe("§3.7(e) predicate integrity — canonical position, demonstrated not 
 	});
 
 	it("distinguishes position from head, and compares the head WHOLE — each half refuses on its own", () => {
-		// The cross-product plus the two precision cases. A gate comparing
-		// only a PREFIX of the head, or omitting the marker's closing
-		// delimiter, passes the first two rows and reds on the last two —
-		// which is the whole reason HEAD_A and HEAD_B differ only at their
-		// last character and HEAD_EXTENDED extends HEAD_A.
+		// The cross-product plus the two precision cases, and which row
+		// catches which mutant is MEASURED. A gate comparing only a PREFIX
+		// of the head (head.length - 1 characters, no terminator) reds on
+		// the FIRST row, "right position, wrong head" — which is why HEAD_A
+		// and HEAD_B differ only at their last character. A gate omitting
+		// the marker's closing delimiter (the head's own width, compared
+		// against the head alone) passes the first two rows and reds on the
+		// THIRD — which is why HEAD_EXTENDED extends HEAD_A. Both mutants
+		// die in this arm.
 		const cases: [string, string, string][] = [
 			["right position, wrong head", body(adjudicatedRecord(HEAD_B)), HEAD_A],
 			["wrong position, right head", `relayed:\n${body(record)}`, HEAD_A],

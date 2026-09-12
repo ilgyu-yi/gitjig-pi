@@ -198,9 +198,15 @@ jobs:
           # The script renders its own advisory notices and exits 0 on
           # every verdict. A NON-ZERO exit is therefore machinery, not a
           # verdict — a torn checkout whose predicate module is absent is
-          # the decided loud case — and every sibling workflow maps a
-          # machinery failure to an authored annotation rather than a raw
-          # runtime stack (§3.9's uniform observability).
+          # the decided loud case — and every sibling CHECK workflow
+          # (check-changelog, check-provenance, check-ssot-home, check-toc,
+          # source-checks and suite) maps a machinery failure to an authored
+          # annotation rather than a raw runtime stack (§3.9's uniform
+          # observability). The other five siblings — the two auto-*.yml,
+          # the initiative marker-to-label workflow, dir-mode-post-merge.yml
+          # and issues-to-project-mirror.yml — emit no annotation on any
+          # path, so the uniformity claimed here is the gate family's, not
+          # the directory's.
           if ! node .github/workflows/check-merge-review.mjs; then
             echo "::error::check-merge-review could not evaluate: the gate's own machinery failed before it reached a verdict. This is NOT a merge-review refusal. Most likely the checkout is missing .pi/extensions/gitjig/review/merge-gate.ts, or the runner's Node cannot resolve a TypeScript import. Reproduce locally with: node .github/workflows/check-merge-review.mjs (with GITHUB_TOKEN, GITJIG_REPO and GITJIG_PR set)." >&2
             exit 1
