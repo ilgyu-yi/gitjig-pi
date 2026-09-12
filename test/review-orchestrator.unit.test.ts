@@ -368,7 +368,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	 * maximal run of lines between blank lines. `includes` cannot see an
 	 * addition at the END of a block — the expected literal stays a
 	 * substring — and that blind spot is what let a retained second home
-	 * of the exculpatory rule survive the whole file, verbatim OR reworded.
+	 * of the exculpatory rule survive the ADMISSION arm's substring pin, verbatim OR reworded.
 	 * Equality over the extracted block sees both, because it sees the
 	 * block's end.
 	 *
