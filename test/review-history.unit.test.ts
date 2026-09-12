@@ -17,6 +17,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+// A TYPE-ONLY import of the upstream tag union, for the witness that
+// replaced the regex over resolve.ts's union body. It is erased before
+// the file runs, so it adds no runtime dependency on the module being
+// present — which is also its limit: an absent or renamed resolve.ts
+// reds `tsc`, never this suite (R-b/R-c, disclosed at the witness).
+import type { ReviewState as UpstreamReviewState } from "../.pi/extensions/gitjig/review/resolve.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
@@ -57,6 +63,13 @@ type DiagnosisAdmission =
 type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
 
 type HistoryModule = {
+	// Mirrored as MUTABLE arrays on purpose. Production declares these
+	// `as const`, which is a type-level word only; the identity and
+	// emptiness laws below perturb the live objects and restore them, and
+	// that reachability is the production module's disclosed residual
+	// (R-a), not an accident this mirror invents.
+	DIAGNOSIS_VALUES: string[];
+	INVALIDATIONS: string[];
 	repairHistory(records: ReviewRecord[]): StateSummary[];
 	triggerFires(history: StateSummary[]): boolean;
 	composeDiagnosisBrief(history: StateSummary[], context: { changeDescription: string }): string;
@@ -80,6 +93,32 @@ try {
 function mod(): HistoryModule {
 	assert.ok(history, `history.ts did not load — §1.4's instruments are absent or broken: ${loadError}`);
 	return history;
+}
+
+/**
+ * The durable record module, pulled through the same guarded dynamic
+ * import. `StateOutcome` is DERIVED from `OUTCOMES` here, and a record
+ * whose outcome is outside it does not parse at all, so this module's
+ * home is part of §1.4's history domain and is measured with the same
+ * three laws. `composeReviewRecord` is mirrored over `unknown` so an
+ * adversarial outcome is expressible without a cast.
+ */
+type RecordModule = {
+	OUTCOMES: string[];
+	composeReviewRecord(record: unknown): string;
+	parseReviewRecord(body: string): ReviewRecord | undefined;
+};
+
+let recordModule: RecordModule | undefined;
+let recordLoadError = "";
+try {
+	recordModule = (await import(pathToFileURL(`${repoRoot()}${REVIEW_DIR}record.ts`).href)) as RecordModule;
+} catch (error) {
+	recordLoadError = error instanceof Error ? error.message : String(error);
+}
+function recordMod(): RecordModule {
+	assert.ok(recordModule, `record.ts did not load — the durable record is absent or broken: ${recordLoadError}`);
+	return recordModule;
 }
 
 const rec = (head: string, review: ReviewState): ReviewRecord => ({
@@ -1300,238 +1339,362 @@ describe("§1.4 the admission carries EVERY enforced member through the parser (
 	}
 });
 
-describe("§1.4 the suite's domains match the SOURCE — types and the enforcing Sets (drift snapshot, issue #186)", () => {
-	// The committed-snapshot idiom this repository already uses (postures.ts's
-	// inventory, build_toc --check). It approves nothing; it refuses to let a
-	// hand-list drift from the artifact it claims to cover.
+describe("§1.4 the domains are pinned on the LIVE enforcing homes, never on their spelling (§1.8 re-plan, issue #186)", () => {
+	// WHY THIS SHAPE, and what it replaces. Everything here supersedes the
+	// former "drift snapshot" describe, which established each declared
+	// domain by READING SOURCE TEXT — `readFileSync` over history.ts,
+	// resolve.ts and record.ts, a comment strip, and two extractors. The
+	// §1.4 diagnosis ruled that plan invalidated and §1.8's contest settled
+	// this one in its place. The ground, in one sentence: the thing a source
+	// regex reads (a `Set` literal, a union body) is not the thing that
+	// enforces (a runtime object, mutable after its literal and reachable
+	// through a cast), so every defect that class produced — a false red on
+	// an inert comment, a false green over a member hidden behind one, a
+	// decoy `Set` literal inside a string — was a defect of reading text at
+	// all, not of reading it badly.
 	//
-	// Round 7's version read the TYPE declarations only, and round 7 found two
-	// gaps in it. Both are closed here:
-	//   F-R2 — it now also reads the runtime Sets, which are what enforces.
-	//   S2   — it now refuses a union body carrying anything but quoted
-	//          literals, so a member appended as a type reference
-	//          (`... | "INDETERMINATE" | ExtraValue`) can no longer pass
-	//          while tsc stays green.
-	const RAW_SOURCE = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
-	/**
-	 * Comments are stripped from the SOURCE before any declaration regex runs
-	 * — not from an already-captured body (round 11's S-1).
-	 *
-	 * The declaration capture is `([^;]+);`, which stops at the first
-	 * semicolon CHARACTER. A comment carrying a semicolon therefore truncates
-	 * the capture before any body-level strip can see it, and stripping the
-	 * truncated prefix only removes the residue that betrayed the truncation.
-	 * Measured both ways at the introducing head: an inert semicolon-bearing
-	 * comment red a passing union (a false red), and a FIFTH DiagnosisValue
-	 * member hidden behind one landed with the whole suite green (a false
-	 * green certifying a domain the check never read).
-	 *
-	 * Stripping first closes both faces at once, because the regex then never
-	 * sees a comment's semicolon at all. Checked on the guarded file: no string
-	 * literal in history.ts contains `//` or an opening block-comment token, so
-	 * a naive strip corrupts nothing there.
-	 */
-	const SOURCE = RAW_SOURCE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-
-	/** Members of `export type NAME = "a" | "b";` — literals only. */
-	const typeMembers = (name: string): string[] => {
-		const declaration = new RegExp(`export type ${name}\\s*=\\s*([^;]+);`).exec(SOURCE);
-		assert.ok(declaration, `history.ts declares no exported type ${name} — the snapshot cannot read its domain`);
-		// Comment spans are stripped before tokenizing: an inline comment
-		// inside a union body is a semantics-preserving spelling, and a check
-		// that reds on it is a false red, which §3.12 calls a defect because
-		// "a red that is not a defect destroys the signal readers act on".
-		// Comment spans are already gone: SOURCE is stripped above, which is
-		// the one home for that (§3.11). A second strip here would be a second
-		// home for the same property and could drift from it.
-		const body = (declaration[1] as string).trim();
-		// S2's closure: every token between the separators must be a quoted
-		// literal. A bare identifier means the union reaches outside this
-		// declaration, so the extracted member list is NOT the domain and the
-		// snapshot must refuse rather than certify a list it cannot see.
-		// The leading-pipe multi-line form (`=\n\t| "a"\n\t| "b";`) is ordinary
-		// TypeScript and must NOT false-red: splitting on "|" yields an empty
-		// leading token for it, so empties are dropped before the check. What
-		// must still red is a token that is present and is not a literal.
-		const tokens = body
-			.split("|")
-			.map((token) => token.trim())
-			.filter((token) => token.length > 0);
-		assert.ok(tokens.length > 0, `history.ts's ${name} has an empty union body — the snapshot read nothing`);
-		for (const token of tokens) {
-			assert.match(
-				token,
-				/^"[^"]*"$/,
-				`history.ts's ${name} has a union member that is not a quoted literal (${JSON.stringify(token.trim())}). ` +
-					"The snapshot reads literals, so a member reached through a type reference would widen the domain " +
-					"while every arm below still claims to range over it — and tsc would stay green. Spell the members " +
-					"inline, or teach this extractor the shape you are adding",
-			);
-		}
-		return [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
-	};
-
-	/** Members of `const NAME = new Set<...>([...]);` — the ENFORCING home. */
-	const setMembers = (name: string): string[] => {
-		// Two spellings are accepted, both semantics-preserving: an inline
-		// literal, and a Set built from a named const array. Refusing the
-		// second was a false red (round 8's S-F4). What still reds is a Set
-		// this extractor cannot resolve at all — refuse rather than certify a
-		// domain it could not read.
-		const inline = new RegExp(`const ${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(\\[([^\\]]*)\\]\\)`).exec(SOURCE);
-		if (inline) {
-			return [...(inline[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
-		}
-		const viaConst = new RegExp(`const ${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(([A-Za-z_$][\\w$]*)\\)`).exec(SOURCE);
-		assert.ok(viaConst, `history.ts declares no readable Set ${name} — the snapshot cannot read what enforces`);
-		const backing = new RegExp(`const ${viaConst[1] as string}\\s*=\\s*\\[([^\\]]*)\\]`).exec(SOURCE);
-		assert.ok(
-			backing,
-			`history.ts's ${name} is built from ${viaConst[1] as string}, whose literal the snapshot cannot read`,
-		);
-		return [...(backing[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
-	};
-
-	for (const [typeName, setName, iterated] of [
-		["DiagnosisValue", "DIAGNOSIS_VALUES", ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]],
-		["Invalidation", "INVALIDATIONS", ["nothing", "plan", "authorization"]],
-	] as const) {
-		it(`${typeName}: the type, the enforcing Set, and the arms all carry the same members`, () => {
-			// Three-way, deliberately: the type and the Set are two homes for
-			// one property (§3.11), and round 7's defect was exactly that they
-			// could disagree with nothing noticing.
-			assert.deepEqual(
-				typeMembers(typeName),
-				[...iterated],
-				`history.ts's ${typeName} no longer matches the member list this suite iterates`,
-			);
-			assert.deepEqual(
-				setMembers(setName),
-				[...iterated],
-				`history.ts's ${setName} — the Set the parser actually enforces over — no longer matches the member ` +
-					"list this suite iterates. This is the home round 7's derivation missed: the type declaration can " +
-					"stay correct while the Set loses a member, and every arm stays green",
-			);
+	// The replacement reads no source text anywhere. Production now declares
+	// ONE home per domain and DERIVES its type from it, so the three
+	// properties that matter are established directly:
+	//   contents      — the live home's members are the committed list;
+	//   identity      — the object an arm reads IS the object the parser
+	//                   consults, proven by perturbing it, for members
+	//                   nobody named;
+	//   emptiness     — that home is the SOLE accept site, proven by
+	//                   emptying it and watching every committed member be
+	//                   refused.
+	// A decoy in a string literal can reach none of them, and a runtime
+	// widening no probe list names is caught by identity rather than by
+	// enumeration.
+	//
+	// RESIDUAL DISCLOSURE (R-e), stated once for the whole describe: the
+	// perturbation and emptiness arms are the only state-mutating arms in
+	// this file. Each restores in a `finally`, each POST-ASSERTS its restore
+	// rather than trusting it, and `node --test` runs the arms of one file
+	// serially with no subtest concurrency here — a parallel runner would
+	// make these arms unsound, and that is a property of the runner, stated
+	// so a later change to it is not silent.
+	const VALUES = ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"] as const;
+	const INVALIDATION_MEMBERS = ["nothing", "plan", "authorization"] as const;
+	const OUTCOME_MEMBERS = ["repair", "measure-escalate", "clear"] as const;
+	const PAYLOAD_KEYS = ["value", "invalidation", "evidence"] as const;
+	/** A well-formed admitted return over ARBITRARY strings — no cast, so a non-member is expressible. */
+	const ruling = (value: string, invalidation: string, evidence: string): DispatchOutcome => ({
+		disposition: "admitted",
+		ok: true,
+		summary: "RESULT",
+		payload: JSON.stringify({ value, invalidation, evidence }),
+		compare: "confirmed",
+	});
+	const resolvedBody = (outcome: string): string =>
+		recordMod().composeReviewRecord({
+			head: "a".repeat(40),
+			slots: [],
+			bundle: [],
+			adjudication: null,
+			review: { state: "resolved", resolution: { dispositions: [], outcome } },
 		});
-	}
 
-	it("the UPSTREAM review-state tags are exactly the ones the assembler recognizes (round 8's S-F2)", () => {
-		// StateOutcome's INPUT domain does not live in history.ts. The review
-		// state's tag union lives in resolve.ts, and tsc does not make the
-		// assembler's per-tag decision exhaustive over a union declared in
-		// another file — so this reads the upstream declaration itself.
-		//
-		// Round 9's F-B: it read only tags spelled as inline literals, so a
-		// member added as a NAMED TYPE REFERENCE passed the whole corpus. The
-		// sibling extractor in this file already refuses a non-literal union
-		// member with an authored message; that closure is carried here.
-		// Stripped before the declaration regex, for S-1's reason.
-		const upstream = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "resolve.ts"), "utf8")
-			.replace(/\/\*[\s\S]*?\*\//g, "")
-			.replace(/\/\/[^\n]*/g, "");
-		// The declaration ends at the next top-level form, not at the first
-		// ";" — its object literals contain semicolons of their own.
-		const declaration = /export type ReviewState =([\s\S]*?)\n(?:export |const |type |function |\/\*\*)/.exec(upstream);
-		assert.ok(declaration, "resolve.ts declares no exported ReviewState — the snapshot cannot read the tag domain");
+	it("CONTENTS — each exported home carries exactly the committed member list", () => {
+		const h = mod();
+		assert.deepEqual(
+			[...h.DIAGNOSIS_VALUES],
+			[...VALUES],
+			"history.ts's DIAGNOSIS_VALUES — the home the parser narrows over AND the home DiagnosisValue is derived " +
+				"from — no longer carries §1.4's four taxonomy values. A member dropped here refuses a valid ruling " +
+				"(for NONE, that parks every change forever); a member added here admits a value §1.4 does not define",
+		);
+		assert.deepEqual(
+			[...h.INVALIDATIONS],
+			[...INVALIDATION_MEMBERS],
+			"history.ts's INVALIDATIONS no longer carries §1.4's three invalidation findings — the second output the " +
+				"diagnosis returns, which routes the change's re-entry gate",
+		);
+		assert.deepEqual(
+			[...recordMod().OUTCOMES],
+			[...OUTCOME_MEMBERS],
+			"record.ts's OUTCOMES — the home that decides whether a resolved record PARSES at all, and the home " +
+				"StateOutcome is derived from — no longer carries the three resolution outcomes. A member dropped here " +
+				"silently stops a legitimate record from parsing, and the history it belongs to loses a state",
+		);
+	});
 
-		// REFUSE what cannot be read, rather than reading past it. Every arm of
-		// the union must carry its own `state: "literal"`; an arm that does
-		// not reaches outside this declaration, so the extracted tag list is
-		// NOT the domain and certifying it would be false.
-		const arms = (declaration[1] as string)
-			.split(/^\s*\|/m)
-			.map((arm) => arm.trim())
-			.filter((arm) => arm.length > 0);
-		assert.ok(arms.length > 0, "resolve.ts's ReviewState union has no readable arms — the snapshot read nothing");
-		for (const arm of arms) {
-			assert.match(
-				arm,
-				/state:\s*"[^"]+"/,
-				`resolve.ts's ReviewState has a union arm carrying no inline state literal (${JSON.stringify(arm.slice(0, 60))}). ` +
-					"The snapshot reads literals, so a member reached through a type reference would widen the tag " +
-					"domain while the assembler silently dropped it and no arm here noticed. Spell the arm inline, " +
-					"or teach this extractor the shape you are adding",
+	it("IDENTITY — a value pushed onto the LIVE DIAGNOSIS_VALUES starts being admitted, and the refusal returns on restore", () => {
+		const h = mod();
+		// The probe is a member of no committed list and appears in no
+		// production file. Nothing can special-case it.
+		const probe = "ZQ-NOT-A-TAXONOMY-VALUE";
+		const outcome = ruling(probe, "nothing", "zq evidence");
+		assert.equal(
+			h.admitDiagnosis(outcome).available,
+			false,
+			"a non-member was admitted before any perturbation — the domain is not closed, and this arm's premise is gone",
+		);
+		try {
+			h.DIAGNOSIS_VALUES.push(probe);
+			assert.deepEqual(
+				h.admitDiagnosis(outcome),
+				{ available: true, diagnosis: { value: probe, invalidation: "nothing", evidence: "zq evidence" } },
+				"pushing a member onto the exported DIAGNOSIS_VALUES did not change what admitDiagnosis admits, so the " +
+					"array this arm reads is NOT the object the parser consults — a second, unreachable copy. Every " +
+					"contents assertion above then certifies a home nothing enforces, which is the exact defect the " +
+					"source-reading plan died of",
+			);
+		} finally {
+			const at = h.DIAGNOSIS_VALUES.indexOf(probe);
+			if (at !== -1) {
+				h.DIAGNOSIS_VALUES.splice(at, 1);
+			}
+		}
+		assert.deepEqual(
+			[...h.DIAGNOSIS_VALUES],
+			[...VALUES],
+			"the perturbation was not restored — later arms are now unsound",
+		);
+		assert.equal(
+			h.admitDiagnosis(outcome).available,
+			false,
+			"the refusal did not return after the restore — the parser is reading something the restore did not reach",
+		);
+	});
+
+	it("IDENTITY — the same law for INVALIDATIONS, the second output's home", () => {
+		const h = mod();
+		const probe = "ZQ-NOT-AN-INVALIDATION";
+		const outcome = ruling("NONE", probe, "zq evidence");
+		assert.equal(
+			h.admitDiagnosis(outcome).available,
+			false,
+			"a non-member invalidation was admitted before any perturbation",
+		);
+		try {
+			h.INVALIDATIONS.push(probe);
+			assert.deepEqual(
+				h.admitDiagnosis(outcome),
+				{ available: true, diagnosis: { value: "NONE", invalidation: probe, evidence: "zq evidence" } },
+				"pushing onto the exported INVALIDATIONS did not change what the parser admits — the exported array is " +
+					"not the enforcing object",
+			);
+		} finally {
+			const at = h.INVALIDATIONS.indexOf(probe);
+			if (at !== -1) {
+				h.INVALIDATIONS.splice(at, 1);
+			}
+		}
+		assert.deepEqual([...h.INVALIDATIONS], [...INVALIDATION_MEMBERS], "the perturbation was not restored");
+		assert.equal(h.admitDiagnosis(outcome).available, false, "the refusal did not return after the restore");
+	});
+
+	it("EMPTINESS — with DIAGNOSIS_VALUES emptied, EVERY committed value is refused, so no second accept site exists", () => {
+		const h = mod();
+		const saved = [...h.DIAGNOSIS_VALUES];
+		try {
+			h.DIAGNOSIS_VALUES.length = 0;
+			for (const value of VALUES) {
+				assert.equal(
+					h.admitDiagnosis(ruling(value, "nothing", "zq evidence")).available,
+					false,
+					`with the home emptied, ${value} was still admitted — some OTHER site accepts it, so the home is not ` +
+						"the sole accept site and dropping a member there would not be caught by any contents assertion. " +
+						"This is the mutant a probe list cannot name: a second accept site for a member the home already " +
+						"carries is invisible to every positive-admission arm",
+				);
+			}
+		} finally {
+			h.DIAGNOSIS_VALUES.length = 0;
+			h.DIAGNOSIS_VALUES.push(...saved);
+		}
+		assert.deepEqual(
+			[...h.DIAGNOSIS_VALUES],
+			[...VALUES],
+			"the emptied home was not restored — later arms are now unsound",
+		);
+		for (const value of VALUES) {
+			assert.equal(
+				h.admitDiagnosis(ruling(value, "nothing", "zq evidence")).available,
+				true,
+				`${value} is no longer admitted after the restore — the restore did not reach the enforcing object`,
 			);
 		}
-
-		const tags = arms.map((arm) => (/state:\s*"([^"]+)"/.exec(arm) as RegExpExecArray)[1] as string);
-		assert.deepEqual(
-			tags,
-			["incomplete", "approved", "resolved"],
-			"resolve.ts's ReviewState tags are no longer the three this module's assembler recognizes. A new tag " +
-				"falls to the assembler's drop branch and contributes no state — which is safe — but no arm here " +
-				"exercises it, and the intended mapping for it has not been decided. Decide it and extend the " +
-				"assembler's explicit per-tag tests, or the domain is covered by a drop nobody chose",
-		);
 	});
 
-	it("record.ts's OUTCOMES is the second home of the resolution outcomes, and it agrees (round 10's audit)", () => {
-		// Found by auditing the corpus against the four homes this lineage has
-		// now met, NOT by a panel finding. `StateOutcome` is declared in
-		// history.ts, but the resolution outcomes it takes are ENFORCED by
-		// record.ts's own Set — a record whose outcome is outside it does not
-		// parse. Measured before this arm existed: dropping "clear" from that
-		// Set left all 98 arms green, so a `clear`-resolved record would stop
-		// parsing with nothing noticing.
+	it("EMPTINESS — the same law for INVALIDATIONS", () => {
+		const h = mod();
+		const saved = [...h.INVALIDATIONS];
+		try {
+			h.INVALIDATIONS.length = 0;
+			for (const invalidation of INVALIDATION_MEMBERS) {
+				assert.equal(
+					h.admitDiagnosis(ruling("NONE", invalidation, "zq evidence")).available,
+					false,
+					`with the home emptied, the invalidation ${invalidation} was still admitted — a second accept site`,
+				);
+			}
+		} finally {
+			h.INVALIDATIONS.length = 0;
+			h.INVALIDATIONS.push(...saved);
+		}
+		assert.deepEqual([...h.INVALIDATIONS], [...INVALIDATION_MEMBERS], "the emptied home was not restored");
+		for (const invalidation of INVALIDATION_MEMBERS) {
+			assert.equal(
+				h.admitDiagnosis(ruling("NONE", invalidation, "zq evidence")).available,
+				true,
+				`the invalidation ${invalidation} is no longer admitted after the restore`,
+			);
+		}
+	});
+
+	it("IDENTITY — record.ts's OUTCOMES is what decides a resolved record's PARSE, measured through a compose/parse round trip", () => {
+		const r = recordMod();
+		const probe = "zq-not-an-outcome";
+		const body = resolvedBody(probe);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"a resolved record carrying a non-member outcome parsed before any perturbation — record.ts's outcome " +
+				"domain is not closed, and StateOutcome (derived from it) would receive a value it does not declare",
+		);
+		try {
+			r.OUTCOMES.push(probe);
+			assert.notEqual(
+				r.parseReviewRecord(body),
+				undefined,
+				"pushing onto the exported OUTCOMES did not change what parseReviewRecord accepts, so the exported " +
+					"array is not the object the validator consults — the contents assertion above certifies nothing, " +
+					"and neither does StateOutcome's derivation from it",
+			);
+		} finally {
+			const at = r.OUTCOMES.indexOf(probe);
+			if (at !== -1) {
+				r.OUTCOMES.splice(at, 1);
+			}
+		}
+		assert.deepEqual([...r.OUTCOMES], [...OUTCOME_MEMBERS], "the perturbation was not restored");
+		assert.equal(r.parseReviewRecord(body), undefined, "the refusal did not return after the restore");
+	});
+
+	it("EMPTINESS — with record.ts's OUTCOMES emptied, EVERY committed outcome stops parsing, and the history loses its states", () => {
+		const r = recordMod();
+		const saved = [...r.OUTCOMES];
+		try {
+			r.OUTCOMES.length = 0;
+			for (const outcome of OUTCOME_MEMBERS) {
+				assert.equal(
+					r.parseReviewRecord(resolvedBody(outcome)),
+					undefined,
+					`with the home emptied, a ${outcome}-resolved record still parsed — some other site accepts it, so a ` +
+						"member dropped from OUTCOMES would not be caught here either",
+				);
+			}
+		} finally {
+			r.OUTCOMES.length = 0;
+			r.OUTCOMES.push(...saved);
+		}
+		assert.deepEqual([...r.OUTCOMES], [...OUTCOME_MEMBERS], "the emptied home was not restored");
+		for (const outcome of OUTCOME_MEMBERS) {
+			const parsed = r.parseReviewRecord(resolvedBody(outcome));
+			assert.notEqual(parsed, undefined, `a ${outcome}-resolved record no longer parses after the restore`);
+			// The tie back to THIS module: what the record carries is what the
+			// assembler maps to a review state, so a broken outcome domain is
+			// not a record-side curiosity — it is a missing state in §1.4's
+			// history and a trigger that counts wrong.
+			assert.deepEqual(
+				mod()
+					.repairHistory([parsed as ReviewRecord])
+					.map((state) => state.outcome),
+				[outcome],
+				`a ${outcome}-resolved record no longer reaches the assembler as its own outcome`,
+			);
+		}
+	});
+
+	it("the UPSTREAM review-state tags are exactly the ones the assembler recognizes (round 8's S-F2, re-authored)", () => {
+		// This replaces a regex over resolve.ts's union body. The tie is now a
+		// TYPE WITNESS: `Record<ReviewState["state"], true>` cannot be written
+		// without naming every tag, so a tag added, removed or renamed
+		// upstream makes this object ill-typed.
 		//
-		// The invariant, which is not an equality: StateOutcome is the
-		// resolution outcomes PLUS "approved", which comes from the tag rather
-		// than from a resolution.
-		// Stripped before the declaration regex, for S-1's reason.
-		const recordSource = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "record.ts"), "utf8")
-			.replace(/\/\*[\s\S]*?\*\//g, "")
-			.replace(/\/\/[^\n]*/g, "");
-		const enforcing = /const OUTCOMES = new Set\(\[([^\]]*)\]\)/.exec(recordSource);
-		assert.ok(enforcing, "record.ts declares no readable OUTCOMES Set — the enforcing home cannot be read");
-		const enforced = [...(enforcing[1] as string).matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+		// RESIDUAL DISCLOSURE (R-b), stated at the witness as well as at the
+		// assembler's per-tag branch: the witness reds `tsc --noEmit`, NOT
+		// this suite. A fourth upstream tag leaves every arm in this file
+		// green and falls to the assembler's drop branch — safe, but not a
+		// mapping anyone decided. The type-check step is therefore part of
+		// this guard, not an adjacent convenience. The runtime assertion
+		// below carries the half a witness cannot: that the tags the witness
+		// names are the three the assembler's arms exercise.
+		const witness: Record<UpstreamReviewState["state"], true> = {
+			incomplete: true,
+			approved: true,
+			resolved: true,
+		};
 		assert.deepEqual(
-			enforced,
-			["repair", "measure-escalate", "clear"],
-			"record.ts's OUTCOMES — the Set that decides whether a resolved record PARSES at all — no longer carries " +
-				"the three resolution outcomes this module maps. A member dropped there silently stops a legitimate " +
-				"record from parsing; a member added there reaches the assembler as an outcome StateOutcome does not " +
-				"declare",
-		);
-		assert.deepEqual(
-			[...enforced, "approved"].sort(),
-			[...typeMembers("StateOutcome")].sort(),
-			'StateOutcome is no longer exactly record.ts\'s enforced resolution outcomes plus "approved". The two ' +
-				"are separate homes for one property (§3.11): the resolution outcomes are enforced upstream at parse " +
-				'time, and "approved" is contributed by the review-state tag, not by a resolution',
+			Object.keys(witness).sort(),
+			["approved", "incomplete", "resolved"],
+			"resolve.ts's ReviewState tags are no longer the three this module's assembler recognizes. A new tag falls " +
+				"to the assembler's drop branch and contributes no state — which is safe — but no arm here exercises " +
+				"it, and the intended mapping has not been decided. Decide it and extend the assembler's explicit " +
+				"per-tag tests, or the domain is covered by a drop nobody chose",
 		);
 	});
 
-	it("StateOutcome's members are exactly what the arms iterate", () => {
-		assert.deepEqual(
-			typeMembers("StateOutcome"),
-			["repair", "measure-escalate", "clear", "approved"],
-			"history.ts's StateOutcome no longer matches the member list this suite iterates",
+	it("the payload's key set is closed member by member — each key omitted, and an unknown key added, hand off", () => {
+		// DIAGNOSIS_KEYS is deliberately unexported with no accessor (R-f):
+		// unlike the two domains it has no second home to weld, so it is
+		// pinned BEHAVIOURALLY and exactly — every committed key is load
+		// bearing (omit it, the return is refused) and the shape admits
+		// nothing else.
+		const h = mod();
+		const whole: Record<string, unknown> = { value: "NONE", invalidation: "nothing", evidence: "zq evidence" };
+		const admitted = (payload: string): boolean =>
+			h.admitDiagnosis({ disposition: "admitted", ok: true, summary: "x", payload, compare: "confirmed" }).available;
+		assert.equal(admitted(JSON.stringify(whole)), true, "the whole payload was refused — this arm's premise is gone");
+		for (const key of PAYLOAD_KEYS) {
+			const missing = { ...whole };
+			delete missing[key];
+			assert.equal(
+				admitted(JSON.stringify(missing)),
+				false,
+				`a payload omitting ${JSON.stringify(key)} was admitted — that key is not enforced, so a Judge that ` +
+					"never returned it yields a diagnosis with a slot nobody filled",
+			);
+		}
+		assert.equal(
+			admitted(JSON.stringify({ ...whole, zqExtra: true })),
+			false,
+			"an unknown key was admitted — the diagnosis shape is closed, and an unknown key is a surface no contract bounds",
 		);
 	});
 
-	it("the payload's enforced key set matches what the brief instructs the Judge to return (round 7's F-R3)", () => {
+	it("the brief names every member of the LIVE domain homes and every enforced payload key (round 7's F-R3, re-keyed)", () => {
 		// A producer/consumer pair with two homes: the brief TELLS the Judge
-		// the shape, DIAGNOSIS_KEYS ENFORCES it. Deleting the brief's shape
-		// line made every return malformed with the suite green.
-		const keys = setMembers("DIAGNOSIS_KEYS");
-		assert.deepEqual(keys, ["value", "invalidation", "evidence"], "the enforced key set changed");
-		const brief = mod().composeDiagnosisBrief(
-			[{ head: "a".repeat(40), outcome: "repair", findings: [], rulings: [] }],
-			{ changeDescription: "d" },
-		);
-		for (const key of keys) {
-			assert.ok(
-				brief.includes(key),
-				`the brief never names the key ${JSON.stringify(key)} that the parser enforces — a Judge told a different ` +
-					"shape than the one admitted returns malformed rulings, and every change then parks (§3.11: one " +
-					"property, one home; where there are two, an arm ties them)",
-			);
-		}
-		for (const value of ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]) {
+		// the shape and the values; the parser ENFORCES them. The tie is
+		// re-keyed onto the live homes, so a member added to a domain without
+		// being named in the brief reds here — and a Judge is never told a
+		// different shape than the one admitted.
+		const h = mod();
+		const brief = h.composeDiagnosisBrief([{ head: "a".repeat(40), outcome: "repair", findings: [], rulings: [] }], {
+			changeDescription: "d",
+		});
+		for (const value of h.DIAGNOSIS_VALUES) {
 			assert.ok(
 				brief.includes(value),
 				`the brief never names the taxonomy value ${value} the parser will accept — the Judge cannot return a ` +
 					"value it was never told exists",
+			);
+		}
+		for (const invalidation of h.INVALIDATIONS) {
+			assert.ok(
+				brief.includes(invalidation),
+				`the brief never names the invalidation finding ${invalidation} the parser will accept — the second ` +
+					"output the diagnosis owes, and the one that routes re-entry",
+			);
+		}
+		for (const key of PAYLOAD_KEYS) {
+			assert.ok(
+				brief.includes(key),
+				`the brief never names the key ${JSON.stringify(key)} that the parser enforces — a Judge told a ` +
+					"different shape than the one admitted returns malformed rulings, and every change then parks " +
+					"(§3.11: one property, one home; where there are two, an arm ties them)",
 			);
 		}
 	});

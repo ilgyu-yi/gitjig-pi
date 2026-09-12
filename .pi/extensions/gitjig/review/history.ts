@@ -43,7 +43,12 @@
  * consumer is the dispatcher's brief slot.
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
-import type { ReviewRecord } from "./record.ts";
+// RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
+// type-only import of an absent or renamed module reds `tsc` with the
+// compiler's own message, never an authored one. The suite stays green
+// on that failure, so the type-check step is load-bearing here and is
+// not a convenience — the same shape the tag witness discloses.
+import type { OUTCOMES, ReviewRecord } from "./record.ts";
 
 /**
  * One review state's outcome, mapped from a RESOLVED record's
@@ -51,8 +56,16 @@ import type { ReviewRecord } from "./record.ts";
  * `incomplete` review is not a review outcome at all (§1.7) and
  * contributes no state, so it has no member here — `repairHistory`
  * drops it rather than mapping it.
+ *
+ * DERIVED, not re-spelled (§3.11, and the §1.8 settlement that
+ * re-planned this scope): the resolution outcomes are ENFORCED by
+ * record.ts's `OUTCOMES` — a record whose outcome is outside it does
+ * not parse — so this type reads that one home and adds the one member
+ * a resolution never supplies. "StateOutcome is the enforced outcomes
+ * plus `approved`" is therefore a declaration `tsc` keeps, rather than
+ * an arm that can drift from what it claims to tie.
  */
-export type StateOutcome = "repair" | "measure-escalate" | "clear" | "approved";
+export type StateOutcome = (typeof OUTCOMES)[number] | "approved";
 
 /** One ruling as the diagnosis reads it — §1.4's "same findings the Judge already ruled". */
 export type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
@@ -70,9 +83,26 @@ export type StateSummary = {
 	rulings: StateRuling[];
 };
 
-/** §1.4's four-value taxonomy and the invalidation finding. */
-export type DiagnosisValue = "NONE" | "STAGNATION" | "OSCILLATION" | "INDETERMINATE";
-export type Invalidation = "nothing" | "plan" | "authorization";
+/**
+ * §1.4's four-value taxonomy and the invalidation finding — ONE home
+ * each (§3.11). The runtime list is the home and the type is DERIVED
+ * from it, so a member can be added or dropped in exactly one place: a
+ * hand-spelled union beside a `Set` literal was two homes for one
+ * property, and this change's round history is what that cost.
+ * `admitDiagnosis` narrows over these very arrays, so the object an arm
+ * reads is the object the parser consults.
+ *
+ * RESIDUAL DISCLOSURE (R-a), stated in place: `as const` is a
+ * type-level word only — an importer can still `push` onto either array
+ * at runtime. That reachability is deliberate and load-bearing: the
+ * suite's identity-by-perturbation and emptiness laws prove these are
+ * the enforcing objects by mutating them and restoring them. No
+ * production site mutates either.
+ */
+export const DIAGNOSIS_VALUES = ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"] as const;
+export const INVALIDATIONS = ["nothing", "plan", "authorization"] as const;
+export type DiagnosisValue = (typeof DIAGNOSIS_VALUES)[number];
+export type Invalidation = (typeof INVALIDATIONS)[number];
 export type DiagnosisInput = { value: DiagnosisValue; invalidation: Invalidation; evidence: string };
 
 export type DiagnosisAdmission =
@@ -107,6 +137,13 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 		// from another file. An unrecognized state is no review state at all,
 		// and is dropped exactly as `incomplete` is: §1.4's own rule that a
 		// head drawing no resolved review contributes no state.
+		//
+		// RESIDUAL DISCLOSURE (R-b), stated at the second home and not only
+		// at the guard that welds it: these per-tag branches are a second
+		// home for a union declared in resolve.ts. The suite ties them with a
+		// type witness over `ReviewState["state"]`, and that witness reds
+		// `tsc`, NOT the suite — a fourth upstream tag leaves every arm here
+		// green and is caught only by the type-check step.
 		let outcome: StateOutcome;
 		if (record.review.state === "resolved") {
 			outcome = record.review.resolution.outcome;
@@ -177,9 +214,31 @@ export function triggerFires(history: readonly StateSummary[]): boolean {
 	return trailingRepairs >= 2;
 }
 
-const DIAGNOSIS_VALUES = new Set<string>(["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"]);
-const INVALIDATIONS = new Set<string>(["nothing", "plan", "authorization"]);
+/**
+ * The payload's closed key set. Deliberately NOT exported and given no
+ * accessor (R-f): unlike the two domains above it has no second home to
+ * weld — the brief that tells the Judge the shape is prose, not a member
+ * list — so it is pinned behaviourally instead, by arms that post a
+ * payload missing a key and a payload carrying an extra one. An export
+ * here would widen the module's surface to buy a pin the behaviour
+ * already carries.
+ */
 const DIAGNOSIS_KEYS = new Set(["value", "invalidation", "evidence"]);
+
+/**
+ * The one narrowing step for both domains: membership in the LIVE home,
+ * read at call time. It is a type predicate, so a member that passes
+ * leaves the parser with the narrowed type and no cast — which is the
+ * point: a cast is a second accept site, and one that admits a value the
+ * home never listed.
+ */
+function isMember<T extends string>(domain: readonly T[], value: unknown): value is T {
+	if (typeof value !== "string") {
+		return false;
+	}
+	const candidate = value;
+	return domain.some((member) => member === candidate);
+}
 
 /**
  * Compose the diagnosis brief (§1.4's Judge dispatch, the actor's
@@ -256,16 +315,24 @@ function diagnosisFromPayload(payload: string | undefined): DiagnosisInput | und
 		return undefined;
 	}
 	const { value, invalidation, evidence } = parsed as { value: unknown; invalidation: unknown; evidence: unknown };
-	if (typeof value !== "string" || !DIAGNOSIS_VALUES.has(value)) {
+	// The narrowing IS the admission: each member reaches the returned
+	// value through `isMember` over the exported home, so there is no cast
+	// to write a non-member through. RESIDUAL DISCLOSURE (R-d): a future
+	// edit CAN re-introduce one by spelling an explicit `as DiagnosisValue`
+	// here, and nothing in this module stops it — the guarantee bought is
+	// that such a second accept site must be written down and reviewed,
+	// not that it is impossible. A lint rule forbidding it outright is a
+	// new enforcement object and is outside this issue's subject.
+	if (!isMember(DIAGNOSIS_VALUES, value)) {
 		return undefined;
 	}
-	if (typeof invalidation !== "string" || !INVALIDATIONS.has(invalidation)) {
+	if (!isMember(INVALIDATIONS, invalidation)) {
 		return undefined;
 	}
 	if (typeof evidence !== "string" || evidence.length === 0) {
 		return undefined;
 	}
-	return { value: value as DiagnosisValue, invalidation: invalidation as Invalidation, evidence };
+	return { value, invalidation, evidence };
 }
 
 /**

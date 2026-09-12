@@ -127,7 +127,26 @@ function isAdjudication(value: unknown): boolean {
 }
 
 const DISPOSITIONS = new Set(["repair", "defer", "remedy", "measure-escalate", "none"]);
-const OUTCOMES = new Set(["repair", "measure-escalate", "clear"]);
+
+/**
+ * The ONE home of the resolution outcomes (§3.11, §1.8 settlement on
+ * the history instruments): history.ts derives StateOutcome from this
+ * list through a type-only import, so "StateOutcome is these plus
+ * 'approved'" is a declaration rather than an arm. Exported so arms pin
+ * the LIVE object; the array is runtime-mutable by an importer
+ * (readonly is a type-level word only) — the suite's identity and
+ * emptiness laws depend on exactly that reachability, and no
+ * production site mutates it.
+ */
+export const OUTCOMES = ["repair", "measure-escalate", "clear"] as const;
+
+/**
+ * The one narrowing step over that home, read at call time so the
+ * object an arm reads is the object this validator consults.
+ */
+function isOutcome(value: unknown): value is (typeof OUTCOMES)[number] {
+	return OUTCOMES.some((member) => member === value);
+}
 
 function isReviewState(value: unknown): boolean {
 	if (!isObject(value)) {
@@ -151,7 +170,7 @@ function isReviewState(value: unknown): boolean {
 		const resolution = value.resolution;
 		return (
 			Object.keys(resolution).length === 2 &&
-			OUTCOMES.has(resolution.outcome as string) &&
+			isOutcome(resolution.outcome) &&
 			Array.isArray(resolution.dispositions) &&
 			resolution.dispositions.every(
 				(entry: unknown) =>
