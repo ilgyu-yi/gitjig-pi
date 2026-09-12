@@ -841,6 +841,67 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 	});
 
+	it("an APPROVED, findings-free round records its slots' summaries (issue #203, round 2's EF1)", async () => {
+		// The round shape in which this channel matters MOST, and the one
+		// round 2 measured had no arm at all.
+		//
+		// On the approved fast path no finding was admitted and no Judge ran,
+		// so a delegate's recorded-not-admitted OBSERVATION is the ONLY prose
+		// the round produces. The previous head covered it by accident — the
+		// differential arm happened to drive this path — and repairing that
+		// arm's own defect (round 1's F4) moved it to a RESOLVED round and
+		// took the accidental coverage with it. Measured at that head: a
+		// mutant dropping every summary on approved rounds left the whole
+		// suite green, 0 arms red, while the same mutant against the previous
+		// head's copy of this file red 1.
+		//
+		// So this arm exists to hold that half ON PURPOSE rather than as a
+		// side effect, and it asserts its own PREMISE — that the round really
+		// took the approved path and the Judge really never ran — so it
+		// cannot pass on a round that quietly stopped being the shape it
+		// names.
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+		const fake = fakeDispatch((brief) => ({
+			disposition: "admitted",
+			ok: true,
+			summary: brief.includes('lens "runtime"')
+				? "zq-runtime OBSERVATION: recorded, not admitted"
+				: "zq-suite OBSERVATION: none",
+			payload: approvedPayload,
+			compare: "confirmed",
+		}));
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: ["AC1"] },
+			fences: FENCES,
+			changeDescription: "zq d",
+			dispatch: fake.dispatch,
+		});
+		assert.equal(
+			result.review.state,
+			"approved",
+			"the round did not take the APPROVED fast path, so this arm is not measuring the shape it names",
+		);
+		assert.equal(
+			fake.judgeBriefs.length,
+			0,
+			"the Judge was dispatched, so this is not the findings-free path and the premise of this arm is gone",
+		);
+		assert.deepEqual(
+			(result.record.summaries ?? []).map((entry) => [entry.from, entry.slot?.lens, entry.text]).sort(),
+			[
+				["slot", "runtime", "zq-runtime OBSERVATION: recorded, not admitted"],
+				["slot", "suite", "zq-suite OBSERVATION: none"],
+			].sort(),
+			"an approved, findings-free round dropped its slots' prose. This is the one round shape where a " +
+				"recorded-not-admitted observation is ALL the round produces — no finding was admitted and no Judge " +
+				"ran — so a channel that is silent here is silent exactly when it is the only channel there is",
+		);
+	});
+
 	it("a NON-ADMITTED return contributes no summary entry (issue #203, round 1's F6)", async () => {
 		// The `disposition === "admitted"` gates. Round 1 measured that no arm
 		// separated the admitted population from its complement: dropping both
