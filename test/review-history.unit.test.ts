@@ -13,8 +13,10 @@
  * dynamic import and every arm reds on its own authored message.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+// For the complement arm's unnameable fixture. Round 13's EF3 removed
+// this file's last source read; what replaced its justification is a tag
+// no production text written before the run can contain.
+import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 // A TYPE-ONLY import of the upstream tag union, for the witness that
@@ -58,7 +60,7 @@ type DiagnosisAdmission =
 	// Narrowed to match production: `admitDiagnosis` returns "hand-off" on
 	// every unavailable limb, and §1.4 homes the open limb in
 	// `historyAvailability`. This mirror had already drifted from the module
-	// once; the snapshot arm below now pins it against the source.
+	// once; nothing in this file pins it against the source at this head.
 	| { available: false; disposition: "hand-off"; reason: string };
 type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
 
@@ -265,27 +267,37 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 
 	it("EVERY unrecognized tag is no state — the complement, not one nominated point (round 9's F-A)", () => {
 		// A complement cannot be enumerated, so this arm is honest only if its
-		// fixture CANNOT be satisfied by a per-point special case. The previous
-		// version nominated one tag, and a production that dropped only that
-		// tag while restoring the catch-all for every other passed all 98 arms
-		// with tsc green — restoring the exact wrong-allow it was authored to
-		// close. Two guards replace it, and neither is a member list:
-		//   (a) several spellings, NONE of which appears in the module source;
-		//   (b) the structural universal — the recognized set is EXACTLY the
-		//       set the module tests for, so anything outside it takes the drop.
+		// fixture CANNOT be satisfied by a per-point special case.
+		//
+		// ROUND 13's EF3 removed this arm's second limb and its source read.
+		// That limb extracted the assembler's per-tag tests out of history.ts's
+		// TEXT and deepEqualled them against a three-member list — a declared
+		// domain established by READING SOURCE TEXT, which is exactly the scope
+		// §1.8 invalidated and re-planned, left standing when the rest of the
+		// method was superseded. It carried that method's defect too: measured
+		// at the previous head, a behaviourally INERT COMMENT inside
+		// repairHistory red this arm alone, 102/1. A comment cannot change what
+		// the assembler does, so that red was false.
+		//
+		// What the limb claimed is not lost, and it is not re-derived here: the
+		// upstream tag domain is carried by the TYPE WITNESS over
+		// `ReviewState["state"]` in this file's domain describe, which `tsc`
+		// welds and which reds on a tag added, removed or renamed upstream in
+		// any spelling. The witness reds the TYPE CHECK and not the suite —
+		// disclosed there and at the assembler's own per-tag branch (R-b).
+		//
+		// What remains here is the BEHAVIOURAL universal, and its fixture is
+		// made unnameable rather than merely unusual: one tag carries a fresh
+		// UUID, so no production special case written before this run can name
+		// it. The randomness is in the FIXTURE only — the assertion is the same
+		// either way, and a failure reproduces from the head under test without
+		// the value, since any tag outside the recognized set must take the
+		// drop. The fixed spellings ride alongside it as ordinary cases.
 		const h = mod();
-		const source = readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "review", "history.ts"), "utf8");
 		const [a, c] = ["a".repeat(40), "c".repeat(40)];
 
-		// (a) — adversarially constructed, not nominated. Each is asserted
-		// ABSENT from the source, so no per-tag special case can reach them.
-		const spellings = ["withdrawn", "superseded", "abandoned", "zq-unknown-tag", ""];
+		const spellings = ["withdrawn", "superseded", "abandoned", "", `zq-${randomUUID()}`];
 		for (const tag of spellings) {
-			assert.ok(
-				!source.includes(`"${tag}"`) || tag === "",
-				`the fixture tag ${JSON.stringify(tag)} appears in the module source, so this arm could be satisfied ` +
-					"by a special case for it — a complement's fixture must not name anything the production knows",
-			);
 			const b = "b".repeat(40);
 			const unknown = { head: b, slots: [], bundle: [], adjudication: null, review: { state: tag } };
 			const history = h.repairHistory([repair(a), unknown as unknown as ReviewRecord, repair(c)]);
@@ -302,40 +314,6 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 					"direction §1.4's opening forbids",
 			);
 		}
-
-		// (b) — a BOUNDED source claim, narrowed to what this measurement can
-		// observe. Round 10's E1 was a soundness defect, not a coverage gap:
-		// the previous version certified "the assembler tests EXACTLY the
-		// three recognized tags", and a regex over one spelling cannot
-		// establish that. A per-tag test written `"x" === record.review.state`,
-		// or as a Set membership read, left the extracted list at three while
-		// the production special-cased a fourth tag onto `approved`.
-		//
-		// Spellings are unbounded, so the universal is not establishable by
-		// reading source at all. The sound repair is therefore the SMALLER
-		// claim, not a wider derivation: this asserts only what the match
-		// observes — that no per-tag test OF THIS SPELLING exists beyond the
-		// three — and says so in its own message, so a later reader cannot
-		// cite it for the universal it does not hold. The behavioural
-		// universal is carried by limb (a) above, over tags the production
-		// source does not contain, which is where it belongs: a claim about
-		// behaviour is established by exercising behaviour, not by reading
-		// text.
-		const assembler = /export function repairHistory[\s\S]*?\n}\n/.exec(source);
-		assert.ok(assembler, "history.ts declares no repairHistory — the source claim cannot be read");
-		const testedInThisSpelling = [...(assembler[0] as string).matchAll(/record\.review\.state === "([^"]+)"/g)].map(
-			(match) => match[1] as string,
-		);
-		assert.deepEqual(
-			[...testedInThisSpelling].sort(),
-			["approved", "incomplete", "resolved"],
-			'the assembler\'s per-tag tests written as `record.review.state === "…"` are no longer exactly the three ' +
-				"recognized tags. SCOPE OF THIS CLAIM, stated so it is not over-cited: it observes ONE spelling of a " +
-				"per-tag test and establishes nothing about any other, so it is not evidence that the drop branch is " +
-				"the universal treatment of the complement — limb (a) above carries that, behaviourally. A fourth tag " +
-				"reached through a different spelling is invisible here BY CONSTRUCTION and is not a gap this arm " +
-				"claims to close",
-		);
 	});
 
 	it("a re-post keeps its head's FIRST position and takes its LAST content (round 2's E1, re-authored)", () => {
@@ -1127,11 +1105,11 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 		}
 	}
 
-	it("no fifth progress value exists — the union the consumer ranges over is exactly four", () => {
-		// AC4's last clause. Structurally pinned by the closed union at
-		// compile time; measured here against the SOURCE so a widening that
-		// adds a member cannot land without this arm and the snapshot below
-		// both reding.
+	it("this suite's own iteration domain for the consumer is exactly four values x three invalidations", () => {
+		// AC4's last clause is pinned by the CONTENTS / IDENTITY / EMPTINESS arms over
+		// the live homes, which red on a production widening; this arm reads no
+		// production source and cannot red on one — it pins only the file-local
+		// literals this describe iterates, so a silently shrunken cross-product reds.
 		assert.equal(VALUES.length, 4, "the value domain this suite iterates is no longer four members");
 		assert.equal(INVALIDATIONS.length, 3, "the invalidation domain this suite iterates is no longer three members");
 	});
@@ -1308,17 +1286,17 @@ describe("§1.7 no drop, no duplication — every list pinned by COUNT (round 8'
 describe("§1.4 the admission carries EVERY enforced member through the parser (round 7's F-R2)", () => {
 	// TRIPWIRE (g): the coverage set is derived from the expression that
 	// ENFORCES the domain, named here, not from the type declaration beside
-	// it. `admitDiagnosis` enforces over two runtime Set literals —
-	//   const DIAGNOSIS_VALUES = new Set<string>([...]);
-	//   const INVALIDATIONS    = new Set<string>([...]);
-	// read by `DIAGNOSIS_VALUES.has(value)` and `INVALIDATIONS.has(invalidation)`.
+	// it. `admitDiagnosis` enforces over two runtime `as const` arrays —
+	//   export const DIAGNOSIS_VALUES = [...] as const;
+	//   export const INVALIDATIONS    = [...] as const;
+	// read by `isMember(DIAGNOSIS_VALUES, value)` and `isMember(INVALIDATIONS, invalidation)`.
 	// Round 7 derived from `export type DiagnosisValue = ...` instead, which
 	// is a DIFFERENT home for the same property (§3.11), so deleting a member
 	// from either Set left 75 arms and tsc green — including deleting "NONE",
 	// which refuses every advancing history's ruling and parks every change
 	// forever.
 	//
-	// The falsifier: deleting ANY single member from either Set must red.
+	// The falsifier: deleting ANY single member from either array must red.
 	// That requires a POSITIVE admission per member, not merely a refusal.
 	const VALUES = ["NONE", "STAGNATION", "OSCILLATION", "INDETERMINATE"] as const;
 	const INVALIDATIONS = ["nothing", "plan", "authorization"] as const;

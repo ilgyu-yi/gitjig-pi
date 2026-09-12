@@ -130,13 +130,31 @@ const DISPOSITIONS = new Set(["repair", "defer", "remedy", "measure-escalate", "
 
 /**
  * The ONE home of the resolution outcomes (§3.11, §1.8 settlement on
- * the history instruments): history.ts derives StateOutcome from this
- * list through a type-only import, so "StateOutcome is these plus
- * 'approved'" is a declaration rather than an arm. Exported so arms pin
- * the LIVE object; the array is runtime-mutable by an importer
- * (readonly is a type-level word only) — the suite's identity and
- * emptiness laws depend on exactly that reachability, and no
- * production site mutates it.
+ * the history instruments). BOTH downstream spellings are derived from
+ * it through type-only imports, so each is a declaration rather than an
+ * arm: history.ts's `StateOutcome` is this list plus "approved", and
+ * resolve.ts's `Resolution["outcome"]` is this list exactly.
+ *
+ * Round 13's EF1 is why the second one is named here. `Resolution`
+ * carried a hand-spelled union of the same three members, and it was
+ * THAT spelling — not this one — that typed the value §1.4's assembler
+ * reads, while this list enforced only the runtime parse. Two homes,
+ * no arm tying them: measured before the repair, widening that union by
+ * a fourth member left the history suite at 103 pass / 0 fail. The claim
+ * "the ONE home" is made here only because that union now derives.
+ *
+ * RESIDUAL DISCLOSURE (R-a): exported so arms pin the LIVE object; the
+ * array is runtime-mutable by an importer (readonly is a type-level word
+ * only) — the suite's identity and emptiness laws depend on exactly that
+ * reachability, and no production site mutates it.
+ *
+ * RESIDUAL DISCLOSURE, new with the EF1 repair: the two derivations are
+ * welded by `tsc` and not by the suite. A re-introduced hand-spelled
+ * union at either site would type-check exactly as well as the
+ * derivation does — nothing reds on a SECOND home, only on a divergent
+ * one, and a second home that happens to agree today diverges silently
+ * later. What the derivation buys is that the divergence is no longer
+ * expressible without first writing the second home down.
  */
 export const OUTCOMES = ["repair", "measure-escalate", "clear"] as const;
 
