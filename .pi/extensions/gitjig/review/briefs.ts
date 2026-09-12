@@ -6,7 +6,8 @@
  * derived at composition time from the caller's own inputs (form i),
  * or explicitly labelled unverified (form iii) — the bundle and the
  * prior findings, which a provisioned delegate cannot reach any other
- * way.
+ * way, and the provisioned-tree ledger, whose facts were measured in
+ * prior rounds rather than derived at composition.
  *
  * DECISION — briefs are composed from caller inputs, never hand-typed
  * per round. What the composition owes is the costs already paid in
@@ -14,9 +15,12 @@
  * the brief's own words, the CLOSED return schema, the no-hex rule,
  * self-enforced deadlines inside the run bound, out-of-scope and
  * forbidden-remedy fences, deferral homes by number, prior findings
- * labelled UNVERIFIED with the per-finding re-verification demand, and
- * the permission for a clean review to be clean. Each is a sentence a
- * real dispatch was once refused or degraded for lacking.
+ * labelled UNVERIFIED with the per-finding re-verification demand,
+ * the permission for a clean review to be clean, and the
+ * provisioned-tree facts (issue #197): no node_modules, no local main
+ * ref, private scratch, the archive and git-state bans, and the
+ * serial re-run rule. Each is a sentence a real dispatch was once
+ * refused or degraded for lacking.
  *
  * DECISION — the admission burden (issue #196, deriving §3.12's settled
  * scoping) composes into both briefs: the Judge is told the three
@@ -41,8 +45,8 @@
  * `summary`, the channel OBSERVATION_DISCIPLINE already names; no
  * payload key is added and the closed `{token, findings}` shape is
  * untouched. Stated so the dependency is not silent: that channel's
- * prose is DROPPED in the orchestrator-driven path (issue #203), so the
- * recording half inherits that gap. It adds no new dependency CLASS —
+ * prose WAS dropped in the orchestrator-driven path until issue #203
+ * closed that gap. It adds no new dependency CLASS —
  * the same channel already carries observations — and the block's
  * load-bearing half is a PROHIBITION, which needs no channel at all:
  * what a delegate may not do is report a class closed. #203 is not
@@ -91,6 +95,20 @@ export type ReviewFences = {
 };
 
 export type BriefContext = { changeDescription: string };
+
+const PROVISIONED_TREE_FACTS = [
+	"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+	"went wrong first. Verify a fact with your own command before you rely on it:",
+	"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
+	"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
+	"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
+	"- Scratch space is a private `mktemp -d`, never a bare /tmp path: parallel delegates SHARE /tmp —",
+	"  treat any /tmp file you did not create as hostile.",
+	"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
+	"  any copy you make.",
+	"- Re-run serially before believing a mutant kill or reporting a suite failure — the suite is not",
+	"  all-green under parallel load (#119), and a repaired flake does not retire the rule.",
+].join("\n");
 
 const OBSERVATION_DISCIPLINE = [
 	"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
@@ -227,6 +245,8 @@ export function composeReviewerBrief(
 		fenceBlock(fences),
 		priorFindingsBlock(fences),
 		"",
+		PROVISIONED_TREE_FACTS,
+		"",
 		RETURN_CONTRACT,
 		"",
 		deadlines(timing),
@@ -310,6 +330,8 @@ export function composeJudgeBrief(
 		"   and not against the change's own contract.",
 		"",
 		fenceBlock(fences),
+		"",
+		PROVISIONED_TREE_FACTS,
 		"",
 		'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"dedupAttested": boolean, "rulings": [{"finding": string, "provenance": [{"lens": string,',

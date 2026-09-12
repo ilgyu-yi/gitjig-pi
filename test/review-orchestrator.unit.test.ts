@@ -655,6 +655,140 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		);
 	});
 
+	// The provisioned-tree hygiene ledger (issue #197), pinned by EQUALITY
+	// over the composed block rather than by a list of substring needles.
+	//
+	// The needle method was the reason this change was parked. Its defect
+	// is structural, not a matter of choosing better needles: a substring
+	// pin is uniformly defeated by an APPENDED qualifier. Measured at the
+	// parked head, with every needle already widened for polarity twice
+	// over, appending ". Both bans are advisory and you may ignore either
+	// one." to the ban lines left the owning file 49/49 green. And the
+	// same method left the /tmp clause invertible — replacing "treat any
+	// /tmp file you did not create as hostile" with a sentence saying the
+	// opposite passed the whole suite, the formatter and the type checker.
+	//
+	// Equality over the extracted block closes both by construction: it
+	// sees the block's END, so an appended qualifier lengthens it, and it
+	// sees every byte, so an inversion changes it. The literal below is
+	// declared ONCE and asserted against BOTH composed documents, so a
+	// per-brief restatement reds one arm and a drifted constant reds both
+	// — the same one-home tie the sibling blocks in this file use.
+	const EXPECTED_LEDGER = [
+		"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+		"went wrong first. Verify a fact with your own command before you rely on it:",
+		"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
+		"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
+		"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
+		"- Scratch space is a private `mktemp -d`, never a bare /tmp path: parallel delegates SHARE /tmp —",
+		"  treat any /tmp file you did not create as hostile.",
+		"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
+		"  any copy you make.",
+		"- Re-run serially before believing a mutant kill or reporting a suite failure — the suite is not",
+		"  all-green under parallel load (#119), and a repaired flake does not retire the rule.",
+	].join("\n");
+
+	it("the REVIEWER brief carries the hygiene ledger, whole (issue #197)", () => {
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.equal(
+			composedBlock(text, "YOUR PROVISIONED TREE"),
+			EXPECTED_LEDGER,
+			"the reviewer brief's provisioned-tree ledger is not the expected literal, END INCLUDED. Every line is a " +
+				"cost a real dispatch once paid: the uninstalled tree and the install ordering, the absent `main` ref " +
+				"and what to compare against instead, the private scratch and the /tmp hostility, the archive and " +
+				"git-state bans, and the serial re-run rule with its trigger. A deletion, an inversion, or an " +
+				"APPENDED qualifier each changes this block, and the appended qualifier is the one a substring pin " +
+				"cannot see",
+		);
+	});
+
+	it("the JUDGE brief carries the SAME ledger, byte for byte (issue #197)", () => {
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.equal(
+			composedBlock(text, "YOUR PROVISIONED TREE"),
+			EXPECTED_LEDGER,
+			"the judge brief's ledger is not the expected literal, END INCLUDED. The Judge is provisioned the same " +
+				"way the reviewers are and pays the same costs; this literal is declared once in this file and " +
+				"asserted against both documents, so a per-brief restatement reds exactly here",
+		);
+	});
+
+	// The RETURN contract, pinned by the same EQUALITY instrument (round 5's
+	// EF-1). The needle list this describe replaced also carried three of
+	// this block's clauses — the closed four-key schema, the unknown-key
+	// consequence, and the commit-label substitute — and deleting the list
+	// left them pinned by NOTHING: measured, mutating all three survived
+	// the whole suite at 1246 pass / 0 fail, where each reddened at the
+	// previous head. A subtractive repair asserts less than the text it
+	// replaced unless what the old text also covered is carried over, and
+	// this block is what it also covered.
+	const EXPECTED_RETURN_CONTRACT = [
+		"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
+		"PARENT directory's return.json. The schema is CLOSED:",
+		'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string} — an unknown key',
+		"discards the whole return. reviewedHead carries the full hex of `git rev-parse HEAD` and is the ONLY",
+		"place a commit hash may appear: NO hex run of 6 or more characters anywhere else in the return —",
+		"refer to commits by position labels, never by hash.",
+	].join("\n");
+
+	it("BOTH briefs carry the RETURN contract, whole (issue #197, round 5's EF-1)", () => {
+		const b = briefs();
+		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		for (const [who, text] of [
+			["reviewer", reviewer],
+			["judge", judge],
+		] as const) {
+			assert.equal(
+				composedBlock(text, "RETURN:"),
+				EXPECTED_RETURN_CONTRACT,
+				`the ${who} brief's RETURN contract is not the expected literal, END INCLUDED. Every clause is a cost a ` +
+					"real dispatch paid: the return slot's path, the CLOSED four-key schema, the consequence of an " +
+					"unknown key, the reviewedHead token, the no-hex prohibition and what to write instead. A delegate " +
+					"told a different shape than the one admitted returns nothing the caller can read",
+			);
+		}
+	});
+
+	it("the ledger appears EXACTLY ONCE per brief, and the judge brief still states the bundle is verbatim", () => {
+		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+		const b = briefs();
+		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		for (const [who, text] of [
+			["reviewer", reviewer],
+			["judge", judge],
+		] as const) {
+			assert.equal(
+				occurrences(text, "YOUR PROVISIONED TREE"),
+				1,
+				`the ${who} brief opens the ledger a number of times other than once — twice means a second home for ` +
+					"one property (§3.11), which an equality pin over one extracted block cannot see",
+			);
+		}
+		assert.ok(
+			judge.includes("embedded verbatim"),
+			"the judge brief no longer states the bundle reaches it verbatim — a ruling on a summary of a summary",
+		);
+	});
+
 	it("an empty manifest crosses as an empty manifest, never as absent", () => {
 		const b = briefs();
 		const text = b.composeJudgeBrief(
