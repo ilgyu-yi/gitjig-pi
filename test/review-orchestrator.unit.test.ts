@@ -57,12 +57,18 @@ type ReviewState =
 				outcome: string;
 			};
 	  };
+/**
+ * The round's durable prose, carried VERBATIM (issue #203). One home for
+ * both actor kinds: a reviewer slot's return summary and the Judge's.
+ */
+type RoundSummary = { from: "slot" | "judge"; slot?: Slot; text: string };
 type ReviewRecord = {
 	head: string;
 	slots: { slot: Slot; valid: boolean; reason?: string }[];
 	bundle: BundleEntry[];
 	adjudication: AdjudicationInput | null;
 	review: ReviewState;
+	summaries?: RoundSummary[];
 };
 type Fences = {
 	outOfScope: readonly string[];
@@ -665,6 +671,127 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 });
 
 describe("§1.7/§1.9 the composed round (issue #184)", () => {
+	it("the round carries EVERY admitted return's summary into the record, verbatim (issue #203)", async () => {
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+		// Distinct per lens, so a record that carried one slot's prose under
+		// another slot's name reds rather than passing on a coincidence.
+		const slotText = (brief: string) =>
+			brief.includes('lens "runtime"') ? "zq-runtime OBSERVATION: not admitted, ground B" : "zq-suite OBSERVATION: none";
+		const fake = fakeDispatch(
+			(brief) => ({
+				disposition: "admitted",
+				ok: true,
+				summary: slotText(brief),
+				payload: findingsPayload("zq a real finding"),
+				compare: "confirmed",
+			}),
+			() => ({
+				disposition: "admitted",
+				ok: true,
+				summary: "zq-judge OBSERVATION: recorded, not admitted, no ground met",
+				payload: judgePayload([
+					{
+						finding: "zq a real finding",
+						provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
+						validity: "REFUTED",
+						evidence: "zq the refuting command",
+					},
+				]),
+				compare: "confirmed",
+			}),
+		);
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: ["AC1"] },
+			fences: FENCES,
+			changeDescription: "zq the round's own change description",
+			dispatch: fake.dispatch,
+		});
+		const summaries = result.record.summaries ?? [];
+		assert.equal(
+			summaries.length,
+			3,
+			"the round did not record one summary per admitted return — two slots and one Judge ran, so the RECORD " +
+				"half of the admission burden owes three. A count, not a membership check: a channel that drops one " +
+				"actor's prose is the gap issue #203 names",
+		);
+		assert.deepEqual(
+			summaries.filter((entry) => entry.from === "judge"),
+			[{ from: "judge", text: "zq-judge OBSERVATION: recorded, not admitted, no ground met" }],
+			"the Judge's summary is missing or altered — the Judge's closed payload has no slot for a " +
+				"recorded-not-admitted item either, so this channel is the only one it has",
+		);
+		assert.deepEqual(
+			summaries
+				.filter((entry) => entry.from === "slot")
+				.map((entry) => [entry.slot?.lens, entry.text])
+				.sort(),
+			[
+				["runtime", "zq-runtime OBSERVATION: not admitted, ground B"],
+				["suite", "zq-suite OBSERVATION: none"],
+			].sort(),
+			"each slot's summary is not carried verbatim under its OWN slot — prose attributed to the wrong reviewer " +
+				"is worse than prose dropped",
+		);
+	});
+
+	it("a recorded summary reaches NEITHER the bundle NOR the Resolver (issue #203)", async () => {
+		// The channel is transport. Nothing reads it, so nothing it carries can
+		// change what the round decides — measured by running one round twice,
+		// identical but for summary prose that would be a finding if it were read.
+		const o = orchestrate();
+		const run = async (summary: string) => {
+			const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+			const fake = fakeDispatch(() => ({
+				disposition: "admitted",
+				ok: true,
+				summary,
+				payload: approvedPayload,
+				compare: "confirmed",
+			}));
+			return o.reviewRound({
+				repoRoot: repo,
+				baseRef: "HEAD~1",
+				headRef: "HEAD",
+				manifest: { state: "present", criteria: ["AC1"] },
+				fences: FENCES,
+				changeDescription: "zq d",
+				dispatch: fake.dispatch,
+			});
+		};
+		const quiet = await run("");
+		const loud = await run("FINDINGS: zq this prose would be a finding if anything read it");
+		assert.deepEqual(
+			loud.record.bundle,
+			quiet.record.bundle,
+			"summary prose changed the bundle — §1.7 builds the bundle from the payload's findings alone, and an " +
+				"observation that entered it would have been admitted by nobody",
+		);
+		assert.deepEqual(
+			loud.review,
+			quiet.review,
+			"summary prose changed the review outcome — the Resolver is deterministic over the ADJUDICATED finding " +
+				"set, and prose no adjudicator ruled cannot reach it",
+		);
+		assert.deepEqual(
+			(loud.record.summaries ?? []).map((entry) => entry.text),
+			[
+				"FINDINGS: zq this prose would be a finding if anything read it",
+				"FINDINGS: zq this prose would be a finding if anything read it",
+			],
+			"the prose was not recorded at all — this arm must not pass by the channel being absent",
+		);
+		assert.deepEqual(
+			quiet.record.summaries ?? [],
+			[],
+			"an EMPTY summary was recorded as an entry — a delegate that wrote nothing has nothing to record, and " +
+				"empty entries make the channel's own contents unreadable",
+		);
+	});
+
 	it("a findings-free complete round is APPROVED and the Judge is never dispatched", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
@@ -1225,6 +1352,115 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 				`a ${disposition}-disposed record no longer parses after the restore`,
 			);
 		}
+	});
+
+	// ISSUE #203 — the orchestrator-driven round's durable channel for a
+	// recorded-not-admitted observation.
+	//
+	// The admission burden's default is RECORD, DO NOT ADMIT, and the
+	// composed briefs tell both actor kinds to carry such an item in the
+	// return's `summary`, distinctly labelled. In a caller-mediated round
+	// the caller reads that summary and records it. In the ORCHESTRATOR
+	// path the summary was dropped on the floor: `slotResultFromDispatch`
+	// reads only the payload, nothing read `outcome.summary`, and the record
+	// had no prose field — so the RECORD half of the default was
+	// unrealizable there.
+	//
+	// THE SURFACE, and it is one home rather than two: a single round-level
+	// `summaries` list carrying both a slot's summary and the Judge's,
+	// rather than a field on SlotRecord plus a second field for the Judge.
+	// Two fields would be two homes for one property.
+	//
+	// WHAT IS DELIBERATELY ABSENT: any extraction of "the observation part"
+	// of a summary. Deciding which prose is an observation is a semantic
+	// act, and §1.9 mints no second adjudicator — so the WHOLE summary
+	// crosses verbatim and nothing reads it. That is transport, not
+	// judgment, and it is the same reason §1.7 makes the bundle transport.
+	const withSummaries = (summaries: unknown): unknown => ({ ...sample, summaries });
+	/**
+	 * Compose a record the mirror's type rejects. Issue #208's EF5 narrowed
+	 * `composeReviewRecord`'s mirror back to `ReviewRecord` precisely so a
+	 * typo in an inline literal reds; these arms need the opposite — shapes
+	 * the PARSE must refuse. One cast, here, named, rather than re-widening
+	 * the signature and unchecking every other call site in the file.
+	 */
+	const composeRaw = (record: unknown): string => records().composeReviewRecord(record as ReviewRecord);
+
+	it("a record carrying round summaries round-trips losslessly (issue #203)", () => {
+		const r = records();
+		const record = withSummaries([
+			{ from: "slot", slot: { lens: "runtime", surface: "s" }, text: "OBSERVATION: zq recorded, not admitted" },
+			{ from: "judge", text: "OBSERVATION: zq the judge's own recorded-not-admitted item" },
+		]);
+		const parsed = r.parseReviewRecord(composeRaw(record));
+		assert.deepEqual(
+			parsed,
+			record,
+			"parse(compose(record)) is not the record once summaries ride it — the one channel the RECORD half of the " +
+				"admission burden has in the orchestrator path does not survive the round trip",
+		);
+	});
+
+	it("a record WITHOUT summaries still parses — the key is optional, not a migration (issue #203)", () => {
+		const r = records();
+		const parsed = r.parseReviewRecord(r.composeReviewRecord(sample));
+		assert.deepEqual(
+			parsed,
+			sample,
+			"a record with no summaries key stopped parsing. Records already posted as platform comments carry five " +
+				"keys; making the sixth REQUIRED would make every one of them unreadable, and §1.4's history would " +
+				"silently lose those review states",
+		);
+	});
+
+	it("the top-level shape stays CLOSED around the new optional key (issue #203)", () => {
+		const r = records();
+		assert.equal(
+			r.parseReviewRecord(composeRaw({ ...sample, zqUnknown: true })),
+			undefined,
+			"an unknown top-level key parsed — admitting an optional key must not turn the exact-count gate into no " +
+				"gate at all; every key must still be a known one",
+		);
+		for (const missing of ["head", "slots", "bundle", "adjudication", "review"]) {
+			const partial: Record<string, unknown> = { ...sample };
+			delete partial[missing];
+			assert.equal(
+				r.parseReviewRecord(composeRaw(partial)),
+				undefined,
+				`a record missing the required key ${JSON.stringify(missing)} parsed — the five that were required before ` +
+					"this change are still required, and an optional sixth must not relax them",
+			);
+		}
+	});
+
+	it("each summary entry is shape-gated, including the from/slot agreement (issue #203)", () => {
+		const r = records();
+		const slot = { lens: "runtime", surface: "s" };
+		for (const [why, entry] of [
+			["an unknown key", { from: "judge", text: "t", zqExtra: 1 }],
+			["a from outside the closed pair", { from: "panel", text: "t" }],
+			["a non-string text", { from: "judge", text: 7 }],
+			["a missing text", { from: "judge" }],
+			["a slot-sourced entry with NO slot", { from: "slot", text: "t" }],
+			["a judge-sourced entry WITH a slot", { from: "judge", slot, text: "t" }],
+			["a malformed slot", { from: "slot", slot: { lens: "runtime" }, text: "t" }],
+			["a non-object entry", "OBSERVATION: prose"],
+		] as const) {
+			assert.equal(
+				r.parseReviewRecord(composeRaw(withSummaries([entry]))),
+				undefined,
+				`a summary entry with ${why} parsed — §1.9's shape gate is deep, and prose admitted through an ungated ` +
+					"slot is prose a later reader cannot attribute. The from/slot agreement is part of the gate: a " +
+					"slot-sourced summary with no slot cannot be attributed, and a judge-sourced one with a slot " +
+					"attributes the Judge's words to a reviewer",
+			);
+		}
+		assert.notEqual(
+			r.parseReviewRecord(composeRaw(withSummaries([]))),
+			undefined,
+			"an EMPTY summaries list refused — a round in which every delegate wrote an empty summary is ordinary, " +
+				"and refusing it would make the channel's absence unrepresentable",
+		);
 	});
 
 	it("the composed body opens with the content marker carrying the head", () => {
