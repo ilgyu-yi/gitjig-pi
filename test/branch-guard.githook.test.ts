@@ -289,14 +289,16 @@ describe("derivation of the protected identity (issue #59, SPEC §3.3 stage 2, �
 });
 
 // ---------------------------------------------------------------------------
-// The gate's own repairs, pinned (issue #63, SPEC §3.12 — a surviving mutant
-// means no assertion pins that guard).
+// The gate's own repairs, pinned per SPEC §3.12's surviving-mutant rule
+// (issue #63); protected-branch is a §3.3 gate class, so its pinning is
+// contract-required.
 //
-// These three arms are GREEN on the landed tree by construction: each pins a
-// repair that is already correct here, so none is red-first. Each is a
-// regression check whose teeth are demonstrated against a named mutant, and
-// the mutant is recorded beside the arm so a later reader can re-run it
-// rather than trust this sentence.
+// The arms below are GREEN on the landed tree by construction: each pinning
+// arm pins a repair already correct here, so none is red-first. Where an arm's
+// teeth are demonstrated against a named mutant, the mutant is recorded
+// beside the arm so a later reader can re-run it rather than trust this
+// sentence; the STRUCTURAL and CONTROL arms state in place why their
+// property is not behaviourally observable.
 // ---------------------------------------------------------------------------
 
 describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { skip: IS_WINDOWS }, () => {

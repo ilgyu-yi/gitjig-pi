@@ -1,0 +1,213 @@
+name: check-merge-review
+
+# The platform half of SPEC §3.3's `merge-review` gate (issue #190,
+# Directive #28). The gate's contract is homed in that row and in §3.7;
+# it is not restated here (§2.8).
+#
+# DEVELOPMENT AND CI ONLY, the same class suite.yml and source-checks.yml
+# declare: not substrate, and an adopting repository is not meant to
+# receive it (#118/#134 own turning that statement into an arm). The
+# ground is #134's own excision test — a handed-over asset must be
+# meaningful with the shell gone, and this gate is not: the shell is what
+# produces the review record it reads.
+#
+# ADVISORY BY DECISION (§3.6's born-advisory → measure → harden; issue
+# #190 decision 6). The job reports and exits 0 on refusal, and it is
+# deliberately NOT in the branch ruleset's required-check set. Its
+# wrong-BLOCK cost is the highest available here — a false refusal blocks
+# every merge to the default branch, including the merge that would fix
+# it — and its firing history is empty. Hardening it is server
+# configuration and the operator's act; its decidable trigger and its
+# named owner are issue #192.
+#
+# TRIGGERS — why `issue_comment` is here (issue #190, round-1 finding
+# E-F7). The evidence this gate reads is a review record posted as a PR
+# comment, which lands AFTER the head exists. On the push-shaped events
+# alone, the last verdict at a head is decided before the record arrives
+# and is never revisited, so §3.7(a)'s evidence-before-action ordering is
+# unsatisfiable by construction — the job would evaluate in form and
+# never at the state it is about. Waking on the comment event is what
+# makes the evaluation reachable. Residual, enumerated in place: an
+# `issue_comment` run has no head in its payload, so the head is resolved
+# through a PR read, and a record edited to
+# remove its own body wakes the job only on `edited`, which is in the
+# type set for that reason. Its sibling case is NOT covered and is named
+# here rather than left to read as covered (round 3's E-F5): a record
+# comment DELETED wakes nothing, because `deleted` is not in the type
+# set, so a PASS rendered while the record existed stays the last verdict
+# visible at that head after its evidence is gone. Adding the type is a
+# trigger change on an advisory job and belongs with #192's hardening,
+# not here.
+#
+# Residual (§3.11), enumerated PER TRIGGER PATH, because the two paths do
+# not check out the same tree and an enumeration that says otherwise is
+# worse than none:
+#   - `pull_request`: the checkout resolves the PR's MERGE REF, so a pull
+#     request that weakens the predicate is graded by its own weakened
+#     predicate. Inherent to `pull_request` CI, shared with suite.yml, and
+#     the residual that matters most at hardening; issue #192 carries it
+#     as a conjunct of its trigger.
+#   - `issue_comment`: the workflow is taken from the DEFAULT BRANCH and
+#     the checkout resolves `github.ref`, which on that event is also the
+#     default branch. So this path grades the PR's head using the default
+#     branch's predicate, and no pull-request-authored code executes.
+#     That is why the two paths can reach different verdicts at one head.
+#
+# The comment path's DOMAIN is UNSCOPED, enumerated here rather than
+# closed (round 2's E17; round 3's EF11 is that this paragraph was
+# recorded as landed and was not). `issue_comment` carries no filter for
+# the commenter, the comment's body, or the thread it sits on, and
+# GitHub offers none in the trigger: every `created` and `edited` comment
+# on every issue and every pull request in this repository wakes this
+# workflow. What bounds it today, and what each bound does NOT do:
+#   - the job-level `if:` drops runs whose thread is a plain issue, so a
+#     non-PR comment queues a run and ends it without an API call. It
+#     does not narrow WHO may wake the job, or on what text.
+#   - the concurrency group is keyed per pull request, so comment traffic
+#     on one PR cannot cancel another's verdict. Within ONE pull request
+#     `cancel-in-progress: true` cuts both ways: repeated comments cancel
+#     that PR's OWN in-flight run, which ends its runner minutes and can
+#     also keep a fresh verdict from completing at all.
+#   - `timeout-minutes: 10` bounds how long ONE woken run may spend. It
+#     is not the only bound on that cost — the `if:` above ends a
+#     plain-issue run before a job is allocated, and cancellation ends
+#     an in-flight one — and none of the three bounds how MANY runs are
+#     woken, which is the cost that stays open: an actor who can comment
+#     can spend runner minutes and fill the run list at will. That is a
+#     live residual of the unscoped domain.
+#   - the token is read-only on every scope it grants — contents,
+#     pull-requests and issues — and the script performs reads only and
+#     no write, so a woken run cannot act on the repository whatever
+#     the comment said. It bounds blast radius, not reachability.
+# What stays open, and the first draft of this paragraph got it WRONG in
+# the direction that matters (round 3's E-F1). It said the cost was
+# runner minutes and log noise "rather than a wrong verdict, because the
+# verdict is derived from the record's own bytes and not from the comment
+# that woke the job". The comment that woke the job IS those bytes:
+# `fetchComments` keeps `comment.body` alone and drops every other
+# platform field, the attested author among them, and the predicate then
+# collapses last-record-wins. MEASURED with a stub fetch: a body composed
+# by `composeReviewRecord` at the real head, carried on a comment whose
+# author is an arbitrary drive-by commenter, returns exit 0 and
+# "merge-review: PASS". So the wrong-verdict axis is OPEN here, not
+# closed, and the sentence that closed it asserted the negation of the
+# predicate's own recorded residual (merge-gate.ts: "the
+# platform-attested author is discarded at the boundary, so a record's
+# AUTHORSHIP is not modelled here").
+# Where that axis lives, so this paragraph does not claim it: §3.7(d)
+# carries hand-forgery as an amortized deferral and retains the surfaces
+# that would detect it. This paragraph owns only the reachability the
+# unscoped domain adds — an actor who can comment can make this job run
+# at will — and states that the run so provoked reads the same evidence
+# any other run reads, neither better nor worse authenticated.
+# Narrowing the domain is a hardening act on a job that is advisory by
+# decision, and the closure is routed to issue #192 with the rest of the
+# hardening, not taken here.
+#
+# NOT to be "fixed" by adding a merge-ref `ref:` so the step name reads
+# true on both paths. That change would make the comment path check out
+# and execute pull-request-authored code while holding a base-repository
+# token — the shape this job is currently, if accidentally, clear of.
+#
+# No third-party Actions; actions/checkout and actions/setup-node are
+# GitHub-shipped.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
+
+# One run per pull request (the idiom check-changelog.yml commits to, on
+# the same ground): a head can carry several runs of this gate, the
+# rollup returns them undeduplicated, and a run queued earlier can
+# COMPLETE later — so a stale `no-record-at-head` notice could be the last
+# verdict a reader sees at a head whose record has since arrived, which is
+# by ordering the very defect the `issue_comment` trigger was added to fix.
+# `cancel-in-progress` is deliberate and is the contestable half, and it
+# is an EXPOSURE as well as a cost saving — the two readings this file
+# used to carry separately, reconciled here so the setting and the
+# domain paragraph above say one thing. The saving: on the
+# `issue_comment` path a cancelled run is the one reading the OLDER
+# comment list, since a newer comment event implies a newer list. That
+# premise does NOT extend to `pull_request` events, which carry no
+# comment at all and whose run reads whatever list exists when it runs.
+# The exposure: cancellation is reachable at will by anyone who can
+# comment, so a fresh verdict can be kept from completing and whatever
+# completed earlier stays the visible one — including the stale
+# `no-record-at-head` the paragraph above says the `issue_comment`
+# trigger was added to fix. Narrowing that is a hardening act and is
+# routed to #192 with the rest; what is owed here is that the exposure
+# is named where the setting is, and not only where the domain is.
+concurrency:
+  group: check-merge-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  # The script reads /repos/{repo}/issues/{n}/comments — a PR's
+  # conversation comments live in the ISSUES collection, which the
+  # platform governs under this scope rather than under pull-requests
+  # (issue #190, round-1 finding E-F1). Granted narrowly and read-only.
+  issues: read
+
+jobs:
+  merge-review:
+    # On `issue_comment` the payload may be a plain issue, which carries
+    # no PR and no head. The `pull_request` key is present only on a PR's
+    # comment, so this is the documented discriminator.
+    if: github.event_name == 'pull_request' || github.event.issue.pull_request != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (the PR merge ref on a push event; the default branch on a comment)
+        uses: actions/checkout@v4
+
+      # Pinned, as suite.yml and source-checks.yml pin it. This is the one
+      # workflow here that invokes `node` directly, and its entry point
+      # statically imports TypeScript resolved by native type stripping —
+      # a version-gated capability. Left to the runner image's default,
+      # the gate's ability to evaluate at all would drift with the image.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Evaluate the merge-review predicate
+        env:
+          # Every value reaches the script through the environment, never
+          # through argv or through `run:` interpolation — the spelling
+          # check-changelog.yml already commits to. A token in argv is
+          # visible in the runner's process table for the life of the
+          # call (issue #190, round-1 finding E-F2).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITJIG_REPO: ${{ github.repository }}
+          # The head under review is the PR's own head SHA — the head
+          # that would be merged, which is what §3.3's row binds the
+          # review to. Empty on `issue_comment`, where the script
+          # resolves it through a PR read instead.
+          GITJIG_PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          GITJIG_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+
+          # The script renders its own advisory notices and exits 0 on
+          # every verdict. A NON-ZERO exit is therefore machinery, not a
+          # verdict — a torn checkout whose predicate module is absent is
+          # the decided loud case — and every sibling CHECK workflow
+          # (check-changelog, check-provenance, check-ssot-home, check-toc,
+          # source-checks and suite) maps a machinery failure to an authored
+          # annotation rather than a raw runtime stack (§3.9's uniform
+          # observability). The other five siblings — the two auto-*.yml,
+          # the initiative marker-to-label workflow, dir-mode-post-merge.yml
+          # and issues-to-project-mirror.yml — emit no annotation on any
+          # path, so the uniformity claimed here is the gate family's, not
+          # the directory's.
+          if ! node .github/workflows/check-merge-review.mjs; then
+            echo "::error::check-merge-review could not evaluate: the gate's own machinery failed before it reached a verdict. This is NOT a merge-review refusal. Most likely the checkout is missing .pi/extensions/gitjig/review/merge-gate.ts, or the runner's Node cannot resolve a TypeScript import. Reproduce locally with: node .github/workflows/check-merge-review.mjs (with GITHUB_TOKEN, GITJIG_REPO and GITJIG_PR set)." >&2
+            exit 1
+          fi

@@ -40,7 +40,7 @@ import {
 	panelOutcome,
 	type SlotResult,
 } from "./panel.ts";
-import { composeReviewRecord, type ReviewRecord, type SlotRecord } from "./record.ts";
+import { composeReviewRecord, type ReviewRecord, type RoundSummary, type SlotRecord } from "./record.ts";
 import {
 	type AdjudicationInput,
 	adjudicationFromDispatch,
@@ -109,6 +109,23 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 		env: withoutRepoLocatingGitEnv(process.env),
 	}).trim();
 
+	// The round's durable prose (issue #203). §1.9's admission burden
+	// defaults to RECORD, DO NOT ADMIT and both briefs route such an item
+	// to the return's `summary`; on this path nothing read it, so the
+	// RECORD half was unrealizable. Collected here, at the one place that
+	// holds the DispatchOutcome, and carried VERBATIM into the record.
+	//
+	// Deliberately NOT threaded through SlotResult: that is §1.7's
+	// discovery grammar and feeds validity and the bundle. Prose that
+	// entered it would reach decisions no adjudicator made.
+	const summaries: RoundSummary[] = [];
+	/** An empty summary is nothing to record; a delegate that wrote none gets no entry. */
+	const collect = (entry: RoundSummary) => {
+		if (entry.text.length > 0) {
+			summaries.push(entry);
+		}
+	};
+
 	const results: SlotResult[] = await Promise.all(
 		required.map(async (slot) => {
 			const brief = composeReviewerBrief(
@@ -117,7 +134,11 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 				options.fences,
 				options.timing,
 			);
-			return slotResultFromDispatch(slot, await options.dispatch(brief, head));
+			const outcome = await options.dispatch(brief, head);
+			if (outcome.disposition === "admitted") {
+				collect({ from: "slot", slot, text: outcome.summary });
+			}
+			return slotResultFromDispatch(slot, outcome);
 		}),
 	);
 	const slots: SlotRecord[] = results.map((result) => {
@@ -141,6 +162,9 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 			options.timing,
 		);
 		const outcome = await options.dispatch(judgeBrief, head);
+		if (outcome.disposition === "admitted") {
+			collect({ from: "judge", text: outcome.summary });
+		}
 		const input = adjudicationFromDispatch(outcome);
 		adjudication = input ?? null;
 		const admission = input === undefined ? undefined : admitAdjudication(input, options.manifest);
@@ -165,6 +189,10 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 		bundle: buildBundle(results, required),
 		adjudication,
 		review,
+		// Always present on this path, empty where no admitted return wrote
+		// prose. The key is optional in the record's shape for records written
+		// before it existed, not for rounds this function drives.
+		summaries,
 	};
 	return { review, record, recordBody: composeReviewRecord(record) };
 }

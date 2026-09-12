@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 405 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 412 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 420 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 524 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 528 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 532 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 542 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 554 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 567 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 581 |
-| &nbsp;&nbsp;§3.11 | Gate design | 591 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 613 |
-| §4 | Substrate and install contract | 623 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 627 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 633 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 637 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 641 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 645 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 651 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 661 |
-| &nbsp;&nbsp;§4.8 | The command layer | 669 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 726 |
-| §5 | Cross-cutting contracts | 768 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 772 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 776 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 780 |
-| &nbsp;&nbsp;§5.4 | Work language | 784 |
-| &nbsp;&nbsp;§5.5 | State boundary | 788 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 794 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 804 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 814 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 822 |
-| §6 | Self-governance milestone | 830 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 841 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 534 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 538 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 542 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 552 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 564 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 577 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 591 |
+| &nbsp;&nbsp;§3.11 | Gate design | 601 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 623 |
+| §4 | Substrate and install contract | 633 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 637 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 643 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 647 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 651 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 655 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 661 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 671 |
+| &nbsp;&nbsp;§4.8 | The command layer | 679 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 736 |
+| §5 | Cross-cutting contracts | 778 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 782 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 786 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 790 |
+| &nbsp;&nbsp;§5.4 | Work language | 794 |
+| &nbsp;&nbsp;§5.5 | State boundary | 798 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 804 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 814 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 824 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 832 |
+| §6 | Self-governance milestone | 840 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 851 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -441,7 +441,7 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 | source-style | sources landing unformatted or carrying a lint error | `home:` tier 3 (`source-style`) · `backstop:` same · `earlier:` — | `supplies:` platform (source text at the PR head) / `infers:` session |
 | type-check | a type annotation drifting from the code the runtime strips it off | `home:` tier 3 (`type-check`) · `backstop:` same · `earlier:` — | `supplies:` platform (source text at the PR head) / `infers:` session |
 | suite | a regression landing that reds the test suite | `home:` tier 3 (`suite`) · `backstop:` same · `earlier:` — | `supplies:` platform (source and test text at the PR head) / `infers:` session |
-| merge-review | merging without a complete, adjudicated review pinned at the merged head | `home:` tier 3 (procedural today, §2.3) · `backstop:` deferred (§3.11 amortized) · `earlier:` tier 1 echo planned | `supplies:` platform (panel results + Judge adjudication where the bundle was non-empty + merged head, §1.6–§1.9) / `infers:` session |
+| merge-review | merging without a complete, adjudicated review pinned at the merged head | `home:` tier 3 (instrument landed at `.pi/extensions/gitjig/review/merge-gate.ts`; **advisory** per §3.6, so §2.3 still enforces; the hardening trigger is decidable and is derived beneath this table, and its owner is #192) · `backstop:` deferred (§3.11 amortized) · `earlier:` tier 1 echo planned | `supplies:` platform (panel results + Judge adjudication where the bundle was non-empty + merged head, §1.6–§1.9) / `infers:` session |
 | ac-closeout | merging a PR whose closing issue has unresolved AC | `home:` tier 3 (procedural today, §2.2) · `backstop:` deferred (§3.11 amortized) · `earlier:` tier 1 echo planned | `supplies:` platform (issue AC + merge event) / `infers:` session |
 | change-reach | retired SSOT vocabulary surviving the declared-set completion check | `home:` tier 3 (procedural today, §2.6) · `backstop:` none (reversible) · `earlier:` — | `supplies:` git (trailers) + platform (push history) / `infers:` session |
 | approval-evidence | a gated approval's terminal action firing without the approval's evidence artifact | `home:` tier 3 (procedural today, §3.7) · `backstop:` merge arm: ruleset for the landing itself, approval predicate deferred (§3.11 amortized); other arms: none (reversible) · `earlier:` tier 1 echo planned | `supplies:` platform (evidence artifact + terminal act) / `infers:` session |
@@ -452,6 +452,16 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 **What the rule moves, and what it merely assigns.** Some rows the rule relocates; others it places for the first time — a row that recorded no tier before is assigned a home rather than moved, and the change claims no more reach than that. `protected-branch` guards two acts and places per arm; `force-push` and `protected-branch`'s landing arm home at tier 3 because git and the platform each hold the deciding fact exactly, so exactness discriminates nothing and the irreversible moment — publication — selects the platform. Both homes are live at the ruleset (§3.2), and the ruleset's default-branch condition is the scope residual each row records in place. `protected-branch`'s commit arm decides on which branch `HEAD` sits when the commit is made: git holds that natively and the platform has no representation of it at that moment, nothing having been published, so that arm's decision is **taken** at tier 2. It is not a pre-image of the landing arm's gate either: §3.11 fixes a pre-image by local and remote not diverging over one act, which is not evaluable for an act the remote gate never sees. The two arms guard different acts, and a local commit is reversible until the landing the other arm gates. What this tree carries at tier 2 is the call-site shape and, on the push surface, the check itself: `.githooks/pre-commit` and `.githooks/pre-push` are committed and call the class's own predicate — the first on the branch `HEAD` is on, the second on each target ref — and the helper they delegate that predicate to, `.githooks/helpers/branch_guard.sh`, is shipped here; the commit arm is live, the adapter's require chain being complete now that `.githooks/helpers/secret_scan.sh` ships in this tree beside it. Tier 1, which can only lex a command string for a fact §3.11 binds to what a ref *is*, is confined to an echo on either arm. `force-push` has no tier-2 call site of its own: its earlier tier-2 entry read *by subsumption*, which is a coverage claim and not an ownership one — §3.11 binds ownership to the predicate, and the adapter shows the local tier evaluates no sharedness predicate at all: `.githooks/pre-push` tests only `is_protected_branch` on the target, and reads the remote oid it is handed as a positional filler explicitly marked unused. What tier 2 blocks there it blocks under the neighbouring class's predicate, so no call site of this row's own predicate sits beneath its home and the `earlier:` slot is empty. `secret` homes at tier 2 not because git is its only layer — the platform can read a pushed commit's content — but because its guarded act is the **commit**, whose deciding object is the index, and the index has no platform representation at that moment. `change-reach` homes at tier 3 on a part worth naming: the declared set arrives as commit trailers, exact in git, but §2.6's pairwise monotonicity is judged over the pull request's push history, which only the platform holds. `approval-evidence` splits by arm — the review-gated merge arm terminates at a blocking platform surface, and the ruleset beneath it blocks a landing that arrives outside a pull request while evaluating no approval predicate, so the landing is backstopped and the approval predicate's backstop stands deferred; the other arms §3.7 names have no such surface and their terminal acts are reversible, so §3.11's backstop obligation does not reach them. And `egress`'s backstop is structurally unavailable rather than deferred: the bytes exist only at the composing publish call, and the platform's first sight of them is the publication the gate exists to precede.
 
 A row whose `home:` slot records that no instrument holds that home yet is a commitment, not an implementation: the gate lands at the recorded home through its own derivation cycle (§1.2). A class with no live gate in any tier is advisory and must be labeled so wherever it is stated.
+
+**`merge-review` hardening trigger.** §3.6(ii) requires a decidable trigger — an observable condition a reader can test — and the row routes its derivation here, the prose home the column-shape rule names. The trigger is **twenty merged pull requests, each contributing at most one observation**. A reader decides one pull request as follows, at the time of counting and with no judgement at any step.
+
+*Which run.* The **last run of this job whose log names the merged head and carries a verdict** — a pass line or an advisory refusal line. Runs whose logs carry no verdict are passed over, whatever the platform records as their conclusion; the test is the log, not the conclusion. A run whose log carries a verdict but names no head is passed over too, and one verdict path produces exactly that: a `lookup-failed` raised while resolving the head has no head to name. If no run at that head qualifies under this step, the pull request contributes no observation.
+
+*Whether it qualifies.* It qualifies if that run rendered a pass, or rendered a refusal the record does not contradict. It is **excluded** — contributing no observation in either direction — if that run rendered `lookup-failed`: it never read the evidence, so its refusal was never a false one, and counting it would spend a qualifying pull request on the gate behaving correctly. That exclusion is what keeps the observable co-extensive with the judgement it replaces.
+
+*What contradicts a refusal.* The reader applies the predicate's own selection rule **to the comments as they stand at counting time** — the last comment at that head opening with that head's marker — and the refusal is contradicted when that record parses, carries a complete review, and carries an adjudication **where its bundle is non-empty**, which is the pass condition the instrument itself applies. Two things are load-bearing and each was got wrong in an earlier form of this clause. The rule is the predicate's, so the row and the instrument state one condition and not two (§3.11); but the **moment** is the reader's, because a refusal evaluated at the run's own moment can never be contradicted — every refusal reason the instrument can render is, by construction, a statement about what the record was when the run read it. Evaluating at counting time is what lets the trigger see the shape it exists to measure: a stale `no-record-at-head` standing as the last verdict at a head whose record has since arrived.
+
+*Where the inputs are.* A qualifying run names the merged head in its own log line, beside its verdict and reason, which is what step 1 selects on. The record is a comment on the pull request. The platform's run list supplies the ordering. The owner is #192.
 
 **`protected-branch` ref-identity semantics.** §3.11 binds this class's protection to what a ref **is**, never its literal spelling; what establishes that identity is recorded here, the prose home the column-shape rule routes slot-sized derivations to. The rule source is **one derived identity P** — the branch this repository's own remote pointer names as its default — derived in two stages. Stage 1 reads the local pointer: `git symbolic-ref -q refs/remotes/origin/HEAD`, with the `refs/remotes/origin/` prefix stripped. Stage 2, only where stage 1 fails, measures the remote's advertised default directly: `git ls-remote --symref origin HEAD` with terminal prompts disabled (`GIT_TERMINAL_PROMPT=0`) — a measurement, never a guess, because §3.9's loader rule forbids a guessing fallback (`init.defaultBranch`, the local `HEAD`): a resolver that guesses erodes its own degradation signal until a warning no longer implies its condition. Stage 2 is reachable only from the push surface, where the push's own ref advertisement has already contacted the remote; the commit surface never reaches it, because an offline commit must not open a network connection. The residual that reachability carries is enumerated in place: no portable timeout instrument exists on the host class the tier binds at, so the second connection can hang — accepted with prompts disabled and only on a surface whose own advertisement has just succeeded against the same remote. `GIT_TERMINAL_PROMPT=0` disables git's own terminal prompting and does not reach an agent outside git: an ssh transport whose key is passphrase-protected and whose agent holds no decrypted copy re-prompts on this second connection, and an askpass program the environment supplies is likewise unaffected. That re-prompt is a member of the same accepted hang class, named here rather than left to read as excluded by the disabled prompts. Stage-2 failure is keyed by outcome, not cause (§3.10): a non-zero exit, or empty or unparseable output — a dangling remote `HEAD` yields empty output with exit 0. Where both stages fail, P is underivable and the gate is **disarmed for that run and says so plainly**: one audit warn record stating the gate is not enforced (§3.9's degradation-signal rule) — the observable that separates a disarmed allow from an ordinary allow. Stage 2 repairs the absent-pointer case only: a present-but-stale local pointer satisfies stage 1 and never reaches stage 2, so the migration shape — the remote's default moved while the fetched local pointer stayed — is unmodeled, enumerated below.
 
@@ -612,7 +622,7 @@ The norm is **procedural today**, enforced at review (§2.3); the semantics land
 
 ### 3.12 Gate verification
 
-A green suite does not prove a guard is live: a silently weakened guard can keep passing assertions that no longer exercise it. Guards are therefore verified by **mutating the guarded artifact** — weaken the rule in a throwaway, isolated copy of the tree, run the suite there, and require it to **fail**; a surviving mutant means no assertion pins that guard, a harness defect, never a tolerated gap. Mutation coverage is prioritized by the same wrong-allow cost asymmetry that selects enforcement faces (§3.6): the gates whose wrong allow is irreversible are the ones whose kill is proven first. This generalizes §1.2's failing-first rule from one test to the guard corpus.
+A green suite does not prove a guard is live: a silently weakened guard can keep passing assertions that no longer exercise it. Guards are therefore verified by **mutating the guarded artifact** — weaken the rule in a throwaway, isolated copy of the tree, run the suite there, and require it to **fail** — and the obligation the verification carries is scoped: a surviving mutant on a guard whose pinning a settled contract requires — a guard is such where it enforces a settled contract of this document, the instruments of the committed gate classes (§3.3) being the enumerated core and every other case ruled at review from the contract's own text (§2.3, this norm's face) — means no assertion pins that guard, a harness defect, never a tolerated gap; a survivor on any other guard is recorded as a decision (§1.9), never owed work by this clause. Mutation coverage is prioritized by the same wrong-allow cost asymmetry that selects enforcement faces (§3.6): the gates whose wrong allow is irreversible are the ones whose kill is proven first — an ordering over which kills are proven, never a widening of which survivors are owed repair. This generalizes §1.2's failing-first rule from one test to the guard corpus.
 
 A newly landed gate **cannot be observed by its own landing change** where the platform withholds a gate's execution from the change that introduces it: the landing verifies structure only, and the next change is the gate's first empirical firing. This is a named deferral of §5.3's smallest-change activation probe, not an exemption from it — the probe obligation transfers to the first post-landing change.
 
