@@ -97,9 +97,11 @@ type RecordModule = {
 	// an accident this mirror invents.
 	OUTCOMES: string[];
 	DISPOSITIONS: string[];
-	// Widened to `unknown` so an adversarial disposition is expressible
-	// without a cast — these arms construct shapes production rejects.
-	composeReviewRecord(record: unknown): string;
+	// `ReviewRecord` above already types a disposition as a plain `string`,
+	// so an adversarial disposition is expressible here without a cast and
+	// without widening — measured: narrowing this back adds zero tsc errors,
+	// and it is what reds TS2561 on a typo in an inline record literal.
+	composeReviewRecord(record: ReviewRecord): string;
 	parseReviewRecord(body: string): ReviewRecord | undefined;
 };
 type CarryModule = {
@@ -1118,9 +1120,12 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		// witness reds `tsc --noEmit`, NOT this suite. A widened `Disposition`
 		// leaves every arm in this file green and is caught only by the
 		// type-check step, which is therefore part of this guard rather than
-		// an adjacent convenience. The runtime assertion below carries the
-		// half a witness cannot: that the members the witness names are the
-		// five the home carries.
+		// an adjacent convenience. The runtime assertion below does NOT reach
+		// the home: both of its operands are literals in this file. The tie
+		// from the names below to record.ts's DISPOSITIONS is the separate
+		// CONTENTS arm's, and this witness is tied to the home only through
+		// it. Measured: with `none` dropped from the home, this arm stays
+		// GREEN while CONTENTS, IDENTITY and EMPTINESS red.
 		const witness: Record<UpstreamDisposition, true> = {
 			repair: true,
 			defer: true,
@@ -1131,8 +1136,9 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		assert.deepEqual(
 			Object.keys(witness).sort(),
 			[...DISPOSITION_MEMBERS].sort(),
-			"resolve.ts's derived `Disposition` no longer names the same five members this file's home arms iterate — " +
-				"the derivation and the committed list have come apart",
+			"this arm's witness object and DISPOSITION_MEMBERS — both literals in this file — no longer name the same " +
+				"five members. resolve.ts's derived `Disposition` is observable here only by tsc: the type-only import is " +
+				"erased before this runs",
 		);
 	});
 
@@ -1142,8 +1148,8 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 			[...DISPOSITION_MEMBERS],
 			"record.ts's DISPOSITIONS — the home that decides whether a resolved record PARSES at all, and the home " +
 				"resolve.ts's `Disposition` is derived from — no longer carries §1.9's five dispositions. A member " +
-				"dropped here silently stops a legitimate record from parsing; a member added here is a disposition " +
-				"the Resolver's own type does not declare",
+				"dropped here silently stops a legitimate record from parsing; a member added here is taken up by " +
+				"resolve.ts's DERIVED `Disposition` and reds only the type witness, under tsc",
 		);
 	});
 
@@ -1175,7 +1181,9 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		assert.deepEqual(
 			[...r.DISPOSITIONS],
 			[...DISPOSITION_MEMBERS],
-			"the perturbation was not restored — later arms are now unsound",
+			"the home's contents differ from the committed list after this arm — either the probe was not spliced out, " +
+				"or the home itself has changed; this assertion cannot tell those apart, and later arms are unsound " +
+				"either way",
 		);
 		assert.equal(
 			r.parseReviewRecord(body),
@@ -1206,7 +1214,9 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		assert.deepEqual(
 			[...r.DISPOSITIONS],
 			[...DISPOSITION_MEMBERS],
-			"the emptied home was not restored — later arms are now unsound",
+			"the home's contents differ from the committed list after this arm — either the emptied home was not " +
+				"refilled, or the home itself has changed; this assertion cannot tell those apart, and later arms are " +
+				"unsound either way",
 		);
 		for (const disposition of DISPOSITION_MEMBERS) {
 			assert.notEqual(

@@ -161,8 +161,13 @@ function isAdjudication(value: unknown): boolean {
  * That widening shape is closed by a TYPE WITNESS in the suite, which
  * cannot be written without naming every member — and it reds the type
  * check, not the suite. What this derivation itself buys is smaller and
- * worth stating plainly: the five members are spelled once, and a second
- * home can no longer appear without someone writing it down.
+ * worth stating plainly: the two homes issue #208 names are now one. That
+ * is an ENUMERATION, not a closed class: measured on this tree, a THIRD
+ * spelling of the same five members survives untied at
+ * test/review-outcome.unit.test.ts:68, typing that suite's disposition
+ * case table — appending a sixth member there reds neither `tsc --noEmit`
+ * nor that suite. The spelling in test/review-orchestrator.unit.test.ts is
+ * tied, by the CONTENTS arm.
  */
 export const DISPOSITIONS = ["repair", "defer", "remedy", "measure-escalate", "none"] as const;
 
