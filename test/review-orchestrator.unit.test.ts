@@ -360,6 +360,34 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	/**
+	 * Extract ONE composed block and return it whole, for comparison by
+	 * EQUALITY rather than by substring (issue #204's EF-2).
+	 *
+	 * The briefs join their blocks with a blank line, so a block is a
+	 * maximal run of lines between blank lines. `includes` cannot see an
+	 * addition at the END of a block — the expected literal stays a
+	 * substring — and that blind spot is what let a retained second home
+	 * of the exculpatory rule survive the whole file, verbatim OR reworded.
+	 * Equality over the extracted block sees both, because it sees the
+	 * block's end.
+	 *
+	 * The extraction refuses what it cannot read rather than reading past
+	 * it: exactly one block must open with the given line, or the arm reds
+	 * on its own message instead of silently comparing the wrong text.
+	 */
+	const composedBlock = (document: string, opening: string): string => {
+		const blocks = document.split("\n\n").filter((block) => block.startsWith(opening));
+		assert.equal(
+			blocks.length,
+			1,
+			`the composed document does not carry exactly one block opening with ${JSON.stringify(opening)} (found ` +
+				`${String(blocks.length)}). Zero means the block was dropped or renamed; more than one means the same ` +
+				"rule has a second home in this very document, which is the drift the equality pin below exists to catch",
+		);
+		return blocks[0] as string;
+	};
+
 	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
 		// Round 1's EF-2: every substring needle over this block survived inverting
 		// the very proposition it pinned ('does not establish' -> 'does establish',
@@ -385,10 +413,18 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			// The three SYMMETRY lines that closed this block moved OUT of it
 			// (issue #204) and into the shared exculpatory block pinned below.
 			// They are not deleted — they are re-homed, because the rule binds
-			// the reviewer as well and this block reaches only the Judge. Their
-			// absence here is therefore part of the pin: a production that kept
-			// them in both places would be two homes for one property (§3.11),
-			// and this whole-literal arm reds on it.
+			// the reviewer as well and this block reaches only the Judge.
+			//
+			// Their absence is part of the pin, and round 1's EF-1 is that the
+			// previous wording of this sentence claimed a coverage this arm did
+			// not have: the assertion was `includes`, so a production that kept
+			// the old lines here AND gained the shared block left this literal a
+			// substring and the arm GREEN. Measured at that head: that mutant
+			// red exactly one arm in the file, and it was not this one.
+			//
+			// The assertion below is now EQUALITY over the extracted block, so
+			// the claim is true as written: a retention here — verbatim or
+			// reworded — lengthens the block and reds this arm.
 		].join("\n");
 		const b = briefs();
 		const text = b.composeJudgeBrief(
@@ -397,12 +433,14 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			{ changeDescription: "x" },
 			FENCES,
 		);
-		assert.ok(
-			text.includes(expectedAdmission),
-			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was " +
-				"deleted, inverted, or edited; every ground, the record-do-not-admit default with its summary " +
-				"channel and §1.9 ground, the demote-before-dedup ordering, and the symmetry rule are pinned " +
-				"as one whole (round 1's EF-2: substring needles survived polarity inversion)",
+		assert.equal(
+			composedBlock(text, "ADMISSION —"),
+			expectedAdmission,
+			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was deleted, " +
+				"inverted, edited, or APPENDED TO; every ground, the record-do-not-admit default with its summary " +
+				"channel and §1.9 ground, and the demote-before-dedup ordering are pinned as one whole, END INCLUDED " +
+				"(#196 round 1's EF-2: substring needles survived polarity inversion; #204 round 1's EF-1: a substring " +
+				"pin over this block could not see a second home of the exculpatory rule appended to it)",
 		);
 		assert.ok(
 			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
@@ -468,12 +506,15 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	it("the REVIEWER brief carries the exculpatory-claim burden (issue #204)", () => {
 		const b = briefs();
 		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
-		assert.ok(
-			text.includes(EXPECTED_EXCULPATORY),
-			"the reviewer brief does not carry the exculpatory-claim block as the expected literal. The reviewer " +
-				"is the party that MAKES class-closure claims, and a burden told only to the Judge arrives after the " +
-				"claim is already asserted as settled — the measured incident is a panel reporting a class closed on " +
-				"nine killed shapes with a tenth alive, which then fed §1.4's diagnosis in the NONE direction",
+		assert.equal(
+			composedBlock(text, "EXCULPATORY CLAIMS"),
+			EXPECTED_EXCULPATORY,
+			"the reviewer brief does not carry the exculpatory-claim block as the expected literal, END INCLUDED. " +
+				"The reviewer is the party that MAKES class-closure claims, and a burden told only to the Judge " +
+				"arrives after the claim is already asserted as settled — the measured incident is a panel reporting " +
+				"a class closed on nine killed shapes with a tenth alive, which then fed §1.4's diagnosis in the NONE " +
+				"direction. Equality, not substring: a line APPENDED to this block can weaken the rule while leaving " +
+				"every substring pin green (round 1's non-admitted observation (i), closed here rather than left)",
 		);
 	});
 
@@ -485,11 +526,13 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			{ changeDescription: "x" },
 			FENCES,
 		);
-		assert.ok(
-			text.includes(EXPECTED_EXCULPATORY),
-			"the judge brief does not carry the exculpatory-claim block as the expected literal. The consumer side " +
-				"of the rule is not optional — the Judge weighs a claim it is handed — and this literal is declared " +
-				"once in this file and asserted against both documents, so a per-brief restatement reds exactly here",
+		assert.equal(
+			composedBlock(text, "EXCULPATORY CLAIMS"),
+			EXPECTED_EXCULPATORY,
+			"the judge brief does not carry the exculpatory-claim block as the expected literal, END INCLUDED. The " +
+				"consumer side of the rule is not optional — the Judge weighs a claim it is handed — and this literal " +
+				"is declared once in this file and asserted against both documents, so a per-brief restatement reds " +
+				"exactly here",
 		);
 	});
 
@@ -525,12 +568,25 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	});
 
 	it("the exculpatory rule appears EXACTLY ONCE per brief — the re-home is a move, not a copy (issue #204)", () => {
-		// A whole-block `includes` pin cannot see a trailing ADDITION: the
-		// ADMISSION arm above would stay green if production kept its old
-		// SYMMETRY lines AND gained the shared block, which is precisely the
-		// two-homes outcome §3.11 forbids and the one this change could
-		// plausibly produce. That residual of the literal-pin method is named
-		// here and closed by COUNT rather than by a longer needle.
+		// WHAT THIS ARM COVERS, re-scoped by round 1's EF-2 — the previous
+		// wording claimed it CLOSED the two-homes residual, and that claim was
+		// false in a way the arm itself could not see. Its needles are two
+		// exact sentences, so a second home stating the same rule in DIFFERENT
+		// WORDS contains neither needle, the count stays at one, and the whole
+		// file stayed green. Measured at that head: a reworded retention in
+		// ADMISSION_BURDEN gave 55/55 pass.
+		//
+		// The two-homes shape is now carried by the EQUALITY pins above, which
+		// see a block's end and therefore see a retention of either wording.
+		// What is left for this arm is the case equality cannot reach: a
+		// repetition somewhere ELSE in the composed document — a third block,
+		// or the same rule restated inside a block this file does not pin.
+		//
+		// STATED OPEN, not closed: a REWORDED restatement in a block no arm
+		// pins is caught by neither mechanism. Equality sees only the blocks
+		// named here; a count sees only these two sentences. That is an
+		// enumeration of two mechanisms, not a class closure, and no arm in
+		// this file should be cited for one.
 		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 		const b = briefs();
 		const documents = [
