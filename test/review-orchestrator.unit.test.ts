@@ -21,6 +21,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+// A TYPE-ONLY import of the DERIVED disposition union, for the witness
+// that closes the one shape the behavioural laws cannot reach (issue
+// #208). Erased before this file runs, so it adds no runtime dependency
+// — which is also its limit: it reds `tsc`, never this suite.
+import type { Disposition as UpstreamDisposition } from "../.pi/extensions/gitjig/review/resolve.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
@@ -52,12 +57,18 @@ type ReviewState =
 				outcome: string;
 			};
 	  };
+/**
+ * The round's durable prose, carried VERBATIM (issue #203). One home for
+ * both actor kinds: a reviewer slot's return summary and the Judge's.
+ */
+type RoundSummary = { from: "slot" | "judge"; slot?: Slot; text: string };
 type ReviewRecord = {
 	head: string;
 	slots: { slot: Slot; valid: boolean; reason?: string }[];
 	bundle: BundleEntry[];
 	adjudication: AdjudicationInput | null;
 	review: ReviewState;
+	summaries?: RoundSummary[];
 };
 type Fences = {
 	outOfScope: readonly string[];
@@ -85,6 +96,17 @@ type BriefsModule = {
 };
 type RecordModule = {
 	REVIEW_RECORD_MARKER: string;
+	// Mirrored as MUTABLE arrays on purpose. Production declares both
+	// `as const`, which is a type-level word only; the identity and
+	// emptiness laws below perturb the live objects and restore them, and
+	// that reachability is the production module's disclosed residual, not
+	// an accident this mirror invents.
+	OUTCOMES: string[];
+	DISPOSITIONS: string[];
+	// `ReviewRecord` above already types a disposition as a plain `string`,
+	// so an adversarial disposition is expressible here without a cast and
+	// without widening — measured: narrowing this back adds zero tsc errors,
+	// and it is what reds TS2561 on a typo in an inline record literal.
 	composeReviewRecord(record: ReviewRecord): string;
 	parseReviewRecord(body: string): ReviewRecord | undefined;
 };
@@ -360,6 +382,279 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	/**
+	 * Extract ONE composed block and return it whole, for comparison by
+	 * EQUALITY rather than by substring (issue #204's EF-2).
+	 *
+	 * The briefs join their blocks with a blank line, so a block is a
+	 * maximal run of lines between blank lines. `includes` cannot see an
+	 * addition at the END of a block — the expected literal stays a
+	 * substring — and that blind spot is what let a retained second home
+	 * of the exculpatory rule survive the ADMISSION arm's substring pin, verbatim OR reworded.
+	 * Equality over the extracted block sees both, because it sees the
+	 * block's end.
+	 *
+	 * The extraction refuses what it cannot read rather than reading past
+	 * it: exactly one block must open with the given line, or the arm reds
+	 * on its own message instead of silently comparing the wrong text.
+	 */
+	const composedBlock = (document: string, opening: string): string => {
+		const blocks = document.split("\n\n").filter((block) => block.startsWith(opening));
+		assert.equal(
+			blocks.length,
+			1,
+			`the composed document does not carry exactly one block opening with ${JSON.stringify(opening)} (found ` +
+				`${String(blocks.length)}). Zero means the block was dropped or renamed; more than one means the same ` +
+				"rule has a second home in this very document, which is the drift the equality pin below exists to catch",
+		);
+		return blocks[0] as string;
+	};
+
+	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
+		// Round 1's EF-2: every substring needle over this block survived inverting
+		// the very proposition it pinned ('does not establish' -> 'does establish',
+		// 'absent' -> 'present', the symmetry burden, the §3.12 limiter) with the
+		// suite green. The materially different method: the WHOLE block is pinned
+		// as one expected literal, so any intra-block deletion, inversion, or edit
+		// reds at once. The literal below is the pin; drifting it is the point.
+		const expectedAdmission = [
+			"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+			"finding at all. A harness or evidence observation is admitted only where you establish one of:",
+			"A — actual artifact defect: given state X the artifact produces Y where a settled contract",
+			"  requires Z. A state trace suffices; no test is required. Look here FIRST.",
+			"B — the check does not establish what its POSITION in the corpus makes it claim. Name",
+			"  the claim / the evidence / what it actually observes / why that cannot establish it.",
+			"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
+			"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
+			"  reaches a guard whose pinning a settled contract requires and no other guard.",
+			"Otherwise: RECORD, DO NOT ADMIT. State each recorded-not-admitted observation in your return's",
+			"summary with the ground it failed; it enters no ruling and no payload key. The ground is §1.9's",
+			'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
+			"disposition exists or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an",
+			"effective finding has no exit but REFUTED, so the ordering is the whole of the token.",
+			// The three SYMMETRY lines that closed this block moved OUT of it
+			// (issue #204) and into the shared exculpatory block pinned below.
+			// They are not deleted — they are re-homed, because the rule binds
+			// the reviewer as well and this block reaches only the Judge.
+			//
+			// Their absence is part of the pin, and round 1's EF-1 is that the
+			// previous wording of this sentence claimed a coverage this arm did
+			// not have: the assertion was `includes`, so a production that kept
+			// the old lines here AND gained the shared block left this literal a
+			// substring and the arm GREEN. Measured at that head: that mutant
+			// red exactly one arm in the file, and it was not this one.
+			//
+			// The assertion below is now EQUALITY over the extracted block, so
+			// the claim is true as written: a retention here — verbatim or
+			// reworded — lengthens the block and reds this arm.
+		].join("\n");
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.equal(
+			composedBlock(text, "ADMISSION —"),
+			expectedAdmission,
+			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was deleted, " +
+				"inverted, edited, or APPENDED TO; every ground, the record-do-not-admit default with its summary " +
+				"channel and §1.9 ground, and the demote-before-dedup ordering are pinned as one whole, END INCLUDED " +
+				"(#196 round 1's EF-2: substring needles survived polarity inversion; #204 round 1's EF-1: a substring " +
+				"pin over this block could not see a second home of the exculpatory rule appended to it)",
+		);
+		assert.ok(
+			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
+			"the admission burden must compose BEFORE the dedup obligation — demote-before-dedup is an ordering, and " +
+				"a burden stated after dedup arrives after the decision it governs",
+		);
+	});
+
+	it("the reviewer brief separates observations from findings without narrowing the search (issue #196)", () => {
+		// Whole-block pin, same ground and method as the judge arm above.
+		const expectedObservation = [
+			"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+			"discipline narrows NOTHING about what you look for. It shapes only the return: an observation",
+			"that establishes no actual artifact defect, no failure of a claim its check's position makes,",
+			"and no absence of contract-required evidence is reported as an OBSERVATION: carry it in the",
+			"return's summary, distinctly labelled OBSERVATION — never as a payload key (the closed shape",
+			"discards an unknown key) and never pressed into finding grammar.",
+		].join("\n");
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.ok(
+			text.includes(expectedObservation),
+			"the reviewer brief's OBSERVATIONS block is not the expected literal — the not-narrowed half, " +
+				"the groundless condition's polarity, the summary channel, or the never-finding-grammar " +
+				"prohibition was deleted, inverted, or edited (round 1's EF-2)",
+		);
+	});
+
+	// ISSUE #204 — the exculpatory-claim burden reaches BOTH briefs.
+	//
+	// The rule was settled in #195/#196 and composed into the Judge's brief
+	// alone, as three lines closing the ADMISSION block. Measured on main
+	// (`724cea4`) over the COMPOSED documents, not the source: the reviewer
+	// brief contained none of "exculpatory", "SYMMETRY", or "enumeration
+	// establishes an enumeration".
+	//
+	// The party that MAKES a class-closure claim is the reviewer; the Judge
+	// only consumes one. The incident the rule came from was a panel's claim
+	// — nine hiding shapes killed, closure reported, a tenth shape alive —
+	// and the unearned closure then reached §1.4's diagnosis as evidence that
+	// ground had been closed, which is the NONE direction: the one value that
+	// admits another autonomous repair attempt. So the brief that never
+	// carried the rule is the brief whose reader the rule is about.
+	//
+	// ONE HOME (§3.11), and this pair of arms IS the tie: the expected
+	// literal is declared ONCE here and asserted against BOTH composed
+	// documents. A production that restated the rule per brief in two
+	// wordings reds one of the two arms; a production that drifted the
+	// shared constant reds both. No third mechanism is needed for the tie,
+	// and none is minted.
+	const EXPECTED_EXCULPATORY = [
+		"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+		"An enumeration establishes an enumeration, never a class: nine hiding shapes killed is evidence",
+		"about nine shapes and is silent about a tenth. Never assert a closure your evidence does not",
+		"establish. State it AS a claim with its enumeration attached — what you covered, how, and what",
+		"that leaves open — in your return's summary, distinctly labelled. The PROHIBITION is the",
+		"load-bearing half and needs no channel: what you may not do is report a class closed. This binds",
+		"the claim you make and the claim you are handed — an unearned closure reaches the repair-history",
+		"diagnosis (§1.4) as evidence that ground was closed, and NONE is the value that admits another",
+		"repair attempt.",
+	].join("\n");
+
+	it("the REVIEWER brief carries the exculpatory-claim burden (issue #204)", () => {
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.equal(
+			composedBlock(text, "EXCULPATORY CLAIMS"),
+			EXPECTED_EXCULPATORY,
+			"the reviewer brief does not carry the exculpatory-claim block as the expected literal, END INCLUDED. " +
+				"The reviewer is the party that MAKES class-closure claims, and a burden told only to the Judge " +
+				"arrives after the claim is already asserted as settled — the measured incident is a panel reporting " +
+				"a class closed on nine killed shapes with a tenth alive, which then fed §1.4's diagnosis in the NONE " +
+				"direction. Equality, not substring: a line APPENDED to this block can weaken the rule while leaving " +
+				"every substring pin green (round 1's non-admitted observation (i), closed here rather than left)",
+		);
+	});
+
+	it("the JUDGE brief carries the SAME exculpatory block, byte for byte — one home, not two wordings (issue #204)", () => {
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.equal(
+			composedBlock(text, "EXCULPATORY CLAIMS"),
+			EXPECTED_EXCULPATORY,
+			"the judge brief does not carry the exculpatory-claim block as the expected literal, END INCLUDED. The " +
+				"consumer side of the rule is not optional — the Judge weighs a claim it is handed — and this literal " +
+				"is declared once in this file and asserted against both documents, so a per-brief restatement reds " +
+				"exactly here",
+		);
+	});
+
+	it("the exculpatory burden composes with the claim discipline it belongs to, ahead of the mechanics (issue #204)", () => {
+		const b = briefs();
+		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.ok(
+			reviewer.indexOf("OBSERVATIONS vs FINDINGS") < reviewer.indexOf("EXCULPATORY CLAIMS"),
+			"the reviewer's positive-claim discipline and its negative-claim burden are two halves of one rule and " +
+				"compose together — the exculpatory block arrived before the observation block, which splits them",
+		);
+		assert.ok(
+			reviewer.indexOf("EXCULPATORY CLAIMS") < reviewer.indexOf("RETURN:"),
+			"the reviewer's exculpatory burden composed after the return mechanics — a claim discipline stated " +
+				"below the transport contract reads as an afterthought to it",
+		);
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.ok(
+			judge.indexOf("ADMISSION") < judge.indexOf("EXCULPATORY CLAIMS"),
+			"the judge's exculpatory block composed before the admission burden — the exculpatory rule is what " +
+				"admission does with a NEGATIVE claim, so it follows the grounds it is the counterpart of",
+		);
+		assert.ok(
+			judge.indexOf("EXCULPATORY CLAIMS") < judge.indexOf("1. DEDUP"),
+			"the judge's exculpatory burden composed after the dedup obligation — like admission, it governs what " +
+				"enters the bundle at all, and a burden stated after dedup arrives after the decision it governs",
+		);
+	});
+
+	it("the exculpatory rule appears EXACTLY ONCE per brief — the re-home is a move, not a copy (issue #204)", () => {
+		// WHAT THIS ARM COVERS, re-scoped by round 1's EF-2 — the previous
+		// wording claimed it CLOSED the two-homes residual, and that claim was
+		// false in a way the arm itself could not see. Its needles are two
+		// exact sentences, so a second home stating the same rule in DIFFERENT
+		// WORDS contains neither needle, the count stays at one, and the whole
+		// file stayed green. Measured at that head: a reworded retention in
+		// ADMISSION_BURDEN gave 55/55 pass.
+		//
+		// The two-homes shape is now carried by the EQUALITY pins above, which
+		// see a block's end and therefore see a retention of either wording.
+		// What is left for this arm is the case equality cannot reach: a
+		// repetition somewhere ELSE in the composed document — a third block,
+		// or the same rule restated inside a block this file does not pin.
+		//
+		// STATED OPEN, not closed: a REWORDED restatement in a block no arm
+		// pins is caught by neither mechanism. Equality sees only the blocks
+		// named here; a count sees only these two sentences. That is an
+		// enumeration of two mechanisms, not a class closure, and no arm in
+		// this file should be cited for one.
+		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+		const b = briefs();
+		const documents = [
+			["reviewer", b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES)],
+			[
+				"judge",
+				b.composeJudgeBrief(
+					[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+					{ state: "present", criteria: ["AC1"] },
+					{ changeDescription: "x" },
+					FENCES,
+				),
+			],
+		] as const;
+		for (const [name, text] of documents) {
+			assert.equal(
+				occurrences(text, "An enumeration establishes an enumeration"),
+				1,
+				`the ${name} brief states the enumeration sentence a number of times other than once. Twice means the ` +
+					"rule was COPIED into the shared block while its old home was left standing — two homes for one " +
+					"property, which drift independently and which no whole-block `includes` pin can see, since a " +
+					"trailing addition leaves every such pin green",
+			);
+			assert.equal(
+				occurrences(text, "EXCULPATORY CLAIMS"),
+				1,
+				`the ${name} brief opens the exculpatory block a number of times other than once`,
+			);
+		}
+	});
+
+	it("the reviewer's claim disciplines add NO payload key — the closed shape is still {token, findings} (issue #204)", () => {
+		// The burden's recording half rides the summary channel the observation
+		// discipline already names, so it adds no new dependency CLASS on the
+		// orchestrator-path gap filed as #203 — and its prohibition half needs
+		// no channel at all. What must not have happened is a widening of the
+		// closed payload to carry it.
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.ok(
+			text.includes('{"token": "APPROVED" | "FINDINGS", "findings": string[]}'),
+			"the reviewer's closed payload shape changed while adding a claim discipline — the burden rides the " +
+				"return's summary, and join.ts discards a return carrying an unknown key",
+		);
+	});
+
 	it("an empty manifest crosses as an empty manifest, never as absent", () => {
 		const b = briefs();
 		const text = b.composeJudgeBrief(
@@ -376,6 +671,291 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 });
 
 describe("§1.7/§1.9 the composed round (issue #184)", () => {
+	it("the round carries EVERY admitted return's summary into the record, verbatim (issue #203)", async () => {
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+		// Distinct per lens, so a record that carried one slot's prose under
+		// another slot's name reds rather than passing on a coincidence.
+		const slotText = (brief: string) =>
+			brief.includes('lens "runtime"')
+				? "zq-runtime OBSERVATION: not admitted, ground B"
+				: "zq-suite OBSERVATION: none";
+		const fake = fakeDispatch(
+			(brief) => ({
+				disposition: "admitted",
+				ok: true,
+				summary: slotText(brief),
+				payload: findingsPayload("zq a real finding"),
+				compare: "confirmed",
+			}),
+			() => ({
+				disposition: "admitted",
+				ok: true,
+				summary: "zq-judge OBSERVATION: recorded, not admitted, no ground met",
+				payload: judgePayload([
+					{
+						finding: "zq a real finding",
+						provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
+						validity: "REFUTED",
+						evidence: "zq the refuting command",
+					},
+				]),
+				compare: "confirmed",
+			}),
+		);
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: ["AC1"] },
+			fences: FENCES,
+			changeDescription: "zq the round's own change description",
+			dispatch: fake.dispatch,
+		});
+		const summaries = result.record.summaries ?? [];
+		assert.equal(
+			summaries.length,
+			3,
+			"the round did not record one summary per admitted return — two slots and one Judge ran, so the RECORD " +
+				"half of the admission burden owes three. A count, not a membership check: a channel that drops one " +
+				"actor's prose is the gap issue #203 names",
+		);
+		assert.deepEqual(
+			summaries.filter((entry) => entry.from === "judge"),
+			[{ from: "judge", text: "zq-judge OBSERVATION: recorded, not admitted, no ground met" }],
+			"the Judge's summary is missing or altered — the Judge's closed payload has no slot for a " +
+				"recorded-not-admitted item either, so this channel is the only one it has",
+		);
+		assert.deepEqual(
+			summaries
+				.filter((entry) => entry.from === "slot")
+				.map((entry) => [entry.slot?.lens, entry.text])
+				.sort(),
+			[
+				["runtime", "zq-runtime OBSERVATION: not admitted, ground B"],
+				["suite", "zq-suite OBSERVATION: none"],
+			].sort(),
+			"each slot's summary is not carried verbatim under its OWN slot — prose attributed to the wrong reviewer " +
+				"is worse than prose dropped",
+		);
+	});
+
+	it("a recorded summary reaches NEITHER the bundle NOR the Resolver, on a RESOLVED round (issue #203)", async () => {
+		// The channel is transport. Nothing reads it, so nothing it carries
+		// can change what the round decides — measured by running one round
+		// twice, identical but for summary prose that would be a finding if
+		// anything read it.
+		//
+		// ROUND 1's F4: the first version of this arm ran the APPROVED fast
+		// path in both runs. The Judge was never dispatched, so the Resolver
+		// never executed in either run, and the arm's title claimed a half it
+		// was not positioned to observe — measured, a mutant appending every
+		// summary into `resolution.dispositions` left the whole file green
+		// while firing on other arms' resolved rounds. Both runs now RESOLVE:
+		// the slots return findings, a Judge rules, and the comparison reaches
+		// the adjudication input and the resolution the Resolver derived.
+		const o = orchestrate();
+		const run = async (summary: string) => {
+			const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+			const fake = fakeDispatch(
+				() => ({
+					disposition: "admitted",
+					ok: true,
+					summary,
+					payload: findingsPayload("zq a real finding"),
+					compare: "confirmed",
+				}),
+				() => ({
+					disposition: "admitted",
+					ok: true,
+					summary,
+					payload: judgePayload([
+						{
+							finding: "zq a real finding",
+							provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
+							validity: "CONFIRMED",
+							severity: "SUBSTANTIVE",
+							direction: "live-harm",
+							onCriterion: true,
+							evidence: "zq the command it ran",
+						},
+					]),
+					compare: "confirmed",
+				}),
+			);
+			return o.reviewRound({
+				repoRoot: repo,
+				baseRef: "HEAD~1",
+				headRef: "HEAD",
+				manifest: { state: "present", criteria: ["AC1"] },
+				fences: FENCES,
+				changeDescription: "zq d",
+				dispatch: fake.dispatch,
+			});
+		};
+		const quiet = await run("");
+		const loud = await run("FINDINGS: zq this prose would be a finding if anything read it");
+		// The arm's own premise, asserted rather than assumed: if these rounds
+		// stopped resolving, every comparison below would compare two empty
+		// shapes and the arm would pass measuring nothing — which is exactly
+		// how its predecessor failed.
+		assert.equal(
+			quiet.review.state,
+			"resolved",
+			"the round did not RESOLVE, so the Resolver never ran and this arm cannot observe what reaches it — the " +
+				"defect round 1's F4 named, reintroduced",
+		);
+		assert.ok(
+			quiet.record.bundle.length > 0,
+			"the bundle is empty, so comparing the two runs' bundles compares nothing",
+		);
+		assert.deepEqual(
+			loud.record.bundle,
+			quiet.record.bundle,
+			"summary prose changed the bundle — §1.7 builds the bundle from the payload's findings alone, and an " +
+				"observation that entered it would have been admitted by nobody",
+		);
+		assert.deepEqual(
+			loud.record.adjudication,
+			quiet.record.adjudication,
+			"summary prose changed the Judge's rulings input — the adjudication is parsed from the closed payload, and " +
+				"prose the Judge carried beside it is not a ruling",
+		);
+		assert.deepEqual(
+			loud.review,
+			quiet.review,
+			"summary prose changed the review outcome — the Resolver is deterministic over the ADJUDICATED finding " +
+				"set, and prose no adjudicator ruled cannot reach it or its dispositions",
+		);
+		assert.deepEqual(
+			(loud.record.summaries ?? []).map((entry) => entry.text),
+			Array(3).fill("FINDINGS: zq this prose would be a finding if anything read it"),
+			"the prose was not recorded at all — this arm must not pass by the channel being absent. Three admitted " +
+				"returns ran: two slots and one Judge",
+		);
+		assert.deepEqual(
+			quiet.record.summaries ?? [],
+			[],
+			"an EMPTY summary was recorded as an entry — a delegate that wrote nothing has nothing to record, and " +
+				"empty entries make the channel's own contents unreadable",
+		);
+	});
+
+	it("an APPROVED, findings-free round records its slots' summaries (issue #203, round 2's EF1)", async () => {
+		// The round shape in which this channel matters MOST, and the one
+		// round 2 measured had no arm at all.
+		//
+		// On the approved fast path no finding was admitted and no Judge ran,
+		// so a delegate's recorded-not-admitted OBSERVATION is the ONLY prose
+		// the round produces. The previous head covered it by accident — the
+		// differential arm happened to drive this path — and repairing that
+		// arm's own defect (round 1's F4) moved it to a RESOLVED round and
+		// took the accidental coverage with it. Measured at that head: a
+		// mutant dropping every summary on approved rounds left the whole
+		// suite green, 0 arms red, while the same mutant against the previous
+		// head's copy of this file red 1.
+		//
+		// So this arm exists to hold that half ON PURPOSE rather than as a
+		// side effect, and it asserts its own PREMISE — that the round really
+		// took the approved path and the Judge really never ran — so it
+		// cannot pass on a round that quietly stopped being the shape it
+		// names.
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+		const fake = fakeDispatch((brief) => ({
+			disposition: "admitted",
+			ok: true,
+			summary: brief.includes('lens "runtime"')
+				? "zq-runtime OBSERVATION: recorded, not admitted"
+				: "zq-suite OBSERVATION: none",
+			payload: approvedPayload,
+			compare: "confirmed",
+		}));
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: ["AC1"] },
+			fences: FENCES,
+			changeDescription: "zq d",
+			dispatch: fake.dispatch,
+		});
+		assert.equal(
+			result.review.state,
+			"approved",
+			"the round did not take the APPROVED fast path, so this arm is not measuring the shape it names",
+		);
+		assert.equal(
+			fake.judgeBriefs.length,
+			0,
+			"the Judge was dispatched, so this is not the findings-free path and the premise of this arm is gone",
+		);
+		assert.deepEqual(
+			(result.record.summaries ?? []).map((entry) => [entry.from, entry.slot?.lens, entry.text]).sort(),
+			[
+				["slot", "runtime", "zq-runtime OBSERVATION: recorded, not admitted"],
+				["slot", "suite", "zq-suite OBSERVATION: none"],
+			].sort(),
+			"an approved, findings-free round dropped its slots' prose. This is the one round shape where a " +
+				"recorded-not-admitted observation is ALL the round produces — no finding was admitted and no Judge " +
+				"ran — so a channel that is silent here is silent exactly when it is the only channel there is",
+		);
+	});
+
+	it("a NON-ADMITTED return contributes no summary entry (issue #203, round 1's F6)", async () => {
+		// The `disposition === "admitted"` gates. Round 1 measured that no arm
+		// separated the admitted population from its complement: dropping both
+		// gates and recording a REFUSED outcome's machine-authored `cause` as
+		// an actor's verbatim prose left the file green. That is durable
+		// MISATTRIBUTION — record.ts's own doc block ranks it worse than prose
+		// dropped — so the complement is pinned here, by count and by content.
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
+		const fake = fakeDispatch((brief) =>
+			brief.includes('lens "runtime"')
+				? { disposition: "refused", cause: "zq-refusal-cause the caller must never read as prose" }
+				: {
+						disposition: "admitted",
+						ok: true,
+						summary: "zq-admitted the only prose this round has",
+						payload: approvedPayload,
+						compare: "confirmed",
+					},
+		);
+		const result = await o.reviewRound({
+			repoRoot: repo,
+			baseRef: "HEAD~1",
+			headRef: "HEAD",
+			manifest: { state: "present", criteria: ["AC1"] },
+			fences: FENCES,
+			changeDescription: "zq d",
+			dispatch: fake.dispatch,
+		});
+		assert.deepEqual(
+			result.record.summaries ?? [],
+			[
+				{
+					from: "slot",
+					slot: { lens: "suite", surface: "the test suite" },
+					text: "zq-admitted the only prose this round has",
+				},
+			],
+			"the refused slot contributed an entry, or the admitted one did not. A refusal carries a machine-authored " +
+				"`cause`, not a delegate's summary: recording it would put words no actor wrote into the durable record " +
+				"under that actor's name, and carry them verbatim to §1.4's history reader",
+		);
+		// The premise, asserted so the arm cannot pass by the refusal never
+		// happening: one slot really was refused, so its result is invalid.
+		assert.deepEqual(
+			result.record.slots.map((entry) => [entry.slot.lens, entry.valid]),
+			[
+				["runtime", false],
+				["suite", true],
+			],
+			"the fixture did not produce one refused slot and one admitted slot, so this arm's complement is empty",
+		);
+	});
+
 	it("a findings-free complete round is APPROVED and the Judge is never dispatched", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
@@ -779,6 +1359,342 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 			},
 		},
 	};
+
+	// ISSUE #208 — the disposition domain gets ONE home and the three laws.
+	//
+	// Measured on main before this change: `DISPOSITIONS` was a private
+	// `Set` in record.ts (the runtime enforcement, consulted by the parse)
+	// while resolve.ts hand-spelled the same five members as the `Disposition`
+	// union (which TYPES what the Resolver produces). Two homes, no tie, no
+	// disclosure — and a sixth member added at the type home was fully silent
+	// across the whole corpus AND `tsc --noEmit`. That is the identical shape,
+	// and the identical measurement, that PR #187's EF1 repaired for the
+	// resolution outcomes one type declaration above it.
+	//
+	// The method is the one main settled for that domain and is not re-derived
+	// here: CONTENTS over the live exported home, IDENTITY BY PERTURBATION
+	// (the object an arm reads IS the object the parser consults, proven for
+	// members nobody named), and EMPTINESS (the home is the SOLE accept site).
+	// The type side is welded by derivation rather than by an arm, and that
+	// weld is `tsc`'s — disclosed in place, because nothing here reds on a
+	// SECOND home, only on a divergent one.
+	//
+	// RESIDUAL DISCLOSURE for this describe: the perturbation arms are the
+	// only state-mutating arms in this file. Each restores in a `finally`,
+	// each POST-ASSERTS its restore rather than trusting it, and `node --test`
+	// runs one file's arms serially with no subtest concurrency here.
+	const DISPOSITION_MEMBERS = ["repair", "defer", "remedy", "measure-escalate", "none"] as const;
+	/** A record carrying ONE disposition, over an arbitrary string — no cast, so a non-member is expressible. */
+	const bodyWithDisposition = (disposition: string): string =>
+		records().composeReviewRecord({
+			...sample,
+			review: {
+				state: "resolved",
+				resolution: { dispositions: [{ finding: "zq f", disposition }], outcome: "clear" },
+			},
+		});
+
+	it("the DERIVED disposition type has exactly the home's members — a witness, not an arm (issue #208)", () => {
+		// Measured, not described: the three behavioural laws below close the
+		// HOME, and they are silent about the DERIVED declaration. A member
+		// appended at the derivation site (`(typeof DISPOSITIONS)[number] |
+		// "zq-sixth"`) widens the type and nothing downstream narrows it back,
+		// so it red neither the suite nor `tsc` — 58 pass / 0 fail, 0 type
+		// errors. That is the shape this witness exists for, and it is the one
+		// the outcome domain never needed, because there a downstream
+		// assembler assigns into a narrower type and the compiler catches it.
+		//
+		// The witness cannot be written without naming every member, so a
+		// sixth one makes this object literal missing a property.
+		//
+		// RESIDUAL DISCLOSURE, stated here AND at the derivation site: this
+		// witness reds `tsc --noEmit`, NOT this suite. A widened `Disposition`
+		// leaves every arm in this file green and is caught only by the
+		// type-check step, which is therefore part of this guard rather than
+		// an adjacent convenience. The runtime assertion below does NOT reach
+		// the home: both of its operands are literals in this file. The tie
+		// from the names below to record.ts's DISPOSITIONS is the separate
+		// CONTENTS arm's, and this witness is tied to the home only through
+		// it. Measured: with `none` dropped from the home, this arm stays
+		// GREEN while CONTENTS, IDENTITY and EMPTINESS red.
+		const witness: Record<UpstreamDisposition, true> = {
+			repair: true,
+			defer: true,
+			remedy: true,
+			"measure-escalate": true,
+			none: true,
+		};
+		assert.deepEqual(
+			Object.keys(witness).sort(),
+			[...DISPOSITION_MEMBERS].sort(),
+			"this arm's witness object and DISPOSITION_MEMBERS — both literals in this file — no longer name the same " +
+				"five members. resolve.ts's derived `Disposition` is observable here only by tsc: the type-only import is " +
+				"erased before this runs",
+		);
+	});
+
+	it("CONTENTS — the exported disposition home carries exactly the five committed members (issue #208)", () => {
+		assert.deepEqual(
+			[...records().DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"record.ts's DISPOSITIONS — the home that decides whether a resolved record PARSES at all, and the home " +
+				"resolve.ts's `Disposition` is derived from — no longer carries §1.9's five dispositions. A member " +
+				"dropped here silently stops a legitimate record from parsing; a member added here is taken up by " +
+				"resolve.ts's DERIVED `Disposition` and reds only the type witness, under tsc",
+		);
+	});
+
+	it("IDENTITY — a value pushed onto the LIVE DISPOSITIONS starts parsing, and the refusal returns (issue #208)", () => {
+		const r = records();
+		const probe = "zq-not-a-disposition";
+		const body = bodyWithDisposition(probe);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"a record carrying a non-member disposition parsed before any perturbation — the domain is not closed, and " +
+				"this arm's premise is gone",
+		);
+		try {
+			r.DISPOSITIONS.push(probe);
+			assert.notEqual(
+				r.parseReviewRecord(body),
+				undefined,
+				"pushing onto the exported DISPOSITIONS did not change what parseReviewRecord accepts, so the array this " +
+					"arm reads is NOT the object the validator consults — a second, unreachable copy. The CONTENTS " +
+					"assertion above would then certify a home nothing enforces",
+			);
+		} finally {
+			const at = r.DISPOSITIONS.indexOf(probe);
+			if (at !== -1) {
+				r.DISPOSITIONS.splice(at, 1);
+			}
+		}
+		assert.deepEqual(
+			[...r.DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"the home's contents differ from the committed list after this arm — either the probe was not spliced out, " +
+				"or the home itself has changed; this assertion cannot tell those apart, and later arms are unsound " +
+				"either way",
+		);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"the refusal did not return after the restore — the validator is reading something the restore did not reach",
+		);
+	});
+
+	it("EMPTINESS — with DISPOSITIONS emptied, EVERY committed member stops parsing (issue #208)", () => {
+		const r = records();
+		const saved = [...r.DISPOSITIONS];
+		try {
+			r.DISPOSITIONS.length = 0;
+			for (const disposition of DISPOSITION_MEMBERS) {
+				assert.equal(
+					r.parseReviewRecord(bodyWithDisposition(disposition)),
+					undefined,
+					`with the home emptied, a ${disposition}-disposed record still parsed — some OTHER site accepts it, so ` +
+						"the home is not the sole accept site and a member dropped there would be caught by no contents " +
+						"assertion. This is the mutant a probe list cannot name: a second accept site for a member the home " +
+						"already carries is invisible to every positive-parse arm",
+				);
+			}
+		} finally {
+			r.DISPOSITIONS.length = 0;
+			r.DISPOSITIONS.push(...saved);
+		}
+		assert.deepEqual(
+			[...r.DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"the home's contents differ from the committed list after this arm — either the emptied home was not " +
+				"refilled, or the home itself has changed; this assertion cannot tell those apart, and later arms are " +
+				"unsound either way",
+		);
+		for (const disposition of DISPOSITION_MEMBERS) {
+			assert.notEqual(
+				records().parseReviewRecord(bodyWithDisposition(disposition)),
+				undefined,
+				`a ${disposition}-disposed record no longer parses after the restore`,
+			);
+		}
+	});
+
+	// ISSUE #203 — the orchestrator-driven round's durable channel for a
+	// recorded-not-admitted observation.
+	//
+	// The admission burden's default is RECORD, DO NOT ADMIT, and the
+	// composed briefs tell both actor kinds to carry such an item in the
+	// return's `summary`, distinctly labelled. In a caller-mediated round
+	// the caller reads that summary and records it. In the ORCHESTRATOR
+	// path the summary was dropped on the floor: `slotResultFromDispatch`
+	// reads only the payload, nothing read `outcome.summary`, and the record
+	// had no prose field — so the RECORD half of the default was
+	// unrealizable there.
+	//
+	// THE SURFACE, and it is one home rather than two: a single round-level
+	// `summaries` list carrying both a slot's summary and the Judge's,
+	// rather than a field on SlotRecord plus a second field for the Judge.
+	// Two fields would be two homes for one property.
+	//
+	// WHAT IS DELIBERATELY ABSENT: any extraction of "the observation part"
+	// of a summary. Deciding which prose is an observation is a semantic
+	// act, and §1.9 mints no second adjudicator — so the WHOLE summary
+	// crosses verbatim and nothing reads it. That is transport, not
+	// judgment, and it is the same reason §1.7 makes the bundle transport.
+	/**
+	 * Build a body carrying an ARBITRARY `summaries` value with NO cast:
+	 * compose a typed, valid record and then edit the parsed JSON — the
+	 * same cast-free idiom the EF3 arm's `tamper` already uses in this file.
+	 *
+	 * Round 1's F7 is why the cast this replaced is gone. `composeRaw` took
+	 * `unknown` and cast, which undid for these arms exactly what issue
+	 * #208's EF5 bought for every other call site — and it was not
+	 * theoretical: with `from: "judge"` typo'd to `"judg"` in ONE negative
+	 * row, tsc said nothing, the arm stayed green, and the mutant that
+	 * drops the judge-side half of the from/slot agreement went from
+	 * reding 1 arm to reding 0. The named case stopped being measured on
+	 * one character, invisibly.
+	 */
+	const bodyWithSummaries = (summaries: unknown): string =>
+		tamperedBody((parsed) => {
+			parsed.summaries = summaries;
+		});
+	const tamperedBody = (edit: (parsed: Record<string, unknown>) => void): string => {
+		const body = records().composeReviewRecord(sample);
+		const open = body.indexOf("```json\n") + "```json\n".length;
+		const close = body.indexOf("\n```", open);
+		const parsed = JSON.parse(body.slice(open, close)) as Record<string, unknown>;
+		edit(parsed);
+		return body.slice(0, open) + JSON.stringify(parsed, null, "\t") + body.slice(close);
+	};
+
+	it("a record carrying round summaries round-trips losslessly (issue #203)", () => {
+		const r = records();
+		// Typed, so this literal is the one #208's EF5 protects: a typo in a
+		// key reds `tsc`.
+		const record: ReviewRecord = {
+			...sample,
+			summaries: [
+				{ from: "slot", slot: { lens: "runtime", surface: "s" }, text: "OBSERVATION: zq recorded, not admitted" },
+				{ from: "judge", text: "OBSERVATION: zq the judge's own recorded-not-admitted item" },
+			],
+		};
+		assert.deepEqual(
+			r.parseReviewRecord(r.composeReviewRecord(record)),
+			record,
+			"parse(compose(record)) is not the record once summaries ride it — the one channel the RECORD half of the " +
+				"admission burden has in the orchestrator path does not survive the round trip",
+		);
+	});
+
+	it("a record WITHOUT summaries still parses — the key is optional, not a migration (issue #203)", () => {
+		const r = records();
+		assert.deepEqual(
+			r.parseReviewRecord(r.composeReviewRecord(sample)),
+			sample,
+			"a record with no summaries key stopped parsing. Records already posted as platform comments carry five " +
+				"keys; making the sixth REQUIRED would make every one of them unreadable, and §1.4's history would " +
+				"silently lose those review states",
+		);
+	});
+
+	it("the top-level shape stays CLOSED around the new optional key (issue #203)", () => {
+		const r = records();
+		assert.equal(
+			r.parseReviewRecord(
+				tamperedBody((parsed) => {
+					parsed.zqUnknown = true;
+				}),
+			),
+			undefined,
+			"an unknown top-level key parsed — admitting an optional key must not turn the exact-count gate into no " +
+				"gate at all; every key must still be a known one",
+		);
+		for (const missing of ["head", "slots", "bundle", "adjudication", "review"]) {
+			assert.equal(
+				r.parseReviewRecord(
+					tamperedBody((parsed) => {
+						delete parsed[missing];
+					}),
+				),
+				undefined,
+				`a record missing the required key ${JSON.stringify(missing)} parsed — the five that were required before ` +
+					"this change are still required, and an optional sixth must not relax them",
+			);
+		}
+	});
+
+	it("a non-list summaries value is REFUSED, not thrown on (issue #203, round 1's F5)", () => {
+		// The container half of the parse's summaries gate. Round 1 measured
+		// that no arm in the corpus fed a non-array value, so dropping
+		// `!Array.isArray(...)` left 1185 tests green — while a record body
+		// whose `summaries` is a string then made the parse THROW
+		// ("candidate.summaries.every is not a function") out of a function
+		// contracted to answer `undefined`. Both halves are pinned here: the
+		// refusal, and that it is a refusal rather than a throw.
+		const r = records();
+		for (const value of ["OBSERVATION: prose, not a list", 7, true, { from: "judge", text: "t" }, null]) {
+			let parsed: unknown;
+			assert.doesNotThrow(
+				() => {
+					parsed = r.parseReviewRecord(bodyWithSummaries(value));
+				},
+				`parseReviewRecord THREW on a summaries value of ${JSON.stringify(value)} — the module's contract is that a malformed body is undefined, never an exception the caller did not sign up for`,
+			);
+			assert.equal(
+				parsed,
+				undefined,
+				`a summaries value of ${JSON.stringify(value)} parsed — the gate's container half admits only a list, and ` +
+					"a non-list reaching §1.4's history reader as a valid record is a record nothing vouched for",
+			);
+		}
+	});
+
+	it("each summary entry is shape-gated, including the from/slot agreement (issue #203)", () => {
+		const r = records();
+		const slot = { lens: "runtime", surface: "s" };
+		// TYPED bases, and each is asserted to parse below before any
+		// deviation is built from it. Round 1's F7: a negative row spelled
+		// wholly inline is still a refusable shape when its own spelling is
+		// typo'd, so the arm passes for the wrong reason and the mutant it
+		// exists for stops reding. Deriving every row from a base that must
+		// itself parse makes that typo red BEHAVIOURALLY — it does not
+		// depend on the type checker seeing it.
+		const slotBase: RoundSummary = { from: "slot", slot, text: "zq base prose" };
+		const judgeBase: RoundSummary = { from: "judge", text: "zq base prose" };
+		for (const base of [slotBase, judgeBase]) {
+			assert.notEqual(
+				r.parseReviewRecord(bodyWithSummaries([base])),
+				undefined,
+				`the ${base.from} BASE does not parse, so every negative row derived from it below refuses for the wrong ` +
+					"reason and measures nothing",
+			);
+		}
+		for (const [why, entry] of [
+			["an unknown key", { ...judgeBase, zqExtra: 1 }],
+			["a from outside the closed pair", { ...judgeBase, from: "panel" }],
+			["a non-string text", { ...judgeBase, text: 7 }],
+			["a missing text", { from: judgeBase.from }],
+			["a slot-sourced entry with NO slot", { from: slotBase.from, text: slotBase.text }],
+			["a judge-sourced entry WITH a slot", { ...judgeBase, slot }],
+			["a malformed slot", { ...slotBase, slot: { lens: "runtime" } }],
+			["a non-object entry", "OBSERVATION: prose"],
+		] as const) {
+			assert.equal(
+				r.parseReviewRecord(bodyWithSummaries([entry])),
+				undefined,
+				`a summary entry with ${why} parsed — §1.9's shape gate is deep, and prose admitted through an ungated ` +
+					"slot is prose a later reader cannot attribute. The from/slot agreement is part of the gate: a " +
+					"slot-sourced summary with no slot cannot be attributed, and a judge-sourced one with a slot " +
+					"attributes the Judge's words to a reviewer",
+			);
+		}
+		assert.notEqual(
+			r.parseReviewRecord(bodyWithSummaries([])),
+			undefined,
+			"an EMPTY summaries list refused — a round in which every delegate wrote an empty summary is ordinary, " +
+				"and refusing it would make the channel's absence unrepresentable",
+		);
+	});
 
 	it("the composed body opens with the content marker carrying the head", () => {
 		const r = records();

@@ -18,6 +18,36 @@
  * the permission for a clean review to be clean. Each is a sentence a
  * real dispatch was once refused or degraded for lacking.
  *
+ * DECISION — the admission burden (issue #196, deriving §3.12's settled
+ * scoping) composes into both briefs: the Judge is told the three
+ * admitting grounds, the record-do-not-admit default on §1.9's own
+ * sentence, and the demote-before-dedup ordering; the reviewer is told
+ * to report groundless observations as observations without narrowing
+ * the search. No disposition, state, actor or phase is added — the
+ * token is §1.9's.
+ *
+ * DECISION — the exculpatory-claim burden (issue #204) is ONE block
+ * composed into BOTH briefs, not a per-role restatement. #196 landed it
+ * as three lines closing the Judge's ADMISSION block; those lines are
+ * RE-HOMED here rather than copied, because the party that MAKES a
+ * class-closure claim is the reviewer and the Judge only weighs one it
+ * is handed. Two wordings of one rule would be two homes (§3.11) that
+ * drift independently, so the block is written to read correctly in
+ * both voices — "the claim you make and the claim you are handed" —
+ * and the suite declares its literal once and asserts it against both
+ * composed documents.
+ *
+ * DECISION — the exculpatory burden's recording half rides the return's
+ * `summary`, the channel OBSERVATION_DISCIPLINE already names; no
+ * payload key is added and the closed `{token, findings}` shape is
+ * untouched. Stated so the dependency is not silent: that channel's
+ * prose is DROPPED in the orchestrator-driven path (issue #203), so the
+ * recording half inherits that gap. It adds no new dependency CLASS —
+ * the same channel already carries observations — and the block's
+ * load-bearing half is a PROHIBITION, which needs no channel at all:
+ * what a delegate may not do is report a class closed. #203 is not
+ * solved here and is not deepened past the class it already records.
+ *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;
  * the Judge's rides the same slot as the closed
@@ -61,6 +91,57 @@ export type ReviewFences = {
 };
 
 export type BriefContext = { changeDescription: string };
+
+const OBSERVATION_DISCIPLINE = [
+	"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+	"discipline narrows NOTHING about what you look for. It shapes only the return: an observation",
+	"that establishes no actual artifact defect, no failure of a claim its check's position makes,",
+	"and no absence of contract-required evidence is reported as an OBSERVATION: carry it in the",
+	"return's summary, distinctly labelled OBSERVATION — never as a payload key (the closed shape",
+	"discards an unknown key) and never pressed into finding grammar.",
+].join("\n");
+
+const ADMISSION_BURDEN = [
+	"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+	"finding at all. A harness or evidence observation is admitted only where you establish one of:",
+	"A — actual artifact defect: given state X the artifact produces Y where a settled contract",
+	"  requires Z. A state trace suffices; no test is required. Look here FIRST.",
+	"B — the check does not establish what its POSITION in the corpus makes it claim. Name",
+	"  the claim / the evidence / what it actually observes / why that cannot establish it.",
+	"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
+	"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
+	"  reaches a guard whose pinning a settled contract requires and no other guard.",
+	"Otherwise: RECORD, DO NOT ADMIT. State each recorded-not-admitted observation in your return's",
+	"summary with the ground it failed; it enters no ruling and no payload key. The ground is §1.9's",
+	'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
+	"disposition exists or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an",
+	"effective finding has no exit but REFUTED, so the ordering is the whole of the token.",
+].join("\n");
+
+/**
+ * The exculpatory-claim burden (issue #204) — the negative counterpart
+ * of the two blocks above, and the ONE home of the rule for both roles.
+ *
+ * The incident, stated because a rule without it gets skimmed: a panel
+ * discharged an admitting ground honestly on nine enumerated hiding
+ * shapes, all genuinely killed, then reported the class closed. A tenth
+ * shape was alive. The unearned closure became a load-bearing input to
+ * §1.4's diagnosis in the next round — in the NONE direction, which is
+ * the one value that admits a further autonomous repair attempt. So the
+ * cost of an unearned exculpatory claim is paid in review states, which
+ * is why this reads as a prohibition rather than as advice.
+ */
+const EXCULPATORY_BURDEN = [
+	"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+	"An enumeration establishes an enumeration, never a class: nine hiding shapes killed is evidence",
+	"about nine shapes and is silent about a tenth. Never assert a closure your evidence does not",
+	"establish. State it AS a claim with its enumeration attached — what you covered, how, and what",
+	"that leaves open — in your return's summary, distinctly labelled. The PROHIBITION is the",
+	"load-bearing half and needs no channel: what you may not do is report a class closed. This binds",
+	"the claim you make and the claim you are handed — an unearned closure reaches the repair-history",
+	"diagnosis (§1.4) as evidence that ground was closed, and NONE is the value that admits another",
+	"repair attempt.",
+].join("\n");
 
 const RETURN_CONTRACT = [
 	"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
@@ -136,6 +217,13 @@ export function composeReviewerBrief(
 		'{"token": "APPROVED" | "FINDINGS", "findings": string[]} — findings empty exactly when the token',
 		"is APPROVED. Each finding states what you observed, where, and the command whose output shows it.",
 		"",
+		OBSERVATION_DISCIPLINE,
+		"",
+		// The positive and negative halves of one claim discipline, composed
+		// together and ahead of the transport mechanics: a claim rule stated
+		// below the return contract reads as an afterthought to it.
+		EXCULPATORY_BURDEN,
+		"",
 		fenceBlock(fences),
 		priorFindingsBlock(fences),
 		"",
@@ -193,6 +281,13 @@ export function composeJudgeBrief(
 		...findings,
 		"",
 		manifestBlock,
+		"",
+		ADMISSION_BURDEN,
+		"",
+		// Admission's negative counterpart: it governs what enters the bundle
+		// at all, so it composes after the grounds it is the complement of and
+		// before the dedup obligation the ordering token turns on.
+		EXCULPATORY_BURDEN,
 		"",
 		"YOUR OBLIGATIONS, all owed (§1.9):",
 		"1. DEDUP over the whole bundle — semantically-one raw findings merge into one effective finding with",
