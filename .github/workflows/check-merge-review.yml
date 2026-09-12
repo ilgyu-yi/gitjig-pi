@@ -64,21 +64,18 @@ name: check-merge-review
 #     non-PR comment queues a run and ends it without an API call. It
 #     does not narrow WHO may wake the job, or on what text.
 #   - the concurrency group is keyed per pull request, so comment traffic
-#     on one PR cannot cancel another's verdict. It bounds CROSS-PR
-#     interference and nothing else — and within ONE pull request it is
-#     an exposure rather than a bound: `cancel-in-progress: true` means
-#     repeated comments cancel that PR's OWN in-flight run, so an actor
-#     who can comment can keep a fresh verdict from completing at all
-#     and leave whatever completed earlier as the visible one.
+#     on one PR cannot cancel another's verdict. Within ONE pull request
+#     `cancel-in-progress: true` cuts both ways, and the setting's own
+#     comment carries the whole reading: repeated comments cancel that
+#     PR's OWN in-flight run, which ends its runner minutes and can also
+#     keep a fresh verdict from completing at all.
 #   - `timeout-minutes: 10` bounds how long ONE woken run may spend. It
 #     is not the only bound on that cost — the `if:` above ends a
 #     plain-issue run before a job is allocated, and cancellation ends
 #     an in-flight one — and none of the three bounds how MANY runs are
 #     woken, which is the cost that stays open: an actor who can comment
 #     can spend runner minutes and fill the run list at will. That is a
-#     live residual of the unscoped domain, stated here because the
-#     paragraph below owns a different one and this one would otherwise
-#     be named nowhere.
+#     live residual of the unscoped domain.
 #   - the token is read-only on every scope it grants — contents,
 #     pull-requests and issues — and the script performs reads only and
 #     no write, so a woken run cannot act on the repository whatever

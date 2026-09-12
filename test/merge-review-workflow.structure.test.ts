@@ -142,20 +142,11 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 		// binding is now what the third limb asserts, so the claim and the
 		// assertion are the same statement.
 		//
-		// ROUND 4's S-F2: the helper has TWO branches and only one was
-		// pinned. Measured over the whole suite, deleting the
-		// inline-trailing branch left 1243 pass / 0 fail while deleting the
-		// whole-line branch red 2 arms — and the unpinned branch carries the
-		// same wrong-allow through the other door, shown by construction:
-		// with `if: always()  # github.event.issue.pull_request != null` the
-		// needle survives in an INLINE comment, so a workflow that no longer
-		// carries the discriminator still satisfies an arm matching LIVE for
-		// it. Measured at THIS head, which is the only head a reader can
-		// run: with the helper intact that construction reds on the
-		// discriminator arm, and with the inline branch deleted it reds on
-		// the inline limb below instead — the wrong-allow is closed from
-		// both sides. Both branches are pinned below, each by its own limb
-		// and its own message.
+		// The helper has TWO branches and each is pinned below by its own
+		// limb with its own message. Both are load-bearing: a setting
+		// deleted and its words left behind satisfies an arm matching LIVE
+		// for it, whether the words were left on their own line or after a
+		// live setting on the same one.
 		const commented = `${RAW}\n# if: github.event_name == 'pull_request'\n# issues: read\n# timeout-minutes: 99\n`;
 		const stripped = stripComments(commented);
 		assert.equal(
