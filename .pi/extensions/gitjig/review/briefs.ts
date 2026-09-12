@@ -55,13 +55,12 @@
  * DECISION — the coverage-attribution burden (issue #213) is the
  * SECOND shared claim block, composed into BOTH briefs from one home on
  * the shape #204 settled. Its authorization is §2.4's machine-pair claim
- * shape — "this arm refuses X" ships one attempted violation and its red
- * — which is a settled contract the author was already bound by and a
- * delegate was never told. The reach is what makes this a composition
- * rather than a restatement: §2.4 binds the author across every round;
- * nothing bound a dispatched reviewer or Judge, both of which attribute
- * coverage routinely — a reviewer in a finding ("no arm covers this"), a
- * Judge in the evidence field every ruling owes.
+ * shape — "this arm refuses X" ships one attempted violation and its red.
+ * The REACH is what makes this a composition rather than a restatement:
+ * §2.4 binds the author across every round, and reaches a delegate only
+ * through a brief. Both roles attribute coverage routinely — a reviewer
+ * in the body of a finding ("no arm covers this"), a Judge in the
+ * non-empty evidence field every ruling owes — so both are told here.
  *
  * DECISION — the incident travels COMPRESSED and UNPROVENANCED. The
  * doctrine this block migrates from carries each rule's incident as a
@@ -76,8 +75,7 @@
  * which is the archaeology §2.4 keeps off a living surface however it is
  * spelled; and it may not lean on an antecedent the composed document
  * does not contain, since the delegate reads the brief and nothing else.
- * Recorded here because it was a real decision made without being
- * stated, and it now binds every later block.
+ * This binds every later block.
  *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;

@@ -713,9 +713,18 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 
 	it("the composed BLOCK ROSTER of both briefs is pinned in full — no paragraph may be inserted (issue #213)", () => {
 		// This arm replaces the pair of indexOf ordering assertions the first
-		// draft carried, and subsumes them: a roster pins membership AND order
-		// in one comparison, so two homes for the ordering property are not
-		// minted.
+		// draft carried, so two homes for the BLOCK ordering property are not
+		// minted: a roster pins block membership and block order in one
+		// comparison.
+		//
+		// It does NOT subsume every ordering the replaced arm asserted, and
+		// the first wording of this comment said it did. Measured: the roster
+		// reads each paragraph's FIRST line, so an ordering stated against a
+		// line INSIDE a block is outside its reach. Moving the Judge's
+		// obligation 3 — the non-empty evidence field — ahead of the coverage
+		// block WITHOUT adding a paragraph reds no arm here, while the same
+		// mutant red the replaced assertion. That ordering therefore keeps its
+		// own assertion, below.
 		//
 		// Why it exists at all, stated as the trade-off §2.5 asks for before
 		// complexity is added: deletion and narrowing were both available and
@@ -740,13 +749,20 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		// - the block removed from both sites: A, B, D and R.
 		// - the block moved ahead of the exculpatory burden: R alone.
 		// - a reworded per-brief restatement at the judge site: B alone.
+		// - the Judge's obligation 3 relocated ahead of the coverage block
+		//   without adding a paragraph: NOT R, and NOT A, B or D. The arm that
+		//   reds is the obligation-3 assertion below, which exists because of
+		//   this measurement.
 		//
 		// WHAT THAT LEAVES OPEN, since six built shapes are evidence about six
 		// shapes: an edit INSIDE a block this file equality-pins is caught by
 		// that block's own pin, not by R — measured on the hygiene ledger, which
 		// red its own two arms. An edit inside a block with NO equality pin is
-		// reached by neither mechanism here, and no arm in this file should be
-		// cited as covering it.
+		// reached by neither of the two mechanisms this comment names; whether
+		// some OTHER arm reaches it is per block and unmeasured here, and the
+		// one case measured cuts the other way — weakening a non-first line of
+		// the OBSERVATIONS block reds that block's substring pin. So neither
+		// mechanism named here covers it, and no claim is made about the file.
 		const openings = (document: string): readonly string[] =>
 			document.split("\n\n").map((block) => block.split("\n")[0] as string);
 		const b = briefs();
@@ -802,6 +818,28 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			"the judge brief's block roster drifted — same grounds as the reviewer's, plus: the coverage burden " +
 				"must arrive before the obligations block, because obligation 3's non-empty evidence field is where " +
 				"a Judge attributes coverage",
+		);
+	});
+
+	it("the judge's coverage burden precedes obligation 3, the evidence field itself (issue #213)", () => {
+		// The one ordering the roster above cannot express, kept as its own
+		// assertion because the measurement says so rather than because the
+		// shape is symmetrical: obligation 3 is a LINE INSIDE the obligations
+		// block, not a block opening, and relocating it ahead of the coverage
+		// block without adding a paragraph leaves the roster's deepEqual green.
+		// Both needles are fail-closed: a missing one gives indexOf -1 and reds.
+		const b = briefs();
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.ok(
+			judge.indexOf("COVERAGE ATTRIBUTION") < judge.indexOf("3. Every ruling carries a required NON-EMPTY"),
+			"the judge's coverage burden no longer precedes the evidence-field obligation. That field is where a " +
+				"Judge states which arm covers what, so a rule about how such a claim is earned must arrive before " +
+				"the demand for it, not after",
 		);
 	});
 	it("the coverage rule appears EXACTLY ONCE per brief — one home, no second (issue #213)", () => {
