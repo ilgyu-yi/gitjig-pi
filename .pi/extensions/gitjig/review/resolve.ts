@@ -55,7 +55,7 @@ import type { PanelOutcome, Slot } from "./panel.ts";
 // therefore enforcement-first rather than layer-first, and it is
 // deliberate: a declaration deriving from its enforcer cannot drift from
 // it, whereas an enforcer deriving from a declaration can.
-import type { OUTCOMES } from "./record.ts";
+import type { DISPOSITIONS, OUTCOMES } from "./record.ts";
 
 /** §1.9's validity axis — INDETERMINATE is a ruling, not an absence. */
 export type Validity = "CONFIRMED" | "REFUTED" | "INDETERMINATE";
@@ -121,7 +121,31 @@ export type Adjudication = {
 
 export type AdmitResult = { complete: true; adjudication: Adjudication } | { complete: false; gaps: string[] };
 
-export type Disposition = "repair" | "defer" | "remedy" | "measure-escalate" | "none";
+/**
+ * DERIVED from record.ts's `DISPOSITIONS`, never re-spelled here (issue
+ * #208). The hand-spelled union this replaces was a second home for the
+ * domain, and it typed what this module PRODUCES while the list in
+ * record.ts decided what would parse — so a member added here was
+ * type-clean at the producer and refused by the parser, and a member
+ * added there left this declaration narrower than the instrument it
+ * declares. Neither limb red anything: measured before the repair, a
+ * sixth member added here left the whole corpus and `tsc --noEmit`
+ * fully silent.
+ *
+ * The direction is the same one the outcome union takes, and for the
+ * same reason: a declaration deriving from its enforcer cannot drift
+ * from it, whereas an enforcer deriving from a declaration can.
+ *
+ * RESIDUAL DISCLOSURE, stated at this site because this is where the
+ * gap is reachable: appending a member HERE — `(typeof
+ * DISPOSITIONS)[number] | "something-else"` — widens the type, and no
+ * consumer narrows a Disposition back, so the compiler has nothing to
+ * catch. Measured: that shape reds neither `tsc` nor the suite. It is
+ * closed instead by a type WITNESS in the suite, which reds the
+ * type-check step and not the suite — so the type check is part of that
+ * guard rather than an adjacent convenience.
+ */
+export type Disposition = (typeof DISPOSITIONS)[number];
 
 export type Resolution = {
 	dispositions: { finding: string; disposition: Disposition; remedy?: string }[];

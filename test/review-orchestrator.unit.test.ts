@@ -21,6 +21,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+// A TYPE-ONLY import of the DERIVED disposition union, for the witness
+// that closes the one shape the behavioural laws cannot reach (issue
+// #208). Erased before this file runs, so it adds no runtime dependency
+// — which is also its limit: it reds `tsc`, never this suite.
+import type { Disposition as UpstreamDisposition } from "../.pi/extensions/gitjig/review/resolve.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
@@ -85,6 +90,17 @@ type BriefsModule = {
 };
 type RecordModule = {
 	REVIEW_RECORD_MARKER: string;
+	// Mirrored as MUTABLE arrays on purpose. Production declares both
+	// `as const`, which is a type-level word only; the identity and
+	// emptiness laws below perturb the live objects and restore them, and
+	// that reachability is the production module's disclosed residual, not
+	// an accident this mirror invents.
+	OUTCOMES: string[];
+	DISPOSITIONS: string[];
+	// `ReviewRecord` above already types a disposition as a plain `string`,
+	// so an adversarial disposition is expressible here without a cast and
+	// without widening — measured: narrowing this back adds zero tsc errors,
+	// and it is what reds TS2561 on a typo in an inline record literal.
 	composeReviewRecord(record: ReviewRecord): string;
 	parseReviewRecord(body: string): ReviewRecord | undefined;
 };
@@ -1052,6 +1068,164 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 			},
 		},
 	};
+
+	// ISSUE #208 — the disposition domain gets ONE home and the three laws.
+	//
+	// Measured on main before this change: `DISPOSITIONS` was a private
+	// `Set` in record.ts (the runtime enforcement, consulted by the parse)
+	// while resolve.ts hand-spelled the same five members as the `Disposition`
+	// union (which TYPES what the Resolver produces). Two homes, no tie, no
+	// disclosure — and a sixth member added at the type home was fully silent
+	// across the whole corpus AND `tsc --noEmit`. That is the identical shape,
+	// and the identical measurement, that PR #187's EF1 repaired for the
+	// resolution outcomes one type declaration above it.
+	//
+	// The method is the one main settled for that domain and is not re-derived
+	// here: CONTENTS over the live exported home, IDENTITY BY PERTURBATION
+	// (the object an arm reads IS the object the parser consults, proven for
+	// members nobody named), and EMPTINESS (the home is the SOLE accept site).
+	// The type side is welded by derivation rather than by an arm, and that
+	// weld is `tsc`'s — disclosed in place, because nothing here reds on a
+	// SECOND home, only on a divergent one.
+	//
+	// RESIDUAL DISCLOSURE for this describe: the perturbation arms are the
+	// only state-mutating arms in this file. Each restores in a `finally`,
+	// each POST-ASSERTS its restore rather than trusting it, and `node --test`
+	// runs one file's arms serially with no subtest concurrency here.
+	const DISPOSITION_MEMBERS = ["repair", "defer", "remedy", "measure-escalate", "none"] as const;
+	/** A record carrying ONE disposition, over an arbitrary string — no cast, so a non-member is expressible. */
+	const bodyWithDisposition = (disposition: string): string =>
+		records().composeReviewRecord({
+			...sample,
+			review: {
+				state: "resolved",
+				resolution: { dispositions: [{ finding: "zq f", disposition }], outcome: "clear" },
+			},
+		});
+
+	it("the DERIVED disposition type has exactly the home's members — a witness, not an arm (issue #208)", () => {
+		// Measured, not described: the three behavioural laws below close the
+		// HOME, and they are silent about the DERIVED declaration. A member
+		// appended at the derivation site (`(typeof DISPOSITIONS)[number] |
+		// "zq-sixth"`) widens the type and nothing downstream narrows it back,
+		// so it red neither the suite nor `tsc` — 58 pass / 0 fail, 0 type
+		// errors. That is the shape this witness exists for, and it is the one
+		// the outcome domain never needed, because there a downstream
+		// assembler assigns into a narrower type and the compiler catches it.
+		//
+		// The witness cannot be written without naming every member, so a
+		// sixth one makes this object literal missing a property.
+		//
+		// RESIDUAL DISCLOSURE, stated here AND at the derivation site: this
+		// witness reds `tsc --noEmit`, NOT this suite. A widened `Disposition`
+		// leaves every arm in this file green and is caught only by the
+		// type-check step, which is therefore part of this guard rather than
+		// an adjacent convenience. The runtime assertion below does NOT reach
+		// the home: both of its operands are literals in this file. The tie
+		// from the names below to record.ts's DISPOSITIONS is the separate
+		// CONTENTS arm's, and this witness is tied to the home only through
+		// it. Measured: with `none` dropped from the home, this arm stays
+		// GREEN while CONTENTS, IDENTITY and EMPTINESS red.
+		const witness: Record<UpstreamDisposition, true> = {
+			repair: true,
+			defer: true,
+			remedy: true,
+			"measure-escalate": true,
+			none: true,
+		};
+		assert.deepEqual(
+			Object.keys(witness).sort(),
+			[...DISPOSITION_MEMBERS].sort(),
+			"this arm's witness object and DISPOSITION_MEMBERS — both literals in this file — no longer name the same " +
+				"five members. resolve.ts's derived `Disposition` is observable here only by tsc: the type-only import is " +
+				"erased before this runs",
+		);
+	});
+
+	it("CONTENTS — the exported disposition home carries exactly the five committed members (issue #208)", () => {
+		assert.deepEqual(
+			[...records().DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"record.ts's DISPOSITIONS — the home that decides whether a resolved record PARSES at all, and the home " +
+				"resolve.ts's `Disposition` is derived from — no longer carries §1.9's five dispositions. A member " +
+				"dropped here silently stops a legitimate record from parsing; a member added here is taken up by " +
+				"resolve.ts's DERIVED `Disposition` and reds only the type witness, under tsc",
+		);
+	});
+
+	it("IDENTITY — a value pushed onto the LIVE DISPOSITIONS starts parsing, and the refusal returns (issue #208)", () => {
+		const r = records();
+		const probe = "zq-not-a-disposition";
+		const body = bodyWithDisposition(probe);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"a record carrying a non-member disposition parsed before any perturbation — the domain is not closed, and " +
+				"this arm's premise is gone",
+		);
+		try {
+			r.DISPOSITIONS.push(probe);
+			assert.notEqual(
+				r.parseReviewRecord(body),
+				undefined,
+				"pushing onto the exported DISPOSITIONS did not change what parseReviewRecord accepts, so the array this " +
+					"arm reads is NOT the object the validator consults — a second, unreachable copy. The CONTENTS " +
+					"assertion above would then certify a home nothing enforces",
+			);
+		} finally {
+			const at = r.DISPOSITIONS.indexOf(probe);
+			if (at !== -1) {
+				r.DISPOSITIONS.splice(at, 1);
+			}
+		}
+		assert.deepEqual(
+			[...r.DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"the home's contents differ from the committed list after this arm — either the probe was not spliced out, " +
+				"or the home itself has changed; this assertion cannot tell those apart, and later arms are unsound " +
+				"either way",
+		);
+		assert.equal(
+			r.parseReviewRecord(body),
+			undefined,
+			"the refusal did not return after the restore — the validator is reading something the restore did not reach",
+		);
+	});
+
+	it("EMPTINESS — with DISPOSITIONS emptied, EVERY committed member stops parsing (issue #208)", () => {
+		const r = records();
+		const saved = [...r.DISPOSITIONS];
+		try {
+			r.DISPOSITIONS.length = 0;
+			for (const disposition of DISPOSITION_MEMBERS) {
+				assert.equal(
+					r.parseReviewRecord(bodyWithDisposition(disposition)),
+					undefined,
+					`with the home emptied, a ${disposition}-disposed record still parsed — some OTHER site accepts it, so ` +
+						"the home is not the sole accept site and a member dropped there would be caught by no contents " +
+						"assertion. This is the mutant a probe list cannot name: a second accept site for a member the home " +
+						"already carries is invisible to every positive-parse arm",
+				);
+			}
+		} finally {
+			r.DISPOSITIONS.length = 0;
+			r.DISPOSITIONS.push(...saved);
+		}
+		assert.deepEqual(
+			[...r.DISPOSITIONS],
+			[...DISPOSITION_MEMBERS],
+			"the home's contents differ from the committed list after this arm — either the emptied home was not " +
+				"refilled, or the home itself has changed; this assertion cannot tell those apart, and later arms are " +
+				"unsound either way",
+		);
+		for (const disposition of DISPOSITION_MEMBERS) {
+			assert.notEqual(
+				records().parseReviewRecord(bodyWithDisposition(disposition)),
+				undefined,
+				`a ${disposition}-disposed record no longer parses after the restore`,
+			);
+		}
+	});
 
 	it("the composed body opens with the content marker carrying the head", () => {
 		const r = records();
