@@ -45,8 +45,8 @@
  * `summary`, the channel OBSERVATION_DISCIPLINE already names; no
  * payload key is added and the closed `{token, findings}` shape is
  * untouched. Stated so the dependency is not silent: that channel's
- * prose is DROPPED in the orchestrator-driven path (issue #203), so the
- * recording half inherits that gap. It adds no new dependency CLASS —
+ * prose WAS dropped in the orchestrator-driven path until issue #203
+ * closed that gap. It adds no new dependency CLASS —
  * the same channel already carries observations — and the block's
  * load-bearing half is a PROHIBITION, which needs no channel at all:
  * what a delegate may not do is report a class closed. #203 is not

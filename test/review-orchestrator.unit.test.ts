@@ -720,6 +720,48 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		);
 	});
 
+	// The RETURN contract, pinned by the same EQUALITY instrument (round 5's
+	// EF-1). The needle list this describe replaced also carried three of
+	// this block's clauses — the closed four-key schema, the unknown-key
+	// consequence, and the commit-label substitute — and deleting the list
+	// left them pinned by NOTHING: measured, mutating all three survived
+	// the whole suite at 1246 pass / 0 fail, where each reddened at the
+	// previous head. A subtractive repair asserts less than the text it
+	// replaced unless what the old text also covered is carried over, and
+	// this block is what it also covered.
+	const EXPECTED_RETURN_CONTRACT = [
+		"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
+		"PARENT directory's return.json. The schema is CLOSED:",
+		'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string} — an unknown key',
+		"discards the whole return. reviewedHead carries the full hex of `git rev-parse HEAD` and is the ONLY",
+		"place a commit hash may appear: NO hex run of 6 or more characters anywhere else in the return —",
+		"refer to commits by position labels, never by hash.",
+	].join("\n");
+
+	it("BOTH briefs carry the RETURN contract, whole (issue #197, round 5's EF-1)", () => {
+		const b = briefs();
+		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		for (const [who, text] of [
+			["reviewer", reviewer],
+			["judge", judge],
+		] as const) {
+			assert.equal(
+				composedBlock(text, "RETURN:"),
+				EXPECTED_RETURN_CONTRACT,
+				`the ${who} brief's RETURN contract is not the expected literal, END INCLUDED. Every clause is a cost a ` +
+					"real dispatch paid: the return slot's path, the CLOSED four-key schema, the consequence of an " +
+					"unknown key, the reviewedHead token, the no-hex prohibition and what to write instead. A delegate " +
+					"told a different shape than the one admitted returns nothing the caller can read",
+			);
+		}
+	});
+
 	it("the ledger appears EXACTLY ONCE per brief, and the judge brief still states the bundle is verbatim", () => {
 		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 		const b = briefs();
