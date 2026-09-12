@@ -31,7 +31,13 @@ name: check-merge-review
 # `issue_comment` run has no head in its payload, so the head is resolved
 # through a PR read (the script's second lookup), and a record edited to
 # remove its own body wakes the job only on `edited`, which is in the
-# type set for that reason.
+# type set for that reason. Its sibling case is NOT covered and is named
+# here rather than left to read as covered (round 3's E-F5): a record
+# comment DELETED wakes nothing, because `deleted` is not in the type
+# set, so a PASS rendered while the record existed stays the last verdict
+# visible at that head after its evidence is gone. Adding the type is a
+# trigger change on an advisory job and belongs with #192's hardening,
+# not here.
 #
 # Residual (§3.11), enumerated PER TRIGGER PATH, because the two paths do
 # not check out the same tree and an enumeration that says otherwise is
@@ -58,18 +64,42 @@ name: check-merge-review
 #     non-PR comment queues a run and ends it without an API call. It
 #     does not narrow WHO may wake the job, or on what text.
 #   - the concurrency group is keyed per pull request, so comment traffic
-#     on one PR cannot cancel another's verdict. It bounds interference,
-#     not volume.
-#   - the token is `issues: read` and the script performs two reads and no
-#     write, so a woken run cannot act on the repository whatever the
-#     comment said. It bounds blast radius, not reachability.
-# What stays open, stated so it is not read as covered: an actor who can
-# comment can make this job run at will, and the cost of that is runner
-# minutes and log noise rather than a wrong verdict, because the verdict
-# is derived from the record's own bytes and not from the comment that
-# woke the job. Narrowing the domain is a hardening act on a job that is
-# advisory by decision, and the closure is routed to issue #192 with the
-# rest of the hardening, not taken here.
+#     on one PR cannot cancel another's verdict. It bounds CROSS-PR
+#     interference and nothing else — and within ONE pull request it is
+#     an exposure rather than a bound: `cancel-in-progress: true` means
+#     repeated comments cancel that PR's OWN in-flight run, so an actor
+#     who can comment can keep a fresh verdict from completing at all
+#     and leave whatever completed earlier as the visible one.
+#   - `timeout-minutes: 10` is the one live bound on the runner-minute
+#     cost named below. It bounds a single run, not how many are woken.
+#   - the token is read-only on every scope it grants — contents,
+#     pull-requests and issues — and the script performs reads only and
+#     no write, so a woken run cannot act on the repository whatever
+#     the comment said. It bounds blast radius, not reachability.
+# What stays open, and the first draft of this paragraph got it WRONG in
+# the direction that matters (round 3's E-F1). It said the cost was
+# runner minutes and log noise "rather than a wrong verdict, because the
+# verdict is derived from the record's own bytes and not from the comment
+# that woke the job". The comment that woke the job IS those bytes:
+# `fetchComments` keeps `comment.body` alone and drops every other
+# platform field, the attested author among them, and the predicate then
+# collapses last-record-wins. MEASURED with a stub fetch: a body composed
+# by `composeReviewRecord` at the real head, carried on a comment whose
+# author is an arbitrary drive-by commenter, returns exit 0 and
+# "merge-review: PASS". So the wrong-verdict axis is OPEN here, not
+# closed, and the sentence that closed it asserted the negation of the
+# predicate's own recorded residual (merge-gate.ts: "the
+# platform-attested author is discarded at the boundary, so a record's
+# AUTHORSHIP is not modelled here").
+# Where that axis lives, so this paragraph does not claim it: §3.7(d)
+# carries hand-forgery as an amortized deferral and retains the surfaces
+# that would detect it. This paragraph owns only the reachability the
+# unscoped domain adds — an actor who can comment can make this job run
+# at will — and states that the run so provoked reads the same evidence
+# any other run reads, neither better nor worse authenticated.
+# Narrowing the domain is a hardening act on a job that is advisory by
+# decision, and the closure is routed to issue #192 with the rest of the
+# hardening, not taken here.
 #
 # NOT to be "fixed" by adding a merge-ref `ref:` so the step name reads
 # true on both paths. That change would make the comment path check out

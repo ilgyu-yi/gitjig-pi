@@ -198,6 +198,24 @@ describe("§3.7(e) predicate integrity — canonical position, demonstrated not 
 			["a leading newline", `\n${body(record)}`],
 			["a markdown blockquote", `> ${body(record)}`],
 			["a trailing relay after real prose", `## Round 2 — panel record\n\nPrior round's record:\n${body(record)}`],
+			// ROUND 4's S-F4. Every shape above relays behind text whose width
+			// is not the marker prefix's, so all of them are refused by the
+			// SPAN comparison alone — and the canonical-position guard could
+			// be dropped with the whole file green. Measured at that head:
+			// weakening `body.startsWith(prefix)` to `body.includes(prefix)`,
+			// leaving the span comparison at its fixed offset, gave 30 pass /
+			// 0 fail. AC3 requires a mutant dropping EITHER half to red.
+			//
+			// This shape is the one that separates them: the relaying text is
+			// EXACTLY as wide as the marker prefix, so the fixed-offset span
+			// lands on this record's own head and terminator. Only the
+			// position guard can refuse it. The width is computed from the
+			// marker rather than typed, so a change to the marker cannot
+			// silently make this fixture stop being the case it names.
+			[
+				"a relay whose preamble is exactly the marker prefix's width",
+				`${"z".repeat(`<!-- ${records().REVIEW_RECORD_MARKER}: `.length)}${HEAD_A} -->\n\n${body(record)}`,
+			],
 		];
 		for (const [shape, relayed] of relays) {
 			// The relayed body really does parse — so what refuses it is

@@ -133,13 +133,51 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 		// consumer ("bounds the job, pins the toolchain..."), while this
 		// arm — the one authored to guard that helper — stayed GREEN. It
 		// now calls `stripComments`, so the helper is what it exercises.
+		//
+		// ROUND 4's S-F1: that repair was real and its prose still
+		// overstated it. The comment claimed the arm reds on "a later edit
+		// that reverts to matching RAW", and measured, rebinding
+		// `const LIVE = stripComments(RAW)` to `const LIVE = RAW` — exactly
+		// that edit — left this arm GREEN, because it never read LIVE. The
+		// binding is now what the third limb asserts, so the claim and the
+		// assertion are the same statement.
+		//
+		// ROUND 4's S-F2: the helper has TWO branches and only one was
+		// pinned. Measured over the whole suite, deleting the
+		// inline-trailing branch left 1243 pass / 0 fail while deleting the
+		// whole-line branch red 2 arms — and the unpinned branch carries the
+		// same wrong-allow through the other door, shown by construction:
+		// with `if: always()  # github.event.issue.pull_request != null` the
+		// needle survives in an INLINE comment, the file reds with the
+		// helper intact and passes with that branch deleted. Both branches
+		// are pinned below, each by its own limb and its own message.
 		const commented = `${RAW}\n# if: github.event_name == 'pull_request'\n# issues: read\n# timeout-minutes: 99\n`;
 		const stripped = stripComments(commented);
 		assert.equal(
 			stripped.includes("timeout-minutes: 99"),
 			false,
-			"the comment-stripping does not remove a commented-out setting — an arm matching the raw text cannot " +
-				"tell a live setting from a deleted one, which is how the discriminator arm became decoration",
+			"the comment-stripping does not remove a WHOLE-LINE commented-out setting — an arm matching the raw " +
+				"text cannot tell a live setting from a deleted one, which is how the discriminator arm became " +
+				"decoration",
+		);
+		// The INLINE branch, pinned on its own. A setting deleted and its
+		// words left after a live setting on the same line is the same
+		// wrong-allow: the needle survives in LIVE and every arm matching
+		// for it passes over a workflow that no longer carries it.
+		assert.equal(
+			stripComments("timeout-minutes: 10  # node-version: 20").includes("node-version: 20"),
+			false,
+			"the comment-stripping does not remove an INLINE trailing comment — a setting deleted and its words " +
+				"left after a live setting on the same line then satisfies any arm matching LIVE for it, which is " +
+				"round-2's E7 wrong-allow through the other door (round 4's S-F2)",
+		);
+		// The BINDING, which is the half this arm's prose used to claim and
+		// not measure. `LIVE` must be the helper's output over RAW, not RAW.
+		assert.equal(
+			LIVE,
+			stripComments(RAW),
+			"LIVE is not the stripped RAW — an edit that reverts the binding to RAW leaves every other arm in this " +
+				"file matching raw text again, which is the state the helper exists to end (round 4's S-F1)",
 		);
 	});
 
