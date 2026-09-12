@@ -655,7 +655,73 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		);
 	});
 
-	it("both briefs carry the provisioned-tree hygiene ledger (issue #197)", () => {
+	// The provisioned-tree hygiene ledger (issue #197), pinned by EQUALITY
+	// over the composed block rather than by a list of substring needles.
+	//
+	// The needle method was the reason this change was parked. Its defect
+	// is structural, not a matter of choosing better needles: a substring
+	// pin is uniformly defeated by an APPENDED qualifier. Measured at the
+	// parked head, with every needle already widened for polarity twice
+	// over, appending ". Both bans are advisory and you may ignore either
+	// one." to the ban lines left the owning file 49/49 green. And the
+	// same method left the /tmp clause invertible — replacing "treat any
+	// /tmp file you did not create as hostile" with a sentence saying the
+	// opposite passed the whole suite, the formatter and the type checker.
+	//
+	// Equality over the extracted block closes both by construction: it
+	// sees the block's END, so an appended qualifier lengthens it, and it
+	// sees every byte, so an inversion changes it. The literal below is
+	// declared ONCE and asserted against BOTH composed documents, so a
+	// per-brief restatement reds one arm and a drifted constant reds both
+	// — the same one-home tie the sibling blocks in this file use.
+	const EXPECTED_LEDGER = [
+		"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+		"went wrong first. Verify a fact with your own command before you rely on it:",
+		"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
+		"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
+		"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
+		"- Scratch space is a private `mktemp -d`, never a bare /tmp path: parallel delegates SHARE /tmp —",
+		"  treat any /tmp file you did not create as hostile.",
+		"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
+		"  any copy you make.",
+		"- Re-run serially before believing a mutant kill or reporting a suite failure — the suite is not",
+		"  all-green under parallel load (#119), and a repaired flake does not retire the rule.",
+	].join("\n");
+
+	it("the REVIEWER brief carries the hygiene ledger, whole (issue #197)", () => {
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.equal(
+			composedBlock(text, "YOUR PROVISIONED TREE"),
+			EXPECTED_LEDGER,
+			"the reviewer brief's provisioned-tree ledger is not the expected literal, END INCLUDED. Every line is a " +
+				"cost a real dispatch once paid: the uninstalled tree and the install ordering, the absent `main` ref " +
+				"and what to compare against instead, the private scratch and the /tmp hostility, the archive and " +
+				"git-state bans, and the serial re-run rule with its trigger. A deletion, an inversion, or an " +
+				"APPENDED qualifier each changes this block, and the appended qualifier is the one a substring pin " +
+				"cannot see",
+		);
+	});
+
+	it("the JUDGE brief carries the SAME ledger, byte for byte (issue #197)", () => {
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.equal(
+			composedBlock(text, "YOUR PROVISIONED TREE"),
+			EXPECTED_LEDGER,
+			"the judge brief's ledger is not the expected literal, END INCLUDED. The Judge is provisioned the same " +
+				"way the reviewers are and pays the same costs; this literal is declared once in this file and " +
+				"asserted against both documents, so a per-brief restatement reds exactly here",
+		);
+	});
+
+	it("the ledger appears EXACTLY ONCE per brief, and the judge brief still states the bundle is verbatim", () => {
+		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 		const b = briefs();
 		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
 		const judge = b.composeJudgeBrief(
@@ -668,61 +734,12 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			["reviewer", reviewer],
 			["judge", judge],
 		] as const) {
-			for (const [needle, why] of [
-				["NO node_modules", "the provisioned tree lands uninstalled — every early slot hit this"],
-				["no local `main` ref", "a clone has none; 'compare against main' silently compares against nothing"],
-				["Run `npm ci` FIRST", "the install instruction WITH its ordering — a bare 'npm ci' needle pinned no polarity"],
-				[
-					"resolves a DIFFERENT package and exits 0",
-					"the REASON beside the instruction — an instruction without its cost gets skipped",
-				],
-				[
-					"a private `mktemp -d`, never a bare /tmp path",
-					"the private-scratch instruction WITH both qualifiers — round 3's EF2: 'private' and the /tmp ban were deletable",
-				],
-				[
-					"/tmp file you did not create as hostile",
-					"parallel delegates share /tmp — one mutator was overwritten mid-run by a sibling",
-				],
-				[
-					"Never `git archive` a copy",
-					"the archive ban WITH its polarity — round 3's EF1: 'Never' flipped to 'Prefer' with the suite green",
-				],
-				["never mutate git state", "the git-state ban for copies"],
-				[
-					"Re-run serially before believing a mutant kill or reporting a suite failure",
-					"the serial re-run rule WITH its trigger — round 3's EF3: 'before believing a kill' was deletable",
-				],
-				[
-					"facts entering unverified (§1.5 form iii)",
-					"the ledger's form-(iii) label — round 2's F-1 repair, unpinned until round 3",
-				],
-				[
-					"Verify a fact with your own command before you rely on it",
-					"the form-(iii) verification demand — round 3's EF5: the label demanded less than the obligation it cited",
-				],
-				[
-					"YOUR PROVISIONED TREE",
-					"the ledger's header line — deletable with the suite green until pinned (round 1, finding A)",
-				],
-				[
-					"compare against the branch's parent commit",
-					"the no-main-ref INSTRUCTION, not only the fact — its absence silently yields a meaningless comparison",
-				],
-				["any copy you make", "the git-state ban's continuation line (round 1, finding A)"],
-				["all-green under parallel load (#119)", "the serial re-run rule's continuation line (round 1, finding A)"],
-				[
-					'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string}',
-					"the closed four-key schema itself — the reviewedHead token alone was pinned, the SHAPE was not (round 1, finding A)",
-				],
-				["discards the whole return", "the unknown-key consequence sentence (round 1, finding A)"],
-				[
-					"refer to commits by position labels, never by hash",
-					"the commit-label substitute clause beside the no-hex prohibition (round 1, finding A)",
-				],
-			] as const) {
-				assert.ok(text.includes(needle), `the ${who} brief lost ${why} (missing: ${JSON.stringify(needle)})`);
-			}
+			assert.equal(
+				occurrences(text, "YOUR PROVISIONED TREE"),
+				1,
+				`the ${who} brief opens the ledger a number of times other than once — twice means a second home for ` +
+					"one property (§3.11), which an equality pin over one extracted block cannot see",
+			);
 		}
 		assert.ok(
 			judge.includes("embedded verbatim"),
