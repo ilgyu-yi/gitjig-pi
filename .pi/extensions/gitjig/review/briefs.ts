@@ -74,8 +74,9 @@ const OBSERVATION_DISCIPLINE = [
 	"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
 	"discipline narrows NOTHING about what you look for. It shapes only the return: an observation",
 	"that establishes no actual artifact defect, no failure of a claim its check's position makes,",
-	"and no absence of contract-required evidence is reported as an OBSERVATION,",
-	"listed separately and distinctly labelled, never pressed into finding grammar.",
+	"and no absence of contract-required evidence is reported as an OBSERVATION: carry it in the",
+	"return's summary, distinctly labelled OBSERVATION — never as a payload key (the closed shape",
+	"discards an unknown key) and never pressed into finding grammar.",
 ].join("\n");
 
 const ADMISSION_BURDEN = [
@@ -88,10 +89,11 @@ const ADMISSION_BURDEN = [
 	"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
 	"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
 	"  reaches a guard whose pinning a settled contract requires and no other guard.",
-	"Otherwise: RECORD, DO NOT ADMIT. The ground is §1.9's own sentence —",
-	'"Deliberate absences are recorded as decisions, not omissions" — so no new disposition exists',
-	"or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an effective finding",
-	"has no exit but REFUTED, so the ordering is the whole of the token.",
+	"Otherwise: RECORD, DO NOT ADMIT. State each recorded-not-admitted observation in your return's",
+	"summary with the ground it failed; it enters no ruling and no payload key. The ground is §1.9's",
+	'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
+	"disposition exists or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an",
+	"effective finding has no exit but REFUTED, so the ordering is the whole of the token.",
 	'SYMMETRY: an exculpatory claim ("this defect class is closed") carries a finding\'s burden.',
 	"An enumeration establishes an enumeration, never a class; record such a claim as a claim,",
 	"with its enumeration attached.",

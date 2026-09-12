@@ -361,6 +361,31 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	});
 
 	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
+		// Round 1's EF-2: every substring needle over this block survived inverting
+		// the very proposition it pinned ('does not establish' -> 'does establish',
+		// 'absent' -> 'present', the symmetry burden, the §3.12 limiter) with the
+		// suite green. The materially different method: the WHOLE block is pinned
+		// as one expected literal, so any intra-block deletion, inversion, or edit
+		// reds at once. The literal below is the pin; drifting it is the point.
+		const expectedAdmission = [
+			"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+			"finding at all. A harness or evidence observation is admitted only where you establish one of:",
+			"A — actual artifact defect: given state X the artifact produces Y where a settled contract",
+			"  requires Z. A state trace suffices; no test is required. Look here FIRST.",
+			"B — the check does not establish what its POSITION in the corpus makes it claim. Name",
+			"  the claim / the evidence / what it actually observes / why that cannot establish it.",
+			"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
+			"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
+			"  reaches a guard whose pinning a settled contract requires and no other guard.",
+			"Otherwise: RECORD, DO NOT ADMIT. State each recorded-not-admitted observation in your return's",
+			"summary with the ground it failed; it enters no ruling and no payload key. The ground is §1.9's",
+			'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
+			"disposition exists or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an",
+			"effective finding has no exit but REFUTED, so the ordering is the whole of the token.",
+			'SYMMETRY: an exculpatory claim ("this defect class is closed") carries a finding\'s burden.',
+			"An enumeration establishes an enumeration, never a class; record such a claim as a claim,",
+			"with its enumeration attached.",
+		].join("\n");
 		const b = briefs();
 		const text = b.composeJudgeBrief(
 			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
@@ -368,39 +393,13 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			{ changeDescription: "x" },
 			FENCES,
 		);
-		for (const [needle, why] of [
-			["ADMISSION", "the burden's own header — admission is decided before any axis is ruled"],
-			["A — actual artifact defect", "ground A's name"],
-			[
-				"A state trace suffices; no test is required. Look here FIRST",
-				"ground A's whole relief — the cheapest ground is looked for first",
-			],
-			["POSITION in the corpus", "ground B's key — position, not rhetoric"],
-			[
-				"the claim / the evidence / what it actually observes / why that cannot establish it",
-				"ground B's four-part naming obligation",
-			],
-			["AUTHORITY CITED", "ground C admits nothing without its authority"],
-			[
-				"whose pinning a settled contract requires",
-				"the §3.12 scoping as settled — the brief cites the scoped obligation",
-			],
-			["RECORD, DO NOT ADMIT", "the default — the token that keeps a true observation out of the bundle"],
-			[
-				"Deliberate absences are recorded as decisions, not omissions",
-				"the default's §1.9 ground, quoted — no new disposition is minted",
-			],
-			["DEMOTE BEFORE DEDUP", "the ordering that IS the token"],
-			["no exit but REFUTED", "why the ordering matters — admit first and the token is gone"],
-			["exculpatory claim", "the symmetry rule's subject"],
-			[
-				"An enumeration establishes an enumeration, never a class",
-				"the symmetry rule's teeth — nine kills are not a closure",
-			],
-			["with its enumeration attached", "how an exculpatory claim is recorded"],
-		] as const) {
-			assert.ok(text.includes(needle), `the judge brief lost ${why} (missing: ${JSON.stringify(needle)})`);
-		}
+		assert.ok(
+			text.includes(expectedAdmission),
+			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was " +
+				"deleted, inverted, or edited; every ground, the record-do-not-admit default with its summary " +
+				"channel and §1.9 ground, the demote-before-dedup ordering, and the symmetry rule are pinned " +
+				"as one whole (round 1's EF-2: substring needles survived polarity inversion)",
+		);
 		assert.ok(
 			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
 			"the admission burden must compose BEFORE the dedup obligation — demote-before-dedup is an ordering, and " +
@@ -409,20 +408,23 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	});
 
 	it("the reviewer brief separates observations from findings without narrowing the search (issue #196)", () => {
+		// Whole-block pin, same ground and method as the judge arm above.
+		const expectedObservation = [
+			"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+			"discipline narrows NOTHING about what you look for. It shapes only the return: an observation",
+			"that establishes no actual artifact defect, no failure of a claim its check's position makes,",
+			"and no absence of contract-required evidence is reported as an OBSERVATION: carry it in the",
+			"return's summary, distinctly labelled OBSERVATION — never as a payload key (the closed shape",
+			"discards an unknown key) and never pressed into finding grammar.",
+		].join("\n");
 		const b = briefs();
 		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
-		for (const [needle, why] of [
-			[
-				"search exactly as aggressively",
-				"the NOT-NARROWED half — pinned so a future edit cannot quietly turn this into a licence to review less",
-			],
-			["narrows NOTHING about what you look for", "the not-narrowed half's second spelling, load-bearing"],
-			["reported as an OBSERVATION", "the reporting shape for what establishes no ground"],
-			["listed separately and distinctly labelled", "observations do not ride finding grammar"],
-			["never pressed into finding grammar", "the prohibition itself, with its polarity"],
-		] as const) {
-			assert.ok(text.includes(needle), `the reviewer brief lost ${why} (missing: ${JSON.stringify(needle)})`);
-		}
+		assert.ok(
+			text.includes(expectedObservation),
+			"the reviewer brief's OBSERVATIONS block is not the expected literal — the not-narrowed half, " +
+				"the groundless condition's polarity, the summary channel, or the never-finding-grammar " +
+				"prohibition was deleted, inverted, or edited (round 1's EF-2)",
+		);
 	});
 
 	it("an empty manifest crosses as an empty manifest, never as absent", () => {
