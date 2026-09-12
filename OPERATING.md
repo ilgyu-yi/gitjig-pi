@@ -80,8 +80,8 @@ apply the rules.
    stayed green and a different arm was the one that red — ruled substantive, on the ground
    that a false record of which arm covers a shape would license a later reader to delete the
    arm that actually covers it. Then the docstring of the helper written to repair that said
-   the substring blind spot let a second home survive *the whole file*; measured, it survived
-   only that one arm's pin, and another arm caught it.
+   the substring blind spot let a second home survive *the whole file*, verbatim or reworded;
+   measured, only the verbatim ones red — on another arm — while the reworded one did survive it.
 
 The unifying shape, as one adjudication put it: *asserting a change landed instead of measuring
 that it landed* (rule 2) and *titling a check over a domain instead of measuring the domain*
