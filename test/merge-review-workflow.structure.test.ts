@@ -148,9 +148,14 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 		// whole-line branch red 2 arms — and the unpinned branch carries the
 		// same wrong-allow through the other door, shown by construction:
 		// with `if: always()  # github.event.issue.pull_request != null` the
-		// needle survives in an INLINE comment, the file reds with the
-		// helper intact and passes with that branch deleted. Both branches
-		// are pinned below, each by its own limb and its own message.
+		// needle survives in an INLINE comment, so a workflow that no longer
+		// carries the discriminator still satisfies an arm matching LIVE for
+		// it. Measured at THIS head, which is the only head a reader can
+		// run: with the helper intact that construction reds on the
+		// discriminator arm, and with the inline branch deleted it reds on
+		// the inline limb below instead — the wrong-allow is closed from
+		// both sides. Both branches are pinned below, each by its own limb
+		// and its own message.
 		const commented = `${RAW}\n# if: github.event_name == 'pull_request'\n# issues: read\n# timeout-minutes: 99\n`;
 		const stripped = stripComments(commented);
 		assert.equal(

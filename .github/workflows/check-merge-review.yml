@@ -29,7 +29,7 @@ name: check-merge-review
 # never at the state it is about. Waking on the comment event is what
 # makes the evaluation reachable. Residual, enumerated in place: an
 # `issue_comment` run has no head in its payload, so the head is resolved
-# through a PR read (the script's second lookup), and a record edited to
+# through a PR read, and a record edited to
 # remove its own body wakes the job only on `edited`, which is in the
 # type set for that reason. Its sibling case is NOT covered and is named
 # here rather than left to read as covered (round 3's E-F5): a record
@@ -70,8 +70,15 @@ name: check-merge-review
 #     repeated comments cancel that PR's OWN in-flight run, so an actor
 #     who can comment can keep a fresh verdict from completing at all
 #     and leave whatever completed earlier as the visible one.
-#   - `timeout-minutes: 10` is the one live bound on the runner-minute
-#     cost named below. It bounds a single run, not how many are woken.
+#   - `timeout-minutes: 10` bounds how long ONE woken run may spend. It
+#     is not the only bound on that cost — the `if:` above ends a
+#     plain-issue run before a job is allocated, and cancellation ends
+#     an in-flight one — and none of the three bounds how MANY runs are
+#     woken, which is the cost that stays open: an actor who can comment
+#     can spend runner minutes and fill the run list at will. That is a
+#     live residual of the unscoped domain, stated here because the
+#     paragraph below owns a different one and this one would otherwise
+#     be named nowhere.
 #   - the token is read-only on every scope it grants — contents,
 #     pull-requests and issues — and the script performs reads only and
 #     no write, so a woken run cannot act on the repository whatever
@@ -124,9 +131,21 @@ on:
 # COMPLETE later — so a stale `no-record-at-head` notice could be the last
 # verdict a reader sees at a head whose record has since arrived, which is
 # by ordering the very defect the `issue_comment` trigger was added to fix.
-# `cancel-in-progress` is deliberate and is the contestable half: it can
-# cancel an in-flight run, but the run it cancels is always the one reading
-# the OLDER comment list, since a newer event implies a newer list.
+# `cancel-in-progress` is deliberate and is the contestable half, and it
+# is an EXPOSURE as well as a cost saving — the two readings this file
+# used to carry separately, reconciled here so the setting and the
+# domain paragraph below say one thing. The saving: on the
+# `issue_comment` path a cancelled run is the one reading the OLDER
+# comment list, since a newer comment event implies a newer list. That
+# premise does NOT extend to `pull_request` events, which carry no
+# comment at all and whose run reads whatever list exists when it runs.
+# The exposure: cancellation is reachable at will by anyone who can
+# comment, so a fresh verdict can be kept from completing and whatever
+# completed earlier stays the visible one — including the stale
+# `no-record-at-head` the paragraph above says the `issue_comment`
+# trigger was added to fix. Narrowing that is a hardening act and is
+# routed to #192 with the rest; what is owed here is that the exposure
+# is named where the setting is, and not only where the domain is.
 concurrency:
   group: check-merge-review-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true

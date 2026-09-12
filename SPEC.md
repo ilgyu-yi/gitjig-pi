@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 405 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 412 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 420 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 526 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 530 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 534 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 544 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 556 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 569 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 583 |
-| &nbsp;&nbsp;§3.11 | Gate design | 593 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 615 |
-| §4 | Substrate and install contract | 625 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 629 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 635 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 639 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 643 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 647 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 653 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 663 |
-| &nbsp;&nbsp;§4.8 | The command layer | 671 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 728 |
-| §5 | Cross-cutting contracts | 770 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 774 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 778 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 782 |
-| &nbsp;&nbsp;§5.4 | Work language | 786 |
-| &nbsp;&nbsp;§5.5 | State boundary | 790 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 796 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 806 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 816 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 824 |
-| §6 | Self-governance milestone | 832 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 843 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 534 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 538 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 542 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 552 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 564 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 577 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 591 |
+| &nbsp;&nbsp;§3.11 | Gate design | 601 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 623 |
+| §4 | Substrate and install contract | 633 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 637 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 643 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 647 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 651 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 655 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 661 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 671 |
+| &nbsp;&nbsp;§4.8 | The command layer | 679 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 736 |
+| §5 | Cross-cutting contracts | 778 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 782 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 786 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 790 |
+| &nbsp;&nbsp;§5.4 | Work language | 794 |
+| &nbsp;&nbsp;§5.5 | State boundary | 798 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 804 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 814 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 824 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 832 |
+| §6 | Self-governance milestone | 840 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 851 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -453,7 +453,15 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 
 A row whose `home:` slot records that no instrument holds that home yet is a commitment, not an implementation: the gate lands at the recorded home through its own derivation cycle (§1.2). A class with no live gate in any tier is advisory and must be labeled so wherever it is stated.
 
-**`merge-review` hardening trigger.** §3.6(ii) requires a decidable trigger — an observable condition a reader can test — and the row routes its derivation here, the prose home the column-shape rule names. The trigger is **twenty merged pull requests, each contributing at most one observation**, decided in four steps that need no adjudication. *Which run counts:* the **last run of this job that completed at the merged head**, and only that one. The job wakes several times per head by construction, and the push-shaped run necessarily completes before the record exists — so a rule quantifying over every run at a head is unsatisfiable, and naming the run is what removes the judgement §3.6(ii) forbids rather than relocating it. *What qualifies:* that run recorded a pass, or recorded a refusal the record does not contradict. *What contradicts:* the refusal is contradicted exactly when **the record the predicate itself selects** — the last comment at that head opening with that head's marker — parses and carries a complete, adjudicated review. The selection is the predicate's and not the reader's, so the row and the instrument apply one condition and not two (§3.11); a reader who picked some other record at that head would be deciding a question the gate has already decided. *What is excluded:* a run refusing `lookup-failed` contributes no observation in either direction — it never read the evidence, so its refusal is neither contradicted nor qualifying and the pull request is skipped rather than counted. That exclusion is what keeps the observable co-extensive with the judgement it replaces: a fail-closed refusal on an unreadable platform was never a false refusal, and counting it as one would spend qualifying PRs on the gate behaving correctly. Every input is in the run's own log — the verdict, its reason and the head all appear on every verdict path — or in the pull request's comments, which is where the record lives.
+**`merge-review` hardening trigger.** §3.6(ii) requires a decidable trigger — an observable condition a reader can test — and the row routes its derivation here, the prose home the column-shape rule names. The trigger is **twenty merged pull requests, each contributing at most one observation**. A reader decides one pull request as follows, at the time of counting and with no judgement at any step.
+
+*Which run.* The **last run of this job that rendered a verdict at the merged head** — a pass line or an advisory refusal line. Runs that rendered no verdict are passed over rather than counted: a run cancelled by the concurrency group or by `timeout-minutes`, and a run that exited non-zero on the machinery path, each end without deciding anything, and the workflow's own header records that the first of those is reachable at will. "Rendered a verdict" is used rather than "completed" because the platform counts a cancelled run as completed, and the two readings select different runs. If no run at that head rendered a verdict, the pull request contributes no observation.
+
+*Whether it qualifies.* It qualifies if that run rendered a pass, or rendered a refusal the record does not contradict. It is **excluded** — contributing no observation in either direction — if that run rendered `lookup-failed`: it never read the evidence, so its refusal was never a false one, and counting it would spend a qualifying pull request on the gate behaving correctly. That exclusion is what keeps the observable co-extensive with the judgement it replaces.
+
+*What contradicts a refusal.* The reader applies the predicate's own selection rule **to the comments as they stand at counting time** — the last comment at that head opening with that head's marker — and the refusal is contradicted when that record parses, carries a complete review, and carries an adjudication **where its bundle is non-empty**, which is the pass condition the instrument itself applies. Two things are load-bearing and each was got wrong in an earlier form of this clause. The rule is the predicate's, so the row and the instrument state one condition and not two (§3.11); but the **moment** is the reader's, because a refusal evaluated at the run's own moment can never be contradicted — every refusal reason the instrument can render is, by construction, a statement about what the record was when the run read it. Evaluating at counting time is what lets the trigger see the shape it exists to measure: a stale `no-record-at-head` standing as the last verdict at a head whose record has since arrived.
+
+*Where the inputs are.* The verdict and its reason are in the run's log. The record is a comment on the pull request. Which runs exist at a head, and the order in which they rendered, are in the platform's run list — a third place, named because the trigger needs it. One verdict path renders no head: a `lookup-failed` refusal raised while resolving the head has no head to name, so such a run cannot be attributed to a head from its log alone and is located through the run list like the rest. The owner is #192.
 
 **`protected-branch` ref-identity semantics.** §3.11 binds this class's protection to what a ref **is**, never its literal spelling; what establishes that identity is recorded here, the prose home the column-shape rule routes slot-sized derivations to. The rule source is **one derived identity P** — the branch this repository's own remote pointer names as its default — derived in two stages. Stage 1 reads the local pointer: `git symbolic-ref -q refs/remotes/origin/HEAD`, with the `refs/remotes/origin/` prefix stripped. Stage 2, only where stage 1 fails, measures the remote's advertised default directly: `git ls-remote --symref origin HEAD` with terminal prompts disabled (`GIT_TERMINAL_PROMPT=0`) — a measurement, never a guess, because §3.9's loader rule forbids a guessing fallback (`init.defaultBranch`, the local `HEAD`): a resolver that guesses erodes its own degradation signal until a warning no longer implies its condition. Stage 2 is reachable only from the push surface, where the push's own ref advertisement has already contacted the remote; the commit surface never reaches it, because an offline commit must not open a network connection. The residual that reachability carries is enumerated in place: no portable timeout instrument exists on the host class the tier binds at, so the second connection can hang — accepted with prompts disabled and only on a surface whose own advertisement has just succeeded against the same remote. `GIT_TERMINAL_PROMPT=0` disables git's own terminal prompting and does not reach an agent outside git: an ssh transport whose key is passphrase-protected and whose agent holds no decrypted copy re-prompts on this second connection, and an askpass program the environment supplies is likewise unaffected. That re-prompt is a member of the same accepted hang class, named here rather than left to read as excluded by the disabled prompts. Stage-2 failure is keyed by outcome, not cause (§3.10): a non-zero exit, or empty or unparseable output — a dangling remote `HEAD` yields empty output with exit 0. Where both stages fail, P is underivable and the gate is **disarmed for that run and says so plainly**: one audit warn record stating the gate is not enforced (§3.9's degradation-signal rule) — the observable that separates a disarmed allow from an ordinary allow. Stage 2 repairs the absent-pointer case only: a present-but-stale local pointer satisfies stage 1 and never reaches stage 2, so the migration shape — the remote's default moved while the fetched local pointer stayed — is unmodeled, enumerated below.
 
