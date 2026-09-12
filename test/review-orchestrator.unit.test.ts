@@ -360,6 +360,73 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
+		// Round 1's EF-2: every substring needle over this block survived inverting
+		// the very proposition it pinned ('does not establish' -> 'does establish',
+		// 'absent' -> 'present', the symmetry burden, the §3.12 limiter) with the
+		// suite green. The materially different method: the WHOLE block is pinned
+		// as one expected literal, so any intra-block deletion, inversion, or edit
+		// reds at once. The literal below is the pin; drifting it is the point.
+		const expectedAdmission = [
+			"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+			"finding at all. A harness or evidence observation is admitted only where you establish one of:",
+			"A — actual artifact defect: given state X the artifact produces Y where a settled contract",
+			"  requires Z. A state trace suffices; no test is required. Look here FIRST.",
+			"B — the check does not establish what its POSITION in the corpus makes it claim. Name",
+			"  the claim / the evidence / what it actually observes / why that cannot establish it.",
+			"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
+			"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
+			"  reaches a guard whose pinning a settled contract requires and no other guard.",
+			"Otherwise: RECORD, DO NOT ADMIT. State each recorded-not-admitted observation in your return's",
+			"summary with the ground it failed; it enters no ruling and no payload key. The ground is §1.9's",
+			'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
+			"disposition exists or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an",
+			"effective finding has no exit but REFUTED, so the ordering is the whole of the token.",
+			'SYMMETRY: an exculpatory claim ("this defect class is closed") carries a finding\'s burden.',
+			"An enumeration establishes an enumeration, never a class; record such a claim as a claim,",
+			"with its enumeration attached.",
+		].join("\n");
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.ok(
+			text.includes(expectedAdmission),
+			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was " +
+				"deleted, inverted, or edited; every ground, the record-do-not-admit default with its summary " +
+				"channel and §1.9 ground, the demote-before-dedup ordering, and the symmetry rule are pinned " +
+				"as one whole (round 1's EF-2: substring needles survived polarity inversion)",
+		);
+		assert.ok(
+			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
+			"the admission burden must compose BEFORE the dedup obligation — demote-before-dedup is an ordering, and " +
+				"a burden stated after dedup arrives after the decision it governs",
+		);
+	});
+
+	it("the reviewer brief separates observations from findings without narrowing the search (issue #196)", () => {
+		// Whole-block pin, same ground and method as the judge arm above.
+		const expectedObservation = [
+			"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+			"discipline narrows NOTHING about what you look for. It shapes only the return: an observation",
+			"that establishes no actual artifact defect, no failure of a claim its check's position makes,",
+			"and no absence of contract-required evidence is reported as an OBSERVATION: carry it in the",
+			"return's summary, distinctly labelled OBSERVATION — never as a payload key (the closed shape",
+			"discards an unknown key) and never pressed into finding grammar.",
+		].join("\n");
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.ok(
+			text.includes(expectedObservation),
+			"the reviewer brief's OBSERVATIONS block is not the expected literal — the not-narrowed half, " +
+				"the groundless condition's polarity, the summary channel, or the never-finding-grammar " +
+				"prohibition was deleted, inverted, or edited (round 1's EF-2)",
+		);
+	});
+
 	it("an empty manifest crosses as an empty manifest, never as absent", () => {
 		const b = briefs();
 		const text = b.composeJudgeBrief(
