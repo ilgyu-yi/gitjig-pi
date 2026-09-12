@@ -279,12 +279,21 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		// repairHistory red this arm alone, 102/1. A comment cannot change what
 		// the assembler does, so that red was false.
 		//
-		// What the limb claimed is not lost, and it is not re-derived here: the
-		// upstream tag domain is carried by the TYPE WITNESS over
-		// `ReviewState["state"]` in this file's domain describe, which `tsc`
-		// welds and which reds on a tag added, removed or renamed upstream in
-		// any spelling. The witness reds the TYPE CHECK and not the suite —
-		// disclosed there and at the assembler's own per-tag branch (R-b).
+		// What the limb claimed is NOT carried by the type witness, and what
+		// follows is a CLAIM with its enumeration attached, never a closed
+		// class. The witness over `ReviewState["state"]` is an object literal
+		// in THIS file typed from resolve.ts, so no edit to history.ts can red
+		// it: measured, a fourth per-tag branch in repairHistory leaves the
+		// witness arm green. What reds is `tsc`'s own narrowing over the closed
+		// union, which is a different guard from the witness — measured at this
+		// head, a fourth test spelled `record.review.state === "obsolete"` is
+		// TS2367 before the three tests and TS2339 after them. That enumerates
+		// THIS spelling and nothing else: measured, a fourth branch reading the
+		// same tag through a cast is green in the suite AND in `tsc`, at this
+		// head and at the previous one, so the assembler's per-tag domain is
+		// closed by nothing in this file. The witness reds the TYPE CHECK and
+		// not the suite — disclosed there and at the assembler's own per-tag
+		// branch (R-b).
 		//
 		// What remains here is the BEHAVIOURAL universal, and its fixture is
 		// made unnameable rather than merely unusual: one tag carries a fresh
@@ -1071,8 +1080,8 @@ describe("§1.4 the admission's input domain, derived from DispatchOutcome (issu
 });
 
 describe("§1.4 the deterministic consumer (issue #186)", () => {
-	// The coverage set here is the CROSS-PRODUCT of two closed unions read
-	// off history.ts's own source — DiagnosisValue x Invalidation, 4 x 3 —
+	// The coverage set here is the CROSS-PRODUCT of two closed domains this
+	// file declares as its own `as const` literals — 4 x 3, read off no source —
 	// not the pairs a reviewer happened to name. Round 6 measured 6 of the
 	// 12 exercised and named 5 survivors; deriving the domain instead found
 	// 6 genuine survivors plus one equivalent mutant, which is the whole
@@ -1309,7 +1318,7 @@ describe("§1.4 the admission carries EVERY enforced member through the parser (
 					mod().admitDiagnosis(admittedPayload(input)),
 					{ available: true, diagnosis: input },
 					`a well-formed ruling of ${value} × ${invalidation} was not admitted with its own two outputs and ` +
-						"evidence — the member is absent from the Set the parser enforces over, so a valid ruling is being " +
+						"evidence — the member is absent from the array the parser enforces over, so a valid ruling is being " +
 						"refused as malformed; for NONE that parks every change forever, inverting the one relief §1.4 grants",
 				);
 			});
