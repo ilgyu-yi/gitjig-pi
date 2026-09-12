@@ -21,6 +21,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+// A TYPE-ONLY import of the DERIVED disposition union, for the witness
+// that closes the one shape the behavioural laws cannot reach (issue
+// #208). Erased before this file runs, so it adds no runtime dependency
+// — which is also its limit: it reds `tsc`, never this suite.
+import type { Disposition as UpstreamDisposition } from "../.pi/extensions/gitjig/review/resolve.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
@@ -1095,6 +1100,41 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 				resolution: { dispositions: [{ finding: "zq f", disposition }], outcome: "clear" },
 			},
 		});
+
+	it("the DERIVED disposition type has exactly the home's members — a witness, not an arm (issue #208)", () => {
+		// Measured, not described: the three behavioural laws below close the
+		// HOME, and they are silent about the DERIVED declaration. A member
+		// appended at the derivation site (`(typeof DISPOSITIONS)[number] |
+		// "zq-sixth"`) widens the type and nothing downstream narrows it back,
+		// so it red neither the suite nor `tsc` — 58 pass / 0 fail, 0 type
+		// errors. That is the shape this witness exists for, and it is the one
+		// the outcome domain never needed, because there a downstream
+		// assembler assigns into a narrower type and the compiler catches it.
+		//
+		// The witness cannot be written without naming every member, so a
+		// sixth one makes this object literal missing a property.
+		//
+		// RESIDUAL DISCLOSURE, stated here AND at the derivation site: this
+		// witness reds `tsc --noEmit`, NOT this suite. A widened `Disposition`
+		// leaves every arm in this file green and is caught only by the
+		// type-check step, which is therefore part of this guard rather than
+		// an adjacent convenience. The runtime assertion below carries the
+		// half a witness cannot: that the members the witness names are the
+		// five the home carries.
+		const witness: Record<UpstreamDisposition, true> = {
+			repair: true,
+			defer: true,
+			remedy: true,
+			"measure-escalate": true,
+			none: true,
+		};
+		assert.deepEqual(
+			Object.keys(witness).sort(),
+			[...DISPOSITION_MEMBERS].sort(),
+			"resolve.ts's derived `Disposition` no longer names the same five members this file's home arms iterate — " +
+				"the derivation and the committed list have come apart",
+		);
+	});
 
 	it("CONTENTS — the exported disposition home carries exactly the five committed members (issue #208)", () => {
 		assert.deepEqual(

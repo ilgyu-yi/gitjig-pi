@@ -126,7 +126,50 @@ function isAdjudication(value: unknown): boolean {
 	);
 }
 
-const DISPOSITIONS = new Set(["repair", "defer", "remedy", "measure-escalate", "none"]);
+/**
+ * The ONE home of §1.9's five dispositions (§3.11; issue #208), and the
+ * home resolve.ts's `Disposition` is DERIVED from through a type-only
+ * import — so "the Resolver's dispositions are these five" is a
+ * declaration rather than an arm that can drift from what it claims to
+ * tie.
+ *
+ * Why it moved: this list enforced the runtime parse while resolve.ts
+ * hand-spelled the same five members as the type the Resolver produces.
+ * Two homes for one property, with nothing tying them. Measured before
+ * the repair: a sixth member added at the type home was fully silent
+ * across the whole corpus AND `tsc --noEmit`. That is the same shape,
+ * and the same measurement, that issue #186's EF1 repaired for the
+ * resolution outcomes one type declaration above it.
+ *
+ * RESIDUAL DISCLOSURE (R-a's shape, restated here rather than
+ * cross-referenced): exported so arms pin the LIVE object; the array is
+ * runtime-mutable by an importer (`as const` is a type-level word only)
+ * — the suite's identity and emptiness laws depend on exactly that
+ * reachability, and no production site mutates it.
+ *
+ * RESIDUAL DISCLOSURE, and it is narrower than the outcome home's —
+ * measured rather than carried over. The weld here is ONE-DIRECTIONAL:
+ * a member REMOVED from this list reds `tsc` at the Resolver, which
+ * produces the literal (measured: 1 type error, plus 3 suite arms), but
+ * a member ADDED at the derived declaration — `(typeof
+ * DISPOSITIONS)[number] | "zq-sixth"` — widens the type with nothing
+ * downstream narrowing it back, so it reds neither `tsc` nor the suite.
+ * The outcome domain does not have that gap only because §1.4's
+ * assembler assigns into a narrower type and the compiler catches it
+ * there; no consumer narrows a Disposition.
+ *
+ * That widening shape is closed by a TYPE WITNESS in the suite, which
+ * cannot be written without naming every member — and it reds the type
+ * check, not the suite. What this derivation itself buys is smaller and
+ * worth stating plainly: the five members are spelled once, and a second
+ * home can no longer appear without someone writing it down.
+ */
+export const DISPOSITIONS = ["repair", "defer", "remedy", "measure-escalate", "none"] as const;
+
+/** The one narrowing step over that home, read at call time. */
+function isDisposition(value: unknown): value is (typeof DISPOSITIONS)[number] {
+	return DISPOSITIONS.some((member) => member === value);
+}
 
 /**
  * The ONE home of the resolution outcomes (§3.11, §1.8 settlement on
@@ -195,7 +238,7 @@ function isReviewState(value: unknown): boolean {
 					isObject(entry) &&
 					Object.keys(entry).every((key) => key === "finding" || key === "disposition" || key === "remedy") &&
 					typeof entry.finding === "string" &&
-					DISPOSITIONS.has(entry.disposition as string) &&
+					isDisposition(entry.disposition) &&
 					(entry.remedy === undefined || typeof entry.remedy === "string"),
 			)
 		);
