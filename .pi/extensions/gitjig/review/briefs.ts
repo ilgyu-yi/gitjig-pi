@@ -68,11 +68,16 @@
  * dated narrative, on the ground that a rule without its incident gets
  * skimmed; a composed block is terse and §2.4 keeps prior-defect
  * provenance off a living surface. Both are honored by folding the
- * incident's SHAPE into the rule's own sentence — the concrete wrong
- * claim, with no round, PR or issue number attached — which is what the
- * exculpatory block's "nine hiding shapes killed" line already did
- * silently. Recorded here because it was a real decision made without
- * being stated, and it now binds every later block.
+ * incident's SHAPE into the rule's own sentence, present-tense and
+ * generic — which is what the exculpatory block's "nine hiding shapes
+ * killed" line already did silently. Two things the fold must satisfy,
+ * and dropping the round, PR and issue numbers satisfies neither on its
+ * own: the sentence may not be a past-tense narrative of prior defects,
+ * which is the archaeology §2.4 keeps off a living surface however it is
+ * spelled; and it may not lean on an antecedent the composed document
+ * does not contain, since the delegate reads the brief and nothing else.
+ * Recorded here because it was a real decision made without being
+ * stated, and it now binds every later block.
  *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;
@@ -198,11 +203,10 @@ const COVERAGE_ATTRIBUTION = [
 	"description. Build the shape, run the suite, read which arm reds, and let the wording say exactly",
 	"that and no more (§2.4's machine-pair claim: it ships one attempted violation and its red). This is",
 	"the burden above over a PARTICULAR claim rather than a universal one, and the measurement differs —",
-	"that one sends you to look for a falsifying case, this one sends you to BUILD the case. Two",
-	"attributions that measured false: a comment asserting a whole-literal arm red on a duplication",
-	"mutant, where the pin was a substring and a DIFFERENT arm was the one that red; and a claim that the",
-	"substring blind spot let a second home survive verbatim OR reworded, where only the verbatim ones",
-	"red. Name the arm you watched red, never the arm you expect to.",
+	"that one sends you to look for a falsifying case, this one sends you to BUILD the case. Expectation",
+	"cannot settle it: a pin that reads a SUBSTRING stays green while a DIFFERENT arm is the one that",
+	"reds, and stays green again on a reworded copy of the very text it pins. Name the arm you watched",
+	"red, never the arm you expect to.",
 ].join("\n");
 
 const RETURN_CONTRACT = [

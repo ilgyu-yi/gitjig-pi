@@ -657,18 +657,26 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	// ONE HOME (§3.11), by the same tie #204 established and no new
 	// mechanism: the expected literal is declared ONCE here and asserted
 	// against BOTH composed documents by EQUALITY over the extracted block,
-	// so a per-brief restatement reds one arm and a drift reds both, and an
-	// APPENDED line — which every substring pin would leave green — reds too.
+	// so a per-brief restatement reds one arm and a drift reds both.
+	//
+	// WHAT THE EQUALITY PIN REACHES, measured rather than described — the
+	// first wording of this comment claimed it caught "an APPENDED line
+	// every substring pin would leave green", and the measurement refuted
+	// that where it mattered most. `composedBlock` splits on a blank line,
+	// so the pin's reach ENDS AT THE BLOCK'S OWN PARAGRAPH: a line appended
+	// INSIDE the block reds the two equality arms, and a weakening
+	// paragraph appended AFTER it reds nothing — which is exactly how every
+	// block in these briefs is composed. The ROSTER arm below is what sees
+	// that shape; the equality arms are pinned to the reach they have.
 	const EXPECTED_COVERAGE = [
 		"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
 		"description. Build the shape, run the suite, read which arm reds, and let the wording say exactly",
 		"that and no more (§2.4's machine-pair claim: it ships one attempted violation and its red). This is",
 		"the burden above over a PARTICULAR claim rather than a universal one, and the measurement differs —",
-		"that one sends you to look for a falsifying case, this one sends you to BUILD the case. Two",
-		"attributions that measured false: a comment asserting a whole-literal arm red on a duplication",
-		"mutant, where the pin was a substring and a DIFFERENT arm was the one that red; and a claim that the",
-		"substring blind spot let a second home survive verbatim OR reworded, where only the verbatim ones",
-		"red. Name the arm you watched red, never the arm you expect to.",
+		"that one sends you to look for a falsifying case, this one sends you to BUILD the case. Expectation",
+		"cannot settle it: a pin that reads a SUBSTRING stays green while a DIFFERENT arm is the one that",
+		"reds, and stays green again on a reworded copy of the very text it pins. Name the arm you watched",
+		"red, never the arm you expect to.",
 	].join("\n");
 
 	it("the REVIEWER brief carries the coverage-attribution burden (issue #213)", () => {
@@ -680,8 +688,8 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			"the reviewer brief does not carry the coverage-attribution block as the expected literal, END " +
 				"INCLUDED. A reviewer attributes coverage in the body of a finding — 'no arm covers this shape' is " +
 				"the claim this rule governs — and §2.4's machine-pair clause bound only the author until this " +
-				"block existed. Equality, not substring: an appended qualifier can weaken the rule while leaving " +
-				"every substring pin green",
+				"block existed. Equality, not substring: a line appended INSIDE this block can weaken the rule " +
+				"while leaving every substring pin over it green",
 		);
 	});
 
@@ -703,36 +711,99 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		);
 	});
 
-	it("the coverage burden composes with the claim discipline it narrows, ahead of the mechanics (issue #213)", () => {
+	it("the composed BLOCK ROSTER of both briefs is pinned in full — no paragraph may be inserted (issue #213)", () => {
+		// This arm replaces the pair of indexOf ordering assertions the first
+		// draft carried, and subsumes them: a roster pins membership AND order
+		// in one comparison, so two homes for the ordering property are not
+		// minted.
+		//
+		// Why it exists at all, stated as the trade-off §2.5 asks for before
+		// complexity is added: deletion and narrowing were both available and
+		// both leave a weakening paragraph appended after any block invisible
+		// to every guard in this file — measured, not assumed. A brief whose
+		// claim disciplines can be silently licensed away by an appended
+		// paragraph is the one failure this block exists to prevent, so the
+		// guard is widened rather than the claim narrowed.
+		//
+		// The roster is deliberately brittle: adding, removing, reordering or
+		// re-opening any block reds it. That is the point — a new block in a
+		// delegate's brief is a deliberate act and is declared here.
+		//
+		// WHICH ARM REDS ON WHICH SHAPE, each built and run serially rather
+		// than expected. Arms: A = the reviewer equality arm, B = the judge
+		// equality arm, D = the once-per-brief arm, R = this one.
+		// - a weakening paragraph appended AFTER the block at both sites: R
+		//   alone. Nothing else in the file sees it.
+		// - a reworded restatement as a third, differently-opened block: R
+		//   alone — the edge the first draft of this file disclosed as open.
+		// - a line appended INSIDE the block literal: A and B, not R.
+		// - the block removed from both sites: A, B, D and R.
+		// - the block moved ahead of the exculpatory burden: R alone.
+		// - a reworded per-brief restatement at the judge site: B alone.
+		//
+		// WHAT THAT LEAVES OPEN, since six built shapes are evidence about six
+		// shapes: an edit INSIDE a block this file equality-pins is caught by
+		// that block's own pin, not by R — measured on the hygiene ledger, which
+		// red its own two arms. An edit inside a block with NO equality pin is
+		// reached by neither mechanism here, and no arm in this file should be
+		// cited as covering it.
+		const openings = (document: string): readonly string[] =>
+			document.split("\n\n").map((block) => block.split("\n")[0] as string);
 		const b = briefs();
-		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
-		assert.ok(
-			reviewer.indexOf("EXCULPATORY CLAIMS") < reviewer.indexOf("COVERAGE ATTRIBUTION"),
-			"the coverage block is the exculpatory burden's narrow case and its text says so — 'the burden " +
-				"above' — so composing it FIRST leaves a forward reference to a block the reader has not reached",
+		assert.deepEqual(
+			openings(b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES)),
+			[
+				"You are one reviewer slot of a mutually blind review panel.",
+				"CHANGE UNDER REVIEW: x",
+				"RESULT GRAMMAR (§1.7): you report what you discovered and nothing about what should follow it.",
+				'Your structured result rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+				"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+				"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+				"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
+				"OUT OF SCOPE — do not raise findings about: the dispatcher's own internals.",
+				"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+				"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
+				"DEADLINES (self-enforced): have a first complete ../return.json written by T0+900 seconds; at " +
+					"T0+1400 seconds STOP whatever you are doing and write your final ../return.json. A late return " +
+					"is refused unread.",
+			],
+			"the reviewer brief's block roster drifted. An EXTRA entry is a paragraph inserted into a delegate's " +
+				"brief — the shape every equality pin in this file is blind to, since `composedBlock` stops at the " +
+				"first blank line and a licence appended AFTER a block leaves its own pin green. A MISSING or " +
+				"REORDERED entry is a block dropped or moved: the claim disciplines must reach the reader before " +
+				"the transport mechanics, and the coverage burden after the burden its text calls 'the burden above'",
 		);
-		assert.ok(
-			reviewer.indexOf("COVERAGE ATTRIBUTION") < reviewer.indexOf("RETURN:"),
-			"the reviewer's coverage burden composed after the return mechanics — a claim discipline stated " +
-				"below the transport contract reads as an afterthought to it",
-		);
-		const judge = b.composeJudgeBrief(
-			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
-			{ state: "present", criteria: ["AC1"] },
-			{ changeDescription: "x" },
-			FENCES,
-		);
-		assert.ok(
-			judge.indexOf("EXCULPATORY CLAIMS") < judge.indexOf("COVERAGE ATTRIBUTION"),
-			"the judge's coverage block composed before the burden it narrows, leaving the same forward reference",
-		);
-		assert.ok(
-			judge.indexOf("COVERAGE ATTRIBUTION") < judge.indexOf("3. Every ruling carries a required NON-EMPTY"),
-			"the judge's coverage burden composed after the evidence-field obligation — that field is where a " +
-				"Judge states which arm covers what, so the rule must arrive before it",
+		assert.deepEqual(
+			openings(
+				b.composeJudgeBrief(
+					[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+					{ state: "present", criteria: ["AC1"] },
+					{ changeDescription: "x" },
+					FENCES,
+				),
+			),
+			[
+				"You are the JUDGE of a review panel (SPEC §1.9). You rule and stop: for a substantive finding the",
+				"CHANGE UNDER REVIEW: x",
+				"THE BUNDLE — embedded verbatim, LABELLED UNVERIFIED (§1.5's third form): re-verify every claim with",
+				"CRITERION MANIFEST (caller-derived; the set your AC-impact axis reads):",
+				"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+				"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+				"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
+				"YOUR OBLIGATIONS, all owed (§1.9):",
+				"OUT OF SCOPE — do not raise findings about: the dispatcher's own internals.",
+				"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+				'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+				"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
+				"DEADLINES (self-enforced): have a first complete ../return.json written by T0+900 seconds; at " +
+					"T0+1400 seconds STOP whatever you are doing and write your final ../return.json. A late return " +
+					"is refused unread.",
+			],
+			"the judge brief's block roster drifted — same grounds as the reviewer's, plus: the coverage burden " +
+				"must arrive before the obligations block, because obligation 3's non-empty evidence field is where " +
+				"a Judge attributes coverage",
 		);
 	});
-
 	it("the coverage rule appears EXACTLY ONCE per brief — one home, no second (issue #213)", () => {
 		// WHAT THIS ARM COVERS, and what it leaves open — stated to the standard
 		// the block it pins demands of itself. The needle is one exact sentence,
