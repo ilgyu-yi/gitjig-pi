@@ -360,6 +360,34 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	/**
+	 * Extract ONE composed block and return it whole, for comparison by
+	 * EQUALITY rather than by substring (issue #204's EF-2).
+	 *
+	 * The briefs join their blocks with a blank line, so a block is a
+	 * maximal run of lines between blank lines. `includes` cannot see an
+	 * addition at the END of a block — the expected literal stays a
+	 * substring — and that blind spot is what let a retained second home
+	 * of the exculpatory rule survive the ADMISSION arm's substring pin, verbatim OR reworded.
+	 * Equality over the extracted block sees both, because it sees the
+	 * block's end.
+	 *
+	 * The extraction refuses what it cannot read rather than reading past
+	 * it: exactly one block must open with the given line, or the arm reds
+	 * on its own message instead of silently comparing the wrong text.
+	 */
+	const composedBlock = (document: string, opening: string): string => {
+		const blocks = document.split("\n\n").filter((block) => block.startsWith(opening));
+		assert.equal(
+			blocks.length,
+			1,
+			`the composed document does not carry exactly one block opening with ${JSON.stringify(opening)} (found ` +
+				`${String(blocks.length)}). Zero means the block was dropped or renamed; more than one means the same ` +
+				"rule has a second home in this very document, which is the drift the equality pin below exists to catch",
+		);
+		return blocks[0] as string;
+	};
+
 	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
 		// Round 1's EF-2: every substring needle over this block survived inverting
 		// the very proposition it pinned ('does not establish' -> 'does establish',
@@ -382,9 +410,21 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
 			"disposition exists or is needed. DEMOTE BEFORE DEDUP: an observation already admitted as an",
 			"effective finding has no exit but REFUTED, so the ordering is the whole of the token.",
-			'SYMMETRY: an exculpatory claim ("this defect class is closed") carries a finding\'s burden.',
-			"An enumeration establishes an enumeration, never a class; record such a claim as a claim,",
-			"with its enumeration attached.",
+			// The three SYMMETRY lines that closed this block moved OUT of it
+			// (issue #204) and into the shared exculpatory block pinned below.
+			// They are not deleted — they are re-homed, because the rule binds
+			// the reviewer as well and this block reaches only the Judge.
+			//
+			// Their absence is part of the pin, and round 1's EF-1 is that the
+			// previous wording of this sentence claimed a coverage this arm did
+			// not have: the assertion was `includes`, so a production that kept
+			// the old lines here AND gained the shared block left this literal a
+			// substring and the arm GREEN. Measured at that head: that mutant
+			// red exactly one arm in the file, and it was not this one.
+			//
+			// The assertion below is now EQUALITY over the extracted block, so
+			// the claim is true as written: a retention here — verbatim or
+			// reworded — lengthens the block and reds this arm.
 		].join("\n");
 		const b = briefs();
 		const text = b.composeJudgeBrief(
@@ -393,12 +433,14 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			{ changeDescription: "x" },
 			FENCES,
 		);
-		assert.ok(
-			text.includes(expectedAdmission),
-			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was " +
-				"deleted, inverted, or edited; every ground, the record-do-not-admit default with its summary " +
-				"channel and §1.9 ground, the demote-before-dedup ordering, and the symmetry rule are pinned " +
-				"as one whole (round 1's EF-2: substring needles survived polarity inversion)",
+		assert.equal(
+			composedBlock(text, "ADMISSION —"),
+			expectedAdmission,
+			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was deleted, " +
+				"inverted, edited, or APPENDED TO; every ground, the record-do-not-admit default with its summary " +
+				"channel and §1.9 ground, and the demote-before-dedup ordering are pinned as one whole, END INCLUDED " +
+				"(#196 round 1's EF-2: substring needles survived polarity inversion; #204 round 1's EF-1: a substring " +
+				"pin over this block could not see a second home of the exculpatory rule appended to it)",
 		);
 		assert.ok(
 			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
@@ -424,6 +466,170 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			"the reviewer brief's OBSERVATIONS block is not the expected literal — the not-narrowed half, " +
 				"the groundless condition's polarity, the summary channel, or the never-finding-grammar " +
 				"prohibition was deleted, inverted, or edited (round 1's EF-2)",
+		);
+	});
+
+	// ISSUE #204 — the exculpatory-claim burden reaches BOTH briefs.
+	//
+	// The rule was settled in #195/#196 and composed into the Judge's brief
+	// alone, as three lines closing the ADMISSION block. Measured on main
+	// (`724cea4`) over the COMPOSED documents, not the source: the reviewer
+	// brief contained none of "exculpatory", "SYMMETRY", or "enumeration
+	// establishes an enumeration".
+	//
+	// The party that MAKES a class-closure claim is the reviewer; the Judge
+	// only consumes one. The incident the rule came from was a panel's claim
+	// — nine hiding shapes killed, closure reported, a tenth shape alive —
+	// and the unearned closure then reached §1.4's diagnosis as evidence that
+	// ground had been closed, which is the NONE direction: the one value that
+	// admits another autonomous repair attempt. So the brief that never
+	// carried the rule is the brief whose reader the rule is about.
+	//
+	// ONE HOME (§3.11), and this pair of arms IS the tie: the expected
+	// literal is declared ONCE here and asserted against BOTH composed
+	// documents. A production that restated the rule per brief in two
+	// wordings reds one of the two arms; a production that drifted the
+	// shared constant reds both. No third mechanism is needed for the tie,
+	// and none is minted.
+	const EXPECTED_EXCULPATORY = [
+		"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+		"An enumeration establishes an enumeration, never a class: nine hiding shapes killed is evidence",
+		"about nine shapes and is silent about a tenth. Never assert a closure your evidence does not",
+		"establish. State it AS a claim with its enumeration attached — what you covered, how, and what",
+		"that leaves open — in your return's summary, distinctly labelled. The PROHIBITION is the",
+		"load-bearing half and needs no channel: what you may not do is report a class closed. This binds",
+		"the claim you make and the claim you are handed — an unearned closure reaches the repair-history",
+		"diagnosis (§1.4) as evidence that ground was closed, and NONE is the value that admits another",
+		"repair attempt.",
+	].join("\n");
+
+	it("the REVIEWER brief carries the exculpatory-claim burden (issue #204)", () => {
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.equal(
+			composedBlock(text, "EXCULPATORY CLAIMS"),
+			EXPECTED_EXCULPATORY,
+			"the reviewer brief does not carry the exculpatory-claim block as the expected literal, END INCLUDED. " +
+				"The reviewer is the party that MAKES class-closure claims, and a burden told only to the Judge " +
+				"arrives after the claim is already asserted as settled — the measured incident is a panel reporting " +
+				"a class closed on nine killed shapes with a tenth alive, which then fed §1.4's diagnosis in the NONE " +
+				"direction. Equality, not substring: a line APPENDED to this block can weaken the rule while leaving " +
+				"every substring pin green (round 1's non-admitted observation (i), closed here rather than left)",
+		);
+	});
+
+	it("the JUDGE brief carries the SAME exculpatory block, byte for byte — one home, not two wordings (issue #204)", () => {
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.equal(
+			composedBlock(text, "EXCULPATORY CLAIMS"),
+			EXPECTED_EXCULPATORY,
+			"the judge brief does not carry the exculpatory-claim block as the expected literal, END INCLUDED. The " +
+				"consumer side of the rule is not optional — the Judge weighs a claim it is handed — and this literal " +
+				"is declared once in this file and asserted against both documents, so a per-brief restatement reds " +
+				"exactly here",
+		);
+	});
+
+	it("the exculpatory burden composes with the claim discipline it belongs to, ahead of the mechanics (issue #204)", () => {
+		const b = briefs();
+		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.ok(
+			reviewer.indexOf("OBSERVATIONS vs FINDINGS") < reviewer.indexOf("EXCULPATORY CLAIMS"),
+			"the reviewer's positive-claim discipline and its negative-claim burden are two halves of one rule and " +
+				"compose together — the exculpatory block arrived before the observation block, which splits them",
+		);
+		assert.ok(
+			reviewer.indexOf("EXCULPATORY CLAIMS") < reviewer.indexOf("RETURN:"),
+			"the reviewer's exculpatory burden composed after the return mechanics — a claim discipline stated " +
+				"below the transport contract reads as an afterthought to it",
+		);
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.ok(
+			judge.indexOf("ADMISSION") < judge.indexOf("EXCULPATORY CLAIMS"),
+			"the judge's exculpatory block composed before the admission burden — the exculpatory rule is what " +
+				"admission does with a NEGATIVE claim, so it follows the grounds it is the counterpart of",
+		);
+		assert.ok(
+			judge.indexOf("EXCULPATORY CLAIMS") < judge.indexOf("1. DEDUP"),
+			"the judge's exculpatory burden composed after the dedup obligation — like admission, it governs what " +
+				"enters the bundle at all, and a burden stated after dedup arrives after the decision it governs",
+		);
+	});
+
+	it("the exculpatory rule appears EXACTLY ONCE per brief — the re-home is a move, not a copy (issue #204)", () => {
+		// WHAT THIS ARM COVERS, re-scoped by round 1's EF-2 — the previous
+		// wording claimed it CLOSED the two-homes residual, and that claim was
+		// false in a way the arm itself could not see. Its needles are two
+		// exact sentences, so a second home stating the same rule in DIFFERENT
+		// WORDS contains neither needle, the count stays at one, and the whole
+		// file stayed green. Measured at that head: a reworded retention in
+		// ADMISSION_BURDEN gave 55/55 pass.
+		//
+		// The two-homes shape is now carried by the EQUALITY pins above, which
+		// see a block's end and therefore see a retention of either wording.
+		// What is left for this arm is the case equality cannot reach: a
+		// repetition somewhere ELSE in the composed document — a third block,
+		// or the same rule restated inside a block this file does not pin.
+		//
+		// STATED OPEN, not closed: a REWORDED restatement in a block no arm
+		// pins is caught by neither mechanism. Equality sees only the blocks
+		// named here; a count sees only these two sentences. That is an
+		// enumeration of two mechanisms, not a class closure, and no arm in
+		// this file should be cited for one.
+		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+		const b = briefs();
+		const documents = [
+			["reviewer", b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES)],
+			[
+				"judge",
+				b.composeJudgeBrief(
+					[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+					{ state: "present", criteria: ["AC1"] },
+					{ changeDescription: "x" },
+					FENCES,
+				),
+			],
+		] as const;
+		for (const [name, text] of documents) {
+			assert.equal(
+				occurrences(text, "An enumeration establishes an enumeration"),
+				1,
+				`the ${name} brief states the enumeration sentence a number of times other than once. Twice means the ` +
+					"rule was COPIED into the shared block while its old home was left standing — two homes for one " +
+					"property, which drift independently and which no whole-block `includes` pin can see, since a " +
+					"trailing addition leaves every such pin green",
+			);
+			assert.equal(
+				occurrences(text, "EXCULPATORY CLAIMS"),
+				1,
+				`the ${name} brief opens the exculpatory block a number of times other than once`,
+			);
+		}
+	});
+
+	it("the reviewer's claim disciplines add NO payload key — the closed shape is still {token, findings} (issue #204)", () => {
+		// The burden's recording half rides the summary channel the observation
+		// discipline already names, so it adds no new dependency CLASS on the
+		// orchestrator-path gap filed as #203 — and its prohibition half needs
+		// no channel at all. What must not have happened is a widening of the
+		// closed payload to carry it.
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.ok(
+			text.includes('{"token": "APPROVED" | "FINDINGS", "findings": string[]}'),
+			"the reviewer's closed payload shape changed while adding a claim discipline — the burden rides the " +
+				"return's summary, and join.ts discards a return carrying an unknown key",
 		);
 	});
 
