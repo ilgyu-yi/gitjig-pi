@@ -150,14 +150,11 @@ export type Disposition = (typeof DISPOSITIONS)[number];
 export type Resolution = {
 	dispositions: { finding: string; disposition: Disposition; remedy?: string }[];
 	/**
-	 * DERIVED from record.ts's `OUTCOMES`, never re-spelled here. A
-	 * hand-spelled union here would be a second home for the domain, and it
-	 * is the spelling that TYPES the value §1.4's assembler reads — so a
-	 * member added here would reach that assembler as an outcome
-	 * `StateOutcome` does not declare, a member added there would not be
-	 * accepted here, and no arm ties the two. Measured against a
-	 * hand-spelled union: widening it by a fourth member leaves the history
-	 * suite fully green.
+	 * DERIVED from record.ts's `OUTCOMES`, never re-spelled here: this
+	 * field is what TYPES the value §1.4's assembler reads, so a
+	 * re-spelling would be a second home for the domain — one that could
+	 * hand that assembler an outcome `StateOutcome` does not declare,
+	 * with no arm tying the two.
 	 */
 	outcome: (typeof OUTCOMES)[number];
 };

@@ -3,29 +3,31 @@
  * #28) — structure over the workflow, and behaviour over the script it
  * runs.
  *
- * the platform half shipped with zero arms while
- * the predicate beside it carried four hundred lines of them, and §3.12
- * makes "the landing verifies structure only" an obligation a landing
- * discharges rather than a permission to ship none.
+ * §3.12 makes "the landing verifies structure only" an obligation a
+ * landing discharges rather than a permission to ship none — so a platform
+ * half with zero arms beside a four-hundred-line predicate is not the
+ * clause being satisfied.
  *
  * NO LIVE PLATFORM CALLS (issue #190 AC8). Every behavioural arm drives
  * the script's exported pieces with an injected `fetch`.
  *
- * Arm method, carried from issue #190 and from PR #187's §1.4 STAGNATION
- * ruling: closed domains ITERATED not sampled; unbounded domains at
+ * Arm method, carried from issue #190 and from a §1.4 STAGNATION ruling:
+ * closed domains ITERATED not sampled; unbounded domains at
  * cardinality >= 2 with needles distinct by construction; structured
  * values asserted WHOLE — no bare flag, no bare substring, in any arm
  * whose title states a general property.
  *
  * The defect shapes this file is built against, each of which a structure
- * suite of this kind re-instantiates by default:
- *   E5  a general title over a one-point fixture (the owner arm, the leak arm)
- *   E6  `cause.length > 0` — a bare flag, returning
- *   E7  a YAML regex that matched a COMMENT, so the setting could be deleted
- *   E8  the request itself unmeasured — the stub ignored `init`
- *   E9  `run`'s PASS limb unarmed
- *   E10 the write-scope negative blind to a job-level block
- *   E21 nothing asserted the escaping the script header commits to
+ * suite over a workflow re-instantiates by default. They are named here
+ * because the arms below are positioned against them:
+ *   - a general title over a one-point fixture
+ *   - a bare flag such as `cause.length > 0`, which a constant survives
+ *   - a YAML regex matching a COMMENT, so the setting can be deleted and
+ *     its words left behind
+ *   - the request itself unmeasured, with a stub ignoring `init`
+ *   - `run`'s PASS limb unarmed
+ *   - a write-scope negative blind to a job-level block
+ *   - nothing asserting the escaping the script header commits to
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -93,7 +95,7 @@ const TOKEN = "zq-the-token";
 const ENV = { GITHUB_TOKEN: TOKEN, GITJIG_REPO: "owner/name", GITJIG_PR: "190", GITJIG_HEAD: HEAD };
 const SLOT = { lens: "runtime", surface: "the shell's runtime extensions" };
 
-/** A fetch stub that records the FULL request, not only the URL (E8). */
+/** A fetch stub that records the FULL request, not only the URL. */
 function stubFetch(answers: ((url: string) => unknown)[]) {
 	const seen: { url: string; init: { headers?: Record<string, string> } }[] = [];
 	let call = 0;
@@ -122,21 +124,17 @@ function passingBody(head = HEAD): string {
 
 describe("§3.3 merge-review workflow — structure, over LIVE settings only (issue #190 AC1)", () => {
 	it("every named setting is LIVE — deleting it and leaving the words in a comment must not satisfy any arm", () => {
-		// The meta-arm over the comment-stripping: it exercises the SHARED
-		// helper, so an edit reverting to matching RAW reds here rather than
-		// silently re-admitting a commented-out setting.
+		// The meta-arm over the comment-stripping. It calls `stripComments`
+		// rather than rebuilding the expression locally, because a local
+		// rebuild is a SECOND HOME (§3.11) and pins a copy: with one,
+		// mutating the helper to strip nothing reds a CONSUMER arm while
+		// this one — authored to guard the helper — stays green.
 		//
-		// Rebuilding the stripping expression locally would be a SECOND HOME
-		// for it (§3.11) — it would pin a copy, not the helper every other arm
-		// runs through, and mutating the helper to strip nothing would then red
-		// one CONSUMER arm while this one, the arm authored to guard the
-		// helper, stayed GREEN. It calls `stripComments` for that reason.
-		//
-		// The BINDING is asserted too, by the third limb below, and that is a
-		// separate property: an arm that exercises the helper but never reads
-		// `LIVE` stays green when `const LIVE = stripComments(RAW)` is rebound
-		// to `const LIVE = RAW`. Claim and assertion are the same statement
-		// only because both limbs are here.
+		// The BINDING is the third limb's own assertion, and it is a separate
+		// property. An arm that exercises the helper but never reads `LIVE`
+		// stays green when `const LIVE = stripComments(RAW)` is rebound to
+		// `const LIVE = RAW` — so both limbs are needed for this arm's claim
+		// and its assertions to be the same statement.
 		//
 		// The helper has TWO branches and each is pinned below by its own
 		// limb with its own message. Both are load-bearing: a setting
@@ -196,9 +194,9 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 	});
 
 	it("grants issues: read and NO write scope, quantified over EVERY permissions block", () => {
-		// the negative was anchored to workflow-level
-		// indentation and could not see a JOB-level block, which overrides
-		// the workflow default wholesale and is the grant that takes effect.
+		// A negative anchored to workflow-level indentation cannot see a
+		// JOB-level block, which overrides the workflow default wholesale and
+		// is the grant that takes effect.
 		assert.ok(/^\s+issues:\s*read\s*$/m.test(LIVE), "the workflow does not grant issues: read");
 		const grants = [
 			...LIVE.matchAll(/^\s+(contents|pull-requests|issues|actions|checks|packages|id-token):\s*(\S+)\s*$/gm),
@@ -215,9 +213,9 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 	it("bounds the job, pins the toolchain, and uses only GitHub-shipped actions", () => {
 		assert.ok(/^\s+timeout-minutes:\s*\d+\s*$/m.test(LIVE), "the job carries no timeout-minutes");
 		assert.ok(/^\s+concurrency:\s*$/m.test(LIVE), "the workflow declares no concurrency group");
-		// this is the one workflow here that invokes
-		// `node`, and its entry point imports TypeScript through native type
-		// stripping — a version-gated capability.
+		// This is the one workflow here that invokes `node`, and its entry
+		// point imports TypeScript through native type stripping — a
+		// version-gated capability.
 		assert.ok(
 			/^\s+node-version:\s*\d+\s*$/m.test(LIVE),
 			"the workflow does not pin a Node version, while its script imports TypeScript resolved by native type " +
@@ -278,8 +276,8 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 });
 
 describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted WHOLE (AC4)", () => {
-	// `cause.length > 0` is a bare flag that a constant
-	// survives. Every shape below asserts the cause's own content.
+	// `cause.length > 0` is a bare flag that a constant survives. Every
+	// shape below asserts the cause's own content.
 	const shapes: [string, ((url: string) => unknown)[], string][] = [
 		[
 			"the fetch throwing",

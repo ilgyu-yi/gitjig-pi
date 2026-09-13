@@ -269,17 +269,16 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		// A complement cannot be enumerated, so this arm is honest only if its
 		// fixture CANNOT be satisfied by a per-point special case.
 		//
-		// This arm has NO source read and no second limb. Extracting the
-		// assembler's per-tag tests out of history.ts's TEXT and deepEqualling
-		// them against a three-member list is a declared
-		// domain established by READING SOURCE TEXT, which is exactly the scope
-		// §1.8 invalidated and re-planned, left standing when the rest of the
-		// method was superseded. It carried that method's defect too: measured
-		// at the previous head, a behaviourally INERT COMMENT inside
-		// repairHistory red this arm alone, 102/1. A comment cannot change what
-		// the assembler does, so that red was false.
+		// This arm has NO source read and no second limb over one. Extracting
+		// the assembler's per-tag tests out of history.ts's TEXT and
+		// deepEqualling them against a three-member list is a declared domain
+		// established by READING SOURCE TEXT, which is exactly the scope §1.8
+		// invalidated and re-planned — and it carries that method's defect: a
+		// behaviourally INERT COMMENT inside repairHistory reds such a limb,
+		// and a comment cannot change what the assembler does, so that red
+		// would be false.
 		//
-		// What the limb claimed is NOT carried by the type witness, and what
+		// What such a limb would claim is NOT carried by the type witness, and what
 		// follows is a CLAIM with its enumeration attached, never a closed
 		// class. The witness over `ReviewState["state"]` is an object literal
 		// in THIS file typed from resolve.ts, so no edit to history.ts can red
@@ -443,11 +442,11 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 });
 
 describe("§1.4 the assembler carries findings and rulings whole (issue #186)", () => {
-	// The domain here is not a closed union but a CARDINALITY, and a corpus
-	// of fixtures standing at 0 or 1 cannot measure it — a bundle of two must
-	// reach the assembler itself, not the renderer it is handed to. A fixture at
+	// The domain here is not a closed union but a CARDINALITY. A fixture at
 	// cardinality 1 cannot falsify "carries them whole": truncation to the
-	// first and preservation of all are the same observation at one entry.
+	// first and preservation of all are the same observation at one entry —
+	// and a two-ruling fixture handed straight to the renderer bypasses the
+	// assembler, so it does not carry the axis either.
 	//
 	// So: two findings and two rulings, needles distinct by construction,
 	// asserted by deep equality in ORDER. A truncation, a reversal, or a
@@ -489,8 +488,8 @@ describe("§1.4 the assembler carries findings and rulings whole (issue #186)", 
 
 	it("a findings-carrying record with a NULL adjudication keeps its findings and empties its rulings", () => {
 		// The shape repairHistory produces by design when a panel gathered
-		// findings the Judge never ruled. It is measured here at the assembler,
-		// not only at position one.
+		// findings the Judge never ruled. It is measured here at the
+		// assembler, and past position one.
 		const [assembled] = mod().repairHistory([{ ...withBundle(), adjudication: null }]);
 		assert.deepEqual(
 			{ findings: assembled?.findings, rulings: assembled?.rulings },
@@ -571,7 +570,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 
 	it("embeds each state's findings and rulings verbatim, labelled unverified", () => {
 		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
-		// pin the per-state FINDINGS line with a needle only it
+		// Pin the per-state FINDINGS line with a needle only it
 		// can produce — a state carrying a finding but NO rulings, so the
 		// ruling line (which also renders the finding) cannot satisfy it.
 		const findingsOnly = mod().composeDiagnosisBrief([state({ findings: ["zq findings-only line"], rulings: [] })], {
@@ -622,7 +621,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		);
 	});
 
-	// every arm above passes a ONE-state history, so the whole
+	// Every arm above passes a ONE-state history, so the whole
 	// multi-state rendering is unmeasured — slice(-1), reverse(), a constant
 	// "1." ordinal, a filter to repair, and a duplicated first state all
 	// survived the suite 8-for-8. §1.4's diagnosis reads the same findings
@@ -641,7 +640,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 			state({
 				head: fill.repeat(40),
 				outcome,
-				// the needle must be distinct BY CONSTRUCTION
+				// The needle must be distinct BY CONSTRUCTION
 				// from anything another rendered line can produce. Previously the
 				// finding text was identical to the ruling's `finding` field, and
 				// the ruling line renders that field — so a renderer that dropped
@@ -664,8 +663,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 	 * A history whose SECOND state carries findings and no rulings — the
 	 * shape `repairHistory` produces for a panel the Judge has not ruled.
 	 * Pinned at position one alone, a renderer emitting findings for the
-	 * first state only would survive every arm; this fixture is why it does
-	 * not.
+	 * FIRST state only survives every arm; this fixture is why it does not.
 	 */
 	const findingsOnlyAtSecond = (): StateSummary[] => {
 		const history = multi();
@@ -849,7 +847,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (issue #186)", () => {
 	it("a valid confirmed diagnosis is available with its two outputs and evidence", () => {
 		const h = mod();
-		// use a NON-identity invalidation ("plan", not the
+		// Use a NON-identity invalidation ("plan", not the
 		// default "nothing"), so a constant-"nothing" mutant that discards the
 		// payload's invalidation cannot pass this deepEqual.
 		const input = { value: "STAGNATION" as const, invalidation: "plan" as const, evidence: "the method repeated" };
@@ -909,7 +907,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		const h = mod();
 		for (const payload of [
 			'{"value":"MAYBE","invalidation":"nothing","evidence":"e"}',
-			// an out-of-set INVALIDATION, not just an out-of-set
+			// An out-of-set INVALIDATION, not just an out-of-set
 			// value — the invalidation set is closed too.
 			'{"value":"NONE","invalidation":"maybe","evidence":"e"}',
 			"not json",
@@ -1081,9 +1079,9 @@ describe("§1.4 the admission's input domain, derived from DispatchOutcome (issu
 describe("§1.4 the deterministic consumer (issue #186)", () => {
 	// The coverage set here is the CROSS-PRODUCT of two closed domains this
 	// file declares as its own `as const` literals — 4 x 3, read off no source —
-	// not the pairs a reviewer happens to name. Sampling exercises part of the
-	// grid and names part of its survivors; the derived domain exercises all
-	// 12, which is the whole reason it is derived rather than sampled.
+	// not the pairs a reviewer happens to name. Sampling exercises part of
+	// the grid and names part of its survivors; the derived domain exercises
+	// all 12, which is the whole reason it is derived rather than sampled.
 	//
 	// The falsifier: a mutant that changes the returned Consequence at
 	// exactly one cell must red. Every cell below is asserted WHOLE, so a
@@ -1125,9 +1123,9 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability (issue #186)", () => {
 	// The domain is derived from the SIGNATURE: storeInstalled is boolean
 	// (2) and records is `ReviewRecord[] | undefined`, whose inhabited
-	// shapes are undefined / empty / non-empty (3). Six cells. A reviewer
-	// naming the interesting ones reaches two (the available limb's payload,
-	// and the empty-but-readable false-block); the signature names all six.
+	// shapes are undefined / empty / non-empty (3). Six cells. Naming the
+	// interesting ones by hand reaches two (the available limb's payload, and
+	// the empty-but-readable false-block); the signature names all six.
 	const HEAD_A = "a".repeat(40);
 	const HEAD_B = "b".repeat(40);
 	const CELLS = [
@@ -1186,9 +1184,9 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 			// treating it as a hand-off parks the FIRST review of every change,
 			// which is the wrong-block direction §3.12 forbids as squarely as
 			// the wrong-allow one.
-			// the expected value must NOT be the array that was
-			// passed in, or an in-place `records.reverse()` mutates the
-			// expectation too and survives. Built independently here.
+			// The expected value must NOT be the array passed in, or an
+			// in-place `records.reverse()` mutates the expectation too and
+			// survives. Built independently here.
 			assert.deepEqual(
 				availability,
 				{ available: true, records: kind === "records" ? [repair(HEAD_A), repair(HEAD_B)] : [] },
@@ -1298,10 +1296,10 @@ describe("§1.4 the admission carries EVERY enforced member through the parser",
 	//   export const INVALIDATIONS    = [...] as const;
 	// read by `isMember(DIAGNOSIS_VALUES, value)` and `isMember(INVALIDATIONS, invalidation)`.
 	// Deriving instead from `export type DiagnosisValue = ...` is a DIFFERENT
-	// home for the same property (§3.11): with that derivation, deleting a
-	// member from either Set leaves the arms and tsc green — including "NONE",
-	// which refuses every advancing history's ruling and parks every change
-	// forever.
+	// home for the same property (§3.11): under that derivation, deleting a
+	// member from either Set leaves the arms and tsc green — including
+	// deleting "NONE", which refuses every advancing history's ruling and
+	// parks every change forever.
 	//
 	// The falsifier: deleting ANY single member from either array must red.
 	// That requires a POSITIVE admission per member, not merely a refusal.

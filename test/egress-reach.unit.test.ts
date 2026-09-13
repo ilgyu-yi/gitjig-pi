@@ -188,10 +188,8 @@ describe("a refusal names which operand it came from (issue #120)", () => {
 	// replaced the body's, so the actor repaired one, retried, and only then
 	// learned of the other.
 	//
-	// These arms drive the EXPORTED rule. Re-implementing the composition in
-	// a local helper leaves the suite green when the whole production merge is
-	// reverted — an arm that re-implements a rule pins nothing. The rule is
-	// exported for exactly this reason.
+	// These arms drive the EXPORTED rule: an arm that re-implements a rule
+	// pins nothing. The rule is exported for exactly this reason.
 	// Typed as ScanOutcome rather than `as const`: `as const` makes the
 	// arrays `readonly`, which the parameter type does not accept. Seven
 	// instances of that shape once shipped green through node's type
@@ -244,10 +242,10 @@ describe("a refusal names which operand it came from (issue #120)", () => {
 	});
 
 	it("merged pattern ids and lines are de-duplicated on the same rule", () => {
-		// ids were de-duplicated through a Set while lines were
-		// concatenated raw, so two operands matching on line 1 printed
-		// "lines 1, 1". Attribution now lives per operand, and the flat
-		// summary fields are joined on one rule rather than two.
+		// A bare line locator is unattributable: de-duplicating ids through a
+		// Set while concatenating lines raw makes two operands matching on
+		// line 1 print "lines 1, 1". Attribution lives per operand, and the
+		// flat summary fields are joined on one rule rather than two.
 		const same: ScanOutcome = { disposition: "refuse-match", patternIds: ["github-token"], lines: [1] };
 		const m = mergeScanOutcomes(same, same);
 		assert.equal(m.scan.disposition, "refuse-match");

@@ -94,8 +94,8 @@ function gate(): GateModule {
 }
 
 // Heads are 40-character hex, and the pair is chosen so the fixture can
-// SEPARATE "compares the whole head" from "compares a prefix of it"
-//. Two runs of a single repeated letter
+// SEPARATE "compares the whole head" from "compares a prefix of it".
+// Two runs of a single repeated letter
 // differing at position 0 cannot: a prefix comparison of any length
 // still tells them apart. These share 39 characters and differ only at
 // the LAST, which is the shape a hash domain actually invites.
@@ -203,13 +203,14 @@ describe("§3.7(e) predicate integrity — canonical position, demonstrated not 
 			["a leading newline", `\n${body(record)}`],
 			["a markdown blockquote", `> ${body(record)}`],
 			["a trailing relay after real prose", `## Round 2 — panel record\n\nPrior round's record:\n${body(record)}`],
-			// Every shape above relays behind text whose width
-			// is not the marker prefix's, so all of them are refused by the
-			// SPAN comparison alone — and the canonical-position guard could
-			// be dropped with the whole file green. Measured at that head:
-			// weakening `body.startsWith(prefix)` to `body.includes(prefix)`,
-			// leaving the span comparison at its fixed offset, gave 30 pass /
-			// 0 fail. AC3 requires a mutant dropping EITHER half to red.
+			// Every shape above relays behind text whose width is not the
+			// marker prefix's, so all of them are refused by the SPAN
+			// comparison alone — and against those shapes alone the
+			// canonical-position guard can be dropped with the whole file
+			// green: weakening `body.startsWith(prefix)` to
+			// `body.includes(prefix)`, leaving the span comparison at its
+			// fixed offset, gives 30 pass / 0 fail. AC3 requires a mutant
+			// dropping EITHER half to red.
 			//
 			// This shape is the one that separates them: the relaying text is
 			// EXACTLY as wide as the marker prefix, so the fixed-offset span
@@ -272,10 +273,10 @@ describe("§3.7(e) predicate integrity — canonical position, demonstrated not 
 	});
 
 	it("selects its artifact from the records AT THE HEAD, at every thread ordering tried", () => {
-		// "beside" is a claim over both orderings, and
-		// the fixture was one. A gate that presence-checks the records at
-		// the head and then parses a body chosen from the WHOLE thread
-		// passes the first row and reds on the second and third.
+		// "beside" is a claim over BOTH orderings, so a one-point fixture
+		// cannot carry it. A gate that presence-checks the records at the head
+		// and then parses a body chosen from the WHOLE thread passes the first
+		// row and reds on the second and third.
 		const real = body(record);
 		const relayedOther = `Quoting a prior round:\n${body(adjudicatedRecord(HEAD_B))}`;
 		const prose = "## Round 2 — panel record\n\nprose only, no record";
@@ -330,11 +331,11 @@ describe("§3.7(c) fail-closed — the closed limb set, ITERATED not sampled (is
 				`${shape} refused under the wrong reason — AC6 owes a DISTINCT authored reason per limb, so a gate ` +
 					"collapsing them into one loses the audit this posture exists for",
 			);
-			// `detail.length > 0` is a bare flag, which
-			// the arm method this file binds itself to forbids — a constant
-			// substituted for any detail survived it. Every detail must carry
-			// the head it is about, which is the binding the gate exists to
-			// report, and the lookup limbs must carry the platform's cause.
+			// `detail.length > 0` is a bare flag, which the arm method this
+			// file binds itself to forbids — a constant substituted for any
+			// detail survives it. Every detail must carry the head it is
+			// about, which is the binding the gate exists to report, and the
+			// lookup limbs must carry the platform's cause.
 			assert.ok(
 				verdict.pass === false && verdict.detail.includes(HEAD_A),
 				`${shape} refused with a detail that does not name the head under review — a refusal an operator cannot ` +
@@ -355,12 +356,13 @@ describe("§3.7(c) fail-closed — the closed limb set, ITERATED not sampled (is
 
 describe("§3.3 completeness and adjudication — the record's own fields (issue #190 AC1)", () => {
 	it("refuses EVERY incomplete cause, CROSSED with the record shapes an incomplete panel yields", () => {
-		// the cause axis was iterated while every
-		// other field was held at one point — and the held point was
-		// incoherent, a one-entry bundle WITH an adjudication handed to an
-		// arm asserting incompleteness. An incomplete panel's real record
-		// has an empty bundle and a null adjudication, so a gate refusing
-		// on `incomplete` only where the bundle is non-empty survived.
+		// Iterating the cause axis while holding every other field at one
+		// point is not enough, and an INCOHERENT held point is worse: a
+		// one-entry bundle WITH an adjudication, handed to an arm asserting
+		// incompleteness. An incomplete panel's real record has an empty
+		// bundle and a null adjudication, so against that fixture a gate
+		// refusing on `incomplete` only where the bundle is non-empty
+		// survives.
 		const causes = ["panel", "adjudication-missing", "adjudication-incomplete"] as const;
 		const contexts: [string, Partial<ReviewRecord>][] = [
 			["the shape an incomplete panel actually yields", { bundle: [], adjudication: null }],

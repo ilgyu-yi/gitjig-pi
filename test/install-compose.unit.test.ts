@@ -110,8 +110,8 @@ describe("the substrate set is derived from the tree (issue #116, §2.4, §6.1)"
 	it("SHELL_NAMESPACES matches §4.1's stated set exactly", () => {
 		// Compared as a SET, not a sorted sequence: `.githooks` sorts before
 		// `.github` (`o` < `u` at index 5), and a hand-written sorted literal
-		// gets that wrong. The property is membership; ordering is not part of
-		// the contract.
+		// gets that wrong. The property is membership; ordering is not part
+		// of the contract.
 		assert.deepEqual(new Set(SHELL_NAMESPACES), new Set([".pi", ".github", ".githooks", "changelog_unreleased"]));
 		assert.equal(SHELL_NAMESPACES.length, 4, "a namespace joined or left without §4.1 being re-read");
 		assert.ok(
@@ -301,10 +301,9 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	}
 
 	it("a DANGLING symlink at the leaf destination does not become a write outside the tree", () => {
-		// `existsSync` follows links, so a symlink pointing
-		// at a not-yet-existing path read as absent and was landed — through
-		// the link. The member here is exactly what the walk produces; nothing
-		// hostile is passed in.
+		// `existsSync` follows links, so a symlink pointing at an absent path
+		// reads as absent and is landed — through the link. The member here is
+		// exactly what the walk produces; nothing hostile is passed in.
 		const { box, src, dest } = sandbox();
 		write(join(src, ".githooks/pre-commit").slice(root.length + 1), MARKER);
 		const outside = join(box, "pwned.txt");
@@ -320,9 +319,9 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	});
 
 	it("a spelling that traverses an ABSENT component into a real symlinked container is refused", () => {
-		// Containment was judged on the canonical path
-		// while the link walk used the raw spelling, so the walk gave up at
-		// the absent component and `join` resolved straight through the link.
+		// Judging containment on the canonical path while the link walk uses
+		// the raw spelling makes the walk give up at the absent component,
+		// and `join` then resolves straight through the link.
 		const { box, src, dest } = sandbox();
 		write(join(src, ".pi/link/x.ts").slice(root.length + 1), MARKER);
 		const elsewhere = join(box, "elsewhere");
@@ -355,7 +354,7 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 		// The fail-open shape §3.9 forbids: reading EVERY probe error as
 		// "absent" turns an unmeasurable destination into a land. Two shapes,
 		// neither producible by the walk but both reachable through the
-		// exported entry point, which is the surface this arm reaches.
+		// exported entry point, which is the surface this arm drives.
 		const { box, src, dest } = sandbox();
 
 		// (a) a container that is a regular FILE — the probe throws ENOTDIR.
@@ -386,12 +385,11 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	});
 
 	it("an unmeasurable LEAF refuses — the branch the container walk short-circuits past", () => {
-		// the arm above never reached the leaf `lstat` catch,
-		// because both of its shapes are decided at the container walk. A
-		// mutant reverting that catch to an unconditional land left the suite
-		// fully green, so the branch was shipped unpinned. These two shapes
-		// put the fault in the LEAF component, where the container walk has
-		// nothing to say.
+		// The arm above cannot reach the leaf `lstat` catch, because both of
+		// its shapes are decided at the container walk — so a mutant reverting
+		// that catch to an unconditional land leaves it green. These two
+		// shapes put the fault in the LEAF component, where the container walk
+		// has nothing to say.
 		const { src, dest } = sandbox();
 		mkdirSync(join(dest, ".pi"), { recursive: true });
 
@@ -407,7 +405,7 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	});
 
 	it("an unmeasurable container is not reported as a symbolic link", () => {
-		// both container refusals shared one literal, so an
+		// Both container refusals shared one literal, so an
 		// operator repairing an ENOTDIR container was told it was a link.
 		const { src, dest } = sandbox();
 		writeFileSync(join(dest, ".pi"), "a regular file where the namespace belongs\n");
