@@ -375,8 +375,8 @@ const REAL_BACKOFF_FLOOR_MS = 1500;
 describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY call site (issue #194)", () => {
 	it("no call site in this file takes the real backoff", () => {
 		// The hazard this closes is that `noSleep` is OPT-IN: a call site
-		// that omits it takes `realSleep`, the arm still passes, and the
-		// only symptom is a suite that quietly waits seconds — which is why
+		// that omits it takes `realSleep`, and the symptom is a suite that
+		// quietly waits seconds — which is why
 		// the population is derived from this file's own source rather than
 		// trusted to review.
 		//
