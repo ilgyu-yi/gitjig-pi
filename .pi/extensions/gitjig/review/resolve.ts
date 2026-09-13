@@ -43,7 +43,7 @@
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import type { PanelOutcome, Slot } from "./panel.ts";
 // The resolution outcomes have ONE home and it is record.ts's `OUTCOMES`
-// (§3.11; round 13's EF1). This is a TYPE-ONLY import, erased before the
+// (§3.11). This is a TYPE-ONLY import, erased before the
 // module runs, so the cycle it completes — record.ts imports this file's
 // types, this file imports that one's — exists only for `tsc` and costs
 // no runtime edge.
@@ -150,14 +150,14 @@ export type Disposition = (typeof DISPOSITIONS)[number];
 export type Resolution = {
 	dispositions: { finding: string; disposition: Disposition; remedy?: string }[];
 	/**
-	 * DERIVED from record.ts's `OUTCOMES`, never re-spelled here (round
-	 * 13's EF1). The hand-spelled union this replaces was a second home
-	 * for the domain, and it was the one that TYPED the value §1.4's
-	 * assembler reads — so a member added here reached that assembler as
-	 * an outcome `StateOutcome` does not declare, and a member added
-	 * there was not accepted here, with no arm tying the two. Measured
-	 * before the repair: widening this union by a fourth member left the
-	 * history suite at 103 pass / 0 fail.
+	 * DERIVED from record.ts's `OUTCOMES`, never re-spelled here. A
+	 * hand-spelled union here would be a second home for the domain, and it
+	 * is the spelling that TYPES the value §1.4's assembler reads — so a
+	 * member added here would reach that assembler as an outcome
+	 * `StateOutcome` does not declare, a member added there would not be
+	 * accepted here, and no arm ties the two. Measured against a
+	 * hand-spelled union: widening it by a fourth member leaves the history
+	 * suite fully green.
 	 */
 	outcome: (typeof OUTCOMES)[number];
 };

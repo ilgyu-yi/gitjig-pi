@@ -3,7 +3,7 @@
  * #28) — structure over the workflow, and behaviour over the script it
  * runs.
  *
- * Round-1 finding E-F8: the platform half shipped with zero arms while
+ * the platform half shipped with zero arms while
  * the predicate beside it carried four hundred lines of them, and §3.12
  * makes "the landing verifies structure only" an obligation a landing
  * discharges rather than a permission to ship none.
@@ -17,10 +17,10 @@
  * values asserted WHOLE — no bare flag, no bare substring, in any arm
  * whose title states a general property.
  *
- * Round-2 findings this file is rebuilt against, because the first
- * version of it re-instantiated the very class it was written under:
+ * The defect shapes this file is built against, each of which a structure
+ * suite of this kind re-instantiates by default:
  *   E5  a general title over a one-point fixture (the owner arm, the leak arm)
- *   E6  `cause.length > 0` — the bare flag round 1 condemned, returning
+ *   E6  `cause.length > 0` — a bare flag, returning
  *   E7  a YAML regex that matched a COMMENT, so the setting could be deleted
  *   E8  the request itself unmeasured — the stub ignored `init`
  *   E9  `run`'s PASS limb unarmed
@@ -72,7 +72,7 @@ function records(): RecordModule {
 const RAW = readFileSync(WORKFLOW, "utf8");
 
 /**
- * The workflow with every comment removed (round-2 finding E7).
+ * The workflow with every comment removed.
  *
  * A structure arm that matches the raw text cannot tell a live setting
  * from a commented-out one, so deleting the setting and leaving the same
@@ -122,25 +122,21 @@ function passingBody(head = HEAD): string {
 
 describe("§3.3 merge-review workflow — structure, over LIVE settings only (issue #190 AC1)", () => {
 	it("every named setting is LIVE — deleting it and leaving the words in a comment must not satisfy any arm", () => {
-		// The meta-arm for round-2 finding E7: it pins the comment-stripping
-		// itself, so a later edit that reverts to matching RAW reds here
-		// rather than silently re-admitting a commented-out setting.
+		// The meta-arm over the comment-stripping: it exercises the SHARED
+		// helper, so an edit reverting to matching RAW reds here rather than
+		// silently re-admitting a commented-out setting.
 		//
-		// ROUND 3's EF4: it used to rebuild the stripping expression
-		// locally, which is a SECOND HOME for it (§3.11) — so it pinned a
-		// copy, not the helper every other arm runs through. Measured at
-		// that head: mutating the helper to strip nothing red ONE arm, a
-		// consumer ("bounds the job, pins the toolchain..."), while this
-		// arm — the one authored to guard that helper — stayed GREEN. It
-		// now calls `stripComments`, so the helper is what it exercises.
+		// Rebuilding the stripping expression locally would be a SECOND HOME
+		// for it (§3.11) — it would pin a copy, not the helper every other arm
+		// runs through, and mutating the helper to strip nothing would then red
+		// one CONSUMER arm while this one, the arm authored to guard the
+		// helper, stayed GREEN. It calls `stripComments` for that reason.
 		//
-		// ROUND 4's S-F1: that repair was real and its prose still
-		// overstated it. The comment claimed the arm reds on "a later edit
-		// that reverts to matching RAW", and measured, rebinding
-		// `const LIVE = stripComments(RAW)` to `const LIVE = RAW` — exactly
-		// that edit — left this arm GREEN, because it never read LIVE. The
-		// binding is now what the third limb asserts, so the claim and the
-		// assertion are the same statement.
+		// The BINDING is asserted too, by the third limb below, and that is a
+		// separate property: an arm that exercises the helper but never reads
+		// `LIVE` stays green when `const LIVE = stripComments(RAW)` is rebound
+		// to `const LIVE = RAW`. Claim and assertion are the same statement
+		// only because both limbs are here.
 		//
 		// The helper has TWO branches and each is pinned below by its own
 		// limb with its own message. Both are load-bearing: a setting
@@ -165,7 +161,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 			false,
 			"the comment-stripping does not remove an INLINE trailing comment — a setting deleted and its words " +
 				"left after a live setting on the same line then satisfies any arm matching LIVE for it, which is " +
-				"round-2's E7 wrong-allow through the other door (round 4's S-F2)",
+				"the same wrong-allow through the other door",
 		);
 		// The BINDING, which is the half this arm's prose used to claim and
 		// not measure. `LIVE` must be the helper's output over RAW, not RAW.
@@ -173,7 +169,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 			LIVE,
 			stripComments(RAW),
 			"LIVE is not the stripped RAW — an edit that reverts the binding to RAW leaves every other arm in this " +
-				"file matching raw text again, which is the state the helper exists to end (round 4's S-F1)",
+				"file matching raw text again, which is the state the helper exists to end",
 		);
 	});
 
@@ -200,7 +196,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 	});
 
 	it("grants issues: read and NO write scope, quantified over EVERY permissions block", () => {
-		// Round-2 finding E10: the negative was anchored to workflow-level
+		// the negative was anchored to workflow-level
 		// indentation and could not see a JOB-level block, which overrides
 		// the workflow default wholesale and is the grant that takes effect.
 		assert.ok(/^\s+issues:\s*read\s*$/m.test(LIVE), "the workflow does not grant issues: read");
@@ -219,7 +215,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 	it("bounds the job, pins the toolchain, and uses only GitHub-shipped actions", () => {
 		assert.ok(/^\s+timeout-minutes:\s*\d+\s*$/m.test(LIVE), "the job carries no timeout-minutes");
 		assert.ok(/^\s+concurrency:\s*$/m.test(LIVE), "the workflow declares no concurrency group");
-		// Round-2 finding E13: this is the one workflow here that invokes
+		// this is the one workflow here that invokes
 		// `node`, and its entry point imports TypeScript through native type
 		// stripping — a version-gated capability.
 		assert.ok(
@@ -270,7 +266,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 		assert.ok(RAW.includes("DEVELOPMENT AND CI ONLY"), "the workflow does not declare its substrate class");
 		for (const [needle, why] of [
 			["MERGE REF", "the push path's self-grading residual"],
-			["DEFAULT BRANCH", "the comment path checks out the default branch, not the merge ref (round-2 E12)"],
+			["DEFAULT BRANCH", "the comment path checks out the default branch, not the merge ref"],
 		] as const) {
 			assert.ok(
 				RAW.includes(needle),
@@ -282,7 +278,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 });
 
 describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted WHOLE (AC4)", () => {
-	// Round-2 finding E6: `cause.length > 0` is a bare flag that a constant
+	// `cause.length > 0` is a bare flag that a constant
 	// survives. Every shape below asserts the cause's own content.
 	const shapes: [string, ((url: string) => unknown)[], string][] = [
 		[
@@ -338,7 +334,7 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
 	});
 });
 
-describe("§3.3 merge-review script — the REQUEST itself (round-2 finding E8)", () => {
+describe("§3.3 merge-review script — the REQUEST itself", () => {
 	// The stub now records `init`, so the credential-bearing header, the
 	// collection read, and the page parameters are all measurable. Before
 	// this, mutants moving the read to another collection or gutting the
@@ -404,7 +400,7 @@ describe("§3.3 merge-review script — the REQUEST itself (round-2 finding E8)"
 	});
 });
 
-describe("§3.3 merge-review script — head resolution (AC1, round-1 E-F7)", () => {
+describe("§3.3 merge-review script — head resolution", () => {
 	it("uses the supplied head without a platform read", async () => {
 		const { impl, seen } = stubFetch([ok(null)]);
 		assert.deepEqual(
@@ -448,7 +444,7 @@ describe("§3.3 merge-review script — head resolution (AC1, round-1 E-F7)", ()
 	});
 });
 
-describe("§3.3 merge-review script — the PASS limb, through the instrument (round-2 finding E9)", () => {
+describe("§3.3 merge-review script — the PASS limb, through the instrument", () => {
 	// The passing arm was demonstrated at the predicate and never through
 	// the thing the platform actually runs, so mutants making PASS exit 1,
 	// render nothing, or ask about the wrong head all survived.
@@ -508,7 +504,7 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 		}
 	});
 
-	it("renders the advisory disclaimer and the hardening owner on EVERY refusal reason (round-2 E5)", async () => {
+	it("renders the advisory disclaimer and the hardening owner on EVERY refusal reason", async () => {
 		// Iterated over the refusal set the run can actually produce, not
 		// over one shape: a mutant rendering the owner for one reason only
 		// survived the single-shape version of this arm.
@@ -538,7 +534,7 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 		}
 	});
 
-	it("never leaks the token, across EVERY outcome the run can produce (round-2 E5)", async () => {
+	it("never leaks the token, across EVERY outcome the run can produce", async () => {
 		const outcomes: [string, Record<string, string | undefined>, ((url: string) => unknown)[]][] = [
 			["a PASS", ENV, [ok([comment(passingBody())])]],
 			["a misconfiguration", { ...ENV, GITJIG_REPO: undefined }, [ok([])]],
@@ -572,7 +568,7 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 		}
 	});
 
-	it("ESCAPES a platform error before rendering it — no input can add a line (round-2 E21)", async () => {
+	it("ESCAPES a platform error before rendering it — no input can add a line", async () => {
 		// The script header commits to wrapping every raw error through the
 		// shell's escaper. Nothing asserted it, so removing the wrap left
 		// the suite green. This arm is that assertion.

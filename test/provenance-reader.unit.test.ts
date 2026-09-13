@@ -156,6 +156,31 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 		line: "// An earlier review asked for this split.",
 		why: "the same narrative without a review numeral",
 	},
+	{
+		shape: "review-archaeology",
+		line: "// The pin was narrowed by round 3's second limb.",
+		why: "the POSSESSIVE spelling — a round owning a finding label, which is how the class is actually written and which no numeral-plus-verb rule reaches",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The bare flag round-2 finding E6 condemned.",
+		why: "the hyphenated spelling with an explicit `finding`, a second live idiom for the same attribution",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 6 measured six of the twelve cells.",
+		why: "a round as the subject of a MEASURING verb, which the found/caught/raised rule does not reach",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The same defect the panel's S-F2 named.",
+		why: "a finding label owned by anything at all — the attribution survives when the round numeral is dropped",
+	},
+	{
+		shape: "change-narration",
+		line: "// The first draft of this helper lived in the caller.",
+		why: "a prior AUTHORING pass named as such: the same genus as a prior review, on the author's side",
+	},
 	{ shape: "issue-narration", line: "// Introduced in #12 alongside the boundary.", why: "the introduce verb" },
 	{ shape: "issue-narration", line: "// Fixed in #34 after the flake was found.", why: "the fix verb" },
 	{ shape: "issue-narration", line: "// Removed in #56 when the alias went.", why: "the remove verb" },

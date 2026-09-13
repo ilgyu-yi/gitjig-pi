@@ -276,12 +276,12 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			["FINDINGS", "the result grammar's second token"],
 			[
 				"NO hex run of 6 or more characters",
-				"the no-hex PROHIBITION itself — round 1's EF8: the bare needle `hex` was satisfied by the unrelated " +
+				"the no-hex PROHIBITION itself — the bare needle `hex` was satisfied by the unrelated " +
 					"reviewedHead sentence, so the prohibition could vanish while the arm stayed green",
 			],
 			[
 				"You do not rule validity, severity, cost direction, or",
-				"§1.7's discovery-only restriction — round 2's EF-F: the APPROVED/FINDINGS needles are satisfied by " +
+				"§1.7's discovery-only restriction — the APPROVED/FINDINGS needles are satisfied by " +
 					"the payload-shape line, so the restriction sentence could be deleted whole while the arm stayed green",
 			],
 			["reviewedHead", "the one home the head hash is allowed"],
@@ -338,7 +338,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			assert.ok(
 				text.includes(entry.slot.surface),
 				"a finding's provenance surface is missing — slot identity is the lens+surface PAIR, and an " +
-					"under-provenanced bundle reaches the Judge (round 1's EF10)",
+					"under-provenanced bundle reaches the Judge",
 			);
 		}
 		for (const criterion of manifest.criteria) {
@@ -359,7 +359,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			["designs no substantive repair", "the Judge's stop rule"],
 			[
 				"NIT REMEDY GRAMMAR",
-				"the canonical remedy grammar carry-forward parses — round 3's EF2: unstated, the exception is live " +
+				"the canonical remedy grammar carry-forward parses — unstated, the exception is live " +
 					"only by coincidence of phrasing, an unstated contract between the brief and carry-forward.ts",
 			],
 			[
@@ -368,15 +368,15 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			],
 			[
 				"delete `<old line>`",
-				"the delete limb of the canonical grammar — round 4's EF5: unstated, the delete-form half is " +
+				"the delete limb of the canonical grammar — unstated, the delete-form half is " +
 					"removable on the producer face with the suite green",
 			],
 			[
 				"leading whitespace included",
-				"the FULL-line requirement — round 4's EF4: without it the brief instructs a grammar the consumer " +
+				"the FULL-line requirement — without it the brief instructs a grammar the consumer " +
 					"refuses for every indented line (it compares exact line text, no trim)",
 			],
-			["NO hex run of 6 or more characters", "the no-hex PROHIBITION itself (round 1's EF8)"],
+			["NO hex run of 6 or more characters", "the no-hex PROHIBITION itself"],
 		] as const) {
 			assert.ok(text.includes(needle), `the judge brief lost ${why} (missing: ${JSON.stringify(needle)})`);
 		}
@@ -384,7 +384,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 
 	/**
 	 * Extract ONE composed block and return it whole, for comparison by
-	 * EQUALITY rather than by substring (issue #204's EF-2).
+	 * EQUALITY rather than by substring (issue #204).
 	 *
 	 * The briefs join their blocks with a blank line, so a block is a
 	 * maximal run of lines between blank lines. `includes` cannot see an
@@ -411,7 +411,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	};
 
 	it("the judge brief carries the admission burden ahead of dedup (issue #196)", () => {
-		// Round 1's EF-2: every substring needle over this block survived inverting
+		// every substring needle over this block survived inverting
 		// the very proposition it pinned ('does not establish' -> 'does establish',
 		// 'absent' -> 'present', the symmetry burden, the §3.12 limiter) with the
 		// suite green. The materially different method: the WHOLE block is pinned
@@ -437,16 +437,12 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			// They are not deleted — they are re-homed, because the rule binds
 			// the reviewer as well and this block reaches only the Judge.
 			//
-			// Their absence is part of the pin, and round 1's EF-1 is that the
-			// previous wording of this sentence claimed a coverage this arm did
-			// not have: the assertion was `includes`, so a production that kept
-			// the old lines here AND gained the shared block left this literal a
-			// substring and the arm GREEN. Measured at that head: that mutant
-			// red exactly one arm in the file, and it was not this one.
-			//
-			// The assertion below is now EQUALITY over the extracted block, so
-			// the claim is true as written: a retention here — verbatim or
-			// reworded — lengthens the block and reds this arm.
+			// Their absence is part of the pin, and EQUALITY is what makes that
+			// true. Under an `includes` assertion a production that kept the old
+			// lines here AND gained the shared block leaves this literal a
+			// substring and the arm GREEN. Equality over the extracted block
+			// sees the block's end, so a retention here — verbatim or reworded —
+			// lengthens the block and reds this arm.
 		].join("\n");
 		const b = briefs();
 		const text = b.composeJudgeBrief(
@@ -461,7 +457,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			"the judge brief's ADMISSION block is not the expected literal — some clause inside it was deleted, " +
 				"inverted, edited, or APPENDED TO; every ground, the record-do-not-admit default with its summary " +
 				"channel and §1.9 ground, and the demote-before-dedup ordering are pinned as one whole, END INCLUDED " +
-				"(#196 round 1's EF-2: substring needles survived polarity inversion; #204 round 1's EF-1: a substring " +
+				"(substring needles survive polarity inversion; a substring " +
 				"pin over this block could not see a second home of the exculpatory rule appended to it)",
 		);
 		assert.ok(
@@ -487,7 +483,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			text.includes(expectedObservation),
 			"the reviewer brief's OBSERVATIONS block is not the expected literal — the not-narrowed half, " +
 				"the groundless condition's polarity, the summary channel, or the never-finding-grammar " +
-				"prohibition was deleted, inverted, or edited (round 1's EF-2)",
+				"prohibition was deleted, inverted, or edited",
 		);
 	});
 
@@ -536,7 +532,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				"arrives after the claim is already asserted as settled — the measured incident is a panel reporting " +
 				"a class closed on nine killed shapes with a tenth alive, which then fed §1.4's diagnosis in the NONE " +
 				"direction. Equality, not substring: a line APPENDED to this block can weaken the rule while leaving " +
-				"every substring pin green (round 1's non-admitted observation (i), closed here rather than left)",
+				"every substring pin green",
 		);
 	});
 
@@ -590,13 +586,12 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	});
 
 	it("the exculpatory rule appears EXACTLY ONCE per brief — the re-home is a move, not a copy (issue #204)", () => {
-		// WHAT THIS ARM COVERS, re-scoped by round 1's EF-2 — the previous
-		// wording claimed it CLOSED the two-homes residual, and that claim was
-		// false in a way the arm itself could not see. Its needles are two
-		// exact sentences, so a second home stating the same rule in DIFFERENT
-		// WORDS contains neither needle, the count stays at one, and the whole
-		// file stayed green. Measured at that head: a reworded retention in
-		// ADMISSION_BURDEN gave 55/55 pass.
+		// WHAT THIS ARM COVERS, and what it does NOT: it does not close the
+		// two-homes residual, and no claim here should say it does. Its needles
+		// are two exact sentences, so a second home stating the same rule in
+		// DIFFERENT WORDS contains neither needle, the count stays at one, and
+		// the file stays green — measured, a reworded retention in
+		// ADMISSION_BURDEN gives a full pass.
 		//
 		// The two-homes shape is now carried by the EQUALITY pins above, which
 		// see a block's end and therefore see a retention of either wording.
@@ -720,13 +715,11 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		);
 	});
 
-	// The RETURN contract, pinned by the same EQUALITY instrument (round 5's
-	// EF-1). The needle list this describe replaced also carried three of
+	// The RETURN contract, pinned by the same EQUALITY instrument. Three of
 	// this block's clauses — the closed four-key schema, the unknown-key
-	// consequence, and the commit-label substitute — and deleting the list
-	// left them pinned by NOTHING: measured, mutating all three survived
-	// the whole suite at 1246 pass / 0 fail, where each reddened at the
-	// previous head. A subtractive repair asserts less than the text it
+	// consequence, and the commit-label substitute — are pinned HERE and
+	// nowhere else: measured, mutating all three under a needle-list pin
+	// survives the whole suite. A subtractive repair asserts less than the text it
 	// replaced unless what the old text also covered is carried over, and
 	// this block is what it also covered.
 	const EXPECTED_RETURN_CONTRACT = [
@@ -738,7 +731,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		"refer to commits by position labels, never by hash.",
 	].join("\n");
 
-	it("BOTH briefs carry the RETURN contract, whole (issue #197, round 5's EF-1)", () => {
+	it("BOTH briefs carry the RETURN contract, whole (issue #197)", () => {
 		const b = briefs();
 		const reviewer = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
 		const judge = b.composeJudgeBrief(
@@ -880,12 +873,12 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		// twice, identical but for summary prose that would be a finding if
 		// anything read it.
 		//
-		// ROUND 1's F4: the first version of this arm ran the APPROVED fast
-		// path in both runs. The Judge was never dispatched, so the Resolver
-		// never executed in either run, and the arm's title claimed a half it
-		// was not positioned to observe — measured, a mutant appending every
-		// summary into `resolution.dispositions` left the whole file green
-		// while firing on other arms' resolved rounds. Both runs now RESOLVE:
+		// BOTH runs must RESOLVE, and that is the whole positioning of the arm.
+		// On the APPROVED fast path the Judge is never dispatched, so the
+		// Resolver never executes in either run, and the title then claims a
+		// half the arm cannot observe — measured on that shape, a mutant
+		// appending every summary into `resolution.dispositions` leaves the
+		// whole file green while firing on other arms' resolved rounds. Here:
 		// the slots return findings, a Judge rules, and the comparison reaches
 		// the adjudication input and the resolution the Resolver derived.
 		const o = orchestrate();
@@ -937,7 +930,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			quiet.review.state,
 			"resolved",
 			"the round did not RESOLVE, so the Resolver never ran and this arm cannot observe what reaches it — the " +
-				"defect round 1's F4 named, reintroduced",
+				"defect this arm exists for, reintroduced",
 		);
 		assert.ok(
 			quiet.record.bundle.length > 0,
@@ -975,17 +968,16 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 	});
 
-	it("an APPROVED, findings-free round records its slots' summaries (issue #203, round 2's EF1)", async () => {
-		// The round shape in which this channel matters MOST, and the one
-		// round 2 measured had no arm at all.
+	it("an APPROVED, findings-free round records its slots' summaries (issue #203)", async () => {
+		// The round shape in which this channel matters MOST, and the one an
+		// arm is easiest to leave off.
 		//
-		// On the approved fast path no finding was admitted and no Judge ran,
+		// On the approved fast path no finding is admitted and no Judge runs,
 		// so a delegate's recorded-not-admitted OBSERVATION is the ONLY prose
-		// the round produces. The previous head covered it by accident — the
-		// differential arm happened to drive this path — and repairing that
-		// arm's own defect (round 1's F4) moved it to a RESOLVED round and
-		// took the accidental coverage with it. Measured at that head: a
-		// mutant dropping every summary on approved rounds left the whole
+		// the round produces. Accidental coverage — another arm that happens
+		// to drive this path — does not survive that arm being re-pointed at
+		// a RESOLVED round. Measured without this arm: a
+		// mutant dropping every summary on approved rounds leaves the whole
 		// suite green, 0 arms red, while the same mutant against the previous
 		// head's copy of this file red 1.
 		//
@@ -1036,11 +1028,11 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 	});
 
-	it("a NON-ADMITTED return contributes no summary entry (issue #203, round 1's F6)", async () => {
-		// The `disposition === "admitted"` gates. Round 1 measured that no arm
-		// separated the admitted population from its complement: dropping both
-		// gates and recording a REFUSED outcome's machine-authored `cause` as
-		// an actor's verbatim prose left the file green. That is durable
+	it("a NON-ADMITTED return contributes no summary entry (issue #203)", async () => {
+		// The `disposition === "admitted"` gates, and the COMPLEMENT is what
+		// this arm holds. Without it, dropping both gates and recording a
+		// REFUSED outcome's machine-authored `cause` as an actor's verbatim
+		// prose leaves the file green. That is durable
 		// MISATTRIBUTION — record.ts's own doc block ranks it worse than prose
 		// dropped — so the complement is pinned here, by count and by content.
 		const o = orchestrate();
@@ -1111,7 +1103,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			2,
 			"the derived slot set was not dispatched one brief per slot — the fixture routes runtime and suite",
 		);
-		// Round 1's EF11: the round arms never inspected composed CONTENT, so
+		// the round arms never inspected composed CONTENT, so
 		// wiring substitutions (empty description, empty fences) survived.
 		for (const brief of fake.briefs) {
 			assert.ok(
@@ -1125,7 +1117,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 					"what the caller already closed",
 			);
 		}
-		// Round 1's EF7: every dispatch of the round is pinned to the round's
+		// every dispatch of the round is pinned to the round's
 		// own resolved head.
 		assert.deepEqual(
 			fake.pins,
@@ -1151,13 +1143,13 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(
 			fake.judgeBriefs.length,
 			0,
-			"the Judge was dispatched under an absent manifest — round 1's EF4: a delegate run to rule what the " +
+			"the Judge was dispatched under an absent manifest — a delegate run to rule what the " +
 				"caller already knows cannot complete",
 		);
 		assert.equal(result.review.state, "incomplete", "an absent manifest did not leave the review incomplete");
 	});
 
-	it("makeDispatcher forwards the round's resolved head as the dispatch pin (round 2's EF-A)", async () => {
+	it("makeDispatcher forwards the round's resolved head as the dispatch pin", async () => {
 		const o = orchestrate();
 		const seen: RunDispatchOptions[] = [];
 		const spy = (options: RunDispatchOptions): Promise<DispatchOutcome> => {
@@ -1171,7 +1163,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			seen[0].expectedRef,
 			"the-resolved-head",
 			"makeDispatcher did not forward its expectedHead as the dispatcher's expectedRef — the per-dispatch " +
-				"pin is discarded and a mutable ref would be re-resolved per dispatch (round 1's EF7)",
+				"pin is discarded and a mutable ref would be re-resolved per dispatch",
 		);
 		assert.equal(seen[0].brief, "the brief text", "makeDispatcher did not forward the brief");
 	});
@@ -1207,7 +1199,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 				result.review.resolution.outcome === "clear" &&
 				result.review.resolution.dispositions[0].disposition === "defer",
 			"a CONFIRMED+SUBSTANTIVE+fail-closed+off-criterion ruling under a NON-EMPTY manifest did not defer — " +
-				"round 1's EF11: an admission run against a substituted empty manifest turns defer into repair, and " +
+				"an admission run against a substituted empty manifest turns defer into repair, and " +
 				"no arm could see it",
 		);
 	});
@@ -1243,10 +1235,10 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 		assert.ok(
 			fake.judgeBriefs[0].includes("AC1"),
-			"the caller's manifest did not cross into the judge brief — round 1's EF11: a substituted manifest " +
+			"the caller's manifest did not cross into the judge brief — a substituted manifest " +
 				"survived because no round arm read the composed content",
 		);
-		// Round 2's EF-A/S1: the Judge dispatch is pinned to the round's own
+		// the Judge dispatch is pinned to the round's own
 		// resolved head, exactly as the reviewer dispatches are — not to a
 		// mutable ref the dispatcher would re-resolve.
 		assert.ok(
@@ -1315,7 +1307,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			0,
 			"the Judge was dispatched under an incomplete panel — completeness precedes adjudication (§1.7)",
 		);
-		// Round 1's EF6: §1.7 builds the bundle from every VALID slot, not
+		// §1.7 builds the bundle from every VALID slot, not
 		// from complete panels — the durable record must not understate what
 		// was discovered.
 		assert.deepEqual(
@@ -1324,7 +1316,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			"the record of an incomplete panel dropped a valid slot's finding — a later reader cannot tell it " +
 				"from the findings-free shape",
 		);
-		// Round 2's EF-D: the invalid slot's disposition and reason are
+		// the invalid slot's disposition and reason are
 		// recorded as the round measured them, not as a constant.
 		const invalid = result.record.slots.find((entry) => !entry.valid);
 		assert.ok(
@@ -1334,7 +1326,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 	});
 
-	it("the recorded reason is the MEASURED cause, not a constant — a distinct cause records distinctly (round 3's EF-D)", async () => {
+	it("the recorded reason is the MEASURED cause, not a constant — a distinct cause records distinctly", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
 		// A slot whose blind compare did not confirm — a different §1.6 cause
@@ -1407,7 +1399,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			head,
 			"the record's head is not the reviewed head's full hash — the pin is §1.6's",
 		);
-		// Round 1's EF12: the round-trip alone is a tautology over whatever
+		// the round-trip alone is a tautology over whatever
 		// the round chose to record — the slots are asserted independently.
 		assert.deepEqual(
 			result.record.slots,
@@ -1424,7 +1416,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 	});
 
-	it("the head pin is scrubbed of the ambient repo-locating env — a bystander GIT_DIR cannot redirect it (round 7)", async () => {
+	it("the head pin is scrubbed of the ambient repo-locating env — a bystander GIT_DIR cannot redirect it", async () => {
 		const o = orchestrate();
 		// The pin resolves via `git rev-parse` under withoutRepoLocatingGitEnv;
 		// without the scrub an ambient GIT_DIR beats cwd and the record would
@@ -1502,8 +1494,8 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 	// union (which TYPES what the Resolver produces). Two homes, no tie, no
 	// disclosure — and a sixth member added at the type home was fully silent
 	// across the whole corpus AND `tsc --noEmit`. That is the identical shape,
-	// and the identical measurement, that PR #187's EF1 repaired for the
-	// resolution outcomes one type declaration above it.
+	// and the identical measurement, that issue #186's derivation repaired
+	// for the resolution outcomes one type declaration above it.
 	//
 	// The method is the one main settled for that domain and is not re-derived
 	// here: CONTENTS over the live exported home, IDENTITY BY PERTURBATION
@@ -1677,16 +1669,15 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 	/**
 	 * Build a body carrying an ARBITRARY `summaries` value with NO cast:
 	 * compose a typed, valid record and then edit the parsed JSON — the
-	 * same cast-free idiom the EF3 arm's `tamper` already uses in this file.
+	 * same cast-free idiom `tamper` already uses in this file.
 	 *
-	 * Round 1's F7 is why the cast this replaced is gone. `composeRaw` took
-	 * `unknown` and cast, which undid for these arms exactly what issue
-	 * #208's EF5 bought for every other call site — and it was not
-	 * theoretical: with `from: "judge"` typo'd to `"judg"` in ONE negative
-	 * row, tsc said nothing, the arm stayed green, and the mutant that
-	 * drops the judge-side half of the from/slot agreement went from
-	 * reding 1 arm to reding 0. The named case stopped being measured on
-	 * one character, invisibly.
+	 * NO CAST, and that is the whole point. A helper taking `unknown` and
+	 * casting undoes for these arms exactly what issue #208's derivation
+	 * bought for every other call site — and not theoretically: with
+	 * `from: "judge"` typo'd to `"judg"` in ONE negative row, tsc says
+	 * nothing, the arm stays green, and the mutant that drops the judge-side
+	 * half of the from/slot agreement goes from reding 1 arm to reding 0.
+	 * The named case stops being measured on one character, invisibly.
 	 */
 	const bodyWithSummaries = (summaries: unknown): string =>
 		tamperedBody((parsed) => {
@@ -1703,7 +1694,7 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 
 	it("a record carrying round summaries round-trips losslessly (issue #203)", () => {
 		const r = records();
-		// Typed, so this literal is the one #208's EF5 protects: a typo in a
+		// Typed, so this literal is the one #208's derivation protects: a typo in a
 		// key reds `tsc`.
 		const record: ReviewRecord = {
 			...sample,
@@ -1757,10 +1748,10 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		}
 	});
 
-	it("a non-list summaries value is REFUSED, not thrown on (issue #203, round 1's F5)", () => {
-		// The container half of the parse's summaries gate. Round 1 measured
-		// that no arm in the corpus fed a non-array value, so dropping
-		// `!Array.isArray(...)` left 1185 tests green — while a record body
+	it("a non-list summaries value is REFUSED, not thrown on (issue #203)", () => {
+		// The container half of the parse's summaries gate, and the only arm
+		// feeding a NON-ARRAY value. Without it, dropping
+		// `!Array.isArray(...)` leaves the suite green — while a record body
 		// whose `summaries` is a string then made the parse THROW
 		// ("candidate.summaries.every is not a function") out of a function
 		// contracted to answer `undefined`. Both halves are pinned here: the
@@ -1787,10 +1778,10 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		const r = records();
 		const slot = { lens: "runtime", surface: "s" };
 		// TYPED bases, and each is asserted to parse below before any
-		// deviation is built from it. Round 1's F7: a negative row spelled
-		// wholly inline is still a refusable shape when its own spelling is
-		// typo'd, so the arm passes for the wrong reason and the mutant it
-		// exists for stops reding. Deriving every row from a base that must
+		// deviation is built from it. A negative row spelled wholly inline is
+		// still a refusable shape when its own spelling is typo'd, so the arm
+		// passes for the wrong reason and the mutant it exists for stops
+		// reding. Deriving every row from a base that must
 		// itself parse makes that typo red BEHAVIOURALLY — it does not
 		// depend on the type checker seeing it.
 		const slotBase: RoundSummary = { from: "slot", slot, text: "zq base prose" };
@@ -1854,7 +1845,7 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 			undefined,
 			"an unmarked body parsed as a record — any comment could then impersonate the machine record",
 		);
-		// Round 1's EF9: the prose fixture above also lacks a fence, so the
+		// the prose fixture above also lacks a fence, so the
 		// fence guard alone answered it and the marker check was deletable.
 		const fencedUnmarked = r.composeReviewRecord(sample).replace(/<!--[^\n]*-->\n/, "");
 		assert.equal(
@@ -1865,7 +1856,7 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		);
 	});
 
-	it("a marker head disagreeing with the record's own head parses to nothing (round 1's EF5)", () => {
+	it("a marker head disagreeing with the record's own head parses to nothing", () => {
 		const r = records();
 		const body = r
 			.composeReviewRecord(sample)
@@ -1878,7 +1869,7 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 		);
 	});
 
-	it("the shape gate is deep — what a consumer reads is what the parse vouched for (round 1's EF3)", () => {
+	it("the shape gate is deep — what a consumer reads is what the parse vouched for", () => {
 		const r = records();
 		const tamper = (edit: (parsed: Record<string, unknown>) => void): string => {
 			const body = r.composeReviewRecord(sample);
@@ -2020,7 +2011,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("the REVERSE application refuses — the remedy grammar is directional (round 1's EF1)", () => {
+	it("the REVERSE application refuses — the remedy grammar is directional", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		const verdict = c.carryForwardAdmissible(record, patch("-const a = 2;", "+const a = 1;"));
@@ -2031,7 +2022,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a substring of the remedy's PROSE does not account — only backticked spans rule (round 1's EF1)", () => {
+	it("a substring of the remedy's PROSE does not account — only backticked spans rule", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;", "+with"));
@@ -2042,7 +2033,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a whitespace-only changed line refuses — nothing can specify the empty span (round 1's EF1)", () => {
+	it("a whitespace-only changed line refuses — nothing can specify the empty span", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;", "+", "+\t"));
@@ -2053,7 +2044,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a content line beginning ++ is still delta — the walk is hunk-aware, not prefix-fooled (round 1's EF1)", () => {
+	it("a content line beginning ++ is still delta — the walk is hunk-aware, not prefix-fooled", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		const verdict = c.carryForwardAdmissible(record, patch("-const a = 1;", "+const a = 2;", "+++smuggled"));
@@ -2064,7 +2055,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a SUBSTANTIVE ruling's remedy text accounts for nothing (round 1's EF2)", () => {
+	it("a SUBSTANTIVE ruling's remedy text accounts for nothing", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		const rulings = (record.adjudication as AdjudicationInput).rulings;
@@ -2077,10 +2068,10 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a re-indentation is a real change, not a verbatim application — the full line is the span (round 3's EF1)", () => {
+	it("a re-indentation is a real change, not a verbatim application — the full line is the span", () => {
 		const c = carry();
-		// Round 2 trimmed both sides, so a re-indent rode the exception. The
-		// remedy now quotes the FULL line (leading whitespace included), so a
+		// A grammar that trims both sides lets a re-indent ride the exception.
+		// The remedy quotes the FULL line (leading whitespace included), so a
 		// remedy without indentation is not satisfied by a delta that adds it.
 		const spanOnly = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		assert.ok(
@@ -2098,7 +2089,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("the arrangement residual is enumerated — a set-equal delta admits; unruled content never does (round 4)", () => {
+	it("the arrangement residual is enumerated — a set-equal delta admits; unruled content never does", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `AAA` with `BBB`");
 		(record.adjudication as AdjudicationInput).rulings.push({
@@ -2135,7 +2126,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("an inversion refuses — when a remedy's old is another's new, arrangement is load-bearing (round 5's EF2)", () => {
+	it("an inversion refuses — when a remedy's old is another's new, arrangement is load-bearing", () => {
 		const c = carry();
 		// Two remedies whose old/new sets INTERSECT: `debug: false` is one's
 		// new and the other's old. A byte-multiset-equal delta could invert
@@ -2160,7 +2151,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a whitespace-only ruled span refuses — an empty span is no verbatim replacement (round 3's EF3)", () => {
+	it("a whitespace-only ruled span refuses — an empty span is no verbatim replacement", () => {
 		const c = carry();
 		const record = clearRecord("replace the line ` ` with `x`");
 		assert.ok(
@@ -2168,7 +2159,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			"a remedy whose old span is whitespace was applied — a blank line is not an exact mechanical span, and " +
 				"admitting it lets blank churn balance the operation set",
 		);
-		// Round 5's EF3: the NEW-span whitespace guard, not just the old side.
+		// the NEW-span whitespace guard, not just the old side.
 		const blankNew = clearRecord("replace the line `AAA` with ` `");
 		assert.ok(
 			!c.carryForwardAdmissible(blankNew, patch("-AAA", "+ ")).admissible,
@@ -2177,7 +2168,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("the canonical grammar is case-insensitive and space-tolerant — both live, so both are pinned (round 5's EF3)", () => {
+	it("the canonical grammar is case-insensitive and space-tolerant — both live, so both are pinned", () => {
 		const c = carry();
 		// REPLACE_FORM's /i flag and the remedy.trim() are live affordances an
 		// ordinary Judge phrasing reaches; an arm pins them so a later edit
@@ -2196,7 +2187,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a NIT ruling with a missing remedy refuses the whole carry-forward (round 3's EF4)", () => {
+	it("a NIT ruling with a missing remedy refuses the whole carry-forward", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `AAA` with `BBB`");
 		(record.adjudication as AdjudicationInput).rulings.push({
@@ -2213,7 +2204,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a REFUTED ruling is no part of the delta — it neither contributes an operation nor blocks (round 3's EF4)", () => {
+	it("a REFUTED ruling is no part of the delta — it neither contributes an operation nor blocks", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `AAA` with `BBB`");
 		(record.adjudication as AdjudicationInput).rulings.push({
@@ -2229,7 +2220,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a remedy outside the recognized grammar refuses — even when the delta is a substring of its prose (round 2's EF-E)", () => {
+	it("a remedy outside the recognized grammar refuses — even when the delta is a substring of its prose", () => {
 		const c = carry();
 		// The changed lines ARE substrings of the remedy prose, so a check
 		// that fell open by treating the raw prose as the ruled corpus would
@@ -2241,7 +2232,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			"a non-canonical remedy admitted a delta drawn from its own prose — a derivation-phrased remedy is " +
 				"exactly what the check cannot verify, and the conservative cost is one fresh review",
 		);
-		// Round 3's EF3: an unanchored REPLACE_FORM would parse a negated
+		// an unanchored REPLACE_FORM would parse a negated
 		// "do not replace `a` with `b`" and reopen EF-C; this pins the anchor.
 		const negated = clearRecord("do not replace `a` with `b`");
 		assert.ok(
@@ -2251,7 +2242,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("one ruled span does not license repeated application — the multiset carries cardinality (round 2's EF-B)", () => {
+	it("one ruled span does not license repeated application — the multiset carries cardinality", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `const a = 1;` with `const a = 2;`");
 		const verdict = c.carryForwardAdmissible(
@@ -2265,7 +2256,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("remedies are per-ruling, not pooled — a hybrid of two remedies is neither (round 2's EF-B)", () => {
+	it("remedies are per-ruling, not pooled — a hybrid of two remedies is neither", () => {
 		const c = carry();
 		const record = clearRecord("replace the line `AAA` with `BBB`");
 		const rulings = (record.adjudication as AdjudicationInput).rulings;
@@ -2291,7 +2282,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		assert.ok(both.admissible, "applying both recorded remedies verbatim was refused — the exception never admits");
 	});
 
-	it("a negated or compound remedy is not canonical — the span it says to KEEP cannot be removed (round 2's EF-C)", () => {
+	it("a negated or compound remedy is not canonical — the span it says to KEEP cannot be removed", () => {
 		const c = carry();
 		const record = clearRecord("replace `foo` with `bar`; do not remove `baz`");
 		const verdict = c.carryForwardAdmissible(record, patch("-baz"));
@@ -2303,7 +2294,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a delete-form remedy applied verbatim admits; an unruled removal does not (round 4's EF5)", () => {
+	it("a delete-form remedy applied verbatim admits; an unruled removal does not", () => {
 		const c = carry();
 		const record = clearRecord("delete the line `const dead = true;`");
 		assert.ok(
@@ -2316,7 +2307,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 			"a removal of a line the delete remedy does not name was admitted — the removed multiset must equal " +
 				"the ruled `old` set",
 		);
-		// Round 6's EF-S2: the delete limb's case-insensitivity and its
+		// the delete limb's case-insensitivity and its
 		// `remove` alternative are live affordances a Judge reaches; pin both.
 		assert.ok(
 			c.carryForwardAdmissible(clearRecord("Delete the line `const dead = true;`"), patch("-const dead = true;"))
@@ -2330,7 +2321,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a compound remedy with an extra span is not canonical — the backtick span class is exact (round 6's EF-R2)", () => {
+	it("a compound remedy with an extra span is not canonical — the backtick span class is exact", () => {
 		const c = carry();
 		// `[^`]+` (not `.+`) is what keeps a span from swallowing a second
 		// "with `...`" clause. A greedy class would parse this compound
@@ -2343,7 +2334,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("the canonical replace form's optional parts are live — both phrasings admit (round 6's EF-S3)", () => {
+	it("the canonical replace form's optional parts are live — both phrasings admit", () => {
 		const c = carry();
 		assert.ok(
 			c.carryForwardAdmissible(clearRecord("replace `AAA` with `BBB`"), patch("-AAA", "+BBB")).admissible,
@@ -2356,11 +2347,11 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("the check runs on real `git diff` output, not only hand-built patches (round 4's EF2)", () => {
+	it("the check runs on real `git diff` output, not only hand-built patches", () => {
 		const c = carry();
 		// A real repository, a real one-line replacement, a real `git diff` —
-		// the shape round 4's EF1 lived in and the hand-built patch() helper
-		// cannot express (interior context, real hunk headers).
+		// the shape the hand-built patch() helper cannot express (interior
+		// context, real hunk headers).
 		const repo = fixtureRepo({ "f.txt": "alpha\nbeta\ngamma\n" });
 		writeFileSync(join(repo, "f.txt"), "alpha\nBETA\ngamma\n");
 		const realDiff = execFileSync("git", ["-C", repo, "diff", "--", "f.txt"], { encoding: "utf8" });
@@ -2379,7 +2370,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("a real MULTI-FILE git diff admits a verbatim two-remedy application — file headers are not content (round 6's EF-R3)", () => {
+	it("a real MULTI-FILE git diff admits a verbatim two-remedy application — file headers are not content", () => {
 		const c = carry();
 		// The `inHunk = false` reset on each diff-header line is what keeps
 		// the SECOND file's ---/+++ headers out of the content multisets; a
@@ -2406,7 +2397,7 @@ describe("§1.9 nit carry-forward — delta equals remedy, fail-closed (issue #1
 		);
 	});
 
-	it("an all-REFUTED clear record against an empty delta refuses on the empty-delta conjunct (round 4's EF2)", () => {
+	it("an all-REFUTED clear record against an empty delta refuses on the empty-delta conjunct", () => {
 		const c = carry();
 		const record = clearRecord("replace `a` with `b`");
 		// Make the sole ruling REFUTED: no remedy operations remain, so only

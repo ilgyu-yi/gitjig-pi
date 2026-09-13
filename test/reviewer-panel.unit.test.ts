@@ -5,9 +5,9 @@
  * Every arm here was written to kill a specific wrong implementation,
  * and the wrong implementations are named in the arm's own message so a
  * later reader can re-run the mutation rather than trust this header.
- * The set was not chosen by reading the module: a reviewer panel ran 24
- * single-edit mutants against an earlier version of it and reported
- * which survived, and the survivors are what most of the arms below
+ * The set was not chosen by reading the module: it is the survivor set of
+ * 24 single-edit mutants run against it, and those survivors are what most
+ * of the arms below
  * exist for — a quorum reintroduced at the panel's terminal output, a
  * content filter over finding text, a dropped validity gate, a policy
  * read replaced by a literal, `startsWith` for `includes`, and the whole
@@ -434,7 +434,7 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 			"the refusal's own text does not name the unowned constituent — §1.7's remedy is an amendment to the " +
 				"committed policy, and an operator reading the refusal must see what to claim",
 		);
-		// Round 3's B: the clause is the operator-facing carrier of §1.7's
+		// the clause is the operator-facing carrier of §1.7's
 		// recorded rejected design — lost, the refusal directs an amendment
 		// without naming the shape it may not take.
 		assert.ok(
@@ -442,13 +442,13 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 			"the refusal's text no longer forbids the catch-all row — §1.7 records that row as the rejected design, " +
 				"and the refusal is where the operator authoring the amendment reads it",
 		);
-		// Round 4's A: the remedy-stating clause is the exclusivity and
+		// the remedy-stating clause is the exclusivity and
 		// auditability guarantee — §1.7's "its ONE remedy is an amendment to
 		// the committed policy — itself a reviewed change". A refusal that
 		// forbids the catch-all but names no discharging act forecloses
 		// nothing.
 		assert.ok(
-			// Round 5: the pin carries the affirmative framing and the
+			// The pin carries the affirmative framing and the
 			// exclusivity, not a bare polarity-blind fragment — a reworded
 			// "never a reviewed amendment" or "one remedy among others" must
 			// red here.
@@ -473,7 +473,7 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 			"the empty-surface refusal named unclaimed constituents — an empty surface has none, and naming any " +
 				"conflates the two limbs the clause keeps distinct",
 		);
-		// Round 3's C: without these two facts in the thrown text, a
+		// without these two facts in the thrown text, a
 		// contentless empty-surface refusal is indistinguishable from a
 		// routing failure and can mint the amendment §1.7 says is not owed.
 		assert.ok(
@@ -1221,7 +1221,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 
 	it("a refusal's named constituents are fixed at construction — mutating the caller's array changes nothing", () => {
 		const p = orchestrator();
-		// Round 2's F1: the class is exported, so a holder of the passed
+		// the class is exported, so a holder of the passed
 		// array could otherwise rewrite what a thrown refusal names — and
 		// the refusal's one remedy is a policy amendment aimed at exactly
 		// that set. The same copy-on-record discipline receive() pins.

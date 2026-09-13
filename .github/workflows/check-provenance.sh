@@ -109,6 +109,15 @@ RULE review-archaeology '[Rr]eview rounds'
 RULE review-archaeology '[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
+# The possessive spellings, which carry the class in practice and which no
+# rule above reaches: a round owning a finding label ("round 3's EF-1",
+# "round-2 finding E7"), a round as the subject of a measuring verb, and a
+# finding label owned by anything. The apostrophe is written as `.` because
+# a RULE pattern is single-quoted and the suite's parser reads it that way.
+RULE review-archaeology '[Rr]ound [0-9]+.s [A-Za-z]'
+RULE review-archaeology '[Rr]ound-[0-9]+ (finding|[A-Z])'
+RULE review-archaeology '[Rr]ound [0-9]+ (measured|showed|named|derived|condemned|trimmed)'
+RULE review-archaeology '.s (EF|E-F|S-F|F-R)-?[0-9]'
 RULE issue-narration '[Aa]dded in #[0-9]+'
 RULE issue-narration '[Ii]ntroduced in #[0-9]+'
 RULE issue-narration '[Ff]ixed in #[0-9]+'
@@ -120,6 +129,9 @@ RULE change-narration 'used to (be|have|carry|call)'
 RULE change-narration 'was previously'
 RULE change-narration 'previously called'
 RULE change-narration 'formerly (called|named)'
+# A prior authoring pass named as such — the same genus as a prior review,
+# on the author's side rather than the reviewer's.
+RULE change-narration '(first|earlier|previous|original) (draft|wording|version) of'
 
 # Living-set extensions. A path whose extension is absent here is not read.
 LIVING_RE='\.(ts|tsx|js|mjs|sh|md|yml|yaml|json|jsonc)$'
