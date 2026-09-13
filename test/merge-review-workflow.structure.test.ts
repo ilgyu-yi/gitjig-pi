@@ -538,13 +538,10 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 	it("the DEFAULT bound is the shipped constant, not just whatever an arm injects", async () => {
 		// The liveness arm below drives `timeoutMs` itself, so it establishes
 		// that SOME live bound reaches the request — not that the one the
-		// workflow ships does. This arm is the file's only exercise of the
-		// default path; PR #216 carries the run.
+		// workflow ships does.
 		//
 		// So: no `timeoutMs` argument, a stub that never answers, and a
 		// window far below the shipped bound. Nothing may settle inside it.
-		// This pins the default as WIRED and as LARGE; it does not pin its
-		// exact value, and no claim here should be read as doing so.
 		const WINDOW_MS = 150;
 		const impl = (_url: string, init: { signal?: AbortSignal }) =>
 			new Promise((_resolve, reject) => {

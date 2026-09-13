@@ -47,14 +47,12 @@ const PER_PAGE = 100;
 export const FETCH_ATTEMPTS = 3;
 const BACKOFF_STEP_MS = 2000;
 /**
- * Bound on ONE ATTEMPT. It does NOT bound the run, and the arithmetic is
- * stated rather than left to be discovered: an exhausted read costs
- * 3 x 20s plus 2s + 4s of backoff = 66s, and `fetchComments` walks up to
- * PAGE_BUDGET pages, so a run of slow pages exceeds the workflow's
- * `timeout-minutes: 10` and is cancelled mid-read — no verdict, no exit
- * code, a red job, which is the one outcome the advisory posture does not
- * produce. What the per-attempt bound buys is the hang case, bounded at
- * 20s; it does not close the overrun.
+ * Bound on ONE ATTEMPT. It does NOT bound the run: a page that fails
+ * twice and then succeeds slowly costs up to 3 x 20s plus 2s + 4s of
+ * backoff, and `fetchComments` walks up to PAGE_BUDGET such pages, which
+ * is past the workflow's `timeout-minutes: 10`. The run is then cancelled
+ * mid-read — no verdict, no exit code, a red job, which is the one
+ * outcome the advisory posture does not produce.
  */
 export const ATTEMPT_TIMEOUT_MS = 20_000;
 
