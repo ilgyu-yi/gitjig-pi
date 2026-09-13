@@ -454,8 +454,7 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 		);
 		assert.ok(
 			result.lines.some((line) => line.includes("merge-review: PASS")),
-			"a read that recovered on its third attempt did not reach the verdict its final answer supports; a " +
-				"transient then renders a refusal indistinguishable in the history from a genuine missing record",
+			"a read that recovered on its third attempt did not reach the verdict its final answer supports",
 		);
 		assert.deepEqual(
 			sleep.waited,
@@ -495,7 +494,7 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 		assert.ok(
 			notice.includes(`${String(script().FETCH_ATTEMPTS)} attempts exhausted`),
 			"the exhausted refusal does not name the exhaustion, so it is indistinguishable in the firing history " +
-				"from a first-try failure and from a genuine absence",
+				"from a first-try failure",
 		);
 		assert.equal(result.code, 0, "the exhausted refusal exited non-zero — the job is advisory and reports");
 	});
