@@ -46,10 +46,24 @@ const PER_PAGE = 100;
 /** Attempts per platform read, and the linear backoff between them. */
 export const FETCH_ATTEMPTS = 3;
 const BACKOFF_STEP_MS = 2000;
-/** Bound on ONE attempt, well inside the job's `timeout-minutes`. */
+/**
+ * Bound on ONE ATTEMPT. It does NOT bound the run, and the arithmetic is
+ * stated rather than left to be discovered: an exhausted read costs
+ * 3 x 20s plus 2s + 4s of backoff = 66s, and `fetchComments` walks up to
+ * PAGE_BUDGET pages, so a run of slow pages exceeds the workflow's
+ * `timeout-minutes: 10` and is cancelled mid-read — no verdict, no exit
+ * code, a red job, which is the one outcome the advisory posture does not
+ * produce. That reachability PRE-DATES the retry: an unbounded hung page
+ * rode to the same place. What the per-attempt bound buys is the hang
+ * case, narrowed from unbounded to 20s; it does not close the overrun.
+ */
 export const ATTEMPT_TIMEOUT_MS = 20_000;
 
-/** The real backoff. Injected at every call site so arms do not wait. */
+/**
+ * The real backoff, and the default. Every arm injects its own instead:
+ * the real one waits seconds per retried read, and one call site left
+ * unthreaded silently costs the suite those seconds while nothing reds.
+ */
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const API = "https://api.github.com";
@@ -81,7 +95,7 @@ function headers(token) {
  * reports, and a thrown error would hand the posture to whatever
  * catches it.
  */
-async function attemptJson(url, token, fetchImpl) {
+async function attemptJson(url, token, fetchImpl, timeoutMs) {
 	// Redact BEFORE escaping, never after: `quoted` rewrites control and
 	// separator characters, so a token containing one is no longer present
 	// as its own bytes when a later `split(token)` runs — it would survive
@@ -91,10 +105,13 @@ async function attemptJson(url, token, fetchImpl) {
 	try {
 		response = await fetchImpl(url, {
 			headers: headers(token),
-			// A hung connection would otherwise ride to the job's
-			// `timeout-minutes`, which ends the run without a verdict; an
-			// aborted attempt is a refusal the retry below can act on.
-			signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+			// Built PER ATTEMPT: one signal shared across attempts would
+			// abort every retry the moment the first one expired. The bound
+			// is a parameter rather than the constant read directly, so an
+			// arm can drive it to a value it can watch fire — read straight,
+			// a dead signal ships green with the constant referenced by
+			// nothing.
+			signal: AbortSignal.timeout(timeoutMs),
 		});
 	} catch (error) {
 		return { ok: false, cause: `the platform read threw: ${wrap(error)}` };
@@ -124,11 +141,15 @@ async function attemptJson(url, token, fetchImpl) {
  * exhaustion, so the history stays able to separate three kinds of
  * refusal: a genuine absence, a first-try failure, and a read that was
  * retried and never succeeded (issue #194).
+ *
+ * The cost is bounded per attempt and by the attempt count. It is NOT
+ * bounded inside the job's `timeout-minutes` — see `ATTEMPT_TIMEOUT_MS`,
+ * where the arithmetic and the pre-existing reachability are stated.
  */
-async function readJson(url, token, fetchImpl, sleepImpl) {
+async function readJson(url, token, fetchImpl, sleepImpl, timeoutMs) {
 	let last = { ok: false, cause: "no attempt was made" };
 	for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
-		last = await attemptJson(url, token, fetchImpl);
+		last = await attemptJson(url, token, fetchImpl, timeoutMs);
 		if (last.ok) {
 			return last;
 		}
@@ -144,11 +165,19 @@ async function readJson(url, token, fetchImpl, sleepImpl) {
  * hands it to us; on an `issue_comment` run the payload carries no head,
  * so it is read from the PR. A failed read is a value, like every other.
  */
-export async function resolveHead({ repo, pr, head, token, fetchImpl = fetch, sleepImpl = realSleep }) {
+export async function resolveHead({
+	repo,
+	pr,
+	head,
+	token,
+	fetchImpl = fetch,
+	sleepImpl = realSleep,
+	timeoutMs = ATTEMPT_TIMEOUT_MS,
+}) {
 	if (head) {
 		return { ok: true, head };
 	}
-	const read = await readJson(`${API}/repos/${repo}/pulls/${pr}`, token, fetchImpl, sleepImpl);
+	const read = await readJson(`${API}/repos/${repo}/pulls/${pr}`, token, fetchImpl, sleepImpl, timeoutMs);
 	if (!read.ok) {
 		return { ok: false, cause: `the head under review could not be resolved — ${read.cause}` };
 	}
@@ -166,7 +195,14 @@ export async function resolveHead({ repo, pr, head, token, fetchImpl = fetch, sl
  * predicate's last-record-wins collapse rests on it — stated here
  * because the predicate cannot see this call site.
  */
-export async function fetchComments({ repo, pr, token, fetchImpl = fetch, sleepImpl = realSleep }) {
+export async function fetchComments({
+	repo,
+	pr,
+	token,
+	fetchImpl = fetch,
+	sleepImpl = realSleep,
+	timeoutMs = ATTEMPT_TIMEOUT_MS,
+}) {
 	const bodies = [];
 	for (let page = 1; page <= PAGE_BUDGET; page += 1) {
 		const read = await readJson(
@@ -174,6 +210,7 @@ export async function fetchComments({ repo, pr, token, fetchImpl = fetch, sleepI
 			token,
 			fetchImpl,
 			sleepImpl,
+			timeoutMs,
 		);
 		if (!read.ok) {
 			return { ok: false, cause: `${read.cause} for page ${page}` };
@@ -196,7 +233,7 @@ export async function fetchComments({ repo, pr, token, fetchImpl = fetch, sleepI
 }
 
 /** The whole run, as a value. Returns the lines to print and the exit code. */
-export async function run(env, fetchImpl = fetch, sleepImpl = realSleep) {
+export async function run(env, fetchImpl = fetch, sleepImpl = realSleep, timeoutMs = ATTEMPT_TIMEOUT_MS) {
 	const token = env.GITHUB_TOKEN;
 	const repo = env.GITJIG_REPO;
 	const pr = env.GITJIG_PR;
@@ -207,12 +244,15 @@ export async function run(env, fetchImpl = fetch, sleepImpl = realSleep) {
 		};
 	}
 
-	const resolved = await resolveHead({ repo, pr, head: env.GITJIG_HEAD, token, fetchImpl, sleepImpl });
+	const resolved = await resolveHead({ repo, pr, head: env.GITJIG_HEAD, token, fetchImpl, sleepImpl, timeoutMs });
 	if (!resolved.ok) {
 		return { code: 0, lines: advisory("lookup-failed", resolved.cause) };
 	}
 
-	const verdict = mergeReviewGate(await fetchComments({ repo, pr, token, fetchImpl, sleepImpl }), resolved.head);
+	const verdict = mergeReviewGate(
+		await fetchComments({ repo, pr, token, fetchImpl, sleepImpl, timeoutMs }),
+		resolved.head,
+	);
 	if (verdict.pass) {
 		return { code: 0, lines: [`merge-review: PASS — a complete, adjudicated review is pinned at ${resolved.head}.`] };
 	}

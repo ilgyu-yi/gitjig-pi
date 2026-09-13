@@ -44,7 +44,12 @@ type ScriptModule = {
 	ATTEMPT_TIMEOUT_MS: number;
 	resolveHead(input: Record<string, unknown>): Promise<{ ok: true; head: string } | { ok: false; cause: string }>;
 	fetchComments(input: Record<string, unknown>): Promise<{ ok: true; bodies: string[] } | { ok: false; cause: string }>;
-	run(env: Record<string, string | undefined>, fetchImpl: unknown, sleepImpl?: unknown): Promise<RunResult>;
+	run(
+		env: Record<string, string | undefined>,
+		fetchImpl: unknown,
+		sleepImpl?: unknown,
+		timeoutMs?: number,
+	): Promise<RunResult>;
 };
 type RecordModule = {
 	composeReviewRecord(record: Record<string, unknown>): string;
@@ -356,6 +361,58 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
 	});
 });
 
+describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY call site (issue #194)", () => {
+	it("no call site in this file takes the real backoff", () => {
+		// The hazard this closes is that `noSleep` is OPT-IN: a call site
+		// that omits it takes `realSleep`, the arm still passes, and the
+		// only symptom is a suite that quietly waits seconds. Nothing reds,
+		// so nothing reports it — which is why the population is derived
+		// from this file's own source rather than trusted to review.
+		//
+		// The reach is stated so it is not over-read: this arm sees THIS
+		// file. A call site in another file is outside it.
+		const source = readFileSync(new URL(import.meta.url), "utf8");
+		const unthreaded: string[] = [];
+		let total = 0;
+		const call = /script\(\)\.(run|resolveHead|fetchComments)\s*\(/g;
+		for (const match of source.matchAll(call)) {
+			total += 1;
+			// Walk the call's own argument list by balancing brackets, so a
+			// later call's arguments cannot be read as this one's.
+			let depth = 0;
+			let end = match.index + match[0].length - 1;
+			for (; end < source.length; end += 1) {
+				const ch = source[end];
+				if (ch === "(" || ch === "{" || ch === "[") {
+					depth += 1;
+				} else if (ch === ")" || ch === "}" || ch === "]") {
+					depth -= 1;
+					if (depth === 0) {
+						break;
+					}
+				}
+			}
+			const args = source.slice(match.index, end + 1);
+			if (!/noSleep|sleepImpl|sleep\.impl/.test(args)) {
+				const line = source.slice(0, match.index).split("\n").length;
+				unthreaded.push(`line ${String(line)}: ${match[1]}`);
+			}
+		}
+		assert.deepEqual(
+			unthreaded,
+			[],
+			"these call sites do not inject a backoff, so they take the real one: three attempts against a failing " +
+				"read cost 2s + 4s EACH and the arm still passes, which is a suite that silently waits. Pass " +
+				"`noSleep` (or a sleepSpy) at every site",
+		);
+		assert.ok(
+			total >= 10,
+			`the call-site pattern matched ${String(total)} sites, which is fewer than this file demonstrably has — ` +
+				"the spelling it scans for has changed and the guard is measuring air rather than an empty population",
+		);
+	});
+});
+
 describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 	// An unretried transient is indistinguishable, in the accumulated
 	// firing history, from a genuine missing record — and that history is
@@ -363,8 +420,8 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 	// external fetch is retried and buffered rather than allowed to fail
 	// the run".
 	//
-	// The three paths §3.12 asks for are iterated below rather than
-	// sampled: recovery, exhaustion, and the per-attempt bound.
+	// Three paths are iterated below rather than sampled: recovery,
+	// exhaustion, and the per-attempt bound.
 
 	it("recovers: a read failing twice then succeeding reaches a verdict, and the page is re-requested", async () => {
 		const sleep = sleepSpy();
@@ -373,7 +430,7 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 		assert.equal(
 			seen.length,
 			3,
-			"the failing read was not re-attempted — one attempt per page is the defect #194 names",
+			"the failing read was not re-attempted — one attempt per page is the defect this retry closes",
 		);
 		assert.ok(
 			result.lines.some((line) => line.includes("merge-review: PASS")),
@@ -418,7 +475,7 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 		assert.ok(
 			notice.includes(`${String(script().FETCH_ATTEMPTS)} attempts exhausted`),
 			"the exhausted refusal does not name the exhaustion, so it is indistinguishable in the firing history " +
-				"from a first-try failure and from a genuine absence — which is the evidence #192's trigger reads",
+				"from a first-try failure and from a genuine absence",
 		);
 		assert.equal(result.code, 0, "the exhausted refusal exited non-zero — the job is advisory and reports");
 	});
@@ -450,10 +507,48 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 			notice?.includes("lookup-failed") && notice.includes("zq aborted by timeout"),
 			"an aborted attempt did not surface as a lookup-failed refusal carrying its own cause",
 		);
+	});
+
+	it("the bound is LIVE: a request that never answers is aborted BY the signal, and lands as a refusal", async () => {
+		// The arm above establishes that an AbortSignal object is passed and
+		// is unaborted at request time. Neither is liveness: a
+		// `new AbortController().signal`, which can never fire, satisfies
+		// both — measured, that mutant leaves this file fully green while the
+		// bound is referenced by nothing but its own declaration.
+		//
+		// So the bound is driven as a PARAMETER and watched firing. The stub
+		// never answers, so the only thing that can settle the read is the
+		// signal, and the deadline turns a dead signal into a red rather
+		// than a hung run.
+		const aborts: string[] = [];
+		const impl = (_url: string, init: { signal?: AbortSignal }) =>
+			new Promise((_resolve, reject) => {
+				init.signal?.addEventListener("abort", () => {
+					const reason = init.signal?.reason as { name?: string } | undefined;
+					aborts.push(String(reason?.name ?? "aborted"));
+					reject(reason ?? new Error("aborted"));
+				});
+			});
+		const deadline = new Promise<"DEADLINE">((resolve) => {
+			setTimeout(() => resolve("DEADLINE"), 3000).unref?.();
+		});
+		const outcome = await Promise.race([script().run(ENV, impl, noSleep, 5), deadline]);
+		assert.notEqual(
+			outcome,
+			"DEADLINE",
+			"the read never settled: nothing aborted the request, so the per-attempt bound is not wired to it and " +
+				"a hung platform read rides to the job's timeout-minutes with no verdict at all",
+		);
+		assert.equal(
+			aborts.length,
+			script().FETCH_ATTEMPTS,
+			"the signal did not fire once per attempt — a signal built once and shared would fire for the first " +
+				"attempt only, and every later retry would be aborted before it began",
+		);
+		const notice = (outcome as RunResult).lines.find((line) => line.includes("::notice::merge-review")) as string;
 		assert.ok(
-			script().ATTEMPT_TIMEOUT_MS > 0 && script().ATTEMPT_TIMEOUT_MS < 10 * 60 * 1000,
-			"the per-attempt bound is not inside the job's timeout-minutes, so the signal cannot fire before the " +
-				"job is killed and the bound buys nothing",
+			notice?.includes("lookup-failed") && notice.includes("attempts exhausted"),
+			"an attempt the bound aborted did not land as an exhausted lookup-failed refusal",
 		);
 	});
 });
@@ -578,6 +673,7 @@ describe("§3.3 merge-review script — head resolution (AC1, round-1 E-F7)", ()
 						: [ok(payload)];
 			const { impl } = stubFetch(answers);
 			const resolved = await script().resolveHead({
+				sleepImpl: noSleep,
 				repo: "owner/name",
 				pr: "190",
 				head: "",
