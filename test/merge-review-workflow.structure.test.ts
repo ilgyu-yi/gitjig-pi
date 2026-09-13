@@ -388,7 +388,7 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 		// ANY receiver, not `script()` alone. A population defined by one
 		// spelling is a guard over that spelling: a dropped backoff at a call
 		// whose receiver is a local, or split across a newline, costs the
-		// suite seconds with nothing red. PR #216 carries the run.
+		// suite seconds. PR #216 carries the run.
 		//
 		// This comment deliberately spells no call: the scan reads this
 		// file's whole source, so an example written out here would enter

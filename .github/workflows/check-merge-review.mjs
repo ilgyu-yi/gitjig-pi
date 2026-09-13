@@ -61,8 +61,7 @@ export const ATTEMPT_TIMEOUT_MS = 20_000;
 /**
  * The real backoff, and the default. The arm "no call site in this file
  * takes the real backoff" holds the TEST file's sites to injecting their own:
- * the real one waits seconds per retried read, and one call site left
- * unthreaded silently costs the suite those seconds while nothing reds.
+ * the real one waits seconds per retried read.
  */
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
