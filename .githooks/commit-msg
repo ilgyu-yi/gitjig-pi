@@ -205,10 +205,7 @@ fi
 # decides nothing — no status is read from it and no path below can refuse.
 #
 # WHY THIS SURFACE AND NOT pre-commit. The message does not exist at
-# pre-commit time; `git commit` writes it after that adapter returns. This
-# is the one hook at which the diff and the message BOTH exist and the
-# commit has not been made, which is what makes the pair readable while it
-# can still be changed.
+# pre-commit time; `git commit` writes it after that adapter returns.
 if githook_source authoring_pass.sh authoring-pass; then
   if command -v authoring_pass_layout >/dev/null 2>&1; then
     authoring_pass_layout "$_gh_msgfile" >&2 || true

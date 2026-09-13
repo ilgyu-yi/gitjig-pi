@@ -54,6 +54,29 @@ function stageProse(fixture: GithookFixture, name: string, line: string): void {
 	fixtureGit(fixture, ["add", name]);
 }
 
+/** Plant a reader that never returns, so the budget is what ends the run. */
+function plantHangingReader(fixture: GithookFixture): void {
+	mkdirSync(join(fixture.root, ".github", "workflows"), { recursive: true });
+	writeFileSync(join(fixture.root, READER_REL), "#!/usr/bin/env bash\ncat >/dev/null\nsleep 600\n");
+}
+
+/**
+ * Pass `budget` as the layout's second argument in the FIXTURE's adapter.
+ *
+ * This is the seam, and its shape is the point: the budget is an ARGUMENT,
+ * so a caller who can set it is already running the function. The committed
+ * adapter passes nothing, and no environment variable reaches the budget —
+ * for one revision one did, and every all-digit value was honoured, which
+ * handed the committing environment control over how long a commit is held.
+ */
+function patchAdapterBudget(fixture: GithookFixture, budget: string | null): void {
+	const adapter = join(fixture.root, ".githooks", "commit-msg");
+	const committed = readFileSync(join(repoRoot(), ".githooks", "commit-msg"), "utf8");
+	const call = 'authoring_pass_layout "$_gh_msgfile"';
+	assert.ok(committed.includes(call), "the adapter's call site did not match, so this arm would patch nothing");
+	writeFileSync(adapter, budget === null ? committed : committed.replace(call, `${call} ${JSON.stringify(budget)}`));
+}
+
 /** Plant this repository's own committed reader into the fixture. */
 function plantReader(fixture: GithookFixture): void {
 	mkdirSync(join(fixture.root, ".github", "workflows"), { recursive: true });
@@ -108,15 +131,20 @@ describe(
 			);
 		});
 
-		it("carries the disposition, and all three exceptions with it", () => {
+		it("carries the disposition, its pointer, and all FOUR exceptions", () => {
 			const attempt = commitWithMessage(fixture, "feat(#218): the disposition\n");
 			assert.ok(
 				attempt.stderr.includes("DELETED"),
 				`the layout does not state the disposition. A pass that points at a sentence without saying what to do with it is the rewrite generator it exists to close.\n${attempt.stderr}`,
 			);
-			// An UNENUMERATED exception is where a stated rule breaks, so the
-			// rule's three are pinned individually rather than by a count.
-			for (const exception of ["NIT remedy", "wrong literal", "arm titles"]) {
+			assert.ok(
+				attempt.stderr.includes('SPEC §2.5, "Deletion is the default repair"'),
+				`the printed rule names no source clause. §2.8 binds code-adjacent prose to point at the clause it enforces, and a working form with no pointer is a copy a reader cannot check.\n${attempt.stderr}`,
+			);
+			// An UNENUMERATED exception is where a stated rule breaks, so each is
+			// pinned individually rather than by a count. The fourth is §2.5's own
+			// repair case, which the first revision of this block dropped.
+			for (const exception of ["NIT remedy", "wrong literal", "arm titles", "acceptance criterion"]) {
 				assert.ok(
 					attempt.stderr.includes(exception),
 					`the disposition's "${exception}" exception is missing from the layout:\n${attempt.stderr}`,
@@ -124,24 +152,38 @@ describe(
 			}
 		});
 
-		it("the disposition's own wording has exactly ONE home in the repository", () => {
-			// Built at runtime from fragments, never written whole: a literal
-			// search string in this source would itself become a second home and
-			// green the very check it performs.
-			const needle = ["never replaced,", "re-tensed,", "or re-derived"].join(" ");
-			// `--untracked` so the arm measures the working tree a pre-commit run
-			// stands in, not only what is already committed.
-			const hits = execFileSync(
+		it("the printed rule is pinned WHOLE-STRING, so the copy cannot drift from its clause", () => {
+			// The equality lock. A substring check over normative prose stays green
+			// while the instruction inverts — an appended negating qualifier defeats
+			// it — so the block is compared entire. This is the guard §2.8's
+			// never-copy rule asks for where a copy is kept deliberately: the copy is
+			// allowed because an acceptance criterion depends on the rule standing at
+			// the step, and it is allowed only while something holds it to its source.
+			const expected = [
+				'  THE DISPOSITION (SPEC §2.5, "Deletion is the default repair")',
+				"  A flagged prose sentence is DELETED. It is not replaced, re-tensed, or",
+				"  re-derived: a rewrite is a fresh claim carrying the same burden the",
+				"  deleted one failed.",
+				"",
+				"  Exceptions:",
+				"    1. A Judge's verbatim NIT remedy — the text is the Judge's, not yours.",
+				"    2. A wrong literal — a number, an identifier, a path — may be corrected",
+				"       in place. The sentence EXPLAINING it is deleted, not re-derived.",
+				"    3. Code, assertions and arm titles are not prose.",
+				"    4. A claim an acceptance criterion or a live contract depends on is",
+				"       REPAIRED, not deleted, and the repair carries a render or a pointer.",
+			].join("\n");
+
+			const printed = execFileSync(
 				"bash",
-				["-c", `cd ${JSON.stringify(repoRoot())} && git grep -l --untracked -F ${JSON.stringify(needle)} -- . | sort`],
+				["-c", `. ${JSON.stringify(join(repoRoot(), HELPER_REL))} && authoring_pass_rule`],
 				{ encoding: "utf8" },
-			)
-				.split("\n")
-				.filter((line) => line !== "");
-			assert.deepEqual(
-				hits,
-				[HELPER_REL],
-				"this wording is stated somewhere other than where the step happens, so the two copies drift apart in the direction nobody is reading. §2.5 owns the disposition; a surface that restates it in its OWN words is a call site, but two byte-equal copies of one paragraph are not",
+			).replace(/\n$/, "");
+
+			assert.equal(
+				printed,
+				expected,
+				"the printed disposition is not byte-equal to the text this arm holds. §2.8 forbids a hand-copy of a contract precisely because the copy loses its qualifiers in transit; the copy stands here only while this equality holds it to what was reviewed against §2.5",
 			);
 		});
 	},
@@ -194,29 +236,6 @@ describe(
 			assert.ok(
 				!attempt.stderr.includes("no row matched"),
 				`a crashed reader was reported as a clean run, which is the one reading that licenses shipping the sentence it never read:\n${attempt.stderr}`,
-			);
-			plantReader(fixture);
-		});
-
-		it("a reader that does NOT RETURN is stopped at its budget, and the commit lands", () => {
-			// The arm cannot refuse a commit, but an unbounded shell-out can take
-			// one away by not returning. The budget is driven down from the
-			// environment so this arm costs a second rather than the real budget.
-			writeFileSync(join(fixture.root, READER_REL), "#!/usr/bin/env bash\ncat >/dev/null\nsleep 60\n");
-			stageProse(fixture, "zqhang.ts", "// an ordinary comment.");
-			const started = Date.now();
-			const attempt = commitWithMessage(fixture, "feat(#218): a reader that hangs\n", {
-				env: { AUTHORING_PASS_BUDGET_S: "1" },
-			});
-			const elapsed = Date.now() - started;
-			assert.equal(attempt.status, 0, `a hung reader blocked a commit:\n${attempt.stderr}`);
-			assert.ok(
-				elapsed < 30_000,
-				`the commit took ${elapsed}ms, so the budget did not stop the reader — an arm that cannot refuse still took the commit away`,
-			);
-			assert.ok(
-				attempt.stderr.includes("did not finish within 1s"),
-				`the expiry is silent, so a stopped reader reads like a clean one:\n${attempt.stderr}`,
 			);
 			plantReader(fixture);
 		});
@@ -365,6 +384,91 @@ describe(
 			assert.ok(
 				!attempt.stderr.includes("authoring pass"),
 				`a layout was printed for a message that is not going to land. Reading a rejected pair is work spent on a commit that does not exist:\n${attempt.stderr}`,
+			);
+		});
+	},
+);
+
+describe(
+	"the reader's budget is the adapter's, never the environment's (issue #218, SPEC §3.9)",
+	{ skip: process.platform === "win32" },
+	() => {
+		let fixture: GithookFixture;
+
+		before(() => {
+			fixture = buildGithookFixture();
+			plantHangingReader(fixture);
+		});
+		after(() => {
+			removeGithookFixture(fixture);
+		});
+
+		// WHAT THESE ARMS PIN, and it is the INVARIANT and not a printed number:
+		// with a reader that never returns, the commit LANDS, and it lands inside
+		// a fixed wall-clock ceiling. That is the property an unbounded budget
+		// breaks, and it broke twice — once with no budget at all, once with a
+		// budget the environment could set to an arbitrary all-digit value.
+		//
+		// THEY ARE SLOW BY CONSTRUCTION. Three of the four wait out the
+		// compiled-in budget, because a fallback that silently honoured its input
+		// would be indistinguishable from one that did not until the wait ran
+		// long. The cost is the measurement.
+		const CEILING_MS = 60_000;
+
+		const driveHungCommit = (budget: string | null, label: string, env?: Record<string, string>) => {
+			patchAdapterBudget(fixture, budget);
+			const started = Date.now();
+			const attempt = commitWithMessage(fixture, `feat(#218): ${label}\n`, env ? { env } : {});
+			const elapsed = Date.now() - started;
+			assert.equal(attempt.status, 0, `a reader that never returns blocked a commit:\n${attempt.stderr}`);
+			assert.ok(
+				elapsed < CEILING_MS,
+				`the commit took ${elapsed}ms against a ${CEILING_MS}ms ceiling, so the budget did not end the reader — an arm that cannot refuse still took the commit away`,
+			);
+			assert.match(
+				attempt.stderr,
+				/did not finish within \d+s and was stopped/,
+				`the expiry is silent, so a stopped reader reads like a clean one:\n${attempt.stderr}`,
+			);
+			return { attempt, elapsed };
+		};
+
+		it("the COMPILED-IN default ends a reader that never returns, and no environment variable reaches it", () => {
+			// One arm, two properties, because they share the same 20s wait: the
+			// adapter passes no budget, so the compiled-in value is what runs — and
+			// it still runs with an environment naming the variable that used to
+			// set it, which is the harm this revision closes.
+			const { attempt } = driveHungCommit(null, "the default budget", {
+				AUTHORING_PASS_BUDGET_S: "999999999999",
+			});
+			assert.ok(
+				attempt.stderr.includes("did not finish within 20s"),
+				`either the compiled-in budget did not run, or the environment's value reached it:\n${attempt.stderr}`,
+			);
+		});
+
+		it("an in-range argument is honoured, which is how an arm reaches this path cheaply", () => {
+			const { attempt, elapsed } = driveHungCommit("1", "an in-range budget");
+			assert.ok(
+				attempt.stderr.includes("did not finish within 1s"),
+				`the argument was ignored, so the seam this suite drives the expiry path through does not work:\n${attempt.stderr}`,
+			);
+			assert.ok(elapsed < 15_000, `an in-range budget of 1s took ${elapsed}ms`);
+		});
+
+		it("an OUT-OF-RANGE all-digit argument takes the default, not its own value", () => {
+			const { attempt } = driveHungCommit("999999999999", "an out-of-range budget");
+			assert.ok(
+				attempt.stderr.includes("did not finish within 20s"),
+				`an all-digit value past the ceiling was honoured. Every all-digit value being honoured is exactly how the bound was lost before:\n${attempt.stderr}`,
+			);
+		});
+
+		it("a NON-DIGIT argument takes the default, and does not collapse the wait", () => {
+			const { attempt } = driveHungCommit("abc", "a non-digit budget");
+			assert.ok(
+				attempt.stderr.includes("did not finish within 20s"),
+				`a non-digit value reached the arithmetic. Unvalidated it multiplies to 0, which ends the wait immediately and reports a layout that was never produced:\n${attempt.stderr}`,
 			);
 		});
 	},

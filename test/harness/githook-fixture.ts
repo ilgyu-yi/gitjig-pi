@@ -147,10 +147,7 @@ export interface CommitOptions {
  * The layout is cut BETWEEN ITS OWN TWO MARKERS, never from the banner to
  * the end of the stream. Cutting the tail would make every negative `cause`
  * assertion in every githook suite blind to anything emitted after the
- * layout — measured: with the tail cut, an adapter appending §3.9's
- * degradation wording below the layout left branch-guard, secret-scan and
- * commit-format all green, including the one arm that exists to refuse that
- * wording. Bounding the block restores those assertions; the arm named
+ * layout. Bounding the block restores those assertions; the arm named
  * `an emission BELOW the layout reaches cause` pins it.
  *
  * Where the closing marker is absent — a layout that died midway — the cut
