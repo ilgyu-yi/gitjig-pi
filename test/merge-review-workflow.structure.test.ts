@@ -376,7 +376,7 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 	it("no call site in this file takes the real backoff", () => {
 		// The hazard this closes is that `noSleep` is OPT-IN: a call site
 		// that omits it takes `realSleep`, and the symptom is a suite that
-		// quietly waits seconds — which is why
+		// waits seconds — which is why
 		// the population is derived from this file's own source rather than
 		// trusted to review.
 		//
@@ -421,7 +421,7 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 			unthreaded,
 			[],
 			"these call sites do not inject a backoff, so they take the real one: three attempts against a failing " +
-				"read cost 2s + 4s EACH, which is a suite that silently waits. Pass " +
+				"read cost 2s + 4s EACH. Pass " +
 				"`noSleep` (or a sleepSpy) at every site",
 		);
 		// An EXACT count, not a floor. §2.4 permits one exactly where going
