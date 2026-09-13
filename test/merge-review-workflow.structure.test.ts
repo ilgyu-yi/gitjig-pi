@@ -369,8 +369,8 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
  */
 const EXPECTED_CALL_SITES = 20;
 
-/** Wall clock above which a real 2s + 4s backoff has been taken somewhere. */
-const REAL_BACKOFF_FLOOR_MS = 3000;
+/** Below one real backoff step (2s), above this file's own cost. */
+const REAL_BACKOFF_FLOOR_MS = 1500;
 
 describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY call site (issue #194)", () => {
 	it("no call site in this file takes the real backoff", () => {
@@ -910,21 +910,16 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 /**
  * The backoff criterion, read behaviourally rather than from source text.
  *
- * The structural arm above decides "threaded" by matching the argument
- * text, which admits a value that threads nothing. This one admits no
- * value: a real backoff costs seconds of wall clock, so the file's own
- * elapsed time is the property.
- *
- * Declared last so every arm above has run.
+ * A real backoff costs wall clock, so the file's own elapsed time is the
+ * property. Declared last so every arm above has run.
  */
 describe("§3.12 merge-review arms — the injected backoff, measured not matched (issue #194)", () => {
-	it("no arm in this file took a real backoff", () => {
+	it("this file's own elapsed time is below one backoff step", () => {
 		const elapsed = performance.now() - FILE_LOADED_AT;
 		assert.ok(
 			elapsed < REAL_BACKOFF_FLOOR_MS,
-			`this file took ${elapsed.toFixed(0)}ms. One retried read on the real backoff costs 2s + 4s, so an ` +
-				`elapsed time past ${String(REAL_BACKOFF_FLOOR_MS)}ms means some call site threaded a value that is ` +
-				"not a backoff — `sleepImpl: undefined` satisfies the structural arm above and is not caught by it",
+			`this file took ${elapsed.toFixed(0)}ms, past ${String(REAL_BACKOFF_FLOOR_MS)}ms. Something in it waited: ` +
+				"look for a call site whose read fails and whose sleep argument is not a backoff",
 		);
 	});
 });
