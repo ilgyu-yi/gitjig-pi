@@ -440,14 +440,8 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 });
 
 describe("§3.12 merge-review script — the retried read (issue #194)", () => {
-	// An unretried transient is indistinguishable, in the accumulated
-	// firing history, from a genuine missing record — and that history is
-	// the whole point of the advisory stage (§3.6). §3.12: "a flaky
-	// external fetch is retried and buffered rather than allowed to fail
-	// the run".
-	//
-	// Three paths are iterated below rather than sampled: recovery,
-	// exhaustion, and the per-attempt bound.
+	// §3.12: "a flaky external fetch is retried and buffered rather than
+	// allowed to fail the run".
 
 	it("recovers: a read failing twice then succeeding reaches a verdict, and the page is re-requested", async () => {
 		const sleep = sleepSpy();
