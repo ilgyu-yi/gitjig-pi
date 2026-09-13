@@ -47,12 +47,7 @@ const PER_PAGE = 100;
 export const FETCH_ATTEMPTS = 3;
 const BACKOFF_STEP_MS = 2000;
 /**
- * Bound on ONE ATTEMPT. It does NOT bound the run: a page that fails
- * twice and then succeeds slowly costs up to 3 x 20s plus 2s + 4s of
- * backoff, and `fetchComments` walks up to PAGE_BUDGET such pages, which
- * is past the workflow's `timeout-minutes: 10`. The run is then cancelled
- * mid-read — no verdict, no exit code, a red job, which is the one
- * outcome the advisory posture does not produce.
+ * Bound on ONE ATTEMPT. It does NOT bound the run.
  */
 export const ATTEMPT_TIMEOUT_MS = 20_000;
 
@@ -137,8 +132,7 @@ async function attemptJson(url, token, fetchImpl, timeoutMs) {
  * exhaustion (issue #194).
  *
  * The cost is bounded per attempt and by the attempt count. It is NOT
- * bounded inside the job's `timeout-minutes` — see `ATTEMPT_TIMEOUT_MS`,
- * where the arithmetic is stated.
+ * bounded inside the job's `timeout-minutes`.
  */
 async function readJson(url, token, fetchImpl, sleepImpl, timeoutMs) {
 	let last = { ok: false, cause: "no attempt was made" };
