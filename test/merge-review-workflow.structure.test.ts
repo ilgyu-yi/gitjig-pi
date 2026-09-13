@@ -40,9 +40,11 @@ const SCRIPT = join(repoRoot(), ".github", "workflows", "check-merge-review.mjs"
 type RunResult = { code: number; lines: string[] };
 type ScriptModule = {
 	PAGE_BUDGET: number;
+	FETCH_ATTEMPTS: number;
+	ATTEMPT_TIMEOUT_MS: number;
 	resolveHead(input: Record<string, unknown>): Promise<{ ok: true; head: string } | { ok: false; cause: string }>;
 	fetchComments(input: Record<string, unknown>): Promise<{ ok: true; bodies: string[] } | { ok: false; cause: string }>;
-	run(env: Record<string, string | undefined>, fetchImpl: unknown): Promise<RunResult>;
+	run(env: Record<string, string | undefined>, fetchImpl: unknown, sleepImpl?: unknown): Promise<RunResult>;
 };
 type RecordModule = {
 	composeReviewRecord(record: Record<string, unknown>): string;
@@ -95,9 +97,9 @@ const SLOT = { lens: "runtime", surface: "the shell's runtime extensions" };
 
 /** A fetch stub that records the FULL request, not only the URL (E8). */
 function stubFetch(answers: ((url: string) => unknown)[]) {
-	const seen: { url: string; init: { headers?: Record<string, string> } }[] = [];
+	const seen: { url: string; init: { headers?: Record<string, string>; signal?: unknown } }[] = [];
 	let call = 0;
-	const impl = (url: string, init: { headers?: Record<string, string> } = {}) => {
+	const impl = (url: string, init: { headers?: Record<string, string>; signal?: unknown } = {}) => {
 		seen.push({ url, init });
 		const answer = answers[Math.min(call, answers.length - 1)] as (url: string) => unknown;
 		call += 1;
@@ -105,6 +107,22 @@ function stubFetch(answers: ((url: string) => unknown)[]) {
 	};
 	return { impl, seen };
 }
+/**
+ * The injected backoff. Arms MUST pass this: the real one waits seconds
+ * per retried read, and a suite that waits is a suite that gets run less.
+ * It records what it was asked to wait, so the backoff is measurable.
+ */
+function sleepSpy() {
+	const waited: number[] = [];
+	return {
+		waited,
+		impl: (ms: number) => {
+			waited.push(ms);
+			return Promise.resolve();
+		},
+	};
+}
+const noSleep = () => Promise.resolve();
 const ok = (value: unknown) => () => ({ ok: true, status: 200, json: () => Promise.resolve(value) });
 const status = (code: number) => () => ({ ok: false, status: code, json: () => Promise.resolve(null) });
 const comment = (body: string) => ({ body });
@@ -306,7 +324,7 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
 	for (const [shape, answers, needle] of shapes) {
 		it(`refuses on ${shape}, names it distinctly, and never passes`, () => {
 			return script()
-				.run(ENV, stubFetch(answers).impl)
+				.run(ENV, stubFetch(answers).impl, noSleep)
 				.then((result) => {
 					assert.equal(result.code, 0, `${shape} exited non-zero — the job is advisory and reports`);
 					const notice = result.lines.find((line) => line.includes("::notice::merge-review"));
@@ -328,13 +346,115 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
 	it("refuses when the page budget is exhausted rather than judging a truncated list", async () => {
 		const full = Array.from({ length: 100 }, () => comment("prose"));
 		const { impl, seen } = stubFetch([ok(full)]);
-		const result = await script().run(ENV, impl);
+		const result = await script().run(ENV, impl, noSleep);
 		assert.equal(seen.length, script().PAGE_BUDGET, "the reader did not walk exactly its page budget before refusing");
 		assert.ok(
 			result.lines.some((line) => line.includes("lookup-failed") && line.includes(String(script().PAGE_BUDGET))),
 			"the truncation refusal does not name the budget it exhausted",
 		);
 		assert.equal(result.code, 0, "the truncation refusal exited non-zero");
+	});
+});
+
+describe("§3.12 merge-review script — the retried read (issue #194)", () => {
+	// An unretried transient is indistinguishable, in the accumulated
+	// firing history, from a genuine missing record — and that history is
+	// the whole point of the advisory stage (§3.6). §3.12: "a flaky
+	// external fetch is retried and buffered rather than allowed to fail
+	// the run".
+	//
+	// The three paths §3.12 asks for are iterated below rather than
+	// sampled: recovery, exhaustion, and the per-attempt bound.
+
+	it("recovers: a read failing twice then succeeding reaches a verdict, and the page is re-requested", async () => {
+		const sleep = sleepSpy();
+		const { impl, seen } = stubFetch([status(502), status(502), ok([comment(passingBody())])]);
+		const result = await script().run(ENV, impl, sleep.impl);
+		assert.equal(
+			seen.length,
+			3,
+			"the failing read was not re-attempted — one attempt per page is the defect #194 names",
+		);
+		assert.ok(
+			result.lines.some((line) => line.includes("merge-review: PASS")),
+			"a read that recovered on its third attempt did not reach the verdict its final answer supports; a " +
+				"transient then renders a refusal indistinguishable in the history from a genuine missing record",
+		);
+		assert.deepEqual(
+			sleep.waited,
+			[2000, 4000],
+			"the backoff is not the linear attempt*2s check-changelog.yml commits to, or a wait was taken after " +
+				"the LAST attempt, which delays a refusal already decided",
+		);
+	});
+
+	it("does NOT retry a read that succeeded — one answer, one attempt", async () => {
+		const sleep = sleepSpy();
+		const { impl, seen } = stubFetch([ok([comment(passingBody())])]);
+		await script().run(ENV, impl, sleep.impl);
+		assert.equal(
+			seen.length,
+			1,
+			"a successful read was re-attempted, which triples every ordinary run's platform traffic",
+		);
+		assert.deepEqual(sleep.waited, [], "a successful read waited a backoff");
+	});
+
+	it("exhausts: the refusal stays lookup-failed, keeps the last cause, AND names the exhaustion", async () => {
+		const sleep = sleepSpy();
+		const { impl, seen } = stubFetch([status(503)]);
+		const result = await script().run(ENV, impl, sleep.impl);
+		assert.equal(
+			seen.length,
+			script().FETCH_ATTEMPTS,
+			"the reader did not attempt exactly its declared budget before refusing",
+		);
+		const notice = result.lines.find((line) => line.includes("::notice::merge-review")) as string;
+		assert.ok(notice?.includes("lookup-failed"), "exhaustion did not land as lookup-failed (§3.7(c))");
+		assert.ok(
+			notice.includes("503"),
+			"the exhausted refusal dropped the last attempt's own cause, so an operator cannot tell WHAT kept failing",
+		);
+		assert.ok(
+			notice.includes(`${String(script().FETCH_ATTEMPTS)} attempts exhausted`),
+			"the exhausted refusal does not name the exhaustion, so it is indistinguishable in the firing history " +
+				"from a first-try failure and from a genuine absence — which is the evidence #192's trigger reads",
+		);
+		assert.equal(result.code, 0, "the exhausted refusal exited non-zero — the job is advisory and reports");
+	});
+
+	it("bounds each attempt: every request carries a live AbortSignal, and an abort is a refusal not a throw", async () => {
+		const sleep = sleepSpy();
+		const { impl, seen } = stubFetch([
+			() => {
+				throw Object.assign(new Error("zq aborted by timeout"), { name: "TimeoutError" });
+			},
+		]);
+		const result = await script().run(ENV, impl, sleep.impl);
+		assert.equal(seen.length, script().FETCH_ATTEMPTS, "an aborted attempt was not retried");
+		for (const [index, request] of seen.entries()) {
+			assert.ok(
+				request.init.signal instanceof AbortSignal,
+				`attempt ${String(index + 1)} carried no AbortSignal — a hung connection then rides to the job's ` +
+					"timeout-minutes, which ends the run with no verdict at all rather than a refusal",
+			);
+			assert.equal(
+				(request.init.signal as AbortSignal).aborted,
+				false,
+				`attempt ${String(index + 1)}'s signal was already aborted when the request was made — a signal ` +
+					"created once and reused across attempts aborts every retry instantly",
+			);
+		}
+		const notice = result.lines.find((line) => line.includes("::notice::merge-review")) as string;
+		assert.ok(
+			notice?.includes("lookup-failed") && notice.includes("zq aborted by timeout"),
+			"an aborted attempt did not surface as a lookup-failed refusal carrying its own cause",
+		);
+		assert.ok(
+			script().ATTEMPT_TIMEOUT_MS > 0 && script().ATTEMPT_TIMEOUT_MS < 10 * 60 * 1000,
+			"the per-attempt bound is not inside the job's timeout-minutes, so the signal cannot fire before the " +
+				"job is killed and the bound buys nothing",
+		);
 	});
 });
 
@@ -346,7 +466,7 @@ describe("§3.3 merge-review script — the REQUEST itself (round-2 finding E8)"
 	it("reads the ISSUES comment collection, authorized, paged — asserted over EVERY page walked", async () => {
 		const full = Array.from({ length: 100 }, () => comment("prose"));
 		const { impl, seen } = stubFetch([ok(full), ok(full), ok([comment("done")])]);
-		await script().fetchComments({ repo: "owner/name", pr: "190", token: TOKEN, fetchImpl: impl });
+		await script().fetchComments({ repo: "owner/name", pr: "190", token: TOKEN, fetchImpl: impl, sleepImpl: noSleep });
 		assert.equal(seen.length, 3, "the reader did not walk until a short page");
 		seen.forEach((request, index) => {
 			assert.ok(
@@ -369,7 +489,14 @@ describe("§3.3 merge-review script — the REQUEST itself (round-2 finding E8)"
 
 	it("reads the PULLS collection to resolve a head, authorized", async () => {
 		const { impl, seen } = stubFetch([ok({ head: { sha: HEAD } })]);
-		await script().resolveHead({ repo: "owner/name", pr: "190", head: "", token: TOKEN, fetchImpl: impl });
+		await script().resolveHead({
+			repo: "owner/name",
+			pr: "190",
+			head: "",
+			token: TOKEN,
+			fetchImpl: impl,
+			sleepImpl: noSleep,
+		});
 		assert.equal(seen.length, 1, "the head resolution did not make exactly one read");
 		assert.ok(
 			(seen[0] as { url: string }).url.includes("/repos/owner/name/pulls/190"),
@@ -384,7 +511,13 @@ describe("§3.3 merge-review script — the REQUEST itself (round-2 finding E8)"
 
 	it("stops at the first short page, oldest-first — the collapse the predicate performs rests on this order", async () => {
 		const { impl, seen } = stubFetch([ok([comment("zq first"), comment("zq second")])]);
-		const read = await script().fetchComments({ repo: "owner/name", pr: "190", token: TOKEN, fetchImpl: impl });
+		const read = await script().fetchComments({
+			repo: "owner/name",
+			pr: "190",
+			token: TOKEN,
+			fetchImpl: impl,
+			sleepImpl: noSleep,
+		});
 		assert.equal(seen.length, 1, "a short page did not end the walk");
 		assert.deepEqual(
 			read.ok ? read.bodies : undefined,
@@ -395,7 +528,13 @@ describe("§3.3 merge-review script — the REQUEST itself (round-2 finding E8)"
 
 	it("substitutes an empty body for a comment carrying none, rather than dropping it", async () => {
 		const { impl } = stubFetch([ok([{ body: null }, comment("zq real")])]);
-		const read = await script().fetchComments({ repo: "owner/name", pr: "190", token: TOKEN, fetchImpl: impl });
+		const read = await script().fetchComments({
+			repo: "owner/name",
+			pr: "190",
+			token: TOKEN,
+			fetchImpl: impl,
+			sleepImpl: noSleep,
+		});
 		assert.deepEqual(
 			read.ok ? read.bodies : undefined,
 			["", "zq real"],
@@ -408,7 +547,14 @@ describe("§3.3 merge-review script — head resolution (AC1, round-1 E-F7)", ()
 	it("uses the supplied head without a platform read", async () => {
 		const { impl, seen } = stubFetch([ok(null)]);
 		assert.deepEqual(
-			await script().resolveHead({ repo: "owner/name", pr: "190", head: HEAD, token: TOKEN, fetchImpl: impl }),
+			await script().resolveHead({
+				repo: "owner/name",
+				pr: "190",
+				head: HEAD,
+				token: TOKEN,
+				fetchImpl: impl,
+				sleepImpl: noSleep,
+			}),
 			{ ok: true, head: HEAD },
 			"a supplied head was not used as-is",
 		);
@@ -462,7 +608,7 @@ describe("§3.3 merge-review script — the PASS limb, through the instrument (r
 			],
 		];
 		for (const [shape, env, answers] of paths) {
-			const result = await script().run(env, stubFetch(answers).impl);
+			const result = await script().run(env, stubFetch(answers).impl, noSleep);
 			assert.deepEqual(
 				result,
 				{ code: 0, lines: [`merge-review: PASS — a complete, adjudicated review is pinned at ${HEAD}.`] },
@@ -482,7 +628,7 @@ describe("§3.3 merge-review script — the PASS limb, through the instrument (r
 			["a record at a different head", other, false],
 		] as const) {
 			const answers = [ok({ head: { sha: HEAD } }), ok([comment(passingBody(recordHead))])];
-			const result = await script().run({ ...ENV, GITJIG_HEAD: "" }, stubFetch(answers).impl);
+			const result = await script().run({ ...ENV, GITJIG_HEAD: "" }, stubFetch(answers).impl, noSleep);
 			assert.equal(
 				result.lines.some((line) => line.includes("PASS")),
 				expected,
@@ -495,7 +641,7 @@ describe("§3.3 merge-review script — the PASS limb, through the instrument (r
 describe("§3.3 merge-review script — the advisory contract and the rendered line (decision 6)", () => {
 	it("exits 1 on missing configuration, iterated over every required variable", async () => {
 		for (const missing of ["GITHUB_TOKEN", "GITJIG_REPO", "GITJIG_PR"]) {
-			const result = await script().run({ ...ENV, [missing]: undefined }, stubFetch([ok([])]).impl);
+			const result = await script().run({ ...ENV, [missing]: undefined }, stubFetch([ok([])]).impl, noSleep);
 			assert.equal(
 				result.code,
 				1,
@@ -524,7 +670,7 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 			],
 		];
 		for (const [shape, env, answers] of refusals) {
-			const result = await script().run(env, stubFetch(answers).impl);
+			const result = await script().run(env, stubFetch(answers).impl, noSleep);
 			assert.equal(result.code, 0, `${shape} exited non-zero`);
 			assert.ok(
 				result.lines.some((line) => line.includes("(ADVISORY)")),
@@ -564,7 +710,7 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 			["an absent record", ENV, [ok([comment("prose")])]],
 		];
 		for (const [shape, env, answers] of outcomes) {
-			const result = await script().run(env, stubFetch(answers).impl);
+			const result = await script().run(env, stubFetch(answers).impl, noSleep);
 			assert.ok(
 				!result.lines.join("\n").includes(TOKEN),
 				`${shape} rendered a line carrying the token — a credential must not reach the run log`,
@@ -581,7 +727,7 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 				throw new Error("zq boom\n::error::FORGED\nmerge-review: PASS");
 			},
 		]);
-		const result = await script().run(ENV, impl);
+		const result = await script().run(ENV, impl, noSleep);
 		// Split on PHYSICAL line boundaries, not on array elements: an
 		// unescaped newline lives INSIDE one element, and an arm iterating
 		// elements cannot see the second line it renders. That is the same
