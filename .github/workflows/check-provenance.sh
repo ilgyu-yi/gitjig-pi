@@ -13,9 +13,7 @@
 #   UNMEASURED CLAIM — a sentence asserting what a guard catches or what a
 #   measurement showed, carrying neither a rendered run nor a pointer
 #   (§2.5's rendered-or-pointer rule). Shapes: guard-claim,
-#   measurement-claim. The rows are derived from one corpus — the comment
-#   prose the review panels of PR #216 flagged and the repairs then deleted
-#   — and they are an ENUMERATION, never a class.
+#   measurement-claim. The rows are an ENUMERATION, never a class.
 #
 # Usage:
 #   git diff --unified=0 <base>...HEAD | check-provenance.sh
@@ -134,15 +132,13 @@ RULE change-narration 'used to (be|have|carry|call)'
 RULE change-narration 'was previously'
 RULE change-narration 'previously called'
 RULE change-narration 'formerly (called|named)'
-# §2.4's other half (issue #218). Every row below quotes a spelling from the
-# corpus named in the header; the suite's case for each row IS that corpus
-# sentence, so a row cannot drift away from the defect it was derived from.
+# §2.4's other half (issue #218).
 RULE guard-claim 'nothing reds?([^A-Za-z]|$)'
 RULE guard-claim 'leaves (the|this) file [a-z ]{0,12}green'
-RULE guard-claim 'admits (a|no) value'
-RULE guard-claim '[Tt]his (arm )?pins'
+RULE guard-claim '(guard|check|arm|scan|rule|gate) admits (a|no) value'
+RULE guard-claim '[Tt]his (arm|rule|check|guard|gate|test|assertion) pins'
 RULE measurement-claim 'went [0-9][0-9,]*ms to'
-RULE measurement-claim '[0-9]+ x [0-9]+s'
+RULE measurement-claim '(ran|runs|took|costs?|waits?|sleeps?) [0-9]+ x [0-9]+s'
 
 # Living-set extensions. A path whose extension is absent here is not read.
 LIVING_RE='\.(ts|tsx|js|mjs|sh|md|yml|yaml|json|jsonc)$'

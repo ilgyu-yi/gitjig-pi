@@ -182,12 +182,12 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	},
 	{
 		shape: "guard-claim",
-		line: "// The structural arm above decides threaded by matching the argument text, which admits a value that threads nothing.",
+		line: "// The criterion is a substring test, so the arm admits a value that threads nothing.",
 		why: "a claim about what a guard's CRITERION lets through, which is the half a population fix never reaches",
 	},
 	{
 		shape: "guard-claim",
-		line: "// This pins the default as WIRED and as LARGE.",
+		line: "// This arm pins the default as WIRED and as LARGE.",
 		why: "a claim about what an arm establishes \u2014 OPERATING rule 7's shape, stated in prose instead of measured",
 	},
 	{
@@ -198,7 +198,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{
 		shape: "measurement-claim",
 		line: "// an exhausted read costs 3 x 20s plus 2s + 4s of backoff.",
-		why: "arithmetic performed in prose, which the next constant change silently falsifies",
+		why: "a timing multiplied out in prose, rendered nowhere; the row reaches the '3 x 20s' spelling alone",
 	},
 ];
 

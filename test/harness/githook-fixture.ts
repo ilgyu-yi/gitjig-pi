@@ -142,14 +142,34 @@ export interface CommitOptions {
  * appends the recovery live at that surface. And the report-only authoring
  * pass, which `commit-msg` prints on EVERY commit that reaches it (issue
  * #218): it refuses nothing and gates nothing, so it is the cause of
- * nothing. The layout runs last in `commit-msg`, which is the last hook a
- * commit fires, so cutting at its banner drops the layout and nothing else.
+ * nothing.
+ *
+ * The layout is cut BETWEEN ITS OWN TWO MARKERS, never from the banner to
+ * the end of the stream. Cutting the tail would make every negative `cause`
+ * assertion in every githook suite blind to anything emitted after the
+ * layout — measured: with the tail cut, an adapter appending §3.9's
+ * degradation wording below the layout left branch-guard, secret-scan and
+ * commit-format all green, including the one arm that exists to refuse that
+ * wording. Bounding the block restores those assertions; the arm named
+ * `an emission BELOW the layout reaches cause` pins it.
+ *
+ * Where the closing marker is absent — a layout that died midway — the cut
+ * falls back to the tail, and that fallback carries the blindness above. It
+ * is the cheaper side: the alternative leaves half a layout inside `cause`
+ * and reds arms whose subject is elsewhere.
  */
 const AUTHORING_PASS_BANNER = "───────── authoring pass";
+const AUTHORING_PASS_END = "───────── end authoring pass";
 
 function causeOf(stderr: string): string {
-	return stderr
-		.split(AUTHORING_PASS_BANNER)[0]
+	const start = stderr.indexOf(AUTHORING_PASS_BANNER);
+	let trimmed = stderr;
+	if (start !== -1) {
+		const end = stderr.indexOf(AUTHORING_PASS_END, start);
+		trimmed =
+			end === -1 ? stderr.slice(0, start) : stderr.slice(0, start) + stderr.slice(end + AUTHORING_PASS_END.length);
+	}
+	return trimmed
 		.split("\n")
 		.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
 		.join("\n");
