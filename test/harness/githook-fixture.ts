@@ -123,12 +123,7 @@ export interface CommitAttempt {
 	stderrBytes: Buffer;
 	/** The audit-file lines this one commit attempt appended ("" when none). */
 	auditDelta: string;
-	/**
-	 * The predicate-owned share of stderr: every non-empty line except the
-	 * adapter's own `[dev-shell] …` recovery line (§3.11's division — the
-	 * checker emits the cause, each calling surface appends the recovery
-	 * live at that surface).
-	 */
+	/** The predicate-owned share of stderr — see `causeOf`. Arms whose subject IS the layout read `stderr` directly. */
 	cause: string;
 }
 
@@ -137,6 +132,27 @@ export interface CommitOptions {
 	env?: Record<string, string>;
 	/** Extra `git commit` arguments, inserted before `-F` (e.g. `--cleanup=verbatim`). */
 	gitArgs?: string[];
+}
+
+/**
+ * The predicate-owned share of stderr, computed once for both surfaces.
+ *
+ * Two things are dropped. The adapter's own `[dev-shell] …` recovery line,
+ * per §3.11's division — the checker emits the cause, each calling surface
+ * appends the recovery live at that surface. And the report-only authoring
+ * pass, which `commit-msg` prints on EVERY commit that reaches it (issue
+ * #218): it refuses nothing and gates nothing, so it is the cause of
+ * nothing. The layout runs last in `commit-msg`, which is the last hook a
+ * commit fires, so cutting at its banner drops the layout and nothing else.
+ */
+const AUTHORING_PASS_BANNER = "───────── authoring pass";
+
+function causeOf(stderr: string): string {
+	return stderr
+		.split(AUTHORING_PASS_BANNER)[0]
+		.split("\n")
+		.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
+		.join("\n");
 }
 
 function baseEnv(fixture: GithookFixture): Record<string, string> {
@@ -327,10 +343,7 @@ export function commitWithMessage(
 		stdoutBytes,
 		stderrBytes,
 		auditDelta: auditAfter.slice(auditBefore.length),
-		cause: stderr
-			.split("\n")
-			.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
-			.join("\n"),
+		cause: causeOf(stderr),
 	};
 }
 
@@ -388,9 +401,6 @@ export function pushRefs(fixture: GithookFixture, refspecs: string[], options: P
 		stdoutBytes,
 		stderrBytes,
 		auditDelta: auditAfter.slice(auditBefore.length),
-		cause: stderr
-			.split("\n")
-			.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
-			.join("\n"),
+		cause: causeOf(stderr),
 	};
 }
