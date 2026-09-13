@@ -34,6 +34,7 @@ import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
 
+const FILE_LOADED_AT = performance.now();
 const WORKFLOW = join(repoRoot(), ".github", "workflows", "check-merge-review.yml");
 const SCRIPT = join(repoRoot(), ".github", "workflows", "check-merge-review.mjs");
 
@@ -368,6 +369,9 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
  */
 const EXPECTED_CALL_SITES = 20;
 
+/** Wall clock above which a real 2s + 4s backoff has been taken somewhere. */
+const REAL_BACKOFF_FLOOR_MS = 3000;
+
 describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY call site (issue #194)", () => {
 	it("no call site in this file takes the real backoff", () => {
 		// The hazard this closes is that `noSleep` is OPT-IN: a call site
@@ -382,13 +386,9 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 		const unthreaded: string[] = [];
 		let total = 0;
 		// ANY receiver, not `script()` alone. A population defined by one
-		// spelling is a guard over that spelling: measured, the same dropped
-		// backoff written with the module bound to a local first was
-		// invisible to a `script()`-anchored scan, while the file's runtime
-		// went 85ms to 12,096ms with nothing red. Widening it also found a
-		// site this file already had, where the receiver and the reader name
-		// are split across a newline, which the narrower spelling never
-		// counted.
+		// spelling is a guard over that spelling: a dropped backoff at a call
+		// whose receiver is a local, or split across a newline, costs the
+		// suite seconds with nothing red. PR #216 carries the run.
 		//
 		// This comment deliberately spells no call: the scan reads this
 		// file's whole source, so an example written out here would enter
@@ -425,8 +425,8 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 				"`noSleep` (or a sleepSpy) at every site",
 		);
 		// An EXACT count, not a floor. §2.4 permits one exactly where going
-		// stale fails a check, and this is that place: a floor of ten over
-		// nineteen sites tolerates nine disappearing, which is the defect a
+		// stale fails a check, and this is that place: a floor tolerates
+		// sites silently disappearing, which is the defect a
 		// floor was supposed to prevent. Changing this number is a deliberate
 		// act and the message says so.
 		assert.equal(
@@ -538,9 +538,8 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 	it("the DEFAULT bound is the shipped constant, not just whatever an arm injects", async () => {
 		// The liveness arm below drives `timeoutMs` itself, so it establishes
 		// that SOME live bound reaches the request — not that the one the
-		// workflow ships does. Measured without this arm: `ATTEMPT_TIMEOUT_MS
-		// = 1` leaves the file fully green, because nothing exercises the
-		// default path.
+		// workflow ships does. This arm is the file's only exercise of the
+		// default path; PR #216 carries the run.
 		//
 		// So: no `timeoutMs` argument, a stub that never answers, and a
 		// window far below the shipped bound. Nothing may settle inside it.
@@ -904,6 +903,28 @@ describe("§3.3 merge-review script — the advisory contract and the rendered l
 		assert.ok(
 			result.lines.some((line) => line.includes("zq boom")),
 			"the escaping dropped the platform's cause instead of neutralising it — the refusal must still say what failed",
+		);
+	});
+});
+
+/**
+ * The backoff criterion, read behaviourally rather than from source text.
+ *
+ * The structural arm above decides "threaded" by matching the argument
+ * text, which admits a value that threads nothing. This one admits no
+ * value: a real backoff costs seconds of wall clock, so the file's own
+ * elapsed time is the property.
+ *
+ * Declared last so every arm above has run.
+ */
+describe("§3.12 merge-review arms — the injected backoff, measured not matched (issue #194)", () => {
+	it("no arm in this file took a real backoff", () => {
+		const elapsed = performance.now() - FILE_LOADED_AT;
+		assert.ok(
+			elapsed < REAL_BACKOFF_FLOOR_MS,
+			`this file took ${elapsed.toFixed(0)}ms. One retried read on the real backoff costs 2s + 4s, so an ` +
+				`elapsed time past ${String(REAL_BACKOFF_FLOOR_MS)}ms means some call site threaded a value that is ` +
+				"not a backoff — `sleepImpl: undefined` satisfies the structural arm above and is not caught by it",
 		);
 	});
 });

@@ -60,7 +60,7 @@ export const ATTEMPT_TIMEOUT_MS = 20_000;
 
 /**
  * The real backoff, and the default. The arm "no call site in this file
- * takes the real backoff" holds this file's sites to injecting their own:
+ * takes the real backoff" holds the TEST file's sites to injecting their own:
  * the real one waits seconds per retried read, and one call site left
  * unthreaded silently costs the suite those seconds while nothing reds.
  */
@@ -143,7 +143,7 @@ async function attemptJson(url, token, fetchImpl, timeoutMs) {
  *
  * The cost is bounded per attempt and by the attempt count. It is NOT
  * bounded inside the job's `timeout-minutes` — see `ATTEMPT_TIMEOUT_MS`,
- * where the arithmetic and the pre-existing reachability are stated.
+ * where the arithmetic is stated.
  */
 async function readJson(url, token, fetchImpl, sleepImpl, timeoutMs) {
 	let last = { ok: false, cause: "no attempt was made" };
