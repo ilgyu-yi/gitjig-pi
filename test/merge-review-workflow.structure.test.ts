@@ -361,6 +361,13 @@ describe("§3.7(c) merge-review script — lookup failures, ITERATED, asserted W
 	});
 });
 
+/**
+ * Call sites of the script's three exported readers in this file. Exact
+ * rather than a floor — see the arm below for why, and raise it in the
+ * same commit that adds a site.
+ */
+const EXPECTED_CALL_SITES = 20;
+
 describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY call site (issue #194)", () => {
 	it("no call site in this file takes the real backoff", () => {
 		// The hazard this closes is that `noSleep` is OPT-IN: a call site
@@ -374,7 +381,19 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 		const source = readFileSync(new URL(import.meta.url), "utf8");
 		const unthreaded: string[] = [];
 		let total = 0;
-		const call = /script\(\)\.(run|resolveHead|fetchComments)\s*\(/g;
+		// ANY receiver, not `script()` alone. A population defined by one
+		// spelling is a guard over that spelling: measured, the same dropped
+		// backoff written with the module bound to a local first was
+		// invisible to a `script()`-anchored scan, while the file's runtime
+		// went 85ms to 12,096ms with nothing red. Widening it also found a
+		// site this file already had, where the receiver and the reader name
+		// are split across a newline, which the narrower spelling never
+		// counted.
+		//
+		// This comment deliberately spells no call: the scan reads this
+		// file's whole source, so an example written out here would enter
+		// its own population.
+		const call = /\.(run|resolveHead|fetchComments)\s*\(/g;
 		for (const match of source.matchAll(call)) {
 			total += 1;
 			// Walk the call's own argument list by balancing brackets, so a
@@ -405,10 +424,17 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 				"read cost 2s + 4s EACH and the arm still passes, which is a suite that silently waits. Pass " +
 				"`noSleep` (or a sleepSpy) at every site",
 		);
-		assert.ok(
-			total >= 10,
-			`the call-site pattern matched ${String(total)} sites, which is fewer than this file demonstrably has — ` +
-				"the spelling it scans for has changed and the guard is measuring air rather than an empty population",
+		// An EXACT count, not a floor. §2.4 permits one exactly where going
+		// stale fails a check, and this is that place: a floor of ten over
+		// nineteen sites tolerates nine disappearing, which is the defect a
+		// floor was supposed to prevent. Changing this number is a deliberate
+		// act and the message says so.
+		assert.equal(
+			total,
+			EXPECTED_CALL_SITES,
+			`the call-site population is ${String(total)}, not ${String(EXPECTED_CALL_SITES)}. If you ADDED a call ` +
+				"site, raise the constant in the same commit. If it DROPPED, a site was deleted or respelled out of " +
+				"this scan's reach — and an unreachable site is exactly the invisible omission this arm exists for",
 		);
 	});
 });
@@ -509,12 +535,44 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 		);
 	});
 
+	it("the DEFAULT bound is the shipped constant, not just whatever an arm injects", async () => {
+		// The liveness arm below drives `timeoutMs` itself, so it establishes
+		// that SOME live bound reaches the request — not that the one the
+		// workflow ships does. Measured without this arm: `ATTEMPT_TIMEOUT_MS
+		// = 1` leaves the file fully green, because nothing exercises the
+		// default path.
+		//
+		// So: no `timeoutMs` argument, a stub that never answers, and a
+		// window far below the shipped bound. Nothing may settle inside it.
+		// This pins the default as WIRED and as LARGE; it does not pin its
+		// exact value, and no claim here should be read as doing so.
+		const WINDOW_MS = 150;
+		const impl = (_url: string, init: { signal?: AbortSignal }) =>
+			new Promise((_resolve, reject) => {
+				init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+			});
+		const window = new Promise<"WINDOW">((resolve) => {
+			setTimeout(() => resolve("WINDOW"), WINDOW_MS).unref?.();
+		});
+		const outcome = await Promise.race([script().run(ENV, impl, noSleep), window]);
+		assert.equal(
+			outcome,
+			"WINDOW",
+			`a read on the DEFAULT bound settled inside ${String(WINDOW_MS)}ms. The shipped bound is ` +
+				`${String(script().ATTEMPT_TIMEOUT_MS)}ms, so either the default is no longer wired to the request ` +
+				"or the constant has been shrunk to a value that aborts every real platform read — which lands every " +
+				"run as lookup-failed and is the history pollution this issue removes",
+		);
+		assert.ok(
+			script().ATTEMPT_TIMEOUT_MS > WINDOW_MS * 10,
+			"the shipped bound is no longer comfortably above the window this arm watches, so the arm can pass on " +
+				"timing alone and stops pinning the default",
+		);
+	});
+
 	it("the bound is LIVE: a request that never answers is aborted BY the signal, and lands as a refusal", async () => {
 		// The arm above establishes that an AbortSignal object is passed and
-		// is unaborted at request time. Neither is liveness: a
-		// `new AbortController().signal`, which can never fire, satisfies
-		// both — measured, that mutant leaves this file fully green while the
-		// bound is referenced by nothing but its own declaration.
+		// is unaborted at request time. Neither is liveness.
 		//
 		// So the bound is driven as a PARAMETER and watched firing. The stub
 		// never answers, so the only thing that can settle the read is the

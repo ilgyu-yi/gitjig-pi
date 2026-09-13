@@ -53,14 +53,14 @@ const BACKOFF_STEP_MS = 2000;
  * PAGE_BUDGET pages, so a run of slow pages exceeds the workflow's
  * `timeout-minutes: 10` and is cancelled mid-read — no verdict, no exit
  * code, a red job, which is the one outcome the advisory posture does not
- * produce. That reachability PRE-DATES the retry: an unbounded hung page
- * rode to the same place. What the per-attempt bound buys is the hang
- * case, narrowed from unbounded to 20s; it does not close the overrun.
+ * produce. What the per-attempt bound buys is the hang case, bounded at
+ * 20s; it does not close the overrun.
  */
 export const ATTEMPT_TIMEOUT_MS = 20_000;
 
 /**
- * The real backoff, and the default. Every arm injects its own instead:
+ * The real backoff, and the default. The arm "no call site in this file
+ * takes the real backoff" holds this file's sites to injecting their own:
  * the real one waits seconds per retried read, and one call site left
  * unthreaded silently costs the suite those seconds while nothing reds.
  */
@@ -134,8 +134,7 @@ async function attemptJson(url, token, fetchImpl, timeoutMs) {
  * Every failure is retried, including a non-2xx: this reader cannot tell
  * a transient 502 from a durable 404 without modelling the platform's
  * status space, and §3.12's rule is about the flaky read rather than
- * about a particular status. The cost is bounded by the attempt count
- * and by the job's own `timeout-minutes`.
+ * about a particular status.
  *
  * The exhausted cause KEEPS the last attempt's own cause and appends the
  * exhaustion, so the history stays able to separate three kinds of
