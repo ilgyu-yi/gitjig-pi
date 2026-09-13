@@ -86,11 +86,12 @@ describe("the provenance reader exists and is advisory (issue #70, SPEC §2.5)",
 /**
  * One instance of every ALTERNATIVE the reader applies — not one per shape.
  *
- * At shape granularity this table measured almost nothing: with the rules
- * written as four fat regexes, thirteen of twenty-one alternatives could be
- * deleted outright and the whole suite stayed green, because one fixture
- * satisfied its shape through a different alternative. The unit of a rule
- * is the alternative, so the unit of a case is too.
+ * At shape granularity this table measures almost nothing: with the rules
+ * written as one fat regex per shape, most alternatives can be deleted
+ * outright and the whole suite stays green, because one fixture satisfies
+ * its shape through a different alternative. The unit of a rule is the
+ * alternative, so the unit of a case is too. No count is stated here: a
+ * count over this table is what the next widening falsifies.
  */
 const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> = [
 	{
@@ -155,6 +156,31 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 		shape: "review-archaeology",
 		line: "// An earlier review asked for this split.",
 		why: "the same narrative without a review numeral",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The pin was narrowed by round 3's second limb.",
+		why: "the POSSESSIVE spelling — how the class is actually written, and reached by no numeral-plus-verb rule",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The bare flag round-2 finding condemned.",
+		why: "the hyphenated spelling with an explicit `finding`, a second live idiom for the same attribution",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// ROUND 6 measured six of the twelve cells.",
+		why: "a round as the subject of a MEASURING verb, in the all-caps spelling the corpus also uses",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The same defect S-F2 named.",
+		why: "a finding label owned by nothing at all — the attribution survives the round numeral being dropped",
+	},
+	{
+		shape: "change-narration",
+		line: "// The first draft of this helper lived in the caller.",
+		why: "a prior AUTHORING pass named as such: the same genus as a prior review, on the author's side",
 	},
 	{ shape: "issue-narration", line: "// Introduced in #12 alongside the boundary.", why: "the introduce verb" },
 	{ shape: "issue-narration", line: "// Fixed in #34 after the flake was found.", why: "the fix verb" },

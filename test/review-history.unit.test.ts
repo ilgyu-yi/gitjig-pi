@@ -13,9 +13,9 @@
  * dynamic import and every arm reds on its own authored message.
  */
 import assert from "node:assert/strict";
-// For the complement arm's unnameable fixture. Round 13's EF3 removed
-// this file's last source read; what replaced its justification is a tag
-// no production text written before the run can contain.
+// For the complement arm's unnameable fixture. This file performs no
+// source read: the fixture is a tag no production text written before the
+// run can contain.
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -169,7 +169,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("each state carries the record's findings and rulings — the diagnosis reads the same findings (round 1's E1)", () => {
+	it("each state carries the record's findings and rulings — the diagnosis reads the same findings", () => {
 		const h = mod();
 		const head = "a".repeat(40);
 		const record: ReviewRecord = {
@@ -227,7 +227,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 			out[0].outcome,
 			"clear",
 			"the collapse did not take the LAST record's outcome — a re-posted head's settled record is the last, " +
-				"and position and outcome must come from the same record (round 1's E4)",
+				"and position and outcome must come from the same record",
 		);
 	});
 
@@ -265,21 +265,20 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("EVERY unrecognized tag is no state — the complement, not one nominated point (round 9's F-A)", () => {
+	it("EVERY unrecognized tag is no state — the complement, not one nominated point", () => {
 		// A complement cannot be enumerated, so this arm is honest only if its
 		// fixture CANNOT be satisfied by a per-point special case.
 		//
-		// ROUND 13's EF3 removed this arm's second limb and its source read.
-		// That limb extracted the assembler's per-tag tests out of history.ts's
-		// TEXT and deepEqualled them against a three-member list — a declared
-		// domain established by READING SOURCE TEXT, which is exactly the scope
-		// §1.8 invalidated and re-planned, left standing when the rest of the
-		// method was superseded. It carried that method's defect too: measured
-		// at the previous head, a behaviourally INERT COMMENT inside
-		// repairHistory red this arm alone, 102/1. A comment cannot change what
-		// the assembler does, so that red was false.
+		// This arm has NO source read and no second limb over one. Extracting
+		// the assembler's per-tag tests out of history.ts's TEXT and
+		// deepEqualling them against a three-member list is a declared domain
+		// established by READING SOURCE TEXT, which is exactly the scope §1.8
+		// invalidated and re-planned — and it carries that method's defect: a
+		// behaviourally INERT COMMENT inside repairHistory reds such a limb,
+		// and a comment cannot change what the assembler does, so that red
+		// would be false.
 		//
-		// What the limb claimed is NOT carried by the type witness, and what
+		// What such a limb would claim is NOT carried by the type witness, and what
 		// follows is a CLAIM with its enumeration attached, never a closed
 		// class. The witness over `ReviewState["state"]` is an object literal
 		// in THIS file typed from resolve.ts, so no edit to history.ts can red
@@ -325,7 +324,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		}
 	});
 
-	it("a re-post keeps its head's FIRST position and takes its LAST content (round 2's E1, re-authored)", () => {
+	it("a re-post keeps its head's FIRST position and takes its LAST content", () => {
 		const h = mod();
 		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
 		// A repaired, then C cleared, then B repaired, then A re-posted.
@@ -354,7 +353,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("a re-post of an already-resolved head does NOT silence a trigger that has fired (round 7's F-R1)", () => {
+	it("a re-post of an already-resolved head does NOT silence a trigger that has fired", () => {
 		const h = mod();
 		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
 		// The measured defect: under last-occurrence positioning the re-post
@@ -385,7 +384,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		}
 	});
 
-	it("a resolved measure-escalate maps as itself, and interposed it RESETS the repair run (round 4's S1)", () => {
+	it("a resolved measure-escalate maps as itself, and interposed it RESETS the repair run", () => {
 		const h = mod();
 		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
 		const mapped = h.repairHistory([measureEscalate(a)]);
@@ -403,7 +402,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		);
 	});
 
-	it("a later incomplete does not erase a head's already-resolved state (round 4's S1)", () => {
+	it("a later incomplete does not erase a head's already-resolved state", () => {
 		const h = mod();
 		const [a, b] = ["a".repeat(40), "b".repeat(40)];
 		// A resolved to repair, B repaired, then A re-posts an incomplete.
@@ -418,7 +417,7 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 		assert.equal(h.triggerFires(out), true, "the trigger under-fired after a later incomplete — the two repairs stand");
 	});
 
-	it("an incomplete review is NOT a review state — it is dropped, never a resetting state (round 3's EF1)", () => {
+	it("an incomplete review is NOT a review state — it is dropped, never a resetting state", () => {
 		const h = mod();
 		const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
 		const out = h.repairHistory([incomplete(a), repair(b), clear(c)]);
@@ -443,12 +442,11 @@ describe("§1.4 the repair history is assembled from the durable records, not au
 });
 
 describe("§1.4 the assembler carries findings and rulings whole (issue #186)", () => {
-	// The domain here is not a closed union but a CARDINALITY, and round 6
-	// found every fixture standing at 0 or 1 — no record anywhere carried a
-	// bundle of two, and the only two-ruling fixture bypassed the assembler
-	// entirely by being handed straight to the renderer. A fixture at
+	// The domain here is not a closed union but a CARDINALITY. A fixture at
 	// cardinality 1 cannot falsify "carries them whole": truncation to the
-	// first and preservation of all are the same observation at one entry.
+	// first and preservation of all are the same observation at one entry —
+	// and a two-ruling fixture handed straight to the renderer bypasses the
+	// assembler, so it does not carry the axis either.
 	//
 	// So: two findings and two rulings, needles distinct by construction,
 	// asserted by deep equality in ORDER. A truncation, a reversal, or a
@@ -490,8 +488,8 @@ describe("§1.4 the assembler carries findings and rulings whole (issue #186)", 
 
 	it("a findings-carrying record with a NULL adjudication keeps its findings and empties its rulings", () => {
 		// The shape repairHistory produces by design when a panel gathered
-		// findings the Judge never ruled. Round 6 showed this shape unmeasured
-		// past position one; it is measured here at the assembler.
+		// findings the Judge never ruled. It is measured here at the
+		// assembler, and past position one.
 		const [assembled] = mod().repairHistory([{ ...withBundle(), adjudication: null }]);
 		assert.deepEqual(
 			{ findings: assembled?.findings, rulings: assembled?.rulings },
@@ -554,7 +552,7 @@ describe("§1.4 the coarse deterministic trigger (issue #186)", () => {
 	});
 });
 
-describe("§1.4 the diagnosis brief carries the findings and asks both outputs (issue #186; round 1's E1/E3)", () => {
+describe("§1.4 the diagnosis brief carries the findings and asks both outputs (issue #186)", () => {
 	const state = (over: Partial<StateSummary> = {}): StateSummary => ({
 		head: "a".repeat(40),
 		outcome: "repair",
@@ -572,7 +570,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 
 	it("embeds each state's findings and rulings verbatim, labelled unverified", () => {
 		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
-		// Round 2's S1: pin the per-state FINDINGS line with a needle only it
+		// Pin the per-state FINDINGS line with a needle only it
 		// can produce — a state carrying a finding but NO rulings, so the
 		// ruling line (which also renders the finding) cannot satisfy it.
 		const findingsOnly = mod().composeDiagnosisBrief([state({ findings: ["zq findings-only line"], rulings: [] })], {
@@ -601,7 +599,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		}
 	});
 
-	it("pins the per-state header and the change description — the head/outcome sequence IS the history (round 3's EF4)", () => {
+	it("pins the per-state header and the change description — the head/outcome sequence IS the history", () => {
 		const text = mod().composeDiagnosisBrief([state({ head: "f".repeat(40), outcome: "repair" })], {
 			changeDescription: "zq the change description",
 		});
@@ -623,7 +621,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		);
 	});
 
-	// Round 5's S1: every arm above passes a ONE-state history, so the whole
+	// Every arm above passes a ONE-state history, so the whole
 	// multi-state rendering is unmeasured — slice(-1), reverse(), a constant
 	// "1." ordinal, a filter to repair, and a duplicated first state all
 	// survived the suite 8-for-8. §1.4's diagnosis reads the same findings
@@ -642,7 +640,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 			state({
 				head: fill.repeat(40),
 				outcome,
-				// Round 6's F3/N1: the needle must be distinct BY CONSTRUCTION
+				// The needle must be distinct BY CONSTRUCTION
 				// from anything another rendered line can produce. Previously the
 				// finding text was identical to the ruling's `finding` field, and
 				// the ruling line renders that field — so a renderer that dropped
@@ -664,8 +662,8 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 	/**
 	 * A history whose SECOND state carries findings and no rulings — the
 	 * shape `repairHistory` produces for a panel the Judge has not ruled.
-	 * Round 6 showed it pinned only at position one, so a renderer emitting
-	 * findings for the first state alone survived every arm.
+	 * Pinned at position one alone, a renderer emitting findings for the
+	 * FIRST state only survives every arm; this fixture is why it does not.
 	 */
 	const findingsOnlyAtSecond = (): StateSummary[] => {
 		const history = multi();
@@ -690,11 +688,11 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		}
 	});
 
-	it("renders EVERY entry of a state's findings AND rulings lists, in order (round 7's E1)", () => {
-		// Round 7: cardinality was derived for the ASSEMBLER and carried to
-		// the renderer only as a per-POSITION axis, so every brief fixture
-		// still held 0 or 1 findings per state and `.slice(0,1)` / `.reverse()`
-		// on the rendered lists survived. Cardinality is an axis of EVERY
+	it("renders EVERY entry of a state's findings AND rulings lists, in order", () => {
+		// Cardinality derived for the ASSEMBLER alone, and carried to the
+		// renderer only as a per-POSITION axis, leaves every brief fixture at
+		// 0 or 1 findings per state — and `.slice(0,1)` / `.reverse()` on the
+		// rendered lists then survive. Cardinality is an axis of EVERY
 		// function that consumes a list, this one included.
 		//
 		// Needles are distinct by construction across both axes: "fq" for
@@ -815,7 +813,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 			// Bound to its OWN state's header: whole-text membership let the
 			// literal be misattributed to a state that DOES carry findings while
 			// the findings-free state rendered nothing — which is what this arm's
-			// own message forbids (round 9's F-D).
+			// own message forbids.
 			/ {2}1\. head b{40} resolved repair\n {7}findings: \(none\)\n/.test(text),
 			"a state with no findings rendered nothing at all — an absent line reads as an absent STATE, and §1.4 " +
 				"counts a findings-free review as a state that resets, not as a gap in the history",
@@ -849,7 +847,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (issue #186)", () => {
 	it("a valid confirmed diagnosis is available with its two outputs and evidence", () => {
 		const h = mod();
-		// Round 3's EF2: use a NON-identity invalidation ("plan", not the
+		// Use a NON-identity invalidation ("plan", not the
 		// default "nothing"), so a constant-"nothing" mutant that discards the
 		// payload's invalidation cannot pass this deepEqual.
 		const input = { value: "STAGNATION" as const, invalidation: "plan" as const, evidence: "the method repeated" };
@@ -873,7 +871,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		);
 	});
 
-	it("an ok:false admitted return hands off — a delegate-disowned diagnosis is not a value (round 1's E3)", () => {
+	it("an ok:false admitted return hands off — a delegate-disowned diagnosis is not a value", () => {
 		const h = mod();
 		const admission = h.admitDiagnosis({
 			disposition: "admitted",
@@ -909,7 +907,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		const h = mod();
 		for (const payload of [
 			'{"value":"MAYBE","invalidation":"nothing","evidence":"e"}',
-			// Round 3's EF2: an out-of-set INVALIDATION, not just an out-of-set
+			// An out-of-set INVALIDATION, not just an out-of-set
 			// value — the invalidation set is closed too.
 			'{"value":"NONE","invalidation":"maybe","evidence":"e"}',
 			"not json",
@@ -935,7 +933,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		assert.ok(!admission.available, "a diagnosis with empty evidence was admitted");
 	});
 
-	it("an extra key in the payload hands off — the shape is closed (round 1's E4)", () => {
+	it("an extra key in the payload hands off — the shape is closed", () => {
 		const h = mod();
 		const admission = h.admitDiagnosis({
 			disposition: "admitted",
@@ -951,12 +949,11 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		);
 	});
 
-	it("NEITHER fail limb is silent, and each names its own — both limbs, not one (round 10's audit)", () => {
+	it("NEITHER fail limb is silent, and each names its own — both limbs, not one", () => {
 		// The title quantifies over BOTH of `admitDiagnosis`'s hand-off limbs
 		// and the fixture exercised one, with `reason.length > 0` standing in
-		// for a structured value — the same two defects round 9's F-C found at
-		// the availability limbs. Found here by auditing the corpus rather
-		// than by a panel. Both limbs are iterated, and each is pinned on a
+		// for a structured value — the same two defects the availability limbs
+		// carry. Both limbs are iterated, and each is pinned on a
 		// phrase only its own reason carries, so a swap cannot pass.
 		const h = mod();
 		const limbs: [string, DispatchOutcome, RegExp][] = [
@@ -1082,10 +1079,9 @@ describe("§1.4 the admission's input domain, derived from DispatchOutcome (issu
 describe("§1.4 the deterministic consumer (issue #186)", () => {
 	// The coverage set here is the CROSS-PRODUCT of two closed domains this
 	// file declares as its own `as const` literals — 4 x 3, read off no source —
-	// not the pairs a reviewer happened to name. Round 6 measured 6 of the
-	// 12 exercised and named 5 survivors; deriving the domain instead found
-	// 6 genuine survivors plus one equivalent mutant, which is the whole
-	// reason the domain is derived rather than sampled.
+	// not the pairs a reviewer happens to name. Sampling exercises part of
+	// the grid and names part of its survivors; the derived domain exercises
+	// all 12, which is the whole reason it is derived rather than sampled.
 	//
 	// The falsifier: a mutant that changes the returned Consequence at
 	// exactly one cell must red. Every cell below is asserted WHOLE, so a
@@ -1127,9 +1123,9 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability (issue #186)", () => {
 	// The domain is derived from the SIGNATURE: storeInstalled is boolean
 	// (2) and records is `ReviewRecord[] | undefined`, whose inhabited
-	// shapes are undefined / empty / non-empty (3). Six cells. Round 6
-	// named two of them (the available limb's payload, and the
-	// empty-but-readable false-block); the signature names all six.
+	// shapes are undefined / empty / non-empty (3). Six cells. Naming the
+	// interesting ones by hand reaches two (the available limb's payload, and
+	// the empty-but-readable false-block); the signature names all six.
 	const HEAD_A = "a".repeat(40);
 	const HEAD_B = "b".repeat(40);
 	const CELLS = [
@@ -1188,9 +1184,9 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 			// treating it as a hand-off parks the FIRST review of every change,
 			// which is the wrong-block direction §3.12 forbids as squarely as
 			// the wrong-allow one.
-			// Round 7's N2: the expected value must NOT be the array that was
-			// passed in, or an in-place `records.reverse()` mutates the
-			// expectation too and survives. Built independently here.
+			// The expected value must NOT be the array passed in, or an
+			// in-place `records.reverse()` mutates the expectation too and
+			// survives. Built independently here.
 			assert.deepEqual(
 				availability,
 				{ available: true, records: kind === "records" ? [repair(HEAD_A), repair(HEAD_B)] : [] },
@@ -1202,7 +1198,7 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 	}
 });
 
-describe("§1.7 no drop, no duplication — every list pinned by COUNT (round 8's S-F1)", () => {
+describe("§1.7 no drop, no duplication — every list pinned by COUNT", () => {
 	// Truncation and reversal were killed at all six list-consuming sites,
 	// but only ONE list (the per-state header line) was pinned by COUNT.
 	// The other direction of the same axis — a silent dedup, or a line
@@ -1292,18 +1288,18 @@ describe("§1.7 no drop, no duplication — every list pinned by COUNT (round 8'
 	});
 });
 
-describe("§1.4 the admission carries EVERY enforced member through the parser (round 7's F-R2)", () => {
+describe("§1.4 the admission carries EVERY enforced member through the parser", () => {
 	// TRIPWIRE (g): the coverage set is derived from the expression that
 	// ENFORCES the domain, named here, not from the type declaration beside
 	// it. `admitDiagnosis` enforces over two runtime `as const` arrays —
 	//   export const DIAGNOSIS_VALUES = [...] as const;
 	//   export const INVALIDATIONS    = [...] as const;
 	// read by `isMember(DIAGNOSIS_VALUES, value)` and `isMember(INVALIDATIONS, invalidation)`.
-	// Round 7 derived from `export type DiagnosisValue = ...` instead, which
-	// is a DIFFERENT home for the same property (§3.11), so deleting a member
-	// from either Set left 75 arms and tsc green — including deleting "NONE",
-	// which refuses every advancing history's ruling and parks every change
-	// forever.
+	// Deriving instead from `export type DiagnosisValue = ...` is a DIFFERENT
+	// home for the same property (§3.11): under that derivation, deleting a
+	// member from either Set leaves the arms and tsc green — including
+	// deleting "NONE", which refuses every advancing history's ruling and
+	// parks every change forever.
 	//
 	// The falsifier: deleting ANY single member from either array must red.
 	// That requires a POSITIVE admission per member, not merely a refusal.
@@ -1595,7 +1591,7 @@ describe("§1.4 the domains are pinned on the LIVE enforcing homes, never on the
 		}
 	});
 
-	it("the UPSTREAM review-state tags are exactly the ones the assembler recognizes (round 8's S-F2, re-authored)", () => {
+	it("the UPSTREAM review-state tags are exactly the ones the assembler recognizes", () => {
 		// This replaces a regex over resolve.ts's union body. The tie is now a
 		// TYPE WITNESS: `Record<ReviewState["state"], true>` cannot be written
 		// without naming every tag, so a tag added, removed or renamed
@@ -1652,7 +1648,7 @@ describe("§1.4 the domains are pinned on the LIVE enforcing homes, never on the
 		);
 	});
 
-	it("the brief names every member of the LIVE domain homes and every enforced payload key (round 7's F-R3, re-keyed)", () => {
+	it("the brief names every member of the LIVE domain homes and every enforced payload key", () => {
 		// A producer/consumer pair with two homes: the brief TELLS the Judge
 		// the shape and the values; the parser ENFORCES them. The tie is
 		// re-keyed onto the live homes, so a member added to a domain without

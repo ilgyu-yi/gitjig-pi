@@ -40,17 +40,31 @@
 #   The narrowing was the price of not matching "the review round trip", a
 #   live feature name, and the miss is the cheaper side of that trade.
 #
-#   FALSE POSITIVES, in three measured classes. `previously`, `used to` and
-#   `formerly` also spell a legitimate compatibility fact ("v1 messages
-#   remain accepted"); §2.4 draws that line at fact-versus-provenance and no
-#   pattern decides it. `(once|after) X lands` also spells a CONTRACT whose
+#   The possessive and verb rules are narrowed the same way and owe the same
+#   disclosure. UNREPORTED, measured: a round bound to a verb outside the
+#   listed set ("round 2 adjudicated the global shape"); a possessive whose
+#   label begins with a digit ("round 3's 2nd limb"); and a finding label
+#   whose prefix is outside the roster the label rule carries. Each is the
+#   price of not reporting ordinary prose, and each is a real miss.
+#
+#   FALSE POSITIVES, in four measured classes. `previously`, `used to`,
+#   `formerly` and `(first|earlier|previous|original) (draft|wording|version)
+#   of` also spell a legitimate compatibility fact ("v1 messages remain
+#   accepted", "the previous version of the payload is still accepted");
+#   §2.4 draws that line at fact-versus-provenance and no pattern decides it.
+#   The fourth is listed with the other three rather than narrowed, because
+#   what separates the two readings is the sentence's claim and not its
+#   words. `(once|after) X lands` also spells a CONTRACT whose
 #   condition resolves from the living set — "these arms hold while the
 #   helper is absent AND after it lands" is present-tense prose about a
 #   chain, which §2.5 explicitly acquits and this rule reports anyway;
 #   deciding it needs the resolvability test, which is a human's to apply.
 #   And a shape name can appear inside a feature name — a `[Rr]eview round`
-#   token once matched "the review round trip", the name of a live command
-#   flow, which is why that rule now requires a number or the plural.
+#   token matches "the review round trip", the name of a live command flow,
+#   which is why that rule requires a number or the plural. The same shape
+#   reaches further than a feature name: `[Rr]ound` with no left boundary
+#   matches inside `background`, which is why every rule added for the
+#   possessive and verb spellings carries `(^|[^A-Za-z])`.
 #
 #   All three are reported for a human to judge, which is why this reader
 #   cannot become a gate without first solving a problem it does not solve.
@@ -86,10 +100,12 @@ set -uo pipefail
 # every row, so an alternative that matches nothing — deleted, typo'd, or
 # broken by a stray metacharacter — fails rather than being believed.
 #
-# Rows and not four fat regexes, because a rule pinned at the granularity
-# of the shape name leaves its alternatives unmeasured: at four regexes,
-# thirteen of twenty-one alternatives could be deleted with the whole suite
-# still green. The table is the population and the suite binds it.
+# Rows and not one fat regex per shape, because a rule pinned at the
+# granularity of the shape NAME leaves its alternatives unmeasured: under
+# that spelling most alternatives can be deleted with the whole suite still
+# green, since one fixture satisfies its shape through a different
+# alternative. The table is the population and the suite binds it. No count
+# is stated: a count here is exactly what the next widening falsifies.
 SHAPES=()
 PATTERNS=()
 RULE() {
@@ -109,6 +125,20 @@ RULE review-archaeology '[Rr]eview rounds'
 RULE review-archaeology '[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
+# The spellings that actually carry this class, which the five rows above do
+# not reach. Each carries its own LEFT boundary, because `[Rr]ound` with none
+# matches inside `background` and `foreground`.
+#
+# The possessive is written `[^0-9[:space:]]s` rather than `.s`: a RULE
+# pattern is single-quoted, so it cannot carry an apostrophe, and a bare `.`
+# there also matches a digit — which reports `a round 30s budget` as
+# archaeology. The class excludes digits and space for exactly that reason.
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+[^0-9[:space:]]s [A-Za-z]'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ (finding|nit|[A-Z])'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ (measured|showed|named|derived|condemned|trimmed)'
+# A finding label owned by anything, or by nothing: the attribution survives
+# the round numeral being dropped, so the label is the shape.
+RULE review-archaeology '(^|[^A-Za-z])(EF|E-F|S-F|F-R|F)-?[0-9]'
 RULE issue-narration '[Aa]dded in #[0-9]+'
 RULE issue-narration '[Ii]ntroduced in #[0-9]+'
 RULE issue-narration '[Ff]ixed in #[0-9]+'
@@ -120,6 +150,9 @@ RULE change-narration 'used to (be|have|carry|call)'
 RULE change-narration 'was previously'
 RULE change-narration 'previously called'
 RULE change-narration 'formerly (called|named)'
+# A prior authoring pass named as such — the same genus as a prior review,
+# on the author's side rather than the reviewer's.
+RULE change-narration '(first|earlier|previous|original) (draft|wording|version) of'
 
 # Living-set extensions. A path whose extension is absent here is not read.
 LIVING_RE='\.(ts|tsx|js|mjs|sh|md|yml|yaml|json|jsonc)$'
