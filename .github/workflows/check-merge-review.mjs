@@ -136,9 +136,7 @@ async function attemptJson(url, token, fetchImpl, timeoutMs) {
  * about a particular status.
  *
  * The exhausted cause KEEPS the last attempt's own cause and appends the
- * exhaustion, so the history stays able to separate three kinds of
- * refusal: a genuine absence, a first-try failure, and a read that was
- * retried and never succeeded (issue #194).
+ * exhaustion, so a refusal names the status that kept failing (issue #194).
  *
  * The cost is bounded per attempt and by the attempt count. It is NOT
  * bounded inside the job's `timeout-minutes` — see `ATTEMPT_TIMEOUT_MS`,

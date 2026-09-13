@@ -376,9 +376,9 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 	it("no call site in this file takes the real backoff", () => {
 		// The hazard this closes is that `noSleep` is OPT-IN: a call site
 		// that omits it takes `realSleep`, the arm still passes, and the
-		// only symptom is a suite that quietly waits seconds. Nothing reds,
-		// so nothing reports it — which is why the population is derived
-		// from this file's own source rather than trusted to review.
+		// only symptom is a suite that quietly waits seconds — which is why
+		// the population is derived from this file's own source rather than
+		// trusted to review.
 		//
 		// The reach is stated so it is not over-read: this arm sees THIS
 		// file. A call site in another file is outside it.
@@ -421,7 +421,7 @@ describe("§3.12 merge-review arms — the injected backoff is threaded at EVERY
 			unthreaded,
 			[],
 			"these call sites do not inject a backoff, so they take the real one: three attempts against a failing " +
-				"read cost 2s + 4s EACH and the arm still passes, which is a suite that silently waits. Pass " +
+				"read cost 2s + 4s EACH, which is a suite that silently waits. Pass " +
 				"`noSleep` (or a sleepSpy) at every site",
 		);
 		// An EXACT count, not a floor. §2.4 permits one exactly where going
@@ -587,7 +587,7 @@ describe("§3.12 merge-review script — the retried read (issue #194)", () => {
 				});
 			});
 		const deadline = new Promise<"DEADLINE">((resolve) => {
-			setTimeout(() => resolve("DEADLINE"), 3000).unref?.();
+			setTimeout(() => resolve("DEADLINE"), 300).unref?.();
 		});
 		const outcome = await Promise.race([script().run(ENV, impl, noSleep, 5), deadline]);
 		assert.notEqual(
@@ -918,7 +918,7 @@ describe("§3.12 merge-review arms — the injected backoff, measured not matche
 		const elapsed = performance.now() - FILE_LOADED_AT;
 		assert.ok(
 			elapsed < REAL_BACKOFF_FLOOR_MS,
-			`this file took ${elapsed.toFixed(0)}ms, past ${String(REAL_BACKOFF_FLOOR_MS)}ms. Something in it waited: ` +
+			`this file took ${elapsed.toFixed(0)}ms, past ${String(REAL_BACKOFF_FLOOR_MS)}ms. ` +
 				"look for a call site whose read fails and whose sleep argument is not a backoff",
 		);
 	});
