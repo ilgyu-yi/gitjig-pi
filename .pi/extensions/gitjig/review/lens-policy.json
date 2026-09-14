@@ -24,7 +24,7 @@
 		{
 			"lens": "docs",
 			"surface": "adopter-facing prose and the changelog fragments",
-			"prefixes": ["README.md", "changelog_unreleased/"]
+			"prefixes": ["README.md", "OPERATING.md", "changelog_unreleased/"]
 		},
 		{
 			"lens": "toolchain",
