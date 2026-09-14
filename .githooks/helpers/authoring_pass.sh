@@ -164,9 +164,9 @@ authoring_pass_rule() {
     # `fold` costs the line breaks and never the bytes. Its failure is caught
     # by an EMPTY capture rather than by a status: this is a pipeline, and a
     # pipeline's status is its last stage's, so `fold` going missing upstream
-    # leaves `sed` exiting 0 over nothing. Its stderr goes to /dev/null —
-    # a `command not found` on the operator's terminal, in the
-    # middle of the layout, is a worse report than an unwrapped clause.
+    # leaves `sed` exiting 0 over nothing. Its stderr goes to /dev/null — a
+    # `command not found` on the operator's terminal, in the middle of the
+    # layout, is a worse report than an unwrapped clause.
     wrapped="$(printf '%s\n' "$clause" | fold -s -w 72 2>/dev/null | sed 's/^/    /' 2>/dev/null)"
     if [ -n "$wrapped" ]; then
       printf '%s\n' "$wrapped"

@@ -65,9 +65,7 @@ function plantHangingReader(fixture: GithookFixture): void {
  *
  * This is the seam, and its shape is the point: the budget is an ARGUMENT,
  * so a caller who can set it is already running the function. The committed
- * adapter passes nothing, and no environment variable reaches the budget —
- * for one revision one did, and every all-digit value was honoured, which
- * handed the committing environment control over how long a commit is held.
+ * adapter passes nothing, and no environment variable reaches the budget.
  */
 function patchAdapterBudget(fixture: GithookFixture, budget: string | null): void {
 	const adapter = join(fixture.root, ".githooks", "commit-msg");
@@ -256,9 +254,9 @@ describe(
 		it("with the wrap tool PRESENT the clause is wrapped, so the fallback is not the only measured path", () => {
 			copyFileSync(join(repoRoot(), "SPEC.md"), join(fixture.root, "SPEC.md"));
 			const attempt = commitWithMessage(fixture, "feat(#218): fold present\n");
-			// Cut BEFORE the exceptions heredoc. Without that cut this arm was
-			// vacuous: `body` ran to the end of the layout, and the heredoc's four
-			// unconditional lines cleared the threshold on their own, so the arm was
+			// Cut BEFORE the exceptions heredoc. Without that cut this arm is
+			// vacuous: `body` runs to the end of the layout, and the heredoc's four
+			// unconditional lines clear the threshold on their own, leaving the arm
 			// green with the clause entirely unread. The boundary is a prose literal,
 			// so a reworded heredoc would silently restore `body` whole and
 			// re-vacuate the arm — its presence is asserted before the cut.
