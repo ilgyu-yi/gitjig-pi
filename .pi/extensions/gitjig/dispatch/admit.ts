@@ -12,8 +12,10 @@
  * `{ ok: boolean, summary: string, reviewedHead?: string, payload?: string }`
  * with unknown keys refused — a minimum-match would admit a surface no
  * contract bounds. `payload` is an OPAQUE caller-interpreted slot (issue
- * #169): this module fixes its type and the caller scans
- * its bytes for held operands exactly as it scans the summary, and
+ * #169): this module fixes its type but gives it no smaller bound of its own;
+ * it inherits the 64 KiB whole-file bound above, may occupy every byte the
+ * closed return envelope leaves, and an overrun refuses the return whole.
+ * The caller scans its bytes for held operands exactly as it scans the summary, and
  * nothing here reads its meaning. That is deliberate and it is what
  * keeps a caller's policy ABOVE this dispatcher rather than inside it
  * (Directive #166's non-goal). A non-string at that key refuses whole: widening the schema

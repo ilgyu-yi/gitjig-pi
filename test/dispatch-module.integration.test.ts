@@ -181,6 +181,7 @@ interface AdmitModule {
 		| { admitted: true; ok: boolean; summary: string; reviewedHead?: string; payload?: string }
 		| { admitted: false; cause: string };
 	REFUSAL_CAUSES: { delegateAbsent: string; missingReturn: string; malformedReturn: string };
+	RETURN_LIMIT_BYTES: number;
 }
 
 type DispatchOutcome =
@@ -374,7 +375,7 @@ const PAYLOADS: Record<string, string> = {
 	"payload-partial.json": `{"ok":true,"summary":"${PARTIAL_MARKER}`,
 	"payload-unknown.json": `{"ok":true,"summary":"zq","zqExtraKey":"${UNKNOWN_MARKER}"}`,
 	// The opaque caller-interpreted slot (issue #169). The dispatcher fixes
-	// its TYPE and its bound and scans its bytes; it never reads its meaning,
+	// its TYPE, inherits the whole-return bound, and scans its bytes; it never reads its meaning,
 	// which is what keeps review policy above the dispatcher rather than in
 	// it (Directive #166's non-goal).
 	"payload-carrier.json": `{"ok":true,"summary":"${CLEAN_SUMMARY}","payload":"{\\"opaque\\":\\"zqcarried\\"}"}`,
@@ -1123,6 +1124,58 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 			'{"opaque":"zqcarried"}',
 			"payload-carrier: the payload did not cross intact — the dispatcher fixes its type and scans its " +
 				"bytes, and parses nothing of its meaning",
+		);
+	});
+
+	it("a payload may occupy every byte left inside the inherited whole-return bound", async () => {
+		const admit = await requireModule<AdmitModule>("admit.ts", "payload-at-return-bound");
+		const dir = mintDir("gitjig-dispatch-slot-");
+		const slot = join(dir, "return.json");
+		const empty = JSON.stringify({ ok: true, summary: "", payload: "" });
+		const payloadLength = admit.RETURN_LIMIT_BYTES - Buffer.byteLength(empty);
+		const raw = JSON.stringify({ ok: true, summary: "", payload: "z".repeat(payloadLength) });
+		assert.equal(
+			Buffer.byteLength(raw),
+			admit.RETURN_LIMIT_BYTES,
+			"payload-at-return-bound: the fixture does not land exactly at the whole-file limit",
+		);
+		writeFileSync(slot, raw);
+		const verdict = admit.admitReturn(slot);
+		assert.ok(
+			verdict.admitted,
+			"payload-at-return-bound: a payload filling every byte left by the closed return envelope was refused — " +
+				"the payload has no smaller bound of its own",
+		);
+		assert.equal(
+			(verdict as { payload?: string }).payload?.length,
+			payloadLength,
+			"payload-at-return-bound: the admitted payload was truncated rather than crossing intact",
+		);
+	});
+
+	it("a payload one byte over the inherited whole-return bound refuses whole", async () => {
+		const admit = await requireModule<AdmitModule>("admit.ts", "payload-over-return-bound");
+		const dir = mintDir("gitjig-dispatch-slot-");
+		const slot = join(dir, "return.json");
+		const empty = JSON.stringify({ ok: true, summary: "", payload: "" });
+		const payloadLength = admit.RETURN_LIMIT_BYTES - Buffer.byteLength(empty) + 1;
+		const raw = JSON.stringify({ ok: true, summary: "", payload: "z".repeat(payloadLength) });
+		assert.equal(
+			Buffer.byteLength(raw),
+			admit.RETURN_LIMIT_BYTES + 1,
+			"payload-over-return-bound: the fixture does not exceed the whole-file limit by exactly one byte",
+		);
+		writeFileSync(slot, raw);
+		const verdict = admit.admitReturn(slot);
+		assert.ok(!verdict.admitted, "payload-over-return-bound: an oversize payload was admitted");
+		assert.equal(
+			(verdict as { cause: string }).cause,
+			admit.REFUSAL_CAUSES.malformedReturn,
+			"payload-over-return-bound: the oversize payload did not refuse on the whole-return malformed cause",
+		);
+		assert.ok(
+			!("payload" in verdict),
+			"payload-over-return-bound: the refusal carries a truncated payload instead of refusing the return whole",
 		);
 	});
 
