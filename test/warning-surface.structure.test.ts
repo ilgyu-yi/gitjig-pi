@@ -380,8 +380,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// not on review — a future push of a derived value stops compiling
 			// rather than quietly widening these entries. `located` is the
 			// composition of the three beneath it and carries nothing they do
-			// not. Materially unlike the round-1 entries that were withdrawn:
-			// those admitted the published body itself.
+			// not. Materially unlike an entry admitting the published body
+			// itself, which this roster must never carry.
 			'merged.operands.join(" and ")',
 			"m.operand",
 			'm.patternIds.join(", ")',
@@ -404,11 +404,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// path in the first place.
 			"note",
 			"located",
-			// NOTHING for the published operands (issue #120). An earlier draft
-			// joined the title and body with a template and allowlisted both,
-			// arguing the entry was a visible decision. The entry was avoidable
-			// at no cost — the operands are now scanned separately, so the
-			// template never existed — and admitting `params.body` permanently
+			// NOTHING for the published operands (issue #120). The operands are
+			// scanned separately, so no template joins the title and body and
+			// no entry for one is owed — and admitting `params.body` permanently
 			// in the ONE file whose §3.8 doctrine is that a refusal must never
 			// carry the body would have retired the only check that catches
 			// such an interpolation drifting into a refusal message later.

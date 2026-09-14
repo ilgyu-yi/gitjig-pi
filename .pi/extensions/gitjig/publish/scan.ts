@@ -113,9 +113,7 @@ export interface MergedScan {
  * Combine the per-operand scans into one verdict (issue #120).
  *
  * EXPORTED because it is a rule, and a rule an arm re-implements is a rule
- * nothing pins: the first draft of this lived inside the tool's `execute`
- * and its arms tested a copy, so reverting the whole merge left the suite
- * green.
+ * nothing pins.
  *
  * Two orderings matter and both are decisions rather than conveniences:
  *

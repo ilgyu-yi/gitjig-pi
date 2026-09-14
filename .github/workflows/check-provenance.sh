@@ -47,24 +47,37 @@
 #   the accepted side: narration spelled with those words passes unreported.
 #
 #   Also missed, and named because narrowing a rule opens a gap that owes a
-#   disclosure: the archaeology rules want a NUMBERED round or the plural, so
-#   a spelled ordinal — "Review round three asked for this" — is unreported.
-#   The narrowing was the price of not matching "the review round trip", a
-#   live feature name, and the miss is the cheaper side of that trade.
+#   disclosure: a BARE FINDING LABEL — `EF-1`, `S-F2`, `F15` — is unreported.
+#   So is a POSSESSIVE round — "round 3's second limb" — in every spelling.
 #
-#   FALSE POSITIVES, in three measured classes. `previously`, `used to` and
-#   `formerly` also spell a legitimate compatibility fact ("v1 messages
-#   remain accepted"); §2.4 draws that line at fact-versus-provenance and no
-#   pattern decides it. `(once|after) X lands` also spells a CONTRACT whose
+#   Also missed, and named for the same reason: the archaeology rules want a
+#   NUMBERED round or the plural, so a spelled ordinal — "Review round three
+#   asked for this" — is unreported. The narrowing was the price of not
+#   matching "the review round trip", a live feature name, and the miss is
+#   the cheaper side of that trade.
+#
+#   UNREPORTED, measured: a round bound to a verb outside the listed set
+#   ("round 2 adjudicated the global shape"). It is the price of not
+#   reporting ordinary prose, and it is a real miss.
+#
+#   FALSE POSITIVES. `previously`, `used to`,
+#   `formerly` and `(first|earlier|previous|original) (draft|wording|version)
+#   of` also spell a legitimate compatibility fact ("v1 messages remain
+#   accepted", "the previous version of the payload is still accepted");
+#   §2.4 draws that line at fact-versus-provenance and no pattern decides it.
+#   `(once|after) X lands` also spells a CONTRACT whose
 #   condition resolves from the living set — "these arms hold while the
 #   helper is absent AND after it lands" is present-tense prose about a
 #   chain, which §2.5 explicitly acquits and this rule reports anyway;
 #   deciding it needs the resolvability test, which is a human's to apply.
 #   And a shape name can appear inside a feature name — a `[Rr]eview round`
-#   token once matched "the review round trip", the name of a live command
-#   flow, which is why that rule now requires a number or the plural.
+#   token matches "the review round trip", the name of a live command flow,
+#   which is why that rule requires a number or the plural. The same shape
+#   reaches further than a feature name: `[Rr]ound` with no left boundary
+#   matches inside `background`, which is why every rule added for the
+#   spellings below carries `(^|[^A-Za-z])`.
 #
-#   All three are reported for a human to judge, which is why this reader
+#   They are reported for a human to judge, which is why this reader
 #   cannot become a gate without first solving a problem it does not solve.
 #
 #   USE VERSUS MENTION, and this one is unavoidable rather than merely
@@ -98,10 +111,12 @@ set -uo pipefail
 # every row, so an alternative that matches nothing — deleted, typo'd, or
 # broken by a stray metacharacter — fails rather than being believed.
 #
-# Rows and not four fat regexes, because a rule pinned at the granularity
-# of the shape name leaves its alternatives unmeasured: at four regexes,
-# thirteen of twenty-one alternatives could be deleted with the whole suite
-# still green. The table is the population and the suite binds it.
+# Rows and not one fat regex per shape, because a rule pinned at the
+# granularity of the shape NAME leaves its alternatives unmeasured: under
+# that spelling most alternatives can be deleted with the whole suite still
+# green, since one fixture satisfies its shape through a different
+# alternative. The table is the population and the suite binds it. No count
+# is stated: a count here is exactly what the next widening falsifies.
 SHAPES=()
 PATTERNS=()
 RULE() {
@@ -109,18 +124,30 @@ RULE() {
   PATTERNS+=("$2")
 }
 
-RULE schedule 'red until'
+RULE schedule '(^|[^A-Za-z])red until'
 RULE schedule 'until Phase'
 RULE schedule 'until #[0-9]+'
 RULE schedule 'does not exist yet'
 RULE schedule 'not yet (implemented|landed|written)'
 RULE schedule '(once|after) [^,]{1,40} lands'
 RULE schedule 'will be (added|implemented|landed|removed)'
-RULE review-archaeology '[Rr]eview round [0-9]'
-RULE review-archaeology '[Rr]eview rounds'
-RULE review-archaeology '[Rr]ound [0-9]+ (found|caught|raised)'
+RULE review-archaeology '(^|[^A-Za-z])[Rr]eview round [0-9]'
+RULE review-archaeology '(^|[^A-Za-z])[Rr]eview rounds'
+RULE review-archaeology '(^|[^A-Za-z])[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
+# The spellings the five rows above do not reach. Each carries its own LEFT
+# boundary, because `[Rr]ound` with none matches inside `background` and
+# `foreground`.
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ finding'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ nit'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ [A-Z]'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ measured'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ showed'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ named'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ derived'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ condemned'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ trimmed'
 RULE issue-narration '[Aa]dded in #[0-9]+'
 RULE issue-narration '[Ii]ntroduced in #[0-9]+'
 RULE issue-narration '[Ff]ixed in #[0-9]+'
@@ -132,6 +159,9 @@ RULE change-narration 'used to (be|have|carry|call)'
 RULE change-narration 'was previously'
 RULE change-narration 'previously called'
 RULE change-narration 'formerly (called|named)'
+# A prior authoring pass named as such — the same genus as a prior review,
+# on the author's side rather than the reviewer's.
+RULE change-narration '(first|earlier|previous|original) (draft|wording|version) of'
 # §2.4's other half (issue #218).
 RULE guard-claim '[Nn]othing reds?([^A-Za-z]|$)'
 RULE guard-claim 'leaves (the|this) file [a-z ]{0,12}green'
@@ -196,6 +226,9 @@ enters_domain() {
 # and metadata; a path carrying non-ASCII or a control byte arrives
 # C-quoted. Both were silently skipped whole before they were handled here,
 # which is a fail-open miss on exactly the files least likely to be noticed.
+# The quotes are stripped; the C escapes inside them are NOT decoded, so a
+# C-quoted path is reported in its escaped spelling, which is not the path
+# on disk and is not navigable.
 header_path() {
   local raw="$1"
   raw="${raw%%$'\t'*}"
@@ -207,6 +240,10 @@ header_path() {
   printf '%s' "${raw#b/}"
 }
 
+# First match wins over the whole table, so a sentence carrying both a
+# schedule spelling and a guard-claim spelling draws whichever row stands
+# first: the family keying is per HIT, never per sentence.
+#
 # The remedy is keyed by FAMILY, because the two families are decided by
 # different criteria: provenance by §2.5's erasure test, an unmeasured claim
 # by §2.5's rendered-or-pointer rule. One remedy over both would name a

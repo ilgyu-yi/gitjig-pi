@@ -86,11 +86,12 @@ describe("the provenance reader exists and is advisory (issue #70, SPEC §2.5)",
 /**
  * One instance of every ALTERNATIVE the reader applies — not one per shape.
  *
- * At shape granularity this table measured almost nothing: with the rules
- * written as four fat regexes, thirteen of twenty-one alternatives could be
- * deleted outright and the whole suite stayed green, because one fixture
- * satisfied its shape through a different alternative. The unit of a rule
- * is the alternative, so the unit of a case is too.
+ * At shape granularity this table measures almost nothing: with the rules
+ * written as one fat regex per shape, most alternatives can be deleted
+ * outright and the whole suite stays green, because one fixture satisfies
+ * its shape through a different alternative. The unit of a rule is the
+ * alternative, so the unit of a case is too. No count is stated here: a
+ * count over this table is what the next widening falsifies.
  */
 const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> = [
 	{
@@ -155,6 +156,56 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 		shape: "review-archaeology",
 		line: "// An earlier review asked for this split.",
 		why: "the same narrative without a review numeral",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The bare flag round-2 finding condemned.",
+		why: "the hyphenated spelling with an explicit `finding`, a second live idiom for the same attribution",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The wording round-4 nit asked for.",
+		why: "the hyphenated spelling naming a nit rather than a finding",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The shape round-2 EF raised.",
+		why: "the hyphenated spelling carrying a bare label, which needs no `finding` or `nit` word",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// ROUND 6 measured six of the twelve cells.",
+		why: "a round as the subject of a MEASURING verb, in the all-caps spelling the corpus also uses",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 2 showed the floor was wrong.",
+		why: "the same attribution on a SHOWING verb",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// round 5 named the surviving shape.",
+		why: "the same attribution on a NAMING verb, lower case",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 3 derived the criterion axis.",
+		why: "the same attribution on a DERIVING verb",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 1 condemned the wider spelling.",
+		why: "the same attribution on a CONDEMNING verb",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 4 trimmed the roster to nine.",
+		why: "the same attribution on a TRIMMING verb",
+	},
+	{
+		shape: "change-narration",
+		line: "// The first draft of this helper lived in the caller.",
+		why: "a prior AUTHORING pass named as such: the same genus as a prior review, on the author's side",
 	},
 	{ shape: "issue-narration", line: "// Introduced in #12 alongside the boundary.", why: "the introduce verb" },
 	{ shape: "issue-narration", line: "// Fixed in #34 after the flake was found.", why: "the fix verb" },
@@ -244,6 +295,7 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 				return parsed[2];
 			});
 		assert.ok(rules.length > 0, "no RULE lines parsed, so this arm would pass over an empty population");
+		const reached = new Set<string>();
 		for (const { line } of SHAPE_CASES) {
 			const sentence = line.replace(/^\/\/ /, "");
 			const matched = rules.filter((rule) => {
@@ -259,7 +311,13 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 				1,
 				`${JSON.stringify(sentence)} matches ${matched.length} rules, not one: ${JSON.stringify(matched)}. The reader stops at the first, so every other rule this input touches is measured by nothing while this case reads as its coverage`,
 			);
+			reached.add(matched[0]);
 		}
+		assert.deepEqual(
+			[...reached].sort(),
+			[...new Set(rules)].sort(),
+			"a declared RULE is reached by no case. The count census passes on a redirected case — row count and shape multiset are unchanged — so the rule could be deleted or broken by a stray metacharacter silently",
+		);
 	});
 
 	it("every RULE the reader declares has a case — counted per alternative, not per shape", () => {
@@ -612,6 +670,16 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 			/must NOT be added to the branch ruleset/i,
 			"the workflow no longer states that it must stay out of the required-check set, which is the one thing keeping an advisory reader from becoming a gate",
 		);
+	});
+
+	it("the verb-round row's LEFT boundary holds — `background 3 found` is not a round", () => {
+		const run = runReader(diffAdding("doc.md", ["The background 3 found the cause.", "Round 3 found the cause."]));
+		assert.equal(run.status, 0, "the reader is advisory and exits 0 on every input");
+		assert.ok(
+			!run.stdout.includes("The background 3 found the cause."),
+			"the boundary is gone: the row matched inside `background`",
+		);
+		assert.ok(run.stdout.includes("Round 3 found the cause."), "the row no longer fires on its own shape");
 	});
 
 	it("the reader's header states the residual it carries", () => {

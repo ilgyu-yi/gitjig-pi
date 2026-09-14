@@ -190,14 +190,6 @@ function isAdjudication(value: unknown): boolean {
  * declaration rather than an arm that can drift from what it claims to
  * tie.
  *
- * Why it moved: this list enforced the runtime parse while resolve.ts
- * hand-spelled the same five members as the type the Resolver produces.
- * Two homes for one property, with nothing tying them. Measured before
- * the repair: a sixth member added at the type home was fully silent
- * across the whole corpus AND `tsc --noEmit`. That is the same shape,
- * and the same measurement, that issue #186's EF1 repaired for the
- * resolution outcomes one type declaration above it.
- *
  * RESIDUAL DISCLOSURE (R-a's shape, restated here rather than
  * cross-referenced): exported so arms pin the LIVE object; the array is
  * runtime-mutable by an importer (`as const` is a type-level word only)
@@ -240,22 +232,14 @@ function isDisposition(value: unknown): value is (typeof DISPOSITIONS)[number] {
  * arm: history.ts's `StateOutcome` is this list plus "approved", and
  * resolve.ts's `Resolution["outcome"]` is this list exactly.
  *
- * Round 13's EF1 is why the second one is named here. `Resolution`
- * carried a hand-spelled union of the same three members, and it was
- * THAT spelling — not this one — that typed the value §1.4's assembler
- * reads, while this list enforced only the runtime parse. Two homes,
- * no arm tying them: measured before the repair, widening that union by
- * a fourth member left the history suite at 103 pass / 0 fail. The claim
- * "the ONE home" is made here only because that union now derives.
- *
  * RESIDUAL DISCLOSURE (R-a): exported so arms pin the LIVE object; the
  * array is runtime-mutable by an importer (readonly is a type-level word
  * only) — the suite's identity and emptiness laws depend on exactly that
  * reachability, and no production site mutates it.
  *
- * RESIDUAL DISCLOSURE, new with the EF1 repair: the two derivations are
- * welded by `tsc` and not by the suite. A re-introduced hand-spelled
- * union at either site would type-check exactly as well as the
+ * RESIDUAL DISCLOSURE: the two derivations are
+ * welded by `tsc` and not by the suite. A hand-spelled union at either
+ * site would type-check exactly as well as the
  * derivation does — nothing reds on a SECOND home, only on a divergent
  * one, and a second home that happens to agree today diverges silently
  * later. What the derivation buys is that the divergence is no longer
