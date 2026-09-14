@@ -198,6 +198,12 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// is the stronger state: the escaping lock scans it and finds nothing,
 	// which stays true only while it holds no interpolation at all.
 	{ file: "gitjig/review/lens-policy.json", allow: [] },
+	{
+		file: "gitjig/review/comments.ts",
+		// A positive integer admitted by the command-spec parser, and the
+		// module's fixed marker literal. Neither can carry a path byte.
+		allow: ["String(pr)", "REVIEW_RECORD_MARKER"],
+	},
 	// No interpolation exists in join.ts today; it is rostered so the module
 	// that parses a DELEGATE-authored payload — the surface most exposed to
 	// actor bytes in the review layer — cannot grow a raw rendering of one.
@@ -297,6 +303,17 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// fixed literals to the dispatcher and report its causes unrephrased.
 	{ file: "gitjig/commands/index.ts", allow: [] },
 	{ file: "gitjig/commands/review.ts", allow: [] },
+	{
+		file: "gitjig/commands/review-round.ts",
+		allow: [
+			// The platform's path separator, used only to reject a spec path
+			// outside the repository.
+			"sep",
+			// The caller's own git revision operand, passed to rev-parse as one
+			// argv element and never rendered on a message surface.
+			"ref",
+		],
+	},
 	{ file: "gitjig/commands/ship.ts", allow: [] },
 	// Admission and the delegate child compose no interpolated text; every
 	// refusal they surface is a fixed content-free literal.
@@ -417,7 +434,7 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// own fixed cause. The allowance is the WHOLE line including that
 			// guard, so it cannot silently admit some other ternary raw read
 			// that happens to trim to the same few tokens.
-			'error instanceof PatternSourceError ? error.message : "the scan machinery failed before a verdict";',
+			'const cause = error instanceof PatternSourceError ? error.message : "the scan machinery failed before a verdict";',
 		],
 	},
 	{
