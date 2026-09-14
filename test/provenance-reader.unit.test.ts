@@ -682,6 +682,22 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 		assert.ok(run.stdout.includes("Round 3 found the cause."), "the row no longer fires on its own shape");
 	});
 
+	it("the passive change row's LEFT boundary does not match the suffix of an ordinary noun", () => {
+		const run = runReader(
+			diffAdding("doc.md", ["Each digit was added to the checksum.", "It was added deliberately."]),
+		);
+		assert.equal(run.status, 0, "the reader is advisory and exits 0 on every input");
+		assert.ok(!run.stdout.includes("Each digit was added"), "the row matched `It was added` inside `digit was added`");
+		assert.ok(run.stdout.includes("It was added deliberately."), "the row no longer fires on its own shape");
+	});
+
+	it("the guard-claim row's LEFT boundary does not match inside an ordinary noun", () => {
+		const run = runReader(diffAdding("doc.md", ["The aggregate admits no value.", "The gate admits no value."]));
+		assert.equal(run.status, 0, "the reader is advisory and exits 0 on every input");
+		assert.ok(!run.stdout.includes("aggregate admits"), "the row matched `gate admits` inside `aggregate admits`");
+		assert.ok(run.stdout.includes("gate admits no value"), "the row no longer fires on its own shape");
+	});
+
 	it("the reader's header states the residual it carries", () => {
 		const source = execFileSync("cat", [READER], { encoding: "utf8" });
 		assert.match(
