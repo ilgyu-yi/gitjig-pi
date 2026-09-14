@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
-# check-provenance.sh — development-provenance reader (issue #70).
+# check-provenance.sh — authoring-doctrine reader (issues #70, #218).
 #
-# Reads a unified diff on stdin and reports development provenance (SPEC
-# §2.4) on the ADDED lines of living-set files: text a reader does not need
-# in order to understand the current contract, because it describes how the
-# repository got here.
+# Reads a unified diff on stdin and reports, on the ADDED lines of
+# living-set files, two families of SPEC §2.4 defect. The file's name is
+# narrower than its charter and is kept.
+#
+#   DEVELOPMENT PROVENANCE — text a reader does not need in order to
+#   understand the current contract, because it describes how the
+#   repository got here. Shapes: schedule, review-archaeology,
+#   issue-narration, change-narration.
+#
+#   UNMEASURED CLAIM — a sentence asserting what a guard catches or what a
+#   measurement showed, carrying neither a rendered run nor a pointer
+#   (§2.5's rendered-or-pointer rule). Shapes: guard-claim,
+#   measurement-claim. The rows are an ENUMERATION, never a class.
 #
 # Usage:
 #   git diff --unified=0 <base>...HEAD | check-provenance.sh
+#   git diff --cached --unified=0 | check-provenance.sh   (the pre-commit
+#   call site, `.githooks/helpers/authoring_pass.sh`; one predicate, two
+#   call sites — §3.11)
 #
 # ADVISORY BY CONSTRUCTION. It exits 0 on every input, including one that
 # reports hits. §2.5 states that no gate class homes a decidable check for
@@ -120,6 +132,13 @@ RULE change-narration 'used to (be|have|carry|call)'
 RULE change-narration 'was previously'
 RULE change-narration 'previously called'
 RULE change-narration 'formerly (called|named)'
+# §2.4's other half (issue #218).
+RULE guard-claim '[Nn]othing reds?([^A-Za-z]|$)'
+RULE guard-claim 'leaves (the|this) file [a-z ]{0,12}green'
+RULE guard-claim '(guard|check|arm|scan|rule|gate) admits (a|no) value'
+RULE guard-claim '[Tt]his (arm|rule|check|guard|gate|test|assertion) pins'
+RULE measurement-claim 'went [0-9][0-9,]*ms to'
+RULE measurement-claim '(ran|runs|took|costs?|waits?|sleeps?) [0-9]+ x [0-9]+s'
 
 # Living-set extensions. A path whose extension is absent here is not read.
 LIVING_RE='\.(ts|tsx|js|mjs|sh|md|yml|yaml|json|jsonc)$'
@@ -188,10 +207,20 @@ header_path() {
   printf '%s' "${raw#b/}"
 }
 
+# The remedy is keyed by FAMILY, because the two families are decided by
+# different criteria: provenance by §2.5's erasure test, an unmeasured claim
+# by §2.5's rendered-or-pointer rule. One remedy over both would name a
+# criterion that does not decide half the hits.
 emit() {
   local shape="$1" file="$2" line="$3" text="$4"
   hits=$((hits + 1))
   printf '%s:%s: [%s] %s\n' "$file" "$line" "$shape" "$text"
+  case "$shape" in
+    guard-claim|measurement-claim)
+      printf '    remedy: apply the rendered-or-pointer rule (SPEC §2.5) — a descriptive fact enters a durable artifact as a machine-emitted command-plus-output block, as a pointer (issue number, path, commit sha, § heading), or not at all. If you cannot render the run or point at it, DELETE the sentence. Deletion is the default repair (§2.5) and it is not a replacement: a rewritten claim is a fresh claim, and it carries the same burden this one failed.\n'
+      return
+      ;;
+  esac
   printf '    remedy: apply the erasure test (SPEC §2.5) — with the repository'"'"'s history AND its plans erased, does this sentence still read as documentation of the current HEAD? A forward-looking sentence whose condition RESOLVES from the living set is a contract and stays; one whose condition resolves only to a plan the tree does not carry is a schedule and goes. If not, DELETE it (§2.5 makes deletion the default repair), restate it as the invariant it is really about, or move it to the surface that owns it: issue (problem, intent, decision), PR (implementation and review), commit message (the atomic change), SPEC/README (the current contract), or a comment (current invariants, rationale, API semantics).\n'
 }
 
