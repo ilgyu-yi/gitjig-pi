@@ -665,6 +665,16 @@ describe("the reader's false-positive residual is measured, not asserted (issue 
 		);
 	});
 
+	it("the verb-round row's LEFT boundary holds — `background 3 found` is not a round", () => {
+		const run = runReader(diffAdding("doc.md", ["The background 3 found the cause.", "Round 3 found the cause."]));
+		assert.equal(run.status, 0, "the reader is advisory and exits 0 on every input");
+		assert.ok(
+			!run.stdout.includes("The background 3 found the cause."),
+			"the boundary is gone: the row matched inside `background`",
+		);
+		assert.ok(run.stdout.includes("Round 3 found the cause."), "the row no longer fires on its own shape");
+	});
+
 	it("the reader's header states the residual it carries", () => {
 		const source = execFileSync("cat", [READER], { encoding: "utf8" });
 		assert.match(

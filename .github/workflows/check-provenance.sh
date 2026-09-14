@@ -117,14 +117,6 @@ set -uo pipefail
 # green, since one fixture satisfies its shape through a different
 # alternative. The table is the population and the suite binds it. No count
 # is stated: a count here is exactly what the next widening falsifies.
-#
-# A ROW THAT OVER-MATCHES IS DELETED, NEVER NARROWED. What a deletion
-# costs is a miss, and a
-# miss is disclosed in the residual block above. What a narrowing costs is
-# a false report, which the header cannot disclose because nobody knows it
-# is there. A missing left boundary is not an over-match of the rule's
-# shape but of its edges, and is repaired in place; every other over-match
-# is deleted.
 SHAPES=()
 PATTERNS=()
 RULE() {
@@ -144,8 +136,9 @@ RULE review-archaeology '(^|[^A-Za-z])[Rr]eview rounds'
 RULE review-archaeology '(^|[^A-Za-z])[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
-# The spellings the five rows above do not reach. Each carries its own LEFT boundary, because `[Rr]ound` with none
-# matches inside `background` and `foreground`.
+# The spellings the five rows above do not reach. Each carries its own LEFT
+# boundary, because `[Rr]ound` with none matches inside `background` and
+# `foreground`.
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ finding'
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ nit'
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ [A-Z]'
