@@ -351,7 +351,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			["You are the JUDGE", "the role subject the round driver keys the judge dispatch on"],
 			["UNVERIFIED", "the bundle crosses labelled unverified (§1.5 form iii)"],
 			["dedupAttested", "the closed judge payload shape"],
-			["evidence", "F15's required non-empty evidence field"],
+			["evidence", "the required non-empty evidence field"],
 			["CONFIRMED", "the validity axis"],
 			["fail-closed", "the harm-direction axis's first token"],
 			["live-harm", "the harm-direction axis's second token"],
@@ -1257,7 +1257,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 		assert.ok(
 			result.recordBody.includes("zq the refuting command and its output"),
-			"the admitted Ruling's evidence did not reach the record VERBATIM — F15's anchor is the record",
+			"the admitted Ruling's evidence did not reach the record VERBATIM",
 		);
 	});
 
@@ -1456,7 +1456,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 	});
 });
 
-describe("the durable review record (issue #184; §1.4, F15)", () => {
+describe("the durable review record (issue #184; §1.4)", () => {
 	const sample: ReviewRecord = {
 		head: "0000000000000000000000000000000000000000",
 		slots: [{ slot: { lens: "runtime", surface: "s" }, valid: true }],
@@ -1833,7 +1833,7 @@ describe("the durable review record (issue #184; §1.4, F15)", () => {
 	it("evidence crosses verbatim and the round-trip is lossless", () => {
 		const r = records();
 		const body = r.composeReviewRecord(sample);
-		assert.ok(body.includes("zq evidence text preserved verbatim"), "the Ruling's evidence is not in the body (F15)");
+		assert.ok(body.includes("zq evidence text preserved verbatim"), "the Ruling's evidence is not in the body");
 		assert.deepEqual(r.parseReviewRecord(body), sample, "parse(compose(record)) is not the record — the record lies");
 	});
 

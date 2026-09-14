@@ -35,7 +35,13 @@
 #   the accepted side: narration spelled with those words passes unreported.
 #
 #   Also missed, and named because narrowing a rule opens a gap that owes a
-#   disclosure: the archaeology rules want a NUMBERED round or the plural, so
+#   disclosure: a BARE FINDING LABEL — `EF-1`, `S-F2`, `F15` — is unreported.
+#   A row for it carried five alternatives against this table's one-per-row
+#   rule, so four went unmeasured, and the bare-`F` alternative reported
+#   `Press the F2 key`. It was deleted rather than narrowed: a third spelling
+#   of a rule whose two previous spellings both over-matched is not evidence
+#   the third does not.
+# the archaeology rules want a NUMBERED round or the plural, so
 #   a spelled ordinal — "Review round three asked for this" — is unreported.
 #   The narrowing was the price of not matching "the review round trip", a
 #   live feature name, and the miss is the cheaper side of that trade.
@@ -47,14 +53,12 @@
 #   whose prefix is outside the roster the label rule carries. Each is the
 #   price of not reporting ordinary prose, and each is a real miss.
 #
-#   FALSE POSITIVES, in four measured classes. `previously`, `used to`,
+#   FALSE POSITIVES. `previously`, `used to`,
 #   `formerly` and `(first|earlier|previous|original) (draft|wording|version)
 #   of` also spell a legitimate compatibility fact ("v1 messages remain
 #   accepted", "the previous version of the payload is still accepted");
 #   §2.4 draws that line at fact-versus-provenance and no pattern decides it.
-#   The fourth is listed with the other three rather than narrowed, because
-#   what separates the two readings is the sentence's claim and not its
-#   words. `(once|after) X lands` also spells a CONTRACT whose
+#   `(once|after) X lands` also spells a CONTRACT whose
 #   condition resolves from the living set — "these arms hold while the
 #   helper is absent AND after it lands" is present-tense prose about a
 #   chain, which §2.5 explicitly acquits and this rule reports anyway;
@@ -66,7 +70,7 @@
 #   matches inside `background`, which is why every rule added for the
 #   possessive and verb spellings carries `(^|[^A-Za-z])`.
 #
-#   All three are reported for a human to judge, which is why this reader
+#   They are reported for a human to judge, which is why this reader
 #   cannot become a gate without first solving a problem it does not solve.
 #
 #   USE VERSUS MENTION, and this one is unavoidable rather than merely
@@ -138,7 +142,6 @@ RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ (finding|nit|[A
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ (measured|showed|named|derived|condemned|trimmed)'
 # A finding label owned by anything, or by nothing: the attribution survives
 # the round numeral being dropped, so the label is the shape.
-RULE review-archaeology '(^|[^A-Za-z])(EF|E-F|S-F|F-R|F)-?[0-9]'
 RULE issue-narration '[Aa]dded in #[0-9]+'
 RULE issue-narration '[Ii]ntroduced in #[0-9]+'
 RULE issue-narration '[Ff]ixed in #[0-9]+'

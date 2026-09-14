@@ -173,11 +173,6 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 		why: "a round as the subject of a MEASURING verb, in the all-caps spelling the corpus also uses",
 	},
 	{
-		shape: "review-archaeology",
-		line: "// The same defect S-F2 named.",
-		why: "a finding label owned by nothing at all — the attribution survives the round numeral being dropped",
-	},
-	{
 		shape: "change-narration",
 		line: "// The first draft of this helper lived in the caller.",
 		why: "a prior AUTHORING pass named as such: the same genus as a prior review, on the author's side",

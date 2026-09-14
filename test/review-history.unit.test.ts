@@ -583,7 +583,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		);
 		for (const [needle, why] of [
 			["zq the recurring finding", "the state's finding text — the diagnosis reads the same findings the Judge ruled"],
-			["zq the evidence", "the ruling's evidence verbatim (F15's discipline carried into the history)"],
+			["zq the evidence", "the ruling's evidence verbatim"],
 			["CONFIRMED", "the ruling's validity"],
 			["UNVERIFIED", "the §1.5 form-iii label — a provisioned tree re-verifies, never trusts"],
 			["effect on", "OSCILLATION's discriminator is the artifact's effect, not the labels the reviews wore"],
@@ -725,8 +725,8 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		for (const ruling of rulings) {
 			assert.ok(
 				text.includes(ruling.evidence),
-				`the brief dropped the ruling evidence ${JSON.stringify(ruling.evidence)} — F15's discipline is that a ` +
-					"ruling travels with the evidence it rests on",
+				`the brief dropped the ruling evidence ${JSON.stringify(ruling.evidence)} — a ruling travels with ` +
+					"the evidence it rests on",
 			);
 		}
 		assert.ok(
@@ -927,7 +927,7 @@ describe("§1.4 the diagnosis admission is fail-closed — absence is not NONE (
 		}
 	});
 
-	it("an empty evidence string is not admissible — every ruling carries its evidence (F15's discipline)", () => {
+	it("an empty evidence string is not admissible — every ruling carries its evidence", () => {
 		const h = mod();
 		const admission = h.admitDiagnosis(admittedPayload({ value: "OSCILLATION", invalidation: "plan", evidence: "" }));
 		assert.ok(!admission.available, "a diagnosis with empty evidence was admitted");
