@@ -165,7 +165,7 @@ authoring_pass_rule() {
     # by an EMPTY capture rather than by a status: this is a pipeline, and a
     # pipeline's status is its last stage's, so `fold` going missing upstream
     # leaves `sed` exiting 0 over nothing. Its stderr goes to /dev/null —
-    # an unlabelled `command not found` on the operator's terminal, in the
+    # a `command not found` on the operator's terminal, in the
     # middle of the layout, is a worse report than an unwrapped clause.
     wrapped="$(printf '%s\n' "$clause" | fold -s -w 72 2>/dev/null | sed 's/^/    /' 2>/dev/null)"
     if [ -n "$wrapped" ]; then
@@ -175,10 +175,17 @@ authoring_pass_rule() {
     fi
   else
     # No substitute text. A paraphrase authored on the degraded path would be
-    # the copy this function exists not to carry.
-    printf '    (not read: %s is absent, or no longer carries the clause at this\n' "$AUTHORING_PASS_CLAUSE_REL"
-    printf '     anchor, so the clause is not reproduced here.\n'
-    printf '     Read §2.5 before disposing of anything flagged above.)\n'
+    # the copy this function exists not to carry. What the line names instead
+    # is WHICH state it is in, because the fail policy's whole content is that
+    # a degraded line names what was not laid out.
+    if [ -z "$top" ]; then
+      printf '    (not read: the repository top was not resolved, so %s was not located.\n' "$AUTHORING_PASS_CLAUSE_REL"
+    elif [ ! -f "$top/$AUTHORING_PASS_CLAUSE_REL" ]; then
+      printf '    (not read: %s is absent.\n' "$AUTHORING_PASS_CLAUSE_REL"
+    else
+      printf '    (not read: %s no longer carries the clause at this anchor.\n' "$AUTHORING_PASS_CLAUSE_REL"
+    fi
+    printf '     The clause is not reproduced here. Read §2.5 before disposing of\n     anything flagged above.)\n'
   fi
 
   cat <<'RULE'
@@ -224,9 +231,7 @@ authoring_pass_layout() {
     *) [ "$budget" -gt "$AUTHORING_PASS_BUDGET_MAX_S" ] && budget="$AUTHORING_PASS_BUDGET_S" ;;
   esac
 
-  # The effective budget rides the banner. It is one word, and it is the one
-  # value that has twice been able to cost a commit — once unbounded, once
-  # settable from the environment. Printed unconditionally, every clamp
+  # The effective budget rides the banner. Printed unconditionally, every clamp
   # decision is visible at the surface the operator already reads, and an arm
   # can measure one without waiting the budget out.
   printf '\n───────── authoring pass (SPEC §2.4, §2.5) — advisory, blocks nothing; reader budget %ss\n' \

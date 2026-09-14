@@ -154,9 +154,7 @@ describe(
 		});
 
 		it("prints the CLAUSE'S OWN BYTES, read from SPEC.md at run time", () => {
-			// The property that replaces the equality lock. Two revisions carried a
-			// hand copy of §2.5 and corrected it toward the clause; measured, the
-			// copy had lost three of the clause's qualifiers. A lock pins a copy to
+			// The property that replaces the equality lock. A lock pins a copy to
 			// what it was reviewed as — it cannot stop the copy from being a copy.
 			// What is pinned here instead is provenance: the bytes on stderr are the
 			// bytes in SPEC.md, so a qualifier cannot be lost in transit because
@@ -178,7 +176,7 @@ describe(
 			);
 
 			// The qualifiers the hand copy lost, each pinned by name so their loss
-			// reds here rather than at a review round three states later.
+			// reds here.
 			for (const qualifier of ["default fix", "acceptance criterion", "pointing at its source"]) {
 				assert.ok(
 					flat(attempt.stderr).includes(qualifier),
@@ -188,8 +186,7 @@ describe(
 		});
 
 		it("keeps NO copy of the clause in its own source", () => {
-			// The method this change was parked for was carrying a hand copy and
-			// correcting it. The copy is what must be absent, not merely accurate.
+			// The copy is what must be absent, not merely accurate.
 			const specLine = readFileSync(join(repoRoot(), "SPEC.md"), "utf8")
 				.split("\n")
 				.find((line) => line.startsWith("**Deletion is the default repair.**"));
@@ -218,9 +215,7 @@ describe(
 			// line leaking here is invisible to every `cause` assertion in every
 			// githook suite.
 			// The shim mirrors the REAL PATH minus one tool, so the rest of the
-			// hook chain still resolves. A hand-listed allow-list of tools was
-			// tried first and measured the chain collapsing on `dirname`, not
-			// the wrap going missing.
+			// hook chain still resolves.
 			const shim = join(fixture.root, "nofold");
 			mkdirSync(shim, { recursive: true });
 			const built = spawnSync(
@@ -261,7 +256,18 @@ describe(
 		it("with the wrap tool PRESENT the clause is wrapped, so the fallback is not the only measured path", () => {
 			copyFileSync(join(repoRoot(), "SPEC.md"), join(fixture.root, "SPEC.md"));
 			const attempt = commitWithMessage(fixture, "feat(#218): fold present\n");
-			const body = attempt.stderr.split("THE DISPOSITION")[1] ?? "";
+			// Cut BEFORE the exceptions heredoc. Without that cut this arm was
+			// vacuous: `body` ran to the end of the layout, and the heredoc's four
+			// unconditional lines cleared the threshold on their own, so the arm was
+			// green with the clause entirely unread. The boundary is a prose literal,
+			// so a reworded heredoc would silently restore `body` whole and
+			// re-vacuate the arm — its presence is asserted before the cut.
+			const after = attempt.stderr.split("THE DISPOSITION")[1] ?? "";
+			assert.ok(
+				after.includes("Exceptions to it,"),
+				"the exceptions boundary this arm cuts at is not in the output, so the cut did nothing and the arm is measuring the whole layout again",
+			);
+			const body = after.split("Exceptions to it,")[0];
 			const clauseLines = body
 				.split("\n")
 				.filter((line) => line.startsWith("    ") && line.trim() !== "" && !line.trim().startsWith("("));
@@ -278,12 +284,19 @@ describe(
 			const attempt = commitWithMessage(fixture, "feat(#218): no SPEC in this tree\n");
 			assert.equal(attempt.status, 0, `an absent SPEC.md blocked a commit:\n${attempt.stderr}`);
 			assert.ok(
-				attempt.stderr.includes("not read: SPEC.md is absent, or no longer carries the clause"),
+				attempt.stderr.includes("not read: SPEC.md is absent."),
 				`the layout is silent about a clause it did not read:\n${attempt.stderr}`,
 			);
 			assert.ok(
 				!attempt.stderr.includes("default fix for a prose finding"),
 				"a substitute for the clause was printed on the degraded path, which is the copy this change was parked for",
+			);
+			// The line names WHICH state it is in. One line serving several causes
+			// sends a reader after a deleted file when the anchor merely moved.
+			assert.ok(
+				!attempt.stderr.includes("no longer carries the clause at this anchor") &&
+					!attempt.stderr.includes("repository top was not resolved"),
+				`an absent file was reported as some other degraded state:\n${attempt.stderr}`,
 			);
 		});
 	},
@@ -525,10 +538,7 @@ describe(
 
 		// WHAT THIS BLOCK PINS, and it is the INVARIANT rather than a printed
 		// number: how long a commit can be held is the adapter's to decide and
-		// nobody else's. That property broke twice — once with no budget at all,
-		// once with a budget the environment could set — and a third time the
-		// replacement's own clamp let an argument through into an arithmetic
-		// expansion that kills the hook.
+		// nobody else's.
 		//
 		// The effective budget rides the layout's banner, so the clamp is
 		// measurable without waiting it out. One arm still waits, because a
