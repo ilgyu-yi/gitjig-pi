@@ -640,6 +640,150 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		}
 	});
 
+	// ISSUE #213 — the coverage-attribution burden reaches BOTH briefs.
+	const EXPECTED_COVERAGE = [
+		"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
+		"description. Build the shape, run the suite, read which arm reds, and let the wording say exactly",
+		"that and no more. This is the burden above over a PARTICULAR claim rather than a universal one,",
+		"and the measurement differs — that one sends you to look for a falsifying case, this one sends you",
+		"to BUILD the case. Expectation cannot settle it: a pin that reads a SUBSTRING stays green while a",
+		"DIFFERENT arm is the one that reds. Name the arm you watched red, never the arm you expect to.",
+	].join("\n");
+
+	it("the REVIEWER brief carries the coverage-attribution burden (issue #213)", () => {
+		const b = briefs();
+		const text = b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES);
+		assert.equal(
+			composedBlock(text, "COVERAGE ATTRIBUTION"),
+			EXPECTED_COVERAGE,
+			"the reviewer brief does not carry the coverage-attribution block as the expected literal, END " +
+				"INCLUDED. A reviewer attributes coverage in the body of a finding — 'no arm covers this shape' is " +
+				"the claim this rule governs. Equality, not substring: a line appended INSIDE this block can weaken the rule " +
+				"while leaving every substring pin over it green",
+		);
+	});
+
+	it("the JUDGE brief carries the SAME coverage block, byte for byte — one home, not two wordings (issue #213)", () => {
+		const b = briefs();
+		const text = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.equal(
+			composedBlock(text, "COVERAGE ATTRIBUTION"),
+			EXPECTED_COVERAGE,
+			"the judge brief does not carry the coverage-attribution block as the expected literal, END INCLUDED. " +
+				"Every ruling owes a non-empty evidence field, which is exactly where a Judge attributes coverage; " +
+				"this literal is declared once in this file and asserted against both documents, so a per-brief " +
+				"restatement reds exactly here",
+		);
+	});
+
+	it("the composed BLOCK ROSTER of both briefs is pinned in full — no paragraph may be inserted (issue #213)", () => {
+		const openings = (document: string): readonly string[] =>
+			document.split("\n\n").map((block) => block.split("\n")[0] as string);
+		const b = briefs();
+		assert.deepEqual(
+			openings(b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES)),
+			[
+				"You are one reviewer slot of a mutually blind review panel.",
+				"CHANGE UNDER REVIEW: x",
+				"RESULT GRAMMAR (§1.7): you report what you discovered and nothing about what should follow it.",
+				'Your structured result rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+				"OBSERVATIONS vs FINDINGS: search exactly as aggressively as you otherwise would — this",
+				"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+				"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
+				"OUT OF SCOPE — do not raise findings about: the dispatcher's own internals.",
+				"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+				"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
+				"DEADLINES (self-enforced): have a first complete ../return.json written by T0+900 seconds; at " +
+					"T0+1400 seconds STOP whatever you are doing and write your final ../return.json. A late return " +
+					"is refused unread.",
+			],
+			"the reviewer brief's block roster drifted. An EXTRA entry is a paragraph inserted into a delegate's " +
+				"brief. A MISSING or " +
+				"REORDERED entry is a block dropped or moved: the claim disciplines must reach the reader before " +
+				"the transport mechanics, and the coverage burden after the burden its text calls 'the burden above'",
+		);
+		assert.deepEqual(
+			openings(
+				b.composeJudgeBrief(
+					[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+					{ state: "present", criteria: ["AC1"] },
+					{ changeDescription: "x" },
+					FENCES,
+				),
+			),
+			[
+				"You are the JUDGE of a review panel (SPEC §1.9). You rule and stop: for a substantive finding the",
+				"CHANGE UNDER REVIEW: x",
+				"THE BUNDLE — embedded verbatim, LABELLED UNVERIFIED (§1.5's third form): re-verify every claim with",
+				"CRITERION MANIFEST (caller-derived; the set your AC-impact axis reads):",
+				"ADMISSION — decided before dedup, because it decides what enters the bundle as an effective",
+				"EXCULPATORY CLAIMS — a claim that a defect class is CLOSED carries a finding's own burden.",
+				"COVERAGE ATTRIBUTION — a claim about WHICH guard catches WHICH shape is a measurement, not a",
+				"YOUR OBLIGATIONS, all owed (§1.9):",
+				"OUT OF SCOPE — do not raise findings about: the dispatcher's own internals.",
+				"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
+				'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+				"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
+				"DEADLINES (self-enforced): have a first complete ../return.json written by T0+900 seconds; at " +
+					"T0+1400 seconds STOP whatever you are doing and write your final ../return.json. A late return " +
+					"is refused unread.",
+			],
+			"the judge brief's block roster drifted — same grounds as the reviewer's, plus: the coverage burden " +
+				"must arrive before the obligations block, because obligation 3's non-empty evidence field is where " +
+				"a Judge attributes coverage",
+		);
+	});
+
+	it("the judge's coverage burden precedes obligation 3, the evidence field itself (issue #213)", () => {
+		const b = briefs();
+		const judge = b.composeJudgeBrief(
+			[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+			{ state: "present", criteria: ["AC1"] },
+			{ changeDescription: "x" },
+			FENCES,
+		);
+		assert.ok(
+			judge.indexOf("COVERAGE ATTRIBUTION") < judge.indexOf("3. Every ruling carries a required NON-EMPTY"),
+			"the judge's coverage burden no longer precedes the evidence-field obligation. That field is where a " +
+				"Judge states which arm covers what, so a rule about how such a claim is earned must arrive before " +
+				"the demand for it, not after",
+		);
+	});
+	it("the coverage rule appears EXACTLY ONCE per brief — one home, no second (issue #213)", () => {
+		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+		const b = briefs();
+		const documents = [
+			["reviewer", b.composeReviewerBrief({ lens: "runtime", surface: "s" }, { changeDescription: "x" }, FENCES)],
+			[
+				"judge",
+				b.composeJudgeBrief(
+					[{ finding: "f", slot: { lens: "runtime", surface: "s" } }],
+					{ state: "present", criteria: ["AC1"] },
+					{ changeDescription: "x" },
+					FENCES,
+				),
+			],
+		] as const;
+		for (const [name, text] of documents) {
+			assert.equal(
+				occurrences(text, "COVERAGE ATTRIBUTION"),
+				1,
+				`the ${name} brief opens the coverage block a number of times other than once`,
+			);
+			assert.equal(
+				occurrences(text, "is a measurement, not a"),
+				1,
+				`the ${name} brief states the measurement sentence a number of times other than once — twice means ` +
+					"the rule was copied rather than composed from one home, and two wordings drift independently",
+			);
+		}
+	});
+
 	it("the reviewer's claim disciplines add NO payload key — the closed shape is still {token, findings} (issue #204)", () => {
 		// The burden's recording half rides the summary channel the observation
 		// discipline already names, so it adds no new dependency CLASS on the
