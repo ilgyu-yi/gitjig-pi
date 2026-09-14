@@ -192,8 +192,8 @@ know about the transport:
   policy switch, turned on by the operator for a bounded domain and revocable at any time. It
   reaches activation only. The run may activate an issue it authored when all three hold: the
   type is `task` or `bug`; the ranking above classifies it priority 1; and the change amends no
-  SPEC contract. Always the operator's, never the run's: `directive`, `initiative` and
-  `execution` issues; any SSOT amendment however typed; anything not priority 1; and directive
+  SPEC contract. Always the operator's, never the run's: `directive` and
+  `initiative` issues; any SSOT amendment however typed; anything not priority 1; and directive
   completion review. An own-behalf verdict carries the activation marker, states in its own text
   that it is own-behalf under this grant, answers the three conditions explicitly with the
   priority-1 call naming the convergence-failure form it removes, and performs the §1.2
