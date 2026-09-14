@@ -123,12 +123,7 @@ export interface CommitAttempt {
 	stderrBytes: Buffer;
 	/** The audit-file lines this one commit attempt appended ("" when none). */
 	auditDelta: string;
-	/**
-	 * The predicate-owned share of stderr: every non-empty line except the
-	 * adapter's own `[dev-shell] …` recovery line (§3.11's division — the
-	 * checker emits the cause, each calling surface appends the recovery
-	 * live at that surface).
-	 */
+	/** The predicate-owned share of stderr — see `causeOf`. Arms whose subject IS the layout read `stderr` directly. */
 	cause: string;
 }
 
@@ -137,6 +132,44 @@ export interface CommitOptions {
 	env?: Record<string, string>;
 	/** Extra `git commit` arguments, inserted before `-F` (e.g. `--cleanup=verbatim`). */
 	gitArgs?: string[];
+}
+
+/**
+ * The predicate-owned share of stderr, computed once for both surfaces.
+ *
+ * Two things are dropped. The adapter's own `[dev-shell] …` recovery line,
+ * per §3.11's division — the checker emits the cause, each calling surface
+ * appends the recovery live at that surface. And the report-only authoring
+ * pass, which `commit-msg` prints on EVERY commit that reaches it (issue
+ * #218): it refuses nothing and gates nothing, so it is the cause of
+ * nothing.
+ *
+ * The layout is cut BETWEEN ITS OWN TWO MARKERS, never from the banner to
+ * the end of the stream. Cutting the tail would make every negative `cause`
+ * assertion in every githook suite blind to anything emitted after the
+ * layout. Bounding the block restores those assertions; the arm named
+ * `an emission BELOW the layout reaches cause` pins it.
+ *
+ * Where the closing marker is absent — a layout that died midway — the cut
+ * falls back to the tail, and that fallback carries the blindness above. It
+ * is the cheaper side: the alternative leaves half a layout inside `cause`
+ * and reds arms whose subject is elsewhere.
+ */
+const AUTHORING_PASS_BANNER = "───────── authoring pass";
+const AUTHORING_PASS_END = "───────── end authoring pass";
+
+function causeOf(stderr: string): string {
+	const start = stderr.indexOf(AUTHORING_PASS_BANNER);
+	let trimmed = stderr;
+	if (start !== -1) {
+		const end = stderr.indexOf(AUTHORING_PASS_END, start);
+		trimmed =
+			end === -1 ? stderr.slice(0, start) : stderr.slice(0, start) + stderr.slice(end + AUTHORING_PASS_END.length);
+	}
+	return trimmed
+		.split("\n")
+		.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
+		.join("\n");
 }
 
 function baseEnv(fixture: GithookFixture): Record<string, string> {
@@ -327,10 +360,7 @@ export function commitWithMessage(
 		stdoutBytes,
 		stderrBytes,
 		auditDelta: auditAfter.slice(auditBefore.length),
-		cause: stderr
-			.split("\n")
-			.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
-			.join("\n"),
+		cause: causeOf(stderr),
 	};
 }
 
@@ -388,9 +418,6 @@ export function pushRefs(fixture: GithookFixture, refspecs: string[], options: P
 		stdoutBytes,
 		stderrBytes,
 		auditDelta: auditAfter.slice(auditBefore.length),
-		cause: stderr
-			.split("\n")
-			.filter((line) => line !== "" && !line.startsWith("[dev-shell]"))
-			.join("\n"),
+		cause: causeOf(stderr),
 	};
 }

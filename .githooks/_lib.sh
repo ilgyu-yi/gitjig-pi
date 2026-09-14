@@ -26,6 +26,9 @@
 #   conventional_commit.sh → check_commit_subject (the
 #                            `<type>(#<N>)[!]: <subject>` grammar,
 #                            subject 1..72 codepoints)
+#   authoring_pass.sh      → authoring_pass_layout (report-only: lays the
+#                            staged diff and the prepared message out
+#                            together; gates nothing)
 # Anything missing — helper file, or a delegated function inside one — →
 # no-op (advice tier): githook_require guards each delegated function after
 # sourcing, so a present-but-incomplete helper degrades to allow, never to a
