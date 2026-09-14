@@ -48,22 +48,17 @@
 #
 #   Also missed, and named because narrowing a rule opens a gap that owes a
 #   disclosure: a BARE FINDING LABEL — `EF-1`, `S-F2`, `F15` — is unreported.
-#   A row for it carried five alternatives against this table's one-per-row
-#   rule, so four went unmeasured, and the bare-`F` alternative reported
-#   `Press the F2 key`. It was deleted rather than narrowed: a third spelling
-#   of a rule whose two previous spellings both over-matched is not evidence
-#   the third does not.
-# the archaeology rules want a NUMBERED round or the plural, so
-#   a spelled ordinal — "Review round three asked for this" — is unreported.
-#   The narrowing was the price of not matching "the review round trip", a
-#   live feature name, and the miss is the cheaper side of that trade.
+#   So is a POSSESSIVE round — "round 3's second limb" — in every spelling.
 #
-#   The possessive and verb rules are narrowed the same way and owe the same
-#   disclosure. UNREPORTED, measured: a round bound to a verb outside the
-#   listed set ("round 2 adjudicated the global shape"); a possessive whose
-#   label begins with a digit ("round 3's 2nd limb"); and a finding label
-#   whose prefix is outside the roster the label rule carries. Each is the
-#   price of not reporting ordinary prose, and each is a real miss.
+#   Also missed, and named for the same reason: the archaeology rules want a
+#   NUMBERED round or the plural, so a spelled ordinal — "Review round three
+#   asked for this" — is unreported. The narrowing was the price of not
+#   matching "the review round trip", a live feature name, and the miss is
+#   the cheaper side of that trade.
+#
+#   UNREPORTED, measured: a round bound to a verb outside the listed set
+#   ("round 2 adjudicated the global shape"). Each is the price of not
+#   reporting ordinary prose, and each is a real miss.
 #
 #   FALSE POSITIVES. `previously`, `used to`,
 #   `formerly` and `(first|earlier|previous|original) (draft|wording|version)
@@ -122,6 +117,14 @@ set -uo pipefail
 # green, since one fixture satisfies its shape through a different
 # alternative. The table is the population and the suite binds it. No count
 # is stated: a count here is exactly what the next widening falsifies.
+#
+# A ROW THAT OVER-MATCHES IS DELETED, NEVER NARROWED. Re-spelling it is
+# what produced three over-matching spellings of one rule here, each
+# narrower than the last and each reported as ordinary prose; the fourth is
+# reachable only by trying again. What a deletion costs is a miss, and a
+# miss is disclosed in the residual block above. What a narrowing costs is
+# a false report, which the header cannot disclose because nobody knows it
+# is there.
 SHAPES=()
 PATTERNS=()
 RULE() {
@@ -129,15 +132,15 @@ RULE() {
   PATTERNS+=("$2")
 }
 
-RULE schedule 'red until'
+RULE schedule '(^|[^A-Za-z])red until'
 RULE schedule 'until Phase'
 RULE schedule 'until #[0-9]+'
 RULE schedule 'does not exist yet'
 RULE schedule 'not yet (implemented|landed|written)'
 RULE schedule '(once|after) [^,]{1,40} lands'
 RULE schedule 'will be (added|implemented|landed|removed)'
-RULE review-archaeology '[Rr]eview round [0-9]'
-RULE review-archaeology '[Rr]eview rounds'
+RULE review-archaeology '(^|[^A-Za-z])[Rr]eview round [0-9]'
+RULE review-archaeology '(^|[^A-Za-z])[Rr]eview rounds'
 RULE review-archaeology '[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
@@ -149,11 +152,15 @@ RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
 # pattern is single-quoted, so it cannot carry an apostrophe, and a bare `.`
 # there also matches a digit — which reports `a round 30s budget` as
 # archaeology. The class excludes digits and space for exactly that reason.
-RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+[^0-9[:space:]]s [A-Za-z]'
-RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ (finding|nit|[A-Z])'
-RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ (measured|showed|named|derived|condemned|trimmed)'
-# A finding label owned by anything, or by nothing: the attribution survives
-# the round numeral being dropped, so the label is the shape.
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ finding'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ nit'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ [A-Z]'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ measured'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ showed'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ named'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ derived'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ condemned'
+RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round) [0-9]+ trimmed'
 RULE issue-narration '[Aa]dded in #[0-9]+'
 RULE issue-narration '[Ii]ntroduced in #[0-9]+'
 RULE issue-narration '[Ff]ixed in #[0-9]+'
@@ -232,6 +239,9 @@ enters_domain() {
 # and metadata; a path carrying non-ASCII or a control byte arrives
 # C-quoted. Both were silently skipped whole before they were handled here,
 # which is a fail-open miss on exactly the files least likely to be noticed.
+# The quotes are stripped; the C escapes inside them are NOT decoded, so a
+# C-quoted path is reported in its escaped spelling, which is not the path
+# on disk and is not navigable.
 header_path() {
   local raw="$1"
   raw="${raw%%$'\t'*}"
@@ -243,6 +253,10 @@ header_path() {
   printf '%s' "${raw#b/}"
 }
 
+# First match wins over the whole table, so a sentence carrying both a
+# schedule spelling and a guard-claim spelling draws whichever row stands
+# first: the family keying is per HIT, never per sentence.
+#
 # The remedy is keyed by FAMILY, because the two families are decided by
 # different criteria: provenance by §2.5's erasure test, an unmeasured claim
 # by §2.5's rendered-or-pointer rule. One remedy over both would name a

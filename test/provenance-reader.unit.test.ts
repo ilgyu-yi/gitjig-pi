@@ -159,18 +159,48 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	},
 	{
 		shape: "review-archaeology",
-		line: "// The pin was narrowed by round 3's second limb.",
-		why: "the POSSESSIVE spelling — how the class is actually written, and reached by no numeral-plus-verb rule",
-	},
-	{
-		shape: "review-archaeology",
 		line: "// The bare flag round-2 finding condemned.",
 		why: "the hyphenated spelling with an explicit `finding`, a second live idiom for the same attribution",
 	},
 	{
 		shape: "review-archaeology",
+		line: "// The wording round-4 nit asked for.",
+		why: "the hyphenated spelling naming a nit rather than a finding",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// The shape round-2 EF raised.",
+		why: "the hyphenated spelling carrying a bare label, which needs no `finding` or `nit` word",
+	},
+	{
+		shape: "review-archaeology",
 		line: "// ROUND 6 measured six of the twelve cells.",
 		why: "a round as the subject of a MEASURING verb, in the all-caps spelling the corpus also uses",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 2 showed the floor was wrong.",
+		why: "the same attribution on a SHOWING verb",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// round 5 named the surviving shape.",
+		why: "the same attribution on a NAMING verb, lower case",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 3 derived the criterion axis.",
+		why: "the same attribution on a DERIVING verb",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 1 condemned the wider spelling.",
+		why: "the same attribution on a CONDEMNING verb",
+	},
+	{
+		shape: "review-archaeology",
+		line: "// Round 4 trimmed the roster to nine.",
+		why: "the same attribution on a TRIMMING verb",
 	},
 	{
 		shape: "change-narration",

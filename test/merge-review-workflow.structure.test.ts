@@ -150,9 +150,7 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 	it("every named setting is LIVE — deleting it and leaving the words in a comment must not satisfy any arm", () => {
 		// The meta-arm over the comment-stripping. It calls `stripComments`
 		// rather than rebuilding the expression locally, because a local
-		// rebuild is a SECOND HOME (§3.11) and pins a copy: with one,
-		// mutating the helper to strip nothing reds a CONSUMER arm while
-		// this one — authored to guard the helper — stays green.
+		// rebuild is a SECOND HOME (§3.11) and pins a copy.
 		//
 		// The BINDING is the third limb's own assertion, and it is a separate
 		// property. An arm that exercises the helper but never reads `LIVE`

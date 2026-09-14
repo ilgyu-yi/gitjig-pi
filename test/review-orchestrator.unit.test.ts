@@ -1175,7 +1175,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		// this arm holds. Without an arm separating the admitted population
 		// from its complement, dropping both gates and recording a REFUSED
 		// outcome's machine-authored `cause` as an actor's verbatim prose
-		// leaves the file green. That is durable
+		// is not separable at all. That is durable
 		// MISATTRIBUTION — record.ts's own doc block ranks it worse than prose
 		// dropped — so the complement is pinned here, by count and by content.
 		const o = orchestrate();
