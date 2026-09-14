@@ -74,7 +74,8 @@ _authoring_pass_signal_tree() {
 
 # _authoring_pass_read <reader> — run the reader over the staged diff under
 # the budget above. Sets AUTHORING_PASS_REPORT and AUTHORING_PASS_STATUS,
-# where the status is the reader's own exit code, `timeout`, or `no-scratch`.
+# where the status is the reader's own exit code, `timeout`, `no-status`, or
+# `no-scratch`.
 # It is read rather than discarded: a crashed reader prints nothing, and
 # empty output read as a verdict reports a run that never happened as a
 # clean one. Always returns 0.
@@ -120,9 +121,10 @@ _authoring_pass_read() {
     #
     # Enumerated in place (§3.11) and NOT closed: a child that ignores TERM,
     # or one that has already forked a grandchild, survives this. Those
-    # processes hold no descriptor of the hook — stdout is the scratch file
-    # and stderr is /dev/null — so they neither hold the commit nor reach the
-    # operator; the residual is wasted work, not a wedged git.
+    # processes hold no descriptor of the hook — the reader's stdout is the
+    # scratch file, `git diff`'s is the pipe into it, and both stderrs are
+    # /dev/null — so they neither hold the commit nor reach the operator; the
+    # residual is wasted work, not a wedged git.
     _authoring_pass_signal_tree "$pid"
     kill -TERM "$pid" 2>/dev/null
     wait "$pid" 2>/dev/null
@@ -138,26 +140,47 @@ _authoring_pass_read() {
   return 0
 }
 
-# §2.5's "Deletion is the default repair" paragraph is the rule source. What
-# this function prints is the working form of it, at the step it governs;
-# §2.8 forbids a digest that drops a clause's qualifiers, so the clause's own
-# repair case is the last line of the list and the pointer is on the first.
-# The text is pinned whole-string by an arm, so the copy cannot drift from
-# the clause silently.
-authoring_pass_rule() {
-  cat <<'RULE'
-  THE DISPOSITION (SPEC §2.5, "Deletion is the default repair")
-  A flagged prose sentence is DELETED. It is not replaced, re-tensed, or
-  re-derived: a rewrite is a fresh claim carrying the same burden the
-  deleted one failed.
+# The disposition is §2.5's, and THIS FILE AUTHORS NO RESTATEMENT OF IT.
+# §2.8: "point at the SSOT clause they enforce, never copy it — a digest that
+# restates a contract is a second copy to keep in sync by hand, and the copy
+# loses its qualifiers in transit." Two revisions of this block carried a hand
+# copy and corrected it toward the clause; measured, the copy had lost three
+# of the clause's qualifiers. So the clause's own bytes are READ at run time
+# and emitted, which is §2.5's rendered-or-pointer rule applied here: a render
+# is machine-emitted, never typed.
+#
+# What remains authored below is the three exceptions, which restate no clause
+# — they are the operator's procedure, and they carry their source as a
+# pointer rather than a derivation.
+AUTHORING_PASS_CLAUSE_ANCHOR='^\*\*Deletion is the default repair\.\*\*'
+AUTHORING_PASS_CLAUSE_REL="SPEC.md"
 
-  Exceptions:
+authoring_pass_rule() {
+  local top="${_gh_top:-}" clause=""
+
+  printf '  THE DISPOSITION — SPEC §2.5, "Deletion is the default repair"\n'
+
+  if [ -n "$top" ] && [ -f "$top/$AUTHORING_PASS_CLAUSE_REL" ]; then
+    clause="$(grep -m1 -E "$AUTHORING_PASS_CLAUSE_ANCHOR" "$top/$AUTHORING_PASS_CLAUSE_REL" 2>/dev/null)" || clause=""
+  fi
+
+  if [ -n "$clause" ]; then
+    printf '%s\n' "$clause" | fold -s -w 72 | sed 's/^/    /'
+  else
+    # No substitute text. A paraphrase authored on the degraded path would be
+    # the copy this function exists not to carry.
+    printf '    (not read: %s did not resolve, so the clause is not reproduced\n' "$AUTHORING_PASS_CLAUSE_REL"
+    printf '     here. Read §2.5 before disposing of anything flagged above.)\n'
+  fi
+
+  cat <<'RULE'
+
+  Exceptions to it, from the procedure recorded on issue #218 — not derived
+  from any clause, and this is their whole source:
     1. A Judge's verbatim NIT remedy — the text is the Judge's, not yours.
     2. A wrong literal — a number, an identifier, a path — may be corrected
        in place. The sentence EXPLAINING it is deleted, not re-derived.
     3. Code, assertions and arm titles are not prose.
-    4. A claim an acceptance criterion or a live contract depends on is
-       REPAIRED, not deleted, and the repair carries a render or a pointer.
 RULE
 }
 
@@ -175,12 +198,31 @@ authoring_pass_layout() {
   local budget="${2:-}"
   local top="${_gh_top:-}"
 
+  # TOTAL BEFORE ARITHMETIC. No caller string reaches `[ -gt ]` or `$(( ))`
+  # until it is known to be one to three digits with no leading zero. Each arm
+  # below is a shape that reached one of them and did damage. Measured on the
+  # committed chain, with this guard removed: `08` printed `reader budget 08s`
+  # and leaked `value too great for base` onto the operator's stderr; `010`
+  # passed the comparison and was then read as OCTAL, so ten asked bought
+  # eight; a value past the shell's integer range made the comparison error
+  # and left the ceiling unenforced. The commit landed in each case — what is
+  # lost is the bound and the operator's trust in the line, not the commit.
+  # First match wins, so order is load-bearing.
   case "$budget" in
-    '' | 0 | *[!0-9]*) budget="$AUTHORING_PASS_BUDGET_S" ;;
+    '') budget="$AUTHORING_PASS_BUDGET_S" ;;
+    *[!0-9]*) budget="$AUTHORING_PASS_BUDGET_S" ;;
+    0*) budget="$AUTHORING_PASS_BUDGET_S" ;;
+    ????*) budget="$AUTHORING_PASS_BUDGET_S" ;;
     *) [ "$budget" -gt "$AUTHORING_PASS_BUDGET_MAX_S" ] && budget="$AUTHORING_PASS_BUDGET_S" ;;
   esac
 
-  printf '\n───────── authoring pass (SPEC §2.4, §2.5) — advisory, blocks nothing\n'
+  # The effective budget rides the banner. It is one word, and it is the one
+  # value that has twice been able to cost a commit — once unbounded, once
+  # settable from the environment. Printed unconditionally, every clamp
+  # decision is visible at the surface the operator already reads, and an arm
+  # can measure one without waiting the budget out.
+  printf '\n───────── authoring pass (SPEC §2.4, §2.5) — advisory, blocks nothing; reader budget %ss\n' \
+    "$budget"
 
   printf '───────── the diff this message is about\n'
   if [ -n "$(git diff --cached --name-only </dev/null 2>/dev/null)" ]; then

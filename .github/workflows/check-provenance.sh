@@ -133,7 +133,7 @@ RULE change-narration 'was previously'
 RULE change-narration 'previously called'
 RULE change-narration 'formerly (called|named)'
 # §2.4's other half (issue #218).
-RULE guard-claim 'nothing reds?([^A-Za-z]|$)'
+RULE guard-claim '[Nn]othing reds?([^A-Za-z]|$)'
 RULE guard-claim 'leaves (the|this) file [a-z ]{0,12}green'
 RULE guard-claim '(guard|check|arm|scan|rule|gate) admits (a|no) value'
 RULE guard-claim '[Tt]his (arm|rule|check|guard|gate|test|assertion) pins'

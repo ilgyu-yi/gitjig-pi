@@ -31,8 +31,8 @@
  *   - POSIX bytes and bash are required: the suite skips on win32.
  */
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -131,20 +131,21 @@ describe(
 			);
 		});
 
-		it("carries the disposition, its pointer, and all FOUR exceptions", () => {
+		it("carries the disposition's POINTER and the three exceptions", () => {
 			const attempt = commitWithMessage(fixture, "feat(#218): the disposition\n");
 			assert.ok(
-				attempt.stderr.includes("DELETED"),
-				`the layout does not state the disposition. A pass that points at a sentence without saying what to do with it is the rewrite generator it exists to close.\n${attempt.stderr}`,
-			);
-			assert.ok(
 				attempt.stderr.includes('SPEC §2.5, "Deletion is the default repair"'),
-				`the printed rule names no source clause. §2.8 binds code-adjacent prose to point at the clause it enforces, and a working form with no pointer is a copy a reader cannot check.\n${attempt.stderr}`,
+				`the layout names no source clause. §2.8 binds code-adjacent prose to point at the clause it enforces.\n${attempt.stderr}`,
 			);
-			// An UNENUMERATED exception is where a stated rule breaks, so each is
-			// pinned individually rather than by a count. The fourth is §2.5's own
-			// repair case, which the first revision of this block dropped.
-			for (const exception of ["NIT remedy", "wrong literal", "arm titles", "acceptance criterion"]) {
+			// The exceptions are the operator's procedure and restate no clause, so
+			// they are the only authored text here and they carry their source as a
+			// pointer. An UNENUMERATED exception is where a stated rule breaks, so
+			// each is pinned individually rather than by a count.
+			assert.ok(
+				attempt.stderr.includes("issue #218"),
+				`the exceptions cite no source, so a reader cannot check where they came from:\n${attempt.stderr}`,
+			);
+			for (const exception of ["NIT remedy", "wrong literal", "arm titles"]) {
 				assert.ok(
 					attempt.stderr.includes(exception),
 					`the disposition's "${exception}" exception is missing from the layout:\n${attempt.stderr}`,
@@ -152,38 +153,73 @@ describe(
 			}
 		});
 
-		it("the printed rule is pinned WHOLE-STRING, so the copy cannot drift from its clause", () => {
-			// The equality lock. A substring check over normative prose stays green
-			// while the instruction inverts — an appended negating qualifier defeats
-			// it — so the block is compared entire. This is the guard §2.8's
-			// never-copy rule asks for where a copy is kept deliberately: the copy is
-			// allowed because an acceptance criterion depends on the rule standing at
-			// the step, and it is allowed only while something holds it to its source.
-			const expected = [
-				'  THE DISPOSITION (SPEC §2.5, "Deletion is the default repair")',
-				"  A flagged prose sentence is DELETED. It is not replaced, re-tensed, or",
-				"  re-derived: a rewrite is a fresh claim carrying the same burden the",
-				"  deleted one failed.",
-				"",
-				"  Exceptions:",
-				"    1. A Judge's verbatim NIT remedy — the text is the Judge's, not yours.",
-				"    2. A wrong literal — a number, an identifier, a path — may be corrected",
-				"       in place. The sentence EXPLAINING it is deleted, not re-derived.",
-				"    3. Code, assertions and arm titles are not prose.",
-				"    4. A claim an acceptance criterion or a live contract depends on is",
-				"       REPAIRED, not deleted, and the repair carries a render or a pointer.",
-			].join("\n");
+		it("prints the CLAUSE'S OWN BYTES, read from SPEC.md at run time", () => {
+			// The property that replaces the equality lock. Two revisions carried a
+			// hand copy of §2.5 and corrected it toward the clause; measured, the
+			// copy had lost three of the clause's qualifiers. A lock pins a copy to
+			// what it was reviewed as — it cannot stop the copy from being a copy.
+			// What is pinned here instead is provenance: the bytes on stderr are the
+			// bytes in SPEC.md, so a qualifier cannot be lost in transit because
+			// nothing is in transit.
+			const specLine = readFileSync(join(repoRoot(), "SPEC.md"), "utf8")
+				.split("\n")
+				.find((line) => line.startsWith("**Deletion is the default repair.**"));
+			assert.ok(specLine, "the anchor did not match in SPEC.md, so this arm measures nothing");
 
-			const printed = execFileSync(
-				"bash",
-				["-c", `. ${JSON.stringify(join(repoRoot(), HELPER_REL))} && authoring_pass_rule`],
-				{ encoding: "utf8" },
-			).replace(/\n$/, "");
+			copyFileSync(join(repoRoot(), "SPEC.md"), join(fixture.root, "SPEC.md"));
+			const attempt = commitWithMessage(fixture, "feat(#218): the clause itself\n");
 
-			assert.equal(
-				printed,
-				expected,
-				"the printed disposition is not byte-equal to the text this arm holds. §2.8 forbids a hand-copy of a contract precisely because the copy loses its qualifiers in transit; the copy stands here only while this equality holds it to what was reviewed against §2.5",
+			// Compared on whitespace-collapsed text: the layout folds and indents
+			// for a terminal, which moves line breaks and nothing else.
+			const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+			assert.ok(
+				flat(attempt.stderr).includes(flat(specLine)),
+				`the printed disposition is not the clause's own text. Either the read failed or something re-minted it — and a restatement is what this arm exists to forbid.\n${attempt.stderr}`,
+			);
+
+			// The qualifiers the hand copy lost, each pinned by name so their loss
+			// reds here rather than at a review round three states later.
+			for (const qualifier of ["default fix", "acceptance criterion", "pointing at its source"]) {
+				assert.ok(
+					flat(attempt.stderr).includes(qualifier),
+					`the clause's "${qualifier}" qualifier did not reach the operator:\n${attempt.stderr}`,
+				);
+			}
+		});
+
+		it("keeps NO copy of the clause in its own source", () => {
+			// The method this change was parked for was carrying a hand copy and
+			// correcting it. The copy is what must be absent, not merely accurate.
+			const specLine = readFileSync(join(repoRoot(), "SPEC.md"), "utf8")
+				.split("\n")
+				.find((line) => line.startsWith("**Deletion is the default repair.**"));
+			assert.ok(specLine, "the anchor did not match in SPEC.md, so this arm measures nothing");
+			const helper = readFileSync(join(repoRoot(), HELPER_REL), "utf8");
+			// Sentence by sentence, because a copy of one sentence is a copy.
+			for (const sentence of specLine
+				.split(". ")
+				.map((part) => part.trim())
+				.filter((part) => part.length > 40)) {
+				assert.ok(
+					!helper.includes(sentence),
+					`the helper carries a copy of the clause: ${JSON.stringify(sentence.slice(0, 60))}. §2.8: a digest that restates a contract is a second copy to keep in sync by hand`,
+				);
+			}
+		});
+
+		it("an ABSENT SPEC.md prints no substitute text", () => {
+			// The degraded path is where a paraphrase would be most tempting and
+			// least checkable. It must say it did not read, not say it differently.
+			rmSync(join(fixture.root, "SPEC.md"), { force: true });
+			const attempt = commitWithMessage(fixture, "feat(#218): no SPEC in this tree\n");
+			assert.equal(attempt.status, 0, `an absent SPEC.md blocked a commit:\n${attempt.stderr}`);
+			assert.ok(
+				attempt.stderr.includes("not read: SPEC.md did not resolve"),
+				`the layout is silent about a clause it did not read:\n${attempt.stderr}`,
+			);
+			assert.ok(
+				!attempt.stderr.includes("default fix for a prose finding"),
+				"a substitute for the clause was printed on the degraded path, which is the copy this change was parked for",
 			);
 		});
 	},
@@ -390,85 +426,144 @@ describe(
 );
 
 describe(
-	"the reader's budget is the adapter's, never the environment's (issue #218, SPEC §3.9)",
+	"the reader's budget is the adapter's, never the environment's (issue #218, SPEC \u00a73.9)",
 	{ skip: process.platform === "win32" },
 	() => {
 		let fixture: GithookFixture;
 
 		before(() => {
 			fixture = buildGithookFixture();
-			plantHangingReader(fixture);
+			plantReader(fixture);
 		});
 		after(() => {
 			removeGithookFixture(fixture);
 		});
 
-		// WHAT THESE ARMS PIN, and it is the INVARIANT and not a printed number:
-		// with a reader that never returns, the commit LANDS, and it lands inside
-		// a fixed wall-clock ceiling. That is the property an unbounded budget
-		// breaks, and it broke twice — once with no budget at all, once with a
-		// budget the environment could set to an arbitrary all-digit value.
+		// WHAT THIS BLOCK PINS, and it is the INVARIANT rather than a printed
+		// number: how long a commit can be held is the adapter's to decide and
+		// nobody else's. That property broke twice — once with no budget at all,
+		// once with a budget the environment could set — and a third time the
+		// replacement's own clamp let an argument through into an arithmetic
+		// expansion that kills the hook.
 		//
-		// THEY ARE SLOW BY CONSTRUCTION. Three of the four wait out the
-		// compiled-in budget, because a fallback that silently honoured its input
-		// would be indistinguishable from one that did not until the wait ran
-		// long. The cost is the measurement.
-		const CEILING_MS = 60_000;
+		// The effective budget rides the layout's banner, so the clamp is
+		// measurable without waiting it out. One arm still waits, because a
+		// budget that is printed and not honoured would pass every other arm.
+		const budgetOf = (attempt: { stderr: string }) => attempt.stderr.match(/reader budget (\d+)s/)?.[1];
 
-		const driveHungCommit = (budget: string | null, label: string, env?: Record<string, string>) => {
-			patchAdapterBudget(fixture, budget);
+		it("the clamp is TOTAL — every hostile argument takes the compiled-in default", () => {
+			// Each row is a shape that reached a comparison or an arithmetic
+			// expansion and did damage there. Measured with the guard removed:
+			// the commit still landed, and what was lost was the bound and the
+			// silence — `08` printed `reader budget 08s` and leaked `value too
+			// great for base` onto the operator's stderr.
+			const cases: ReadonlyArray<{ arg: string; expect: string; why: string }> = [
+				{ arg: "1", expect: "1", why: "in range, honoured — the seam an arm drives the expiry path through" },
+				{ arg: "120", expect: "120", why: "the ceiling itself is in range" },
+				{ arg: "121", expect: "20", why: "one past the ceiling" },
+				{ arg: "abc", expect: "20", why: "a non-digit, which multiplies to 0 and ends the wait at once" },
+				{
+					arg: "08",
+					expect: "20",
+					why: "a leading zero that is not octal — the expansion errors and leaks onto stderr",
+				},
+				{ arg: "010", expect: "20", why: "a leading zero that IS octal — ten asked, eight waited" },
+				{ arg: "0x10", expect: "20", why: "a base prefix" },
+				{ arg: "+5", expect: "20", why: "a sign" },
+				{
+					arg: "9".repeat(400),
+					expect: "20",
+					why: "past the shell's integer range, where the comparison errors and the ceiling goes unenforced",
+				},
+			];
+
+			for (const { arg, expect, why } of cases) {
+				patchAdapterBudget(fixture, arg);
+				const attempt = commitWithMessage(fixture, `feat(#218): clamp ${arg.slice(0, 8)}\n`);
+				assert.equal(
+					attempt.status,
+					0,
+					`the argument ${JSON.stringify(arg.slice(0, 12))} blocked a commit (${why}). This arm refuses nothing, so no value of it may:\n${attempt.stderr}`,
+				);
+				assert.equal(
+					budgetOf(attempt),
+					expect,
+					`${JSON.stringify(arg.slice(0, 12))} (${why}) produced budget ${budgetOf(attempt)}s, expected ${expect}s`,
+				);
+				assert.ok(
+					!/integer expression expected|value too great for base/.test(attempt.stderr),
+					`a shell error reached the operator for ${JSON.stringify(arg.slice(0, 12))}: the value was let into a comparison or an expansion before it was known to be one\n${attempt.stderr}`,
+				);
+			}
+		});
+
+		it("NO environment variable reaches the budget — driven with an IN-RANGE value", () => {
+			// The direction that matters, and the reason this arm uses an in-range
+			// value: an out-of-range one is discarded by the clamp whatever its
+			// provenance, so it cannot separate "the environment cannot reach the
+			// budget" from "it reached it and was handed a value the clamp
+			// rejects".
+			patchAdapterBudget(fixture, null);
+			const attempt = commitWithMessage(fixture, "feat(#218): an environment that tries\n", {
+				env: { AUTHORING_PASS_BUDGET_S: "1", AUTHORING_PASS_BUDGET_MAX_S: "1" },
+			});
+			assert.equal(attempt.status, 0, `the environment took the commit away:\n${attempt.stderr}`);
+			assert.equal(
+				budgetOf(attempt),
+				"20",
+				`the environment set the budget to ${budgetOf(attempt)}s. How long a commit is held is not the committing environment's to choose`,
+			);
+		});
+
+		it("the COMPILED-IN default actually ENDS a reader that never returns", () => {
+			// The one arm that waits. A budget printed and not honoured passes
+			// every arm above; only elapsed time separates them.
+			plantHangingReader(fixture);
+			patchAdapterBudget(fixture, null);
 			const started = Date.now();
-			const attempt = commitWithMessage(fixture, `feat(#218): ${label}\n`, env ? { env } : {});
+			const attempt = commitWithMessage(fixture, "feat(#218): the default ends it\n");
 			const elapsed = Date.now() - started;
+			plantReader(fixture);
+
 			assert.equal(attempt.status, 0, `a reader that never returns blocked a commit:\n${attempt.stderr}`);
 			assert.ok(
-				elapsed < CEILING_MS,
-				`the commit took ${elapsed}ms against a ${CEILING_MS}ms ceiling, so the budget did not end the reader — an arm that cannot refuse still took the commit away`,
+				elapsed < 60_000,
+				`the commit took ${elapsed}ms against a 60000ms ceiling — an arm that cannot refuse still took the commit away`,
 			);
-			assert.match(
-				attempt.stderr,
-				/did not finish within \d+s and was stopped/,
+			assert.ok(
+				elapsed > 15_000,
+				`the commit took only ${elapsed}ms, so the 20s budget was not what ended the reader and this arm measures something else`,
+			);
+			assert.ok(
+				attempt.stderr.includes("did not finish within 20s"),
 				`the expiry is silent, so a stopped reader reads like a clean one:\n${attempt.stderr}`,
 			);
-			return { attempt, elapsed };
-		};
-
-		it("the COMPILED-IN default ends a reader that never returns, and no environment variable reaches it", () => {
-			// One arm, two properties, because they share the same 20s wait: the
-			// adapter passes no budget, so the compiled-in value is what runs — and
-			// it still runs with an environment naming the variable that used to
-			// set it, which is the harm this revision closes.
-			const { attempt } = driveHungCommit(null, "the default budget", {
-				AUTHORING_PASS_BUDGET_S: "999999999999",
-			});
-			assert.ok(
-				attempt.stderr.includes("did not finish within 20s"),
-				`either the compiled-in budget did not run, or the environment's value reached it:\n${attempt.stderr}`,
-			);
 		});
 
-		it("an in-range argument is honoured, which is how an arm reaches this path cheaply", () => {
-			const { attempt, elapsed } = driveHungCommit("1", "an in-range budget");
-			assert.ok(
-				attempt.stderr.includes("did not finish within 1s"),
-				`the argument was ignored, so the seam this suite drives the expiry path through does not work:\n${attempt.stderr}`,
+		it("an expired reader's own CHILDREN are reaped, not left running", () => {
+			// The budget bounds the report. Without the reap it bounds ONLY the
+			// report: TERM reaches the subshell, its pipeline children survive,
+			// and the scratch is removed while one still holds a descriptor.
+			const marker = "zqReapProbe";
+			mkdirSync(join(fixture.root, ".github", "workflows"), { recursive: true });
+			writeFileSync(
+				join(fixture.root, READER_REL),
+				`#!/usr/bin/env bash\ncat >/dev/null\nexec -a ${marker} sleep 600\n`,
 			);
-			assert.ok(elapsed < 15_000, `an in-range budget of 1s took ${elapsed}ms`);
-		});
+			patchAdapterBudget(fixture, "1");
+			const attempt = commitWithMessage(fixture, "feat(#218): the reap\n");
+			plantReader(fixture);
+			assert.equal(attempt.status, 0, `the reap path blocked a commit:\n${attempt.stderr}`);
 
-		it("an OUT-OF-RANGE all-digit argument takes the default, not its own value", () => {
-			const { attempt } = driveHungCommit("999999999999", "an out-of-range budget");
-			assert.ok(
-				attempt.stderr.includes("did not finish within 20s"),
-				`an all-digit value past the ceiling was honoured. Every all-digit value being honoured is exactly how the bound was lost before:\n${attempt.stderr}`,
-			);
-		});
-
-		it("a NON-DIGIT argument takes the default, and does not collapse the wait", () => {
-			const { attempt } = driveHungCommit("abc", "a non-digit budget");
-			assert.ok(
-				attempt.stderr.includes("did not finish within 20s"),
-				`a non-digit value reached the arithmetic. Unvalidated it multiplies to 0, which ends the wait immediately and reports a layout that was never produced:\n${attempt.stderr}`,
+			const survivors = spawnSync("pgrep", ["-f", marker], { encoding: "utf8" });
+			const pids = (survivors.stdout ?? "").split("\n").filter((line) => line.trim() !== "");
+			for (const pid of pids) {
+				spawnSync("kill", ["-9", pid]);
+			}
+			assert.deepEqual(
+				pids,
+				[],
+				`${pids.length} child of the expired reader survived its budget. The budget then bounds the report and not the work, and the scratch is removed while a live descriptor still points into it`,
 			);
 		});
 	},
