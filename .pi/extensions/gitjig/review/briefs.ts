@@ -20,7 +20,12 @@
  * provisioned-tree facts (issue #197): no node_modules, no local main
  * ref, private scratch, the archive and git-state bans, and the
  * serial re-run rule. Each is a sentence a real dispatch was once
- * refused or degraded for lacking.
+ * refused or degraded for lacking. The caller-side transport additions
+ * from issue #220 stay in those same blocks: no remote in the provisioned
+ * ledger; completion semantics for `ok`; the caller-visible summary bound;
+ * and an early provisional return overwritten in place. Brief length has
+ * no invented character threshold — the time-bounded provisional return is
+ * the mitigation that applies independently of input size.
  *
  * DECISION — the admission burden (issue #196, deriving §3.12's settled
  * scoping) composes into both briefs: the Judge is told the three
@@ -99,9 +104,11 @@ export type BriefContext = { changeDescription: string };
 const PROVISIONED_TREE_FACTS = [
 	"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
 	"went wrong first. Verify a fact with your own command before you rely on it:",
-	"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
-	"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
-	"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
+	"- It has NO node_modules, no remote, and no local `main` ref. Run `npm ci` FIRST, before any check:",
+	"  a bare `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that",
+	"  means nothing. With no `main` ref, compare against the branch's parent commit, never a ref you",
+	"  lack. A platform-only living surface such as the current PR body is unreachable unless the caller",
+	"  embeds it in this brief; never substitute remembered text or silently mark it reviewed.",
 	"- Scratch space is a private `mktemp -d`, never a bare /tmp path: parallel delegates SHARE /tmp —",
 	"  treat any /tmp file you did not create as hostile.",
 	"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
@@ -184,14 +191,19 @@ const RETURN_CONTRACT = [
 	"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
 	"PARENT directory's return.json. The schema is CLOSED:",
 	'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string} — an unknown key',
-	"discards the whole return. reviewedHead carries the full hex of `git rev-parse HEAD` and is the ONLY",
-	"place a commit hash may appear: NO hex run of 6 or more characters anywhere else in the return —",
-	"refer to commits by position labels, never by hash.",
+	"discards the whole return. `ok` reports that YOUR WORK COMPLETED, not that the artifact passed: a",
+	"complete review with findings and a complete Judge ruling that requires repair both use true.",
+	"Only `summary` crosses to the tool caller. Keep it under 6000 characters and put the COMPLETE verdict,",
+	"every finding, and every NIT remedy there verbatim; content left only in `payload` is invisible.",
+	"reviewedHead carries the full hex of `git rev-parse HEAD` and is the ONLY place a commit hash may",
+	"appear: NO hex run of 6 or more characters anywhere else in the return — refer to commits by",
+	"position labels, never by hash.",
 ].join("\n");
 
 function deadlines(timing: BriefTiming): string {
 	return (
-		"DEADLINES (self-enforced): have a first complete ../return.json written by T0+" +
+		"DEADLINES (self-enforced): write a SHORT, COMPLETE provisional ../return.json early, then improve " +
+		"it by OVERWRITING it in place. Have it written by T0+" +
 		String(timing.firstReturnSeconds) +
 		" seconds; at T0+" +
 		String(timing.finalReturnSeconds) +

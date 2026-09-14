@@ -693,9 +693,9 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				"OUT OF SCOPE — do not raise findings about: the dispatcher's own internals.",
 				"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
 				"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
-				"DEADLINES (self-enforced): have a first complete ../return.json written by T0+900 seconds; at " +
-					"T0+1400 seconds STOP whatever you are doing and write your final ../return.json. A late return " +
-					"is refused unread.",
+				"DEADLINES (self-enforced): write a SHORT, COMPLETE provisional ../return.json early, then improve " +
+					"it by OVERWRITING it in place. Have it written by T0+900 seconds; at T0+1400 seconds STOP " +
+					"whatever you are doing and write your final ../return.json. A late return is refused unread.",
 			],
 			"the reviewer brief's block roster drifted. An EXTRA entry is a paragraph inserted into a delegate's " +
 				"brief. A MISSING or " +
@@ -724,9 +724,9 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
 				'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 				"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
-				"DEADLINES (self-enforced): have a first complete ../return.json written by T0+900 seconds; at " +
-					"T0+1400 seconds STOP whatever you are doing and write your final ../return.json. A late return " +
-					"is refused unread.",
+				"DEADLINES (self-enforced): write a SHORT, COMPLETE provisional ../return.json early, then improve " +
+					"it by OVERWRITING it in place. Have it written by T0+900 seconds; at T0+1400 seconds STOP " +
+					"whatever you are doing and write your final ../return.json. A late return is refused unread.",
 			],
 			"the judge brief's block roster drifted — same grounds as the reviewer's, plus: the coverage burden " +
 				"must arrive before the obligations block, because obligation 3's non-empty evidence field is where " +
@@ -816,9 +816,11 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	const EXPECTED_LEDGER = [
 		"YOUR PROVISIONED TREE — facts entering unverified (§1.5 form iii), each learned from a round that",
 		"went wrong first. Verify a fact with your own command before you rely on it:",
-		"- It has NO node_modules and no local `main` ref. Run `npm ci` FIRST, before any check: a bare",
-		"  `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that means",
-		"  nothing. With no `main` ref, compare against the branch's parent commit, never a ref you lack.",
+		"- It has NO node_modules, no remote, and no local `main` ref. Run `npm ci` FIRST, before any check:",
+		"  a bare `npx biome` on an uninstalled tree resolves a DIFFERENT package and exits 0 — a green that",
+		"  means nothing. With no `main` ref, compare against the branch's parent commit, never a ref you",
+		"  lack. A platform-only living surface such as the current PR body is unreachable unless the caller",
+		"  embeds it in this brief; never substitute remembered text or silently mark it reviewed.",
 		"- Scratch space is a private `mktemp -d`, never a bare /tmp path: parallel delegates SHARE /tmp —",
 		"  treat any /tmp file you did not create as hostile.",
 		"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
@@ -870,9 +872,13 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
 		"PARENT directory's return.json. The schema is CLOSED:",
 		'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string} — an unknown key',
-		"discards the whole return. reviewedHead carries the full hex of `git rev-parse HEAD` and is the ONLY",
-		"place a commit hash may appear: NO hex run of 6 or more characters anywhere else in the return —",
-		"refer to commits by position labels, never by hash.",
+		"discards the whole return. `ok` reports that YOUR WORK COMPLETED, not that the artifact passed: a",
+		"complete review with findings and a complete Judge ruling that requires repair both use true.",
+		"Only `summary` crosses to the tool caller. Keep it under 6000 characters and put the COMPLETE verdict,",
+		"every finding, and every NIT remedy there verbatim; content left only in `payload` is invisible.",
+		"reviewedHead carries the full hex of `git rev-parse HEAD` and is the ONLY place a commit hash may",
+		"appear: NO hex run of 6 or more characters anywhere else in the return — refer to commits by",
+		"position labels, never by hash.",
 	].join("\n");
 
 	it("BOTH briefs carry the RETURN contract, whole (issue #197)", () => {
