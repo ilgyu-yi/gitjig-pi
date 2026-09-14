@@ -32,7 +32,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
@@ -207,6 +207,70 @@ describe(
 			}
 		});
 
+		it("a missing WRAP tool costs the line breaks, never the clause", () => {
+			// The wrap is a convenience; the clause is the point. A pipeline's
+			// status is its last stage's, so `fold` going missing upstream leaves
+			// `sed` exiting 0 over nothing — the failure has to be caught by an
+			// empty capture, and the fallback has to emit the raw bytes.
+			//
+			// Asserted over the chain's OWN stdout and stderr, never over `cause`:
+			// the harness cuts everything between the layout's two markers, so a
+			// line leaking here is invisible to every `cause` assertion in every
+			// githook suite.
+			// The shim mirrors the REAL PATH minus one tool, so the rest of the
+			// hook chain still resolves. A hand-listed allow-list of tools was
+			// tried first and measured the chain collapsing on `dirname`, not
+			// the wrap going missing.
+			const shim = join(fixture.root, "nofold");
+			mkdirSync(shim, { recursive: true });
+			const built = spawnSync(
+				"bash",
+				[
+					"-c",
+					`set -u; IFS=:; for d in $PATH; do [ -d "$d" ] || continue; for f in "$d"/*; do n=$(basename "$f"); [ "$n" = fold ] && continue; [ -e ${JSON.stringify(shim)}/"$n" ] || ln -s "$f" ${JSON.stringify(shim)}/"$n" 2>/dev/null; done; done; command -v fold >/dev/null && echo REAL_FOLD_EXISTS`,
+				],
+				{ encoding: "utf8" },
+			);
+			assert.ok(
+				(built.stdout ?? "").includes("REAL_FOLD_EXISTS"),
+				"there is no `fold` on this machine's PATH, so removing it from the shim measures nothing",
+			);
+			assert.ok(
+				!existsSync(join(shim, "fold")) && existsSync(join(shim, "grep")),
+				"the shim did not come out as PATH-minus-fold, so this arm measures something else",
+			);
+			copyFileSync(join(repoRoot(), "SPEC.md"), join(fixture.root, "SPEC.md"));
+
+			const attempt = commitWithMessage(fixture, "feat(#218): no fold on PATH\n", { env: { PATH: shim } });
+			assert.equal(attempt.status, 0, `a missing wrap tool blocked a commit:\n${attempt.stderr}`);
+			assert.ok(
+				!/command not found/.test(attempt.stderr) && !/command not found/.test(attempt.stdout),
+				`a raw shell error reached the operator in the middle of the layout:\n${attempt.stderr}`,
+			);
+			// The clause itself must still be there, unwrapped.
+			const specLine = readFileSync(join(repoRoot(), "SPEC.md"), "utf8")
+				.split("\n")
+				.find((line) => line.startsWith("**Deletion is the default repair.**"));
+			assert.ok(specLine, "the anchor did not match in SPEC.md, so this arm measures nothing");
+			assert.ok(
+				attempt.stderr.replace(/\s+/g, " ").includes(specLine.replace(/\s+/g, " ").trim()),
+				`the clause vanished when the wrap tool did. The header then announces a disposition over nothing:\n${attempt.stderr}`,
+			);
+		});
+
+		it("with the wrap tool PRESENT the clause is wrapped, so the fallback is not the only measured path", () => {
+			copyFileSync(join(repoRoot(), "SPEC.md"), join(fixture.root, "SPEC.md"));
+			const attempt = commitWithMessage(fixture, "feat(#218): fold present\n");
+			const body = attempt.stderr.split("THE DISPOSITION")[1] ?? "";
+			const clauseLines = body
+				.split("\n")
+				.filter((line) => line.startsWith("    ") && line.trim() !== "" && !line.trim().startsWith("("));
+			assert.ok(
+				clauseLines.length > 3,
+				`the clause came out on one line with the wrap tool present, so the wrap is not running and the fallback is the only path this suite ever measures:\n${body}`,
+			);
+		});
+
 		it("an ABSENT SPEC.md prints no substitute text", () => {
 			// The degraded path is where a paraphrase would be most tempting and
 			// least checkable. It must say it did not read, not say it differently.
@@ -214,7 +278,7 @@ describe(
 			const attempt = commitWithMessage(fixture, "feat(#218): no SPEC in this tree\n");
 			assert.equal(attempt.status, 0, `an absent SPEC.md blocked a commit:\n${attempt.stderr}`);
 			assert.ok(
-				attempt.stderr.includes("not read: SPEC.md did not resolve"),
+				attempt.stderr.includes("not read: SPEC.md is absent, or no longer carries the clause"),
 				`the layout is silent about a clause it did not read:\n${attempt.stderr}`,
 			);
 			assert.ok(
@@ -272,6 +336,26 @@ describe(
 			assert.ok(
 				!attempt.stderr.includes("no row matched"),
 				`a crashed reader was reported as a clean run, which is the one reading that licenses shipping the sentence it never read:\n${attempt.stderr}`,
+			);
+			plantReader(fixture);
+		});
+
+		it("a reader that takes its own subshell down is not reported as a clean run", () => {
+			writeFileSync(join(fixture.root, READER_REL), "#!/usr/bin/env bash\ncat >/dev/null\nkill -9 $PPID\n");
+			stageProse(fixture, "zqnostatus.ts", "// an ordinary comment.");
+			const attempt = commitWithMessage(fixture, "feat(#218): a reader with no status\n");
+			assert.equal(
+				attempt.status,
+				0,
+				`a reader that died before recording a status blocked a commit:\n${attempt.stderr}`,
+			);
+			assert.ok(
+				attempt.stderr.includes("stopped before it recorded a status"),
+				`the no-status path is silent, so a read that never finished reads like one that did:\n${attempt.stderr}`,
+			);
+			assert.ok(
+				!attempt.stderr.includes("no row matched"),
+				`a reader with no status was reported as a clean run:\n${attempt.stderr}`,
 			);
 			plantReader(fixture);
 		});
@@ -461,7 +545,7 @@ describe(
 				{ arg: "1", expect: "1", why: "in range, honoured — the seam an arm drives the expiry path through" },
 				{ arg: "120", expect: "120", why: "the ceiling itself is in range" },
 				{ arg: "121", expect: "20", why: "one past the ceiling" },
-				{ arg: "abc", expect: "20", why: "a non-digit, which multiplies to 0 and ends the wait at once" },
+				{ arg: "abc", expect: "20", why: "a non-digit" },
 				{
 					arg: "08",
 					expect: "20",

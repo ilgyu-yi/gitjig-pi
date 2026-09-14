@@ -140,23 +140,18 @@ _authoring_pass_read() {
   return 0
 }
 
-# The disposition is §2.5's, and THIS FILE AUTHORS NO RESTATEMENT OF IT.
-# §2.8: "point at the SSOT clause they enforce, never copy it — a digest that
-# restates a contract is a second copy to keep in sync by hand, and the copy
-# loses its qualifiers in transit." Two revisions of this block carried a hand
-# copy and corrected it toward the clause; measured, the copy had lost three
-# of the clause's qualifiers. So the clause's own bytes are READ at run time
-# and emitted, which is §2.5's rendered-or-pointer rule applied here: a render
-# is machine-emitted, never typed.
+# The disposition is §2.5's, and THIS FILE AUTHORS NO RESTATEMENT OF IT (§2.8).
+# The clause's own bytes are READ at run time and emitted, which is §2.5's
+# rendered-or-pointer rule applied here: a render is machine-emitted, never
+# typed.
 #
-# What remains authored below is the three exceptions, which restate no clause
-# — they are the operator's procedure, and they carry their source as a
-# pointer rather than a derivation.
+# What remains authored below is the three exceptions — the operator's
+# procedure, carrying their source as a pointer.
 AUTHORING_PASS_CLAUSE_ANCHOR='^\*\*Deletion is the default repair\.\*\*'
 AUTHORING_PASS_CLAUSE_REL="SPEC.md"
 
 authoring_pass_rule() {
-  local top="${_gh_top:-}" clause=""
+  local top="${_gh_top:-}" clause="" wrapped=""
 
   printf '  THE DISPOSITION — SPEC §2.5, "Deletion is the default repair"\n'
 
@@ -165,18 +160,30 @@ authoring_pass_rule() {
   fi
 
   if [ -n "$clause" ]; then
-    printf '%s\n' "$clause" | fold -s -w 72 | sed 's/^/    /'
+    # The wrap is a convenience and the clause is the point, so a missing
+    # `fold` costs the line breaks and never the bytes. Its failure is caught
+    # by an EMPTY capture rather than by a status: this is a pipeline, and a
+    # pipeline's status is its last stage's, so `fold` going missing upstream
+    # leaves `sed` exiting 0 over nothing. Its stderr goes to /dev/null —
+    # an unlabelled `command not found` on the operator's terminal, in the
+    # middle of the layout, is a worse report than an unwrapped clause.
+    wrapped="$(printf '%s\n' "$clause" | fold -s -w 72 2>/dev/null | sed 's/^/    /' 2>/dev/null)"
+    if [ -n "$wrapped" ]; then
+      printf '%s\n' "$wrapped"
+    else
+      printf '    %s\n' "$clause"
+    fi
   else
     # No substitute text. A paraphrase authored on the degraded path would be
     # the copy this function exists not to carry.
-    printf '    (not read: %s did not resolve, so the clause is not reproduced\n' "$AUTHORING_PASS_CLAUSE_REL"
-    printf '     here. Read §2.5 before disposing of anything flagged above.)\n'
+    printf '    (not read: %s is absent, or no longer carries the clause at this\n' "$AUTHORING_PASS_CLAUSE_REL"
+    printf '     anchor, so the clause is not reproduced here.\n'
+    printf '     Read §2.5 before disposing of anything flagged above.)\n'
   fi
 
   cat <<'RULE'
 
-  Exceptions to it, from the procedure recorded on issue #218 — not derived
-  from any clause, and this is their whole source:
+  Exceptions to it, from the procedure recorded on issue #218:
     1. A Judge's verbatim NIT remedy — the text is the Judge's, not yours.
     2. A wrong literal — a number, an identifier, a path — may be corrected
        in place. The sentence EXPLAINING it is deleted, not re-derived.
@@ -191,8 +198,9 @@ RULE
 # it exists so an arm can drive the expiry path without waiting out the
 # compiled-in budget. An argument is not an environment variable: a caller
 # who can pass it is already running this function. It clamps to
-# 1..AUTHORING_PASS_BUDGET_MAX_S, and anything else — empty, non-digit, zero,
-# or an all-digit value above the ceiling — takes the compiled-in default.
+# 1..AUTHORING_PASS_BUDGET_MAX_S, and anything else — empty, non-digit,
+# carrying a leading zero, or an all-digit value above the ceiling — takes
+# the compiled-in default.
 authoring_pass_layout() {
   local msgfile="${1:-}"
   local budget="${2:-}"
