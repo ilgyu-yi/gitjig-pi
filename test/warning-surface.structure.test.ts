@@ -230,6 +230,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// from a path or a delegate; interpolated only into the parse's own
 			// needle.
 			"REVIEW_RECORD_MARKER",
+			// Four lowercase hexadecimal digits emitted only after membership
+			// in the fixed delimiter set, so the output domain is fixed.
+			'character.charCodeAt(0).toString(16).padStart(4, "0")',
 		],
 	},
 	{

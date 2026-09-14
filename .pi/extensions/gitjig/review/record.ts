@@ -98,6 +98,46 @@ function isRoundSummary(value: unknown): boolean {
 }
 
 /**
+ * Encode the delimiters every neutralization pass needs while they are
+ * inside JSON strings. JSON parsing restores the original code units, so
+ * egress sees no actionable spelling and the history reader sees the exact
+ * recorded values. Structural JSON bytes and the marker stay readable.
+ */
+function inertJsonStrings(json: string): string {
+	let rendered = "";
+	let insideString = false;
+	let escaped = false;
+	for (const character of json) {
+		if (!insideString) {
+			rendered += character;
+			if (character === '"') insideString = true;
+			continue;
+		}
+		if (escaped) {
+			rendered += character;
+			escaped = false;
+			continue;
+		}
+		if (character === "\\") {
+			rendered += character;
+			escaped = true;
+			continue;
+		}
+		if (character === '"') {
+			rendered += character;
+			insideString = false;
+			continue;
+		}
+		if ("@#-:/".includes(character)) {
+			rendered += `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+		} else {
+			rendered += character;
+		}
+	}
+	return rendered;
+}
+
+/**
  * Compose the record body: the marker line pinning the head, then the
  * record as fenced JSON. The render is machine-emitted from the record
  * value — never typed prose — so what the reader parses is what the
@@ -110,7 +150,7 @@ export function composeReviewRecord(record: ReviewRecord): string {
 		": " +
 		record.head +
 		" -->\n\n```json\n" +
-		JSON.stringify(record, null, "\t") +
+		inertJsonStrings(JSON.stringify(record, null, "\t")) +
 		"\n```\n"
 	);
 }

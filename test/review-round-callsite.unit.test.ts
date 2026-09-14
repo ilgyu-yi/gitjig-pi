@@ -11,9 +11,10 @@ import {
 	type ReviewRoundSpec,
 	registerReviewRoundCommand,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
+import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
 import { fetchReviewComments, recordsFromComments } from "../.pi/extensions/gitjig/review/comments.ts";
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
-import { composeReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
+import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 
 const dirs: string[] = [];
 after(() => {
@@ -104,6 +105,27 @@ describe("review-round production call site", () => {
 		});
 		assert.deepEqual(lookup, { ok: true, bodies: [] });
 		assert.equal(attempts, 2);
+	});
+
+	it("stops after two failed platform comment-read attempts", () => {
+		let attempts = 0;
+		const lookup = fetchReviewComments("/repo", 212, () => {
+			attempts += 1;
+			throw new Error("persistent");
+		});
+		assert.deepEqual(lookup, { ok: false, cause: "the bounded platform comment read failed" });
+		assert.equal(attempts, 2);
+	});
+
+	it("preserves record strings across the egress neutralizer", () => {
+		const record = repairRecord(HEAD_A);
+		const finding = "notify @alice; fixes #12; GH-4; owner/repo#5; https://example.invalid/issues/6";
+		record.bundle = [{ finding, slot: SLOT }];
+		const body = composeReviewRecord(record);
+		const published = neutralizeForDestination(body, "pr-comment");
+		assert.equal(published.neutralized, 0);
+		assert.equal(published.text, body);
+		assert.equal(parseReviewRecord(published.text)?.bundle[0].finding, finding);
 	});
 
 	it("drives the registered handler through the composed round and posts its machine record", async () => {

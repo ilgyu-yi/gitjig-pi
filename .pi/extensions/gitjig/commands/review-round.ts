@@ -26,7 +26,7 @@ import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchest
 import type { Manifest } from "../review/resolve.ts";
 
 const REFUSE_SPEC =
-	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape";
+	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
 const HANDOFF_HEAD = "review-round handed off: the requested review head could not be resolved";
 const HANDOFF_HISTORY = "review-round handed off: installed review history could not be read";
 const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnosis was unavailable or required parking";
@@ -213,7 +213,10 @@ export function registerReviewRoundCommand(
 ): void {
 	pi.registerCommand("review-round", {
 		description:
-			"Drive panel, Judge, Resolver, durable record, and §1.4 history from one closed JSON spec: /review-round <spec-file>.",
+			"Drive panel, Judge, Resolver, durable record, and §1.4 history from one closed JSON spec: " +
+			"/review-round <spec-file>. Schema and example: README.md, Driving a review round. The delegate runs " +
+			"in the caller's trust domain and inherits its environment, credentials included: remote reach through " +
+			"inherited credentials is not confined.",
 		handler: async (args: string, ctx) => {
 			let spec: ReviewRoundSpec | undefined;
 			const name = args.trim();
