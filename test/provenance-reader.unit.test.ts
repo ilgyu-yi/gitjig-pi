@@ -189,6 +189,38 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{ shape: "change-narration", line: "// This used to carry the whole union.", why: "the used-to spelling" },
 	{ shape: "change-narration", line: "// The field was previously optional.", why: "the was-previously spelling" },
 	{ shape: "change-narration", line: "// A helper formerly named subjectAbsent.", why: "the formerly spelling" },
+	// The unmeasured-claim family (issue #218). The corpus these rows were
+	// derived from is named in the reader's own header.
+	{
+		shape: "guard-claim",
+		line: "// unthreaded silently costs the suite those seconds while nothing reds.",
+		why: "the canonical shape: a guard's silence asserted, with no run behind it",
+	},
+	{
+		shape: "guard-claim",
+		line: "// Measured without this arm: the constant at 1 leaves the file fully green.",
+		why: "the same claim in its positive spelling \u2014 a mutant's outcome narrated rather than rendered",
+	},
+	{
+		shape: "guard-claim",
+		line: "// The criterion is a substring test, so the arm admits a value that threads nothing.",
+		why: "a claim about what a guard's CRITERION lets through, which is the half a population fix never reaches",
+	},
+	{
+		shape: "guard-claim",
+		line: "// This arm pins the default as WIRED and as LARGE.",
+		why: "a claim about what an arm establishes \u2014 OPERATING rule 7's shape, stated in prose instead of measured",
+	},
+	{
+		shape: "measurement-claim",
+		line: "// the file's runtime went 85ms to 12,096ms.",
+		why: "a before/after runtime typed into a comment; \u00a72.5 admits it rendered or as a pointer, not as prose",
+	},
+	{
+		shape: "measurement-claim",
+		line: "// an exhausted read costs 3 x 20s plus 2s + 4s of backoff.",
+		why: "a timing multiplied out in prose, rendered nowhere; the row reaches the '3 x 20s' spelling alone",
+	},
 ];
 
 describe("every shape the reader claims to cover is reported (issue #70)", () => {
@@ -205,10 +237,15 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 				run.stdout.includes(line.trim()) || run.stdout.includes(line.trim().replace(/^\/\/ /, "")),
 				`the report does not carry the sentence it found. Report was:\n${run.stdout}`,
 			);
+			// The remedy is keyed by FAMILY: provenance is decided by §2.5's
+			// erasure test, an unmeasured claim by its rendered-or-pointer rule.
+			// Asserting one criterion over both would pass on a report naming a
+			// criterion that cannot decide half the hits.
+			const criterion = shape === "guard-claim" || shape === "measurement-claim" ? /rendered-or-pointer/i : /erasure/i;
 			assert.match(
 				run.stdout,
-				/erasure/i,
-				"the report does not carry the remedy. §2.5's erasure test is what a reader applies to decide the sentence, so a hit without it is a flag without a criterion",
+				criterion,
+				`the report does not carry the remedy this shape is decided by (${criterion}). A hit without its criterion is a flag a reader cannot act on`,
 			);
 		});
 	}

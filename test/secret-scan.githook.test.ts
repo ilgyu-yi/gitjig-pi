@@ -947,6 +947,10 @@ describe("boundary pins — green in both tree states (issue #66)", { skip: IS_W
 				join(repoRoot(), ".githooks", "helpers", "conventional_commit.sh"),
 				join(fixture.helpersDir, "conventional_commit.sh"),
 			);
+			cpSync(
+				join(repoRoot(), ".githooks", "helpers", "authoring_pass.sh"),
+				join(fixture.helpersDir, "authoring_pass.sh"),
+			);
 			stageFile(fixture, "zqleakbstub.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(fixture, "chore: exercise the silent-stub arm\n");
 			assert.equal(attempt.status, 0, `stub branch helper: the fold-open contract broke: ${attempt.stderr}`);
