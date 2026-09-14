@@ -239,7 +239,7 @@ const SHAPE_CASES: ReadonlyArray<{ shape: string; line: string; why: string }> =
 	{
 		shape: "guard-claim",
 		line: "// This arm pins the default as WIRED and as LARGE.",
-		why: "a claim about what an arm establishes \u2014 OPERATING rule 7's shape, stated in prose instead of measured",
+		why: "a coverage-attribution claim about what an arm establishes, stated in prose instead of measured",
 	},
 	{
 		shape: "measurement-claim",
