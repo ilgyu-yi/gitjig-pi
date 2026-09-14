@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -177,6 +177,32 @@ describe("review-round production call site", () => {
 		assert.deepEqual(entries, [
 			{ type: "gitjig-review-round", data: { disposition: "posted", review: { state: "approved" } } },
 		]);
+
+		const outside = mkdtempSync(join(tmpdir(), "gitjig-review-outside-"));
+		dirs.push(outside);
+		writeFileSync(join(outside, "round.json"), JSON.stringify(input));
+		symlinkSync(join(outside, "round.json"), join(fixture.root, "linked.json"));
+		await handler("linked.json", { waitForIdle: async () => {} });
+		assert.deepEqual(entries.at(-1), {
+			type: "gitjig-review-round",
+			data: {
+				disposition: "refused",
+				cause:
+					"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round",
+			},
+		});
+		assert.equal(briefs.length, 1, "a symlinked spec must refuse before dispatch");
+
+		writeFileSync(join(fixture.root, "bad-base.json"), JSON.stringify(spec("missing-base", fixture.head)));
+		await handler("bad-base.json", { waitForIdle: async () => {} });
+		assert.deepEqual(entries.at(-1), {
+			type: "gitjig-review-round",
+			data: {
+				disposition: "hand-off",
+				cause: "review-round handed off: the composed round could not produce a terminal result",
+				reentry: "none",
+			},
+		});
 	});
 
 	it("hands off when a marked record is unreadable instead of shortening history", async () => {
@@ -233,7 +259,40 @@ describe("review-round production call site", () => {
 			disposition: "hand-off",
 			cause: "review-round handed off: the required history diagnosis was unavailable or required parking",
 			reentry: "none",
+			diagnosis: {
+				value: "STAGNATION",
+				invalidation: "nothing",
+				evidence: "two recorded repair states",
+			},
 		});
 		assert.equal(rounds, 0);
+	});
+
+	it("retains a NONE diagnosis in the posted terminal disposition", async () => {
+		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "new ground" };
+		const seams = {
+			readComments: () => ({ ok: true as const, bodies }),
+			recordsFromComments,
+			resolveHead: () => HEAD_B,
+			makeDispatch: () => async () => ({
+				disposition: "admitted" as const,
+				ok: true,
+				summary: "",
+				compare: "confirmed" as const,
+				payload: JSON.stringify(diagnosis),
+			}),
+			runRound: async () => ({
+				review: { state: "approved" as const },
+				record: repairRecord(HEAD_B),
+				recordBody: "record",
+			}),
+			publish: async () => publishResult(),
+		} as ReviewRoundSeams;
+		assert.deepEqual(await driveReviewRound(spec(), "/unused", seams), {
+			disposition: "posted",
+			review: { state: "approved" },
+			diagnosis,
+		});
 	});
 });

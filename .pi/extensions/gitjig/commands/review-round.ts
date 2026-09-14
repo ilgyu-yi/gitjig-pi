@@ -4,8 +4,8 @@
  * and fences explicit instead of inventing a positional prose grammar.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { lstatSync, readFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
@@ -17,6 +17,7 @@ import {
 	admitDiagnosis,
 	type Consequence,
 	composeDiagnosisBrief,
+	type DiagnosisInput,
 	diagnosisConsequence,
 	historyAvailability,
 	repairHistory,
@@ -32,6 +33,7 @@ const HANDOFF_HISTORY = "review-round handed off: installed review history could
 const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnosis was unavailable or required parking";
 const HANDOFF_REENTRY = "review-round handed off: the diagnosis invalidated a gate that must be re-entered";
 const HANDOFF_PUBLISH = "review-round handed off: the durable review record was not confirmed published";
+const HANDOFF_ROUND = "review-round handed off: the composed round could not produce a terminal result";
 
 export type ReviewRoundSpec = {
 	pr: number;
@@ -47,8 +49,8 @@ export type ReviewRoundSpec = {
 
 export type CommandDisposition =
 	| { disposition: "refused"; cause: string }
-	| { disposition: "hand-off"; cause: string; reentry: Consequence["reentry"] }
-	| { disposition: "posted"; review: RoundResult["review"] };
+	| { disposition: "hand-off"; cause: string; reentry: Consequence["reentry"]; diagnosis?: DiagnosisInput }
+	| { disposition: "posted"; review: RoundResult["review"]; diagnosis?: DiagnosisInput };
 
 export type ReviewRoundSeams = {
 	readComments: typeof fetchReviewComments;
@@ -158,14 +160,16 @@ export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefine
 	return value as ReviewRoundSpec;
 }
 
-function reentryConsequence(consequence: Consequence): CommandDisposition | undefined {
+function reentryConsequence(consequence: Consequence, diagnosis: DiagnosisInput): CommandDisposition | undefined {
 	switch (consequence.reentry) {
 		case "none":
-			return consequence.park ? { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" } : undefined;
+			return consequence.park
+				? { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none", diagnosis }
+				: undefined;
 		case "plan":
-			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "plan" };
+			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "plan", diagnosis };
 		case "authorization":
-			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "authorization" };
+			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "authorization", diagnosis };
 	}
 }
 
@@ -181,12 +185,17 @@ export async function driveReviewRound(
 	if (!availability.available) return { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" };
 	const history = repairHistory(availability.records);
 	const dispatch = seams.makeDispatch(spec);
+	let diagnosis: DiagnosisInput | undefined;
 	if (triggerFires(history)) {
 		const admitted = admitDiagnosis(
 			await dispatch(composeDiagnosisBrief(history, { changeDescription: spec.changeDescription }), head),
 		);
 		if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
-		const stop = reentryConsequence(diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation));
+		diagnosis = admitted.diagnosis;
+		const stop = reentryConsequence(
+			diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation),
+			admitted.diagnosis,
+		);
 		if (stop !== undefined) return stop;
 	}
 	const round = await seams.runRound({
@@ -202,7 +211,28 @@ export async function driveReviewRound(
 	const published = await seams.publish(round.recordBody, spec.pr);
 	if (published.details.disposition !== "published")
 		return { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" };
-	return { disposition: "posted", review: round.review };
+	return diagnosis === undefined
+		? { disposition: "posted", review: round.review }
+		: { disposition: "posted", review: round.review, diagnosis };
+}
+
+function readRepositorySpec(repoRoot: string, name: string): ReviewRoundSpec | undefined {
+	if (name.length === 0 || isAbsolute(name)) return undefined;
+	const path = resolve(repoRoot, name);
+	const fromRoot = relative(repoRoot, path);
+	if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`)) return undefined;
+	try {
+		let cursor = repoRoot;
+		for (const component of fromRoot.split(sep)) {
+			cursor = join(cursor, component);
+			const stat = lstatSync(cursor);
+			if (stat.isSymbolicLink()) return undefined;
+		}
+		if (!lstatSync(path).isFile()) return undefined;
+		return parseReviewRoundSpec(JSON.parse(readFileSync(path, "utf8")));
+	} catch {
+		return undefined;
+	}
 }
 
 export function registerReviewRoundCommand(
@@ -218,19 +248,7 @@ export function registerReviewRoundCommand(
 			"in the caller's trust domain and inherits its environment, credentials included: remote reach through " +
 			"inherited credentials is not confined.",
 		handler: async (args: string, ctx) => {
-			let spec: ReviewRoundSpec | undefined;
-			const name = args.trim();
-			if (name.length > 0 && !isAbsolute(name)) {
-				const path = resolve(repoRoot, name);
-				const fromRoot = relative(repoRoot, path);
-				if (fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`)) {
-					try {
-						spec = parseReviewRoundSpec(JSON.parse(readFileSync(path, "utf8")));
-					} catch {
-						/* fixed refusal below */
-					}
-				}
-			}
+			const spec = readRepositorySpec(repoRoot, args.trim());
 			let outcome: CommandDisposition;
 			if (spec === undefined) {
 				outcome = { disposition: "refused", cause: REFUSE_SPEC };
@@ -260,7 +278,11 @@ export function registerReviewRoundCommand(
 						}
 					},
 				};
-				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
+				try {
+					outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
+				} catch {
+					outcome = { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" };
+				}
 			}
 			pi.appendEntry("gitjig-review-round", outcome);
 			pi.sendMessage({ customType: "gitjig-spine-turn", content: [], display: false }, { triggerTurn: true });

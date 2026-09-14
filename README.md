@@ -55,7 +55,7 @@ A complete specification is:
 }
 ```
 
-`pr` is a positive integer. Refs and `changeDescription` are non-empty strings. `delegateArgv` is a non-empty list of non-empty strings. `manifest` is explicit: use `{"state":"absent"}` when no criterion manifest is available, or `present` with a string list. All four fence lists are required; each prior finding has exactly `label` and `text`. `timeoutMs` is optional, positive, and at most 2147483647. `timing` is optional; both values are positive seconds and `finalReturnSeconds` is greater than `firstReturnSeconds`. Unknown keys, an absolute or outside-repository spec path, unreadable JSON, and any value outside these constraints are refused before dispatch.
+`pr` is a positive integer. Refs and `changeDescription` are non-empty strings. `delegateArgv` is a non-empty list of non-empty strings. `manifest` is explicit: use `{"state":"absent"}` when no criterion manifest is available, or `present` with a string list. All four fence lists are required; each prior finding has exactly `label` and `text`. `timeoutMs` is optional, positive, and at most 2147483647. `timing` is optional; both values are positive seconds and `finalReturnSeconds` is greater than `firstReturnSeconds`. Unknown keys, an absolute or outside-repository spec path, a path with a symbolic-link component, unreadable JSON, and any value outside these constraints are refused before dispatch.
 
 The delegate runs in the caller's trust domain and inherits its environment, credentials included: remote reach through inherited credentials is not confined.
 
