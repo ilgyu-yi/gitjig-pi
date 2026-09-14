@@ -295,6 +295,7 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 				return parsed[2];
 			});
 		assert.ok(rules.length > 0, "no RULE lines parsed, so this arm would pass over an empty population");
+		const reached = new Set<string>();
 		for (const { line } of SHAPE_CASES) {
 			const sentence = line.replace(/^\/\/ /, "");
 			const matched = rules.filter((rule) => {
@@ -310,7 +311,13 @@ describe("every shape the reader claims to cover is reported (issue #70)", () =>
 				1,
 				`${JSON.stringify(sentence)} matches ${matched.length} rules, not one: ${JSON.stringify(matched)}. The reader stops at the first, so every other rule this input touches is measured by nothing while this case reads as its coverage`,
 			);
+			reached.add(matched[0]);
 		}
+		assert.deepEqual(
+			[...reached].sort(),
+			[...new Set(rules)].sort(),
+			"a declared RULE is reached by no case. The count census passes on a redirected case — row count and shape multiset are unchanged — so the rule could be deleted or broken by a stray metacharacter silently",
+		);
 	});
 
 	it("every RULE the reader declares has a case — counted per alternative, not per shape", () => {
