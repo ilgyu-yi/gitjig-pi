@@ -52,7 +52,6 @@
  * what a delegate may not do is report a class closed. #203 is not
  * solved here and is not deepened past the class it already records.
  *
- *
  * DECISION — the reviewer's structured result rides the return's
  * `payload` slot as the closed `{token, findings}` JSON join.ts parses;
  * the Judge's rides the same slot as the closed

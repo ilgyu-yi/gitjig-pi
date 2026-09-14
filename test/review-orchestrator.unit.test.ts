@@ -658,8 +658,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			EXPECTED_COVERAGE,
 			"the reviewer brief does not carry the coverage-attribution block as the expected literal, END " +
 				"INCLUDED. A reviewer attributes coverage in the body of a finding — 'no arm covers this shape' is " +
-				"the claim this rule governs — and §2.4's machine-pair clause bound only the author until this " +
-				"block existed. Equality, not substring: a line appended INSIDE this block can weaken the rule " +
+				"the claim this rule governs. Equality, not substring: a line appended INSIDE this block can weaken the rule " +
 				"while leaving every substring pin over it green",
 		);
 	});
@@ -704,8 +703,7 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 					"is refused unread.",
 			],
 			"the reviewer brief's block roster drifted. An EXTRA entry is a paragraph inserted into a delegate's " +
-				"brief — the shape every equality pin in this file is blind to, since `composedBlock` stops at the " +
-				"first blank line and a licence appended AFTER a block leaves its own pin green. A MISSING or " +
+				"brief. A MISSING or " +
 				"REORDERED entry is a block dropped or moved: the claim disciplines must reach the reader before " +
 				"the transport mechanics, and the coverage burden after the burden its text calls 'the burden above'",
 		);
@@ -757,13 +755,6 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		);
 	});
 	it("the coverage rule appears EXACTLY ONCE per brief — one home, no second (issue #213)", () => {
-		// WHAT THIS ARM COVERS, and what it leaves open — stated to the standard
-		// the block it pins demands of itself. The needle is one exact sentence,
-		// so a second home stating the rule in DIFFERENT WORDS contains it zero
-		// times, the count stays at one, and this arm stays green. The equality
-		// pins above see a reworded retention only INSIDE the two blocks they
-		// extract. A reworded restatement in a third block no arm pins is caught
-		// by neither: an enumeration of two mechanisms, not a class closure.
 		const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 		const b = briefs();
 		const documents = [
