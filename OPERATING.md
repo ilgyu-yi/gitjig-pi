@@ -22,7 +22,7 @@ That is what keeps it a contract rather than a schedule (§2.4).
 | § | what it keeps | why no instrument reaches it | derivation |
 |---|---|---|---|
 | R1 | the queue ranking and the repair preference | no actor but the author ranks a queue; a brief binds a delegate for one round, and the ranking has to hold across all of them | none owed |
-| R2 | claim-discipline rules 1, 2, 3 and 5 | they govern **acts** — taking an exit status, re-reading after an edit, asserting an anchor matched — and a text reader cannot observe an act. A brief also binds the wrong party: the author is the one who runs the command | #227 |
+| R2 | claim-discipline rules 1, 2, 3 and 4 | they govern **acts** — taking an exit status, re-reading after an edit, asserting an anchor matched — and a text reader cannot observe an act. A brief also binds the wrong party: the author is the one who runs the command | #227 |
 | R3 | the evidence ledger | readings of SPEC clauses against this corpus, addressed to the author across rounds; part of it is delegate-facing and in scope for its derivation | #227 |
 | R4 | the caller-side transport contract | what the **caller** must put into any brief: neither a delegate-world fact (which `briefs.ts` composes) nor a SPEC contract | #220 |
 | R5 | the clone's working facts | properties of this one clone's toolchain and gates, true of no adopter and so homeless in the SPEC | none owed |
@@ -85,7 +85,7 @@ rule without it is the kind of prose that gets skimmed.
    the command read.** "Reports nothing" over a command reporting one hit, and a domain recorded as
    cleared where two of its three treatments were measured, are the same defect at two scales.
 
-Four rules already left this list because instruments carry them, and they are named here so the
+Three rules already left this list because instruments carry them, and they are named here so the
 roster is readable against the file's own history: findings crossing into a brief verbatim is
 structural in `briefs.ts` (it composes raw findings and has no summarizing path); the exculpatory
 burden and the coverage-attribution burden are composed blocks in both briefs; and the sentence
