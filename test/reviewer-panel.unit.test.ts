@@ -1248,6 +1248,29 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
+	it("the authoritative read retains a deleted tracked path and routes its lens", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ ".pi/deleted.ts": "gone after this commit\n" });
+		rmSync(join(repo, ".pi/deleted.ts"));
+		execFileSync("git", ["add", "-A"], { cwd: repo });
+		execFileSync("git", ["commit", "-qm", "delete tracked path"], { cwd: repo });
+
+		const read = p.changedPathsFromRepo("HEAD~1", "HEAD", repo);
+		assert.deepEqual(
+			[...read],
+			[".pi/deleted.ts"],
+			"the changed-path read dropped a deleted constituent — adding `--diff-filter=d` to its git argv " +
+				"survives unless an arm owns the deletion shape, and §1.7 exempts no constituent of the " +
+				"authoritative change surface from routing",
+		);
+		assert.deepEqual(
+			p.deriveRequiredSlots(read, p.loadPolicy()).map((slot) => slot.lens),
+			["runtime"],
+			"the deleted runtime path did not derive its required lens — retaining the name without routing it " +
+				"would not protect a deletion review from the empty or incomplete panel path",
+		);
+	});
+
 	it("the read is a three-dot range: it reports the head's own changes, not the base's", () => {
 		const p = orchestrator();
 		// Divergent history: `base-line` carries a change the head does not.
