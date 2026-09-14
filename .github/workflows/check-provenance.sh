@@ -57,8 +57,8 @@
 #   the cheaper side of that trade.
 #
 #   UNREPORTED, measured: a round bound to a verb outside the listed set
-#   ("round 2 adjudicated the global shape"). Each is the price of not
-#   reporting ordinary prose, and each is a real miss.
+#   ("round 2 adjudicated the global shape"). It is the price of not
+#   reporting ordinary prose, and it is a real miss.
 #
 #   FALSE POSITIVES. `previously`, `used to`,
 #   `formerly` and `(first|earlier|previous|original) (draft|wording|version)
@@ -75,7 +75,7 @@
 #   which is why that rule requires a number or the plural. The same shape
 #   reaches further than a feature name: `[Rr]ound` with no left boundary
 #   matches inside `background`, which is why every rule added for the
-#   possessive and verb spellings carries `(^|[^A-Za-z])`.
+#   spellings below carries `(^|[^A-Za-z])`.
 #
 #   They are reported for a human to judge, which is why this reader
 #   cannot become a gate without first solving a problem it does not solve.
@@ -118,13 +118,13 @@ set -uo pipefail
 # alternative. The table is the population and the suite binds it. No count
 # is stated: a count here is exactly what the next widening falsifies.
 #
-# A ROW THAT OVER-MATCHES IS DELETED, NEVER NARROWED. Re-spelling it is
-# what produced three over-matching spellings of one rule here, each
-# narrower than the last and each reported as ordinary prose; the fourth is
-# reachable only by trying again. What a deletion costs is a miss, and a
+# A ROW THAT OVER-MATCHES IS DELETED, NEVER NARROWED. What a deletion
+# costs is a miss, and a
 # miss is disclosed in the residual block above. What a narrowing costs is
 # a false report, which the header cannot disclose because nobody knows it
-# is there.
+# is there. A missing left boundary is not an over-match of the rule's
+# shape but of its edges, and is repaired in place; every other over-match
+# is deleted.
 SHAPES=()
 PATTERNS=()
 RULE() {
@@ -141,17 +141,11 @@ RULE schedule '(once|after) [^,]{1,40} lands'
 RULE schedule 'will be (added|implemented|landed|removed)'
 RULE review-archaeology '(^|[^A-Za-z])[Rr]eview round [0-9]'
 RULE review-archaeology '(^|[^A-Za-z])[Rr]eview rounds'
-RULE review-archaeology '[Rr]ound [0-9]+ (found|caught|raised)'
+RULE review-archaeology '(^|[^A-Za-z])[Rr]ound [0-9]+ (found|caught|raised)'
 RULE review-archaeology '[Tt]he reviewer (found|caught|noted)'
 RULE review-archaeology '[Aa]n? (previous|prior|earlier) review'
-# The spellings that actually carry this class, which the five rows above do
-# not reach. Each carries its own LEFT boundary, because `[Rr]ound` with none
+# The spellings the five rows above do not reach. Each carries its own LEFT boundary, because `[Rr]ound` with none
 # matches inside `background` and `foreground`.
-#
-# The possessive is written `[^0-9[:space:]]s` rather than `.s`: a RULE
-# pattern is single-quoted, so it cannot carry an apostrophe, and a bare `.`
-# there also matches a digit — which reports `a round 30s budget` as
-# archaeology. The class excludes digits and space for exactly that reason.
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ finding'
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ nit'
 RULE review-archaeology '(^|[^A-Za-z])(ROUND|Round|round)-[0-9]+ [A-Z]'

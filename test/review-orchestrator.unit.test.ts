@@ -1172,12 +1172,10 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 
 	it("a NON-ADMITTED return contributes no summary entry (issue #203)", async () => {
 		// The `disposition === "admitted"` gates, and the COMPLEMENT is what
-		// this arm holds. Without an arm separating the admitted population
-		// from its complement, dropping both gates and recording a REFUSED
-		// outcome's machine-authored `cause` as an actor's verbatim prose
-		// is not separable at all. That is durable
-		// MISATTRIBUTION — record.ts's own doc block ranks it worse than prose
-		// dropped — so the complement is pinned here, by count and by content.
+		// this arm holds. Recording a REFUSED outcome's machine-authored
+		// `cause` as an actor's verbatim prose is durable MISATTRIBUTION —
+		// record.ts's own doc block ranks it worse than prose dropped — so the
+		// complement is pinned here, by count and by content.
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n", "test/y.test.ts": "y\n" });
 		const fake = fakeDispatch((brief) =>
