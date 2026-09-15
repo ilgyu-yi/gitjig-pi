@@ -1,15 +1,21 @@
 /**
  * The /review-round production call site for one composed review round and
- * §1.4's preceding history decision. Its JSON file input keeps the manifest
- * and fences explicit instead of inventing a positional prose grammar.
+ * §1.4's history decision over the record it just made durable. Its JSON
+ * file input keeps the fences explicit instead of inventing a positional
+ * prose grammar; every review target — repository, pull request, base, head
+ * and criterion manifest — comes from the platform-attested ReviewSubject,
+ * never from the caller.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
-import { type PublishResult, performPublish } from "../publish/index.ts";
 import { quoted } from "../quote.ts";
 import type { BriefTiming, ReviewFences } from "../review/briefs.ts";
-import { fetchReviewComments, recordsFromComments } from "../review/comments.ts";
+import {
+	type AttestedCommentPopulation,
+	fetchAttestedReviewComments,
+	recordsFromAttestedComments,
+} from "../review/comments.ts";
 import {
 	admitDiagnosis,
 	type Consequence,
@@ -18,16 +24,28 @@ import {
 	diagnosisConsequence,
 	historyAvailability,
 	repairHistory,
+	type StateSummary,
 	triggerFires,
 } from "../review/history.ts";
 import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchestrate.ts";
+import type { ReviewPublicationOutcome } from "../review/publication.ts";
+import { commitPostStateDiagnosis, publishAndRefetchReviewRecord } from "../review/publication.ts";
+import type { ReviewRecord } from "../review/record.ts";
 import { resolveRepositoryHead } from "../review/repository.ts";
-import type { Manifest } from "../review/resolve.ts";
+import {
+	fetchReviewSubject,
+	type ReviewSubject,
+	refetchPlatformReviewContext,
+	subjectCriterionManifest,
+} from "../review/subject.ts";
 import { readRepositoryInput } from "./review-round-input.ts";
 
 const REFUSE_SPEC =
 	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
-const HANDOFF_HEAD = "review-round handed off: the requested review head could not be resolved";
+const HANDOFF_SUBJECT = "review-round handed off: the platform-attested review subject could not be established";
+const HANDOFF_HEAD = "review-round handed off: the attested head is not the head this clone resolves";
+const HANDOFF_DRIFT = "review-round handed off: the review subject changed while the round ran";
+const HANDOFF_DIAGNOSIS_RECORD = "review-round handed off: the post-state diagnosis record was not made durable";
 const HANDOFF_HISTORY = "review-round handed off: installed review history could not be read";
 const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnosis was unavailable or required parking";
 const HANDOFF_REENTRY = "review-round handed off: the diagnosis invalidated a gate that must be re-entered";
@@ -41,9 +59,6 @@ function alignedTiming(timeoutMs: number): BriefTiming {
 
 export type ReviewRoundSpec = {
 	pr: number;
-	baseRef: string;
-	headRef: string;
-	manifest: Manifest;
 	fences: ReviewFences;
 	changeDescription: string;
 	delegateArgv: string[];
@@ -84,11 +99,18 @@ export function terminalText(outcome: CommandDisposition): string {
 }
 
 export type ReviewRoundSeams = {
-	readComments: typeof fetchReviewComments;
-	recordsFromComments: typeof recordsFromComments;
+	fetchSubject: (repoRoot: string, pr: number) => Promise<ReviewSubject | undefined>;
+	refetchSubject: (repoRoot: string, subject: ReviewSubject) => Promise<ReviewSubject | undefined>;
+	readComments: (repoRoot: string, subject: ReviewSubject) => Promise<AttestedCommentPopulation>;
+	recordsFromComments: (population: AttestedCommentPopulation, writerId: string) => ReviewRecord[] | undefined;
 	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
-	publish: (body: string, pr: number) => Promise<PublishResult>;
+	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
+	commitDiagnosis: (
+		subject: ReviewSubject,
+		history: readonly StateSummary[],
+		diagnosis: DiagnosisInput,
+	) => Promise<ReviewPublicationOutcome>;
 	resolveHead: (repoRoot: string, headRef: string) => string | undefined;
 };
 
@@ -103,12 +125,6 @@ function exactObject(value: unknown, keys: readonly string[]): value is Record<s
 
 function stringList(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every((entry) => typeof entry === "string");
-}
-
-function manifest(value: unknown): value is Manifest {
-	if (!exactObject(value, ["state", "criteria"])) return false;
-	if (value.state === "absent") return Object.keys(value).length === 1;
-	return value.state === "present" && Object.keys(value).length === 2 && stringList(value.criteria);
 }
 
 function fences(value: unknown): value is ReviewFences {
@@ -146,32 +162,10 @@ function timing(value: unknown): value is BriefTiming {
 }
 
 export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefined {
-	const keys = [
-		"pr",
-		"baseRef",
-		"headRef",
-		"manifest",
-		"fences",
-		"changeDescription",
-		"delegateArgv",
-		"timeoutMs",
-		"timing",
-	];
+	const keys = ["pr", "fences", "changeDescription", "delegateArgv", "timeoutMs", "timing"];
 	if (!exactObject(value, keys)) return undefined;
 	if (!Number.isSafeInteger(value.pr) || (value.pr as number) <= 0) return undefined;
-	if (
-		typeof value.baseRef !== "string" ||
-		value.baseRef.length === 0 ||
-		typeof value.headRef !== "string" ||
-		value.headRef.length === 0
-	)
-		return undefined;
-	if (
-		!manifest(value.manifest) ||
-		!fences(value.fences) ||
-		typeof value.changeDescription !== "string" ||
-		value.changeDescription.length === 0
-	)
+	if (!fences(value.fences) || typeof value.changeDescription !== "string" || value.changeDescription.length === 0)
 		return undefined;
 	if (
 		!stringList(value.delegateArgv) ||
@@ -205,6 +199,22 @@ function reentryConsequence(consequence: Consequence): TerminalSeed | undefined 
 	}
 }
 
+/**
+ * Read the durable history back across the publication boundary: the round's
+ * own record is assembled from what the platform returns, never from the
+ * body this process just composed (§1.4's record the acting agent does not
+ * author, issue #212's acceptance criterion 2).
+ */
+async function durableHistory(
+	repoRoot: string,
+	subject: ReviewSubject,
+	seams: ReviewRoundSeams,
+): Promise<StateSummary[] | undefined> {
+	const records = seams.recordsFromComments(await seams.readComments(repoRoot, subject), subject.writerId);
+	const availability = historyAvailability(true, records);
+	return availability.available ? repairHistory(availability.records) : undefined;
+}
+
 export async function driveReviewRound(
 	spec: ReviewRoundSpec,
 	repoRoot: string,
@@ -212,46 +222,56 @@ export async function driveReviewRound(
 ): Promise<CommandDisposition> {
 	let state: TransactionState = { phase: "pre-admission" };
 	try {
-		const head = seams.resolveHead(repoRoot, spec.headRef);
-		if (head === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HEAD, reentry: "none" });
-		const records = seams.recordsFromComments(await seams.readComments(repoRoot, spec.pr));
-		const availability = historyAvailability(true, records);
-		if (!availability.available)
+		const subject = await seams.fetchSubject(repoRoot, spec.pr);
+		if (subject === undefined)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_SUBJECT, reentry: "none" });
+		const head = subject.context.pullRequest.head.oid;
+		if (seams.resolveHead(repoRoot, head) !== head)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_HEAD, reentry: "none" });
+		// Read the substrate BEFORE spending a round on it: an unreadable
+		// history hands off (§1.4's present-but-cannot-measure limb) rather
+		// than producing a review state no next round could ever read.
+		if ((await durableHistory(repoRoot, subject, seams)) === undefined)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
-		const history = repairHistory(availability.records);
 		const dispatch = seams.makeDispatch(spec);
 		const briefTiming = spec.timing ?? alignedTiming(spec.timeoutMs ?? REVIEW_ROUND_RUN_BOUND_MS);
-		if (triggerFires(history)) {
-			const admitted = admitDiagnosis(
-				await dispatch(
-					composeDiagnosisBrief(history, {
-						changeDescription: spec.changeDescription,
-						withheldHead: head,
-						timing: briefTiming,
-					}),
-					head,
-				),
-			);
-			if (!admitted.available)
-				return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" });
-			state = { phase: "diagnosis-admitted", diagnosis: admitted.diagnosis };
-			const stop = reentryConsequence(diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation));
-			if (stop !== undefined) return finish(state, stop);
-		}
 		const round = await seams.runRound({
 			repoRoot,
-			baseRef: spec.baseRef,
+			baseRef: subject.context.pullRequest.base.oid,
 			headRef: head,
-			manifest: spec.manifest,
+			manifest: subjectCriterionManifest(subject),
 			fences: spec.fences,
 			changeDescription: spec.changeDescription,
 			timing: briefTiming,
 			dispatch,
 		});
-		const published = await seams.publish(round.recordBody, spec.pr);
-		if (published.details.disposition !== "published")
+		if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
+		if (!(await seams.publishRecord(round.recordBody, subject)).ok)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
-		return finish(state, { disposition: "posted", review: round.review });
+		const history = await durableHistory(repoRoot, subject, seams);
+		if (history === undefined)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+		if (!triggerFires(history)) return finish(state, { disposition: "posted", review: round.review });
+		const admitted = admitDiagnosis(
+			await dispatch(
+				composeDiagnosisBrief(history, {
+					changeDescription: spec.changeDescription,
+					withheldHead: head,
+					timing: briefTiming,
+				}),
+				head,
+			),
+		);
+		if (!admitted.available)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" });
+		state = { phase: "diagnosis-admitted", diagnosis: admitted.diagnosis };
+		// Durable before the consequence: the ruling that gates continuation is
+		// made durable before anything acts on it (§1.9, §1.4).
+		if (!(await seams.commitDiagnosis(subject, history, admitted.diagnosis)).ok)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS_RECORD, reentry: "none" });
+		const stop = reentryConsequence(diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation));
+		return finish(state, stop ?? { disposition: "posted", review: round.review });
 	} catch {
 		return finish(state, { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" });
 	}
@@ -286,8 +306,13 @@ export function registerReviewRoundCommand(
 				outcome = { disposition: "refused", cause: REFUSE_SPEC };
 			} else {
 				const defaults: ReviewRoundSeams = {
-					readComments: fetchReviewComments,
-					recordsFromComments,
+					fetchSubject: fetchReviewSubject,
+					refetchSubject: async (root, current) => {
+						const context = await refetchPlatformReviewContext(root, current.context);
+						return context === undefined ? undefined : current;
+					},
+					readComments: (root, current) => fetchAttestedReviewComments(root, current.context),
+					recordsFromComments: recordsFromAttestedComments,
 					makeDispatch: (input) =>
 						makeDispatcher({
 							callerRepoRoot: repoRoot,
@@ -296,8 +321,9 @@ export function registerReviewRoundCommand(
 							timeoutMs: input.timeoutMs,
 						}),
 					runRound: reviewRound,
-					publish: (body, pr) =>
-						performPublish({ body, destination: { kind: "pr-comment", number: pr } }, repoRoot, stateRoot),
+					publishRecord: (body, current) => publishAndRefetchReviewRecord(body, current, repoRoot, stateRoot),
+					commitDiagnosis: (current, history, diagnosis) =>
+						commitPostStateDiagnosis(current, history, diagnosis, repoRoot, stateRoot),
 					resolveHead: resolveRepositoryHead,
 				};
 				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
