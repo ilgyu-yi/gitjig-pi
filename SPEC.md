@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 169 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 181 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 195 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 217 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 229 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 270 |
-| §2 | Artifact hierarchy and lifecycle | 278 |
-| &nbsp;&nbsp;§2.1 | Issue types | 282 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 295 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 311 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 315 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 330 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 367 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 379 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 389 |
-| §3 | Enforcement-layer architecture | 401 |
-| &nbsp;&nbsp;§3.1 | The constraint | 405 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 412 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 420 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 534 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 538 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 542 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 552 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 564 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 577 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 591 |
-| &nbsp;&nbsp;§3.11 | Gate design | 601 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 623 |
-| §4 | Substrate and install contract | 633 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 637 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 643 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 647 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 651 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 655 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 661 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 671 |
-| &nbsp;&nbsp;§4.8 | The command layer | 679 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 736 |
-| §5 | Cross-cutting contracts | 778 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 782 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 786 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 790 |
-| &nbsp;&nbsp;§5.4 | Work language | 794 |
-| &nbsp;&nbsp;§5.5 | State boundary | 798 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 804 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 814 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 824 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 832 |
-| §6 | Self-governance milestone | 840 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 851 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 171 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 183 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 197 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 219 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 231 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 272 |
+| §2 | Artifact hierarchy and lifecycle | 280 |
+| &nbsp;&nbsp;§2.1 | Issue types | 284 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 297 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 313 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 317 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 332 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 369 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 381 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 391 |
+| §3 | Enforcement-layer architecture | 403 |
+| &nbsp;&nbsp;§3.1 | The constraint | 407 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 414 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 422 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 536 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 540 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 544 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 554 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 566 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 579 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 593 |
+| &nbsp;&nbsp;§3.11 | Gate design | 603 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 625 |
+| §4 | Substrate and install contract | 635 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 639 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 645 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 649 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 653 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 657 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 663 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 673 |
+| &nbsp;&nbsp;§4.8 | The command layer | 681 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 738 |
+| §5 | Cross-cutting contracts | 780 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 784 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 788 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 792 |
+| &nbsp;&nbsp;§5.4 | Work language | 796 |
+| &nbsp;&nbsp;§5.5 | State boundary | 800 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 806 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 816 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 826 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 834 |
+| §6 | Self-governance milestone | 842 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 853 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -159,7 +159,7 @@ Plan invalidation is deliberately **not** a value of this taxonomy — it is the
 
 **When the diagnosis cannot be made.** No value is ever inferred from a failure — **absence is not NONE**, and an unreadable history is never read as STAGNATION — so what a failure can do is withhold the relief only NONE grants, never supply a value. Which failures withhold it is §3.9's keying rule, applied here rather than re-derived:
 
-- **Present but cannot measure** — an unreadable or unreachable history record, a Judge not dispatched, dispatched and unavailable, or returning a ruling that is invalid or incomplete. The Judge dependency takes this limb in **every** shape, which is what keeps one direction across the actor's two capacities (§1.9): an undispatched Judge is a caller's omission, not an uninstalled enforcement, and relieving it would hand the relieved party the lever this section elsewhere refuses to mint. The instrument is being asked to vouch for something it did not measure, so it **fails closed**: the change hands off exactly as a non-NONE value would. Named false-block cost, stated here rather than discovered in operation (§3.6): this is the limb that parks a change on the diagnosis machinery's own malfunction — a transient outage or one malformed return stops work whose history would have ruled NONE — which is a guarantee the retired ladder held and this direction deliberately gives up, bounded by the recovery stated next and read by §3.6's calibration loop if it proves too eager. This is what keeps the interrupt off a semantic actor's availability — the trigger that occasioned the ruling is a caller-derived fact and has already fired, and the handoff stands until a ruling is actually obtained, which a later valid ruling then governs.
+- **Present but cannot measure** — an unreadable or unreachable history record, a Judge not dispatched, dispatched and unavailable, or returning a ruling that is invalid or incomplete. The Judge dependency takes this limb in **every** shape, which is what keeps one direction across the actor's two capacities (§1.9): an undispatched Judge is a caller's omission, not an uninstalled enforcement, and relieving it would hand the relieved party the lever this section elsewhere refuses to mint. The instrument is being asked to vouch for something it did not measure, so it **fails closed** and parks: without a valid diagnosis there is no taxonomy value or invalidation route with which autonomous recovery can begin. Named false-block cost, stated here rather than discovered in operation (§3.6): this is the limb that parks a change on the diagnosis machinery's own malfunction — a transient outage or one malformed return stops work whose history would have ruled NONE — which is a guarantee the retired ladder held and this direction deliberately gives up, bounded by the later valid ruling that can replace the failed attempt and read by §3.6's calibration loop if it proves too eager. This is what keeps the interrupt off a semantic actor's availability — the trigger that occasioned the ruling is a caller-derived fact and has already fired, and the handoff stands until a ruling is actually obtained, which a later valid ruling then governs.
 - **Absent** — the durable record's substrate, wherever a later instrument homes it, is **not installed in this clone**: the enforcement was never installed, the acting party is neither its cause nor able to repair it from inside a block, so it **fails open with a warning** and the flow continues on its ordinary terms. The shape is a property of a clone, not of a moment — a caller that omits a record the substrate does hold has made an omission, which takes the limb above.
 
 Both limbs allocate postures for a diagnosis that was **attempted**. Until every one of the instruments below has derived, no diagnosis is attempted: the clause's subject does not exist and the clause sleeps, §5.3's shape, which is what "advisory today" amounts to in operation and why neither limb reaches that regime.
