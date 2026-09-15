@@ -10,6 +10,7 @@ import {
 	type ReviewRoundSeams,
 	type ReviewRoundSpec,
 	registerReviewRoundCommand,
+	terminalText,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
 import { runPlatformRead } from "../.pi/extensions/gitjig/platform/read.ts";
@@ -93,6 +94,25 @@ function publishResult() {
 }
 
 describe("review-round production call site", () => {
+	it("projects every terminal class visibly without diagnosis evidence", () => {
+		assert.equal(
+			terminalText({ disposition: "refused", cause: "fixed refusal" }),
+			"review-round: refused — fixed refusal",
+		);
+		assert.equal(
+			terminalText({
+				disposition: "hand-off",
+				cause: "fixed handoff",
+				reentry: "authorization",
+				diagnosis: { value: "OSCILLATION", invalidation: "authorization", evidence: "untrusted evidence" },
+			}),
+			"review-round: hand-off (authorization) — fixed handoff; diagnosis OSCILLATION/authorization",
+		);
+		assert.equal(
+			terminalText({ disposition: "posted", review: { state: "approved" } }),
+			"review-round: posted approved",
+		);
+	});
 	it("reads paginated platform comments through the bounded child seam", async () => {
 		let seen: { argv: string[]; repoRoot: string } | undefined;
 		const lookup = await fetchReviewComments("/repo", 212, async (argv, repoRoot) => {

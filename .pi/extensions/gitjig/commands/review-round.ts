@@ -63,6 +63,18 @@ function finish(state: TransactionState, seed: TerminalSeed): CommandDisposition
 	return { ...seed, diagnosis: state.diagnosis };
 }
 
+/** Fixed operator-visible projection; evidence and artifact text never ride it. */
+export function terminalText(outcome: CommandDisposition): string {
+	if (outcome.disposition === "refused") return `review-round: refused — ${outcome.cause}`;
+	const diagnosis = outcome.diagnosis ? `; diagnosis ${outcome.diagnosis.value}/${outcome.diagnosis.invalidation}` : "";
+	switch (outcome.disposition) {
+		case "hand-off":
+			return `review-round: hand-off (${outcome.reentry}) — ${outcome.cause}${diagnosis}`;
+		case "posted":
+			return `review-round: posted ${outcome.review.state}${diagnosis}`;
+	}
+}
+
 export type ReviewRoundSeams = {
 	readComments: typeof fetchReviewComments;
 	recordsFromComments: typeof recordsFromComments;
@@ -272,7 +284,14 @@ export function registerReviewRoundCommand(
 				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
 			}
 			pi.appendEntry("gitjig-review-round", outcome);
-			pi.sendMessage({ customType: "gitjig-spine-turn", content: [], display: false }, { triggerTurn: true });
+			pi.sendMessage(
+				{
+					customType: "gitjig-review-round-terminal",
+					content: [{ type: "text", text: terminalText(outcome) }],
+					display: true,
+				},
+				{ triggerTurn: true },
+			);
 			await ctx.waitForIdle();
 		},
 	});
