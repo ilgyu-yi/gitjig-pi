@@ -122,8 +122,8 @@ import {
 /** One text turn: a script for runs whose act is a command dispatch, not a model turn. */
 const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 
-/** The expected governed-home multiset — §4.8's three worked cases on their ruled surfaces. */
-const EXPECTED_GOVERNED_ROWS = ["review-round|extension", "review|extension", "ship|extension", "work-on|prompt"];
+/** Active homes: review-round stays dark until its attested subject derives. */
+const EXPECTED_GOVERNED_ROWS = ["review|extension", "ship|extension", "work-on|prompt"];
 
 function subjectAbsent(arm: string, subject: string): string {
 	return (

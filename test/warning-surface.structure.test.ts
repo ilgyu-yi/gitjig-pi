@@ -154,27 +154,6 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{
 		file: "gitjig/review/panel.ts",
 		allow: [
-			// The two git revision operands, composed into ONE argv element of
-			// an execFileSync call: `git diff --name-only -z <base>...<head>`.
-			//
-			// The ground is NOT that they never reach a message — an earlier
-			// revision of this entry claimed that and it was false, measured
-			// twice: execFileSync synthesizes an Error whose `message` begins
-			// "Command failed: git diff --name-only -z <base>...<head>", and
-			// its default stdio leaves the child's stderr inherited, so git's
-			// own diagnostic echoes the operand onto the PARENT's stderr.
-			//
-			// The ground that does hold is provenance. Issue #47's lock exists
-			// for text an ACTOR influences — a path component an outside party
-			// names. These two are refs the caller resolves for the change it
-			// is reviewing; they are never read from a delegate's return, from
-			// a policy file, or from any surface a reviewed party writes. What
-			// reaches the throw path is the caller's own operand, and a caller
-			// that cannot trust its own refs has lost the compare before this.
-			// If a later change ever routes an outside-supplied ref here, this
-			// entry stops holding and the interpolation goes through `quoted`.
-			"baseRef",
-			"headRef",
 			// A policy prefix, composed into a comparison operand for the
 			// segment-aware match (`path.startsWith(`${prefix}/`)`). It does
 			// carry a path, and that is why it is allowlisted on the second
@@ -209,20 +188,7 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// actor bytes in the review layer — cannot grow a raw rendering of one.
 	{ file: "gitjig/review/join.ts", allow: [] },
 	{ file: "gitjig/review/carry-forward.ts", allow: [] },
-	{
-		file: "gitjig/review/orchestrate.ts",
-		allow: [
-			// The caller's own head ref, composed into ONE execFileSync argv
-			// operand (`git rev-parse --verify <headRef>^{commit}`) — the same
-			// provenance ground panel.ts's baseRef/headRef ride: a ref the
-			// caller resolves for the change it is reviewing, never read from a
-			// delegate return or a reviewed party's surface, and the composed
-			// value is passed to git and discarded, never warned or printed. If
-			// a later change routes an outside-supplied ref here, this entry
-			// stops holding and the interpolation goes through `quoted`.
-			"options.headRef",
-		],
-	},
+	{ file: "gitjig/review/orchestrate.ts", allow: [] },
 	{
 		file: "gitjig/review/record.ts",
 		allow: [
@@ -306,17 +272,7 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// fixed literals to the dispatcher and report its causes unrephrased.
 	{ file: "gitjig/commands/index.ts", allow: [] },
 	{ file: "gitjig/commands/review.ts", allow: [] },
-	{
-		file: "gitjig/commands/review-round.ts",
-		allow: [
-			// The platform's path separator, used only to reject a spec path
-			// outside the repository.
-			"sep",
-			// The caller's own git revision operand, passed to rev-parse as one
-			// argv element and never rendered on a message surface.
-			"ref",
-		],
-	},
+	{ file: "gitjig/commands/review-round.ts", allow: [] },
 	{ file: "gitjig/commands/ship.ts", allow: [] },
 	// Admission and the delegate child compose no interpolated text; every
 	// refusal they surface is a fixed content-free literal.

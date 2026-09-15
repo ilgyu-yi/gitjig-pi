@@ -23,42 +23,6 @@ node --test "test/*.test.ts"
 
 Keep the glob quoted, and do not run a bare `node --test`: node's default discovery treats every file under `test/` as a test and executes the harness assets themselves, so that shape false-reds on a harness asset instead of measuring the runtime. The harness's own contract stays with its author-side home, the header of [`test/harness/run-pi.ts`](test/harness/run-pi.ts). CI runs the same invocation on every pull request to `main` or a maintenance branch — the `suite` required check, [`.github/workflows/suite.yml`](.github/workflows/suite.yml), which also states its own install posture; contract in SPEC §3.2/§3.3.
 
-## Driving a review round
-
-Run the composed panel, Judge, Resolver, durable record, and repair-history path with a repository-relative JSON file:
-
-```sh
-/review-round review-round.json
-```
-
-A complete specification is:
-
-```json
-{
-  "pr": 212,
-  "baseRef": "main",
-  "headRef": "HEAD",
-  "manifest": {
-    "state": "present",
-    "criteria": ["The landed instrument drives one review round."]
-  },
-  "fences": {
-    "outOfScope": [],
-    "forbiddenRemedies": [],
-    "deferralHomes": [],
-    "priorFindings": [{"label": "F1", "text": "A prior adjudicated finding."}]
-  },
-  "changeDescription": "Add the review-round call site.",
-  "delegateArgv": ["pi", "-p", "--no-session", "Read ../brief.md and write ../return.json."],
-  "timeoutMs": 600000,
-  "timing": {"firstReturnSeconds": 120, "finalReturnSeconds": 480}
-}
-```
-
-`pr` is a positive integer. Refs and `changeDescription` are non-empty strings. `delegateArgv` is a non-empty list of non-empty strings. `manifest` is explicit: use `{"state":"absent"}` when no criterion manifest is available, or `present` with a string list. All four fence lists are required; each prior finding has exactly `label` and `text`. `timeoutMs` is optional, positive, and at most 2147483647. `timing` is optional; both values are positive seconds and `finalReturnSeconds` is greater than `firstReturnSeconds`. Unknown keys, an absolute or outside-repository spec path, a path with a symbolic-link component, unreadable JSON, and any value outside these constraints are refused before dispatch.
-
-The delegate runs in the caller's trust domain and inherits its environment, credentials included: remote reach through inherited credentials is not confined.
-
 ## The development toolchain
 
 Formatting, linting and type checking run from a root `package.json` and are **development and CI only**. They are not part of what an adopting repository receives, and they are not a precondition for the suite above — the command runs unchanged in a clone that never installs. Contract in SPEC §3.3 (`source-style`, `type-check`).
