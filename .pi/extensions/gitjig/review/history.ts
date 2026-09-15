@@ -249,10 +249,11 @@ function isMember<T extends string>(domain: readonly T[], value: unknown): value
  */
 export function composeDiagnosisBrief(
 	history: readonly StateSummary[],
-	context: { changeDescription: string },
+	context: { changeDescription: string; withheldHead?: string },
 ): string {
 	const lines = history.flatMap((state, index) => {
-		const header = `  ${index + 1}. head ${state.head} resolved ${state.outcome}`;
+		const renderedHead = state.head === context.withheldHead ? "(current operand withheld)" : state.head;
+		const header = `  ${index + 1}. head ${renderedHead} resolved ${state.outcome}`;
 		const findings =
 			state.findings.length === 0
 				? ["       findings: (none)"]

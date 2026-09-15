@@ -211,7 +211,10 @@ export async function driveReviewRound(
 		const dispatch = seams.makeDispatch(spec);
 		if (triggerFires(history)) {
 			const admitted = admitDiagnosis(
-				await dispatch(composeDiagnosisBrief(history, { changeDescription: spec.changeDescription }), head),
+				await dispatch(
+					composeDiagnosisBrief(history, { changeDescription: spec.changeDescription, withheldHead: head }),
+					head,
+				),
 			);
 			if (!admitted.available)
 				return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" });

@@ -74,7 +74,7 @@ type HistoryModule = {
 	INVALIDATIONS: string[];
 	repairHistory(records: ReviewRecord[]): StateSummary[];
 	triggerFires(history: StateSummary[]): boolean;
-	composeDiagnosisBrief(history: StateSummary[], context: { changeDescription: string }): string;
+	composeDiagnosisBrief(history: StateSummary[], context: { changeDescription: string; withheldHead?: string }): string;
 	admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission;
 	diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence;
 	historyAvailability(
@@ -672,6 +672,18 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 
 	const headerLines = (text: string): string[] =>
 		text.split("\n").filter((line) => /^ {2}\d+\. head \S+ resolved /.test(line));
+
+	it("withholds the caller-held current operand while retaining older history heads", () => {
+		const oldHead = "a".repeat(40);
+		const currentHead = "b".repeat(40);
+		const text = mod().composeDiagnosisBrief([state({ head: oldHead }), state({ head: currentHead })], {
+			changeDescription: "d",
+			withheldHead: currentHead,
+		});
+		assert.match(text, new RegExp(oldHead));
+		assert.doesNotMatch(text, new RegExp(currentHead));
+		assert.match(text, /head \(current operand withheld\) resolved repair/);
+	});
 
 	it("renders EVERY state, not only one — each state's own finding and ruling evidence appears", () => {
 		const history = multi();
