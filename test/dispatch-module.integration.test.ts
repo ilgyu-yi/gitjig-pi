@@ -939,6 +939,94 @@ describe("the executor's child is drained and seam-scoped (issue #88, SPEC §4.9
 		);
 	});
 
+	it("the shared scrub's seven keys are each pinned by delegate-side git behavior", async () => {
+		const provision = await requireModule<ProvisionModule>("provision.ts", "seven-key-env-scrub");
+		const executor = await requireModule<ExecutorModule>("executor.ts", "seven-key-env-scrub");
+		const repo = mintRepo();
+		type ScrubCase = {
+			key: string;
+			poison: (context: DispatchContext) => Record<string, string>;
+			script: string;
+		};
+		const cases: ScrubCase[] = [
+			{
+				key: "GIT_DIR",
+				poison: () => ({ GIT_DIR: join(repo, ".git") }),
+				script: 'test "$(git rev-parse --git-dir)" = ".git"',
+			},
+			{
+				key: "GIT_WORK_TREE",
+				poison: () => ({ GIT_WORK_TREE: repo }),
+				script: 'test "$(git rev-parse --show-toplevel)" = "$PWD"',
+			},
+			{
+				key: "GIT_INDEX_FILE",
+				poison: (context) => {
+					const index = join(context.scratchRoot, "hostile-index");
+					execFileSync("git", ["read-tree", "--empty"], {
+						cwd: context.treeDir,
+						env: { ...process.env, GIT_INDEX_FILE: index },
+					});
+					return { GIT_INDEX_FILE: index };
+				},
+				script: 'test -n "$(git ls-files | head -n 1)"',
+			},
+			{
+				key: "GIT_OBJECT_DIRECTORY",
+				poison: (context) => {
+					const objects = join(context.scratchRoot, "hostile-objects");
+					mkdirSync(objects);
+					return { GIT_OBJECT_DIRECTORY: objects };
+				},
+				script: "git cat-file -e HEAD",
+			},
+			{
+				key: "GIT_COMMON_DIR",
+				poison: (context) => {
+					const common = join(context.scratchRoot, "hostile-common");
+					mkdirSync(common);
+					return { GIT_COMMON_DIR: common };
+				},
+				script: "git rev-parse --git-dir >/dev/null",
+			},
+			{
+				key: "GIT_CONFIG_PARAMETERS",
+				poison: () => ({ GIT_CONFIG_PARAMETERS: "'zq.scrub'='parameters'" }),
+				script: 'test -z "$(git config --get zq.scrub || true)"',
+			},
+			{
+				key: "GIT_CONFIG_COUNT",
+				poison: () => ({ GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "zq.scrub", GIT_CONFIG_VALUE_0: "count" }),
+				script: 'test -z "$(git config --get zq.scrub || true)"',
+			},
+		];
+
+		for (const scrubCase of cases) {
+			const context = await provision.provisionDispatchContext(repo, { brief: BRIEF });
+			cleanups.push(context.scratchRoot);
+			const poison = scrubCase.poison(context);
+			const prior = new Map(
+				Object.keys(poison).map((key) => [key, { present: Object.hasOwn(process.env, key), value: process.env[key] }]),
+			);
+			Object.assign(process.env, poison);
+			let outcome: { exitCode: number | null; timedOut: boolean };
+			try {
+				outcome = await executor.runDelegate(context, ["sh", "-c", scrubCase.script], { timeoutMs: 30_000 });
+			} finally {
+				for (const [key, before] of prior) {
+					if (before.present) process.env[key] = before.value;
+					else delete process.env[key];
+				}
+			}
+			assert.equal(
+				outcome.exitCode,
+				0,
+				`seven-key-env-scrub: deleting the ${scrubCase.key} scrub lets the delegate's git observe the hostile ` +
+					"ambient value; each row must independently fail its single-line deletion mutant",
+			);
+		}
+	});
+
 	it("an empty-string argv entry settles spawnFailed and refuses on the delegate-absent cause", async () => {
 		const provision = await requireModule<ProvisionModule>("provision.ts", "spawn-throw");
 		const executor = await requireModule<ExecutorModule>("executor.ts", "spawn-throw");
