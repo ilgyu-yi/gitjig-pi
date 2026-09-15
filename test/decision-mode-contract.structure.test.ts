@@ -6,11 +6,94 @@ import { repoRoot } from "./harness/run-pi.ts";
 
 const spec = readFileSync(join(repoRoot(), "SPEC.md"), "utf8");
 
-function section(heading: string, nextHeading: string): string {
-	const start = spec.indexOf(heading);
-	const end = spec.indexOf(nextHeading, start + heading.length);
+function section(heading: string, nextHeading: string, source = spec): string {
+	const start = source.indexOf(heading);
+	const end = source.indexOf(nextHeading, start + heading.length);
 	assert.ok(start >= 0 && end > start, `SPEC section bounds are missing: ${heading} -> ${nextHeading}`);
-	return spec.slice(start, end);
+	return source.slice(start, end);
+}
+
+function paragraphStarting(source: string, heading: string, nextHeading: string, opening: string): string {
+	const body = section(heading, nextHeading, source);
+	const matches = body.split("\n\n").filter((paragraph) => paragraph.startsWith(opening));
+	assert.equal(matches.length, 1, `expected one paragraph beginning ${opening}`);
+	return matches[0];
+}
+
+function assertModeResolution(source: string): void {
+	const paragraph = paragraphStarting(
+		source,
+		"### 5.6 Operating modes",
+		"### 5.7 Unattended conduct",
+		"Each setting resolves separately",
+	);
+	const sources = [
+		"`--execution-mode`, `--decision-mode`",
+		"`GITJIG_EXECUTION_MODE`, `GITJIG_DECISION_MODE`",
+		"`<resolved-state-root>/modes.json`",
+		"then its default",
+	];
+	let prior = -1;
+	for (const token of sources) {
+		const at = paragraph.indexOf(token);
+		assert.ok(at > prior, `mode source is missing or out of precedence order: ${token}`);
+		prior = at;
+	}
+}
+
+const BOUNDARY_SENTENCE =
+	"Trusted-account attribution, approval of an SSOT correction or genuinely new authorization, reversal of deliberate human state, disposal of another party's filed work, credentials, server configuration, another repository, and public or unretractable acts remain non-substitutable and park when reached.";
+
+function assertHardBoundarySentence(source: string): void {
+	const paragraph = paragraphStarting(
+		source,
+		"### 5.7 Unattended conduct",
+		"### 5.8 Context lifecycle",
+		"**Generation is open, decision is gated.**",
+	);
+	const start = paragraph.indexOf("Trusted-account attribution");
+	const end = paragraph.indexOf("park when reached.", start);
+	assert.ok(start >= 0 && end >= start, "the shared hard-boundary consequence sentence is missing");
+	assert.equal(paragraph.slice(start, end + "park when reached.".length), BOUNDARY_SENTENCE);
+}
+
+function assertDiagnosisAuthority(source: string): void {
+	const body = section("### 1.4 Cross-review repair", "### 1.5 Delegated work", source);
+	for (const stale of [
+		"answers whether a further autonomous repair attempt is admissible",
+		"decides whether the next act is an autonomous repair attempt",
+		"this value hands off",
+		"the value says whether the next act is an autonomous repair attempt or a handoff",
+		"whatever the taxonomy value admits",
+		"under NONE the repair simply continues",
+		"repair the value admits",
+		"relief only NONE grants",
+	]) {
+		assert.ok(!body.includes(stale), `a taxonomy value still carries action authority: ${stale}`);
+	}
+	assert.ok(body.includes("the value never authorizes an act"));
+	assert.ok(body.includes("decision mode alone selects the recipient of an interruption"));
+}
+
+function assertPanelModeSplit(source: string): void {
+	const paragraph = paragraphStarting(
+		source,
+		"### 1.7 The reviewer panel",
+		"### 1.8 Plan contest",
+		"Majority vote is the **rejected design**",
+	);
+	for (const token of [
+		"At **plan selection**, decision mode `handoff` uses a human",
+		"`autonomous` uses §1.8's mutually blind contest and independent Judge",
+		"a reviewer verdict never substitutes there",
+		"At the **ready decision**, execution mode `attended` stops for a human",
+		"`unattended` may use the existing reviewer-verdict fallback",
+		"decision mode grants no merge authority",
+		"complete panel",
+		"at least one required slot",
+	]) {
+		assert.ok(paragraph.includes(token), `the plan/ready mode split dropped: ${token}`);
+	}
 }
 
 const crossReview = section("### 1.4 Cross-review repair", "### 1.5 Delegated work");
@@ -35,19 +118,23 @@ describe("the orthogonal decision-mode settlement (#237)", () => {
 		);
 	});
 
-	it("pins resolution inputs, defaults, failure direction, and the single project-value home", () => {
+	it("pins resolution inputs, precedence, defaults, failure direction, and the single project-value home", () => {
+		assertModeResolution(spec);
 		for (const token of [
 			"`attended` — the default",
 			"`handoff` — the default",
-			"`--execution-mode`, `--decision-mode`",
-			"`GITJIG_EXECUTION_MODE`, `GITJIG_DECISION_MODE`",
 			"`executionMode` or `decisionMode` field",
-			"`<resolved-state-root>/modes.json`",
 			"execution value falls toward `attended`",
 			"decision value toward `handoff`",
 		]) {
 			assert.ok(modes.includes(token), `mode resolution lost ${token}`);
 		}
+		const swapped = spec.replace(
+			"through its invocation flag (`--execution-mode`, `--decision-mode`), then its environment value (`GITJIG_EXECUTION_MODE`, `GITJIG_DECISION_MODE`)",
+			"through its environment value (`GITJIG_EXECUTION_MODE`, `GITJIG_DECISION_MODE`), then its invocation flag (`--execution-mode`, `--decision-mode`)",
+		);
+		assert.notEqual(swapped, spec, "the precedence mutant anchor did not match");
+		assert.throws(() => assertModeResolution(swapped), /out of precedence order/);
 	});
 
 	it("closes the substitutable checkpoint set and keeps ready under execution mode", () => {
@@ -147,25 +234,49 @@ describe("the orthogonal decision-mode settlement (#237)", () => {
 		}
 	});
 
-	it("does not stack the soft budget or cross any named non-substitutable boundary", () => {
+	it("does not stack the soft budget or detach a hard boundary from its mandatory park", () => {
 		assert.ok(unattended.includes("one intervention spends both rather than stacking attempts"));
-		for (const boundary of [
-			"Trusted-account attribution",
-			"approval of an SSOT correction",
-			"genuinely new authorization",
-			"reversal of deliberate human state",
-			"disposal of another party's filed work",
-			"credentials",
-			"server configuration",
-			"another repository",
-			"public or unretractable acts",
-		]) {
-			assert.ok(unattended.includes(boundary), `the all-mode hard boundary dropped ${boundary}`);
-		}
+		assertHardBoundarySentence(spec);
+		const permitted = spec.replace(
+			"disposal of another party's filed work, credentials",
+			"disposal of another party's filed work is permitted; credentials",
+		);
+		assert.notEqual(permitted, spec, "the contradictory-permission mutant anchor did not match");
+		assert.throws(() => assertHardBoundarySentence(permitted));
 		assert.ok(
 			unattended.includes(
 				"Autonomous decision mode changes the independent consumer at §5.6's closed three-checkpoint set, never another gate",
 			),
 		);
+	});
+
+	it("keeps taxonomy values classification-only across every §1.4 authority cluster", () => {
+		assertDiagnosisAuthority(spec);
+		for (const stale of [
+			"answers whether a further autonomous repair attempt is admissible",
+			"this value hands off",
+			"whatever the taxonomy value admits",
+			"relief only NONE grants",
+		]) {
+			const mutated = spec.replace("\n### 1.5 Delegated work", `\n${stale}\n\n### 1.5 Delegated work`);
+			assert.notEqual(mutated, spec, "the §1.4 authority mutant anchor did not match");
+			assert.throws(() => assertDiagnosisAuthority(mutated), /still carries action authority/);
+		}
+	});
+
+	it("separates decision-mode plan selection from execution-mode ready fallback", () => {
+		assertPanelModeSplit(spec);
+		const planSubstitution = spec.replace(
+			"a reviewer verdict never substitutes there",
+			"a reviewer verdict may substitute there",
+		);
+		assert.notEqual(planSubstitution, spec, "the plan-substitution mutant anchor did not match");
+		assert.throws(() => assertPanelModeSplit(planSubstitution), /plan\/ready mode split dropped/);
+		const readyOwnership = spec.replace(
+			"At the **ready decision**, execution mode `attended` stops for a human",
+			"At the **ready decision**, decision mode `handoff` stops for a human",
+		);
+		assert.notEqual(readyOwnership, spec, "the ready-ownership mutant anchor did not match");
+		assert.throws(() => assertPanelModeSplit(readyOwnership), /plan\/ready mode split dropped/);
 	});
 });
