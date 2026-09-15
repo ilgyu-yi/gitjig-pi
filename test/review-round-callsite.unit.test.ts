@@ -7,6 +7,7 @@ import { after, describe, it } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	driveReviewRound,
+	parseReviewRoundSpec,
 	type ReviewRoundSeams,
 	type ReviewRoundSpec,
 	registerReviewRoundCommand,
@@ -111,6 +112,22 @@ function publishResult() {
 }
 
 describe("review-round production call site", () => {
+	it("normalizes omitted deadlines inside one finite outer bound and rejects misalignment", () => {
+		const normalized = parseReviewRoundSpec(spec());
+		assert.ok(normalized !== undefined);
+		assert.equal(normalized.timeoutMs, 30 * 60 * 1_000);
+		assert.deepEqual(normalized.timing, { firstReturnSeconds: 600, finalReturnSeconds: 900 });
+
+		assert.equal(
+			parseReviewRoundSpec({
+				...spec(),
+				timeoutMs: 2_000,
+				timing: { firstReturnSeconds: 1, finalReturnSeconds: 2 },
+			}),
+			undefined,
+		);
+	});
+
 	it("projects every terminal class visibly without diagnosis evidence", () => {
 		assert.equal(
 			terminalText({ disposition: "refused", cause: "fixed refusal" }),

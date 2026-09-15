@@ -33,6 +33,11 @@ const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnos
 const HANDOFF_REENTRY = "review-round handed off: the diagnosis invalidated a gate that must be re-entered";
 const HANDOFF_PUBLISH = "review-round handed off: the durable review record was not confirmed published";
 const HANDOFF_ROUND = "review-round handed off: the composed round could not produce a terminal result";
+const REVIEW_ROUND_RUN_BOUND_MS = 30 * 60 * 1_000;
+
+function alignedTiming(timeoutMs: number): BriefTiming {
+	return { firstReturnSeconds: timeoutMs / 3_000, finalReturnSeconds: timeoutMs / 2_000 };
+}
 
 export type ReviewRoundSpec = {
 	pr: number;
@@ -183,7 +188,10 @@ export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefine
 	)
 		return undefined;
 	if (value.timing !== undefined && !timing(value.timing)) return undefined;
-	return value as ReviewRoundSpec;
+	const timeoutMs = (value.timeoutMs as number | undefined) ?? REVIEW_ROUND_RUN_BOUND_MS;
+	const briefTiming = (value.timing as BriefTiming | undefined) ?? alignedTiming(timeoutMs);
+	if (briefTiming.finalReturnSeconds * 1_000 >= timeoutMs) return undefined;
+	return { ...(value as ReviewRoundSpec), timeoutMs, timing: briefTiming };
 }
 
 function reentryConsequence(consequence: Consequence): TerminalSeed | undefined {
@@ -212,10 +220,15 @@ export async function driveReviewRound(
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
 		const history = repairHistory(availability.records);
 		const dispatch = seams.makeDispatch(spec);
+		const briefTiming = spec.timing ?? alignedTiming(spec.timeoutMs ?? REVIEW_ROUND_RUN_BOUND_MS);
 		if (triggerFires(history)) {
 			const admitted = admitDiagnosis(
 				await dispatch(
-					composeDiagnosisBrief(history, { changeDescription: spec.changeDescription, withheldHead: head }),
+					composeDiagnosisBrief(history, {
+						changeDescription: spec.changeDescription,
+						withheldHead: head,
+						timing: briefTiming,
+					}),
 					head,
 				),
 			);
@@ -232,7 +245,7 @@ export async function driveReviewRound(
 			manifest: spec.manifest,
 			fences: spec.fences,
 			changeDescription: spec.changeDescription,
-			timing: spec.timing,
+			timing: briefTiming,
 			dispatch,
 		});
 		const published = await seams.publish(round.recordBody, spec.pr);

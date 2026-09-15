@@ -187,7 +187,7 @@ const COVERAGE_ATTRIBUTION = [
 	"DIFFERENT arm is the one that reds. Name the arm you watched red, never the arm you expect to.",
 ].join("\n");
 
-const RETURN_CONTRACT = [
+export const DELEGATE_RETURN_CONTRACT = [
 	"RETURN: write JSON to ../return.json — your cwd is the provisioned tree and the return slot is the",
 	"PARENT directory's return.json. The schema is CLOSED:",
 	'{"ok": boolean, "summary": string, "reviewedHead": string, "payload": string} — an unknown key',
@@ -200,7 +200,7 @@ const RETURN_CONTRACT = [
 	"position labels, never by hash.",
 ].join("\n");
 
-function deadlines(timing: BriefTiming): string {
+export function composeDelegateDeadlines(timing: BriefTiming): string {
 	return (
 		"DEADLINES (self-enforced): write a SHORT, COMPLETE provisional ../return.json early, then improve " +
 		"it by OVERWRITING it in place. Have it written by T0+" +
@@ -283,9 +283,9 @@ export function composeReviewerBrief(
 		"",
 		PROVISIONED_TREE_FACTS,
 		"",
-		RETURN_CONTRACT,
+		DELEGATE_RETURN_CONTRACT,
 		"",
-		deadlines(timing),
+		composeDelegateDeadlines(timing),
 	].join("\n");
 }
 
@@ -380,8 +380,8 @@ export function composeJudgeBrief(
 		'"onCriterion"?: boolean, "evidence": string}]} — the optional axes owed exactly when §1.9 owes',
 		"them: all four on a CONFIRMED finding, validity plus evidence otherwise.",
 		"",
-		RETURN_CONTRACT,
+		DELEGATE_RETURN_CONTRACT,
 		"",
-		deadlines(timing),
+		composeDelegateDeadlines(timing),
 	].join("\n");
 }

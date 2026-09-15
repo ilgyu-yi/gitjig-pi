@@ -74,7 +74,14 @@ type HistoryModule = {
 	INVALIDATIONS: string[];
 	repairHistory(records: ReviewRecord[]): StateSummary[];
 	triggerFires(history: StateSummary[]): boolean;
-	composeDiagnosisBrief(history: StateSummary[], context: { changeDescription: string; withheldHead?: string }): string;
+	composeDiagnosisBrief(
+		history: StateSummary[],
+		context: {
+			changeDescription: string;
+			withheldHead?: string;
+			timing?: { firstReturnSeconds: number; finalReturnSeconds: number };
+		},
+	): string;
 	admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission;
 	diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence;
 	historyAvailability(
@@ -596,6 +603,24 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
 		for (const needle of ["taxonomy VALUE", "INVALIDATION finding", "absence is not NONE"]) {
 			assert.ok(text.includes(needle), `the diagnosis brief no longer states ${JSON.stringify(needle)}`);
+		}
+	});
+
+	it("carries the closed return envelope and caller-aligned provisional/final deadlines", () => {
+		const text = mod().composeDiagnosisBrief([state()], {
+			changeDescription: "d",
+			timing: { firstReturnSeconds: 600, finalReturnSeconds: 900 },
+		});
+		for (const needle of [
+			"The schema is CLOSED",
+			'"ok": boolean',
+			'"summary": string',
+			'"reviewedHead": string',
+			'"payload": string',
+			"T0+600 seconds",
+			"T0+900 seconds",
+		]) {
+			assert.ok(text.includes(needle), needle);
 		}
 	});
 
