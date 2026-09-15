@@ -7,6 +7,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import { type PublishResult, performPublish } from "../publish/index.ts";
+import { quoted } from "../quote.ts";
 import type { BriefTiming, ReviewFences } from "../review/briefs.ts";
 import { fetchReviewComments, recordsFromComments } from "../review/comments.ts";
 import {
@@ -65,13 +66,15 @@ function finish(state: TransactionState, seed: TerminalSeed): CommandDisposition
 
 /** Fixed operator-visible projection; evidence and artifact text never ride it. */
 export function terminalText(outcome: CommandDisposition): string {
-	if (outcome.disposition === "refused") return `review-round: refused — ${outcome.cause}`;
-	const diagnosis = outcome.diagnosis ? `; diagnosis ${outcome.diagnosis.value}/${outcome.diagnosis.invalidation}` : "";
+	if (outcome.disposition === "refused") return ["review-round: refused — ", quoted(outcome.cause)].join("");
+	const diagnosis = outcome.diagnosis
+		? ["; diagnosis ", outcome.diagnosis.value, "/", outcome.diagnosis.invalidation].join("")
+		: "";
 	switch (outcome.disposition) {
 		case "hand-off":
-			return `review-round: hand-off (${outcome.reentry}) — ${outcome.cause}${diagnosis}`;
+			return ["review-round: hand-off (", outcome.reentry, ") — ", quoted(outcome.cause), diagnosis].join("");
 		case "posted":
-			return `review-round: posted ${outcome.review.state}${diagnosis}`;
+			return ["review-round: posted ", outcome.review.state, diagnosis].join("");
 	}
 }
 

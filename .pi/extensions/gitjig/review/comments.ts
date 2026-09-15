@@ -55,7 +55,8 @@ export async function fetchAttestedReviewComments(
 	if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !Number.isSafeInteger(pr) || pr <= 0)
 		return { ok: false, cause: "the platform comment subject was not admissible" };
 	let output: string | undefined;
-	const argv = ["api", "--paginate", "--slurp", `repos/${repository}/issues/${String(pr)}/comments`];
+	const route = ["repos/", repository, "/issues/", String(pr), "/comments"].join("");
+	const argv = ["api", "--paginate", "--slurp", route];
 	for (let attempt = 0; attempt < 2 && output === undefined; attempt += 1) {
 		try {
 			output = await read(argv, repoRoot);

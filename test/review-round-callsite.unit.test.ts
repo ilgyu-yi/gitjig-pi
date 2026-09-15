@@ -98,7 +98,7 @@ describe("review-round production call site", () => {
 	it("projects every terminal class visibly without diagnosis evidence", () => {
 		assert.equal(
 			terminalText({ disposition: "refused", cause: "fixed refusal" }),
-			"review-round: refused — fixed refusal",
+			'review-round: refused — "fixed refusal"',
 		);
 		assert.equal(
 			terminalText({
@@ -107,7 +107,7 @@ describe("review-round production call site", () => {
 				reentry: "authorization",
 				diagnosis: { value: "OSCILLATION", invalidation: "authorization", evidence: "untrusted evidence" },
 			}),
-			"review-round: hand-off (authorization) — fixed handoff; diagnosis OSCILLATION/authorization",
+			'review-round: hand-off (authorization) — "fixed handoff"; diagnosis OSCILLATION/authorization',
 		);
 		assert.equal(
 			terminalText({ disposition: "posted", review: { state: "approved" } }),
