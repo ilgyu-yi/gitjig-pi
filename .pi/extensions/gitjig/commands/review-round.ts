@@ -3,13 +3,9 @@
  * §1.4's preceding history decision. Its JSON file input keeps the manifest
  * and fences explicit instead of inventing a positional prose grammar.
  */
-import { execFileSync } from "node:child_process";
-import { lstatSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
-import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import { type PublishResult, performPublish } from "../publish/index.ts";
 import type { BriefTiming, ReviewFences } from "../review/briefs.ts";
 import { fetchReviewComments, recordsFromComments } from "../review/comments.ts";
@@ -24,7 +20,9 @@ import {
 	triggerFires,
 } from "../review/history.ts";
 import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchestrate.ts";
+import { resolveRepositoryHead } from "../review/repository.ts";
 import type { Manifest } from "../review/resolve.ts";
+import { readRepositoryInput } from "./review-round-input.ts";
 
 const REFUSE_SPEC =
 	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
@@ -51,6 +49,19 @@ export type CommandDisposition =
 	| { disposition: "refused"; cause: string }
 	| { disposition: "hand-off"; cause: string; reentry: Consequence["reentry"]; diagnosis?: DiagnosisInput }
 	| { disposition: "posted"; review: RoundResult["review"]; diagnosis?: DiagnosisInput };
+
+type TerminalSeed =
+	| { disposition: "refused"; cause: string }
+	| { disposition: "hand-off"; cause: string; reentry: Consequence["reentry"] }
+	| { disposition: "posted"; review: RoundResult["review"] };
+
+type TransactionState = { phase: "pre-admission" } | { phase: "diagnosis-admitted"; diagnosis: DiagnosisInput };
+
+/** The sole constructor of a public command outcome. */
+function finish(state: TransactionState, seed: TerminalSeed): CommandDisposition {
+	if (state.phase === "pre-admission" || seed.disposition === "refused") return seed;
+	return { ...seed, diagnosis: state.diagnosis };
+}
 
 export type ReviewRoundSeams = {
 	readComments: typeof fetchReviewComments;
@@ -160,16 +171,14 @@ export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefine
 	return value as ReviewRoundSpec;
 }
 
-function reentryConsequence(consequence: Consequence, diagnosis: DiagnosisInput): CommandDisposition | undefined {
+function reentryConsequence(consequence: Consequence): TerminalSeed | undefined {
 	switch (consequence.reentry) {
 		case "none":
-			return consequence.park
-				? { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none", diagnosis }
-				: undefined;
+			return consequence.park ? { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" } : undefined;
 		case "plan":
-			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "plan", diagnosis };
+			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "plan" };
 		case "authorization":
-			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "authorization", diagnosis };
+			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "authorization" };
 	}
 }
 
@@ -178,58 +187,50 @@ export async function driveReviewRound(
 	repoRoot: string,
 	seams: ReviewRoundSeams,
 ): Promise<CommandDisposition> {
-	const head = seams.resolveHead(repoRoot, spec.headRef);
-	if (head === undefined) return { disposition: "hand-off", cause: HANDOFF_HEAD, reentry: "none" };
-	const records = seams.recordsFromComments(seams.readComments(repoRoot, spec.pr));
-	const availability = historyAvailability(true, records);
-	if (!availability.available) return { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" };
-	const history = repairHistory(availability.records);
-	const dispatch = seams.makeDispatch(spec);
-	let diagnosis: DiagnosisInput | undefined;
-	if (triggerFires(history)) {
-		const admitted = admitDiagnosis(
-			await dispatch(composeDiagnosisBrief(history, { changeDescription: spec.changeDescription }), head),
-		);
-		if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
-		diagnosis = admitted.diagnosis;
-		const stop = reentryConsequence(
-			diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation),
-			admitted.diagnosis,
-		);
-		if (stop !== undefined) return stop;
+	let state: TransactionState = { phase: "pre-admission" };
+	try {
+		const head = seams.resolveHead(repoRoot, spec.headRef);
+		if (head === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HEAD, reentry: "none" });
+		const records = seams.recordsFromComments(seams.readComments(repoRoot, spec.pr));
+		const availability = historyAvailability(true, records);
+		if (!availability.available)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+		const history = repairHistory(availability.records);
+		const dispatch = seams.makeDispatch(spec);
+		if (triggerFires(history)) {
+			const admitted = admitDiagnosis(
+				await dispatch(composeDiagnosisBrief(history, { changeDescription: spec.changeDescription }), head),
+			);
+			if (!admitted.available)
+				return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" });
+			state = { phase: "diagnosis-admitted", diagnosis: admitted.diagnosis };
+			const stop = reentryConsequence(diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation));
+			if (stop !== undefined) return finish(state, stop);
+		}
+		const round = await seams.runRound({
+			repoRoot,
+			baseRef: spec.baseRef,
+			headRef: head,
+			manifest: spec.manifest,
+			fences: spec.fences,
+			changeDescription: spec.changeDescription,
+			timing: spec.timing,
+			dispatch,
+		});
+		const published = await seams.publish(round.recordBody, spec.pr);
+		if (published.details.disposition !== "published")
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
+		return finish(state, { disposition: "posted", review: round.review });
+	} catch {
+		return finish(state, { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" });
 	}
-	const round = await seams.runRound({
-		repoRoot,
-		baseRef: spec.baseRef,
-		headRef: head,
-		manifest: spec.manifest,
-		fences: spec.fences,
-		changeDescription: spec.changeDescription,
-		timing: spec.timing,
-		dispatch,
-	});
-	const published = await seams.publish(round.recordBody, spec.pr);
-	if (published.details.disposition !== "published")
-		return { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" };
-	return diagnosis === undefined
-		? { disposition: "posted", review: round.review }
-		: { disposition: "posted", review: round.review, diagnosis };
 }
 
 function readRepositorySpec(repoRoot: string, name: string): ReviewRoundSpec | undefined {
-	if (name.length === 0 || isAbsolute(name)) return undefined;
-	const path = resolve(repoRoot, name);
-	const fromRoot = relative(repoRoot, path);
-	if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`)) return undefined;
+	const input = readRepositoryInput(repoRoot, name);
+	if (input === undefined) return undefined;
 	try {
-		let cursor = repoRoot;
-		for (const component of fromRoot.split(sep)) {
-			cursor = join(cursor, component);
-			const stat = lstatSync(cursor);
-			if (stat.isSymbolicLink()) return undefined;
-		}
-		if (!lstatSync(path).isFile()) return undefined;
-		return parseReviewRoundSpec(JSON.parse(readFileSync(path, "utf8")));
+		return parseReviewRoundSpec(JSON.parse(input));
 	} catch {
 		return undefined;
 	}
@@ -266,23 +267,9 @@ export function registerReviewRoundCommand(
 					runRound: reviewRound,
 					publish: (body, pr) =>
 						performPublish({ body, destination: { kind: "pr-comment", number: pr } }, repoRoot, stateRoot),
-					resolveHead: (root, ref) => {
-						try {
-							return execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], {
-								cwd: root,
-								encoding: "utf8",
-								env: withoutRepoLocatingGitEnv(process.env),
-							}).trim();
-						} catch {
-							return undefined;
-						}
-					},
+					resolveHead: resolveRepositoryHead,
 				};
-				try {
-					outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
-				} catch {
-					outcome = { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" };
-				}
+				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
 			}
 			pi.appendEntry("gitjig-review-round", outcome);
 			pi.sendMessage({ customType: "gitjig-spine-turn", content: [], display: false }, { triggerTurn: true });

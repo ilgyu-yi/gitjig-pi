@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -11,10 +11,12 @@ import {
 	type ReviewRoundSpec,
 	registerReviewRoundCommand,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
+import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
 import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
 import { fetchReviewComments, recordsFromComments } from "../.pi/extensions/gitjig/review/comments.ts";
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
+import { resolveRepositoryHead } from "../.pi/extensions/gitjig/review/repository.ts";
 
 const dirs: string[] = [];
 after(() => {
@@ -26,6 +28,8 @@ const HEAD_A = "a".repeat(40);
 const HEAD_B = "b".repeat(40);
 const SLOT = { lens: "runtime", surface: "the shell's runtime extensions" };
 const FENCES = { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] };
+const REFUSE_SPEC_FOR_TEST =
+	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
 
 function repo(): { root: string; base: string; head: string } {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-review-callsite-"));
@@ -193,6 +197,16 @@ describe("review-round production call site", () => {
 		});
 		assert.equal(briefs.length, 1, "a symlinked spec must refuse before dispatch");
 
+		mkdirSync(join(fixture.root, "actual"));
+		writeFileSync(join(fixture.root, "actual", "round.json"), JSON.stringify(input));
+		symlinkSync(join(fixture.root, "actual"), join(fixture.root, "linked-dir"));
+		await handler("linked-dir/round.json", { waitForIdle: async () => {} });
+		assert.deepEqual(entries.at(-1), {
+			type: "gitjig-review-round",
+			data: { disposition: "refused", cause: REFUSE_SPEC_FOR_TEST },
+		});
+		assert.equal(briefs.length, 1, "an intermediate symlink must refuse before dispatch");
+
 		writeFileSync(join(fixture.root, "bad-base.json"), JSON.stringify(spec("missing-base", fixture.head)));
 		await handler("bad-base.json", { waitForIdle: async () => {} });
 		assert.deepEqual(entries.at(-1), {
@@ -294,5 +308,144 @@ describe("review-round production call site", () => {
 			review: { state: "approved" },
 			diagnosis,
 		});
+	});
+
+	it("projects an admitted diagnosis through every later failure class", async () => {
+		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "retained" };
+		const round = {
+			review: { state: "approved" as const },
+			record: repairRecord(HEAD_B),
+			recordBody: "record",
+		};
+		const base = {
+			readComments: () => ({ ok: true as const, bodies }),
+			recordsFromComments,
+			resolveHead: () => HEAD_B,
+			makeDispatch: () => async () => ({
+				disposition: "admitted" as const,
+				ok: true,
+				summary: "",
+				compare: "confirmed" as const,
+				payload: JSON.stringify(diagnosis),
+			}),
+		} as Pick<ReviewRoundSeams, "readComments" | "recordsFromComments" | "resolveHead" | "makeDispatch">;
+		const cases: Array<{ name: string; seams: ReviewRoundSeams; cause: string }> = [
+			{
+				name: "round throw",
+				seams: {
+					...base,
+					runRound: async () => {
+						throw new Error("round");
+					},
+					publish: async () => publishResult(),
+				},
+				cause: "review-round handed off: the composed round could not produce a terminal result",
+			},
+			{
+				name: "publish throw",
+				seams: {
+					...base,
+					runRound: async () => round,
+					publish: async () => {
+						throw new Error("publish");
+					},
+				},
+				cause: "review-round handed off: the composed round could not produce a terminal result",
+			},
+			{
+				name: "publish not confirmed",
+				seams: {
+					...base,
+					runRound: async () => round,
+					publish: async () => ({ content: [], details: { disposition: "refused" } }),
+				},
+				cause: "review-round handed off: the durable review record was not confirmed published",
+			},
+		];
+		for (const item of cases) {
+			assert.deepEqual(
+				await driveReviewRound(spec(), "/unused", item.seams),
+				{
+					disposition: "hand-off",
+					cause: item.cause,
+					reentry: "none",
+					diagnosis,
+				},
+				item.name,
+			);
+		}
+
+		const beforeAdmission = await driveReviewRound(spec(), "/unused", {
+			...base,
+			readComments: () => {
+				throw new Error("history");
+			},
+			runRound: async () => round,
+			publish: async () => publishResult(),
+		});
+		assert.deepEqual(beforeAdmission, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the composed round could not produce a terminal result",
+			reentry: "none",
+		});
+	});
+
+	it("refuses every linked path component, including one later cancelled by dot-dot", () => {
+		const fixture = repo();
+		writeFileSync(join(fixture.root, "round.json"), "root");
+		mkdirSync(join(fixture.root, "actual"));
+		mkdirSync(join(fixture.root, "actual", "deep"));
+		writeFileSync(join(fixture.root, "actual", "deep", "round.json"), "nested");
+		assert.equal(readRepositoryInput(fixture.root, "actual/deep/round.json"), "nested");
+
+		symlinkSync(join(fixture.root, "actual"), join(fixture.root, "alias"));
+		assert.equal(readRepositoryInput(fixture.root, "alias/deep/round.json"), undefined);
+		assert.equal(readRepositoryInput(fixture.root, "alias/../round.json"), undefined);
+		symlinkSync(join(fixture.root, "actual", "deep"), join(fixture.root, "actual", "linked-deep"));
+		assert.equal(readRepositoryInput(fixture.root, "actual/linked-deep/round.json"), undefined);
+	});
+
+	it("keeps Git execution behind the one quiet repository capability", () => {
+		const consumers = [
+			"../.pi/extensions/gitjig/commands/review-round.ts",
+			"../.pi/extensions/gitjig/review/orchestrate.ts",
+			"../.pi/extensions/gitjig/review/panel.ts",
+		];
+		for (const name of consumers) {
+			assert.doesNotMatch(readFileSync(new URL(name, import.meta.url), "utf8"), /execFileSync\s*\(/, name);
+		}
+		const owner = readFileSync(new URL("../.pi/extensions/gitjig/review/repository.ts", import.meta.url), "utf8");
+		assert.equal(owner.match(/execFileSync\s*\(/g)?.length, 1);
+		assert.match(owner, /stdio:\s*\["ignore",\s*"pipe",\s*"pipe"\]/);
+		assert.match(owner, /withoutRepoLocatingGitEnv\(process\.env\)/);
+		assert.match(owner, /"--end-of-options"/);
+
+		const fileOwner = readFileSync(
+			new URL("../.pi/extensions/gitjig/commands/review-round-input.ts", import.meta.url),
+			"utf8",
+		);
+		assert.match(fileOwner, /constants\.O_RDONLY\s*\|\s*constants\.O_NOFOLLOW/);
+		assert.match(fileOwner, /fstatSync\(fd\)/);
+		assert.match(fileOwner, /readFileSync\(fd,\s*"utf8"\)/);
+	});
+
+	it("resolves invalid and dash-leading refs without emitting child diagnostics", () => {
+		const fixture = repo();
+		assert.equal(resolveRepositoryHead(fixture.root, "missing-ref"), undefined);
+		const moduleUrl = new URL("../.pi/extensions/gitjig/review/repository.ts", import.meta.url).href;
+		for (const ref of ["missing-ref", "--output=forbidden"]) {
+			const child = spawnSync(
+				process.execPath,
+				[
+					"--input-type=module",
+					"--eval",
+					`import { resolveRepositoryHead } from ${JSON.stringify(moduleUrl)}; if (resolveRepositoryHead(${JSON.stringify(fixture.root)}, ${JSON.stringify(ref)}) !== undefined) process.exit(2);`,
+				],
+				{ encoding: "utf8" },
+			);
+			assert.equal(child.status, 0, ref);
+			assert.equal(child.stderr, "", ref);
+		}
 	});
 });
