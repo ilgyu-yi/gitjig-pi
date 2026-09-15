@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 171 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 183 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 197 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 219 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 231 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 272 |
-| §2 | Artifact hierarchy and lifecycle | 280 |
-| &nbsp;&nbsp;§2.1 | Issue types | 284 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 297 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 313 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 317 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 332 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 369 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 381 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 391 |
-| §3 | Enforcement-layer architecture | 403 |
-| &nbsp;&nbsp;§3.1 | The constraint | 407 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 414 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 422 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 536 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 540 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 544 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 554 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 566 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 579 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 593 |
-| &nbsp;&nbsp;§3.11 | Gate design | 603 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 625 |
-| §4 | Substrate and install contract | 635 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 639 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 645 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 649 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 653 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 657 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 663 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 673 |
-| &nbsp;&nbsp;§4.8 | The command layer | 681 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 738 |
-| §5 | Cross-cutting contracts | 780 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 784 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 788 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 792 |
-| &nbsp;&nbsp;§5.4 | Work language | 796 |
-| &nbsp;&nbsp;§5.5 | State boundary | 800 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 806 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 816 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 826 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 834 |
-| §6 | Self-governance milestone | 842 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 853 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 175 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 187 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 201 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 223 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 235 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 276 |
+| §2 | Artifact hierarchy and lifecycle | 284 |
+| &nbsp;&nbsp;§2.1 | Issue types | 288 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 301 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 317 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 321 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 336 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 373 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 385 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 395 |
+| §3 | Enforcement-layer architecture | 407 |
+| &nbsp;&nbsp;§3.1 | The constraint | 411 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 418 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 426 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 540 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 544 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 548 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 558 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 570 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 583 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 597 |
+| &nbsp;&nbsp;§3.11 | Gate design | 607 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 629 |
+| §4 | Substrate and install contract | 639 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 643 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 649 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 653 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 657 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 661 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 667 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 677 |
+| &nbsp;&nbsp;§4.8 | The command layer | 685 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 742 |
+| §5 | Cross-cutting contracts | 784 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 788 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 792 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 796 |
+| &nbsp;&nbsp;§5.4 | Work language | 800 |
+| &nbsp;&nbsp;§5.5 | State boundary | 804 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 810 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 822 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 832 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 840 |
+| §6 | Self-governance milestone | 848 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 859 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -143,9 +143,13 @@ The taxonomy value is exactly one of four, and this clause commits to them as th
 
 **What a value decides.** NONE admits ordinary continuation. STAGNATION, OSCILLATION, and INDETERMINATE interrupt ordinary repair and downstream flow; the resolved **decision mode** (§5.6), never the execution mode, then selects the recipient. Under `handoff` each value takes §5.7's idempotent park. Under `autonomous` the change may consume the single recovery allowance below. A park reached here is reached on this clause's terms rather than by re-running §5.7's blocker classification, and overlapping grounds produce one park. No diagnosis value itself grants progress: only the independently produced recovery evidence can return a change to ordinary flow.
 
-**The autonomous recovery allowance.** One allowance exists per stable change lineage, not per head, session, clone, mode selection, plan, or re-plan. Its durable writer atomically changes it from `available` to `claimed` **before** any intervention; claim, crash, invalid return, or unavailable actor consumes it, and no later event resets it for that change. The acting author cannot write, clear, or satisfy this record. Its closed record carries the change key; triggering review-state and diagnosis identity; taxonomy value and invalidation; both resolved modes and their sources; allowance state `available | claimed | consumed`; selected route; independent actor identity; bounded measurement provenance and result class where present; fresh diagnosis; and terminal `continue | park`. Missing, unknown, duplicate, or misaligned fields park. The allowance is one route-specific intervention followed by exactly one fresh independent diagnosis: NONE returns to ordinary flow under the unchanged execution ceiling; every non-NONE, incomplete, invalid, or unavailable result parks. A second recovery request parks.
+**The autonomous recovery allowance.** One allowance exists per stable change lineage, not per head, session, clone, mode selection, plan, or re-plan. Its **change key** is mechanically derived by the durable writer from platform-attested immutable identities: repository plus the sorted set of activated closing issues, or repository plus the pull request where no issue exists. A replacement pull request for the same activated issue set therefore reuses the key; the caller never supplies or mints it. A subject with unavailable or ambiguous attested identity parks rather than receiving a key. A newly activated issue is a new lineage because activation, not an author's relabeling, admits that identity. The writer atomically changes the allowance from `available` to `claimed` **before** any intervention; claim, crash, invalid return, or unavailable actor consumes it, and no later event resets it for that lineage. The acting author cannot write, clear, or satisfy this record.
 
-The recovery route is bounded by taxonomy. **STAGNATION** runs a mutually blind §1.8-shaped contest over methods, independent of the author and prior planner; its Judge either selects and attests one materially different method or the change parks. **OSCILLATION** uses the diagnosis only to identify the opposed adjudications — a semantic rereading is not §1.9 new evidence — and independently selects exactly one non-mutating discriminating measurement; only a genuinely new result may support reconsideration by a fresh Judge, otherwise the change parks. **INDETERMINATE** independently selects and runs one bounded non-mutating measurement and then re-dispatches the history Judge once; measurement itself clears no gate. No admissible candidate, no discriminating measurement, a failed bound, or an unavailable independent actor parks.
+The closed recovery record carries the derived change key; a tagged basis; both resolved modes and their sources; allowance state `available | claimed | consumed`; selected route; independent actor identity; bounded measurement provenance and result class where present; next gate; and terminal `continue | park`. A `history-diagnosis` basis carries triggering review-state identity, taxonomy value, and invalidation; a `finding-escalation` basis carries the effective finding and adjudication identity and invents no invalidation. Missing, unknown, duplicate, or misaligned fields park. One allowance admits one route-specific intervention followed by exactly one fresh independent ruling at the gate its basis names. For a history diagnosis, only a fresh NONE returns to ordinary flow under the unchanged execution ceiling; every non-NONE, incomplete, invalid, or unavailable result parks. A second recovery request parks.
+
+The history-diagnosis route is bounded by taxonomy, while the existing invalidation finding remains its sole re-entry selector. **STAGNATION** runs a mutually blind §1.8-shaped contest over methods, independent of the author and prior planner; its Judge either selects and attests one materially different method or the change parks. **OSCILLATION** uses the diagnosis only to identify the opposed adjudications — a semantic rereading is not §1.9 new evidence — and independently selects exactly one non-mutating discriminating measurement; only a genuinely new result may support reconsideration by a fresh Judge, otherwise the change parks. **INDETERMINATE** independently selects and runs one bounded non-mutating measurement and then re-dispatches the history Judge once; measurement itself clears no gate. No admissible candidate, no discriminating measurement, a failed bound, or an unavailable independent actor parks.
+
+§1.9's finding-level `measure-escalate` reaches the same decision-mode consumer without pretending it is a history diagnosis. `handoff` parks. `autonomous` consumes the lineage's allowance with a `finding-escalation` basis, independently selects one bounded non-mutating measurement, and sends genuinely new evidence to one fresh findings Judge. The ordinary Resolver consumes that ruling: `none` or a clear set returns to the normal review flow, `repair` returns to author repair, and another `measure-escalate` or any invalid/unavailable result parks. No invalidation value or history taxonomy value is invented on this route.
 
 Plan invalidation is deliberately **not** a value of this taxonomy — it is the ruling's second output, above. A repair history can show that the selected plan no longer holds, but that is not a diagnosis of the repair loop; it is a planning fact, and giving it a taxonomy slot would route it through the repair machinery instead of through the model that owns it — and would also force one output to answer two questions, which is the tie the separation above exists to prevent.
 
@@ -256,7 +260,7 @@ First, **every effective finding takes exactly one disposition**, and the five a
 - **repair** — confirmed SUBSTANTIVE, and the defer disposition below does not reach it. The author authors the repair; the head advances and draws a fresh required panel (§1.6, §1.7). Whether a further autonomous attempt is admissible at all is §1.4's, past its trigger — this disposition says whose act the repair is, never that the flow may take it unexamined.
 - **defer** — confirmed SUBSTANTIVE, recorded `fail-closed`, and sitting on **no** criterion of the manifest the AC-impact axis read. It is filed as its own issue, the filed issue's identifier entering the review record beside the finding — which makes a false filing record mechanically falsifiable. Repairing it in place instead is always available and discharges the obligation — at the ordinary cost of a substantive repair, since landing it advances the head and draws a fresh required panel (§1.6, §1.7). The carve-out is what keeps a change's own contract fully reviewable: a finding against what the change itself promised is never deferrable, however safe its direction. Where the manifest is **empty** — a change with no closing issue, or criteria empty however they came to be empty — nothing is deferrable. An **absent** manifest never reaches this disposition at all: it is the missing input the Judge's own rule above stops on, which is what makes the two states distinct (§2.6) rather than two names for one outcome.
 - **remedy** — confirmed NIT. The Judge's exact mechanical remedy is applied verbatim; nothing else follows from the finding.
-- **measure-escalate** — INDETERMINATE on validity, which is where an unrulable direction has already collapsed by the harm-direction axis's own rule. It hands off to the recipient §1.4 names, on that clause's terms — which may resolve it by measurement or by a human's ruling, and it can become neither an approval nor an author repair by anyone's silence.
+- **measure-escalate** — INDETERMINATE on validity, which is where an unrulable direction has already collapsed by the harm-direction axis's own rule. It hands off to the decision-mode recipient §1.4 names, on that clause's `finding-escalation` terms: handoff parks, while autonomous mode may spend the one lineage allowance on bounded measurement and one fresh findings Judge. It can become neither an approval nor an author repair by anyone's silence.
 - **none** — REFUTED. It is retained marked refuted and leaves nothing behind.
 
 Second, the **outcome over the set** is derived by a fixed total precedence, so a mixed set has exactly one answer: **repair** if any finding disposed to repair; otherwise **measure-escalate** if any disposed to measure-escalate; otherwise **clear**. A set of deferrals, remedies, and refutations therefore resolves **clear**, which is what lets the change proceed to the ready decision (§2.3) with its deferrals filed and its exact remedies applied — the filing and the verbatim remedy are the whole of what those dispositions owe at that head. **Where every finding is REFUTED the outcome is clear** for the same reason: no reviewer result holds a gate of its own (§1.6), so refutation leaves nothing behind, and the old design's independent blocking verdict — which survived the refutation of every finding under it — retires here.
@@ -807,9 +811,11 @@ The residual is two-sided: exclusion-at-creation mutates a foreign repository's 
 
 Modes are two explicit, independently resolvable settings, never inferences from context. **Execution mode** answers which irreversible boundary the run may cross: `attended` — the default — stops at the ready transition (§2.3), while `unattended` continues through merge-or-park (§5.7) and no further. **Decision mode** answers who consumes a recoverable semantic or method interruption: `handoff` — the default — gives it to a human, while `autonomous` permits the one independent recovery allowance §1.4 defines. Public, unretractable acts — a version tag, a public release, publication into a repository the shell does not govern — sit past the ceiling under every combination.
 
-Each setting resolves separately through an invocation-scoped override, then the environment, then the one per-project state home #228 derives, then its default; the run durably records both values and their sources at start. An unknown or unresolvable execution value falls toward `attended`, and a decision value toward `handoff`, naming the offending source. **Fail-safe has no universal direction**: each fallback follows what its toggle guards. Per-project configuration never lives on a surface shared across projects (§5.5's boundary), and this contract creates no second project-state home while #228 remains unresolved.
+Each setting resolves separately through its invocation flag (`--execution-mode`, `--decision-mode`), then its environment value (`GITJIG_EXECUTION_MODE`, `GITJIG_DECISION_MODE`), then the `executionMode` or `decisionMode` field in the one per-project mode record `<resolved-state-root>/modes.json`, then its default; the run durably records both values and their sources at start. An unknown or unresolvable execution value falls toward `attended`, and a decision value toward `handoff`, naming the offending source. **Fail-safe has no universal direction**: each fallback follows what its toggle guards. The resolved state root and its repository key obey §5.5, so this is one project-scoped home even when storage falls through to shell-owned space.
 
-The four combinations are explicit. `attended + handoff` hands judgment to a human and stops before merge. `attended + autonomous` may use an independent decider at eligible checkpoints but still stops at ready. `unattended + handoff` may reach a semantic interruption but hands it off and cannot merge through it. `unattended + autonomous` may use independent decisions and retains merge-or-park. Execution mode alone governs ready and merge; decision mode alone chooses the consumer of eligible judgment. Neither setting suppresses a gate, changes attribution, or lets automation approve its own artifact: every checkpoint keeps its designated decider, and identity-attributed evidence acts (§2.2's trusted-account activation verdict) remain account-bound. Substitution reaches eligible judgment, never attribution.
+Decision-mode substitution reaches exactly three recoverable checkpoints: §1.8 plan selection, §1.4 history-diagnosis recovery, and §1.9 finding-level `measure-escalate`; no other gate or judgment is eligible by classification or analogy. At each, `handoff` names the human recipient and `autonomous` requires the independent actor that checkpoint names. The ready decision is not in that set: `attended` always stops there, while `unattended` keeps the existing reviewer-verdict fallback and may merge a clear change regardless of decision mode.
+
+The four combinations are explicit. `attended + handoff` gives the three recoverable choices to a human and stops at ready. `attended + autonomous` may independently resolve those three choices but still stops at ready and cannot merge. `unattended + handoff` may merge a clear change, but a reached recoverable choice hands off and cannot be merged through. `unattended + autonomous` may independently resolve those choices and retains merge-or-park. Execution mode alone governs ready and merge; decision mode alone chooses the consumer at the closed three-checkpoint set. Neither setting suppresses a gate, changes attribution, or lets automation approve its own artifact: identity-attributed evidence acts (§2.2's trusted-account activation verdict), AC closeout, SSOT-correction approval, and Directive completion remain outside substitution. Substitution reaches the named recoverable judgment, never attribution.
 
 The norm is **explicitly advisory** today (§3.1 rule 1), enforced at review (§2.3); the mode instruments derive later per §1.2's macro-phase clause.
 
@@ -817,7 +823,7 @@ The norm is **explicitly advisory** today (§3.1 rule 1), enforced at review (§
 
 An unattended run classifies what stopped it before acting: **clean** — nothing blocks; **soft** — attributable to the run's own last change and fixable without a new product decision; **hard** — outside existing authorization or requiring a non-substitutable human act. A clean state proceeds to the ceiling action (§5.6). A soft blocker earns exactly one self-repair attempt; a second soft outcome requires the materially different method §1.4 names where diagnosis reaches it, and otherwise becomes a semantic interruption consumed by decision mode. Where §1.4's autonomous allowance and this soft budget reach one state, one intervention spends both rather than stacking attempts. A hard blocker **parks** under every mode combination: a deterministic state summary, marker label, log entry, and audit record — idempotent on repeat and a friction signal the calibration loop (§3.6) reads. Parking is the named next action, never a bare stop.
 
-**Generation is open, decision is gated.** The shell may produce drafts, proposals, measurements, and candidate corrections, but every state transition stays behind its gate. Autonomous decision mode changes the eligible gate's independent consumer, never the gate or the authority beneath it. Trusted-account attribution, approval of an SSOT correction or genuinely new authorization, reversal of deliberate human state, disposal of another party's filed work, credentials, server configuration, another repository, and public or unretractable acts remain non-substitutable and park when reached. It never re-adjudicates an unchanged artifact: an OSCILLATION diagnosis is a trigger, not new evidence, and §1.9 reconsideration still requires a changed artifact or genuinely new measurement. It never destroys an untrusted filer's content — a rejected outside filing is demoted to the friction-free tier (§2.1) with a lineage link, and a trusted filer's item is never auto-closed.
+**Generation is open, decision is gated.** The shell may produce drafts, proposals, measurements, and candidate corrections, but every state transition stays behind its gate. Autonomous decision mode changes the independent consumer at §5.6's closed three-checkpoint set, never another gate or the authority beneath it. Trusted-account attribution, approval of an SSOT correction or genuinely new authorization, reversal of deliberate human state, disposal of another party's filed work, credentials, server configuration, another repository, and public or unretractable acts remain non-substitutable and park when reached. It never re-adjudicates an unchanged artifact: an OSCILLATION diagnosis is a trigger, not new evidence, and §1.9 reconsideration still requires a changed artifact or genuinely new measurement. It never destroys an untrusted filer's content — a rejected outside filing is demoted to the friction-free tier (§2.1) with a lineage link, and a trusted filer's item is never auto-closed.
 
 **No actor satisfies a gate on its own behalf.** Where an own-artifact approval is admissible at all, it is a per-project, default-off, operator-set policy — and even then the evidence rules of §1.6 bind it in full.
 
