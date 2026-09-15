@@ -211,6 +211,10 @@ async function durableHistory(
 	seams: ReviewRoundSeams,
 ): Promise<StateSummary[] | undefined> {
 	const records = seams.recordsFromComments(await seams.readComments(repoRoot, subject), subject.writerId);
+	// The substrate is the platform's own comment record on the subject this
+	// command already attested, so for this call site it is installed by
+	// construction and §1.4's absent limb has no case here. A clone that cannot
+	// reach the platform never gets a subject and never arrives at this line.
 	const availability = historyAvailability(true, records);
 	return availability.available ? repairHistory(availability.records) : undefined;
 }

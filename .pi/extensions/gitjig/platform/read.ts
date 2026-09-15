@@ -71,6 +71,11 @@ export function runPlatformRead(
 		const terminate = (): void => {
 			if (terminating || settled) return;
 			terminating = true;
+			// `exit` can fire before the last buffered stdout chunk arrives, so a
+			// grace timer may already be armed when a cap or a timeout terminates
+			// the read. Reassigning without clearing would orphan that timer past
+			// `settle`'s reach, where it would resolve a refused read as success.
+			if (graceTimer !== undefined) clearTimeout(graceTimer);
 			killGroup(child);
 			graceTimer = setTimeout(() => settle(undefined), bounds.graceMs);
 		};

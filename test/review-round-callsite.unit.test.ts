@@ -293,6 +293,70 @@ describe("review-round production call site", () => {
 		}
 	});
 
+	it("refuses a read that exceeds the byte cap instead of returning it truncated", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-cap-"));
+		dirs.push(root);
+		const shim = join(root, "gh");
+		writeFileSync(shim, "#!/bin/sh\nprintf '0123456789abcdef'\n");
+		chmodSync(shim, 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${root}:${savedPath ?? ""}`;
+		try {
+			assert.equal(await runPlatformRead([], root, { timeoutMs: 5_000, graceMs: 200, maxBytes: 8 }), undefined);
+			assert.equal(
+				await runPlatformRead([], root, { timeoutMs: 5_000, graceMs: 200, maxBytes: 16 }),
+				"0123456789abcdef",
+			);
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	});
+
+	it("refuses an over-cap read that arrives after the child already exited", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-late-cap-"));
+		dirs.push(root);
+		const shim = join(root, "gh");
+		// The writer leaves the child's process group, so the group kill cannot
+		// reach it and `close` stays pending: the child exits first, arming the
+		// grace timer, and the over-cap bytes arrive afterwards. Only a
+		// terminate that clears that already-armed timer can refuse this read.
+		writeFileSync(
+			shim,
+			"#!/bin/sh\nperl -e 'setpgrp(0,0); select(undef,undef,undef,0.3); " +
+				'$|=1; print "0123456789abcdef"; sleep 5\' &\nexit 0\n',
+		);
+		chmodSync(shim, 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${root}:${savedPath ?? ""}`;
+		try {
+			assert.equal(await runPlatformRead([], root, { timeoutMs: 20_000, graceMs: 1_200, maxBytes: 8 }), undefined);
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	});
+
+	it("settles a finished child whose pipe an orphan holds open", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-orphan-"));
+		dirs.push(root);
+		const shim = join(root, "gh");
+		// The background sleep inherits stdout, so `close` cannot arrive until it
+		// ends: only the `exit` path can settle this read within the grace bound.
+		writeFileSync(shim, "#!/bin/sh\nprintf 'payload'\nsleep 30 &\nexit 0\n");
+		chmodSync(shim, 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${root}:${savedPath ?? ""}`;
+		const started = Date.now();
+		try {
+			assert.equal(await runPlatformRead([], root, { timeoutMs: 20_000, graceMs: 300, maxBytes: 1024 }), "payload");
+			assert.ok(Date.now() - started < 10_000, "the read waited on the orphan rather than settling at exit");
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	});
+
 	it("carries a multi-byte character split across two stdout chunks", async () => {
 		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-split-"));
 		dirs.push(root);
