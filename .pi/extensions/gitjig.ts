@@ -37,8 +37,8 @@ export default function gitjig(pi: ExtensionAPI) {
 	// tool call site; every act it takes runs inside its execute.
 	registerDispatchTool(pi, repoRoot, stateRoot);
 
-	// The command spine (§4.8): rung-1 review and ship extension commands;
-	// every act they take runs inside a handler.
+	// The command spine (§4.8): rung-1 review, review-round, and ship
+	// extension commands; every act they take runs inside a handler.
 	registerSpineCommands(pi, repoRoot, stateRoot);
 
 	// Every append outcome of this session, folded: false the moment any

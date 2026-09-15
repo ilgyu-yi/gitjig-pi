@@ -7,6 +7,16 @@
  * emits no warning, record, or operator-facing text. The attended #241
  * decision permits one platform account; role ordering, not account identity,
  * supplies semantic separation.
+ *
+ * Named residual, in place: §1.9 fixes the Judge's criterion set as the UNION
+ * of the criteria activation adjudicated and the criteria as they stand when
+ * the panel opens. The snapshot below is the second half only — the platform
+ * exposes an issue body as it stands now, and this repository durably records
+ * no activation-time body for the union's first half. The direction of the
+ * gap is the unsafe one and is stated rather than assumed away: where an
+ * executor narrows criteria after activation, the manifest read here is the
+ * narrower set, so a finding against a dropped criterion becomes deferrable
+ * where the union would have forbidden it. Issue #242 owns closing it.
  */
 import { runPlatformRead } from "../platform/read.ts";
 import type { Manifest } from "./resolve.ts";
