@@ -1,19 +1,22 @@
 /** Bounded platform reader for the review records posted as PR comments. */
 import { execFileSync } from "node:child_process";
-import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
+import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 import type { CommentLookup } from "./merge-gate.ts";
 import { parseReviewRecord, REVIEW_RECORD_MARKER, type ReviewRecord } from "./record.ts";
 
 const COMMENT_READ_TIMEOUT_MS = 10_000;
 const COMMENT_READ_MAX_BYTES = 4 * 1024 * 1024;
 
-type CommentReader = (argv: string[], options: { cwd: string; timeout: number; maxBuffer: number }) => string;
+type CommentReader = (
+	argv: string[],
+	options: { cwd: string; timeout: number; maxBuffer: number; env: NodeJS.ProcessEnv },
+) => string;
 
 const readComments: CommentReader = (argv, options) =>
 	execFileSync("gh", argv, {
 		...options,
 		encoding: "utf8",
-		env: withoutRepoLocatingGitEnv(process.env),
+		env: withoutPlatformRetargetingEnv(process.env),
 	});
 
 /** Read every comment page as one JSON value; child text never enters a failure result. */
@@ -25,6 +28,7 @@ export function fetchReviewComments(repoRoot: string, pr: number, read: CommentR
 				cwd: repoRoot,
 				timeout: COMMENT_READ_TIMEOUT_MS,
 				maxBuffer: COMMENT_READ_MAX_BYTES,
+				env: withoutPlatformRetargetingEnv(process.env),
 			});
 		} catch {
 			// One bounded retry absorbs a transient platform or child failure.

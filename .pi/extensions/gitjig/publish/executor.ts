@@ -6,8 +6,8 @@
  * The child is `gh`, argv-composed (never a shell string), the body on
  * stdin (`--body-file -`, never an argv byte), cwd pinned to the
  * runtime's own repository root — `gh` resolves the target repository
- * from cwd, so an ambient cwd retargets the publication (§4.6) — the
- * environment passed through, and the run time-bounded.
+ * from cwd, so an ambient cwd retargets the publication (§4.6) — ambient
+ * repository overrides are removed, and the run is time-bounded.
  *
  * Admission is keyed on output validity alone (§3.10): success exactly
  * when the child exits 0 with a comment-URL shape as the whole of its
@@ -70,6 +70,7 @@
  *     is not read as strictly more containment than before.
  */
 import { spawn } from "node:child_process";
+import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 
 /** A comment's own url — the shape only the comment verbs print. */
 const COMMENT_URL_SHAPE = /^https:\/\/[^\s]+#issuecomment-\d+$/;
@@ -282,7 +283,7 @@ export function runPublishChild(
 			// sibling child already takes; nothing about the piped stdin this
 			// child reads its body from makes that treatment inapplicable here.
 			detached: true,
-			env: process.env,
+			env: withoutPlatformRetargetingEnv(process.env),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 		const settle = (outcome: PublishChildOutcome): void => {
