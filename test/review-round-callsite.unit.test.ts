@@ -484,12 +484,18 @@ describe("review-round production call site", () => {
 		mkdirSync(join(fixture.root, "actual", "deep"));
 		writeFileSync(join(fixture.root, "actual", "deep", "round.json"), "nested");
 		assert.equal(readRepositoryInput(fixture.root, "actual/deep/round.json"), "nested");
+		assert.equal(readRepositoryInput(fixture.root, "../round.json"), undefined);
+		assert.equal(readRepositoryInput(fixture.root, "actual/deep/round.json/child"), undefined);
 
 		symlinkSync(join(fixture.root, "actual"), join(fixture.root, "alias"));
 		assert.equal(readRepositoryInput(fixture.root, "alias/deep/round.json"), undefined);
 		assert.equal(readRepositoryInput(fixture.root, "alias/../round.json"), undefined);
 		symlinkSync(join(fixture.root, "actual", "deep"), join(fixture.root, "actual", "linked-deep"));
 		assert.equal(readRepositoryInput(fixture.root, "actual/linked-deep/round.json"), undefined);
+		symlinkSync(join(fixture.root, "missing"), join(fixture.root, "dangling.json"));
+		assert.equal(readRepositoryInput(fixture.root, "dangling.json"), undefined);
+		symlinkSync(join(fixture.root, "loop.json"), join(fixture.root, "loop.json"));
+		assert.equal(readRepositoryInput(fixture.root, "loop.json"), undefined);
 	});
 
 	it("refuses a FIFO input without blocking on a writer", () => {
@@ -508,13 +514,15 @@ describe("review-round production call site", () => {
 			"../.pi/extensions/gitjig/review/panel.ts",
 		];
 		for (const name of consumers) {
-			assert.doesNotMatch(readFileSync(new URL(name, import.meta.url), "utf8"), /execFileSync\s*\(/, name);
+			const source = readFileSync(new URL(name, import.meta.url), "utf8");
+			assert.doesNotMatch(source, /from\s+["']node:child_process["']/, name);
 		}
 		const owner = readFileSync(new URL("../.pi/extensions/gitjig/review/repository.ts", import.meta.url), "utf8");
 		assert.equal(owner.match(/execFileSync\s*\(/g)?.length, 1);
 		assert.match(owner, /stdio:\s*\["ignore",\s*"pipe",\s*"pipe"\]/);
 		assert.match(owner, /withoutRepoLocatingGitEnv\(process\.env\)/);
 		assert.match(owner, /"--end-of-options"/);
+		assert.ok(owner.includes("return /^[0-9a-f]{40}$/.test(head) ? head : undefined;"));
 
 		const fileOwner = readFileSync(
 			new URL("../.pi/extensions/gitjig/commands/review-round-input.ts", import.meta.url),
@@ -523,6 +531,7 @@ describe("review-round production call site", () => {
 		assert.match(fileOwner, /constants\.O_RDONLY\s*\|\s*constants\.O_NOFOLLOW\s*\|\s*constants\.O_NONBLOCK/);
 		assert.match(fileOwner, /opened\.dev !== leaf\.dev \|\| opened\.ino !== leaf\.ino/);
 		assert.match(fileOwner, /readFileSync\(fd,\s*"utf8"\)/);
+		assert.match(fileOwner, /finally\s*{\s*closeSync\(fd\);\s*}/);
 	});
 
 	it("resolves invalid and dash-leading refs without emitting child diagnostics", () => {
