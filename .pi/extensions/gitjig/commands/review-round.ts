@@ -191,7 +191,7 @@ export async function driveReviewRound(
 	try {
 		const head = seams.resolveHead(repoRoot, spec.headRef);
 		if (head === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HEAD, reentry: "none" });
-		const records = seams.recordsFromComments(seams.readComments(repoRoot, spec.pr));
+		const records = seams.recordsFromComments(await seams.readComments(repoRoot, spec.pr));
 		const availability = historyAvailability(true, records);
 		if (!availability.available)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });

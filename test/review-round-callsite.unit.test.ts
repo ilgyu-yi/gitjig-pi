@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -13,7 +13,7 @@ import {
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
 import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
-import { fetchReviewComments, recordsFromComments } from "../.pi/extensions/gitjig/review/comments.ts";
+import { fetchReviewComments, recordsFromComments, runCommentRead } from "../.pi/extensions/gitjig/review/comments.ts";
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 import { resolveRepositoryHead } from "../.pi/extensions/gitjig/review/repository.ts";
@@ -86,23 +86,22 @@ function publishResult() {
 }
 
 describe("review-round production call site", () => {
-	it("reads paginated platform comments through the bounded child seam", () => {
-		let seen: { argv: string[]; timeout: number; maxBuffer: number } | undefined;
-		const lookup = fetchReviewComments("/repo", 212, (argv, options) => {
-			seen = { argv, timeout: options.timeout, maxBuffer: options.maxBuffer };
+	it("reads paginated platform comments through the bounded child seam", async () => {
+		let seen: { argv: string[]; repoRoot: string } | undefined;
+		const lookup = await fetchReviewComments("/repo", 212, async (argv, repoRoot) => {
+			seen = { argv, repoRoot };
 			return JSON.stringify([[{ body: "first" }], [{ body: "second" }]]);
 		});
 		assert.deepEqual(lookup, { ok: true, bodies: ["first", "second"] });
 		assert.deepEqual(seen, {
 			argv: ["api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues/212/comments"],
-			timeout: 10_000,
-			maxBuffer: 4 * 1024 * 1024,
+			repoRoot: "/repo",
 		});
 	});
 
-	it("retries one transient platform comment-read failure", () => {
+	it("retries one transient platform comment-read failure", async () => {
 		let attempts = 0;
-		const lookup = fetchReviewComments("/repo", 212, () => {
+		const lookup = await fetchReviewComments("/repo", 212, async () => {
 			attempts += 1;
 			if (attempts === 1) throw new Error("transient");
 			return "[[]]";
@@ -111,14 +110,33 @@ describe("review-round production call site", () => {
 		assert.equal(attempts, 2);
 	});
 
-	it("stops after two failed platform comment-read attempts", () => {
+	it("stops after two failed platform comment-read attempts", async () => {
 		let attempts = 0;
-		const lookup = fetchReviewComments("/repo", 212, () => {
+		const lookup = await fetchReviewComments("/repo", 212, async () => {
 			attempts += 1;
 			throw new Error("persistent");
 		});
 		assert.deepEqual(lookup, { ok: false, cause: "the bounded platform comment read failed" });
 		assert.equal(attempts, 2);
+	});
+
+	it("hard-kills a comment child that ignores TERM", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-bound-"));
+		dirs.push(root);
+		const shim = join(root, "gh");
+		writeFileSync(shim, "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n");
+		chmodSync(shim, 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${root}:${savedPath ?? ""}`;
+		const started = Date.now();
+		try {
+			const output = await runCommentRead([], root, { timeoutMs: 100, graceMs: 100, maxBytes: 1024 });
+			assert.equal(output, undefined);
+			assert.ok(Date.now() - started < 2_000, "the hard bound did not settle promptly");
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
 	});
 
 	it("preserves record strings across the egress neutralizer", () => {
@@ -151,7 +169,7 @@ describe("review-round production call site", () => {
 			sendMessage() {},
 		} as unknown as ExtensionAPI;
 		registerReviewRoundCommand(pi, fixture.root, join(fixture.root, "state"), {
-			readComments: () => ({ ok: true, bodies: [] }),
+			readComments: async () => ({ ok: true, bodies: [] }),
 			recordsFromComments,
 			resolveHead: () => fixture.head,
 			makeDispatch: () => async (brief) => {
@@ -222,7 +240,7 @@ describe("review-round production call site", () => {
 	it("hands off when a marked record is unreadable instead of shortening history", async () => {
 		let ran = false;
 		const seams = {
-			readComments: () => ({ ok: true as const, bodies: ["<!-- gitjig-review-record: broken -->"] }),
+			readComments: async () => ({ ok: true as const, bodies: ["<!-- gitjig-review-record: broken -->"] }),
 			recordsFromComments,
 			resolveHead: () => HEAD_B,
 			makeDispatch: () => async () => {
@@ -244,7 +262,7 @@ describe("review-round production call site", () => {
 		let diagnosisBrief = "";
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
 		const seams = {
-			readComments: () => ({ ok: true as const, bodies }),
+			readComments: async () => ({ ok: true as const, bodies }),
 			recordsFromComments,
 			resolveHead: () => HEAD_B,
 			makeDispatch: () => async (brief: string) => {
@@ -286,7 +304,7 @@ describe("review-round production call site", () => {
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
 		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "new ground" };
 		const seams = {
-			readComments: () => ({ ok: true as const, bodies }),
+			readComments: async () => ({ ok: true as const, bodies }),
 			recordsFromComments,
 			resolveHead: () => HEAD_B,
 			makeDispatch: () => async () => ({
@@ -319,7 +337,7 @@ describe("review-round production call site", () => {
 			recordBody: "record",
 		};
 		const base = {
-			readComments: () => ({ ok: true as const, bodies }),
+			readComments: async () => ({ ok: true as const, bodies }),
 			recordsFromComments,
 			resolveHead: () => HEAD_B,
 			makeDispatch: () => async () => ({
@@ -378,7 +396,7 @@ describe("review-round production call site", () => {
 
 		const beforeAdmission = await driveReviewRound(spec(), "/unused", {
 			...base,
-			readComments: () => {
+			readComments: async () => {
 				throw new Error("history");
 			},
 			runRound: async () => round,
