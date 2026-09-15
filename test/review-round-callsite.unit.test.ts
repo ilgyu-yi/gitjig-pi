@@ -22,6 +22,7 @@ import {
 	recordsFromAttestedComments,
 	recordsFromComments,
 } from "../.pi/extensions/gitjig/review/comments.ts";
+import { DIAGNOSIS_VALUES, INVALIDATIONS } from "../.pi/extensions/gitjig/review/history.ts";
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 import { resolveRepositoryHead } from "../.pi/extensions/gitjig/review/repository.ts";
@@ -366,6 +367,46 @@ describe("review-round production call site", () => {
 			},
 		});
 		assert.equal(rounds, 0);
+	});
+
+	it("binds every diagnosis taxonomy × invalidation cell before downstream acts", async () => {
+		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		for (const value of DIAGNOSIS_VALUES) {
+			for (const invalidation of INVALIDATIONS) {
+				let rounds = 0;
+				let publishes = 0;
+				const outcome = await driveReviewRound(spec(), "/unused", {
+					readComments: async () => ({ ok: true, bodies }),
+					recordsFromComments,
+					resolveHead: () => HEAD_B,
+					makeDispatch: () => async () => ({
+						disposition: "admitted",
+						ok: true,
+						summary: "",
+						compare: "confirmed",
+						payload: JSON.stringify({ value, invalidation, evidence: "measured" }),
+					}),
+					runRound: async () => {
+						rounds += 1;
+						return { record: repairRecord(HEAD_B), recordBody: "record", review: { state: "approved" } };
+					},
+					publish: async () => {
+						publishes += 1;
+						return publishResult();
+					},
+				});
+				const continues = value === "NONE" && invalidation === "nothing";
+				assert.equal(rounds, continues ? 1 : 0, `${value}/${invalidation}: round count`);
+				assert.equal(publishes, continues ? 1 : 0, `${value}/${invalidation}: publish count`);
+				assert.ok("diagnosis" in outcome, `${value}/${invalidation}: diagnosis absent`);
+				if ("diagnosis" in outcome) assert.deepEqual(outcome.diagnosis, { value, invalidation, evidence: "measured" });
+				if (!continues) {
+					assert.equal(outcome.disposition, "hand-off", `${value}/${invalidation}`);
+					if (outcome.disposition === "hand-off")
+						assert.equal(outcome.reentry, invalidation === "nothing" ? "none" : invalidation);
+				}
+			}
+		}
 	});
 
 	it("retains a NONE diagnosis in the posted terminal disposition", async () => {
