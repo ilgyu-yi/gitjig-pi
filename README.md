@@ -51,7 +51,7 @@ A complete specification is:
 
 `pr` is a positive integer, and it is the only review target the spec carries: the repository, the base, the reviewed head, and the criterion manifest are read from the platform's own record of that pull request and its closing issues, so no caller-supplied value can retarget or re-scope the round. The clone must already contain the attested head, or the round hands off instead of reviewing a different commit.
 
-`changeDescription` is a non-empty string and `delegateArgv` a non-empty list of non-empty strings. All four fence lists are required; each prior finding has exactly `label` and `text`. `timeoutMs` is optional, positive, and at most 2147483647. `timing` is optional; both values are positive seconds and `finalReturnSeconds` is greater than `firstReturnSeconds`. Unknown keys, an absolute or outside-repository spec path, a path with a symbolic-link component, unreadable JSON, and any value outside these constraints are refused before dispatch.
+`changeDescription` is a non-empty string and `delegateArgv` a non-empty list of non-empty strings. All four fence lists are required; each prior finding has exactly `label` and `text`. `timeoutMs` is optional, positive, and at most 2147483647. `timing` is optional; both values are positive seconds and `finalReturnSeconds` is greater than `firstReturnSeconds`. Unknown keys, an absolute or outside-repository spec path, a path with a symbolic-link component, and unreadable JSON are refused before dispatch.
 
 The delegate runs in the caller's trust domain and inherits its environment, credentials included: remote reach through inherited credentials is not confined.
 

@@ -227,6 +227,41 @@ describe("review-round production call site", () => {
 		assert.equal(attempts, 2);
 	});
 
+	it("combines every page of a paginated attested read, in order", async () => {
+		const population = await fetchAttestedReviewComments("/repo", platformContext(), async () =>
+			JSON.stringify([
+				[
+					{ id: 1, body: "first", user: { node_id: "U_writer" } },
+					{ id: 2, body: "second", user: { node_id: "U_other" } },
+				],
+				[{ id: 3, body: "third", user: { node_id: "U_writer" } }],
+				[{ id: 4, body: "fourth", user: { node_id: "U_writer" } }],
+			]),
+		);
+		assert.deepEqual(population, {
+			ok: true,
+			comments: [
+				{ id: 1, authorId: "U_writer", body: "first" },
+				{ id: 2, authorId: "U_other", body: "second" },
+				{ id: 3, authorId: "U_writer", body: "third" },
+				{ id: 4, authorId: "U_writer", body: "fourth" },
+			],
+		});
+	});
+
+	it("assembles history from records spread across pages", async () => {
+		const first = composeReviewRecord(repairRecord(HEAD_A));
+		const last = composeReviewRecord(repairRecord(HEAD_B));
+		const population = await fetchAttestedReviewComments("/repo", platformContext(), async () =>
+			JSON.stringify([
+				[{ id: 1, body: first, user: { node_id: "U_writer" } }],
+				[{ id: 2, body: "ordinary", user: { node_id: "U_writer" } }],
+				[{ id: 3, body: last, user: { node_id: "U_writer" } }],
+			]),
+		);
+		assert.deepEqual(recordsFromAttestedComments(population, "U_writer"), [repairRecord(HEAD_A), repairRecord(HEAD_B)]);
+	});
+
 	it("refuses a duplicated comment identity in the attested population", async () => {
 		const read = await fetchAttestedReviewComments("/repo", platformContext(), async () =>
 			JSON.stringify([
