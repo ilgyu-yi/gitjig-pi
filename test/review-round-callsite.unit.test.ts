@@ -437,6 +437,15 @@ describe("review-round production call site", () => {
 		assert.equal(readRepositoryInput(fixture.root, "actual/linked-deep/round.json"), undefined);
 	});
 
+	it("refuses a FIFO input without blocking on a writer", () => {
+		const fixture = repo();
+		const fifo = join(fixture.root, "round.json");
+		execFileSync("mkfifo", [fifo]);
+		const started = Date.now();
+		assert.equal(readRepositoryInput(fixture.root, "round.json"), undefined);
+		assert.ok(Date.now() - started < 1_000, "the FIFO read blocked before descriptor validation");
+	});
+
 	it("keeps Git execution behind the one quiet repository capability", () => {
 		const consumers = [
 			"../.pi/extensions/gitjig/commands/review-round.ts",
@@ -456,8 +465,8 @@ describe("review-round production call site", () => {
 			new URL("../.pi/extensions/gitjig/commands/review-round-input.ts", import.meta.url),
 			"utf8",
 		);
-		assert.match(fileOwner, /constants\.O_RDONLY\s*\|\s*constants\.O_NOFOLLOW/);
-		assert.match(fileOwner, /fstatSync\(fd\)/);
+		assert.match(fileOwner, /constants\.O_RDONLY\s*\|\s*constants\.O_NOFOLLOW\s*\|\s*constants\.O_NONBLOCK/);
+		assert.match(fileOwner, /opened\.dev !== leaf\.dev \|\| opened\.ino !== leaf\.ino/);
 		assert.match(fileOwner, /readFileSync\(fd,\s*"utf8"\)/);
 	});
 

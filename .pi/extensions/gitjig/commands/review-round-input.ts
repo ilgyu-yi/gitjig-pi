@@ -40,12 +40,14 @@ export function readRepositoryInput(repoRoot: string, name: string): string | un
 		const leaf = lstatSync(leafPath);
 		if (!leaf.isFile() || leaf.isSymbolicLink()) return undefined;
 
-		// O_NOFOLLOW closes leaf replacement. Portable Node has no openat-style
-		// ancestor descriptor walk, so an ancestor swap between the checks and
-		// this open remains the explicitly bounded residual.
-		const fd = openSync(leafPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+		// O_NOFOLLOW refuses a replacement symlink; O_NONBLOCK prevents a
+		// replacement FIFO/device from wedging before descriptor validation.
+		// Portable Node has no openat-style ancestor descriptor walk, so the
+		// opened descriptor is also matched to the checked leaf identity.
+		const fd = openSync(leafPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		try {
-			if (!fstatSync(fd).isFile()) return undefined;
+			const opened = fstatSync(fd);
+			if (!opened.isFile() || opened.dev !== leaf.dev || opened.ino !== leaf.ino) return undefined;
 			return readFileSync(fd, "utf8");
 		} finally {
 			closeSync(fd);
