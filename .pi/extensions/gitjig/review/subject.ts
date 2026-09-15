@@ -5,6 +5,7 @@
  * emits no warning, record, or operator-facing text. Activation remains gated
  * on #241's independent writer and criteria authorities.
  */
+import { runCommentRead } from "./comments.ts";
 
 export interface PlatformRepositoryIdentity {
 	id: string;
@@ -53,6 +54,10 @@ function object(value: unknown, keys: readonly string[]): value is Record<string
 
 function text(value: unknown): value is string {
 	return typeof value === "string" && value.length > 0;
+}
+
+function platformNode(value: unknown): value is Record<string, unknown> & { id: string } {
+	return typeof value === "object" && value !== null && !Array.isArray(value) && text((value as { id?: unknown }).id);
 }
 
 function repository(value: unknown): value is PlatformRepositoryIdentity {
@@ -109,4 +114,91 @@ export function admitPlatformReviewContext(value: unknown): PlatformReviewContex
 		return undefined;
 	if (pull.closingIssues.some((entry) => entry.repositoryId !== repositoryIdentity.id)) return undefined;
 	return structuredClone(value) as unknown as PlatformReviewContext;
+}
+
+type PlatformRead = (argv: string[], repoRoot: string) => Promise<string | undefined>;
+
+async function readJson(read: PlatformRead, argv: string[], repoRoot: string): Promise<unknown> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		try {
+			const output = await read(argv, repoRoot);
+			if (output !== undefined) return JSON.parse(output) as unknown;
+		} catch {
+			// One identical retry; no child or parse text crosses the boundary.
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Bootstrap the repository from the operator's checkout once, then address
+ * the PR explicitly by the returned platform repository identity.
+ */
+export async function fetchPlatformReviewContext(
+	repoRoot: string,
+	pr: number,
+	read: PlatformRead = runCommentRead,
+): Promise<PlatformReviewContext | undefined> {
+	if (!Number.isSafeInteger(pr) || pr <= 0) return undefined;
+	const repositoryValue = await readJson(read, ["repo", "view", "--json", "id,nameWithOwner"], repoRoot);
+	if (!repository(repositoryValue)) return undefined;
+	const pullValue = await readJson(
+		read,
+		[
+			"pr",
+			"view",
+			String(pr),
+			"--repo",
+			repositoryValue.nameWithOwner,
+			"--json",
+			"id,number,url,author,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,closingIssuesReferences",
+		],
+		repoRoot,
+	);
+	if (
+		!object(pullValue, [
+			"id",
+			"number",
+			"url",
+			"author",
+			"baseRefName",
+			"baseRefOid",
+			"headRefName",
+			"headRefOid",
+			"headRepository",
+			"closingIssuesReferences",
+		]) ||
+		!platformNode(pullValue.author) ||
+		!platformNode(pullValue.headRepository) ||
+		!Array.isArray(pullValue.closingIssuesReferences)
+	)
+		return undefined;
+	const closingIssues = pullValue.closingIssuesReferences.map((entry) => {
+		if (!object(entry, ["id", "number", "title", "body", "repository"]) || !platformNode(entry.repository))
+			return undefined;
+		return {
+			id: entry.id,
+			repositoryId: entry.repository.id,
+			number: entry.number,
+			title: entry.title,
+			body: entry.body,
+		};
+	});
+	if (closingIssues.some((entry) => entry === undefined)) return undefined;
+	return admitPlatformReviewContext({
+		repository: repositoryValue,
+		pullRequest: {
+			id: pullValue.id,
+			number: pullValue.number,
+			url: pullValue.url,
+			authorId: pullValue.author.id,
+			base: { repositoryId: repositoryValue.id, name: pullValue.baseRefName, oid: pullValue.baseRefOid },
+			head: {
+				repositoryId: pullValue.headRepository.id,
+				name: pullValue.headRefName,
+				oid: pullValue.headRefOid,
+			},
+			closingIssues,
+		},
+	});
 }

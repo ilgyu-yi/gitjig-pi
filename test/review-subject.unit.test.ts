@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { admitPlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
+import { admitPlatformReviewContext, fetchPlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const OID = "a".repeat(40);
 
@@ -55,6 +55,49 @@ describe("inert platform review context", () => {
 			delete target[boundary === "root" ? "repository" : "authorId"];
 			assert.equal(admitPlatformReviewContext(extra), undefined, `${boundary} missing`);
 		}
+	});
+
+	it("bootstraps once, then addresses the PR by explicit platform repository", async () => {
+		const calls: string[][] = [];
+		const outputs = [
+			JSON.stringify({ id: "R_repo", nameWithOwner: "owner/repo" }),
+			JSON.stringify({
+				id: "PR_node",
+				number: 223,
+				url: "https://github.com/owner/repo/pull/223",
+				author: { id: "U_author", login: "author" },
+				baseRefName: "main",
+				baseRefOid: OID,
+				headRefName: "feature",
+				headRefOid: "b".repeat(40),
+				headRepository: { id: "R_repo", nameWithOwner: "owner/repo" },
+				closingIssuesReferences: [
+					{ id: "I_node", number: 212, title: "task", body: "criteria", repository: { id: "R_repo" } },
+				],
+			}),
+		];
+		const context = await fetchPlatformReviewContext("/repo", 223, async (argv) => {
+			calls.push(argv);
+			return outputs.shift();
+		});
+		assert.ok(context !== undefined);
+		assert.equal(context.pullRequest.head.oid, "b".repeat(40));
+		assert.deepEqual(calls[1]?.slice(0, 6), ["pr", "view", "223", "--repo", "owner/repo", "--json"]);
+	});
+
+	it("retries an unavailable bootstrap identically and never queries a PR without it", async () => {
+		const calls: string[][] = [];
+		const context = await fetchPlatformReviewContext("/repo", 223, async (argv) => {
+			calls.push(argv);
+			return undefined;
+		});
+		assert.equal(context, undefined);
+		assert.equal(calls.length, 2);
+		assert.deepEqual(calls[0], calls[1]);
+		assert.equal(
+			calls.every((argv) => argv[0] === "repo"),
+			true,
+		);
 	});
 
 	it("refuses an invalid repository name and empty platform identities", () => {
