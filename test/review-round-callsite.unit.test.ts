@@ -13,6 +13,7 @@ import {
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
 import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
+import { scanBody } from "../.pi/extensions/gitjig/publish/scan.ts";
 import { fetchReviewComments, recordsFromComments, runCommentRead } from "../.pi/extensions/gitjig/review/comments.ts";
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
@@ -137,6 +138,18 @@ describe("review-round production call site", () => {
 			if (savedPath === undefined) delete process.env.PATH;
 			else process.env.PATH = savedPath;
 		}
+	});
+
+	it("scans the semantic record before reversible punctuation encoding", () => {
+		const record = repairRecord(HEAD_A);
+		record.bundle = [
+			{
+				finding: ["Author", "ization: Bearer ", "abcdefghijklmnopqrstuvwx"].join(""),
+				slot: SLOT,
+			},
+		];
+		const scan = scanBody(composeReviewRecord(record));
+		assert.deepEqual(scan, { disposition: "refuse-match", patternIds: ["bearer-token"], lines: [17] });
 	});
 
 	it("preserves record strings across the egress neutralizer", () => {
