@@ -198,6 +198,15 @@ export async function fetchPlatformReviewContext(
 		host,
 		nameWithOwner: repositoryValue.nameWithOwner,
 	};
+	return fetchPullContext(repoRoot, repositoryIdentity, pr, read);
+}
+
+async function fetchPullContext(
+	repoRoot: string,
+	repositoryIdentity: PlatformRepositoryIdentity,
+	pr: number,
+	read: PlatformRead,
+): Promise<PlatformReviewContext | undefined> {
 	const pullValue = await readJson(
 		read,
 		[
@@ -259,4 +268,16 @@ export async function fetchPlatformReviewContext(
 			closingIssues,
 		},
 	});
+}
+
+/** Re-fetch only through the already attested repository identity and require exact equality. */
+export async function refetchPlatformReviewContext(
+	repoRoot: string,
+	expected: PlatformReviewContext,
+	read: PlatformRead = runPlatformRead,
+): Promise<PlatformReviewContext | undefined> {
+	const subject = admitPlatformReviewContext(expected);
+	if (subject === undefined) return undefined;
+	const current = await fetchPullContext(repoRoot, subject.repository, subject.pullRequest.number, read);
+	return current !== undefined && JSON.stringify(current) === JSON.stringify(subject) ? current : undefined;
 }

@@ -3,9 +3,30 @@ import { describe, it } from "node:test";
 import type { PublishRepository } from "../.pi/extensions/gitjig/publish/executor.ts";
 import type { PublishRequest, PublishResult } from "../.pi/extensions/gitjig/publish/index.ts";
 import { publishAndRefetchReviewRecord, publishReviewRecord } from "../.pi/extensions/gitjig/review/publication.ts";
-import { admitPlatformReviewContext, fetchPlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
+import {
+	admitPlatformReviewContext,
+	fetchPlatformReviewContext,
+	refetchPlatformReviewContext,
+} from "../.pi/extensions/gitjig/review/subject.ts";
 
 const OID = "a".repeat(40);
+
+function rawPull(): Record<string, unknown> {
+	return {
+		id: "PR_node",
+		number: 223,
+		url: "https://github.example/owner/repo/pull/223",
+		author: { id: "U_author" },
+		baseRefName: "main",
+		baseRefOid: OID,
+		headRefName: "feature",
+		headRefOid: "b".repeat(40),
+		headRepository: { id: "R_repo" },
+		closingIssuesReferences: [
+			{ id: "I_node", number: 212, title: "task", body: "criteria", repository: { id: "R_repo" } },
+		],
+	};
+}
 
 function snapshot(): Record<string, unknown> {
 	return {
@@ -86,6 +107,38 @@ describe("inert platform review context", () => {
 		assert.ok(context !== undefined);
 		assert.equal(context.pullRequest.head.oid, "b".repeat(40));
 		assert.deepEqual(calls[1]?.slice(0, 6), ["pr", "view", "223", "--repo", "github.example/owner/repo", "--json"]);
+	});
+
+	it("refetches only through the sealed repository and rejects every observed drift", async () => {
+		const expected = admitPlatformReviewContext(snapshot());
+		assert.ok(expected !== undefined);
+		const calls: string[][] = [];
+		const unchanged = await refetchPlatformReviewContext("/repo", expected, async (argv) => {
+			calls.push(argv);
+			return JSON.stringify(rawPull());
+		});
+		assert.deepEqual(unchanged, expected);
+		assert.equal(calls.length, 1);
+		assert.deepEqual(calls[0]?.slice(0, 6), ["pr", "view", "223", "--repo", "github.example/owner/repo", "--json"]);
+
+		for (const mutate of [
+			(value: Record<string, unknown>) => {
+				value.author = { id: "U_other" };
+			},
+			(value: Record<string, unknown>) => {
+				value.headRefOid = "c".repeat(40);
+			},
+			(value: Record<string, unknown>) => {
+				((value.closingIssuesReferences as Record<string, unknown>[])[0] as Record<string, unknown>).body = "drift";
+			},
+		]) {
+			const changed = rawPull();
+			mutate(changed);
+			assert.equal(
+				await refetchPlatformReviewContext("/repo", expected, async () => JSON.stringify(changed)),
+				undefined,
+			);
+		}
 	});
 
 	it("retries an unavailable bootstrap identically and never queries a PR without it", async () => {
