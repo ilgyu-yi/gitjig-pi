@@ -103,7 +103,7 @@ function isRoundSummary(value: unknown): boolean {
  * egress sees no actionable spelling and the history reader sees the exact
  * recorded values. Structural JSON bytes and the marker stay readable.
  */
-function inertJsonStrings(json: string): string {
+export function inertJsonStrings(json: string): string {
 	let rendered = "";
 	let insideString = false;
 	let escaped = false;
