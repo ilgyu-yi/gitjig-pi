@@ -7,23 +7,39 @@ import {
 	parseDiagnosisRecord,
 } from "../.pi/extensions/gitjig/review/diagnosis-record.ts";
 import type { StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
-import type { PlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
+import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
+const EMPTY_CRITERIA_DIGEST = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 
-function context(): PlatformReviewContext {
+function context(criteria: readonly string[] = []): ReviewSubject {
 	return {
-		repository: { id: "R_repo", host: "github.example", nameWithOwner: "owner/repo" },
-		pullRequest: {
-			id: "PR_node",
-			number: 12,
-			url: "https://github.example/owner/repo/pull/12",
-			authorId: "U_author",
-			base: { repositoryId: "R_repo", name: "main", oid: A },
-			head: { repositoryId: "R_repo", name: "feature", oid: B },
-			closingIssues: [],
+		context: {
+			repository: { id: "R_repo", host: "github.example", nameWithOwner: "owner/repo" },
+			pullRequest: {
+				id: "PR_node",
+				number: 12,
+				url: "https://github.example/owner/repo/pull/12",
+				authorId: "U_author",
+				base: { repositoryId: "R_repo", name: "main", oid: A },
+				head: { repositoryId: "R_repo", name: "feature", oid: B },
+				closingIssues:
+					criteria.length === 0
+						? []
+						: [
+								{
+									id: "I_node",
+									repositoryId: "R_repo",
+									number: 12,
+									title: "task",
+									body: ["## Acceptance criteria", ...criteria.map((entry) => `- ${entry}`)].join("\n"),
+								},
+							],
+			},
 		},
+		writerId: "U_writer",
+		criteria: criteria.map((entry) => `#12: ${entry}`),
 	};
 }
 
@@ -42,7 +58,19 @@ describe("durable post-state diagnosis record", () => {
 			evidence: "issue #12: @actor",
 		});
 		assert.ok(record !== undefined);
-		assert.deepEqual(record.subject, { repositoryId: "R_repo", pullRequestId: "PR_node", headOid: B });
+		assert.deepEqual(record.subject, {
+			repositoryId: "R_repo",
+			pullRequestId: "PR_node",
+			headOid: B,
+			writerId: "U_writer",
+			criteriaDigest: EMPTY_CRITERIA_DIGEST,
+		});
+		const withCriteria = createDiagnosisRecord(context(["one criterion"]), history(), {
+			value: "NONE",
+			invalidation: "plan",
+			evidence: "issue #12: @actor",
+		});
+		assert.notEqual(withCriteria?.subject.criteriaDigest, EMPTY_CRITERIA_DIGEST);
 		assert.deepEqual(record.historyHeads, [A, B]);
 		assert.match(record.historyDigest, /^[0-9a-f]{64}$/);
 		const changed = createDiagnosisRecord(context(), [{ ...history()[0], outcome: "approved" }, history()[1]], {
@@ -76,6 +104,14 @@ describe("durable post-state diagnosis record", () => {
 		});
 		assert.ok(base !== undefined);
 		assert.equal(admitDiagnosisRecord({ ...base, extra: true }), undefined);
+		for (const subject of [
+			{ ...base.subject, writerId: "" },
+			{ ...base.subject, criteriaDigest: "abc" },
+			{ repositoryId: "R_repo", pullRequestId: "PR_node", headOid: B },
+		]) {
+			assert.equal(admitDiagnosisRecord({ ...base, subject }), undefined, JSON.stringify(subject));
+		}
+		assert.equal(createDiagnosisRecord({ ...context(), writerId: "" }, history(), base.diagnosis), undefined);
 		assert.equal(admitDiagnosisRecord({ ...base, historyDigest: "abc" }), undefined);
 		assert.equal(admitDiagnosisRecord({ ...base, diagnosis: { ...base.diagnosis, value: "OTHER" } }), undefined);
 		const body = composeDiagnosisRecord(base);

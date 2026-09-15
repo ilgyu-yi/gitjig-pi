@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import type { DiagnosisInput, StateSummary } from "./history.ts";
 import { DIAGNOSIS_VALUES, INVALIDATIONS } from "./history.ts";
 import { inertJsonStrings } from "./record.ts";
-import { admitPlatformReviewContext, type PlatformReviewContext } from "./subject.ts";
+import { admitReviewSubject, type ReviewSubject } from "./subject.ts";
 
 export const DIAGNOSIS_RECORD_MARKER = "gitjig-diagnosis-record";
 
@@ -17,6 +17,8 @@ export interface DiagnosisRecord {
 		repositoryId: string;
 		pullRequestId: string;
 		headOid: string;
+		writerId: string;
+		criteriaDigest: string;
 	};
 	historyHeads: string[];
 	historyDigest: string;
@@ -51,13 +53,17 @@ function diagnosis(value: unknown): value is DiagnosisInput {
 export function admitDiagnosisRecord(value: unknown): DiagnosisRecord | undefined {
 	if (!object(value, ["subject", "historyHeads", "historyDigest", "diagnosis"])) return undefined;
 	if (
-		!object(value.subject, ["repositoryId", "pullRequestId", "headOid"]) ||
+		!object(value.subject, ["repositoryId", "pullRequestId", "headOid", "writerId", "criteriaDigest"]) ||
 		typeof value.subject.repositoryId !== "string" ||
 		value.subject.repositoryId.length === 0 ||
 		typeof value.subject.pullRequestId !== "string" ||
 		value.subject.pullRequestId.length === 0 ||
 		typeof value.subject.headOid !== "string" ||
 		!OID.test(value.subject.headOid) ||
+		typeof value.subject.writerId !== "string" ||
+		value.subject.writerId.length === 0 ||
+		typeof value.subject.criteriaDigest !== "string" ||
+		!SHA256.test(value.subject.criteriaDigest) ||
 		!Array.isArray(value.historyHeads) ||
 		value.historyHeads.length < 2 ||
 		!value.historyHeads.every((head) => typeof head === "string" && OID.test(head)) ||
@@ -71,22 +77,32 @@ export function admitDiagnosisRecord(value: unknown): DiagnosisRecord | undefine
 	return structuredClone(value) as unknown as DiagnosisRecord;
 }
 
-/** Bind subject and the complete triggering post-state history in one record. */
+function digest(value: unknown): string {
+	return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+/**
+ * Bind the sealed subject — repository, pull request, reviewed head, the
+ * authenticated writer, and the criterion snapshot the adjudication was read
+ * against — to the complete triggering post-state history in one record.
+ */
 export function createDiagnosisRecord(
-	context: PlatformReviewContext,
+	source: ReviewSubject,
 	history: readonly StateSummary[],
 	input: DiagnosisInput,
 ): DiagnosisRecord | undefined {
-	const subject = admitPlatformReviewContext(context);
+	const subject = admitReviewSubject(source);
 	if (subject === undefined) return undefined;
 	return admitDiagnosisRecord({
 		subject: {
-			repositoryId: subject.repository.id,
-			pullRequestId: subject.pullRequest.id,
-			headOid: subject.pullRequest.head.oid,
+			repositoryId: subject.context.repository.id,
+			pullRequestId: subject.context.pullRequest.id,
+			headOid: subject.context.pullRequest.head.oid,
+			writerId: subject.writerId,
+			criteriaDigest: digest(subject.criteria),
 		},
 		historyHeads: history.map((state) => state.head),
-		historyDigest: createHash("sha256").update(JSON.stringify(history)).digest("hex"),
+		historyDigest: digest(history),
 		diagnosis: input,
 	});
 }

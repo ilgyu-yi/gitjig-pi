@@ -2,11 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { PublishRepository } from "../.pi/extensions/gitjig/publish/executor.ts";
 import type { PublishRequest, PublishResult } from "../.pi/extensions/gitjig/publish/index.ts";
-import { publishAndRefetchReviewRecord, publishReviewRecord } from "../.pi/extensions/gitjig/review/publication.ts";
+import {
+	commitPostStateDiagnosis,
+	publishAndRefetchReviewRecord,
+	publishReviewRecord,
+} from "../.pi/extensions/gitjig/review/publication.ts";
 import {
 	admitPlatformReviewContext,
+	admitReviewSubject,
+	criteriaFromClosingIssues,
 	fetchPlatformReviewContext,
+	fetchReviewSubject,
+	type ReviewSubject,
 	refetchPlatformReviewContext,
+	subjectCriterionManifest,
 } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const OID = "a".repeat(40);
@@ -41,6 +50,12 @@ function snapshot(): Record<string, unknown> {
 			closingIssues: [{ id: "I_node", repositoryId: "R_repo", number: 212, title: "task", body: "criteria" }],
 		},
 	};
+}
+
+function subject(criteria: readonly string[] = []): ReviewSubject {
+	const admitted = admitReviewSubject({ context: snapshot(), writerId: "U_writer", criteria });
+	assert.ok(admitted !== undefined);
+	return admitted;
 }
 
 describe("inert platform review context", () => {
@@ -183,6 +198,90 @@ describe("inert platform review context", () => {
 		assert.equal(await fetchPlatformReviewContext("/repo", 223, async () => outputs.shift()), undefined);
 	});
 
+	it("derives the criterion snapshot from the closing issues alone", () => {
+		const issues = [
+			{
+				id: "I_a",
+				repositoryId: "R_repo",
+				number: 212,
+				title: "task",
+				body: [
+					"## Background",
+					"- not a criterion",
+					"## Acceptance criteria",
+					"1. an operator can drive a round",
+					"- the record is posted\r",
+					"",
+					"### Notes",
+					"* also not a criterion",
+				].join("\n"),
+			},
+			{ id: "I_b", repositoryId: "R_repo", number: 9, title: "task", body: "## acceptance criteria\n2) second issue" },
+		];
+		assert.deepEqual(criteriaFromClosingIssues(issues), [
+			"#212: an operator can drive a round",
+			"#212: the record is posted",
+			"#9: second issue",
+		]);
+		assert.deepEqual(criteriaFromClosingIssues([]), []);
+	});
+
+	it("seals the writer and the criterion snapshot against a caller-authored set", () => {
+		const sealed = subject();
+		assert.deepEqual(subjectCriterionManifest(sealed), { state: "present", criteria: [] });
+		assert.equal(sealed.writerId, "U_writer");
+
+		const context = snapshot();
+		(context.pullRequest as { closingIssues: { body: string }[] }).closingIssues[0].body =
+			"## Acceptance criteria\n- the sealed one";
+		assert.deepEqual(
+			admitReviewSubject({ context, writerId: "U_writer", criteria: ["#212: the sealed one"] })?.criteria,
+			["#212: the sealed one"],
+		);
+		for (const criteria of [[], ["#212: a criterion nobody filed"], ["#212: the sealed one", "#212: and one more"]]) {
+			assert.equal(
+				admitReviewSubject({ context, writerId: "U_writer", criteria }),
+				undefined,
+				JSON.stringify(criteria),
+			);
+		}
+		assert.equal(admitReviewSubject({ context: snapshot(), writerId: "", criteria: [] }), undefined);
+		assert.equal(admitReviewSubject({ context: snapshot(), writerId: "U_writer" }), undefined);
+		assert.equal(admitReviewSubject({ context: { wrong: true }, writerId: "U_writer", criteria: [] }), undefined);
+	});
+
+	it("fetches the whole subject or none of it, retrying the writer read identically", async () => {
+		const bootstrap = JSON.stringify({
+			id: "R_repo",
+			nameWithOwner: "owner/repo",
+			url: "https://github.example/owner/repo",
+		});
+		const pull = JSON.stringify(rawPull());
+		const calls: string[][] = [];
+		const outputs = [bootstrap, pull, JSON.stringify({ node_id: "U_writer", login: "writer" })];
+		const sealed = await fetchReviewSubject("/repo", 223, async (argv) => {
+			calls.push(argv);
+			return outputs.shift();
+		});
+		assert.deepEqual(sealed, subject());
+		assert.deepEqual(calls[2], ["api", "--hostname", "github.example", "user"]);
+
+		const retried: string[][] = [];
+		const unavailable = [bootstrap, pull];
+		assert.equal(
+			await fetchReviewSubject("/repo", 223, async (argv) => {
+				retried.push(argv);
+				return unavailable.shift();
+			}),
+			undefined,
+		);
+		assert.equal(retried.length, 4);
+		assert.deepEqual(retried[2], retried[3]);
+
+		const anonymous = [bootstrap, pull, JSON.stringify({ login: "writer" })];
+		assert.equal(await fetchReviewSubject("/repo", 223, async () => anonymous.shift()), undefined);
+	});
+
 	it("projects publication target and PR only from the re-admitted context", async () => {
 		let captured: { params: PublishRequest; repository?: PublishRepository } | undefined;
 		const result = await publishReviewRecord(
@@ -213,7 +312,7 @@ describe("inert platform review context", () => {
 	});
 
 	it("admits a durable receipt only after exact bound-subject refetch", async () => {
-		const context = snapshot() as never;
+		const context = subject();
 		const publish = async (): Promise<PublishResult> => ({
 			content: [{ type: "text", text: "published" }],
 			details: {
@@ -236,6 +335,16 @@ describe("inert platform review context", () => {
 				body: "record",
 			},
 		});
+
+		const foreignWriter = await publishAndRefetchReviewRecord(
+			"record",
+			context,
+			"/repo",
+			"/state",
+			publish,
+			async () => ({ ok: true, comments: [{ id: 99, authorId: "U_other", body: "record" }] }),
+		);
+		assert.deepEqual(foreignWriter, { ok: false, cause: "the published review record did not refetch exactly" });
 
 		let attempts = 0;
 		const eventuallyVisible = await publishAndRefetchReviewRecord(
@@ -296,7 +405,7 @@ describe("inert platform review context", () => {
 		]) {
 			const outcome = await publishAndRefetchReviewRecord(
 				"record",
-				snapshot() as never,
+				subject(),
 				"/repo",
 				"/state",
 				publish,
@@ -304,6 +413,60 @@ describe("inert platform review context", () => {
 			);
 			assert.deepEqual(outcome, { ok: false, cause: "the published review record did not refetch exactly" });
 		}
+	});
+
+	it("lands the post-state diagnosis only as a confirmed durable record", async () => {
+		const A = "a".repeat(40);
+		const B = "b".repeat(40);
+		const history = [
+			{ head: A, outcome: "repair" as const, findings: ["first"], rulings: [] },
+			{ head: B, outcome: "repair" as const, findings: ["second"], rulings: [] },
+		];
+		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "inspection" };
+		let sent: string | undefined;
+		const publish = async (params: PublishRequest): Promise<PublishResult> => {
+			sent = params.body;
+			return {
+				content: [{ type: "text", text: "published" }],
+				details: { disposition: "published", url: "https://github.example/owner/repo/pull/223#issuecomment-99" },
+			};
+		};
+		const landed = await commitPostStateDiagnosis(
+			subject(),
+			history,
+			diagnosis,
+			"/repo",
+			"/state",
+			publish,
+			async () => ({ ok: true, comments: [{ id: 99, authorId: "U_writer", body: sent as string }] }),
+		);
+		assert.equal(landed.ok, true);
+		assert.ok(sent !== undefined);
+		assert.equal(sent.startsWith(`<!-- gitjig-diagnosis-record: ${B} -->`), true);
+
+		const uncomposable = await commitPostStateDiagnosis(
+			subject(),
+			[history[1]],
+			diagnosis,
+			"/repo",
+			"/state",
+			async () => {
+				throw new Error("must not publish");
+			},
+			async () => ({ ok: false, cause: "must not read" }),
+		);
+		assert.deepEqual(uncomposable, { ok: false, cause: "the post-state diagnosis record was not composable" });
+
+		const unconfirmed = await commitPostStateDiagnosis(
+			subject(),
+			history,
+			diagnosis,
+			"/repo",
+			"/state",
+			publish,
+			async () => ({ ok: true, comments: [] }),
+		);
+		assert.equal(unconfirmed.ok, false);
 	});
 
 	it("refuses invalid repository names, hosts, URLs, and empty platform identities", () => {

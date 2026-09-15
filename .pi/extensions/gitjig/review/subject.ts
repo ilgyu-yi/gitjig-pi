@@ -1,5 +1,7 @@
 /**
- * Inert platform-attested half of ReviewSubject.
+ * The platform-attested ReviewSubject: repository/PR context, the
+ * authenticated record writer, and the sealed closing-issue criterion
+ * snapshot.
  *
  * Warning-surface roster: EXEMPT — this module returns data or undefined and
  * emits no warning, record, or operator-facing text. The attended #241
@@ -7,6 +9,7 @@
  * supplies semantic separation.
  */
 import { runPlatformRead } from "../platform/read.ts";
+import type { Manifest } from "./resolve.ts";
 
 export interface PlatformRepositoryIdentity {
 	id: string;
@@ -160,6 +163,70 @@ export function admitPlatformReviewContext(value: unknown): PlatformReviewContex
 	return structuredClone(value) as unknown as PlatformReviewContext;
 }
 
+/**
+ * One review subject: the attested platform context, the authenticated
+ * account that may write this change's durable records, and the criterion
+ * snapshot derived from that context's closing issues at admission. The
+ * three travel together so no later consumer re-derives one of them from a
+ * caller-authored value (SPEC §1.9's criterion manifest, §1.4's durable
+ * record the acting agent does not author).
+ */
+export interface ReviewSubject {
+	context: PlatformReviewContext;
+	writerId: string;
+	criteria: readonly string[];
+}
+
+const CRITERIA_HEADING = /^#{1,6}[ \t]+acceptance criteria[ \t]*$/i;
+const ANY_HEADING = /^#{1,6}[ \t]/;
+const LIST_ITEM = /^(?:[-*+]|\d{1,3}[.)])[ \t]+(\S.*?)[ \t]*$/;
+
+/**
+ * The committed derivation rule: within each closing issue, the list items
+ * under an "Acceptance criteria" heading, in platform order, each carried
+ * with the issue it came from. A subject with no closing issue, or none
+ * carrying criteria, yields the EMPTY set — §1.9's empty manifest, never
+ * its absent one.
+ */
+export function criteriaFromClosingIssues(issues: readonly PlatformIssueSnapshot[]): string[] {
+	const criteria: string[] = [];
+	for (const entry of issues) {
+		let inside = false;
+		for (const line of entry.body.split("\n")) {
+			const text = line.endsWith("\r") ? line.slice(0, -1) : line;
+			if (ANY_HEADING.test(text)) {
+				inside = CRITERIA_HEADING.test(text);
+				continue;
+			}
+			if (!inside) continue;
+			const item = LIST_ITEM.exec(text);
+			if (item !== null) criteria.push(["#", String(entry.number), ": ", item[1]].join(""));
+		}
+	}
+	return criteria;
+}
+
+/**
+ * Admit one sealed subject. The criterion snapshot is not trusted as
+ * supplied: it must equal the set this module derives from the same
+ * context's closing issues, so a caller cannot widen or narrow the
+ * criteria the adjudication will be read against.
+ */
+export function admitReviewSubject(value: unknown): ReviewSubject | undefined {
+	if (!object(value, ["context", "writerId", "criteria"])) return undefined;
+	const context = admitPlatformReviewContext(value.context);
+	if (context === undefined || !text(value.writerId)) return undefined;
+	if (!Array.isArray(value.criteria) || !value.criteria.every(text)) return undefined;
+	const derived = criteriaFromClosingIssues(context.pullRequest.closingIssues);
+	if (JSON.stringify(value.criteria) !== JSON.stringify(derived)) return undefined;
+	return { context, writerId: value.writerId, criteria: derived };
+}
+
+/** §1.9's manifest projection: a sealed subject always supplies a present one. */
+export function subjectCriterionManifest(subject: ReviewSubject): Manifest {
+	return { state: "present", criteria: subject.criteria };
+}
+
 type PlatformRead = (argv: string[], repoRoot: string) => Promise<string | undefined>;
 
 async function readJson(read: PlatformRead, argv: string[], repoRoot: string): Promise<unknown> {
@@ -268,6 +335,39 @@ async function fetchPullContext(
 			},
 			closingIssues,
 		},
+	});
+}
+
+/**
+ * Read the authenticated account the platform would attribute a write to,
+ * addressed at the already attested host. #241's settlement admits one such
+ * account: separation is the ordered agent capacities', never the account's.
+ */
+async function fetchWriterIdentity(
+	repoRoot: string,
+	repositoryIdentity: PlatformRepositoryIdentity,
+	read: PlatformRead,
+): Promise<string | undefined> {
+	const value = await readJson(read, ["api", "--hostname", repositoryIdentity.host, "user"], repoRoot);
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+	const id = (value as { node_id?: unknown }).node_id;
+	return text(id) ? id : undefined;
+}
+
+/** Compose the whole subject, or none of it. */
+export async function fetchReviewSubject(
+	repoRoot: string,
+	pr: number,
+	read: PlatformRead = runPlatformRead,
+): Promise<ReviewSubject | undefined> {
+	const context = await fetchPlatformReviewContext(repoRoot, pr, read);
+	if (context === undefined) return undefined;
+	const writerId = await fetchWriterIdentity(repoRoot, context.repository, read);
+	if (writerId === undefined) return undefined;
+	return admitReviewSubject({
+		context,
+		writerId,
+		criteria: criteriaFromClosingIssues(context.pullRequest.closingIssues),
 	});
 }
 

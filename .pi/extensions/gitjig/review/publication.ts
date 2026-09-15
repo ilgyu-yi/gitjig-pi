@@ -8,7 +8,14 @@
  */
 import { type PublishResult, performPublish } from "../publish/index.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
-import { admitPlatformReviewContext, type PlatformReviewContext } from "./subject.ts";
+import { composeDiagnosisRecord, createDiagnosisRecord } from "./diagnosis-record.ts";
+import type { DiagnosisInput, StateSummary } from "./history.ts";
+import {
+	admitPlatformReviewContext,
+	admitReviewSubject,
+	type PlatformReviewContext,
+	type ReviewSubject,
+} from "./subject.ts";
 
 type Publish = typeof performPublish;
 type FetchComments = typeof fetchAttestedReviewComments;
@@ -78,14 +85,17 @@ function publishedCommentId(result: PublishResult, context: PlatformReviewContex
 }
 
 function admitReceipt(
-	context: PlatformReviewContext,
+	subject: ReviewSubject,
 	body: string,
 	commentId: number,
 	population: AttestedCommentPopulation,
 ): ReviewPublicationReceipt | undefined {
 	if (!population.ok) return undefined;
-	const matches = population.comments.filter((comment) => comment.id === commentId && comment.body === body);
+	const matches = population.comments.filter(
+		(comment) => comment.id === commentId && comment.body === body && comment.authorId === subject.writerId,
+	);
 	if (matches.length !== 1) return undefined;
+	const context = subject.context;
 	return {
 		repositoryId: context.repository.id,
 		pullRequestId: context.pullRequest.id,
@@ -96,23 +106,57 @@ function admitReceipt(
 	};
 }
 
-/** A send is usable only after the exact comment is re-fetched from its bound subject. */
+/**
+ * A send is usable only after the exact comment is re-fetched from its bound
+ * subject and attributed to that subject's sealed writer.
+ */
 export async function publishAndRefetchReviewRecord(
 	body: string,
-	context: PlatformReviewContext,
+	source: ReviewSubject,
 	repoRoot: string,
 	stateRoot: string,
 	publish: Publish = performPublish,
 	fetchComments: FetchComments = fetchAttestedReviewComments,
 ): Promise<ReviewPublicationOutcome> {
-	const subject = admitPlatformReviewContext(context);
+	const subject = admitReviewSubject(source);
 	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
-	const published = await publishReviewRecord(body, subject, repoRoot, stateRoot, publish);
-	const commentId = publishedCommentId(published, subject);
+	const context = subject.context;
+	const published = await publishReviewRecord(body, context, repoRoot, stateRoot, publish);
+	const commentId = publishedCommentId(published, context);
 	if (commentId === undefined) return { ok: false, cause: "the review publication was not confirmed" };
 	for (let attempt = 0; attempt < 2; attempt += 1) {
-		const receipt = admitReceipt(subject, body, commentId, await fetchComments(repoRoot, subject));
+		const receipt = admitReceipt(subject, body, commentId, await fetchComments(repoRoot, context));
 		if (receipt !== undefined) return { ok: true, receipt };
 	}
 	return { ok: false, cause: "the published review record did not refetch exactly" };
+}
+
+/**
+ * The post-state transaction: compose §1.4's durable diagnosis record from
+ * the sealed subject and the complete triggering history, then land it
+ * through the same attested publish-and-refetch path. Nothing is durable
+ * until the receipt is admitted, so a composed-but-unconfirmed record is a
+ * refusal rather than a record the next round would read back.
+ */
+export async function commitPostStateDiagnosis(
+	source: ReviewSubject,
+	history: readonly StateSummary[],
+	diagnosis: DiagnosisInput,
+	repoRoot: string,
+	stateRoot: string,
+	publish: Publish = performPublish,
+	fetchComments: FetchComments = fetchAttestedReviewComments,
+): Promise<ReviewPublicationOutcome> {
+	const subject = admitReviewSubject(source);
+	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
+	const record = createDiagnosisRecord(subject, history, diagnosis);
+	if (record === undefined) return { ok: false, cause: "the post-state diagnosis record was not composable" };
+	return publishAndRefetchReviewRecord(
+		composeDiagnosisRecord(record),
+		subject,
+		repoRoot,
+		stateRoot,
+		publish,
+		fetchComments,
+	);
 }
