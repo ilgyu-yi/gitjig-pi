@@ -66,6 +66,61 @@ function repo(): { root: string; base: string; head: string } {
 	return { root, base, head: git("rev-parse", "HEAD") };
 }
 
+/**
+ * A `gh` shim that writes `payload`, hands its stdout to a detached holder
+ * process, and exits. The holder outlives the shim by design — that is the
+ * interleaving these arms exist to reach — so the shim records its pid and
+ * `cleanup` reaps it; nothing is left running past the arm. The holder is a
+ * Node script, so the arms need no interpreter beyond the one running them.
+ */
+function holderShim(prefix: string, holderBody: string): { root: string; cleanup: () => void } {
+	const root = mkdtempSync(join(tmpdir(), prefix));
+	dirs.push(root);
+	const pidFile = join(root, "holder.pid");
+	writeFileSync(
+		join(root, "holder.js"),
+		[
+			"const parent = Number(process.argv[2]);",
+			"const alive = () => { try { process.kill(parent, 0); return true; } catch { return false; } };",
+			"const nap = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);",
+			"const awaitParentExit = () => { while (alive()) nap(20); };",
+			"const hold = () => setTimeout(() => {}, 60000);",
+			holderBody,
+		].join("\n"),
+	);
+	const shim = join(root, "gh");
+	writeFileSync(
+		shim,
+		[
+			`#!${process.execPath}`,
+			'const { spawn } = require("node:child_process");',
+			'const { writeFileSync } = require("node:fs");',
+			'process.stdout.write("payload");',
+			`const holder = spawn(process.execPath, [${JSON.stringify(join(root, "holder.js"))}, String(process.pid)], {`,
+			"\tdetached: true,",
+			'\tstdio: ["ignore", 1, "ignore"],',
+			"});",
+			`writeFileSync(${JSON.stringify(pidFile)}, String(holder.pid));`,
+			"holder.unref();",
+		].join("\n"),
+	);
+	chmodSync(shim, 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${root}:${savedPath ?? ""}`;
+	return {
+		root,
+		cleanup: () => {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+			try {
+				process.kill(Number(readFileSync(pidFile, "utf8")), "SIGKILL");
+			} catch {
+				// The holder already ended, or never started; nothing is owed.
+			}
+		},
+	};
+}
+
 function spec(): ReviewRoundSpec {
 	return {
 		pr: 212,
@@ -314,46 +369,34 @@ describe("review-round production call site", () => {
 	});
 
 	it("refuses an over-cap read that arrives after the child already exited", async () => {
-		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-late-cap-"));
-		dirs.push(root);
-		const shim = join(root, "gh");
-		// The writer leaves the child's process group, so the group kill cannot
-		// reach it and `close` stays pending: the child exits first, arming the
-		// grace timer, and the over-cap bytes arrive afterwards. Only a
-		// terminate that clears that already-armed timer can refuse this read.
-		writeFileSync(
-			shim,
-			"#!/bin/sh\nperl -e 'setpgrp(0,0); select(undef,undef,undef,0.3); " +
-				'$|=1; print "0123456789abcdef"; sleep 5\' &\nexit 0\n',
+		const fixture = holderShim(
+			"gitjig-comment-late-cap-",
+			// The writer waits for its own parent to be gone before writing, so the
+			// ordering this arm needs — child exits, grace timer arms, over-cap bytes
+			// arrive after it — is causal rather than raced against a clock.
+			"awaitParentExit(); process.stdout.write('0123456789abcdef'); hold();",
 		);
-		chmodSync(shim, 0o755);
-		const savedPath = process.env.PATH;
-		process.env.PATH = `${root}:${savedPath ?? ""}`;
 		try {
-			assert.equal(await runPlatformRead([], root, { timeoutMs: 20_000, graceMs: 1_200, maxBytes: 8 }), undefined);
+			assert.equal(
+				await runPlatformRead([], fixture.root, { timeoutMs: 30_000, graceMs: 3_000, maxBytes: 8 }),
+				undefined,
+			);
 		} finally {
-			if (savedPath === undefined) delete process.env.PATH;
-			else process.env.PATH = savedPath;
+			fixture.cleanup();
 		}
 	});
 
 	it("settles a finished child whose pipe an orphan holds open", async () => {
-		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-orphan-"));
-		dirs.push(root);
-		const shim = join(root, "gh");
-		// The background sleep inherits stdout, so `close` cannot arrive until it
-		// ends: only the `exit` path can settle this read within the grace bound.
-		writeFileSync(shim, "#!/bin/sh\nprintf 'payload'\nsleep 30 &\nexit 0\n");
-		chmodSync(shim, 0o755);
-		const savedPath = process.env.PATH;
-		process.env.PATH = `${root}:${savedPath ?? ""}`;
+		const fixture = holderShim("gitjig-comment-orphan-", "hold();");
 		const started = Date.now();
 		try {
-			assert.equal(await runPlatformRead([], root, { timeoutMs: 20_000, graceMs: 300, maxBytes: 1024 }), "payload");
+			assert.equal(
+				await runPlatformRead([], fixture.root, { timeoutMs: 30_000, graceMs: 300, maxBytes: 1024 }),
+				"payload",
+			);
 			assert.ok(Date.now() - started < 10_000, "the read waited on the orphan rather than settling at exit");
 		} finally {
-			if (savedPath === undefined) delete process.env.PATH;
-			else process.env.PATH = savedPath;
+			fixture.cleanup();
 		}
 	});
 
