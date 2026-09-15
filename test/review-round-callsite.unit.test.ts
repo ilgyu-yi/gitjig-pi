@@ -26,6 +26,7 @@ import { DIAGNOSIS_VALUES, INVALIDATIONS } from "../.pi/extensions/gitjig/review
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 import { resolveRepositoryHead } from "../.pi/extensions/gitjig/review/repository.ts";
+import type { PlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const dirs: string[] = [];
 after(() => {
@@ -68,6 +69,21 @@ function spec(base = HEAD_A, head = HEAD_B): ReviewRoundSpec {
 		fences: FENCES,
 		changeDescription: "review-round call site",
 		delegateArgv: ["delegate"],
+	};
+}
+
+function platformContext(): PlatformReviewContext {
+	return {
+		repository: { id: "R_repo", host: "github.example", nameWithOwner: "owner/repo" },
+		pullRequest: {
+			id: "PR_node",
+			number: 212,
+			url: "https://github.example/owner/repo/pull/212",
+			authorId: "U_author",
+			base: { repositoryId: "R_repo", name: "main", oid: HEAD_A },
+			head: { repositoryId: "R_repo", name: "feature", oid: HEAD_B },
+			closingIssues: [],
+		},
 	};
 }
 
@@ -170,7 +186,7 @@ describe("review-round production call site", () => {
 	it("reads an explicit repository and admits records only from the attested writer", async () => {
 		const recordBody = composeReviewRecord(repairRecord(HEAD_A));
 		let argv: string[] | undefined;
-		const population = await fetchAttestedReviewComments("/repo", "owner/repo", 212, async (seen) => {
+		const population = await fetchAttestedReviewComments("/repo", platformContext(), async (seen) => {
 			argv = seen;
 			return JSON.stringify([
 				[
@@ -180,13 +196,20 @@ describe("review-round production call site", () => {
 				],
 			]);
 		});
-		assert.deepEqual(argv, ["api", "--paginate", "--slurp", "repos/owner/repo/issues/212/comments"]);
+		assert.deepEqual(argv, [
+			"api",
+			"--hostname",
+			"github.example",
+			"--paginate",
+			"--slurp",
+			"repos/owner/repo/issues/212/comments",
+		]);
 		assert.deepEqual(recordsFromAttestedComments(population, "U_writer"), [repairRecord(HEAD_A)]);
 		assert.deepEqual(recordsFromAttestedComments(population, "U_absent"), []);
 	});
 
 	it("fails closed on malformed provenance from the explicit comment population", async () => {
-		const population = await fetchAttestedReviewComments("/repo", "owner/repo", 212, async () =>
+		const population = await fetchAttestedReviewComments("/repo", platformContext(), async () =>
 			JSON.stringify([[{ id: 1, body: "record", user: {} }]]),
 		);
 		assert.deepEqual(population, {
@@ -194,6 +217,16 @@ describe("review-round production call site", () => {
 			cause: "the platform comment response carried unreadable provenance",
 		});
 		assert.equal(recordsFromAttestedComments(population, "U_writer"), undefined);
+
+		let called = false;
+		const malformedSubject = platformContext();
+		malformedSubject.repository.host = "-option.example";
+		const wrongHost = await fetchAttestedReviewComments("/repo", malformedSubject, async () => {
+			called = true;
+			return "[]";
+		});
+		assert.equal(called, false);
+		assert.equal(wrongHost.ok, false);
 	});
 
 	it("scans the semantic record before reversible punctuation encoding", () => {

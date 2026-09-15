@@ -6,11 +6,11 @@ const OID = "a".repeat(40);
 
 function snapshot(): Record<string, unknown> {
 	return {
-		repository: { id: "R_repo", nameWithOwner: "owner/repo" },
+		repository: { id: "R_repo", host: "github.example", nameWithOwner: "owner/repo" },
 		pullRequest: {
 			id: "PR_node",
 			number: 223,
-			url: "https://github.com/owner/repo/pull/223",
+			url: "https://github.example/owner/repo/pull/223",
 			authorId: "U_author",
 			base: { repositoryId: "R_repo", name: "main", oid: OID },
 			head: { repositoryId: "R_repo", name: "feature", oid: "b".repeat(40) },
@@ -60,11 +60,11 @@ describe("inert platform review context", () => {
 	it("bootstraps once, then addresses the PR by explicit platform repository", async () => {
 		const calls: string[][] = [];
 		const outputs = [
-			JSON.stringify({ id: "R_repo", nameWithOwner: "owner/repo" }),
+			JSON.stringify({ id: "R_repo", nameWithOwner: "owner/repo", url: "https://github.example/owner/repo" }),
 			JSON.stringify({
 				id: "PR_node",
 				number: 223,
-				url: "https://github.com/owner/repo/pull/223",
+				url: "https://github.example/owner/repo/pull/223",
 				author: { id: "U_author", login: "author" },
 				baseRefName: "main",
 				baseRefOid: OID,
@@ -82,7 +82,7 @@ describe("inert platform review context", () => {
 		});
 		assert.ok(context !== undefined);
 		assert.equal(context.pullRequest.head.oid, "b".repeat(40));
-		assert.deepEqual(calls[1]?.slice(0, 6), ["pr", "view", "223", "--repo", "owner/repo", "--json"]);
+		assert.deepEqual(calls[1]?.slice(0, 6), ["pr", "view", "223", "--repo", "github.example/owner/repo", "--json"]);
 	});
 
 	it("retries an unavailable bootstrap identically and never queries a PR without it", async () => {
@@ -100,10 +100,51 @@ describe("inert platform review context", () => {
 		);
 	});
 
-	it("refuses an invalid repository name and empty platform identities", () => {
+	it("does not cross a mismatched bootstrap URL and refuses a retargeted PR response", async () => {
+		let calls = 0;
+		const badRepository = await fetchPlatformReviewContext("/repo", 223, async () => {
+			calls += 1;
+			return JSON.stringify({ id: "R_repo", nameWithOwner: "owner/repo", url: "https://other.example/wrong/repo" });
+		});
+		assert.equal(badRepository, undefined);
+		assert.equal(calls, 1);
+
+		const outputs = [
+			JSON.stringify({ id: "R_repo", nameWithOwner: "owner/repo", url: "https://github.example/owner/repo" }),
+			JSON.stringify({
+				id: "PR_node",
+				number: 224,
+				url: "https://github.example/owner/repo/pull/224",
+				author: { id: "U_author" },
+				baseRefName: "main",
+				baseRefOid: OID,
+				headRefName: "feature",
+				headRefOid: "b".repeat(40),
+				headRepository: { id: "R_repo" },
+				closingIssuesReferences: [],
+			}),
+		];
+		assert.equal(await fetchPlatformReviewContext("/repo", 223, async () => outputs.shift()), undefined);
+	});
+
+	it("refuses invalid repository names, hosts, URLs, and empty platform identities", () => {
 		const badName = snapshot();
 		(badName.repository as { nameWithOwner: string }).nameWithOwner = "ambient-only";
 		assert.equal(admitPlatformReviewContext(badName), undefined);
+		const badHost = snapshot();
+		(badHost.repository as { host: string }).host = "-option.example";
+		assert.equal(admitPlatformReviewContext(badHost), undefined);
+		for (const url of [
+			"http://github.example/owner/repo/pull/223",
+			"https://other.example/owner/repo/pull/223",
+			"https://github.example/other/repo/pull/223",
+			"https://github.example/owner/repo/pull/224",
+			"https://github.example/owner/repo/pull/223?wrong=1",
+		]) {
+			const wrongUrl = snapshot();
+			(wrongUrl.pullRequest as { url: string }).url = url;
+			assert.equal(admitPlatformReviewContext(wrongUrl), undefined, url);
+		}
 		const emptyAuthor = snapshot();
 		(emptyAuthor.pullRequest as { authorId: string }).authorId = "";
 		assert.equal(admitPlatformReviewContext(emptyAuthor), undefined);

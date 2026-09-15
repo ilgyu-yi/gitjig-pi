@@ -9,6 +9,7 @@ import { runPlatformRead } from "../platform/read.ts";
 
 export interface PlatformRepositoryIdentity {
 	id: string;
+	host: string;
 	nameWithOwner: string;
 }
 
@@ -41,6 +42,7 @@ export interface PlatformReviewContext {
 
 const FULL_OID = /^[0-9a-f]{40}$/;
 const REPOSITORY_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const PLATFORM_HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 function object(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
 	return (
@@ -62,11 +64,44 @@ function platformNode(value: unknown): value is Record<string, unknown> & { id: 
 
 function repository(value: unknown): value is PlatformRepositoryIdentity {
 	return (
-		object(value, ["id", "nameWithOwner"]) &&
+		object(value, ["id", "host", "nameWithOwner"]) &&
 		text(value.id) &&
+		typeof value.host === "string" &&
+		PLATFORM_HOST.test(value.host) &&
 		text(value.nameWithOwner) &&
 		REPOSITORY_NAME.test(value.nameWithOwner)
 	);
+}
+
+function exactHttpsUrl(value: unknown, host: string, pathname: string): boolean {
+	if (typeof value !== "string") return false;
+	try {
+		const parsed = new URL(value);
+		return (
+			parsed.protocol === "https:" &&
+			parsed.username === "" &&
+			parsed.password === "" &&
+			parsed.port === "" &&
+			parsed.search === "" &&
+			parsed.hash === "" &&
+			parsed.hostname === host &&
+			parsed.pathname === pathname
+		);
+	} catch {
+		return false;
+	}
+}
+
+function repositoryUrl(value: unknown, nameWithOwner: string): string | undefined {
+	if (typeof value !== "string") return undefined;
+	try {
+		const parsed = new URL(value);
+		if (!PLATFORM_HOST.test(parsed.hostname) || !exactHttpsUrl(value, parsed.hostname, `/${nameWithOwner}`))
+			return undefined;
+		return parsed.hostname;
+	} catch {
+		return undefined;
+	}
 }
 
 function ref(value: unknown): value is PlatformRefIdentity {
@@ -110,7 +145,15 @@ export function admitPlatformReviewContext(value: unknown): PlatformReviewContex
 		!pull.closingIssues.every(issue)
 	)
 		return undefined;
-	if (pull.base.repositoryId !== repositoryIdentity.id || pull.head.repositoryId !== repositoryIdentity.id)
+	if (
+		!exactHttpsUrl(
+			pull.url,
+			repositoryIdentity.host,
+			`/${repositoryIdentity.nameWithOwner}/pull/${String(pull.number)}`,
+		) ||
+		pull.base.repositoryId !== repositoryIdentity.id ||
+		pull.head.repositoryId !== repositoryIdentity.id
+	)
 		return undefined;
 	if (pull.closingIssues.some((entry) => entry.repositoryId !== repositoryIdentity.id)) return undefined;
 	return structuredClone(value) as unknown as PlatformReviewContext;
@@ -140,8 +183,21 @@ export async function fetchPlatformReviewContext(
 	read: PlatformRead = runPlatformRead,
 ): Promise<PlatformReviewContext | undefined> {
 	if (!Number.isSafeInteger(pr) || pr <= 0) return undefined;
-	const repositoryValue = await readJson(read, ["repo", "view", "--json", "id,nameWithOwner"], repoRoot);
-	if (!repository(repositoryValue)) return undefined;
+	const repositoryValue = await readJson(read, ["repo", "view", "--json", "id,nameWithOwner,url"], repoRoot);
+	if (
+		!object(repositoryValue, ["id", "nameWithOwner", "url"]) ||
+		!text(repositoryValue.id) ||
+		!text(repositoryValue.nameWithOwner) ||
+		!REPOSITORY_NAME.test(repositoryValue.nameWithOwner)
+	)
+		return undefined;
+	const host = repositoryUrl(repositoryValue.url, repositoryValue.nameWithOwner);
+	if (host === undefined) return undefined;
+	const repositoryIdentity: PlatformRepositoryIdentity = {
+		id: repositoryValue.id,
+		host,
+		nameWithOwner: repositoryValue.nameWithOwner,
+	};
 	const pullValue = await readJson(
 		read,
 		[
@@ -149,7 +205,7 @@ export async function fetchPlatformReviewContext(
 			"view",
 			String(pr),
 			"--repo",
-			repositoryValue.nameWithOwner,
+			[repositoryIdentity.host, repositoryIdentity.nameWithOwner].join("/"),
 			"--json",
 			"id,number,url,author,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,closingIssuesReferences",
 		],
@@ -168,6 +224,8 @@ export async function fetchPlatformReviewContext(
 			"headRepository",
 			"closingIssuesReferences",
 		]) ||
+		pullValue.number !== pr ||
+		!exactHttpsUrl(pullValue.url, repositoryIdentity.host, `/${repositoryIdentity.nameWithOwner}/pull/${String(pr)}`) ||
 		!platformNode(pullValue.author) ||
 		!platformNode(pullValue.headRepository) ||
 		!Array.isArray(pullValue.closingIssuesReferences)
@@ -186,13 +244,13 @@ export async function fetchPlatformReviewContext(
 	});
 	if (closingIssues.some((entry) => entry === undefined)) return undefined;
 	return admitPlatformReviewContext({
-		repository: repositoryValue,
+		repository: repositoryIdentity,
 		pullRequest: {
 			id: pullValue.id,
 			number: pullValue.number,
 			url: pullValue.url,
 			authorId: pullValue.author.id,
-			base: { repositoryId: repositoryValue.id, name: pullValue.baseRefName, oid: pullValue.baseRefOid },
+			base: { repositoryId: repositoryIdentity.id, name: pullValue.baseRefName, oid: pullValue.baseRefOid },
 			head: {
 				repositoryId: pullValue.headRepository.id,
 				name: pullValue.headRefName,

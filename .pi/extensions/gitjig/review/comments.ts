@@ -2,6 +2,7 @@
 import { runPlatformRead } from "../platform/read.ts";
 import type { CommentLookup } from "./merge-gate.ts";
 import { parseReviewRecord, REVIEW_RECORD_MARKER, type ReviewRecord } from "./record.ts";
+import { admitPlatformReviewContext, type PlatformReviewContext } from "./subject.ts";
 
 type CommentRead = (argv: string[], repoRoot: string) => Promise<string | undefined>;
 
@@ -48,15 +49,20 @@ export async function fetchReviewComments(
 /** Read comments from one explicit platform repository and retain provenance fields. */
 export async function fetchAttestedReviewComments(
 	repoRoot: string,
-	repository: string,
-	pr: number,
+	context: PlatformReviewContext,
 	read: CommentRead = runPlatformRead,
 ): Promise<AttestedCommentPopulation> {
-	if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !Number.isSafeInteger(pr) || pr <= 0)
-		return { ok: false, cause: "the platform comment subject was not admissible" };
+	const subject = admitPlatformReviewContext(context);
+	if (subject === undefined) return { ok: false, cause: "the platform comment subject was not admissible" };
 	let output: string | undefined;
-	const route = ["repos/", repository, "/issues/", String(pr), "/comments"].join("");
-	const argv = ["api", "--paginate", "--slurp", route];
+	const route = [
+		"repos/",
+		subject.repository.nameWithOwner,
+		"/issues/",
+		String(subject.pullRequest.number),
+		"/comments",
+	].join("");
+	const argv = ["api", "--hostname", subject.repository.host, "--paginate", "--slurp", route];
 	for (let attempt = 0; attempt < 2 && output === undefined; attempt += 1) {
 		try {
 			output = await read(argv, repoRoot);
