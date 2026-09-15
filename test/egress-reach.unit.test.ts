@@ -24,6 +24,7 @@ import { describe, it } from "node:test";
 import {
 	ghPublishArgv,
 	isPublishDestination,
+	isPublishRepository,
 	kindCarriesTitle,
 	PUBLISH_DESTINATION_KINDS,
 	type PublishDestination,
@@ -105,6 +106,28 @@ describe("every publication kind is reachable by the gate (issue #120)", () => {
 			"--body-file",
 			"-",
 		]);
+	});
+
+	it("pins an attested repository into argv and rejects malformed or open targets", () => {
+		const repository = { host: "github.example", nameWithOwner: "owner/repo" };
+		assert.equal(isPublishRepository(repository), true);
+		assert.deepEqual(ghPublishArgv({ kind: "pr-comment", number: 7 }, repository), [
+			"pr",
+			"comment",
+			"7",
+			"--repo",
+			"github.example/owner/repo",
+			"--body-file",
+			"-",
+		]);
+		for (const malformed of [
+			{ host: "-option.example", nameWithOwner: "owner/repo" },
+			{ host: "github.example", nameWithOwner: "owner/repo/extra" },
+			{ host: "github.example", nameWithOwner: "owner/repo", extra: true },
+		]) {
+			assert.equal(isPublishRepository(malformed), false);
+			assert.throws(() => ghPublishArgv({ kind: "pr-comment", number: 7 }, malformed as never));
+		}
 	});
 
 	it("every kind's argv is distinct — no two kinds perform the same act", () => {

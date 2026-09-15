@@ -47,8 +47,10 @@ import { quoted } from "../quote.ts";
 import {
 	ghPublishArgv,
 	isPublishDestination,
+	isPublishRepository,
 	kindCarriesTitle,
 	PUBLISH_DESTINATION_KINDS,
+	type PublishRepository,
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
@@ -93,10 +95,16 @@ export async function performPublish(
 	params: PublishRequest,
 	repoRoot: string,
 	stateRoot: string,
+	repository?: PublishRepository,
 ): Promise<PublishResult> {
 	const record = (action: string, text: string): void => {
 		appendAuditRecord(stateRoot, { category: "egress", action, text });
 	};
+	if (repository !== undefined && !isPublishRepository(repository)) {
+		const text = "publish refused: the explicit repository is not admissible";
+		record("refuse-repository", text);
+		return result(text, { disposition: "refuse-repository" });
+	}
 	// The destination is the actor's explicit structured target; an
 	// inadmissible one refuses content-free, never publishes (§3.3).
 	const destination: unknown = params.destination;
@@ -195,7 +203,7 @@ export async function performPublish(
 		return result(text, { disposition: "refuse-destination" });
 	}
 	const outcome = await runPublishChild(
-		ghPublishArgv(sendDestination),
+		ghPublishArgv(sendDestination, repository),
 		neutralizedBody.text,
 		repoRoot,
 		spec.successShape,

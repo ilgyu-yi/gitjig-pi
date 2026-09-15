@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { PublishRepository } from "../.pi/extensions/gitjig/publish/executor.ts";
+import type { PublishRequest, PublishResult } from "../.pi/extensions/gitjig/publish/index.ts";
+import { publishReviewRecord } from "../.pi/extensions/gitjig/review/publication.ts";
 import { admitPlatformReviewContext, fetchPlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const OID = "a".repeat(40);
@@ -125,6 +128,35 @@ describe("inert platform review context", () => {
 			}),
 		];
 		assert.equal(await fetchPlatformReviewContext("/repo", 223, async () => outputs.shift()), undefined);
+	});
+
+	it("projects publication target and PR only from the re-admitted context", async () => {
+		let captured: { params: PublishRequest; repository?: PublishRepository } | undefined;
+		const result = await publishReviewRecord(
+			"record",
+			snapshot() as never,
+			"/repo",
+			"/state",
+			async (params, _repoRoot, _stateRoot, repository): Promise<PublishResult> => {
+				captured = { params, repository };
+				return { content: [{ type: "text", text: "published" }], details: { disposition: "published" } };
+			},
+		);
+		assert.equal(result.details.disposition, "published");
+		assert.deepEqual(captured, {
+			params: { body: "record", destination: { kind: "pr-comment", number: 223 } },
+			repository: { host: "github.example", nameWithOwner: "owner/repo" },
+		});
+
+		const malformed = snapshot();
+		(malformed.pullRequest as { number: number }).number = 224;
+		let called = false;
+		const refused = await publishReviewRecord("record", malformed as never, "/repo", "/state", async () => {
+			called = true;
+			throw new Error("must not publish");
+		});
+		assert.equal(called, false);
+		assert.equal(refused.details.disposition, "refuse-subject");
 	});
 
 	it("refuses invalid repository names, hosts, URLs, and empty platform identities", () => {
