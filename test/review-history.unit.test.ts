@@ -627,8 +627,8 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 	// survived the suite 8-for-8. §1.4's diagnosis reads the same findings
 	// ACROSS states, oldest first: a brief free to carry one state, or to
 	// carry them reordered, makes STAGNATION and OSCILLATION unrulable, and
-	// the Judge's likely NONE routes to a further autonomous repair on a
-	// history that warranted a park — a silent wrong-allow.
+	// the Judge's likely false NONE returns a still-open problem to ordinary
+	// flow on a history that warranted a park — a silent wrong-allow.
 	const multi = (): StateSummary[] =>
 		(
 			[
@@ -1102,9 +1102,9 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 				assert.deepEqual(
 					mod().diagnosisConsequence(value, invalidation),
 					expected(value, invalidation),
-					`the consumer's cell ${value} x ${invalidation} does not match §1.4's mapping — NONE alone admits a ` +
-						"further autonomous repair, the other three hand off to §5.7's park, and the invalidation routes " +
-						"the re-entry gate INDEPENDENTLY of the value (AC4: arms pin the total mapping)",
+					`the current handoff consumer's cell ${value} x ${invalidation} does not match its mapping — NONE ` +
+						"returns to ordinary flow, the other three park, and invalidation routes the re-entry gate " +
+						"INDEPENDENTLY of the value (AC4: arms pin the total mapping)",
 				);
 			});
 		}
