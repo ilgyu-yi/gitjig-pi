@@ -8,9 +8,8 @@
  * decision permits one platform account; role ordering, not account identity,
  * supplies semantic separation.
  *
- * Named residual, in place: §1.9 fixes the Judge's criterion set as the UNION
- * of the criteria activation adjudicated and the criteria as they stand when
- * the panel opens. The snapshot below is the second half only — the platform
+ * Named residual, in place: §1.9 fixes the Judge's criterion set (§1.9's
+ * AC-impact union rule). The snapshot below is the second half only — the platform
  * exposes an issue body as it stands now, and this repository durably records
  * no activation-time body for the union's first half. The direction of the
  * gap is the unsafe one and is stated rather than assumed away: where an
