@@ -2,8 +2,9 @@
  * Inert explicit-target publication seam for review records.
  *
  * Warning-surface roster: EXEMPT — this module emits no warning or
- * operator-facing text. It does not attest the writer; activation remains
- * gated on #241's independently identified machine principal.
+ * operator-facing text. It attests the platform writer without claiming
+ * account-level independence; #241 assigns semantic separation to the
+ * ordered agent capacities under one account.
  */
 import { type PublishResult, performPublish } from "../publish/index.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";

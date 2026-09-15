@@ -2,8 +2,9 @@
  * Inert platform-attested half of ReviewSubject.
  *
  * Warning-surface roster: EXEMPT — this module returns data or undefined and
- * emits no warning, record, or operator-facing text. Activation remains gated
- * on #241's independent writer and criteria authorities.
+ * emits no warning, record, or operator-facing text. The attended #241
+ * decision permits one platform account; role ordering, not account identity,
+ * supplies semantic separation.
  */
 import { runPlatformRead } from "../platform/read.ts";
 

@@ -104,7 +104,7 @@ export async function fetchAttestedReviewComments(
 	}
 }
 
-/** Admit marked records only from the independently attested writer. */
+/** Admit marked records only from the platform-attested single-account writer. */
 export function recordsFromAttestedComments(
 	population: AttestedCommentPopulation,
 	writerId: string,
