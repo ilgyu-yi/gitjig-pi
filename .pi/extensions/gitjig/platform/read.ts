@@ -5,6 +5,7 @@
  * only to closed parsers; this module emits no warning or operator-facing text.
  */
 import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 
 const PLATFORM_READ_TIMEOUT_MS = 10_000;
@@ -44,6 +45,12 @@ export function runPlatformRead(
 		let terminating = false;
 		let output = "";
 		let bytes = 0;
+		// A `data` chunk boundary is a byte boundary, never a code-point one, so
+		// decoding each chunk alone turns any multi-byte character split across
+		// two chunks into replacement characters — silently, since the result is
+		// still valid UTF-8 and still valid JSON. The decoder carries the
+		// partial tail across chunks instead.
+		const decoder = new StringDecoder("utf8");
 		const child = spawn("gh", argv, {
 			cwd: repoRoot,
 			detached: true,
@@ -75,14 +82,14 @@ export function runPlatformRead(
 				terminate();
 				return;
 			}
-			output += chunk.toString("utf8");
+			output += decoder.write(chunk);
 		});
 		child.stderr.resume();
 		child.on("exit", (code) => {
 			clearTimeout(runTimer);
 			if (settled || terminating) return;
-			graceTimer = setTimeout(() => settle(code === 0 ? output : undefined), bounds.graceMs);
+			graceTimer = setTimeout(() => settle(code === 0 ? output + decoder.end() : undefined), bounds.graceMs);
 		});
-		child.on("close", (code) => settle(!terminating && code === 0 ? output : undefined));
+		child.on("close", (code) => settle(!terminating && code === 0 ? output + decoder.end() : undefined));
 	});
 }

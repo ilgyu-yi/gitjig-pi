@@ -293,6 +293,25 @@ describe("review-round production call site", () => {
 		}
 	});
 
+	it("carries a multi-byte character split across two stdout chunks", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-comment-split-"));
+		dirs.push(root);
+		const shim = join(root, "gh");
+		// The two-byte encoding of the accented character is written either side
+		// of a pause, so the reader sees it as two separate `data` events.
+		writeFileSync(shim, "#!/bin/sh\nprintf 'caf\\303'\nsleep 0.2\nprintf '\\251 h\\303\\251llo'\n");
+		chmodSync(shim, 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${root}:${savedPath ?? ""}`;
+		try {
+			const output = await runPlatformRead([], root, { timeoutMs: 5_000, graceMs: 200, maxBytes: 1024 });
+			assert.equal(output, "caf\u00e9 h\u00e9llo");
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	});
+
 	it("reads an explicit repository and admits records only from the attested writer", async () => {
 		const recordBody = composeReviewRecord(repairRecord(HEAD_A));
 		let argv: string[] | undefined;
