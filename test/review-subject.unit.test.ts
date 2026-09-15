@@ -237,6 +237,24 @@ describe("inert platform review context", () => {
 			},
 		});
 
+		let attempts = 0;
+		const eventuallyVisible = await publishAndRefetchReviewRecord(
+			"record",
+			context,
+			"/repo",
+			"/state",
+			publish,
+			async () => {
+				attempts += 1;
+				return {
+					ok: true,
+					comments: attempts === 1 ? [] : [{ id: 99, authorId: "U_writer", body: "record" }],
+				};
+			},
+		);
+		assert.equal(eventuallyVisible.ok, true);
+		assert.equal(attempts, 2);
+
 		for (const url of [
 			"https://other.example/owner/repo/pull/223#issuecomment-99",
 			"https://github.example/owner/repo/pull/224#issuecomment-99",

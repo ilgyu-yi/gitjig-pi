@@ -109,8 +109,9 @@ export async function publishAndRefetchReviewRecord(
 	const published = await publishReviewRecord(body, subject, repoRoot, stateRoot, publish);
 	const commentId = publishedCommentId(published, subject);
 	if (commentId === undefined) return { ok: false, cause: "the review publication was not confirmed" };
-	const receipt = admitReceipt(subject, body, commentId, await fetchComments(repoRoot, subject));
-	return receipt === undefined
-		? { ok: false, cause: "the published review record did not refetch exactly" }
-		: { ok: true, receipt };
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const receipt = admitReceipt(subject, body, commentId, await fetchComments(repoRoot, subject));
+		if (receipt !== undefined) return { ok: true, receipt };
+	}
+	return { ok: false, cause: "the published review record did not refetch exactly" };
 }
