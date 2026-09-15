@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { PublishRepository } from "../.pi/extensions/gitjig/publish/executor.ts";
 import type { PublishRequest, PublishResult } from "../.pi/extensions/gitjig/publish/index.ts";
-import { publishReviewRecord } from "../.pi/extensions/gitjig/review/publication.ts";
+import { publishAndRefetchReviewRecord, publishReviewRecord } from "../.pi/extensions/gitjig/review/publication.ts";
 import { admitPlatformReviewContext, fetchPlatformReviewContext } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const OID = "a".repeat(40);
@@ -157,6 +157,82 @@ describe("inert platform review context", () => {
 		});
 		assert.equal(called, false);
 		assert.equal(refused.details.disposition, "refuse-subject");
+	});
+
+	it("admits a durable receipt only after exact bound-subject refetch", async () => {
+		const context = snapshot() as never;
+		const publish = async (): Promise<PublishResult> => ({
+			content: [{ type: "text", text: "published" }],
+			details: {
+				disposition: "published",
+				url: "https://github.example/owner/repo/pull/223#issuecomment-99",
+			},
+		});
+		const admitted = await publishAndRefetchReviewRecord("record", context, "/repo", "/state", publish, async () => ({
+			ok: true,
+			comments: [{ id: 99, authorId: "U_writer", body: "record" }],
+		}));
+		assert.deepEqual(admitted, {
+			ok: true,
+			receipt: {
+				repositoryId: "R_repo",
+				pullRequestId: "PR_node",
+				headOid: "b".repeat(40),
+				commentId: 99,
+				authorId: "U_writer",
+				body: "record",
+			},
+		});
+
+		for (const url of [
+			"https://other.example/owner/repo/pull/223#issuecomment-99",
+			"https://github.example/owner/repo/pull/224#issuecomment-99",
+			"https://github.example/other/repo/pull/223#issuecomment-99",
+			"https://github.example/owner/repo/pull/223#issuecomment-0",
+		]) {
+			let fetched = false;
+			const refused = await publishAndRefetchReviewRecord(
+				"record",
+				context,
+				"/repo",
+				"/state",
+				async () => ({
+					content: [{ type: "text", text: "published" }],
+					details: { disposition: "published", url },
+				}),
+				async () => {
+					fetched = true;
+					return { ok: true, comments: [] };
+				},
+			);
+			assert.equal(refused.ok, false, url);
+			assert.equal(fetched, false, url);
+		}
+	});
+
+	it("refuses mismatched, absent, and ambiguous post-send comments", async () => {
+		const publish = async (): Promise<PublishResult> => ({
+			content: [{ type: "text", text: "published" }],
+			details: { disposition: "published", url: "https://github.example/owner/repo/issues/223#issuecomment-99" },
+		});
+		for (const comments of [
+			[],
+			[{ id: 99, authorId: "U_writer", body: "different" }],
+			[
+				{ id: 99, authorId: "U_writer", body: "record" },
+				{ id: 99, authorId: "U_writer", body: "record" },
+			],
+		]) {
+			const outcome = await publishAndRefetchReviewRecord(
+				"record",
+				snapshot() as never,
+				"/repo",
+				"/state",
+				publish,
+				async () => ({ ok: true, comments }),
+			);
+			assert.deepEqual(outcome, { ok: false, cause: "the published review record did not refetch exactly" });
+		}
 	});
 
 	it("refuses invalid repository names, hosts, URLs, and empty platform identities", () => {

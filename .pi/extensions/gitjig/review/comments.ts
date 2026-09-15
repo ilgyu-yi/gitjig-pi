@@ -76,17 +76,21 @@ export async function fetchAttestedReviewComments(
 		if (!Array.isArray(pages) || !pages.every(Array.isArray))
 			return { ok: false, cause: "the platform comment response was not a page list" };
 		const comments: { id: number; authorId: string; body: string }[] = [];
+		const ids = new Set<number>();
 		for (const page of pages) {
 			for (const comment of page) {
 				if (
 					typeof comment !== "object" ||
 					comment === null ||
 					!Number.isSafeInteger((comment as { id?: unknown }).id) ||
+					((comment as { id: number }).id as number) <= 0 ||
+					ids.has((comment as { id: number }).id) ||
 					typeof (comment as { body?: unknown }).body !== "string" ||
 					typeof (comment as { user?: { node_id?: unknown } }).user?.node_id !== "string" ||
 					(comment as { user: { node_id: string } }).user.node_id.length === 0
 				)
 					return { ok: false, cause: "the platform comment response carried unreadable provenance" };
+				ids.add((comment as { id: number }).id);
 				comments.push({
 					id: (comment as { id: number }).id,
 					authorId: (comment as { user: { node_id: string } }).user.node_id,
