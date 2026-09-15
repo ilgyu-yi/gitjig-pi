@@ -151,9 +151,9 @@ const ADMISSION_BURDEN = [
  * discharged an admitting ground honestly on nine enumerated hiding
  * shapes, all genuinely killed, then reported the class closed. A tenth
  * shape was alive. The unearned closure became a load-bearing input to
- * §1.4's diagnosis in the next round — in the NONE direction, which is
- * the one value that admits a further autonomous repair attempt. So the
- * cost of an unearned exculpatory claim is paid in review states, which
+ * §1.4's diagnosis in the next round — as a false NONE, which returns an
+ * open problem to ordinary flow. So the cost of an unearned exculpatory
+ * claim is paid in review states, which
  * is why this reads as a prohibition rather than as advice.
  */
 const EXCULPATORY_BURDEN = [
@@ -164,8 +164,8 @@ const EXCULPATORY_BURDEN = [
 	"that leaves open — in your return's summary, distinctly labelled. The PROHIBITION is the",
 	"load-bearing half and needs no channel: what you may not do is report a class closed. This binds",
 	"the claim you make and the claim you are handed — an unearned closure reaches the repair-history",
-	"diagnosis (§1.4) as evidence that ground was closed, and NONE is the value that admits another",
-	"repair attempt.",
+	"diagnosis (§1.4) as evidence that ground was closed, and a false NONE can return the change to",
+	"ordinary flow while that ground remains open.",
 ].join("\n");
 
 /**

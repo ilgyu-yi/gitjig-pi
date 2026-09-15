@@ -23,8 +23,8 @@
  * DECISION — the diagnosis is admitted fail-closed, and absence is
  * NEVER read as NONE. §1.4: "absence is not NONE, and an unreadable
  * history is never read as STAGNATION." A refused, unconfirmed, or
- * malformed diagnosis dispatch is a hand-off (the change parks exactly
- * as a non-NONE value would), never a value. The one open-direction
+ * malformed diagnosis dispatch is a hand-off and parks because no valid
+ * value can select recovery, never a value. The one open-direction
  * limb is the substrate's absence in a clone, which fails open with a
  * warning — a property of a clone, not of a moment.
  *
@@ -338,8 +338,8 @@ function diagnosisFromPayload(payload: string | undefined): DiagnosisInput | und
 /**
  * Admit a diagnosis dispatch, fail-closed (§1.4/§1.6). A refused,
  * `ok:false`, unconfirmed-compare, or malformed return is a HAND-OFF —
- * the change parks exactly as a non-NONE value would — never read as
- * NONE. This is the present-but-cannot-measure limb; the caller supplies
+ * without a valid value or route it parks, never read as NONE. This is
+ * the present-but-cannot-measure limb; the caller supplies
  * the absent-substrate limb through `historyAvailability`.
  */
 export function admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission {
@@ -364,12 +364,12 @@ export function admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission {
 }
 
 /**
- * The deterministic consumer (§1.4). NONE admits a further autonomous
- * repair; STAGNATION, OSCILLATION and INDETERMINATE each hand the
- * change off to §5.7's park (every mode). The invalidation finding
- * routes the re-entry gate independently of the value — plan → §1.8,
- * authorization → §1.2/§2.2, nothing → no re-entry. There is no
- * workflow-effective progress value beyond NONE.
+ * The currently instrumented handoff consumer (§1.4). NONE continues;
+ * STAGNATION, OSCILLATION and INDETERMINATE park. The invalidation
+ * finding routes the re-entry gate independently of the value — plan →
+ * §1.8, authorization → §1.2/§2.2, nothing → no re-entry. This function
+ * exposes no decision-mode input and therefore cannot claim the contract's
+ * autonomous-recovery consequence; it implements only the default limb.
  */
 export function diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence {
 	const reentry = invalidation === "plan" ? "plan" : invalidation === "authorization" ? "authorization" : "none";

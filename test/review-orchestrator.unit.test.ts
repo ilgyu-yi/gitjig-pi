@@ -500,9 +500,9 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	// only consumes one. The incident the rule came from was a panel's claim
 	// — nine hiding shapes killed, closure reported, a tenth shape alive —
 	// and the unearned closure then reached §1.4's diagnosis as evidence that
-	// ground had been closed, which is the NONE direction: the one value that
-	// admits another autonomous repair attempt. So the brief that never
-	// carried the rule is the brief whose reader the rule is about.
+	// ground had been closed, producing a false NONE that returned an open
+	// problem to ordinary flow. So the brief that never carried the rule is
+	// the brief whose reader the rule is about.
 	//
 	// ONE HOME (§3.11), and this pair of arms IS the tie: the expected
 	// literal is declared ONCE here and asserted against BOTH composed
@@ -518,8 +518,8 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 		"that leaves open — in your return's summary, distinctly labelled. The PROHIBITION is the",
 		"load-bearing half and needs no channel: what you may not do is report a class closed. This binds",
 		"the claim you make and the claim you are handed — an unearned closure reaches the repair-history",
-		"diagnosis (§1.4) as evidence that ground was closed, and NONE is the value that admits another",
-		"repair attempt.",
+		"diagnosis (§1.4) as evidence that ground was closed, and a false NONE can return the change to",
+		"ordinary flow while that ground remains open.",
 	].join("\n");
 
 	it("the REVIEWER brief carries the exculpatory-claim burden (issue #204)", () => {
