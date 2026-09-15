@@ -233,6 +233,26 @@ export function loadPolicy(): Policy {
 }
 
 /**
+ * The authoritative-read failure contract (issue #175). This is separate
+ * from RoutingRefusal: no change surface exists yet, so there is no
+ * constituent a policy amendment could claim and §1.7's one routing-failure
+ * remedy would be false. The two limbs tell a caller which input boundary
+ * failed without carrying localized git text, argv, or filesystem detail.
+ */
+export class ChangedPathsRefusal extends Error {
+	readonly limb: "root-unreadable" | "range-unreadable";
+	constructor(limb: "root-unreadable" | "range-unreadable") {
+		super(
+			limb === "root-unreadable"
+				? "changed-path read refused: the supplied repository root cannot be measured as a repository toplevel"
+				: "changed-path read refused: the requested revision range cannot be measured; no change surface was produced",
+		);
+		this.name = "ChangedPathsRefusal";
+		this.limb = limb;
+	}
+}
+
+/**
  * §1.7's pre-review refusal, one class for the clause's two limbs —
  * they woke together on one activation story, and a downstream caller
  * maps them to different consequences: `routing-failure` owes a
@@ -311,17 +331,10 @@ export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot:
 			cwd: repoRoot,
 			encoding: "utf8",
 			env,
+			stdio: ["ignore", "pipe", "pipe"],
 		}).trim();
 	} catch {
-		// The child's diagnostic is localized and names no cause a caller can
-		// act on (a nonexistent directory surfaces as a bare spawn ENOENT), so
-		// the refusal is authored here, in the same voice as validatePolicy's.
-		throw new Error(
-			"changed-path read: the supplied repository root cannot be probed for a toplevel — the probe itself " +
-				"failed, and this arm does not distinguish its causes: the root does not exist, git cannot resolve " +
-				"a repository there, or git could not be run at all; the read refuses rather than answering about " +
-				"a repository it cannot pin (§4.7)",
-		);
+		throw new ChangedPathsRefusal("root-unreadable");
 	}
 	if (realpathSync(toplevel) !== realpathSync(repoRoot)) {
 		throw new Error(
@@ -329,11 +342,17 @@ export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot:
 				"own toplevel — an unpinned read would silently answer about the enclosing repository (§4.7)",
 		);
 	}
-	const out = execFileSync("git", ["diff", "--name-only", "-z", "--end-of-options", `${baseRef}...${headRef}`], {
-		cwd: repoRoot,
-		encoding: "utf8",
-		env,
-	});
+	let out: string;
+	try {
+		out = execFileSync("git", ["diff", "--name-only", "-z", "--end-of-options", `${baseRef}...${headRef}`], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+	} catch {
+		throw new ChangedPathsRefusal("range-unreadable");
+	}
 	return out.split("\0").filter((entry) => entry.length > 0) as unknown as ChangedPaths;
 }
 

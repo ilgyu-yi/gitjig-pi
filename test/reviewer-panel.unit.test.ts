@@ -34,7 +34,7 @@
  * which live in `dispatch-module`.
  */
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -53,6 +53,9 @@ type ChangedPaths = readonly string[];
 type Policy = { rows: { lens: string; surface: string; prefixes: string[] }[] };
 
 type PanelModule = {
+	ChangedPathsRefusal: new (
+		limb: "root-unreadable" | "range-unreadable",
+	) => Error & { limb: "root-unreadable" | "range-unreadable" };
 	RoutingRefusal: new (
 		limb: "routing-failure" | "empty-surface",
 		unclaimed: readonly string[],
@@ -1305,6 +1308,66 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		);
 	});
 
+	it("a bad ref refuses on the authored range-unreadable contract", () => {
+		const p = orchestrator();
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		assert.throws(
+			() => p.changedPathsFromRepo("not-a-ref", "HEAD", repo),
+			(error: unknown) =>
+				error instanceof p.ChangedPathsRefusal &&
+				error.limb === "range-unreadable" &&
+				error.message ===
+					"changed-path read refused: the requested revision range cannot be measured; no change surface was produced",
+			"a bad ref escaped as git/execFileSync's own diagnostic instead of the fixed range-unreadable refusal",
+		);
+	});
+
+	it("the authored range refusal does not leak the child's diagnostic on stderr", () => {
+		const repo = fixtureRepo({ "SPEC.md": "x\n" });
+		const moduleUrl = pathToFileURL(`${repoRoot()}${REVIEW_DIR}panel.ts`).href;
+		const script =
+			`import { changedPathsFromRepo } from ${JSON.stringify(moduleUrl)};` +
+			`try { changedPathsFromRepo("not-a-ref", "HEAD", process.argv[1]); } ` +
+			`catch (error) { process.stdout.write(error.name + ":" + error.limb); }`;
+		const child = spawnSync(process.execPath, ["--input-type=module", "--eval", script, repo], { encoding: "utf8" });
+		assert.equal(child.status, 0, "the isolated refusal probe itself failed");
+		assert.equal(
+			child.stdout,
+			"ChangedPathsRefusal:range-unreadable",
+			"the isolated caller did not receive the authored typed refusal",
+		);
+		assert.equal(
+			child.stderr,
+			"",
+			"git's localized bad-ref diagnostic escaped on stderr — removing the diff child's piped stderr must red this arm",
+		);
+	});
+
+	it("an unborn repository refuses on the same authored range-unreadable contract", () => {
+		const p = orchestrator();
+		const repo = scratchDir("gitjig-unborn-repo-");
+		execFileSync("git", ["init", "-q"], { cwd: repo });
+		assert.throws(
+			() => p.changedPathsFromRepo("HEAD~1", "HEAD", repo),
+			(error: unknown) => error instanceof p.ChangedPathsRefusal && error.limb === "range-unreadable",
+			"an unborn repository escaped as git's missing-HEAD diagnostic instead of the authored range refusal",
+		);
+	});
+
+	it("a nonexistent root refuses on the authored root-unreadable contract", () => {
+		const p = orchestrator();
+		const root = join(scratchDir("gitjig-absent-root-"), "does-not-exist");
+		assert.throws(
+			() => p.changedPathsFromRepo("HEAD~1", "HEAD", root),
+			(error: unknown) =>
+				error instanceof p.ChangedPathsRefusal &&
+				error.limb === "root-unreadable" &&
+				error.message ===
+					"changed-path read refused: the supplied repository root cannot be measured as a repository toplevel",
+			"a nonexistent root escaped as spawnSync ENOENT instead of the fixed root-unreadable refusal",
+		);
+	});
+
 	it("a dash-leading ref is a refusal, never a silently-empty read", () => {
 		const p = orchestrator();
 		const repo = fixtureRepo({ "SPEC.md": "x\n" });
@@ -1334,12 +1397,10 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 					"empty, and a routing input that cannot be a revision must refuse, not degrade into an empty " +
 					"change surface",
 			);
-			const status = (refusal as { status?: unknown }).status;
 			assert.ok(
-				typeof status === "number" && status !== 0,
-				"the refusal is not a git child's non-zero exit — the guard's job is to make GIT refuse the operand " +
-					"while parsing options, and a throw from anywhere else is a different failure wearing this arm's " +
-					"green",
+				refusal instanceof p.ChangedPathsRefusal && refusal.limb === "range-unreadable",
+				"the dash-leading operand did not reach the authored range-unreadable refusal — the guard must make git " +
+					"reject it without letting git's own diagnostic become the caller contract",
 			);
 			assert.ok(
 				!existsSync(sideEffect),
@@ -1401,7 +1462,7 @@ describe("§1.7 required slots derive from a committed, caller-owned policy (iss
 		const outside = scratchDir("gitjig-nonrepo-");
 		assert.throws(
 			() => p.changedPathsFromRepo("HEAD~1", "HEAD", outside),
-			/cannot be probed/,
+			/cannot be measured as a repository toplevel/,
 			"a non-repository root threw something this repository did not author — the refusal direction is right " +
 				"either way, but an unauthored, localized diagnostic is not a refusal a caller can act on",
 		);

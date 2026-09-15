@@ -1526,6 +1526,30 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(fake.briefs.length, 0, "a routing failure dispatched reviewer slots — the refusal is pre-review");
 	});
 
+	it("an unreadable revision range propagates its authored refusal before any dispatch", async () => {
+		const o = orchestrate();
+		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
+		const fake = fakeDispatch(() => admitted(approvedPayload));
+		await assert.rejects(
+			o.reviewRound({
+				repoRoot: repo,
+				baseRef: "not-a-ref",
+				headRef: "HEAD",
+				manifest: { state: "present", criteria: [] },
+				fences: FENCES,
+				changeDescription: "d",
+				dispatch: fake.dispatch,
+			}),
+			(error: unknown) =>
+				error instanceof Error &&
+				error.name === "ChangedPathsRefusal" &&
+				"limb" in error &&
+				(error as Error & { limb: string }).limb === "range-unreadable",
+			"reviewRound did not propagate the authoritative-read refusal in its authored type",
+		);
+		assert.equal(fake.briefs.length, 0, "an unreadable changed-path range dispatched a reviewer slot");
+	});
+
 	it("the record pins the head's full hash and survives its own round-trip", async () => {
 		const o = orchestrate();
 		const r = records();
