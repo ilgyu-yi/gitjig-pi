@@ -5,7 +5,7 @@
  * emits no warning, record, or operator-facing text. Activation remains gated
  * on #241's independent writer and criteria authorities.
  */
-import { runCommentRead } from "./comments.ts";
+import { runPlatformRead } from "../platform/read.ts";
 
 export interface PlatformRepositoryIdentity {
 	id: string;
@@ -137,7 +137,7 @@ async function readJson(read: PlatformRead, argv: string[], repoRoot: string): P
 export async function fetchPlatformReviewContext(
 	repoRoot: string,
 	pr: number,
-	read: PlatformRead = runCommentRead,
+	read: PlatformRead = runPlatformRead,
 ): Promise<PlatformReviewContext | undefined> {
 	if (!Number.isSafeInteger(pr) || pr <= 0) return undefined;
 	const repositoryValue = await readJson(read, ["repo", "view", "--json", "id,nameWithOwner"], repoRoot);

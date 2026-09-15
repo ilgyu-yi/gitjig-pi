@@ -12,9 +12,10 @@ import {
 	registerReviewRoundCommand,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
+import { runPlatformRead } from "../.pi/extensions/gitjig/platform/read.ts";
 import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
 import { scanBody } from "../.pi/extensions/gitjig/publish/scan.ts";
-import { fetchReviewComments, recordsFromComments, runCommentRead } from "../.pi/extensions/gitjig/review/comments.ts";
+import { fetchReviewComments, recordsFromComments } from "../.pi/extensions/gitjig/review/comments.ts";
 import { reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 import { resolveRepositoryHead } from "../.pi/extensions/gitjig/review/repository.ts";
@@ -131,7 +132,7 @@ describe("review-round production call site", () => {
 		process.env.PATH = `${root}:${savedPath ?? ""}`;
 		const started = Date.now();
 		try {
-			const output = await runCommentRead([], root, { timeoutMs: 100, graceMs: 100, maxBytes: 1024 });
+			const output = await runPlatformRead([], root, { timeoutMs: 100, graceMs: 100, maxBytes: 1024 });
 			assert.equal(output, undefined);
 			assert.ok(Date.now() - started < 2_000, "the hard bound did not settle promptly");
 		} finally {
