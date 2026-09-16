@@ -42,6 +42,8 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { renderActCall, renderActTerminal, safeIssueNumber } from "../act-render.ts";
+import type { TerminalClass } from "../session-surface.ts";
 import { PUBLISH_DESTINATION_KINDS } from "./executor.ts";
 import { performPublish } from "./service.ts";
 
@@ -67,6 +69,46 @@ const PublishParams = Type.Object({
 	}),
 });
 
+export function publishTarget(args: unknown): string {
+	const destination =
+		typeof args === "object" && args !== null && "destination" in args
+			? (args as { destination?: unknown }).destination
+			: undefined;
+	const target =
+		typeof destination === "object" && destination !== null
+			? (destination as { kind?: unknown; number?: unknown })
+			: undefined;
+	const kind = target?.kind;
+	const number = safeIssueNumber(target?.number);
+	switch (kind) {
+		case "issue-comment":
+			return `issue comment${number}`;
+		case "pr-comment":
+			return `PR comment${number}`;
+		case "issue-body":
+			return `issue body${number}`;
+		case "pr-body":
+			return `PR body${number}`;
+		case "issue-create":
+			return "new issue";
+		case "pr-create":
+			return "new PR";
+		default:
+			return "invalid target";
+	}
+}
+
+export function publishTerminal(details: unknown, isError = false): TerminalClass {
+	if (isError) return "failure";
+	const disposition =
+		typeof details === "object" && details !== null && "disposition" in details
+			? (details as { disposition?: unknown }).disposition
+			: undefined;
+	if (disposition === "published") return "success";
+	if (typeof disposition === "string" && disposition.startsWith("refuse")) return "refusal";
+	return "failure";
+}
+
 export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoot: string): void {
 	pi.registerTool({
 		name: PUBLISH_TOOL_NAME,
@@ -79,6 +121,15 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 		parameters: PublishParams,
 		async execute(_toolCallId, params) {
 			return performPublish({ body: params.body, destination: params.destination }, repoRoot, stateRoot);
+		},
+		renderCall(args, theme) {
+			return renderActCall("Publish", publishTarget(args), theme);
+		},
+		renderResult(result, options, theme, context) {
+			const terminal = publishTerminal(result.details, context.isError);
+			const first = result.content[0];
+			const detail = options.expanded && terminal !== "success" && first?.type === "text" ? first.text : undefined;
+			return renderActTerminal(terminal, theme, detail);
 		},
 	});
 }
