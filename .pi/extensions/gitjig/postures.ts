@@ -473,4 +473,19 @@ export const POSTURES: readonly PostureRow[] = [
 			"reports an awk miss as a docs authoring defect — or, with no SPEC present, skips clean. Recorded not " +
 			"repaired; message disambiguation is follow-up work.",
 	},
+	{
+		dependency: "adopter-delivery-egress",
+		failureShape: "the egress scan, neutralization, or audit writer cannot produce an admitted delivery title and body",
+		posture: "closed",
+		justification:
+			"Delivery returns egress-refused before invoking the platform seam; publishing unscanned repository-derived prose is irreversible.",
+	},
+	{
+		dependency: "adopter-delivery-platform",
+		failureShape:
+			"the platform throws, returns no snapshot, or returns a snapshot that does not exactly confirm the requested draft change",
+		posture: "closed",
+		justification:
+			"Delivery reports no success unless repository, immutable base, draft PR identity, and every atomic change are confirmed exactly.",
+	},
 ];
