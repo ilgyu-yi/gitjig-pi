@@ -135,15 +135,17 @@ describe("the on-demand authoring brief", () => {
 		}
 	});
 
-	it("rejects an inline anchor decoy after the real heading is removed", () => {
-		const root = fixtureRoot();
-		const sourcePath = join(root, "SPEC.md");
+	it("rejects inline, fenced, and commented anchor decoys after the real heading is removed", () => {
 		const anchor = "### 2.4 Evidence discipline";
-		const source = readFileSync(sourcePath, "utf8").replace(`${anchor}\n`, `A quotation names ${anchor}\n`);
-		writeFileSync(sourcePath, source);
-		const result = composeAuthoringBrief(input(["test/example.test.ts"]), root);
-		assert.equal(result.complete, false);
-		assert.match(result.text, /missing or ambiguous canonical anchor/);
+		for (const decoy of [`A quotation names ${anchor}\n`, `\`\`\`md\n${anchor}\n\`\`\`\n`, `<!--\n${anchor}\n-->\n`]) {
+			const root = fixtureRoot();
+			const sourcePath = join(root, "SPEC.md");
+			const source = readFileSync(sourcePath, "utf8").replace(`${anchor}\n`, decoy);
+			writeFileSync(sourcePath, source);
+			const result = composeAuthoringBrief(input(["test/example.test.ts"]), root);
+			assert.equal(result.complete, false);
+			assert.match(result.text, /missing or ambiguous canonical anchor/);
+		}
 	});
 
 	it("the route-set witness kills a fixed-selector mutant", () => {

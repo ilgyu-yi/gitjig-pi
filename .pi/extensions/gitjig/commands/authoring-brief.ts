@@ -1,8 +1,8 @@
 /**
  * On-demand pre-authoring norm delivery (SPEC §2.5, issue #245).
  *
- * The policy is repository-controlled data. User text selects only named paths;
- * it never selects source files or anchors. Clauses are byte slices of SPEC.md,
+ * The policy is repository-controlled data. Of the supplied text, only named
+ * paths select clauses; no input selects source files or anchors. Clauses are byte slices of SPEC.md,
  * not restated summaries. An incomplete result is advisory and cannot claim
  * readiness.
  */
@@ -126,29 +126,50 @@ function matches(path: string, prefix: string): boolean {
 	return prefix.endsWith("/") ? path.startsWith(prefix) : path === prefix;
 }
 
-function sectionAt(source: string, anchor: string): string | undefined {
-	const marker = `${anchor}\n`;
-	const starts: number[] = [];
-	for (let cursor = 0; cursor < source.length; ) {
-		const candidate = source.indexOf(marker, cursor);
-		if (candidate < 0) break;
-		if (candidate === 0 || source[candidate - 1] === "\n") starts.push(candidate);
-		cursor = candidate + marker.length;
-	}
-	if (starts.length !== 1) return undefined;
-	const start = starts[0];
-	const level = anchor.match(/^#+/)?.[0].length;
-	if (level === undefined) return undefined;
-	let end = source.length;
-	const heading = /^(#{1,6}) .+$/gm;
-	heading.lastIndex = start + marker.length;
-	for (let match = heading.exec(source); match !== null; match = heading.exec(source)) {
-		if (match[1].length <= level) {
-			end = match.index;
-			break;
+interface MarkdownHeading {
+	start: number;
+	level: number;
+	text: string;
+}
+
+/** Narrow CommonMark block scan: ATX headings inside fences/comments are not headings. */
+function markdownHeadings(source: string): MarkdownHeading[] {
+	const headings: MarkdownHeading[] = [];
+	let fence: { marker: string; width: number } | undefined;
+	let inComment = false;
+	for (let start = 0; start < source.length; ) {
+		const newline = source.indexOf("\n", start);
+		const end = newline < 0 ? source.length : newline;
+		const line = source.slice(start, end).replace(/\r$/, "");
+		const wasInComment = inComment;
+		const opensComment = !inComment && line.includes("<!--");
+		if (opensComment) inComment = true;
+		if (inComment && line.includes("-->")) inComment = false;
+		if (!wasInComment && !opensComment) {
+			if (fence === undefined) {
+				const opening = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+				if (opening !== null) fence = { marker: opening[1][0], width: opening[1].length };
+				else {
+					const heading = /^(#{1,6}) ([^\r\n]+)$/.exec(line);
+					if (heading !== null) headings.push({ start, level: heading[1].length, text: line });
+				}
+			} else {
+				const closing = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+				if (closing !== null && closing[1][0] === fence.marker && closing[1].length >= fence.width) fence = undefined;
+			}
 		}
+		start = newline < 0 ? source.length : newline + 1;
 	}
-	return source.slice(start, end);
+	return headings;
+}
+
+function sectionAt(source: string, anchor: string): string | undefined {
+	const headings = markdownHeadings(source);
+	const candidates = headings.filter((heading) => heading.text === anchor);
+	if (candidates.length !== 1) return undefined;
+	const selected = candidates[0];
+	const following = headings.find((heading) => heading.start > selected.start && heading.level <= selected.level);
+	return source.slice(selected.start, following?.start ?? source.length);
 }
 
 function incomplete(causes: string[]): AuthoringBriefResult {
