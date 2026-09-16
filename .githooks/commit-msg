@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# .githooks/commit-msg — local-tier adapter. Two arms, in this order:
-# check_commit_subject over every line that could become the committed
-# subject, then the report-only authoring pass (issue #218, at the foot of
-# this file). It copies NO check logic (single-source). It
-# deliberately does NOT reuse the command-string subject parser: at the git
+# .githooks/commit-msg — local-tier adapter for check_commit_subject over
+# every line that could become the committed subject. It copies NO check
+# logic (single-source). It deliberately does NOT reuse the command-string
+# subject parser: at the git
 # layer there is no command string, only the message file git hands us.
 #
 # WHY EVERY LINE THAT COULD LAND, AND NOT "THE SUBJECT" (issue #58). This
@@ -198,20 +197,6 @@ if [ -n "$_gh_subject_trimmed" ] &&
   [ "$_gh_subject_trimmed" != "$_gh_first_trimmed" ] &&
   [ "$_gh_subject_trimmed" != "$_gh_subject" ]; then
   _gh_check_one "$_gh_subject_trimmed" || exit 1
-fi
-
-# THE AUTHORING PASS (issue #218). Report-only: it lays the staged diff and
-# the prepared message out together and prints the disposition, and it
-# decides nothing — no status is read from it and no path below can refuse.
-#
-# WHY THIS SURFACE AND NOT pre-commit. The message does not exist at
-# pre-commit time; `git commit` writes it after that adapter returns.
-if githook_source authoring_pass.sh authoring-pass; then
-  if command -v authoring_pass_layout >/dev/null 2>&1; then
-    authoring_pass_layout "$_gh_msgfile" >&2 || true
-  else
-    printf '[dev-shell] no authoring-pass layout was printed: the helper defines no authoring_pass_layout. Nothing was gated by this; lay the staged diff and this message out by hand and read them together (SPEC \302\2472.4, \302\2472.5).\n' >&2
-  fi
 fi
 
 exit 0

@@ -122,8 +122,8 @@ import {
 /** One text turn: a script for runs whose act is a command dispatch, not a model turn. */
 const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 
-/** The expected governed-home multiset — §4.8's three worked cases on their ruled surfaces. */
-const EXPECTED_GOVERNED_ROWS = ["review|extension", "ship|extension", "work-on|prompt"];
+/** The expected governed-home multiset — governed commands on their ruled surfaces. */
+const EXPECTED_GOVERNED_ROWS = ["authoring-brief|extension", "review|extension", "ship|extension", "work-on|prompt"];
 
 function subjectAbsent(arm: string, subject: string): string {
 	return (
@@ -560,6 +560,19 @@ describe("registration on the governed home, from the substrate's own report (is
 		);
 	});
 
+	it("authoring-brief registers as an extension command on the governed home", () => {
+		const row = requireGovernedRow(
+			"authoring-brief-registration",
+			"authoring-brief",
+			"the pre-authoring norm-delivery command",
+		);
+		assert.equal(
+			row.source,
+			"extension",
+			"authoring-brief-registration: pre-authoring delivery must be an on-demand command, not an always-on surface",
+		);
+	});
+
 	it("review registers as an extension command on the governed home", () => {
 		const row = requireGovernedRow("review-registration", "review", "the review extension command");
 		assert.equal(
@@ -590,7 +603,7 @@ describe("cross-surface uniqueness over the governed home (issue #91 AC 2)", () 
 		assert.deepEqual(
 			governedMultiset(registrationRun, registrationFixture),
 			EXPECTED_GOVERNED_ROWS,
-			`${subjectAbsent("uniqueness", "all three spine assets")} — full-row-multiset equality is what ` +
+			`${subjectAbsent("uniqueness", "all governed command assets")} — full-row-multiset equality is what ` +
 				`fails on every collision shape §4.8 measured (within-surface suffixing, cross-surface ` +
 				`side-by-side rows, an alias's extra row) as well as on a missing asset\n${diagnostics(registrationRun)}`,
 		);

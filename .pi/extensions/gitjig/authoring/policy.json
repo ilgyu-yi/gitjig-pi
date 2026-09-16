@@ -1,0 +1,54 @@
+{
+	"version": 1,
+	"routes": [
+		{
+			"surface": "specification prose",
+			"prefixes": ["SPEC.md"],
+			"anchors": [
+				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.5 Authoring doctrine",
+				"### 2.6 SSOT change-reach protocol",
+				"### 2.8 Artifact surfaces"
+			],
+			"defaultAct": "delete"
+		},
+		{
+			"surface": "repository prose",
+			"prefixes": ["MISSION.md", "README.md", "changelog_unreleased/"],
+			"anchors": [
+				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.5 Authoring doctrine",
+				"### 2.8 Artifact surfaces"
+			],
+			"defaultAct": "delete"
+		},
+		{
+			"surface": "test code",
+			"prefixes": ["test/"],
+			"anchors": [
+				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.4 Evidence discipline",
+				"### 2.5 Authoring doctrine",
+				"### 2.8 Artifact surfaces"
+			]
+		},
+		{
+			"surface": "implementation code",
+			"prefixes": [".pi/", "src/", "package.json", "tsconfig.json", "biome.json"],
+			"anchors": [
+				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.5 Authoring doctrine",
+				"### 2.8 Artifact surfaces"
+			]
+		},
+		{
+			"surface": "enforcement and automation",
+			"prefixes": [".githooks/", ".github/"],
+			"anchors": [
+				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.5 Authoring doctrine",
+				"### 2.8 Artifact surfaces"
+			]
+		}
+	]
+}
