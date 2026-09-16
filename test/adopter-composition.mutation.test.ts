@@ -121,8 +121,8 @@ describe("#250 named isolated guard mutants", () => {
 		kill(
 			"nofollow-open",
 			"classifier.ts",
-			" | constants.O_NOFOLLOW",
-			"",
+			"descriptor = openSync(childAbs, constants.O_RDONLY | constants.O_NOFOLLOW);",
+			"descriptor = openSync(childAbs, constants.O_RDONLY);",
 			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync,symlinkSync,rmSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"),outside=join(root,"outside"); writeFileSync(file,"in"); writeFileSync(outside,"out"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){renameSync(file,outside+"-checked");symlinkSync(outside+"-checked",file)}},afterRead(p){if(p===".github/a"){rmSync(file);renameSync(outside+"-checked",file)}}}));`,
 		);
 		kill(
