@@ -232,15 +232,14 @@ const judgePayload = (rulings: Ruling[]): string => JSON.stringify({ dedupAttest
 const FAILED_RUN = "dispatch refused: the delegated run reported failure; no return is admitted from a failed run";
 const RETRY_BRIEF = "the brief text";
 const RETRY_HEAD = "the-resolved-head";
-const retryOptions = () => ({ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] });
+const retryOptions = () => ({ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"], timeoutMs: 1234 });
 
 /**
- * One `makeDispatcher` probe. `expected` is **derived from the very options
- * the dispatch is made with**, so the two cannot disagree on any field
- * `RunDispatchOptions` carries — a hand-listed shape could only agree on the
- * fields whoever wrote it remembered. Every send an arm expects is seeded,
- * and a call past the seeded set throws, so an unbounded-retry mutant reds
- * here rather than hanging the run.
+ * One `makeDispatcher` probe. `expected` derives from the same options binding
+ * the dispatch receives, and that binding deliberately sets optional
+ * `timeoutMs`, so dropping an option while composing either send is observable.
+ * Every send an arm expects is seeded, and a call past the seeded set throws,
+ * so an unbounded-retry mutant reds here rather than hanging the run.
  */
 function retryProbe(outcomes: DispatchOutcome[]): {
 	seen: RunDispatchOptions[];
