@@ -80,6 +80,7 @@ function records(): RecordModule {
 }
 
 const RAW = readFileSync(WORKFLOW, "utf8");
+const SCRIPT_RAW = readFileSync(SCRIPT, "utf8");
 
 /**
  * The workflow with every comment removed.
@@ -281,9 +282,11 @@ describe("§3.3 merge-review workflow — structure, over LIVE settings only (is
 		);
 	});
 
-	it("declares its development-and-CI-only class and enumerates its residuals PER TRIGGER PATH", () => {
+	it("declares its exact source-only class and enumerates its residuals PER TRIGGER PATH", () => {
+		assert.equal(RAW.split(/\r?\n/, 1)[0], "# gitjig: source-only", "the workflow lacks §4.1's exact marker");
+		assert.equal(SCRIPT_RAW.split(/\r?\n/, 1)[0], "// gitjig: source-only", "the script lacks §4.1's exact marker");
 		// Prose assertions run against RAW: these ARE comments.
-		assert.ok(RAW.includes("DEVELOPMENT AND CI ONLY"), "the workflow does not declare its substrate class");
+		assert.ok(RAW.includes("DEVELOPMENT AND CI ONLY"), "the workflow does not explain its substrate class");
 		for (const [needle, why] of [
 			["MERGE REF", "the push path's self-grading residual"],
 			["DEFAULT BRANCH", "the comment path checks out the default branch, not the merge ref"],
