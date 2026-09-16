@@ -2,6 +2,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, type Stats } from "node:fs";
 import { resolve } from "node:path";
 import { TextDecoder } from "node:util";
+import type { Occupant } from "./plan.ts";
 
 export const CANDIDATE_ROOTS = [".pi", ".github", ".githooks", "changelog_unreleased"] as const;
 export const DISPOSITIONS = ["source-only", "instance-state", "handed-over", "carried"] as const;
@@ -213,6 +214,60 @@ export function observeCandidates(sourceRoot: string, options: ObservationOption
 		walk(abs, Buffer.from(namespace), found, stats, options);
 	}
 	return found.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
+}
+
+export function observeOccupants(targetRoot: string, paths: readonly string[]): ReadonlyMap<string, Occupant> {
+	const root = Buffer.from(resolve(targetRoot));
+	const occupants = new Map<string, Occupant>();
+	for (const path of paths) {
+		validateCandidatePath(path);
+		const components = path.split("/");
+		let current: Buffer = root;
+		const ancestors: Array<{ path: Buffer; stats: Stats }> = [];
+		let absent = false;
+		for (let index = 0; index < components.length - 1; index++) {
+			current = appendPath(current, Buffer.from(components[index]));
+			try {
+				const stats = lstatSync(current);
+				if (!stats.isDirectory() || stats.isSymbolicLink())
+					throw new ClassificationRefusal("occupant container is non-regular");
+				ancestors.push({ path: current, stats });
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+					absent = true;
+					break;
+				}
+				if (error instanceof ClassificationRefusal) throw error;
+				throw new ClassificationRefusal("occupant container is unreadable");
+			}
+		}
+		const absolute = appendPath(root, Buffer.from(path));
+		if (absent) {
+			occupants.set(path, { kind: "absent" });
+			continue;
+		}
+		let descriptor: number | undefined;
+		try {
+			const before = lstatSync(absolute);
+			if (!before.isFile() || before.isSymbolicLink()) throw new ClassificationRefusal("occupant is non-regular");
+			descriptor = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
+			const opened = fstatSync(descriptor);
+			if (!opened.isFile() || !sameObject(before, opened)) throw new ClassificationRefusal("occupant identity changed");
+			const bytes = readFileSync(descriptor);
+			if (!sameObject(opened, lstatSync(absolute))) throw new ClassificationRefusal("occupant identity changed");
+			for (const ancestor of ancestors)
+				if (!sameObject(ancestor.stats, lstatSync(ancestor.path)))
+					throw new ClassificationRefusal("occupant container identity changed");
+			occupants.set(path, { kind: "bytes", bytes });
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") occupants.set(path, { kind: "absent" });
+			else if (error instanceof ClassificationRefusal) throw error;
+			else throw new ClassificationRefusal("occupant is unreadable or was replaced");
+		} finally {
+			if (descriptor !== undefined) closeSync(descriptor);
+		}
+	}
+	return occupants;
 }
 
 export function renderMembershipSnapshot(members: readonly Membership[]): string {

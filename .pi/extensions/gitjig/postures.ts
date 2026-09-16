@@ -481,6 +481,38 @@ export const POSTURES: readonly PostureRow[] = [
 			"Delivery returns egress-refused before invoking the platform seam; publishing unscanned repository-derived prose is irreversible.",
 	},
 	{
+		dependency: "adopter-acquisition-identity",
+		failureShape:
+			"the disposable Git snapshot cannot confirm the explicit canonical source and immutable revision before carried code runs",
+		posture: "closed",
+		justification:
+			"Bootstrap refuses before invoking the carried provisioner; executing an unconfirmed snapshot would cross the first-run trust boundary.",
+	},
+	{
+		dependency: "adopter-provision-filesystem",
+		failureShape:
+			"target occupants, exclusions, carried writes, or final carried bytes cannot be measured or safely applied",
+		posture: "closed",
+		justification:
+			"Provision reports no success and never advances installed-pin unless the complete final planner state and every exclusion verify.",
+	},
+	{
+		dependency: "adopter-provision-binding",
+		failureShape:
+			"the handed bind instrument fails or effective clone-local core.hooksPath does not resolve to .githooks",
+		posture: "closed",
+		justification:
+			"A clone with placed carried bytes but an unbound handed tier is not governed and cannot be reported as provisioned.",
+	},
+	{
+		dependency: "adopter-provision-installed-pin",
+		failureShape:
+			"the verified committed pin cannot be atomically written and read back from target .gitjig state after all other checks",
+		posture: "closed",
+		justification:
+			"The installed record is authority for later updates and advances last; an unconfirmed write leaves the run refused and safely rerunnable.",
+	},
+	{
 		dependency: "adopter-delivery-platform",
 		failureShape:
 			"the platform throws, returns no snapshot, or returns a snapshot that does not exactly confirm the requested draft change",

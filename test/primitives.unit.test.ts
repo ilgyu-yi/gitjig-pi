@@ -1422,8 +1422,12 @@ describe("fail-posture inventory (§3.9)", () => {
 		assert.deepEqual(
 			POSTURES.map((row) => `${row.dependency} → ${row.posture}`).sort(),
 			[
+				"adopter-acquisition-identity → closed",
 				"adopter-delivery-egress → closed",
 				"adopter-delivery-platform → closed",
+				"adopter-provision-binding → closed",
+				"adopter-provision-filesystem → closed",
+				"adopter-provision-installed-pin → closed",
 				"audit-append → open",
 				"branch-guard-derivation → open",
 				"branch-guard-derivation-fallback → closed",

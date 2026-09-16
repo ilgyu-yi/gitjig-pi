@@ -198,6 +198,14 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/install/acquire.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/bootstrap.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/install/classifier.ts",
 			"disposition": "carried"
 		},
@@ -210,11 +218,23 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/install/local-provision.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/install/pin.ts",
 			"disposition": "carried"
 		},
 		{
 			"path": ".pi/extensions/gitjig/install/plan.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/provision-cli.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/provision.ts",
 			"disposition": "carried"
 		},
 		{
@@ -343,6 +363,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/13.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/130.md",
 			"disposition": "instance-state"
 		},
 		{
