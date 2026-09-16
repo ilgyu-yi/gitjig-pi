@@ -247,7 +247,10 @@ export async function driveReviewRound(
 		let diagnosedHistory: string | undefined;
 
 		const currentSubject = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) !== undefined;
-		const diagnose = async (history: StateSummary[]): Promise<TerminalSeed | undefined> => {
+		const diagnose = async (
+			history: StateSummary[],
+			requiredReceipt?: ReviewPublicationReceipt,
+		): Promise<TerminalSeed | undefined> => {
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			const admitted = admitDiagnosis(
 				await dispatch(
@@ -263,6 +266,9 @@ export async function driveReviewRound(
 			const diagnosis = admitted.diagnosis;
 			state = { phase: "diagnosis-admitted", diagnosis };
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+			const confirmed = await durableState(repoRoot, subject, seams, requiredReceipt);
+			if (confirmed === undefined || JSON.stringify(confirmed.history) !== JSON.stringify(history))
+				return { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" };
 			diagnosedHistory = JSON.stringify(history);
 			return reentryConsequence(diagnosisConsequence(diagnosis.value, diagnosis.invalidation));
 		};
@@ -301,7 +307,7 @@ export async function driveReviewRound(
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 		if (!triggerFires(after.history) || JSON.stringify(after.history) === diagnosedHistory)
 			return finish(state, { disposition: "posted", review: round.review });
-		const stop = await diagnose(after.history);
+		const stop = await diagnose(after.history, publication.receipt);
 		return finish(state, stop ?? { disposition: "posted", review: round.review });
 	} catch {
 		return finish(state, { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" });

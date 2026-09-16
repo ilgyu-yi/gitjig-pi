@@ -886,6 +886,40 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
+	it("hands off when durable history changes during diagnosis", async () => {
+		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		let rounds = 0;
+		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "stale" };
+		const outcome = await driveReviewRound(
+			spec(),
+			"/unused",
+			seams({
+				readComments: async () => population(bodies),
+				makeDispatch: () => async () => {
+					bodies.push(composeReviewRecord(repairRecord("c".repeat(40))));
+					return {
+						disposition: "admitted",
+						ok: true,
+						summary: "",
+						compare: "confirmed",
+						payload: JSON.stringify(diagnosis),
+					};
+				},
+				runRound: async () => {
+					rounds += 1;
+					return ROUND;
+				},
+			}),
+		);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: installed review history could not be read",
+			reentry: "none",
+			diagnosis,
+		});
+		assert.equal(rounds, 0);
+	});
+
 	it("requires the next history population to contain the exact publication receipt", async () => {
 		const outcome = await driveReviewRound(spec(), "/unused", seams({ readComments: async () => population([]) }));
 		assert.deepEqual(outcome, {
