@@ -1,3 +1,4 @@
+# gitjig: source-only
 # .githooks/helpers/conventional_commit.sh — the commit-format class's
 # delegated predicate (SPEC §3.3 `commit-format` row; the grammar contract
 # `.githooks/_lib.sh` states for this file). Sourced by adapters, never

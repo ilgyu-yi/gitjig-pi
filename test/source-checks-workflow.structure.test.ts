@@ -60,7 +60,10 @@ function recordedContexts(label: string, pattern: RegExp): string[] {
 	return backticked(m[1]);
 }
 
-const TIER3_CONTEXTS = recordedContexts("§3.2 tier-3", /The workflow gates \(([^)]*)\) run as required status checks/);
+const TIER3_CONTEXTS = recordedContexts(
+	"§3.2 tier-3 source-repository",
+	/In this source repository the workflow gates \(([^)]*)\) run as required status checks/,
+);
 const SHAPE_CONTEXTS = recordedContexts(
 	"§4.3 server-config shape",
 	/required-check contexts equal the CI job names \(([^)]*)\)/,
@@ -179,14 +182,13 @@ describe("S3 — the source-checks workflow's own contract (issue #121; SPEC §3
 		);
 	});
 
-	it("carries the header naming it development-and-CI only", () => {
+	it("carries the exact source-only declaration at the classifier's legal position", () => {
 		assert.ok(file, "no workflow declares a `source-style` job");
 		const raw = readFileSync(join(WORKFLOW_DIR, file[0]), "utf8");
-		const header = raw.split("\n").slice(0, 20).join("\n");
-		assert.match(
-			header,
-			/development and CI only/i,
-			`${file[0]} does not declare itself development-and-CI only in its own header. This file sits inside \`.github/\`, which \`deriveSubstrateSet\` walks, so today it IS a member of the set an adopting repository would receive; the header is the only thing a reader of the composed tree has to go on, since no arm proves this file never enters it`,
+		assert.equal(
+			raw.split(/\r?\n/, 1)[0],
+			"# gitjig: source-only",
+			`${file[0]} is development-only but lacks §4.1's exact first-line source-only declaration`,
 		);
 	});
 });

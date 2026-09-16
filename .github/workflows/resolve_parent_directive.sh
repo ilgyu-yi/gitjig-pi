@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # resolve_parent_directive.sh — label-aware reflection-target resolver.
 #
 # Sourced by .github/workflows/dir-mode-post-merge.yml (after actions/checkout)

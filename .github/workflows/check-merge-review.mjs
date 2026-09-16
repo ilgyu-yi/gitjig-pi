@@ -1,3 +1,4 @@
+// gitjig: source-only
 // The platform half of SPEC §3.3's `merge-review` gate (issue #190,
 // Directive #28). DEVELOPMENT AND CI ONLY, the same class suite.yml and
 // source-checks.yml declare: this is not substrate, and an adopting

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # .githooks/_lib.sh — shared prelude for the local git-hook enforcement tier.
 # Every adapter (pre-commit / pre-push / commit-msg) sources this FIRST. It
 # carries the tier's runtime as committed code and exposes:

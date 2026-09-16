@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 #
 # check-changelog.sh — the changelog fragment-gate predicate (issue #43).
 #

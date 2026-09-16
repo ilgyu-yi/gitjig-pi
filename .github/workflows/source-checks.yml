@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: source-checks
 
 # DEVELOPMENT AND CI ONLY. This workflow drives tools that exist for the

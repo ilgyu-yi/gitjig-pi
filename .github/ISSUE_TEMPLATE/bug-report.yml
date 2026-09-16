@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: Bug report
 description: Report a defect — something doesn't work as documented in SPEC.md / README.
 title: "fix: <subject>"

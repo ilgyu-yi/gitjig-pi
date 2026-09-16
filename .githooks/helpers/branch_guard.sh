@@ -1,3 +1,4 @@
+# gitjig: source-only
 # .githooks/helpers/branch_guard.sh — the protected-branch class's
 # delegated predicate (SPEC §3.3 row + ref-identity semantics statement;
 # the interface contract `.githooks/_lib.sh` states for this file). Sourced

@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: check-provenance
 
 # Per-PR development-provenance reader (issue #70; SPEC §2.4's genus,

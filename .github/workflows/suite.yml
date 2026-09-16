@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: suite
 
 # DEVELOPMENT AND CI ONLY. Like source-checks.yml, this workflow exists for

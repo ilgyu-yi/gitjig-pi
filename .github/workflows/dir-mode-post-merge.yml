@@ -1,3 +1,4 @@
+# gitjig: source-only
 # .github/workflows/dir-mode-post-merge.yml
 # Hook-enforced post-merge dir-mode workflow.
 #

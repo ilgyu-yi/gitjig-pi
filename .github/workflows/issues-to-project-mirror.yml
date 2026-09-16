@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: issues-to-project-mirror
 
 # One-direction sync: Issue events → Project Item fields. The Project remains

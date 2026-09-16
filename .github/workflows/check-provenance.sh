@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # check-provenance.sh — authoring-doctrine reader (issues #70, #218).
 #
 # Reads a unified diff on stdin and reports, on the ADDED lines of

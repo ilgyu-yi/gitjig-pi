@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # check-ssot-home.sh — SSOT-home discipline gate.
 #
 # Usage:

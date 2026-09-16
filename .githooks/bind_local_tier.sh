@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # .githooks/bind_local_tier.sh — the committed arming instrument for the
 # local git-hook tier (SPEC §3.2 arming path, §4.1, §4.6, §4.7).
 #

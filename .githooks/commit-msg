@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # .githooks/commit-msg — local-tier adapter for check_commit_subject over
 # every line that could become the committed subject. It copies NO check
 # logic (single-source). It deliberately does NOT reuse the command-string
