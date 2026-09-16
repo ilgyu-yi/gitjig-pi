@@ -1,5 +1,5 @@
 /** Warning-surface roster: EXEMPT — pure classifier errors are fixed strings. */
-import { lstatSync, readdirSync, readFileSync, type Stats } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, type Stats } from "node:fs";
 import { resolve } from "node:path";
 import { TextDecoder } from "node:util";
 
@@ -13,6 +13,10 @@ export interface Membership {
 }
 export interface ObservedCandidate extends Membership {
 	bytes: Buffer;
+}
+export interface ObservationOptions {
+	/** Test seam for a replacement exactly after pathname classification. */
+	afterLstat?: (path: string) => void;
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -45,7 +49,23 @@ export function classifyMarker(bytes: Buffer): "source-only" | "absent" | "refus
 	return eligible.text.includes("gitjig:") ? "refuse" : "absent";
 }
 
+function hasLoneSurrogate(value: string): boolean {
+	for (let index = 0; index < value.length; index++) {
+		const unit = value.charCodeAt(index);
+		if (unit >= 0xd800 && unit <= 0xdbff) {
+			const next = value.charCodeAt(index + 1);
+			if (!Number.isInteger(next) || next < 0xdc00 || next > 0xdfff) return true;
+			index++;
+		} else if (unit >= 0xdc00 && unit <= 0xdfff) return true;
+	}
+	return false;
+}
+export function validateUnicodeScalars(value: string): void {
+	if (hasLoneSurrogate(value)) throw new ClassificationRefusal("value is not a Unicode scalar sequence");
+}
+
 export function validateCandidatePath(path: string): void {
+	validateUnicodeScalars(path);
 	if (
 		path.length === 0 ||
 		path.startsWith("/") ||
@@ -93,11 +113,26 @@ export function decodeCandidatePath(bytes: Buffer): string {
 	return path;
 }
 
-function walk(abs: Buffer, relative: Buffer, out: ObservedCandidate[]): void {
+function sameObject(left: Stats, right: Stats): boolean {
+	return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
+}
+
+function walk(
+	abs: Buffer,
+	relative: Buffer,
+	out: ObservedCandidate[],
+	expected: Stats,
+	options: ObservationOptions,
+): void {
+	let before: Stats;
 	let entries: ReturnType<typeof readdirSync>;
 	try {
+		before = lstatSync(abs);
+		if (!before.isDirectory() || before.isSymbolicLink() || !sameObject(before, expected))
+			throw new ClassificationRefusal("candidate directory identity changed");
 		entries = readdirSync(abs, { withFileTypes: true, encoding: "buffer" });
-	} catch {
+	} catch (error) {
+		if (error instanceof ClassificationRefusal) throw error;
 		throw new ClassificationRefusal("candidate namespace is unreadable");
 	}
 	for (const entry of entries) {
@@ -110,26 +145,43 @@ function walk(abs: Buffer, relative: Buffer, out: ObservedCandidate[]): void {
 		} catch {
 			throw new ClassificationRefusal("candidate is unreadable");
 		}
+		const path = decodeCandidatePath(childRel);
+		options.afterLstat?.(path);
 		if (stats.isDirectory()) {
-			walk(childAbs, childRel, out);
+			walk(childAbs, childRel, out, stats, options);
 			continue;
 		}
 		if (!stats.isFile())
 			throw new ClassificationRefusal(stats.isSymbolicLink() ? "candidate is a symlink" : "candidate is non-regular");
 		let bytes: Buffer;
+		let descriptor: number | undefined;
 		try {
-			bytes = readFileSync(childAbs);
-		} catch {
-			throw new ClassificationRefusal("candidate is unreadable");
+			descriptor = openSync(childAbs, constants.O_RDONLY | constants.O_NOFOLLOW);
+			const opened = fstatSync(descriptor);
+			if (!opened.isFile() || !sameObject(stats, opened)) throw new ClassificationRefusal("candidate identity changed");
+			bytes = readFileSync(descriptor);
+			if (!sameObject(opened, fstatSync(descriptor))) throw new ClassificationRefusal("candidate identity changed");
+		} catch (error) {
+			if (error instanceof ClassificationRefusal) throw error;
+			throw new ClassificationRefusal("candidate is unreadable or was replaced");
+		} finally {
+			if (descriptor !== undefined) closeSync(descriptor);
 		}
-		const path = decodeCandidatePath(childRel);
 		const disposition = classifyCandidate(path, bytes);
 		if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition");
 		out.push({ path, disposition, bytes });
 	}
+	let after: Stats;
+	try {
+		after = lstatSync(abs);
+	} catch {
+		throw new ClassificationRefusal("candidate directory identity changed");
+	}
+	if (!after.isDirectory() || after.isSymbolicLink() || !sameObject(before, after))
+		throw new ClassificationRefusal("candidate directory identity changed");
 }
 
-export function observeCandidates(sourceRoot: string): ObservedCandidate[] {
+export function observeCandidates(sourceRoot: string, options: ObservationOptions = {}): ObservedCandidate[] {
 	const root = Buffer.from(resolve(sourceRoot));
 	const found: ObservedCandidate[] = [];
 	for (const namespace of CANDIDATE_ROOTS) {
@@ -143,7 +195,7 @@ export function observeCandidates(sourceRoot: string): ObservedCandidate[] {
 		}
 		if (!stats.isDirectory() || stats.isSymbolicLink())
 			throw new ClassificationRefusal("candidate namespace is non-regular");
-		walk(abs, Buffer.from(namespace), found);
+		walk(abs, Buffer.from(namespace), found, stats, options);
 	}
 	return found.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
 }

@@ -46,7 +46,6 @@ export function composeAdopter(input: CompositionInput): AdopterComposition {
 		pin,
 		pinBytes,
 		plan: planComposition({
-			nextPin: pin,
 			nextPinBytes: pinBytes,
 			priorPinBytes: input.priorPinBytes,
 			occupants: input.occupants,

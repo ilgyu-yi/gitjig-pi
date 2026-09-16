@@ -28,9 +28,10 @@ export interface PlannedMember {
 export interface CompositionPlan {
 	outcome: PlanOutcome;
 	members: PlannedMember[];
+	pinDigest: string;
+	nextPayloadDigest: string;
 }
 export interface PlanInput {
-	nextPin: PinV1;
 	nextPinBytes: Buffer;
 	priorPinBytes: Buffer | null;
 	occupants: ReadonlyMap<string, Occupant>;
@@ -53,27 +54,31 @@ function lookup(occupants: ReadonlyMap<string, Occupant>, path: string): Occupan
 	return occupants.get(path);
 }
 
-function globalRefusal(next: PinV1, cause: PlanCause): CompositionPlan {
+function result(outcome: PlanOutcome, members: PlannedMember[], next: PinV1, pinBytes: Buffer): CompositionPlan {
+	return { outcome, members, pinDigest: digest(pinBytes), nextPayloadDigest: next.payloadDigest };
+}
+function globalRefusal(next: PinV1, pinBytes: Buffer, cause: PlanCause): CompositionPlan {
 	const members = next.manifest.map((entry) => refused(entry.path, entry.class, cause));
 	members.push(refused(PIN_PATH, "pin", cause));
-	return { outcome: "refused", members };
+	return result("refused", members, next, pinBytes);
 }
 
 export function planComposition(input: PlanInput): CompositionPlan {
+	const next = parsePin(input.nextPinBytes.toString("utf8"));
 	let prior: PinV1 | null = null;
 	if (input.priorPinBytes !== null) {
 		try {
 			prior = parsePin(input.priorPinBytes.toString("utf8"));
 		} catch {
-			return globalRefusal(input.nextPin, "malformed-prior-pin");
+			return globalRefusal(next, input.nextPinBytes, "malformed-prior-pin");
 		}
-		if (!sourceEqual(prior.source, input.nextPin.source)) return globalRefusal(input.nextPin, "changed-source");
+		if (!sourceEqual(prior.source, next.source)) return globalRefusal(next, input.nextPinBytes, "changed-source");
 	}
 	const oldByPath = new Map((prior?.manifest ?? []).map((entry) => [entry.path, entry]));
-	const nextByPath = new Map(input.nextPin.manifest.map((entry) => [entry.path, entry]));
+	const nextByPath = new Map(next.manifest.map((entry) => [entry.path, entry]));
 	for (const [path, old] of oldByPath) {
-		const next = nextByPath.get(path);
-		if (next && next.class !== old.class) return globalRefusal(input.nextPin, "class-transition");
+		const nextEntry = nextByPath.get(path);
+		if (nextEntry && nextEntry.class !== old.class) return globalRefusal(next, input.nextPinBytes, "class-transition");
 	}
 	const paths = [...new Set([...oldByPath.keys(), ...nextByPath.keys()])].sort((a, b) =>
 		Buffer.compare(Buffer.from(a), Buffer.from(b)),
@@ -119,17 +124,28 @@ export function planComposition(input: PlanInput): CompositionPlan {
 	else if (prior && input.priorPinBytes && bytesEqual(pinOccupant, input.priorPinBytes))
 		members.push({ path: PIN_PATH, class: "pin", action: "replace", cause: "pin-exact-old" });
 	else members.push(refused(PIN_PATH, "pin", "foreign-occupant"));
-	if (members.some((member) => member.action === "refuse")) return { outcome: "refused", members };
-	return { outcome: members.every((member) => member.action === "converged") ? "converged" : "planned", members };
+	if (members.some((member) => member.action === "refuse")) return result("refused", members, next, input.nextPinBytes);
+	return result(
+		members.every((member) => member.action === "converged") ? "converged" : "planned",
+		members,
+		next,
+		input.nextPinBytes,
+	);
 }
 
 export function verifyPlannedState(
 	plan: CompositionPlan,
-	pin: PinV1,
 	occupants: ReadonlyMap<string, Occupant>,
 	pinBytes: Buffer,
 ): TerminalOutcome {
-	if (plan.outcome === "refused") return "refused";
+	if (plan.outcome === "refused" || digest(pinBytes) !== plan.pinDigest) return "refused";
+	let pin: PinV1;
+	try {
+		pin = parsePin(pinBytes.toString("utf8"));
+	} catch {
+		return "refused";
+	}
+	if (pin.payloadDigest !== plan.nextPayloadDigest) return "refused";
 	for (const entry of pin.manifest) {
 		const occupant = occupants.get(entry.path);
 		if (!occupant || !matches(occupant, entry)) return "refused";

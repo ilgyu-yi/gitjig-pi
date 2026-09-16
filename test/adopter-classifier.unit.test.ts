@@ -67,6 +67,8 @@ describe("#250 exact source-only marker and ordered classifier", () => {
 			".github\\x",
 			".github/x\0y",
 			".github/e\u0301",
+			".github/\ud800",
+			".github/\udc00",
 		])
 			assert.throws(() => classifyCandidate(path, Buffer.from("x\n")));
 	});
@@ -78,6 +80,31 @@ describe("#250 candidate observation and checked snapshot", () => {
 		mkdirSync(join(root, ".github"), { recursive: true });
 		symlinkSync(join(root, ".pi/extensions/gitjig.ts"), join(root, ".github/link"));
 		assert.throws(() => observeCandidates(root), /symlink|non-regular/);
+	});
+
+	it("refuses a regular file exchanged for a symlink after lstat", () => {
+		const fixture = mkdtempSync(join(tmpdir(), "gitjig-race-"));
+		const candidate = join(fixture, ".github/race");
+		const outside = join(fixture, "outside");
+		mkdirSync(dirname(candidate), { recursive: true });
+		writeFileSync(candidate, "inside");
+		writeFileSync(outside, "outside");
+		try {
+			assert.throws(
+				() =>
+					observeCandidates(fixture, {
+						afterLstat(path) {
+							if (path === ".github/race") {
+								rmSync(candidate);
+								symlinkSync(outside, candidate);
+							}
+						},
+					}),
+				/replaced|changed|unreadable/,
+			);
+		} finally {
+			rmSync(fixture, { recursive: true, force: true });
+		}
 	});
 
 	it("refuses non-regular, unreadable, and non-UTF-8 candidates", () => {

@@ -1,6 +1,6 @@
 /** Warning-surface roster: EXEMPT — codec refusals are fixed strings. */
 import { createHash } from "node:crypto";
-import { validateCandidatePath } from "./classifier.ts";
+import { validateCandidatePath, validateUnicodeScalars } from "./classifier.ts";
 
 export type PayloadClass = "handed-over" | "carried";
 export interface PinSource {
@@ -154,6 +154,11 @@ function string(value: JsonValue, name: string): string {
 	return value;
 }
 function validName(value: string): boolean {
+	try {
+		validateUnicodeScalars(value);
+	} catch {
+		return false;
+	}
 	return (
 		value.length > 0 &&
 		value === value.normalize("NFC") &&

@@ -29,7 +29,6 @@ const occupied = (entries: Record<string, string | null>): Map<string, Occupant>
 describe("#250 total old/new union planner", () => {
 	it("plans initial land, exact-next convergence, and foreign refusal", () => {
 		const land = planComposition({
-			nextPin,
 			nextPinBytes: Buffer.from(encodePin(nextPin)),
 			priorPinBytes: null,
 			occupants: occupied({ ".githooks/a": null, ".pi/prompts/new": "new", ".pi/gitjig.pin.json": null }),
@@ -44,7 +43,6 @@ describe("#250 total old/new union planner", () => {
 			],
 		);
 		const refused = planComposition({
-			nextPin,
 			nextPinBytes: Buffer.from(encodePin(nextPin)),
 			priorPinBytes: null,
 			occupants: occupied({ ".githooks/a": "foreign", ".pi/prompts/new": null, ".pi/gitjig.pin.json": null }),
@@ -54,7 +52,6 @@ describe("#250 total old/new union planner", () => {
 
 	it("plans replacement, retirement, additions, and skipped-revision rerun states", () => {
 		const plan = planComposition({
-			nextPin,
 			nextPinBytes: Buffer.from(encodePin(nextPin)),
 			priorPinBytes: Buffer.from(encodePin(oldPin)),
 			occupants: occupied({
@@ -75,7 +72,6 @@ describe("#250 total old/new union planner", () => {
 			],
 		);
 		const prefix = planComposition({
-			nextPin,
 			nextPinBytes: Buffer.from(encodePin(nextPin)),
 			priorPinBytes: Buffer.from(encodePin(oldPin)),
 			occupants: occupied({
@@ -92,9 +88,89 @@ describe("#250 total old/new union planner", () => {
 		);
 	});
 
+	it("totalizes retained, added, and retired occupant states", () => {
+		const cases = [
+			[".githooks/a", "old", "replace"],
+			[".githooks/a", "new", "converged"],
+			[".githooks/a", null, "refuse"],
+			[".githooks/a", "foreign", "refuse"],
+			[".pi/prompts/new", null, "land"],
+			[".pi/prompts/new", "new", "converged"],
+			[".pi/prompts/new", "foreign", "refuse"],
+			[".pi/prompts/gone", "gone", "retire"],
+			[".pi/prompts/gone", null, "converged"],
+			[".pi/prompts/gone", "foreign", "refuse"],
+		] as const;
+		for (const [path, body, action] of cases) {
+			const states = occupied({
+				".githooks/a": "new",
+				".pi/prompts/gone": null,
+				".pi/prompts/new": "new",
+				".pi/gitjig.pin.json": encodePin(oldPin),
+			});
+			states.set(path, body === null ? { kind: "absent" } : { kind: "bytes", bytes: Buffer.from(body) });
+			const plan = planComposition({
+				nextPinBytes: Buffer.from(encodePin(nextPin)),
+				priorPinBytes: Buffer.from(encodePin(oldPin)),
+				occupants: states,
+			});
+			assert.equal(plan.members.find((item) => item.path === path)?.action, action, path);
+			assert.equal(plan.outcome === "refused", action === "refuse", path);
+		}
+		for (const path of [".githooks/a", ".pi/prompts/new", ".pi/prompts/gone"]) {
+			const states = occupied({
+				".githooks/a": "new",
+				".pi/prompts/gone": null,
+				".pi/prompts/new": "new",
+				".pi/gitjig.pin.json": encodePin(oldPin),
+			});
+			states.delete(path);
+			const plan = planComposition({
+				nextPinBytes: Buffer.from(encodePin(nextPin)),
+				priorPinBytes: Buffer.from(encodePin(oldPin)),
+				occupants: states,
+			});
+			assert.equal(plan.members.find((item) => item.path === path)?.cause, "unmeasured-occupant");
+			assert.equal(plan.outcome, "refused");
+		}
+	});
+
+	it("totalizes pin occupants and derives the fully converged outcome", () => {
+		const base = { ".githooks/a": "new", ".pi/prompts/gone": null, ".pi/prompts/new": "new" };
+		for (const [pinBody, action] of [
+			[encodePin(nextPin), "converged"],
+			[encodePin(oldPin), "replace"],
+			[null, "refuse"],
+			["foreign", "refuse"],
+		] as const) {
+			const plan = planComposition({
+				nextPinBytes: Buffer.from(encodePin(nextPin)),
+				priorPinBytes: Buffer.from(encodePin(oldPin)),
+				occupants: occupied({ ...base, ".pi/gitjig.pin.json": pinBody }),
+			});
+			assert.equal(plan.members.at(-1)?.action, action);
+			assert.equal(plan.outcome === "refused", action === "refuse");
+		}
+		const missing = occupied({ ...base, ".pi/gitjig.pin.json": encodePin(oldPin) });
+		missing.delete(".pi/gitjig.pin.json");
+		assert.equal(
+			planComposition({
+				nextPinBytes: Buffer.from(encodePin(nextPin)),
+				priorPinBytes: Buffer.from(encodePin(oldPin)),
+				occupants: missing,
+			}).members.at(-1)?.cause,
+			"unmeasured-occupant",
+		);
+		const converged = planComposition({
+			nextPinBytes: Buffer.from(encodePin(nextPin)),
+			priorPinBytes: Buffer.from(encodePin(oldPin)),
+			occupants: occupied({ ...base, ".pi/gitjig.pin.json": encodePin(nextPin) }),
+		});
+		assert.equal(converged.outcome, "converged");
+	});
+
 	it("reports verified only after the final manifest and pin comparison", () => {
 		const plan = planComposition({
-			nextPin,
 			nextPinBytes: Buffer.from(encodePin(nextPin)),
 			priorPinBytes: Buffer.from(encodePin(oldPin)),
 			occupants: occupied({
@@ -110,14 +186,28 @@ describe("#250 total old/new union planner", () => {
 			".pi/prompts/new": "new",
 			".pi/gitjig.pin.json": encodePin(nextPin),
 		});
-		assert.equal(verifyPlannedState(plan, nextPin, final, Buffer.from(encodePin(nextPin))), "verified");
-		final.set(".githooks/a", { kind: "bytes", bytes: Buffer.from("diverged") });
-		assert.equal(verifyPlannedState(plan, nextPin, final, Buffer.from(encodePin(nextPin))), "refused");
+		assert.equal(verifyPlannedState(plan, final, Buffer.from(encodePin(nextPin))), "verified");
+		for (const path of [".githooks/a", ".pi/prompts/new", ".pi/prompts/gone", ".pi/gitjig.pin.json"]) {
+			const broken = new Map(final);
+			broken.delete(path);
+			assert.equal(verifyPlannedState(plan, broken, Buffer.from(encodePin(nextPin))), "refused", path);
+		}
+		const diverged = new Map(final);
+		diverged.set(".githooks/a", { kind: "bytes", bytes: Buffer.from("diverged") });
+		assert.equal(verifyPlannedState(plan, diverged, Buffer.from(encodePin(nextPin))), "refused");
+		assert.equal(verifyPlannedState(plan, final, Buffer.from(encodePin(oldPin))), "refused");
+		const refused = { ...plan, outcome: "refused" as const };
+		assert.equal(verifyPlannedState(refused, final, Buffer.from(encodePin(nextPin))), "refused");
+		const convergedPlan = planComposition({
+			nextPinBytes: Buffer.from(encodePin(nextPin)),
+			priorPinBytes: Buffer.from(encodePin(oldPin)),
+			occupants: final,
+		});
+		assert.equal(verifyPlannedState(convergedPlan, final, Buffer.from(encodePin(nextPin))), "converged");
 	});
 
 	it("refuses changed source, malformed prior pin, local divergence, and same-path class change", () => {
 		const common = {
-			nextPin,
 			nextPinBytes: Buffer.from(encodePin(nextPin)),
 			occupants: occupied({
 				".githooks/a": "local",
