@@ -42,7 +42,7 @@ export default function gitjig(pi: ExtensionAPI) {
 
 	// The command spine (§4.8): rung-1 review, review-round, and ship
 	// extension commands; every act they take runs inside a handler.
-	registerSpineCommands(pi, repoRoot, stateRoot);
+	registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface);
 
 	// Every append outcome of this session, folded: false the moment any
 	// append degrades open. Reported on the registration entry below.

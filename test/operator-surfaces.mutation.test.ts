@@ -115,6 +115,13 @@ describe("#131 named isolated operator-surface mutants", () => {
 			`import assert from "node:assert/strict"; import {safeIssueNumber} from "./gitjig/act-render.ts"; for (const v of [0,-1,1.5,Number.MAX_SAFE_INTEGER+1]) assert.equal(safeIssueNumber(v),"");`,
 		);
 		kill(
+			"non-tool-dispatch-visible",
+			"dispatch/index.ts",
+			"update(() => options.surface?.dispatchStarted());",
+			"void options.surface;",
+			`import assert from "node:assert/strict"; import {runDispatch} from "./gitjig/dispatch/index.ts"; const events=[]; const surface={dispatchStarted:()=>events.push("active"),dispatchFinished:x=>events.push(x)}; await runDispatch({callerRepoRoot:"/does-not-exist",stateRoot:"/does-not-exist",brief:"x",delegateArgv:["false"],surface}); assert.deepEqual(events,["active","refusal"]);`,
+		);
+		kill(
 			"active-dispatch-visible",
 			"session-surface.ts",
 			"this.activeDispatches > 0",

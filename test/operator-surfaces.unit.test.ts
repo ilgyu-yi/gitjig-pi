@@ -7,7 +7,12 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { safeIssueNumber } from "../.pi/extensions/gitjig/act-render.ts";
-import { dispatchTarget, dispatchTerminal, registerDispatchTool } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import {
+	dispatchTarget,
+	dispatchTerminal,
+	registerDispatchTool,
+	runDispatch,
+} from "../.pi/extensions/gitjig/dispatch/index.ts";
 import { PUBLISH_DESTINATION_KINDS } from "../.pi/extensions/gitjig/publish/executor.ts";
 import { publishTarget, publishTerminal, registerPublishTool } from "../.pi/extensions/gitjig/publish/index.ts";
 import { SessionSurface } from "../.pi/extensions/gitjig/session-surface.ts";
@@ -231,6 +236,19 @@ describe("#131 collapsed operator-visible acts", () => {
 });
 
 describe("#131 persistent session surface", () => {
+	it("routes the one projection through both the direct tool and command spine", () => {
+		const root = fileURLToPath(new URL("../.pi/extensions/", import.meta.url));
+		const entry = readFileSync(join(root, "gitjig.ts"), "utf8");
+		const commands = readFileSync(join(root, "gitjig/commands/index.ts"), "utf8");
+		const review = readFileSync(join(root, "gitjig/commands/review.ts"), "utf8");
+		const round = readFileSync(join(root, "gitjig/commands/review-round.ts"), "utf8");
+		assert.ok(entry.includes("registerDispatchTool(pi, repoRoot, stateRoot, sessionSurface)"));
+		assert.ok(entry.includes("registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface)"));
+		assert.ok(commands.includes("registerReviewCommand(pi, repoRoot, stateRoot, surface)"));
+		assert.ok(commands.includes("registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface)"));
+		assert.ok(review.includes("surface,"));
+		assert.ok(round.includes("surface,"));
+	});
 	it("carries delegate activity and terminal state in one composable status slot and resets on attach", () => {
 		const writes: Array<[string, string | undefined]> = [];
 		const surface = new SessionSurface();
@@ -298,7 +316,15 @@ describe("#131 persistent session surface", () => {
 			assert.equal(events.at(-1), "success");
 			await assert.rejects(tool.execute("throw", null as unknown as Record<string, unknown>), TypeError);
 			assert.equal(events.at(-1), "failure");
-			assert.deepEqual(events, ["active", "refusal", "active", "success", "active", "failure"]);
+			const outsideTool = await runDispatch({
+				callerRepoRoot: root,
+				stateRoot: join(root, "state"),
+				brief: "command-spine dispatch",
+				delegateArgv: ["sh", "-c", "exit 2"],
+				surface: recording,
+			});
+			assert.equal(outsideTool.disposition, "refused");
+			assert.deepEqual(events, ["active", "refusal", "active", "success", "active", "failure", "active", "refusal"]);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

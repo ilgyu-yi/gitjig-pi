@@ -39,6 +39,7 @@ import {
 	refetchReviewSubject,
 	subjectCriterionManifest,
 } from "../review/subject.ts";
+import type { SessionSurface } from "../session-surface.ts";
 import { readRepositoryInput } from "./review-round-input.ts";
 
 const REFUSE_SPEC =
@@ -347,6 +348,7 @@ export function registerReviewRoundCommand(
 	repoRoot: string,
 	stateRoot: string,
 	injected: Partial<ReviewRoundSeams> = {},
+	surface?: SessionSurface,
 ): void {
 	pi.registerCommand("review-round", {
 		description:
@@ -371,6 +373,7 @@ export function registerReviewRoundCommand(
 							stateRoot,
 							delegateArgv: input.delegateArgv,
 							timeoutMs: input.timeoutMs,
+							surface,
 						}),
 					runRound: reviewRound,
 					publishRecord: (body, current) => publishAndRefetchReviewRecord(body, current, repoRoot, stateRoot),

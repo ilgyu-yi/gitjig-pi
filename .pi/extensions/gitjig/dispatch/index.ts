@@ -193,9 +193,11 @@ export interface RunDispatchOptions {
 	delegateArgv: string[];
 	expectedRef?: string;
 	timeoutMs?: number;
+	/** Optional operator projection for non-tool callers such as the command spine. */
+	surface?: SessionSurface;
 }
 
-export async function runDispatch(options: RunDispatchOptions): Promise<DispatchOutcome> {
+async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
 	// Content-free by construction: every `text` below is a fixed literal
 	// or a fixed cause — no delegate byte, no operand, no absolute path.
 	const record = (action: string, text: string): void => {
@@ -262,6 +264,32 @@ export async function runDispatch(options: RunDispatchOptions): Promise<Dispatch
 			// orphaned scratch is bounded by the OS temp root (provision header).
 			record("cleanup-degraded", "dispatch cleanup degraded: the scratch could not be removed whole");
 		}
+	}
+}
+
+/**
+ * Every non-tool caller that supplies the shared projection is bracketed here,
+ * at the act owner, so the command spine cannot show idle while a delegate runs.
+ * The registered tool keeps its surface wrapper because its parameter refusals
+ * happen before this function is reached and are operator-visible acts too.
+ */
+export async function runDispatch(options: RunDispatchOptions): Promise<DispatchOutcome> {
+	if (options.surface === undefined) return runDispatchCore(options);
+	const update = (action: () => void): void => {
+		try {
+			action();
+		} catch {
+			// Presentation is a fail-open aid (§5.2), never an act dependency.
+		}
+	};
+	update(() => options.surface?.dispatchStarted());
+	let terminal: TerminalClass = "failure";
+	try {
+		const outcome = await runDispatchCore(options);
+		terminal = dispatchTerminal(outcome);
+		return outcome;
+	} finally {
+		update(() => options.surface?.dispatchFinished(terminal));
 	}
 }
 
