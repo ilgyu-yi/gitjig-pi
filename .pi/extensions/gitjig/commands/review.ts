@@ -34,6 +34,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import { runDispatch } from "../dispatch/index.ts";
+import type { SessionSurface } from "../session-surface.ts";
 
 /**
  * The fixed dispatch brief (§1.5's dispatch-facts carrier): fixed text by
@@ -63,7 +64,12 @@ const REFUSE_BOUND =
 	"review refused: the leading timeoutMs= token is not an admissible positive number of " +
 	"milliseconds; nothing was dispatched";
 
-export function registerReviewCommand(pi: ExtensionAPI, repoRoot: string, stateRoot: string): void {
+export function registerReviewCommand(
+	pi: ExtensionAPI,
+	repoRoot: string,
+	stateRoot: string,
+	surface?: SessionSurface,
+): void {
 	pi.registerCommand("review", {
 		description:
 			"Dispatch a review delegate into an isolated clone pinned at a once-resolved expected head: " +
@@ -100,6 +106,7 @@ export function registerReviewCommand(pi: ExtensionAPI, repoRoot: string, stateR
 					delegateArgv,
 					expectedRef,
 					timeoutMs,
+					surface,
 				});
 				if (outcome.disposition === "refused") {
 					// The cause is one of the dispatcher's fixed content-free

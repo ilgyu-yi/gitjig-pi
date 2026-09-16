@@ -152,6 +152,22 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	},
 	{ file: "gitjig/locate.ts", allow: [] },
 	{
+		file: "gitjig/act-render.ts",
+		allow: [
+			// Both arguments come only from this runtime's fixed intent strings and
+			// closed structured-target projectors. The projectors admit no free-text
+			// body, brief, argv, ref, title, result, or URL operand (#131).
+			'theme.fg("toolTitle", theme.bold(intent))',
+			'theme.fg("muted", `· ${target}`)',
+			"target",
+			// Fixed terminal-class spelling selected inside this module. Expanded
+			// detail is passed only from the two registered renderers: dispatch's
+			// fixed refusal causes and publish's content-free non-success text.
+			"value",
+			'theme.fg("dim", expandedDetail)',
+		],
+	},
+	{
 		file: "gitjig/review/panel.ts",
 		allow: [
 			// Git revision operands passed to execFileSync, never rendered.
@@ -218,6 +234,17 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// the rulings where the caller reads them, so no delegate-authored
 			// byte reaches these carriers at all.
 			"index",
+		],
+	},
+	{
+		file: "gitjig/session-surface.ts",
+		allow: [
+			// Numeric active-call count and a closed terminal-class union; neither
+			// carries a caller or delegate byte.
+			"this.activeDispatches",
+			"this.lastTerminal",
+			// Already-themed composition of the same closed state.
+			"delegate",
 		],
 	},
 	{
@@ -353,7 +380,14 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			'signal ?? "unknown"',
 		],
 	},
-	{ file: "gitjig/publish/index.ts", allow: [] },
+	{
+		file: "gitjig/publish/index.ts",
+		allow: [
+			// `safeIssueNumber` returns only an empty string or space + # + a
+			// positive safe integer; no caller-authored text reaches this carrier.
+			"number",
+		],
+	},
 	{
 		file: "gitjig/publish/service.ts",
 		allow: [

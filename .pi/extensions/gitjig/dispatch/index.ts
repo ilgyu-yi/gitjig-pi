@@ -68,8 +68,10 @@
  * to weigh, and §4.9's injectable-context residual already carries it.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { renderActCall, renderActTerminal } from "../act-render.ts";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
+import type { SessionSurface, TerminalClass } from "../session-surface.ts";
 import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
 import { MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import {
@@ -191,9 +193,11 @@ export interface RunDispatchOptions {
 	delegateArgv: string[];
 	expectedRef?: string;
 	timeoutMs?: number;
+	/** Optional operator projection for non-tool callers such as the command spine. */
+	surface?: SessionSurface;
 }
 
-export async function runDispatch(options: RunDispatchOptions): Promise<DispatchOutcome> {
+async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
 	// Content-free by construction: every `text` below is a fixed literal
 	// or a fixed cause — no delegate byte, no operand, no absolute path.
 	const record = (action: string, text: string): void => {
@@ -264,6 +268,32 @@ export async function runDispatch(options: RunDispatchOptions): Promise<Dispatch
 }
 
 /**
+ * Every non-tool caller that supplies the shared projection is bracketed here,
+ * at the act owner, so the command spine cannot show idle while a delegate runs.
+ * The registered tool keeps its surface wrapper because its parameter refusals
+ * happen before this function is reached and are operator-visible acts too.
+ */
+export async function runDispatch(options: RunDispatchOptions): Promise<DispatchOutcome> {
+	if (options.surface === undefined) return runDispatchCore(options);
+	const update = (action: () => void): void => {
+		try {
+			action();
+		} catch {
+			// Presentation is a fail-open aid (§5.2), never an act dependency.
+		}
+	};
+	update(() => options.surface?.dispatchStarted());
+	let terminal: TerminalClass = "failure";
+	try {
+		const outcome = await runDispatchCore(options);
+		terminal = dispatchTerminal(outcome);
+		return outcome;
+	} finally {
+		update(() => options.surface?.dispatchFinished(terminal));
+	}
+}
+
+/**
  * Plain JSON schema, deliberately not a typebox construction: this module
  * is imported by the module suite under plain node, where the substrate's
  * bundled dependencies do not resolve — and the substrate's argument
@@ -308,7 +338,29 @@ function result(text: string, details: Record<string, unknown>): DispatchToolRes
 	return { content: [{ type: "text", text }], details };
 }
 
-export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRoot: string): void {
+export function dispatchTarget(args: unknown): string {
+	const expectedRef =
+		typeof args === "object" && args !== null && "expectedRef" in args
+			? (args as { expectedRef?: unknown }).expectedRef
+			: undefined;
+	return expectedRef === undefined ? "isolated clone" : "isolated clone · blind compare";
+}
+
+export function dispatchTerminal(details: unknown, isError = false): TerminalClass {
+	if (isError) return "failure";
+	if (typeof details !== "object" || details === null) return "failure";
+	const value = details as { disposition?: unknown; ok?: unknown; compare?: unknown };
+	if (value.disposition === "refused") return "refusal";
+	if (value.disposition === "admitted" && value.ok === true && value.compare !== "invalid") return "success";
+	return "failure";
+}
+
+export function registerDispatchTool(
+	pi: ExtensionAPI,
+	repoRoot: string,
+	stateRoot: string,
+	surface?: SessionSurface,
+): void {
 	pi.registerTool({
 		name: DISPATCH_TOOL_NAME,
 		label: "Dispatch",
@@ -327,66 +379,99 @@ export function registerDispatchTool(pi: ExtensionAPI, repoRoot: string, stateRo
 		// unknown — and widens no field: each is read into an `unknown` local
 		// and admitted by its own predicate, exactly as before.
 		async execute(_toolCallId, params: Record<string, unknown>) {
-			const delegateArgv: unknown = params.delegateArgv;
-			if (
-				!Array.isArray(delegateArgv) ||
-				delegateArgv.length === 0 ||
-				delegateArgv.some((entry) => typeof entry !== "string")
-			) {
-				appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-argv", text: REFUSE_ARGV });
-				return result(REFUSE_ARGV, { disposition: "refused" });
-			}
-			const brief: unknown = params.brief;
-			if (typeof brief !== "string") {
-				// No coercion: a `String()`-coerced "undefined" brief is a
-				// silently wrong dispatch, not an admitted one.
-				appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-brief", text: REFUSE_BRIEF });
-				return result(REFUSE_BRIEF, { disposition: "refused" });
-			}
-			const expectedRef: unknown = params.expectedRef;
-			if (expectedRef !== undefined && typeof expectedRef !== "string") {
-				// No coercion: a present-but-non-string expectedRef would flip the
-				// pin to HEAD and drop the compare — a silently different dispatch,
-				// not the compare the caller asked for. Absent stays legal.
-				appendAuditRecord(stateRoot, {
-					category: "dispatch",
-					action: "refuse-expected-ref",
-					text: REFUSE_EXPECTED_REF,
+			const updateSurface = (update: () => void): void => {
+				try {
+					update();
+				} catch {
+					// Presentation is a fail-open aid (§5.2), never an act dependency.
+				}
+			};
+			let terminalRecorded = false;
+			const finish = (value: DispatchToolResult): DispatchToolResult => {
+				terminalRecorded = true;
+				updateSurface(() => surface?.dispatchFinished(dispatchTerminal(value.details)));
+				return value;
+			};
+			try {
+				updateSurface(() => surface?.dispatchStarted());
+				const delegateArgv: unknown = params.delegateArgv;
+				if (
+					!Array.isArray(delegateArgv) ||
+					delegateArgv.length === 0 ||
+					delegateArgv.some((entry) => typeof entry !== "string")
+				) {
+					appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-argv", text: REFUSE_ARGV });
+					return finish(result(REFUSE_ARGV, { disposition: "refused" }));
+				}
+				const brief: unknown = params.brief;
+				if (typeof brief !== "string") {
+					// No coercion: a `String()`-coerced "undefined" brief is a
+					// silently wrong dispatch, not an admitted one.
+					appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-brief", text: REFUSE_BRIEF });
+					return finish(result(REFUSE_BRIEF, { disposition: "refused" }));
+				}
+				const expectedRef: unknown = params.expectedRef;
+				if (expectedRef !== undefined && typeof expectedRef !== "string") {
+					// No coercion: a present-but-non-string expectedRef would flip the
+					// pin to HEAD and drop the compare — a silently different dispatch,
+					// not the compare the caller asked for. Absent stays legal.
+					appendAuditRecord(stateRoot, {
+						category: "dispatch",
+						action: "refuse-expected-ref",
+						text: REFUSE_EXPECTED_REF,
+					});
+					return finish(result(REFUSE_EXPECTED_REF, { disposition: "refused" }));
+				}
+				const timeoutMs: unknown = params.timeoutMs;
+				if (
+					timeoutMs !== undefined &&
+					(typeof timeoutMs !== "number" ||
+						!Number.isFinite(timeoutMs) ||
+						timeoutMs <= 0 ||
+						timeoutMs > MAX_RUN_BOUND_MS)
+				) {
+					// The whole inadmissible set in one predicate, so no member falls
+					// through to a bound the caller did not name. Absent stays legal and
+					// takes the default — the reach is new, the floor is not.
+					appendAuditRecord(stateRoot, {
+						category: "dispatch",
+						action: "refuse-timeout-ms",
+						text: REFUSE_TIMEOUT_MS,
+					});
+					return finish(result(REFUSE_TIMEOUT_MS, { disposition: "refused" }));
+				}
+				const outcome = await runDispatch({
+					callerRepoRoot: repoRoot,
+					stateRoot,
+					brief,
+					delegateArgv: delegateArgv as string[],
+					expectedRef,
+					timeoutMs,
 				});
-				return result(REFUSE_EXPECTED_REF, { disposition: "refused" });
+				if (outcome.disposition === "refused") {
+					return finish(result(outcome.cause, { disposition: "refused" }));
+				}
+				const compareClause = outcome.compare === undefined ? "" : `; compare ${outcome.compare}`;
+				return finish(
+					result(`dispatch admitted (ok: ${outcome.ok})${compareClause}: ${quoted(outcome.summary)}`, {
+						disposition: "admitted",
+						ok: outcome.ok,
+						...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
+					}),
+				);
+			} catch (error) {
+				if (!terminalRecorded) updateSurface(() => surface?.dispatchFinished("failure"));
+				throw error;
 			}
-			const timeoutMs: unknown = params.timeoutMs;
-			if (
-				timeoutMs !== undefined &&
-				(typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_RUN_BOUND_MS)
-			) {
-				// The whole inadmissible set in one predicate, so no member falls
-				// through to a bound the caller did not name. Absent stays legal and
-				// takes the default — the reach is new, the floor is not.
-				appendAuditRecord(stateRoot, {
-					category: "dispatch",
-					action: "refuse-timeout-ms",
-					text: REFUSE_TIMEOUT_MS,
-				});
-				return result(REFUSE_TIMEOUT_MS, { disposition: "refused" });
-			}
-			const outcome = await runDispatch({
-				callerRepoRoot: repoRoot,
-				stateRoot,
-				brief,
-				delegateArgv: delegateArgv as string[],
-				expectedRef,
-				timeoutMs,
-			});
-			if (outcome.disposition === "refused") {
-				return result(outcome.cause, { disposition: "refused" });
-			}
-			const compareClause = outcome.compare === undefined ? "" : `; compare ${outcome.compare}`;
-			return result(`dispatch admitted (ok: ${outcome.ok})${compareClause}: ${quoted(outcome.summary)}`, {
-				disposition: "admitted",
-				ok: outcome.ok,
-				...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
-			});
+		},
+		renderCall(args, theme) {
+			return renderActCall("Dispatch", dispatchTarget(args), theme);
+		},
+		renderResult(result, options, theme, context) {
+			const terminal = dispatchTerminal(result.details, context.isError);
+			const first = result.content[0];
+			const detail = options.expanded && terminal === "refusal" && first?.type === "text" ? first.text : undefined;
+			return renderActTerminal(terminal, theme, detail);
 		},
 	});
 }

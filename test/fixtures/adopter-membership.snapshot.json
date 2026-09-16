@@ -146,6 +146,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/act-render.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/audit.ts",
 			"disposition": "carried"
 		},
@@ -326,6 +330,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/session-surface.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/state-root.ts",
 			"disposition": "carried"
 		},
@@ -367,6 +375,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/130.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/131.md",
 			"disposition": "instance-state"
 		},
 		{

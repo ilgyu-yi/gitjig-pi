@@ -12,14 +12,20 @@
  * discovery — no call for it belongs in any extension.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { SessionSurface } from "../session-surface.ts";
 import { registerAuthoringBriefCommand } from "./authoring-brief.ts";
 import { registerReviewCommand } from "./review.ts";
 import { registerReviewRoundCommand } from "./review-round.ts";
 import { registerShipCommand } from "./ship.ts";
 
-export function registerSpineCommands(pi: ExtensionAPI, repoRoot: string, stateRoot: string): void {
+export function registerSpineCommands(
+	pi: ExtensionAPI,
+	repoRoot: string,
+	stateRoot: string,
+	surface?: SessionSurface,
+): void {
 	registerAuthoringBriefCommand(pi, repoRoot);
-	registerReviewCommand(pi, repoRoot, stateRoot);
-	registerReviewRoundCommand(pi, repoRoot, stateRoot);
+	registerReviewCommand(pi, repoRoot, stateRoot, surface);
+	registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface);
 	registerShipCommand(pi, repoRoot);
 }

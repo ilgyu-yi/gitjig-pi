@@ -23,6 +23,7 @@ import { registerSpineCommands } from "./gitjig/commands/index.ts";
 import { registerDispatchTool } from "./gitjig/dispatch/index.ts";
 import { locateRepoRoot } from "./gitjig/locate.ts";
 import { registerPublishTool } from "./gitjig/publish/index.ts";
+import { SessionSurface } from "./gitjig/session-surface.ts";
 import { resolveStateRoot } from "./gitjig/state-root.ts";
 
 export default function gitjig(pi: ExtensionAPI) {
@@ -34,12 +35,14 @@ export default function gitjig(pi: ExtensionAPI) {
 	registerPublishTool(pi, repoRoot, stateRoot);
 
 	// The delegation layer (§4.9): one dispatcher, registered here as its
-	// tool call site; every act it takes runs inside its execute.
-	registerDispatchTool(pi, repoRoot, stateRoot);
+	// tool call site; every act it takes runs inside its execute. The shared
+	// surface projects only activity and terminal class, never return bytes.
+	const sessionSurface = new SessionSurface();
+	registerDispatchTool(pi, repoRoot, stateRoot, sessionSurface);
 
 	// The command spine (§4.8): rung-1 review, review-round, and ship
 	// extension commands; every act they take runs inside a handler.
-	registerSpineCommands(pi, repoRoot, stateRoot);
+	registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface);
 
 	// Every append outcome of this session, folded: false the moment any
 	// append degrades open. Reported on the registration entry below.
@@ -63,9 +66,10 @@ export default function gitjig(pi: ExtensionAPI) {
 		record("seam-active", `state root overridden by test seam GITJIG_TEST_STATE_ROOT -> "${stateRoot}"`);
 	}
 
-	pi.on("session_start", () => {
+	pi.on("session_start", (_event, ctx) => {
 		record("session-start", "session_start received; appending the registration entry");
 		pi.appendEntry("gitjig-registration", { repoRoot, stateRoot, seamActive, auditWritable });
+		sessionSurface.attach(ctx);
 		// Tier-2 bind advisory (§5.2, §5.9): classifies the clone the SESSION
 		// stands in from the configuration git resolves; debounced,
 		// timeout-bounded, and degrading to silence — never a session abort.
