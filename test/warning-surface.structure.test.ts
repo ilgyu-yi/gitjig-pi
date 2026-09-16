@@ -304,7 +304,7 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// heading anchor, and repository-owned policy labels/defaults.
 			"sep",
 			"anchor",
-			"matching[0].surface",
+			"surfaces",
 			"act",
 			// Causes are fixed text or already JSON-quoted path/anchor carriers.
 			"cause",

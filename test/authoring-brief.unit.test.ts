@@ -102,8 +102,13 @@ describe("the on-demand authoring brief", () => {
 		}
 	});
 
-	it("marks missing fields, malformed JSON, and unrouted paths incomplete without claiming readiness", () => {
-		for (const raw of ["not-json", JSON.stringify({ plan: "x" }), input(["unowned/example.xyz"])]) {
+	it("marks missing fields, malformed JSON, impossible paths, and unrouted paths incomplete without claiming readiness", () => {
+		for (const raw of [
+			"not-json",
+			JSON.stringify({ plan: "x" }),
+			input(["test/impossible\0name.ts"]),
+			input(["unowned/example.xyz"]),
+		]) {
 			const result = composeAuthoringBrief(raw, fixtureRoot());
 			assert.equal(result.complete, false);
 			assert.match(result.text, /INCOMPLETE \(advisory only\)/);
@@ -118,13 +123,29 @@ describe("the on-demand authoring brief", () => {
 		assert.equal(result.complete, true, result.text);
 	});
 
-	it("marks conflicting routes and missing anchors incomplete", () => {
+	it("compatible rows contribute anchors while conflicting dispositions and missing anchors are incomplete", () => {
+		const compatibleRoot = fixtureRoot();
+		const compatiblePolicyPath = join(compatibleRoot, ".pi/extensions/gitjig/authoring/policy.json");
+		const compatiblePolicy = JSON.parse(readFileSync(compatiblePolicyPath, "utf8"));
+		compatiblePolicy.routes.push({
+			surface: "compatible contributor",
+			prefixes: ["SPEC.md"],
+			anchors: ["### 2.4 Evidence discipline"],
+			defaultAct: "delete",
+		});
+		writeFileSync(compatiblePolicyPath, JSON.stringify(compatiblePolicy));
+		const compatible = composeAuthoringBrief(input(["SPEC.md"]), compatibleRoot);
+		assert.equal(compatible.complete, true, compatible.text);
+		assert.match(compatible.text, /specification prose \+ compatible contributor/);
+		assert.match(compatible.text, /### 2\.4 Evidence discipline/);
+
 		for (const mutation of ["conflict", "anchor"] as const) {
 			const root = fixtureRoot();
 			const policyPath = join(root, ".pi/extensions/gitjig/authoring/policy.json");
 			const policy = JSON.parse(readFileSync(policyPath, "utf8"));
-			if (mutation === "conflict") policy.routes.push({ ...policy.routes[0], surface: "collision" });
-			else policy.routes[0].anchors.push("### 9.9 Missing anchor mutant");
+			if (mutation === "conflict") {
+				policy.routes.push({ ...policy.routes[0], surface: "collision", defaultAct: "rewrite" });
+			} else policy.routes[0].anchors.push("### 9.9 Missing anchor mutant");
 			writeFileSync(policyPath, JSON.stringify(policy));
 			const result = composeAuthoringBrief(input(["SPEC.md"]), root);
 			assert.equal(result.complete, false);
@@ -135,9 +156,16 @@ describe("the on-demand authoring brief", () => {
 		}
 	});
 
-	it("rejects inline, fenced, and commented anchor decoys after the real heading is removed", () => {
+	it("rejects inline and Markdown-block anchor decoys after the real heading is removed", () => {
 		const anchor = "### 2.4 Evidence discipline";
-		for (const decoy of [`A quotation names ${anchor}\n`, `\`\`\`md\n${anchor}\n\`\`\`\n`, `<!--\n${anchor}\n-->\n`]) {
+		for (const decoy of [
+			`A quotation names ${anchor}\n`,
+			`\`\`\`md\n${anchor}\n\`\`\`\n`,
+			`<!--\n${anchor}\n-->\n`,
+			`<!-- closed --><!--\n${anchor}\n-->\n`,
+			`<script>\n${anchor}\n</script>\n`,
+			`<div>\n${anchor}\n</div>\n`,
+		]) {
 			const root = fixtureRoot();
 			const sourcePath = join(root, "SPEC.md");
 			const source = readFileSync(sourcePath, "utf8").replace(`${anchor}\n`, decoy);

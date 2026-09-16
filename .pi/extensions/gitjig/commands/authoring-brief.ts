@@ -71,7 +71,7 @@ function parseInput(raw: string): AuthoringInput | undefined {
 }
 
 function validRepoPath(path: string): boolean {
-	if (isAbsolute(path) || path.includes("\\") || path.endsWith("/")) return false;
+	if (isAbsolute(path) || path.includes("\\") || path.includes("\0") || path.endsWith("/")) return false;
 	const parts = path.split("/");
 	return parts.every((part) => part !== "" && part !== "." && part !== "..");
 }
@@ -132,7 +132,24 @@ interface MarkdownHeading {
 	text: string;
 }
 
-/** Narrow CommonMark block scan: ATX headings inside fences/comments are not headings. */
+/** Update a multiline HTML-comment state, including close-then-reopen lines. */
+function commentState(line: string, initiallyOpen: boolean): boolean {
+	let open = initiallyOpen;
+	for (let cursor = 0; cursor < line.length; ) {
+		const token = open ? "-->" : "<!--";
+		const next = line.indexOf(token, cursor);
+		if (next < 0) break;
+		open = !open;
+		cursor = next + token.length;
+	}
+	return open;
+}
+
+/**
+ * Narrow fail-closed CommonMark block scan. Fences and comments are parsed;
+ * another HTML block makes the canonical source unresolved rather than
+ * risking that text inside it is mistaken for an ATX heading.
+ */
 function markdownHeadings(source: string): MarkdownHeading[] {
 	const headings: MarkdownHeading[] = [];
 	let fence: { marker: string; width: number } | undefined;
@@ -141,21 +158,22 @@ function markdownHeadings(source: string): MarkdownHeading[] {
 		const newline = source.indexOf("\n", start);
 		const end = newline < 0 ? source.length : newline;
 		const line = source.slice(start, end).replace(/\r$/, "");
-		const wasInComment = inComment;
-		const opensComment = !inComment && line.includes("<!--");
-		if (opensComment) inComment = true;
-		if (inComment && line.includes("-->")) inComment = false;
-		if (!wasInComment && !opensComment) {
-			if (fence === undefined) {
+		if (fence !== undefined) {
+			const closing = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+			if (closing !== null && closing[1][0] === fence.marker && closing[1].length >= fence.width) fence = undefined;
+		} else {
+			const wasInComment = inComment;
+			inComment = commentState(line, inComment);
+			if (!wasInComment && !line.includes("<!--")) {
+				// SPEC currently needs only its generated TOC comments. Any other
+				// HTML block is unsupported in the safe direction: no readiness.
+				if (/^ {0,3}<(?!!--)/.test(line)) return [];
 				const opening = /^ {0,3}(`{3,}|~{3,})/.exec(line);
 				if (opening !== null) fence = { marker: opening[1][0], width: opening[1].length };
 				else {
 					const heading = /^(#{1,6}) ([^\r\n]+)$/.exec(line);
 					if (heading !== null) headings.push({ start, level: heading[1].length, text: line });
 				}
-			} else {
-				const closing = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
-				if (closing !== null && closing[1][0] === fence.marker && closing[1].length >= fence.width) fence = undefined;
 			}
 		}
 		start = newline < 0 ? source.length : newline + 1;
@@ -210,12 +228,14 @@ export function composeAuthoringBrief(raw: string, root = process.cwd()): Author
 			causes.push(`unrouted path ${JSON.stringify(path)}`);
 			continue;
 		}
-		if (matching.length > 1) {
+		const dispositions = [...new Set(matching.map((route) => route.defaultAct).filter(nonempty))];
+		if (dispositions.length > 1) {
 			causes.push(`conflicting routes for ${JSON.stringify(path)}`);
 			continue;
 		}
-		routes.push(matching[0]);
-		pathRows.push(`- ${JSON.stringify(path)} → ${matching[0].surface}`);
+		routes.push(...matching);
+		const surfaces = matching.map((route) => route.surface).join(" + ");
+		pathRows.push(`- ${JSON.stringify(path)} → ${surfaces}`);
 	}
 	if (causes.length > 0) return incomplete(causes);
 
