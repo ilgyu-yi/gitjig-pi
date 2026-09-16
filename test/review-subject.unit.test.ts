@@ -122,6 +122,13 @@ describe("review subject criterion union", () => {
 			]),
 			undefined,
 		);
+		assert.equal(
+			activationCriteriaFromComments(issue, "WRITER", [
+				comment("<!-- activation-verdict: pass --> trailing"),
+				comment(activationBody([]), "WRITER", 2),
+			]),
+			undefined,
+		);
 		assert.deepEqual(
 			activationCriteriaFromComments(issue, "WRITER", [verdict("TRUSTED"), comment(activationBody([]), "WRITER", 2)]),
 			[],

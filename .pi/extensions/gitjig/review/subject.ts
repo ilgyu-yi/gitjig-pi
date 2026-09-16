@@ -246,7 +246,9 @@ export function activationCriteriaFromComments(
 		!(["OWNER", "MEMBER", "COLLABORATOR"] as const).includes(
 			verdict.authorAssociation as "OWNER" | "MEMBER" | "COLLABORATOR",
 		) ||
-		!verdict.body.startsWith(ACTIVATION_PASS_MARKER) ||
+		(verdict.body !== ACTIVATION_PASS_MARKER &&
+			!verdict.body.startsWith(`${ACTIVATION_PASS_MARKER}\n`) &&
+			!verdict.body.startsWith(`${ACTIVATION_PASS_MARKER}\r\n`)) ||
 		verdict.id >= snapshot.id
 	)
 		return undefined;
