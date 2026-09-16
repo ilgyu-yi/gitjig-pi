@@ -256,10 +256,11 @@ function retryProbe(outcomes: DispatchOutcome[]): {
 		}
 		return Promise.resolve(outcome);
 	};
+	const dispatch = orchestrate().makeDispatcher(options, run);
 	return {
 		seen,
 		expected: { ...options, brief: RETRY_BRIEF, expectedRef: RETRY_HEAD },
-		dispatch: () => orchestrate().makeDispatcher(options, run)(RETRY_BRIEF, RETRY_HEAD),
+		dispatch: () => dispatch(RETRY_BRIEF, RETRY_HEAD),
 	};
 }
 
@@ -1351,7 +1352,8 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 	});
 
 	it("makeDispatcher re-sends the identical dispatch once on the failed-run refusal (issue #220)", async () => {
-		const probe = retryProbe([{ disposition: "refused", cause: FAILED_RUN }, admitted(approvedPayload)]);
+		const retryOutcome = admitted(approvedPayload);
+		const probe = retryProbe([{ disposition: "refused", cause: FAILED_RUN }, retryOutcome]);
 		const recovered = await probe.dispatch();
 		assert.equal(probe.seen.length, 2, "the failed-run refusal drew no second send");
 		for (const [index, sent] of probe.seen.entries()) {
@@ -1361,7 +1363,21 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 				`send ${index + 1} was not the stated dispatch \u2014 neither send may be reassembled`,
 			);
 		}
-		assert.equal(recovered.disposition, "admitted", "the retry's own outcome did not reach the caller");
+		assert.deepEqual(recovered, retryOutcome, "the retry's complete outcome did not reach the caller");
+	});
+
+	it("makeDispatcher gives every dispatch its own retry (issue #220)", async () => {
+		const firstRecovery = admitted(approvedPayload);
+		const secondRecovery = admitted(findingsPayload("the second result"));
+		const probe = retryProbe([
+			{ disposition: "refused", cause: FAILED_RUN },
+			firstRecovery,
+			{ disposition: "refused", cause: FAILED_RUN },
+			secondRecovery,
+		]);
+		assert.deepEqual(await probe.dispatch(), firstRecovery);
+		assert.deepEqual(await probe.dispatch(), secondRecovery);
+		assert.equal(probe.seen.length, 4, "a retry spent by one dispatch was unavailable to the next");
 	});
 
 	it("makeDispatcher re-sends a persistently failing run exactly once (issue #220)", async () => {
