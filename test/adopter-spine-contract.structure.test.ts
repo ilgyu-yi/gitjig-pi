@@ -33,7 +33,7 @@ const CONTRACT_CLAUSES = [
 	],
 	[
 		"snapshot check ownership",
-		"The snapshot is development evidence outside the candidate universe, never payload or pin input. This settlement defines but does not create it; #250 materializes it and adds the check that reconstructs it from the classifier, so candidate add, remove, rename, declaration, or disposition change then fails until the snapshot changes in the same reviewed commit.",
+		"The snapshot is development evidence outside the candidate universe, never payload or pin input. The snapshot is committed at `test/fixtures/adopter-membership.snapshot.json`, and `test/adopter-classifier.unit.test.ts` reconstructs it from the classifier byte-for-byte, so candidate add, remove, rename, declaration, or disposition change fails until the snapshot changes in the same reviewed commit.",
 	],
 	[
 		"path-stable ownership",
