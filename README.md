@@ -13,7 +13,9 @@ The runtime has no build step — the tree ships TypeScript sources that run dir
 - [`pi`](https://github.com/earendil-works/pi) available on `PATH` — the suite drives the real binary against disposable fixtures.
 - A Node.js runtime with native TypeScript type-stripping.
 
-To arm the local git-hook tier in a clone, run `bash .githooks/bind_local_tier.sh` from the repository root — idempotent; full contract in SPEC §3.2/§4.7.
+To arm the local git-hook tier in a clone of this source repository, run `bash .githooks/bind_local_tier.sh` from the repository root — idempotent; full contract in SPEC §3.2/§4.7.
+
+An adopter has a different product boundary: its reviewed history carries self-standing handed-over assets and `.pi/gitjig.pin.json`; the gitjig runtime is carried and verified per clone, never committed. The delivery and provisioning commands derive after the settlement in SPEC §4, so this source-tree bind command is not presented as an adopter installer.
 
 Run the verification suite as:
 
