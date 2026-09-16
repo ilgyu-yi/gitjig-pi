@@ -1,0 +1,729 @@
+{
+	"schemaVersion": 1,
+	"members": [
+		{
+			"path": ".githooks/_lib.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/bind_local_tier.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/commit-msg",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/helpers/.gitattributes",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/helpers/branch_guard.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/helpers/conventional_commit.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/helpers/secret-patterns",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/helpers/secret_scan.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/pre-commit",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".githooks/pre-push",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/ISSUE_TEMPLATE/bug-report.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/ISSUE_TEMPLATE/config.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/ISSUE_TEMPLATE/directive-proposal.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/ISSUE_TEMPLATE/discussion.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/ISSUE_TEMPLATE/execution-under-directive.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/ISSUE_TEMPLATE/task.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/auto-clear-awaiting-author.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/auto-status-proposed.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/build_toc.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-changelog.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-changelog.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-merge-review.mjs",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-merge-review.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-provenance.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-provenance.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-ssot-home.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-ssot-home.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/check-toc.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/detect_bare_refs_directive.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/dir-mode-post-merge.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/initiative-feedback-label.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/issues-to-project-mirror.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/resolve_parent_directive.sh",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/source-checks.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".github/workflows/suite.yml",
+			"disposition": "source-only"
+		},
+		{
+			"path": ".pi/extensions/gitjig.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/audit.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/authoring/policy.json",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/bind-state.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/authoring-brief.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/index.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/review-round-input.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/review-round.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/review.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/ship.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/admit.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/executor.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/index.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/provision.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/classifier.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/compose.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/pin.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/plan.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/locate.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/platform/read.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/postures.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/publish/executor.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/publish/index.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/publish/neutralize.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/publish/scan.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/publish/service.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/quote.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/briefs.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/carry-forward.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/comments.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/history.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/join.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/lens-policy.json",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/merge-gate.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/orchestrate.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/panel.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/publication.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/record.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/resolve.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/subject.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/state-root.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/prompts/work-on.md",
+			"disposition": "carried"
+		},
+		{
+			"path": "changelog_unreleased/TEMPLATE.md",
+			"disposition": "source-only"
+		},
+		{
+			"path": "changelog_unreleased/added/.gitkeep",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/1.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/11.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/112.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/116.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/13.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/135.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/136.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/145.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/15.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/169.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/17.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/177.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/184.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/186.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/19.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/190.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/198.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/203.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/21.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/212.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/218.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/244.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/245.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/25.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/250.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/3.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/32.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/35.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/5.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/55.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/59.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/60.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/66.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/68.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/70.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/78.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/8.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/81.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/83.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/88.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/91.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/.gitkeep",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/142.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/143.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/144.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/146.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/149.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/167.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/172.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/179.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/181.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/188.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/195.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/196.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/197.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/204.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/206.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/208.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/211.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/214.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/229.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/230.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/232.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/239.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/249.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/37.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/76.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/deprecated/.gitkeep",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/.gitkeep",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/104.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/113.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/119.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/125.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/128.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/139.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/194.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/220.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/221.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/222.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/23.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/233.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/234.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/43.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/44.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/45.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/53.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/58.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/63.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/65.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/71.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/72.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/74.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/85.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/86.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/94.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/removed/.gitkeep",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/removed/231.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/security/.gitkeep",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/security/120.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/security/40.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/security/47.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/security/97.md",
+			"disposition": "instance-state"
+		}
+	]
+}
