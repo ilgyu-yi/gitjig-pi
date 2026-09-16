@@ -228,6 +228,42 @@ const admitted = (payload: string): DispatchOutcome => ({
 });
 const judgePayload = (rulings: Ruling[]): string => JSON.stringify({ dedupAttested: true, rulings });
 
+/** The one refusal cause measured transient, verbatim (issue #220). */
+const FAILED_RUN = "dispatch refused: the delegated run reported failure; no return is admitted from a failed run";
+const RETRY_BRIEF = "the brief text";
+const RETRY_HEAD = "the-resolved-head";
+const retryOptions = () => ({ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] });
+
+/**
+ * One `makeDispatcher` probe. `expected` is **derived from the very options
+ * the dispatch is made with**, so the two cannot disagree on any field
+ * `RunDispatchOptions` carries — a hand-listed shape could only agree on the
+ * fields whoever wrote it remembered. Every send an arm expects is seeded,
+ * and a call past the seeded set throws, so an unbounded-retry mutant reds
+ * here rather than hanging the run.
+ */
+function retryProbe(outcomes: DispatchOutcome[]): {
+	seen: RunDispatchOptions[];
+	expected: RunDispatchOptions;
+	dispatch: () => Promise<DispatchOutcome>;
+} {
+	const options = retryOptions();
+	const seen: RunDispatchOptions[] = [];
+	const run = (sent: RunDispatchOptions): Promise<DispatchOutcome> => {
+		seen.push(sent);
+		const outcome = outcomes[seen.length - 1];
+		if (outcome === undefined) {
+			throw new Error(`send ${seen.length} was made against ${outcomes.length} seeded outcomes`);
+		}
+		return Promise.resolve(outcome);
+	};
+	return {
+		seen,
+		expected: { ...options, brief: RETRY_BRIEF, expectedRef: RETRY_HEAD },
+		dispatch: () => orchestrate().makeDispatcher(options, run)(RETRY_BRIEF, RETRY_HEAD),
+	};
+}
+
 /** A dispatch fake that answers reviewer briefs and judge briefs apart. */
 function fakeDispatch(
 	perSlot: (brief: string) => DispatchOutcome,
@@ -1315,77 +1351,48 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(seen[0].brief, "the brief text", "makeDispatcher did not forward the brief");
 	});
 
-	it("makeDispatcher re-sends the identical dispatch once, and only on the failed-run refusal", async () => {
-		const o = orchestrate();
-		const failedRun = "dispatch refused: the delegated run reported failure; no return is admitted from a failed run";
-		const seen: RunDispatchOptions[] = [];
-		// Every send this arm expects is seeded. A call past the seeded set
-		// throws, so an unbounded-retry mutant reds deterministically here
-		// instead of echoing the last outcome forever and hanging the run.
-		const run =
-			(outcomes: DispatchOutcome[]) =>
-			(options: RunDispatchOptions): Promise<DispatchOutcome> => {
-				seen.push(options);
-				const outcome = outcomes[seen.length - 1];
-				if (outcome === undefined) {
-					throw new Error(`send ${seen.length} was made against ${outcomes.length} seeded outcomes`);
-				}
-				return Promise.resolve(outcome);
-			};
-		// The expected dispatch, stated here rather than read back off the code
-		// under test: comparing the two sends to each other alone would admit a
-		// composition defect both of them share.
-		const expected = {
-			callerRepoRoot: "/r",
-			stateRoot: "/s",
-			delegateArgv: ["x"],
-			brief: "the brief text",
-			expectedRef: "the-resolved-head",
-		};
-
-		// The one transient class (#220): two of three slots drew it in one
-		// round and both returned cleanly on an identical re-dispatch.
-		const recovered = await o.makeDispatcher(
-			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
-			run([{ disposition: "refused", cause: failedRun }, admitted(approvedPayload)]),
-		)("the brief text", "the-resolved-head");
-		assert.equal(seen.length, 2, "the failed-run refusal drew no second send");
-		for (const [index, sent] of seen.entries()) {
+	it("makeDispatcher re-sends the identical dispatch once on the failed-run refusal", async () => {
+		const probe = retryProbe([{ disposition: "refused", cause: FAILED_RUN }, admitted(approvedPayload)]);
+		const recovered = await probe.dispatch();
+		assert.equal(probe.seen.length, 2, "the failed-run refusal drew no second send");
+		for (const [index, sent] of probe.seen.entries()) {
 			assert.deepEqual(
 				sent,
-				expected,
-				`send ${index + 1} was not the stated dispatch — both sends must carry the same options, brief and pin, ` +
-					"and neither may be reassembled",
+				probe.expected,
+				`send ${index + 1} was not the stated dispatch \u2014 neither send may be reassembled`,
 			);
 		}
 		assert.equal(recovered.disposition, "admitted", "the retry's own outcome did not reach the caller");
+	});
 
-		// One retry, never a loop: a second failed run is the caller's answer.
-		seen.length = 0;
-		const persistent = await o.makeDispatcher(
-			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
-			run([
-				{ disposition: "refused", cause: failedRun },
-				{ disposition: "refused", cause: failedRun },
-			]),
-		)("the brief text", "the-resolved-head");
-		assert.equal(seen.length, 2, "a persistently failing run was re-sent more or fewer than once");
-		assert.deepEqual(persistent, { disposition: "refused", cause: failedRun });
+	it("makeDispatcher re-sends a persistently failing run exactly once", async () => {
+		const probe = retryProbe([
+			{ disposition: "refused", cause: FAILED_RUN },
+			{ disposition: "refused", cause: FAILED_RUN },
+		]);
+		const persistent = await probe.dispatch();
+		assert.equal(probe.seen.length, 2, "a persistently failing run was re-sent more or fewer than once");
+		assert.deepEqual(persistent, { disposition: "refused", cause: FAILED_RUN });
+	});
 
-		// A throw is not a refusal: it is none of §3.10's outcome classes, so it
-		// propagates unchanged and draws no retry.
-		seen.length = 0;
+	it("makeDispatcher propagates a rejected send unchanged and retries none", async () => {
+		// A throw is none of \u00a73.10's outcome classes, so it is not the refusal
+		// the one measured transient class names, and it draws no retry.
+		const o = orchestrate();
+		const seen: RunDispatchOptions[] = [];
 		const thrown = new Error("the dispatcher threw");
 		await assert.rejects(
-			o.makeDispatcher({ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] }, (options) => {
+			o.makeDispatcher(retryOptions(), (options) => {
 				seen.push(options);
 				return Promise.reject(thrown);
-			})("the brief text", "the-resolved-head"),
+			})(RETRY_BRIEF, RETRY_HEAD),
 			(error: unknown) => error === thrown,
 			"a rejected send did not reach the caller unchanged",
 		);
 		assert.equal(seen.length, 1, "a rejected send was retried");
+	});
 
+	it("makeDispatcher re-sends no refusal but the exact failed-run cause", async () => {
 		// Every other refusal stands on its first answer: none was measured
 		// transient, and re-sending one would spend a delegate on a decided fact.
 		for (const cause of [
@@ -1394,26 +1401,21 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			"dispatch refused: no readable return landed at the return slot; a delegate stream is not the crossing",
 			"dispatch refused: the return is oversize or malformed against the closed return schema; it is refused whole, never truncated",
 			"dispatch refused: the return names a caller-held operand; the return channel is content-free and the return is refused whole",
-			// Strict-equality guard: a same-cause string with incidental whitespace must not match the transient class — this is not a seventh distinct refusal cause.
-			`${failedRun} `,
+			// Strict-equality guard: a same-cause string with incidental whitespace must not match the transient class \u2014 this is not a seventh distinct refusal cause.
+			`${FAILED_RUN} `,
 		]) {
-			seen.length = 0;
-			const outcome = await o.makeDispatcher(
-				{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
-				run([{ disposition: "refused", cause }]),
-			)("the brief text", "the-resolved-head");
-			assert.equal(seen.length, 1, `a non-transient refusal was re-sent: ${cause}`);
+			const probe = retryProbe([{ disposition: "refused", cause }]);
+			const outcome = await probe.dispatch();
+			assert.equal(probe.seen.length, 1, `a non-transient refusal was re-sent: ${cause}`);
 			assert.deepEqual(outcome, { disposition: "refused", cause });
 		}
+	});
 
-		// An admitted return is never re-sent, whatever its `ok`.
+	it("makeDispatcher re-sends no admitted return, whatever its ok", async () => {
 		for (const ok of [true, false]) {
-			seen.length = 0;
-			await o.makeDispatcher(
-				{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
-				run([{ disposition: "admitted", ok, summary: "RESULT", compare: "confirmed" }]),
-			)("the brief text", "the-resolved-head");
-			assert.equal(seen.length, 1, `an admitted return was re-sent (ok: ${String(ok)})`);
+			const probe = retryProbe([{ disposition: "admitted", ok, summary: "RESULT", compare: "confirmed" }]);
+			await probe.dispatch();
+			assert.equal(probe.seen.length, 1, `an admitted return was re-sent (ok: ${String(ok)})`);
 		}
 	});
 
