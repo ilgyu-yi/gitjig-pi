@@ -73,13 +73,6 @@ function repo(): { root: string; base: string; head: string } {
  * `cleanup` reaps it; nothing is left running past the arm. The holder is a
  * Node script, so the arms need no interpreter beyond the one running them.
  */
-/**
- * What `cleanup` did, as a fixed token rather than a silent `catch`: the
- * three conditions an earlier form conflated are distinguishable to the arm
- * that reads the return.
- */
-type HolderDisposition = "reaped" | "already-ended" | "never-started" | "unreadable-pid";
-
 function napMs(ms: number): void {
 	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
@@ -87,7 +80,7 @@ function napMs(ms: number): void {
 function holderShim(
 	prefix: string,
 	holderBody: string,
-): { root: string; holderPid: () => number | undefined; cleanup: () => HolderDisposition } {
+): { root: string; holderPid: () => number | undefined; cleanup: () => void } {
 	const root = mkdtempSync(join(tmpdir(), prefix));
 	dirs.push(root);
 	const pidFile = join(root, "holder.pid");
@@ -141,23 +134,19 @@ function holderShim(
 			if (savedPath === undefined) delete process.env.PATH;
 			else process.env.PATH = savedPath;
 			const pid = recordedPid();
-			// The shim never ran, so no holder was ever spawned.
-			if (pid === undefined) return "never-started";
-			// The pid file exists but does not name a process.
-			if (Number.isNaN(pid)) return "unreadable-pid";
+			if (pid === undefined || Number.isNaN(pid)) throw new Error("the holder pid was not recorded");
 			try {
 				process.kill(pid, "SIGKILL");
 			} catch {
-				return "already-ended";
+				return;
 			}
 			// A signal delivered is not a process gone: wait for the holder to
-			// leave the table, so the claim this helper makes is one the arm can
-			// check rather than one it takes on trust.
+			// leave the table, so the shared apparatus invariant is observable.
 			for (let attempt = 0; attempt < 500; attempt += 1) {
 				try {
 					process.kill(pid, 0);
 				} catch {
-					return "reaped";
+					return;
 				}
 				napMs(10);
 			}
@@ -413,30 +402,17 @@ describe("review-round production call site", () => {
 		}
 	});
 
-	it("reaps the holder it started, and distinguishes one that never started", async () => {
+	it("reaps the holder it started", async () => {
 		const fixture = holderShim("gitjig-comment-reap-", "hold();");
-		let disposition: ReturnType<typeof fixture.cleanup> | undefined;
-		let pid: number | undefined;
-		try {
-			assert.equal(
-				await runPlatformRead([], fixture.root, { timeoutMs: 30_000, graceMs: 300, maxBytes: 1024 }),
-				"payload",
-			);
-			pid = fixture.holderPid();
-			assert.ok(pid !== undefined, "the shim recorded no holder pid");
-			assert.doesNotThrow(() => process.kill(pid as number, 0), "the holder was not running before cleanup");
-			disposition = fixture.cleanup();
-		} finally {
-			if (disposition === undefined) fixture.cleanup();
-		}
-		assert.equal(disposition, "reaped");
+		assert.equal(
+			await runPlatformRead([], fixture.root, { timeoutMs: 30_000, graceMs: 300, maxBytes: 1024 }),
+			"payload",
+		);
+		const pid = fixture.holderPid();
+		assert.ok(pid !== undefined, "the shim recorded no holder pid");
+		assert.doesNotThrow(() => process.kill(pid as number, 0), "the holder was not running before cleanup");
+		fixture.cleanup();
 		assert.throws(() => process.kill(pid as number, 0), "the holder outlived the cleanup that claims to reap it");
-
-		// A fixture whose shim was never invoked spawned no holder, and says so
-		// rather than reporting the same token as a successful reaping.
-		const unused = holderShim("gitjig-comment-unused-", "hold();");
-		assert.equal(unused.holderPid(), undefined);
-		assert.equal(unused.cleanup(), "never-started");
 	});
 
 	it("refuses an over-cap read that arrives after the child already exited", async () => {
@@ -534,6 +510,17 @@ describe("review-round production call site", () => {
 		});
 		assert.equal(called, false);
 		assert.equal(wrongHost.ok, false);
+	});
+
+	it("scans semantic lines introduced by reversible encoding", () => {
+		const escapedToken = ["g", "h", "p", "_", "a".repeat(36)]
+			.join("")
+			.replace(/./g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+		assert.deepEqual(scanBody(`safe\\u000a${escapedToken}`), {
+			disposition: "refuse-match",
+			patternIds: ["github-token"],
+			lines: [2],
+		});
 	});
 
 	it("scans the semantic record before reversible punctuation encoding", () => {

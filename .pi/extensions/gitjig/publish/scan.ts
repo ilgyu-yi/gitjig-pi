@@ -365,28 +365,24 @@ export function scanBody(body: string): ScanOutcome {
 	const patterns = loadCommittedPatterns();
 	const patternIds: string[] = [];
 	const lines: number[] = [];
-	const sourceLines = stripped.split("\n");
-	const semanticLines = semantic.split("\n");
-	sourceLines.forEach((line, index) => {
-		// One byte, one code unit: the UTF-8 bytes of each line re-read as
-		// latin1, so a multibyte codepoint interrupts a counted class run
-		// exactly as it does under the tier-2 engine's byte semantics (§3.3).
-		const views = [line, semanticLines[index] ?? line].map((view) => Buffer.from(view, "utf8").toString("latin1"));
-		let matched = false;
-		for (const pattern of patterns) {
-			if (views.some((view) => pattern.regexp.test(view))) {
-				matched = true;
-				if (!patternIds.includes(pattern.id)) {
-					patternIds.push(pattern.id);
+	for (const view of [stripped, semantic]) {
+		view.split("\n").forEach((line, index) => {
+			// One byte, one code unit: the UTF-8 bytes of each line re-read as
+			// latin1, so a multibyte codepoint interrupts a counted class run
+			// exactly as it does under the tier-2 engine's byte semantics (§3.3).
+			const bytes = Buffer.from(line, "utf8").toString("latin1");
+			let matched = false;
+			for (const pattern of patterns) {
+				if (pattern.regexp.test(bytes)) {
+					matched = true;
+					if (!patternIds.includes(pattern.id)) patternIds.push(pattern.id);
 				}
 			}
-		}
-		if (matched) {
-			lines.push(index + 1);
-		}
-	});
+			if (matched && !lines.includes(index + 1)) lines.push(index + 1);
+		});
+	}
 	if (patternIds.length > 0) {
-		return { disposition: "refuse-match", patternIds, lines };
+		return { disposition: "refuse-match", patternIds, lines: lines.sort((left, right) => left - right) };
 	}
 	return { disposition: "clean" };
 }
