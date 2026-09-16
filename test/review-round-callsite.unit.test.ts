@@ -73,7 +73,21 @@ function repo(): { root: string; base: string; head: string } {
  * `cleanup` reaps it; nothing is left running past the arm. The holder is a
  * Node script, so the arms need no interpreter beyond the one running them.
  */
-function holderShim(prefix: string, holderBody: string): { root: string; cleanup: () => void } {
+/**
+ * What `cleanup` did, as a fixed token rather than a silent `catch`: the
+ * three conditions an earlier form conflated are distinguishable to the arm
+ * that reads the return.
+ */
+type HolderDisposition = "reaped" | "already-ended" | "never-started" | "unreadable-pid";
+
+function napMs(ms: number): void {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function holderShim(
+	prefix: string,
+	holderBody: string,
+): { root: string; holderPid: () => number | undefined; cleanup: () => HolderDisposition } {
 	const root = mkdtempSync(join(tmpdir(), prefix));
 	dirs.push(root);
 	const pidFile = join(root, "holder.pid");
@@ -107,16 +121,47 @@ function holderShim(prefix: string, holderBody: string): { root: string; cleanup
 	chmodSync(shim, 0o755);
 	const savedPath = process.env.PATH;
 	process.env.PATH = `${root}:${savedPath ?? ""}`;
+	const recordedPid = (): number | undefined => {
+		let recorded: string;
+		try {
+			recorded = readFileSync(pidFile, "utf8");
+		} catch {
+			return undefined;
+		}
+		const pid = Number(recorded);
+		return Number.isSafeInteger(pid) && pid > 0 ? pid : Number.NaN;
+	};
 	return {
 		root,
+		holderPid: () => {
+			const pid = recordedPid();
+			return pid === undefined || Number.isNaN(pid) ? undefined : pid;
+		},
 		cleanup: () => {
 			if (savedPath === undefined) delete process.env.PATH;
 			else process.env.PATH = savedPath;
+			const pid = recordedPid();
+			// The shim never ran, so no holder was ever spawned.
+			if (pid === undefined) return "never-started";
+			// The pid file exists but does not name a process.
+			if (Number.isNaN(pid)) return "unreadable-pid";
 			try {
-				process.kill(Number(readFileSync(pidFile, "utf8")), "SIGKILL");
+				process.kill(pid, "SIGKILL");
 			} catch {
-				// The holder already ended, or never started; nothing is owed.
+				return "already-ended";
 			}
+			// A signal delivered is not a process gone: wait for the holder to
+			// leave the table, so the claim this helper makes is one the arm can
+			// check rather than one it takes on trust.
+			for (let attempt = 0; attempt < 500; attempt += 1) {
+				try {
+					process.kill(pid, 0);
+				} catch {
+					return "reaped";
+				}
+				napMs(10);
+			}
+			throw new Error("the holder survived its own reaping");
 		},
 	};
 }
@@ -366,6 +411,32 @@ describe("review-round production call site", () => {
 			if (savedPath === undefined) delete process.env.PATH;
 			else process.env.PATH = savedPath;
 		}
+	});
+
+	it("reaps the holder it started, and distinguishes one that never started", async () => {
+		const fixture = holderShim("gitjig-comment-reap-", "hold();");
+		let disposition: ReturnType<typeof fixture.cleanup> | undefined;
+		let pid: number | undefined;
+		try {
+			assert.equal(
+				await runPlatformRead([], fixture.root, { timeoutMs: 30_000, graceMs: 300, maxBytes: 1024 }),
+				"payload",
+			);
+			pid = fixture.holderPid();
+			assert.ok(pid !== undefined, "the shim recorded no holder pid");
+			assert.doesNotThrow(() => process.kill(pid as number, 0), "the holder was not running before cleanup");
+			disposition = fixture.cleanup();
+		} finally {
+			if (disposition === undefined) fixture.cleanup();
+		}
+		assert.equal(disposition, "reaped");
+		assert.throws(() => process.kill(pid as number, 0), "the holder outlived the cleanup that claims to reap it");
+
+		// A fixture whose shim was never invoked spawned no holder, and says so
+		// rather than reporting the same token as a successful reaping.
+		const unused = holderShim("gitjig-comment-unused-", "hold();");
+		assert.equal(unused.holderPid(), undefined);
+		assert.equal(unused.cleanup(), "never-started");
 	});
 
 	it("refuses an over-cap read that arrives after the child already exited", async () => {
