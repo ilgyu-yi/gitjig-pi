@@ -1350,7 +1350,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(seen[0].brief, "the brief text", "makeDispatcher did not forward the brief");
 	});
 
-	it("makeDispatcher re-sends the identical dispatch once on the failed-run refusal", async () => {
+	it("makeDispatcher re-sends the identical dispatch once on the failed-run refusal (issue #220)", async () => {
 		const probe = retryProbe([{ disposition: "refused", cause: FAILED_RUN }, admitted(approvedPayload)]);
 		const recovered = await probe.dispatch();
 		assert.equal(probe.seen.length, 2, "the failed-run refusal drew no second send");
@@ -1364,7 +1364,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(recovered.disposition, "admitted", "the retry's own outcome did not reach the caller");
 	});
 
-	it("makeDispatcher re-sends a persistently failing run exactly once", async () => {
+	it("makeDispatcher re-sends a persistently failing run exactly once (issue #220)", async () => {
 		const probe = retryProbe([
 			{ disposition: "refused", cause: FAILED_RUN },
 			{ disposition: "refused", cause: FAILED_RUN },
@@ -1374,7 +1374,18 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.deepEqual(persistent, { disposition: "refused", cause: FAILED_RUN });
 	});
 
-	it("makeDispatcher propagates a rejected send unchanged and retries none", async () => {
+	it("makeDispatcher returns the retry's own distinct refusal (issue #220)", async () => {
+		const second = {
+			disposition: "refused" as const,
+			cause: "dispatch refused: the delegate exceeded its run bound and was terminated; nothing is admitted",
+		};
+		const probe = retryProbe([{ disposition: "refused", cause: FAILED_RUN }, second]);
+		const outcome = await probe.dispatch();
+		assert.equal(probe.seen.length, 2, "the failed-run refusal did not draw exactly one retry");
+		assert.deepEqual(outcome, second, "the caller received the first refusal instead of the retry's own answer");
+	});
+
+	it("makeDispatcher propagates a rejected send unchanged and retries none (issue #220)", async () => {
 		// A throw is none of \u00a73.10's outcome classes, so it is not the refusal
 		// the one measured transient class names, and it draws no retry.
 		const o = orchestrate();
@@ -1391,7 +1402,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(seen.length, 1, "a rejected send was retried");
 	});
 
-	it("makeDispatcher re-sends no refusal but the exact failed-run cause", async () => {
+	it("makeDispatcher re-sends no refusal but the exact failed-run cause (issue #220)", async () => {
 		// Every other refusal stands on its first answer: none was measured
 		// transient, and re-sending one would spend a delegate on a decided fact.
 		for (const cause of [
@@ -1410,7 +1421,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		}
 	});
 
-	it("makeDispatcher re-sends no admitted return, whatever its ok", async () => {
+	it("makeDispatcher re-sends no admitted return, whatever its ok (issue #220)", async () => {
 		for (const ok of [true, false]) {
 			const probe = retryProbe([{ disposition: "admitted", ok, summary: "RESULT", compare: "confirmed" }]);
 			await probe.dispatch();
