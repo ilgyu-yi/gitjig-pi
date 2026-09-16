@@ -115,6 +115,9 @@ function parsePolicy(text: string): AuthoringPolicy {
 			throw new Error("empty routing policy row");
 		}
 		if (route.prefixes.includes("")) throw new Error("catch-all routing is forbidden");
+		if (!route.anchors.every((anchor) => /^#{1,6} [^\r\n]+$/.test(anchor))) {
+			throw new Error("every canonical anchor must be an exact heading");
+		}
 	}
 	return value as AuthoringPolicy;
 }
@@ -125,8 +128,15 @@ function matches(path: string, prefix: string): boolean {
 
 function sectionAt(source: string, anchor: string): string | undefined {
 	const marker = `${anchor}\n`;
-	const start = source.indexOf(marker);
-	if (start < 0 || source.indexOf(marker, start + marker.length) >= 0) return undefined;
+	const starts: number[] = [];
+	for (let cursor = 0; cursor < source.length; ) {
+		const candidate = source.indexOf(marker, cursor);
+		if (candidate < 0) break;
+		if (candidate === 0 || source[candidate - 1] === "\n") starts.push(candidate);
+		cursor = candidate + marker.length;
+	}
+	if (starts.length !== 1) return undefined;
+	const start = starts[0];
 	const level = anchor.match(/^#+/)?.[0].length;
 	if (level === undefined) return undefined;
 	let end = source.length;

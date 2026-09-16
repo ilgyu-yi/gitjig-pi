@@ -34,7 +34,7 @@
 		},
 		{
 			"surface": "implementation code",
-			"prefixes": [".pi/", "src/", "package.json", "tsconfig.json", "biome.json"],
+			"prefixes": [".pi/", "src/", ".gitignore", "package.json", "package-lock.json", "tsconfig.json", "biome.jsonc"],
 			"anchors": [
 				"### 1.2 Authorization, evidence, and synchronization",
 				"### 2.5 Authoring doctrine",

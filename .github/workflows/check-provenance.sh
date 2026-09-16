@@ -17,9 +17,6 @@
 #
 # Usage:
 #   git diff --unified=0 <base>...HEAD | check-provenance.sh
-#   git diff --cached --unified=0 | check-provenance.sh   (the pre-commit
-#   call site, `.githooks/helpers/authoring_pass.sh`; one predicate, two
-#   call sites — §3.11)
 #
 # ADVISORY BY CONSTRUCTION. It exits 0 on every input, including one that
 # reports hits. §2.5 states that no gate class homes a decidable check for

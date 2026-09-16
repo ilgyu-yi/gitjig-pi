@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -111,6 +112,12 @@ describe("the on-demand authoring brief", () => {
 		}
 	});
 
+	it("the committed routing policy covers every tracked path without a catch-all", () => {
+		const paths = execFileSync("git", ["ls-files"], { cwd: repoRoot(), encoding: "utf8" }).trim().split("\n");
+		const result = composeAuthoringBrief(input(paths), repoRoot());
+		assert.equal(result.complete, true, result.text);
+	});
+
 	it("marks conflicting routes and missing anchors incomplete", () => {
 		for (const mutation of ["conflict", "anchor"] as const) {
 			const root = fixtureRoot();
@@ -126,6 +133,17 @@ describe("the on-demand authoring brief", () => {
 				mutation === "conflict" ? /conflicting routes/ : /missing or ambiguous canonical anchor/,
 			);
 		}
+	});
+
+	it("rejects an inline anchor decoy after the real heading is removed", () => {
+		const root = fixtureRoot();
+		const sourcePath = join(root, "SPEC.md");
+		const anchor = "### 2.4 Evidence discipline";
+		const source = readFileSync(sourcePath, "utf8").replace(`${anchor}\n`, `A quotation names ${anchor}\n`);
+		writeFileSync(sourcePath, source);
+		const result = composeAuthoringBrief(input(["test/example.test.ts"]), root);
+		assert.equal(result.complete, false);
+		assert.match(result.text, /missing or ambiguous canonical anchor/);
 	});
 
 	it("the route-set witness kills a fixed-selector mutant", () => {
