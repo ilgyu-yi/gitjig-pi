@@ -181,7 +181,7 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		file: "gitjig/review/comments.ts",
 		// A positive integer admitted by the command-spec parser, and the
 		// module's fixed marker literal. Neither can carry a path byte.
-		allow: ["String(pr)", "REVIEW_RECORD_MARKER"],
+		allow: ["String(pr)", "REVIEW_RECORD_MARKER", "DIAGNOSIS_RECORD_MARKER"],
 	},
 	// No interpolation exists in join.ts today; it is rostered so the module
 	// that parses a DELEGATE-authored payload — the surface most exposed to

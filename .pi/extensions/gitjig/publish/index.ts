@@ -70,7 +70,7 @@ const PublishParams = {
 			additionalProperties: false,
 			required: ["kind"],
 			properties: {
-				kind: { enum: PUBLISH_DESTINATION_KINDS },
+				kind: { anyOf: PUBLISH_DESTINATION_KINDS.map((kind) => ({ const: kind })) },
 				number: {
 					type: "number",
 					description: "The issue or pull request number acted on. Required for the comment and body kinds.",
