@@ -840,6 +840,33 @@ describe("review-round production call site", () => {
 		assert.equal(posts, 1);
 	});
 
+	it("hands off when the subject drifts during final history readback", async () => {
+		let reads = 0;
+		let stale = false;
+		let publishedBody: string | undefined;
+		const outcome = await driveReviewRound(
+			spec(),
+			"/unused",
+			seams({
+				refetchSubject: async (_root, current) => (stale ? undefined : current),
+				readComments: async () => {
+					reads += 1;
+					if (reads === 2) stale = true;
+					return population([], publishedBody);
+				},
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+			}),
+		);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the review subject changed while the round ran",
+			reentry: "none",
+		});
+	});
+
 	it("does not dispatch a triggered diagnosis after the subject drifts", async () => {
 		let dispatched = 0;
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];

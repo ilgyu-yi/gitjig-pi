@@ -297,6 +297,8 @@ export async function driveReviewRound(
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 		const after = await durableState(repoRoot, subject, seams, publication.receipt);
 		if (after === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+		if (!(await currentSubject()))
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 		if (!triggerFires(after.history) || JSON.stringify(after.history) === diagnosedHistory)
 			return finish(state, { disposition: "posted", review: round.review });
 		const stop = await diagnose(after.history);
