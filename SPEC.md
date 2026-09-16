@@ -666,7 +666,7 @@ Manifest order is unsigned UTF-8 path-byte order. Each digest record is one clas
 
 ### 4.3 PR-based installs
 
-Initial adoption and each manual update land through a reviewed PR (§1.1), never direct protected-branch push. The PR atomically carries all admitted handed-over actions plus exactly one pin and no carried member. The stage-0 exception remains a minimal, scoped, audit-logged direction-document seed for an unborn default branch.
+Initial adoption and each manual update land through a reviewed PR (§1.1), never direct protected-branch push. The PR atomically carries all admitted handed-over actions plus exactly one pin and no carried member. `.pi/extensions/gitjig/install/delivery.ts` consumes the classifier-owned composition without a second roster or planner, binds one atomic draft-PR request to a platform-attested target and immutable base, and reports success only after exact platform confirmation; `test/adopter-delivery.unit.test.ts` exercises that boundary through a hermetic platform seam, so no foreign-repository act is implementation evidence. The stage-0 exception remains a minimal, scoped, audit-logged direction-document seed for an unborn default branch.
 
 Server configuration is applied through the platform API and the repository records its shape. In this source repository, required-check contexts equal the CI job names (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`, `suite`). In an adopter they equal the handed-over CI jobs applicable there; development-only jobs declare source-only instead of shipping. Merge commit remains the only default-branch merge method. Automatic pin selection or bumping is convenience; the core update names an explicit immutable revision.
 
