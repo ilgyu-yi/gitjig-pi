@@ -5,9 +5,10 @@
  *
  * The child is `gh`, argv-composed (never a shell string), the body on
  * stdin (`--body-file -`, never an argv byte), cwd pinned to the
- * runtime's own repository root — `gh` resolves the target repository
- * from cwd, so an ambient cwd retargets the publication (§4.6) — the
- * environment passed through, and the run time-bounded.
+ * runtime's own repository root. Generic calls let `gh` resolve the target
+ * from that cwd; callers holding an attested subject instead add its closed
+ * `--repo` value. Ambient repository overrides are removed, and the run is
+ * time-bounded.
  *
  * Admission is keyed on output validity alone (§3.10): success exactly
  * when the child exits 0 with a comment-URL shape as the whole of its
@@ -70,6 +71,7 @@
  *     is not read as strictly more containment than before.
  */
 import { spawn } from "node:child_process";
+import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 
 /** A comment's own url — the shape only the comment verbs print. */
 const COMMENT_URL_SHAPE = /^https:\/\/[^\s]+#issuecomment-\d+$/;
@@ -168,6 +170,28 @@ export interface PublishDestination {
 	title?: string;
 }
 
+/** Explicit platform repository for callers holding an attested subject. */
+export interface PublishRepository {
+	host: string;
+	nameWithOwner: string;
+}
+
+export function isPublishRepository(value: unknown): value is PublishRepository {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		Object.keys(value).length === 2 &&
+		Object.keys(value).every((key) => key === "host" || key === "nameWithOwner") &&
+		typeof (value as { host?: unknown }).host === "string" &&
+		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
+			(value as { host: string }).host,
+		) &&
+		typeof (value as { nameWithOwner?: unknown }).nameWithOwner === "string" &&
+		/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test((value as { nameWithOwner: string }).nameWithOwner)
+	);
+}
+
 /**
  * A title is published text in ARGUMENT position, unlike the body, which
  * reaches `gh` on stdin. Three refusals follow from that difference and
@@ -209,7 +233,7 @@ export function isPublishDestination(value: unknown): value is PublishDestinatio
  * can exceed the argument limit. The title has no such route — `gh` takes
  * it as an argument — which is why admission constrains its shape above.
  */
-export function ghPublishArgv(destination: PublishDestination): string[] {
+export function ghPublishArgv(destination: PublishDestination, repository?: PublishRepository): string[] {
 	const spec = specForKind(destination.kind);
 	if (spec === undefined) {
 		// Unreachable through the tool, which admits first. Throwing rather
@@ -217,7 +241,11 @@ export function ghPublishArgv(destination: PublishDestination): string[] {
 		// has no argv, instead of quietly acquiring the wrong verb.
 		throw new Error("publish: no argv spelling is mapped for this destination kind");
 	}
-	const tail = ["--body-file", "-"];
+	if (repository !== undefined && !isPublishRepository(repository)) {
+		throw new Error("publish: the explicit repository is not admissible");
+	}
+	const target = repository === undefined ? [] : ["--repo", [repository.host, repository.nameWithOwner].join("/")];
+	const tail = [...target, "--body-file", "-"];
 	if (spec.target === "title") {
 		return [spec.noun, spec.verb, "--title", String(destination.title), ...tail];
 	}
@@ -282,7 +310,7 @@ export function runPublishChild(
 			// sibling child already takes; nothing about the piped stdin this
 			// child reads its body from makes that treatment inapplicable here.
 			detached: true,
-			env: process.env,
+			env: withoutPlatformRetargetingEnv(process.env),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 		const settle = (outcome: PublishChildOutcome): void => {

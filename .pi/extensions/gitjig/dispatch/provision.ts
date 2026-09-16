@@ -86,6 +86,13 @@ export function withoutRepoLocatingGitEnv(base: NodeJS.ProcessEnv): NodeJS.Proce
 	return env;
 }
 
+/** Platform children use an explicit repository and never an ambient gh override. */
+export function withoutPlatformRetargetingEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+	const env = withoutRepoLocatingGitEnv(base);
+	delete env.GH_REPO;
+	return env;
+}
+
 /** The provisioned context: path-pinned layout plus the held operand. */
 export interface DispatchContext {
 	scratchRoot: string;

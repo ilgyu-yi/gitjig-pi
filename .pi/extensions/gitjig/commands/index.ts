@@ -6,18 +6,20 @@
  * seams rather than re-resolving them. Registration is load-legal — every
  * act runs inside a handler.
  *
- * Three command implementations register here (`authoring-brief`, `review`,
- * `ship`). The `work-on` case answers no-no-yes and homes on the prompt-template
+ * Four command implementations register here (`authoring-brief`, `review`,
+ * `review-round`, `ship`). The `work-on` case answers no-no-yes and homes on the prompt-template
  * surface at `.pi/prompts/work-on.md`, registered by the substrate's own
  * discovery — no call for it belongs in any extension.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerAuthoringBriefCommand } from "./authoring-brief.ts";
 import { registerReviewCommand } from "./review.ts";
+import { registerReviewRoundCommand } from "./review-round.ts";
 import { registerShipCommand } from "./ship.ts";
 
 export function registerSpineCommands(pi: ExtensionAPI, repoRoot: string, stateRoot: string): void {
 	registerAuthoringBriefCommand(pi, repoRoot);
 	registerReviewCommand(pi, repoRoot, stateRoot);
+	registerReviewRoundCommand(pi, repoRoot, stateRoot);
 	registerShipCommand(pi, repoRoot);
 }

@@ -23,6 +23,40 @@ node --test "test/*.test.ts"
 
 Keep the glob quoted, and do not run a bare `node --test`: node's default discovery treats every file under `test/` as a test and executes the harness assets themselves, so that shape false-reds on a harness asset instead of measuring the runtime. The harness's own contract stays with its author-side home, the header of [`test/harness/run-pi.ts`](test/harness/run-pi.ts). CI runs the same invocation on every pull request to `main` or a maintenance branch — the `suite` required check, [`.github/workflows/suite.yml`](.github/workflows/suite.yml), which also states its own install posture; contract in SPEC §3.2/§3.3.
 
+## Driving a review round
+
+Run the composed panel, Judge, Resolver, durable record, and repair-history path with a repository-relative JSON file:
+
+```sh
+/review-round review-round.json
+```
+
+A complete specification is:
+
+```json
+{
+  "pr": 212,
+  "fences": {
+    "outOfScope": [],
+    "forbiddenRemedies": [],
+    "deferralHomes": [],
+    "priorFindings": [{"label": "F1", "text": "A prior adjudicated finding."}]
+  },
+  "changeDescription": "Add the review-round call site.",
+  "delegateArgv": ["pi", "-p", "--no-session", "Read ../brief.md and write ../return.json."],
+  "timeoutMs": 600000,
+  "timing": {"firstReturnSeconds": 120, "finalReturnSeconds": 480}
+}
+```
+
+`pr` is a positive integer, and it is the only review target the spec carries. The repository is resolved once from the checkout the command runs in, and the pull request is then addressed explicitly within that resolved identity; the base and reviewed head come from that pull request. The criterion manifest is the stable union of each closing issue's writer-attributed activation snapshot, immediately following its activation PASS record, and its current `Acceptance criteria` section. Missing, malformed, detached, or ambiguous activation evidence hands off rather than narrowing the manifest. Nothing in the spec can retarget the round: it names a number, and every other review target is derived. The clone must already contain the attested head, or the round hands off instead of reviewing a different commit.
+
+`changeDescription` is a non-empty string and `delegateArgv` a non-empty list of non-empty strings. All four fence lists are required; each prior finding has exactly `label` and `text`. `timeoutMs` is optional, positive, and at most 2147483647. `timing` is optional; both values are positive seconds, `finalReturnSeconds` is greater than `firstReturnSeconds`, and `finalReturnSeconds` in milliseconds is less than `timeoutMs`. Unknown keys, an absolute or outside-repository spec path, a path with a symbolic-link component, and unreadable JSON are refused before dispatch. An omitted `timeoutMs` defaults to 1800000 (30 minutes). An omitted `timing` defaults to `firstReturnSeconds = timeoutMs / 3000` and `finalReturnSeconds = timeoutMs / 2000`, computed from whichever `timeoutMs` is in effect.
+
+The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed. The terminal line reports the disposition and, when present, the review state and diagnosis.
+
+The delegate runs in the caller's trust domain and inherits its environment, credentials included: remote reach through inherited credentials is not confined.
+
 ## Pre-authoring brief
 
 Before editing, invoke the advisory command with one closed JSON argument:
