@@ -88,6 +88,12 @@ describe("#118 named isolated delivery guard mutants", () => {
 			`const p={publishDraft:async r=>({...await platform.publishDraft(r),baseRevision:"3".repeat(40)})}; assert.equal((await deliverAdopter({composition,target,title:"t",body:"b",egress,platform:p})).outcome,"refused");`,
 		);
 		kill(
+			"platform-head-format",
+			"!/^[0-9a-f]{40}$/u.test(snapshot.headRevision) ||",
+			"false ||",
+			`const p={publishDraft:async r=>({...await platform.publishDraft(r),headRevision:"not-a-sha"})}; assert.equal((await deliverAdopter({composition,target,title:"t",body:"b",egress,platform:p})).outcome,"refused");`,
+		);
+		kill(
 			"platform-draft",
 			"snapshot.draft !== true ||",
 			"false ||",
@@ -98,6 +104,12 @@ describe("#118 named isolated delivery guard mutants", () => {
 			"snapshot.title !== prepared.title ||",
 			"false ||",
 			`const p={publishDraft:async r=>({...await platform.publishDraft(r),title:"other"})}; assert.equal((await deliverAdopter({composition,target,title:"t",body:"b",egress,platform:p})).outcome,"refused");`,
+		);
+		kill(
+			"platform-change-content",
+			"!retained.every((change, index) => sameChange(change, snapshot.changes[index]))",
+			"false",
+			`const p={publishDraft:async r=>{const s=await platform.publishDraft(r); return {...s,changes:s.changes.map((x,i)=>i===0?{...x,path:x.path+".altered"}:x)}}}; assert.equal((await deliverAdopter({composition,target,title:"t",body:"b",egress,platform:p})).outcome,"refused");`,
 		);
 		kill(
 			"platform-changes",

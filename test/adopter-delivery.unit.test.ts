@@ -228,11 +228,17 @@ describe("#118 reviewed delivery", () => {
 			() => ({ baseRef: "other" }),
 			() => ({ baseRevision: "3".repeat(40) }),
 			(request) => ({ headRevision: request.target.baseRevision }),
+			() => ({ headRevision: "not-a-sha" }),
 			() => ({ number: 0 }),
 			() => ({ draft: false }),
 			() => ({ title: "other" }),
 			() => ({ body: "other" }),
 			() => ({ changes: [] }),
+			(request) => ({
+				changes: request.changes.map((change, index) =>
+					index === 0 ? { ...change, path: `${change.path}.altered` } : change,
+				),
+			}),
 		];
 		for (const mutate of mutations) {
 			const platform: DeliveryPlatform = {
