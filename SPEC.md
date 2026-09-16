@@ -27,45 +27,45 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§2.2 | Lifecycle states | 301 |
 | &nbsp;&nbsp;§2.3 | PR-as-living-doc | 317 |
 | &nbsp;&nbsp;§2.4 | Evidence discipline | 321 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 336 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 373 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 385 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 395 |
-| §3 | Enforcement-layer architecture | 407 |
-| &nbsp;&nbsp;§3.1 | The constraint | 411 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 418 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 426 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 540 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 544 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 548 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 558 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 570 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 583 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 597 |
-| &nbsp;&nbsp;§3.11 | Gate design | 607 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 629 |
-| §4 | Substrate and install contract | 639 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 643 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 649 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 653 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 657 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 661 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 667 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 677 |
-| &nbsp;&nbsp;§4.8 | The command layer | 685 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 742 |
-| §5 | Cross-cutting contracts | 784 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 788 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 792 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 796 |
-| &nbsp;&nbsp;§5.4 | Work language | 800 |
-| &nbsp;&nbsp;§5.5 | State boundary | 804 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 810 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 822 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 832 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 840 |
-| §6 | Self-governance milestone | 848 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 859 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 338 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 377 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 389 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 399 |
+| §3 | Enforcement-layer architecture | 411 |
+| &nbsp;&nbsp;§3.1 | The constraint | 415 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 422 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 430 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 544 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 548 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 562 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 574 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 587 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 601 |
+| &nbsp;&nbsp;§3.11 | Gate design | 611 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 633 |
+| §4 | Substrate and install contract | 643 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 647 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 653 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 657 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 661 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 665 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 671 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 681 |
+| &nbsp;&nbsp;§4.8 | The command layer | 689 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 746 |
+| §5 | Cross-cutting contracts | 788 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 792 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 796 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 800 |
+| &nbsp;&nbsp;§5.4 | Work language | 804 |
+| &nbsp;&nbsp;§5.5 | State boundary | 808 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 814 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 826 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 836 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 844 |
+| §6 | Self-governance milestone | 852 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 863 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -333,6 +333,8 @@ This discipline is **procedural today**, enforced at review (§2.3); evidence in
 
 The generative rule behind this discipline — governing where a claim may come from, not only how it is formatted — is the authoring doctrine (§2.5).
 
+A **primary evidence observation** directly establishes a behavior proposition owed by §1.2; **support apparatus** is test-only setup, synchronization, observation, cleanup, fixture, fake, shim, or helper code used to obtain one; a **silent-invalidating failure** is a support-apparatus failure under which the primary observation still records success although its proposition was not established, or records success while an apparatus-owned process, descriptor, environment mutation, lock, or equivalent external state survives the observation; and an **apparatus witness** is an observation that fails under a named silent-invalidating failure. Support apparatus owes an apparatus witness exactly for a silent-invalidating failure. A support failure that prevents success — by failure, throw, or bounded timeout — and a distinction used only for diagnostics owe no apparatus witness. One shared apparatus invariant owes one witness; a consumer owes another only where it can bypass, swallow, or reinterpret that invariant. An apparatus witness is not a new primary evidence observation merely because it is executable, so the obligation does not recurse into every branch of machinery used by the witness. This rule is **explicitly advisory** (§3.1 rule 1), enforced at review (§2.3), and leaves §3.12's mutation policy to its own terms.
+
 ### 2.5 Authoring doctrine
 
 Truth obligation is scoped by consumption window. The **living set** — the surfaces read to decide current behavior: this SPEC, `MISSION.md`, `README.md`, code, tests, hooks, and agent/command assets (§4.8) — owes present-truth and is kept minimal. Everything else — issue and PR bodies once their flow concludes (an open PR body is living and curated per §2.3; an issue body is living until activation per §2.2), comments, plans — is a **write-once record**: true at authoring, owed no maintenance afterward. A stale record is superseded, never repaired, and a finding against a record is admissible only at its birth review. The reader side is the complement: an old record is dated evidence, re-verified before acting on it; an artifact whose consumption executes it (a plan, a fix list) is self-checking and authored lightly.
@@ -367,6 +369,8 @@ The doctrine's change side is **subtraction-first**:
 - (b) No retention without a stated live function.
 - (c) No legacy surfaces: a rename migrates every call site and deletes the old path in the same change, atomically at the boundary its consumers resolve it from — the merge, where the trunk is the consumer (§1.1) — no alias period. The premise, restated: the rule holds where every consumer resolves the canonical source live; an installed copy is a version-pinned consumer, so a rename that crosses the install boundary owes the re-sync path (§4.5) as its migration story. The rule forbids retaining the old surface — never breaking pinned consumers silently.
 - (d) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design — an irreversible decision owes one; where the decision is not a normative contract, a late ADR is a documentation defect answered by supersession, not an irreversible wrong-allow, so §3.6's hardening-trigger requirement does not fire there — recorded here so it is not re-proposed — while a normative decision's late ADR is a late settlement, re-entering §1.2's gate on that clause's own terms — and an ADR is authored as the decision is taken and before anything derives from it — and where the decision is a normative contract, that authoring is its settlement (§1.2) — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
+
+**An act brief delivers applicable norms before authoring.** Before a write-capable implementer edits repository bytes, the operator may invoke the on-demand `/authoring-brief` command with closed JSON containing the implementation plan, a failing-check description, the exact check command, and the repository-relative paths the act intends to write. The command routes each named path through the single repository-owned routing policy, resolves that route to exact heading anchors in this specification, and places the resulting specification bytes directly in the implementer's session working set. The rendered clauses are source bytes, not a summary or model-authored restatement; the brief also names the routed surface and any inherited default authoring act. The brief is complete only when every input field is present, every path is normalized and repository-relative, every path has at least one route, contributing rows have no conflicting default act, and every routed anchor exists exactly once in the canonical source. An unrouted or conflicting path, a missing field, or a missing or ambiguous anchor produces an explicit advisory incomplete result that does not claim readiness. There is no catch-all route: omission must remain visible. The command is on demand, not an always-on prompt, hook, or warning surface. Its named false-positive shapes are: declared paths can over-approximate the eventual edit; one file can contain several artifact kinds while path routing selects every owning clause; a broad path row can render a clause irrelevant to the particular lines edited; and a plan can leave implementation method open even when its governing clause is correctly rendered. These visible false positives are accepted in preference to silently omitting an applicable norm. The brief does not establish that its plan is correct, that the named paths are exhaustive, that a delivered clause was followed, or that an unmodeled policy applies. Those remain review obligations. A fixed selector that returns the same clauses for specification prose, tests, and production code violates the routing contract even when those clauses happen to be valid guidance.
 
 This section is **explicitly advisory** (§3.1 rule 1): no gate class homes a decidable check for it today, and it is enforced at review (§2.3).
 

@@ -270,7 +270,21 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	},
 	// The command spine composes no message text: the rung-1 commands hand
 	// fixed literals to the dispatcher and report its causes unrephrased.
+	{ file: "gitjig/authoring/policy.json", allow: [] },
 	{ file: "gitjig/commands/index.ts", allow: [] },
+	{
+		file: "gitjig/commands/authoring-brief.ts",
+		allow: [
+			// Closed internal values: the platform separator, exact canonical
+			// heading anchor, and repository-owned policy labels/defaults.
+			"sep",
+			"anchor",
+			"surfaces",
+			"act",
+			// Causes are fixed text or already JSON-quoted path/anchor carriers.
+			"cause",
+		],
+	},
 	{ file: "gitjig/commands/review.ts", allow: [] },
 	{ file: "gitjig/commands/review-round.ts", allow: [] },
 	{ file: "gitjig/commands/ship.ts", allow: [] },
