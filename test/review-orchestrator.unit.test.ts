@@ -1319,36 +1319,72 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		const o = orchestrate();
 		const failedRun = "dispatch refused: the delegated run reported failure; no return is admitted from a failed run";
 		const seen: RunDispatchOptions[] = [];
+		// Every send this arm expects is seeded. A call past the seeded set
+		// throws, so an unbounded-retry mutant reds deterministically here
+		// instead of echoing the last outcome forever and hanging the run.
 		const run =
 			(outcomes: DispatchOutcome[]) =>
 			(options: RunDispatchOptions): Promise<DispatchOutcome> => {
 				seen.push(options);
-				return Promise.resolve(outcomes[seen.length - 1] ?? outcomes[outcomes.length - 1]);
+				const outcome = outcomes[seen.length - 1];
+				if (outcome === undefined) {
+					throw new Error(`send ${seen.length} was made against ${outcomes.length} seeded outcomes`);
+				}
+				return Promise.resolve(outcome);
 			};
+		// The expected dispatch, stated here rather than read back off the code
+		// under test: comparing the two sends to each other alone would admit a
+		// composition defect both of them share.
+		const expected = {
+			callerRepoRoot: "/r",
+			stateRoot: "/s",
+			delegateArgv: ["x"],
+			brief: "the brief text",
+			expectedRef: "the-resolved-head",
+		};
 
-		// The one measured transient class (#220): two of three slots hit it in
-		// one round and both returned cleanly on an identical re-dispatch.
+		// The one transient class (#220): two of three slots drew it in one
+		// round and both returned cleanly on an identical re-dispatch.
 		const recovered = await o.makeDispatcher(
 			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
 			run([{ disposition: "refused", cause: failedRun }, admitted(approvedPayload)]),
 		)("the brief text", "the-resolved-head");
 		assert.equal(seen.length, 2, "the failed-run refusal drew no second send");
-		assert.deepEqual(
-			seen[1],
-			seen[0],
-			"the retry was not the identical dispatch \u2014 the second send must repeat the same options, brief and pin " +
-				"byte for byte, never a reassembled one",
-		);
+		for (const [index, sent] of seen.entries()) {
+			assert.deepEqual(
+				sent,
+				expected,
+				`send ${index + 1} was not the stated dispatch — both sends must carry the same options, brief and pin, ` +
+					"and neither may be reassembled",
+			);
+		}
 		assert.equal(recovered.disposition, "admitted", "the retry's own outcome did not reach the caller");
 
 		// One retry, never a loop: a second failed run is the caller's answer.
 		seen.length = 0;
 		const persistent = await o.makeDispatcher(
 			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
-			run([{ disposition: "refused", cause: failedRun }]),
+			run([
+				{ disposition: "refused", cause: failedRun },
+				{ disposition: "refused", cause: failedRun },
+			]),
 		)("the brief text", "the-resolved-head");
 		assert.equal(seen.length, 2, "a persistently failing run was re-sent more or fewer than once");
 		assert.deepEqual(persistent, { disposition: "refused", cause: failedRun });
+
+		// A throw is not a refusal: it is none of §3.10's outcome classes, so it
+		// propagates unchanged and draws no retry.
+		seen.length = 0;
+		const thrown = new Error("the dispatcher threw");
+		await assert.rejects(
+			o.makeDispatcher({ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] }, (options) => {
+				seen.push(options);
+				return Promise.reject(thrown);
+			})("the brief text", "the-resolved-head"),
+			(error: unknown) => error === thrown,
+			"a rejected send did not reach the caller unchanged",
+		);
+		assert.equal(seen.length, 1, "a rejected send was retried");
 
 		// Every other refusal stands on its first answer: none was measured
 		// transient, and re-sending one would spend a delegate on a decided fact.
@@ -1358,6 +1394,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			"dispatch refused: no readable return landed at the return slot; a delegate stream is not the crossing",
 			"dispatch refused: the return is oversize or malformed against the closed return schema; it is refused whole, never truncated",
 			"dispatch refused: the return names a caller-held operand; the return channel is content-free and the return is refused whole",
+			// Strict-equality guard: a same-cause string with incidental whitespace must not match the transient class — this is not a seventh distinct refusal cause.
 			`${failedRun} `,
 		]) {
 			seen.length = 0;
