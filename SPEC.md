@@ -27,45 +27,45 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§2.2 | Lifecycle states | 301 |
 | &nbsp;&nbsp;§2.3 | PR-as-living-doc | 317 |
 | &nbsp;&nbsp;§2.4 | Evidence discipline | 321 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 336 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 373 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 385 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 395 |
-| §3 | Enforcement-layer architecture | 407 |
-| &nbsp;&nbsp;§3.1 | The constraint | 411 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 418 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 426 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 540 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 544 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 548 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 558 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 570 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 583 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 597 |
-| &nbsp;&nbsp;§3.11 | Gate design | 607 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 629 |
-| §4 | Substrate and install contract | 639 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 643 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 649 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 653 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 657 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 661 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 667 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 677 |
-| &nbsp;&nbsp;§4.8 | The command layer | 685 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 742 |
-| §5 | Cross-cutting contracts | 784 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 788 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 792 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 796 |
-| &nbsp;&nbsp;§5.4 | Work language | 800 |
-| &nbsp;&nbsp;§5.5 | State boundary | 804 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 810 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 822 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 832 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 840 |
-| §6 | Self-governance milestone | 848 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 859 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 338 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 375 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 387 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 397 |
+| §3 | Enforcement-layer architecture | 409 |
+| &nbsp;&nbsp;§3.1 | The constraint | 413 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 420 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 428 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 542 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 546 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 550 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 560 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 572 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 585 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 599 |
+| &nbsp;&nbsp;§3.11 | Gate design | 609 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 631 |
+| §4 | Substrate and install contract | 641 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 645 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 651 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 655 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 659 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 663 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 669 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 679 |
+| &nbsp;&nbsp;§4.8 | The command layer | 687 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 744 |
+| §5 | Cross-cutting contracts | 786 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 790 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 794 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 798 |
+| &nbsp;&nbsp;§5.4 | Work language | 802 |
+| &nbsp;&nbsp;§5.5 | State boundary | 806 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 812 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 824 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 834 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 842 |
+| §6 | Self-governance milestone | 850 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 861 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
