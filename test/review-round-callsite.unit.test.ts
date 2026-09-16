@@ -187,8 +187,14 @@ function subject(base = HEAD_A, head = HEAD_B): ReviewSubject {
 }
 
 /** The attested population a writer's own records are read back from. */
-function population(bodies: readonly string[]): AttestedCommentPopulation {
-	return { ok: true, comments: bodies.map((body, index) => ({ id: index + 1, authorId: "U_writer", body })) };
+function population(bodies: readonly string[], receiptBody?: string): AttestedCommentPopulation {
+	return {
+		ok: true,
+		comments: [
+			...bodies.map((body, index) => ({ id: index + 1, authorId: "U_writer", body })),
+			...(receiptBody === undefined ? [] : [{ id: 99, authorId: "U_writer", body: receiptBody }]),
+		],
+	};
 }
 
 function receipt(body: string): ReviewPublicationOutcome {
@@ -214,17 +220,21 @@ type RoundResultShape = Awaited<ReturnType<typeof reviewRound>>;
 
 /** Every seam defaults to the quiet success path; each arm names what it moves. */
 function seams(overrides: Partial<ReviewRoundSeams> = {}): ReviewRoundSeams {
+	let publishedBody: string | undefined;
 	return {
 		fetchSubject: async () => subject(),
 		refetchSubject: async (_root, current) => current,
-		readComments: async () => population([]),
+		readComments: async () => population([], publishedBody),
 		recordsFromComments: recordsFromAttestedComments,
 		resolveHead: () => HEAD_B,
 		makeDispatch: () => async () => {
 			throw new Error("no dispatch was expected");
 		},
 		runRound: async () => ROUND,
-		publishRecord: async (body) => receipt(body),
+		publishRecord: async (body) => {
+			publishedBody = body;
+			return receipt(body);
+		},
 		...overrides,
 	};
 }
@@ -569,7 +579,7 @@ describe("review-round production call site", () => {
 		registerReviewRoundCommand(pi, fixture.root, join(fixture.root, "state"), {
 			fetchSubject: async () => subject(fixture.base, fixture.head),
 			refetchSubject: async (_root, current) => current,
-			readComments: async () => population(posted),
+			readComments: async () => population([], posted.at(-1)),
 			recordsFromComments: recordsFromAttestedComments,
 			resolveHead: () => fixture.head,
 			makeDispatch: () => async (brief) => {
@@ -773,6 +783,34 @@ describe("review-round production call site", () => {
 		assert.equal(posts, 1);
 	});
 
+	it("does not dispatch a triggered diagnosis after the subject drifts", async () => {
+		let dispatched = 0;
+		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		const outcome = await driveReviewRound(
+			spec(),
+			"/unused",
+			seams({
+				readComments: async () => population(bodies),
+				refetchSubject: async () => undefined,
+				makeDispatch: () => async () => {
+					dispatched += 1;
+					throw new Error("stale diagnosis must not dispatch");
+				},
+			}),
+		);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(dispatched, 0);
+	});
+
+	it("requires the next history population to contain the exact publication receipt", async () => {
+		const outcome = await driveReviewRound(spec(), "/unused", seams({ readComments: async () => population([]) }));
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: installed review history could not be read",
+			reentry: "none",
+		});
+	});
+
 	it("hands off when a marked record is unreadable instead of shortening history", async () => {
 		let ran = false;
 		const outcome = await driveReviewRound(
@@ -807,7 +845,11 @@ describe("review-round production call site", () => {
 			spec(),
 			"/unused",
 			seams({
-				readComments: async () => population(order.includes("publish") ? bodies : bodies.slice(0, 1)),
+				readComments: async () =>
+					population(
+						order.includes("publish") ? bodies : bodies.slice(0, 1),
+						order.includes("publish") ? "record" : undefined,
+					),
 				makeDispatch: diagnosisDispatch(diagnosis, briefs),
 				runRound: async () => {
 					order.push("round");
@@ -841,7 +883,7 @@ describe("review-round production call site", () => {
 					spec(),
 					"/unused",
 					seams({
-						readComments: async () => population(bodies),
+						readComments: async () => population(bodies, publishes > 0 ? "record" : undefined),
 						makeDispatch: diagnosisDispatch({ value, invalidation, evidence: "measured" }),
 						runRound: async () => {
 							rounds += 1;
@@ -871,11 +913,16 @@ describe("review-round production call site", () => {
 
 	it("occasions no diagnosis where the trigger does not fire", async () => {
 		let dispatched = 0;
+		let publishedBody: string | undefined;
 		const outcome = await driveReviewRound(
 			spec(),
 			"/unused",
 			seams({
-				readComments: async () => population([composeReviewRecord(repairRecord(HEAD_B))]),
+				readComments: async () => population([composeReviewRecord(repairRecord(HEAD_B))], publishedBody),
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
 				makeDispatch: () => async () => {
 					dispatched += 1;
 					throw new Error("no diagnosis is occasioned");
@@ -1003,5 +1050,12 @@ describe("review-round production call site", () => {
 		assert.match(fileOwner, /MAX_REVIEW_ROUND_SPEC_BYTES \+ 1/);
 		assert.match(fileOwner, /readSync\(fd,/);
 		assert.match(fileOwner, /finally\s*{\s*closeSync\(fd\);\s*}/);
+
+		const commandOwner = readFileSync(
+			new URL("../.pi/extensions/gitjig/commands/review-round.ts", import.meta.url),
+			"utf8",
+		);
+		assert.match(commandOwner, /timeout:\s*10_000/);
+		assert.match(commandOwner, /killSignal:\s*"SIGKILL"/);
 	});
 });

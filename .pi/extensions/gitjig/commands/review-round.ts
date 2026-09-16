@@ -30,7 +30,7 @@ import {
 	triggerFires,
 } from "../review/history.ts";
 import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchestrate.ts";
-import type { ReviewPublicationOutcome } from "../review/publication.ts";
+import type { ReviewPublicationOutcome, ReviewPublicationReceipt } from "../review/publication.ts";
 import { publishAndRefetchReviewRecord } from "../review/publication.ts";
 import type { ReviewRecord } from "../review/record.ts";
 import {
@@ -206,8 +206,20 @@ async function durableState(
 	repoRoot: string,
 	subject: ReviewSubject,
 	seams: ReviewRoundSeams,
+	requiredReceipt?: ReviewPublicationReceipt,
 ): Promise<DurableState | undefined> {
 	const population = await seams.readComments(repoRoot, subject);
+	if (
+		requiredReceipt !== undefined &&
+		(!population.ok ||
+			!population.comments.some(
+				(comment) =>
+					comment.id === requiredReceipt.commentId &&
+					comment.authorId === requiredReceipt.authorId &&
+					comment.body === requiredReceipt.body,
+			))
+	)
+		return undefined;
 	const records = seams.recordsFromComments(population, subject.writerId);
 	// The substrate is the platform's own comment record on the subject this
 	// command already attested, so for this call site it is installed by
@@ -236,6 +248,7 @@ export async function driveReviewRound(
 
 		const currentSubject = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) !== undefined;
 		const diagnose = async (history: StateSummary[]): Promise<TerminalSeed | undefined> => {
+			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			const admitted = admitDiagnosis(
 				await dispatch(
 					composeDiagnosisBrief(history, {
@@ -278,11 +291,11 @@ export async function driveReviewRound(
 		});
 		if (!(await currentSubject()))
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
-		if (!(await seams.publishRecord(round.recordBody, subject)).ok)
-			return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
+		const publication = await seams.publishRecord(round.recordBody, subject);
+		if (!publication.ok) return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
 		if (!(await currentSubject()))
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
-		const after = await durableState(repoRoot, subject, seams);
+		const after = await durableState(repoRoot, subject, seams, publication.receipt);
 		if (after === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
 		if (!triggerFires(after.history) || JSON.stringify(after.history) === diagnosedHistory)
 			return finish(state, { disposition: "posted", review: round.review });
@@ -300,6 +313,9 @@ function resolveLocalHead(repoRoot: string, ref: string): string | undefined {
 			encoding: "utf8",
 			env: withoutRepoLocatingGitEnv(process.env),
 			stdio: ["ignore", "pipe", "pipe"],
+			timeout: 10_000,
+			killSignal: "SIGKILL",
+			maxBuffer: 1024,
 		}).trim();
 		return /^[0-9a-f]{40}$/.test(head) ? head : undefined;
 	} catch {

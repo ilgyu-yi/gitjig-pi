@@ -186,9 +186,12 @@ export interface ReviewSubject {
 	criteria: readonly string[];
 }
 
+export type PlatformAuthorAssociation = "OWNER" | "MEMBER" | "COLLABORATOR" | "OTHER";
+
 export interface PlatformCommentSnapshot {
 	id: number;
 	authorId: string;
+	authorAssociation: PlatformAuthorAssociation;
 	body: string;
 }
 
@@ -240,7 +243,9 @@ export function activationCriteriaFromComments(
 	const snapshot = comments[index];
 	if (
 		verdict === undefined ||
-		verdict.authorId !== writerId ||
+		!(["OWNER", "MEMBER", "COLLABORATOR"] as const).includes(
+			verdict.authorAssociation as "OWNER" | "MEMBER" | "COLLABORATOR",
+		) ||
 		!verdict.body.startsWith(ACTIVATION_PASS_MARKER) ||
 		verdict.id >= snapshot.id
 	)
@@ -292,14 +297,20 @@ export function admitReviewSubject(value: unknown): ReviewSubject | undefined {
 		const admitted: PlatformCommentSnapshot[] = [];
 		for (const comment of [evidence.verdict, evidence.snapshot]) {
 			if (
-				!object(comment, ["id", "authorId", "body"]) ||
+				!object(comment, ["id", "authorId", "authorAssociation", "body"]) ||
 				!Number.isSafeInteger(comment.id) ||
 				(comment.id as number) <= 0 ||
 				!text(comment.authorId) ||
+				!["OWNER", "MEMBER", "COLLABORATOR", "OTHER"].includes(comment.authorAssociation as string) ||
 				typeof comment.body !== "string"
 			)
 				return undefined;
-			admitted.push({ id: comment.id as number, authorId: comment.authorId, body: comment.body });
+			admitted.push({
+				id: comment.id as number,
+				authorId: comment.authorId,
+				authorAssociation: comment.authorAssociation as PlatformAuthorAssociation,
+				body: comment.body,
+			});
 		}
 		const criteria = activationCriteriaFromComments(issue, value.writerId, admitted);
 		if (criteria === undefined) return undefined;
@@ -464,15 +475,29 @@ async function fetchIssueComments(
 				((entry as { id: number }).id as number) <= 0 ||
 				ids.has((entry as { id: number }).id) ||
 				typeof (entry as { body?: unknown }).body !== "string" ||
+				![
+					"OWNER",
+					"MEMBER",
+					"COLLABORATOR",
+					"NONE",
+					"CONTRIBUTOR",
+					"FIRST_TIMER",
+					"FIRST_TIME_CONTRIBUTOR",
+					"MANNEQUIN",
+				].includes((entry as { author_association?: unknown }).author_association as string) ||
 				typeof (entry as { user?: { node_id?: unknown } }).user?.node_id !== "string" ||
 				(entry as { user: { node_id: string } }).user.node_id.length === 0
 			)
 				return undefined;
 			const id = (entry as { id: number }).id;
 			ids.add(id);
+			const association = (entry as { author_association: string }).author_association;
 			comments.push({
 				id,
 				authorId: (entry as { user: { node_id: string } }).user.node_id,
+				authorAssociation: ["OWNER", "MEMBER", "COLLABORATOR"].includes(association)
+					? (association as PlatformAuthorAssociation)
+					: "OTHER",
 				body: (entry as { body: string }).body,
 			});
 		}

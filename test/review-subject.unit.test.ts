@@ -6,6 +6,7 @@ import {
 	criteriaFromClosingIssues,
 	criterionUnion,
 	fetchReviewSubject,
+	type PlatformAuthorAssociation,
 	type PlatformIssueSnapshot,
 } from "../.pi/extensions/gitjig/review/subject.ts";
 
@@ -34,8 +35,8 @@ function activationBody(criteria: string[], issueId = issue.id, issueNumber = is
 	].join("\n");
 }
 
-function comment(body: string, authorId = "WRITER", id = 1) {
-	return { id, authorId, body };
+function comment(body: string, authorId = "WRITER", id = 1, authorAssociation: PlatformAuthorAssociation = "OWNER") {
+	return { id, authorId, authorAssociation, body };
 }
 
 function verdict(authorId = "WRITER", id = 1) {
@@ -115,8 +116,15 @@ describe("review subject criterion union", () => {
 			undefined,
 		);
 		assert.equal(
-			activationCriteriaFromComments(issue, "WRITER", [verdict("OTHER"), comment(activationBody([]), "WRITER", 2)]),
+			activationCriteriaFromComments(issue, "WRITER", [
+				comment("<!-- activation-verdict: pass -->", "OTHER", 1, "OTHER"),
+				comment(activationBody([]), "WRITER", 2),
+			]),
 			undefined,
+		);
+		assert.deepEqual(
+			activationCriteriaFromComments(issue, "WRITER", [verdict("TRUSTED"), comment(activationBody([]), "WRITER", 2)]),
+			[],
 		);
 	});
 
@@ -133,11 +141,17 @@ describe("review subject criterion union", () => {
 	it("fetches the activation snapshot from the explicit issue route and seals the union", async () => {
 		const responses = platformResponses([
 			[
-				{ id: 90, body: "<!-- activation-verdict: pass -->\n\nActivation passed.", user: { node_id: "WRITER" } },
+				{
+					id: 90,
+					body: "<!-- activation-verdict: pass -->\n\nActivation passed.",
+					user: { node_id: "WRITER" },
+					author_association: "OWNER",
+				},
 				{
 					id: 91,
 					body: activationBody(["activation-only criterion", "retained criterion"]),
 					user: { node_id: "WRITER" },
+					author_association: "OWNER",
 				},
 			],
 		]);
@@ -175,8 +189,18 @@ describe("review subject criterion union", () => {
 		const responses = platformResponses(
 			[
 				[
-					{ id: 90, body: "<!-- activation-verdict: pass -->", user: { node_id: "WRITER" } },
-					{ id: 91, body: activationBody(["retained criterion"]), user: { node_id: "WRITER" } },
+					{
+						id: 90,
+						body: "<!-- activation-verdict: pass -->",
+						user: { node_id: "WRITER" },
+						author_association: "OWNER",
+					},
+					{
+						id: 91,
+						body: activationBody(["retained criterion"]),
+						user: { node_id: "WRITER" },
+						author_association: "OWNER",
+					},
 				],
 			],
 			issue,
@@ -191,9 +215,14 @@ describe("review subject criterion union", () => {
 			[],
 			[
 				[
-					{ id: 1, body: "<!-- activation-verdict: pass -->", user: { node_id: "WRITER" } },
-					{ id: 2, body: activationBody([]), user: { node_id: "WRITER" } },
-					{ id: 3, body: activationBody([]), user: { node_id: "WRITER" } },
+					{
+						id: 1,
+						body: "<!-- activation-verdict: pass -->",
+						user: { node_id: "WRITER" },
+						author_association: "OWNER",
+					},
+					{ id: 2, body: activationBody([]), user: { node_id: "WRITER" }, author_association: "OWNER" },
+					{ id: 3, body: activationBody([]), user: { node_id: "WRITER" }, author_association: "OWNER" },
 				],
 			],
 		]) {
