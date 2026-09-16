@@ -198,6 +198,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/install/acquire.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/install/classifier.ts",
 			"disposition": "carried"
 		},
@@ -343,6 +347,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/13.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/130.md",
 			"disposition": "instance-state"
 		},
 		{
