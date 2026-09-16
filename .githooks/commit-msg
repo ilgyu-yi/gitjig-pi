@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# gitjig: source-only
 # .githooks/commit-msg — local-tier adapter for check_commit_subject over
 # every line that could become the committed subject. It copies NO check
 # logic (single-source). It deliberately does NOT reuse the command-string
@@ -36,7 +35,7 @@
 # unchecked at status 0; `core.commentString=feat` reproduces it exactly. The
 # marker-aware second reading is what refuses both.
 #
-# Enumerated in place (§3.11), and NOT closed here:
+# Enumerated in place, and NOT closed here:
 #   - `core.commentChar=auto` is read as `#`. Under `auto` git picks a marker
 #     that does not already begin a line, so a message leading with `#` makes
 #     git choose something else and keep that line. Both readings are then
@@ -70,9 +69,9 @@
 #     That is a grammar question, not a line-selection one, and it is not
 #     decided here.
 #   - THE MERGE EDGE. `git merge` does fire `commit-msg`, and git's default
-#     merge message violates this grammar; enumerated (not pinned) in
-#     `test/commit-format.githook.test.ts`'s residual block.
-# The tier's own door (§3.8's declared deferral) stands beneath all of these.
+#     merge message violates this grammar. Projects using the default merge
+#     message must edit it to the same subject grammar or bypass this hook.
+# The tier's own door stands beneath all of these.
 # shellcheck source=/dev/null
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
@@ -81,9 +80,9 @@ githook_require check_commit_subject commit-format
 
 # The subject arrives as the message path git passes as $1. Where it is
 # missing or is not a regular file this arm has nothing to measure, so it
-# allows — but it says so rather than allowing silently, the same correction
-# the pre-commit protected-branch arm takes on the same idiom (SPEC 3.9's
-# total-function rule). Git supplies that path as a regular file on every
+# allows — but it says so rather than allowing silently, as the pre-commit
+# protected-branch arm does for its own unmeasurable subject. Git supplies
+# that path as a regular file on every
 # invocation, so no ordinary operation reaches this branch.
 _gh_msgfile="${1:-}"
 if [ -z "$_gh_msgfile" ] || [ ! -f "$_gh_msgfile" ]; then

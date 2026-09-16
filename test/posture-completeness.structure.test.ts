@@ -20,7 +20,7 @@
  *   1. `audit_log warn <category> <constant>` — the reason constant of a
  *      fail-open record. `block` records are NOT collected, and the ground
  *      is a limitation rather than a principle: see residual 6.
- *   2. `_gitjig_ss_disarm '<literal>'` — the staged-secret scan's
+ *   2. `_project_ss_disarm '<literal>'` — the staged-secret scan's
  *      per-cause disarm literals, which are sub-causes of one wrapper
  *      record and so never appear as their own `audit_log` constant.
  *
@@ -100,7 +100,7 @@
  *      constant) emission COUNT, never site identity, and two measured
  *      shapes slip that bound: an equal-count SUBSTITUTION — removing one
  *      code path and adding a different, uninventoried shape under the
- *      same constant — and a new `_gitjig_ss_disarm` site reusing an
+ *      same constant — and a new `_project_ss_disarm` site reusing an
  *      existing literal, which the census never counts because it filters
  *      to `kind === "constant"`. Both were probed and both leave the suite
  *      green. They are recorded here rather than closed: closing them
@@ -179,8 +179,8 @@ export function collectCauses(relPath: string, source: string): DeclaredCause[] 
 		found.push({ cause: m[1] ?? m[2] ?? m[3], where: relPath, kind: "constant" });
 	}
 
-	// 2) _gitjig_ss_disarm '<literal>' — single-quoted sub-causes.
-	const disarmRe = /_gitjig_ss_disarm\s+(?:'([^']+)'|"([^"]+)")/g;
+	// 2) _project_ss_disarm '<literal>' — single-quoted sub-causes.
+	const disarmRe = /_project_ss_disarm\s+(?:'([^']+)'|"([^"]+)")/g;
 	for (const m of text.matchAll(disarmRe)) {
 		found.push({ cause: m[1] ?? m[2], where: relPath, kind: "literal" });
 	}
@@ -316,7 +316,7 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 		it("reds on an uninventoried disarm sub-cause", () => {
 			const mutant = collectCauses(
 				".githooks/helpers/mutant.sh",
-				"\t\t_gitjig_ss_disarm 'zq synthetic uninventoried cause zq'\n",
+				"\t\t_project_ss_disarm 'zq synthetic uninventoried cause zq'\n",
 			);
 			assert.deepEqual(
 				mutant.map((c) => c.cause),
@@ -370,7 +370,7 @@ describe("fail-posture inventory completeness (issue #112, SPEC §3.9, §6.1)", 
 				["zqdqzq"],
 			);
 			assert.deepEqual(
-				collectCauses(".githooks/x.sh", '_gitjig_ss_disarm "zq dq literal zq"\n').map((c) => c.cause),
+				collectCauses(".githooks/x.sh", '_project_ss_disarm "zq dq literal zq"\n').map((c) => c.cause),
 				["zq dq literal zq"],
 			);
 		});

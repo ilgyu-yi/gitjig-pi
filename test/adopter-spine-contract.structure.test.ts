@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { observeCandidates } from "../.pi/extensions/gitjig/install/classifier.ts";
 
 const spec = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
 
@@ -82,7 +82,7 @@ const CONTRACT_CLAUSES = [
 	],
 	[
 		"source-bound assets wait for excision",
-		"Existing source-bound candidates declare source-only until #251 removes that declaration together with the dependency that required it; no asset is admitted to handed-over first and remediated later.",
+		"The handed-over workflow, hook, issue-template, and changelog-template candidates carry no source-only declaration or dependency on a carried member; `test/adopter-excision.integration.test.ts` reconstructs that classifier-derived corpus and proves it remains functional after carried-tree deletion. No asset is admitted to handed-over first and remediated later.",
 	],
 	["first-provision occupant rule", "First provision admits carried destinations only when absent or exact-next."],
 	[
@@ -182,21 +182,26 @@ test("#249's marker model distinguishes declaration, absence, and refusal", () =
 		assert.equal(classifyMarker(raw), expected);
 });
 
-function filesBelow(root: string): string[] {
-	return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
-		const path = join(root, entry.name);
-		return entry.isDirectory() ? filesBelow(path) : [path];
-	});
-}
-
-test("#249 keeps current source-bound candidates out of handoff until #251", () => {
+test("#251 admits the classifier-derived project corpus only after clean excision", () => {
 	const root = fileURLToPath(new URL("..", import.meta.url));
-	const paths = [
-		...filesBelow(join(root, ".github")),
-		...filesBelow(join(root, ".githooks")),
-		join(root, "changelog_unreleased/TEMPLATE.md"),
-	];
-	for (const path of paths) {
-		assert.equal(classifyMarker(readFileSync(path, "utf8")), "source-only", path);
-	}
+	const projectAssets = observeCandidates(root).filter(
+		(candidate) =>
+			candidate.path.startsWith(".github/") ||
+			candidate.path.startsWith(".githooks/") ||
+			candidate.path === "changelog_unreleased/TEMPLATE.md",
+	);
+	const handed = projectAssets.filter((candidate) => candidate.disposition === "handed-over");
+	assert.ok(handed.length > 0);
+	assert.equal(
+		handed.some((candidate) => candidate.path.startsWith(".githooks/")),
+		true,
+	);
+	assert.equal(
+		handed.some((candidate) => candidate.path.startsWith(".github/")),
+		true,
+	);
+	assert.equal(
+		handed.some((candidate) => candidate.path === "changelog_unreleased/TEMPLATE.md"),
+		true,
+	);
 });

@@ -1,4 +1,3 @@
-# gitjig: source-only
 name: check-changelog
 
 # Per-PR fragment-gate for the release backbone.
@@ -8,8 +7,8 @@ name: check-changelog
 # `skip-changelog` label.
 #
 # Sleeps clean while the pull request is a draft: the floor this gate enforces
-# binds from the ready transition onward (SPEC §1.3, §2.3), so until then its
-# subject does not exist (SPEC §5.3). The sleep is a deliberate branch, and
+# binds from the ready transition onward, so until then its
+# subject does not exist. The sleep is a deliberate branch, and
 # `ready_for_review` is in the trigger set below so the gate wakes at the
 # transition it defers to. The draft state is read CONJUNCTIVELY — the
 # `pull_request` payload's `draft` AND the live `isDraft` from the `gh pr view`
@@ -17,11 +16,11 @@ name: check-changelog
 # be eventually-consistent and return a stale `true`, which would sleep the
 # gate on the very event meant to wake it. Either source reading false runs the
 # gate, so a disagreement can only refuse the sleep, never grant it: ambiguity
-# falls toward the block (SPEC §3.9). `converted_to_draft` is deliberately NOT
+# falls toward the block. `converted_to_draft` is deliberately NOT
 # in the trigger set — firing on it would turn a red at a head into a green
 # without that head changing.
 #
-# Residual — what the sleep deliberately leaves unreached (SPEC §3.11), so each
+# Residual — what the sleep deliberately leaves unreached, so each
 # gap reads as a decision rather than an oversight:
 #
 #   1. Clause 2, check-changelog.sh's universal no-junk check over the
@@ -114,8 +113,8 @@ jobs:
           # call is retried with a short backoff and then fails closed with a
           # message that is explicitly not a missing-fragment failure.
           #
-          # SPEC §3.10: a delegated call is admitted on OUTPUT VALIDITY alone,
-          # never on the process's exit status — a run that exits 0 with junk
+          # A delegated call is admitted on output validity alone, never on
+          # the process's exit status — a run that exits 0 with junk
           # output, or with none, is a failure the caller has to see. Each
           # call site therefore names a validity predicate, and an attempt
           # whose output fails it is retried like any other failure.

@@ -1,4 +1,3 @@
-# gitjig: source-only
 name: check-toc
 
 # Per-PR SPEC ToC-freshness gate.

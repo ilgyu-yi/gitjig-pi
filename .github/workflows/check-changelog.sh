@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# gitjig: source-only
 #
 # check-changelog.sh — the changelog fragment-gate predicate (issue #43).
 #
@@ -25,7 +24,8 @@
 #
 # Exit 0 = pass, exit 1 = block. No third code is in the contract.
 #
-# The predicate is SPEC §1.3's floor over the NET file listing, in two
+# The predicate implements the fragment floor stated in
+# `changelog_unreleased/TEMPLATE.md` over the net file listing, in two
 # independent clauses, preceded by three fail-closed arms:
 #
 #   Fail-closed  An empty payload (the gate was handed no listing to read), a
@@ -51,17 +51,17 @@
 #                clause, and a rename from outside changelog_unreleased/ is
 #                an addition rather than a re-categorisation.
 #
-# Residual — what this gate deliberately leaves unreached (§3.11), so each
+# Residual — what this gate deliberately leaves unreached, so each
 # gap reads as a decision rather than an oversight:
 #
-#   1. A `modified` fragment's content is not validated for form. §1.3's
+#   1. A `modified` fragment's content is not validated for form. The
 #      second clause binds added fragments; a weaker second predicate over a
 #      class the floor does not bind would be a divergence surface.
 #      Review-enforced.
 #   2. A `removed` fragment is not gated. Emptying the tree is the release
 #      backbone's own act.
-#   3. Exactly-one is not enforced. §1.3 keeps that above the CI floor;
-#      review-enforced.
+#   3. Exactly-one is not enforced; that remains review-enforced above this
+#      CI floor.
 #   4. Category correctness and bullet truthfulness are not judged — no
 #      machine reading distinguishes `fixed` from `changed`, or a true bullet
 #      from a plausible one.
@@ -175,10 +175,10 @@ fragment_defect() {
 	# CLOSING keyword enters that list: `Refs #N` never does, so naming it here
 	# sent an author to a spelling that cannot satisfy this gate.
 	#
-	# The remedy says FIRST LINE, and the requirement is SPEC §1.1's rather
-	# than the platform's — the platform honours a closing keyword anywhere in
-	# a description. §1.1 fixes that line, and the publish instrument admits it
-	# there and nowhere else, so the first line is the spelling that satisfies
+	# The remedy says FIRST LINE because this gate's issue-link grammar is
+	# narrower than the platform's: the platform honours a closing keyword
+	# anywhere in a description, while this gate admits it only there. The
+	# first line is therefore the spelling that satisfies
 	# both this gate and the boundary an author's body crosses to reach it.
 	#
 	# The cause is not named, deliberately: this gate reads the platform's
@@ -295,7 +295,7 @@ while IFS= read -r row; do
 	# either shape the platform may report it. It waives the allow-set rule
 	# and nothing else: the stem was in the allow-set of the PR that first
 	# added the fragment, so re-checking it against this PR's would refuse a
-	# move §1.3's floor permits — but content, presence, bullet form, the
+	# move this floor permits — but content, presence, bullet form, the
 	# same-line (#N) ref and the positive-stem rule keep running, so the move
 	# cannot smuggle an arbitrary rewrite past the clause.
 	#

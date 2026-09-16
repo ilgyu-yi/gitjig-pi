@@ -1,7 +1,6 @@
-# gitjig: source-only
 # .githooks/helpers/conventional_commit.sh — the commit-format class's
-# delegated predicate (SPEC §3.3 `commit-format` row; the grammar contract
-# `.githooks/_lib.sh` states for this file). Sourced by adapters, never
+# delegated predicate. Its interface is stated by `.githooks/_lib.sh` and its
+# complete grammar is stated below. Sourced by adapters, never
 # executed; defines:
 #   check_commit_subject <subject-line>
 #
@@ -10,7 +9,7 @@
 # test|style|build|ci|chore|revert may omit it. The subject after `: ` must
 # measure 1..72 codepoints.
 #
-# Measurement is a total function with exactly two outcomes (§3.9): a valid
+# Measurement is a total function with exactly two outcomes: a valid
 # decimal, or a refusal — no consumer reads an unvalidated value. The domain
 # is validated BEFORE counting: pure-ASCII input is exact in any charmap
 # (codepoints == bytes), so a degraded environment refuses only the inputs
@@ -20,19 +19,18 @@
 # charmap (invalid bytes have no codepoint count). Either miss refuses with
 # its own arm-named cause.
 #
-# Causes are content-free constants (§3.9): the arm name plus the measured
+# Causes are content-free constants: the arm name plus the measured
 # decimal where one exists, never the subject's bytes — `githook_block`
-# interpolates raw, and a hostile subject must reach no surface (§3.11's
-# hostile-arm terseness). This file emits the CAUSE only; each calling
-# surface appends the recovery live at that surface (§3.11's arm-scoped
-# remediation — the division `.githooks/commit-msg` states in place).
+# interpolates raw, and a hostile subject must reach no surface. This file
+# emits the cause only; each calling surface appends the recovery live at
+# that surface, as `.githooks/commit-msg` states in place.
 #
 # Fail direction bookkeeping: every refusal below is the LIVE predicate
-# refusing the actor's own input (§3.9's measurement rule). Degradation of
+# refusing the actor's own input. Degradation of
 # the enforcement chain around this file — binding, helper file, delegated
 # function — is the adapters' fail-open business (`githook_source`,
-# `githook_require`), inventoried at `.pi/extensions/gitjig/postures.ts`,
-# never re-decided here.
+# `githook_require`), whose warning-and-allow behavior is stated by those
+# adapter helpers at the call site.
 
 # Parsing runs under byte semantics (LC_ALL=C) so globs, lengths, and
 # offsets are deterministic over arbitrary bytes — a subject may carry any
@@ -45,13 +43,13 @@ check_commit_subject() {
 
 	local _cc_lc_set="${LC_ALL+x}" _cc_lc_val="${LC_ALL-}" _cc_status=0
 	export LC_ALL=C
-	_gitjig_cc_check "${1-}" "$_cc_charmap" "$_cc_lc_val" "${LC_CTYPE-}" "${LANG-}" || _cc_status=$?
+	_project_cc_check "${1-}" "$_cc_charmap" "$_cc_lc_val" "${LC_CTYPE-}" "${LANG-}" || _cc_status=$?
 	if [ "$_cc_lc_set" = "x" ]; then LC_ALL="$_cc_lc_val"; else unset LC_ALL; fi
 	return "$_cc_status"
 }
 
-# _gitjig_cc_check <line> <charmap> <caller-LC_ALL> <caller-LC_CTYPE> <caller-LANG>
-_gitjig_cc_check() {
+# _project_cc_check <line> <charmap> <caller-LC_ALL> <caller-LC_CTYPE> <caller-LANG>
+_project_cc_check() {
 	local _cc_line="$1" _cc_charmap="$2" _cc_subject
 	local _cc_re_required='^(feat|fix|docs|refactor|perf)\(#[0-9]+\)(!)?: (.*)$'
 	local _cc_re_optional='^(test|style|build|ci|chore|revert)(\(#[0-9]+\))?(!)?: (.*)$'
@@ -66,7 +64,7 @@ _gitjig_cc_check() {
 	fi
 
 	local _cc_length
-	_cc_length="$(_gitjig_cc_measure "$_cc_subject" "$_cc_charmap" "$3" "$4" "$5")" || return 1
+	_cc_length="$(_project_cc_measure "$_cc_subject" "$_cc_charmap" "$3" "$4" "$5")" || return 1
 
 	if [ "$_cc_length" -lt 1 ] || [ "$_cc_length" -gt 72 ]; then
 		printf 'commit-format: subject measures %s codepoints, outside 1..72\n' "$_cc_length" >&2
@@ -75,10 +73,10 @@ _gitjig_cc_check() {
 	return 0
 }
 
-# _gitjig_cc_measure <subject> <charmap> <caller-LC_ALL> <caller-LC_CTYPE> <caller-LANG>
+# _project_cc_measure <subject> <charmap> <caller-LC_ALL> <caller-LC_CTYPE> <caller-LANG>
 # Prints the codepoint count, or refuses (arm-named cause to stderr, no
 # stdout) — the two outcomes, nothing else. Runs under LC_ALL=C.
-_gitjig_cc_measure() {
+_project_cc_measure() {
 	local _cc_subject="$1" _cc_charmap="$2"
 
 	# Pure ASCII (no byte outside 0x01-0x7F; NUL cannot enter a shell
@@ -99,7 +97,7 @@ _gitjig_cc_measure() {
 	# property the check does not test sends its reader to fix the wrong
 	# thing (issue #58). Under any other charmap the bytes' decoding is a
 	# guess and a per-byte count is a confident wrong decimal — refuse,
-	# never approve (§3.9).
+	# never approve.
 	case "$_cc_charmap" in
 	UTF-8 | utf-8 | UTF8 | utf8) ;;
 	*)
@@ -154,7 +152,7 @@ except UnicodeDecodeError:
 		return 1
 	fi
 
-	# No consumer reads an unvalidated value (§3.9): anything but a bare
+	# No consumer reads an unvalidated value: anything but a bare
 	# decimal is a failed measurement, whatever the tool's exit said.
 	case "$_cc_count" in
 	'' | *[!0-9]*)
