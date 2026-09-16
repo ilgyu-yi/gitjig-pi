@@ -154,6 +154,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{
 		file: "gitjig/review/panel.ts",
 		allow: [
+			// Git revision operands passed to execFileSync, never rendered.
+			"baseRef",
+			"headRef",
 			// A policy prefix, composed into a comparison operand for the
 			// segment-aware match (`path.startsWith(`${prefix}/`)`). It does
 			// carry a path, and that is why it is allowlisted on the second
@@ -181,14 +184,18 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		file: "gitjig/review/comments.ts",
 		// A positive integer admitted by the command-spec parser, and the
 		// module's fixed marker literal. Neither can carry a path byte.
-		allow: ["String(pr)", "REVIEW_RECORD_MARKER", "DIAGNOSIS_RECORD_MARKER"],
+		allow: ["String(pr)", "REVIEW_RECORD_MARKER"],
 	},
 	// No interpolation exists in join.ts today; it is rostered so the module
 	// that parses a DELEGATE-authored payload — the surface most exposed to
 	// actor bytes in the review layer — cannot grow a raw rendering of one.
 	{ file: "gitjig/review/join.ts", allow: [] },
 	{ file: "gitjig/review/carry-forward.ts", allow: [] },
-	{ file: "gitjig/review/orchestrate.ts", allow: [] },
+	{
+		file: "gitjig/review/orchestrate.ts",
+		// Git revision operand passed to execFileSync, never rendered.
+		allow: ["options.headRef"],
+	},
 	{
 		file: "gitjig/review/record.ts",
 		allow: [
@@ -286,7 +293,11 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		],
 	},
 	{ file: "gitjig/commands/review.ts", allow: [] },
-	{ file: "gitjig/commands/review-round.ts", allow: [] },
+	{
+		file: "gitjig/commands/review-round.ts",
+		// Git revision operand passed to execFileSync, never rendered.
+		allow: ["ref"],
+	},
 	{ file: "gitjig/commands/ship.ts", allow: [] },
 	// Admission and the delegate child compose no interpolated text; every
 	// refusal they surface is a fixed content-free literal.

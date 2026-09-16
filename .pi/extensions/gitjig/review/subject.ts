@@ -160,8 +160,7 @@ export function admitPlatformReviewContext(value: unknown): PlatformReviewContex
 			repositoryIdentity.host,
 			`/${repositoryIdentity.nameWithOwner}/pull/${String(pull.number)}`,
 		) ||
-		pull.base.repositoryId !== repositoryIdentity.id ||
-		pull.head.repositoryId !== repositoryIdentity.id
+		pull.base.repositoryId !== repositoryIdentity.id
 	)
 		return undefined;
 	if (pull.closingIssues.some((entry) => entry.repositoryId !== repositoryIdentity.id)) return undefined;
@@ -179,7 +178,11 @@ export function admitPlatformReviewContext(value: unknown): PlatformReviewContex
 export interface ReviewSubject {
 	context: PlatformReviewContext;
 	writerId: string;
-	activation: readonly { issueId: string; comment: PlatformCommentSnapshot }[];
+	activation: readonly {
+		issueId: string;
+		verdict: PlatformCommentSnapshot;
+		snapshot: PlatformCommentSnapshot;
+	}[];
 	criteria: readonly string[];
 }
 
@@ -219,18 +222,31 @@ export function criteriaFromClosingIssues(issues: readonly PlatformIssueSnapshot
 }
 
 const ACTIVATION_MARKER = "gitjig-activation-criteria";
+const ACTIVATION_PASS_MARKER = "<!-- activation-verdict: pass -->";
 
-/** Admit exactly one writer-attributed activation snapshot for one issue. */
+/** Admit exactly one writer-attributed activation snapshot immediately following its PASS. */
 export function activationCriteriaFromComments(
 	issue: PlatformIssueSnapshot,
 	writerId: string,
 	comments: readonly PlatformCommentSnapshot[],
 ): string[] | undefined {
 	const prefix = `<!-- ${ACTIVATION_MARKER}:`;
-	const candidates = comments.filter((comment) => comment.authorId === writerId && comment.body.startsWith(prefix));
-	if (candidates.length !== 1) return undefined;
+	const candidateIndexes = comments.flatMap((comment, index) =>
+		comment.authorId === writerId && comment.body.startsWith(prefix) ? [index] : [],
+	);
+	if (candidateIndexes.length !== 1) return undefined;
+	const index = candidateIndexes[0];
+	const verdict = comments[index - 1];
+	const snapshot = comments[index];
+	if (
+		verdict === undefined ||
+		verdict.authorId !== writerId ||
+		!verdict.body.startsWith(ACTIVATION_PASS_MARKER) ||
+		verdict.id >= snapshot.id
+	)
+		return undefined;
 	const marker = `<!-- ${ACTIVATION_MARKER}: ${issue.id} -->`;
-	const body = candidates[0].body;
+	const body = snapshot.body;
 	if (!body.startsWith(`${marker}\n`) && !body.startsWith(`${marker}\r\n`)) return undefined;
 	const fenced = body.slice(marker.length).trim();
 	const match = /^```json\r?\n([\s\S]+)\r?\n```$/.exec(fenced);
@@ -263,25 +279,31 @@ export function admitReviewSubject(value: unknown): ReviewSubject | undefined {
 	if (context === undefined || !text(value.writerId) || !Array.isArray(value.activation)) return undefined;
 	if (!Array.isArray(value.criteria) || !value.criteria.every(text)) return undefined;
 	if (value.activation.length !== context.pullRequest.closingIssues.length) return undefined;
-	const activation: { issueId: string; comment: PlatformCommentSnapshot }[] = [];
+	const activation: {
+		issueId: string;
+		verdict: PlatformCommentSnapshot;
+		snapshot: PlatformCommentSnapshot;
+	}[] = [];
 	const activationCriteria: string[] = [];
 	for (let index = 0; index < context.pullRequest.closingIssues.length; index += 1) {
 		const issue = context.pullRequest.closingIssues[index];
 		const evidence = value.activation[index];
-		if (!object(evidence, ["issueId", "comment"]) || evidence.issueId !== issue.id) return undefined;
-		const comment = evidence.comment;
-		if (
-			!object(comment, ["id", "authorId", "body"]) ||
-			!Number.isSafeInteger(comment.id) ||
-			(comment.id as number) <= 0 ||
-			!text(comment.authorId) ||
-			typeof comment.body !== "string"
-		)
-			return undefined;
-		const snapshot = { id: comment.id as number, authorId: comment.authorId, body: comment.body };
-		const criteria = activationCriteriaFromComments(issue, value.writerId, [snapshot]);
+		if (!object(evidence, ["issueId", "verdict", "snapshot"]) || evidence.issueId !== issue.id) return undefined;
+		const admitted: PlatformCommentSnapshot[] = [];
+		for (const comment of [evidence.verdict, evidence.snapshot]) {
+			if (
+				!object(comment, ["id", "authorId", "body"]) ||
+				!Number.isSafeInteger(comment.id) ||
+				(comment.id as number) <= 0 ||
+				!text(comment.authorId) ||
+				typeof comment.body !== "string"
+			)
+				return undefined;
+			admitted.push({ id: comment.id as number, authorId: comment.authorId, body: comment.body });
+		}
+		const criteria = activationCriteriaFromComments(issue, value.writerId, admitted);
 		if (criteria === undefined) return undefined;
-		activation.push({ issueId: issue.id, comment: snapshot });
+		activation.push({ issueId: issue.id, verdict: admitted[0], snapshot: admitted[1] });
 		activationCriteria.push(...criteria);
 	}
 	const derived = criterionUnion(activationCriteria, criteriaFromClosingIssues(context.pullRequest.closingIssues));
@@ -468,7 +490,11 @@ export async function fetchReviewSubject(
 	if (context === undefined) return undefined;
 	const writerId = await fetchWriterIdentity(repoRoot, context.repository, read);
 	if (writerId === undefined) return undefined;
-	const activation: { issueId: string; comment: PlatformCommentSnapshot }[] = [];
+	const activation: {
+		issueId: string;
+		verdict: PlatformCommentSnapshot;
+		snapshot: PlatformCommentSnapshot;
+	}[] = [];
 	const activationCriteria: string[] = [];
 	for (const issue of context.pullRequest.closingIssues) {
 		const comments = await fetchIssueComments(repoRoot, context.repository, issue, read);
@@ -476,9 +502,9 @@ export async function fetchReviewSubject(
 		const criteria = activationCriteriaFromComments(issue, writerId, comments);
 		if (criteria === undefined) return undefined;
 		const marker = `<!-- ${ACTIVATION_MARKER}:`;
-		const snapshot = comments.find((comment) => comment.authorId === writerId && comment.body.startsWith(marker));
-		if (snapshot === undefined) return undefined;
-		activation.push({ issueId: issue.id, comment: snapshot });
+		const index = comments.findIndex((comment) => comment.authorId === writerId && comment.body.startsWith(marker));
+		if (index < 1) return undefined;
+		activation.push({ issueId: issue.id, verdict: comments[index - 1], snapshot: comments[index] });
 		activationCriteria.push(...criteria);
 	}
 	return admitReviewSubject({
@@ -487,18 +513,6 @@ export async function fetchReviewSubject(
 		activation,
 		criteria: criterionUnion(activationCriteria, criteriaFromClosingIssues(context.pullRequest.closingIssues)),
 	});
-}
-
-/** Re-fetch only through the already attested repository identity and require exact equality. */
-export async function refetchPlatformReviewContext(
-	repoRoot: string,
-	expected: PlatformReviewContext,
-	read: PlatformRead = runPlatformRead,
-): Promise<PlatformReviewContext | undefined> {
-	const subject = admitPlatformReviewContext(expected);
-	if (subject === undefined) return undefined;
-	const current = await fetchPullContext(repoRoot, subject.repository, subject.pullRequest.number, read);
-	return current !== undefined && JSON.stringify(current) === JSON.stringify(subject) ? current : undefined;
 }
 
 /** Re-fetch every platform-derived component and require the sealed subject to remain exact. */

@@ -1,6 +1,5 @@
 /** Bounded platform reader for review records posted as PR comments. */
 import { runPlatformRead } from "../platform/read.ts";
-import { DIAGNOSIS_RECORD_MARKER, type DiagnosisRecord, parseDiagnosisRecord } from "./diagnosis-record.ts";
 import { parseReviewRecord, REVIEW_RECORD_MARKER, type ReviewRecord } from "./record.ts";
 import { admitPlatformReviewContext, type PlatformReviewContext } from "./subject.ts";
 
@@ -79,23 +78,6 @@ export function recordsFromAttestedComments(
 	for (const comment of population.comments) {
 		if (comment.authorId !== writerId || !comment.body.startsWith(opening)) continue;
 		const record = parseReviewRecord(comment.body);
-		if (record === undefined) return undefined;
-		records.push(record);
-	}
-	return records;
-}
-
-/** Admit diagnosis records through the same attested comment population and writer. */
-export function diagnosesFromAttestedComments(
-	population: AttestedCommentPopulation,
-	writerId: string,
-): DiagnosisRecord[] | undefined {
-	if (!population.ok || writerId.length === 0) return undefined;
-	const records: DiagnosisRecord[] = [];
-	const opening = `<!-- ${DIAGNOSIS_RECORD_MARKER}:`;
-	for (const comment of population.comments) {
-		if (comment.authorId !== writerId || !comment.body.startsWith(opening)) continue;
-		const record = parseDiagnosisRecord(comment.body);
 		if (record === undefined) return undefined;
 		records.push(record);
 	}

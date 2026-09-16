@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
 	chmodSync,
 	mkdirSync,
@@ -28,22 +28,13 @@ import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutr
 import { scanBody } from "../.pi/extensions/gitjig/publish/scan.ts";
 import {
 	type AttestedCommentPopulation,
-	diagnosesFromAttestedComments,
 	fetchAttestedReviewComments,
 	recordsFromAttestedComments,
 } from "../.pi/extensions/gitjig/review/comments.ts";
-import { composeDiagnosisRecord, createDiagnosisRecord } from "../.pi/extensions/gitjig/review/diagnosis-record.ts";
-import {
-	DIAGNOSIS_VALUES,
-	type DiagnosisInput,
-	INVALIDATIONS,
-	repairHistory,
-	type StateSummary,
-} from "../.pi/extensions/gitjig/review/history.ts";
+import { DIAGNOSIS_VALUES, type DiagnosisInput, INVALIDATIONS } from "../.pi/extensions/gitjig/review/history.ts";
 import { type RoundOptions, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewPublicationOutcome } from "../.pi/extensions/gitjig/review/publication.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
-import { resolveRepositoryHead } from "../.pi/extensions/gitjig/review/repository.ts";
 import type { PlatformReviewContext, ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const dirs: string[] = [];
@@ -228,15 +219,12 @@ function seams(overrides: Partial<ReviewRoundSeams> = {}): ReviewRoundSeams {
 		refetchSubject: async (_root, current) => current,
 		readComments: async () => population([]),
 		recordsFromComments: recordsFromAttestedComments,
-		diagnosesFromComments: diagnosesFromAttestedComments,
-		readRepair: () => "patch",
 		resolveHead: () => HEAD_B,
 		makeDispatch: () => async () => {
 			throw new Error("no dispatch was expected");
 		},
 		runRound: async () => ROUND,
 		publishRecord: async (body) => receipt(body),
-		commitDiagnosis: async () => receipt("diagnosis"),
 		...overrides,
 	};
 }
@@ -772,7 +760,6 @@ describe("review-round production call site", () => {
 		const briefs: string[] = [];
 		const order: string[] = [];
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
-		let committed: { history: readonly StateSummary[]; diagnosis: DiagnosisInput } | undefined;
 		const diagnosis = {
 			value: "STAGNATION" as const,
 			invalidation: "nothing" as const,
@@ -792,22 +779,12 @@ describe("review-round production call site", () => {
 					order.push("publish");
 					return receipt(body);
 				},
-				commitDiagnosis: async (_current, history, admitted) => {
-					order.push("diagnosis-record");
-					committed = { history, diagnosis: admitted };
-					return receipt("diagnosis");
-				},
 			}),
 		);
-		assert.deepEqual(order, ["round", "publish", "diagnosis-record"]);
+		assert.deepEqual(order, ["round", "publish"]);
 		assert.equal(briefs.length, 1);
 		assert.match(briefs[0], /repair-history diagnosis/);
 		assert.equal(briefs[0].includes(HEAD_B), false, "the round's own head stays withheld from the diagnosis brief");
-		assert.deepEqual(committed?.diagnosis, diagnosis);
-		assert.deepEqual(
-			committed?.history.map((state) => state.head),
-			[HEAD_A, HEAD_B],
-		);
 		assert.deepEqual(outcome, {
 			disposition: "hand-off",
 			cause: "review-round handed off: the required history diagnosis was unavailable or required parking",
@@ -816,35 +793,12 @@ describe("review-round production call site", () => {
 		});
 	});
 
-	it("hands off when the post-state diagnosis record is not made durable", async () => {
-		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
-		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "advancing" };
-		assert.deepEqual(
-			await driveReviewRound(
-				spec(),
-				"/unused",
-				seams({
-					readComments: async () => population(bodies),
-					makeDispatch: diagnosisDispatch(diagnosis),
-					commitDiagnosis: async () => ({ ok: false, cause: "unconfirmed" }),
-				}),
-			),
-			{
-				disposition: "hand-off",
-				cause: "review-round handed off: the post-state diagnosis record was not made durable",
-				reentry: "none",
-				diagnosis,
-			},
-		);
-	});
-
 	it("binds every diagnosis taxonomy × invalidation cell after one durable round", async () => {
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
 		for (const value of DIAGNOSIS_VALUES) {
 			for (const invalidation of INVALIDATIONS) {
 				let rounds = 0;
 				let publishes = 0;
-				let records = 0;
 				const outcome = await driveReviewRound(
 					spec(),
 					"/unused",
@@ -859,16 +813,11 @@ describe("review-round production call site", () => {
 							publishes += 1;
 							return receipt(body);
 						},
-						commitDiagnosis: async () => {
-							records += 1;
-							return receipt("diagnosis");
-						},
 					}),
 				);
 				const continues = value === "NONE" && invalidation === "nothing";
 				assert.equal(rounds, continues ? 1 : 0, `${value}/${invalidation}: round count`);
 				assert.equal(publishes, continues ? 1 : 0, `${value}/${invalidation}: publish count`);
-				assert.equal(records, 1, `${value}/${invalidation}: diagnosis record count`);
 				assert.ok("diagnosis" in outcome, `${value}/${invalidation}: diagnosis absent`);
 				if ("diagnosis" in outcome) assert.deepEqual(outcome.diagnosis, { value, invalidation, evidence: "measured" });
 				if (continues) {
@@ -882,46 +831,8 @@ describe("review-round production call site", () => {
 		}
 	});
 
-	it("consumes an exact durable diagnosis before another round", async () => {
-		const historyRecords = [repairRecord(HEAD_A), repairRecord(HEAD_B)];
-		const history = repairHistory(historyRecords);
-		const diagnosis = { value: "STAGNATION" as const, invalidation: "nothing" as const, evidence: "durable" };
-		const record = createDiagnosisRecord(subject(), history, diagnosis);
-		assert.ok(record !== undefined);
-		let dispatched = 0;
-		let rounds = 0;
-		const outcome = await driveReviewRound(
-			spec(),
-			"/unused",
-			seams({
-				readComments: async () =>
-					population([
-						...historyRecords.map(composeReviewRecord),
-						composeDiagnosisRecord(record as NonNullable<typeof record>),
-					]),
-				makeDispatch: () => async () => {
-					dispatched += 1;
-					throw new Error("durable diagnosis should be consumed");
-				},
-				runRound: async () => {
-					rounds += 1;
-					return ROUND;
-				},
-			}),
-		);
-		assert.deepEqual(outcome, {
-			disposition: "hand-off",
-			cause: "review-round handed off: the required history diagnosis was unavailable or required parking",
-			reentry: "none",
-			diagnosis,
-		});
-		assert.equal(dispatched, 0);
-		assert.equal(rounds, 0);
-	});
-
 	it("occasions no diagnosis where the trigger does not fire", async () => {
 		let dispatched = 0;
-		let records = 0;
 		const outcome = await driveReviewRound(
 			spec(),
 			"/unused",
@@ -931,15 +842,10 @@ describe("review-round production call site", () => {
 					dispatched += 1;
 					throw new Error("no diagnosis is occasioned");
 				},
-				commitDiagnosis: async () => {
-					records += 1;
-					return receipt("diagnosis");
-				},
 			}),
 		);
 		assert.deepEqual(outcome, { disposition: "posted", review: { state: "approved" } });
 		assert.equal(dispatched, 0);
-		assert.equal(records, 0);
 	});
 
 	it("projects an admitted diagnosis through every later failure class", async () => {
@@ -949,31 +855,6 @@ describe("review-round production call site", () => {
 			readComments: async () => population(bodies),
 			makeDispatch: diagnosisDispatch(diagnosis),
 		};
-		const cases: Array<{ name: string; seams: ReviewRoundSeams; cause: string }> = [
-			{
-				name: "diagnosis record throw",
-				seams: seams({
-					...base,
-					commitDiagnosis: async () => {
-						throw new Error("record");
-					},
-				}),
-				cause: "review-round handed off: the composed round could not produce a terminal result",
-			},
-			{
-				name: "diagnosis record not confirmed",
-				seams: seams({ ...base, commitDiagnosis: async () => ({ ok: false, cause: "unconfirmed" }) }),
-				cause: "review-round handed off: the post-state diagnosis record was not made durable",
-			},
-		];
-		for (const item of cases) {
-			assert.deepEqual(
-				await driveReviewRound(spec(), "/unused", item.seams),
-				{ disposition: "hand-off", cause: item.cause, reentry: "none", diagnosis },
-				item.name,
-			);
-		}
-
 		for (const item of [
 			{
 				name: "round throw",
@@ -1067,49 +948,22 @@ describe("review-round production call site", () => {
 		assert.ok(Date.now() - started < 1_000, "the FIFO read blocked before descriptor validation");
 	});
 
-	it("keeps Git execution behind the one quiet repository capability", () => {
-		const consumers = [
-			"../.pi/extensions/gitjig/commands/review-round.ts",
-			"../.pi/extensions/gitjig/review/orchestrate.ts",
-			"../.pi/extensions/gitjig/review/panel.ts",
-		];
-		for (const name of consumers) {
-			const source = readFileSync(new URL(name, import.meta.url), "utf8");
-			assert.doesNotMatch(source, /from\s+["']node:child_process["']/, name);
-		}
-		const owner = readFileSync(new URL("../.pi/extensions/gitjig/review/repository.ts", import.meta.url), "utf8");
-		assert.equal(owner.match(/execFileSync\s*\(/g)?.length, 1);
-		assert.match(owner, /stdio:\s*\["ignore",\s*"pipe",\s*"pipe"\]/);
-		assert.match(owner, /withoutRepoLocatingGitEnv\(process\.env\)/);
-		assert.match(owner, /"--end-of-options"/);
-		assert.ok(owner.includes("return /^[0-9a-f]{40}$/.test(head) ? head : undefined;"));
+	it("bounds repository input before JSON admission", () => {
+		const fixture = repo();
+		writeFileSync(join(fixture.root, "round.json"), Buffer.alloc(1024 * 1024 + 1, 0x20));
+		assert.equal(readRepositoryInput(fixture.root, "round.json"), undefined);
+	});
 
+	it("pins the repository-input descriptor and byte bound structurally", () => {
 		const fileOwner = readFileSync(
 			new URL("../.pi/extensions/gitjig/commands/review-round-input.ts", import.meta.url),
 			"utf8",
 		);
 		assert.match(fileOwner, /constants\.O_RDONLY\s*\|\s*constants\.O_NOFOLLOW\s*\|\s*constants\.O_NONBLOCK/);
-		assert.match(fileOwner, /opened\.dev !== leaf\.dev \|\| opened\.ino !== leaf\.ino/);
-		assert.match(fileOwner, /readFileSync\(fd,\s*"utf8"\)/);
+		assert.match(fileOwner, /opened\.dev !== leaf\.dev/);
+		assert.match(fileOwner, /opened\.ino !== leaf\.ino/);
+		assert.match(fileOwner, /MAX_REVIEW_ROUND_SPEC_BYTES \+ 1/);
+		assert.match(fileOwner, /readSync\(fd,/);
 		assert.match(fileOwner, /finally\s*{\s*closeSync\(fd\);\s*}/);
-	});
-
-	it("resolves invalid and dash-leading refs without emitting child diagnostics", () => {
-		const fixture = repo();
-		assert.equal(resolveRepositoryHead(fixture.root, "missing-ref"), undefined);
-		const moduleUrl = new URL("../.pi/extensions/gitjig/review/repository.ts", import.meta.url).href;
-		for (const ref of ["missing-ref", "--output=forbidden"]) {
-			const child = spawnSync(
-				process.execPath,
-				[
-					"--input-type=module",
-					"--eval",
-					`import { resolveRepositoryHead } from ${JSON.stringify(moduleUrl)}; if (resolveRepositoryHead(${JSON.stringify(fixture.root)}, ${JSON.stringify(ref)}) !== undefined) process.exit(2);`,
-				],
-				{ encoding: "utf8" },
-			);
-			assert.equal(child.status, 0, ref);
-			assert.equal(child.stderr, "", ref);
-		}
 	});
 });

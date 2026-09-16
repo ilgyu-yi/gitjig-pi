@@ -71,13 +71,12 @@
  * means — no filter, no rank, no merge, no severity — because that is
  * the semantic act §1.7 reserves for exactly one downstream point.
  */
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import { quoted } from "../quote.ts";
-import { readChangedPaths } from "./repository.ts";
-
-export { ChangedPathsRefusal } from "./repository.ts";
 
 /** A required review slot: one lens over one declared surface (§1.7). */
 export type Slot = { lens: string; surface: string };
@@ -234,6 +233,26 @@ export function loadPolicy(): Policy {
 }
 
 /**
+ * The authoritative-read failure contract (issue #175). This is separate
+ * from RoutingRefusal: no change surface exists yet, so there is no
+ * constituent a policy amendment could claim and §1.7's one routing-failure
+ * remedy would be false. The two limbs tell a caller which input boundary
+ * failed without carrying localized git text, argv, or filesystem detail.
+ */
+export class ChangedPathsRefusal extends Error {
+	readonly limb: "root-unreadable" | "range-unreadable";
+	constructor(limb: "root-unreadable" | "range-unreadable") {
+		super(
+			limb === "root-unreadable"
+				? "changed-path read refused: the supplied repository root cannot be measured as a repository toplevel"
+				: "changed-path read refused: the requested revision range cannot be measured; no change surface was produced",
+		);
+		this.name = "ChangedPathsRefusal";
+		this.limb = limb;
+	}
+}
+
+/**
  * §1.7's pre-review refusal, one class for the clause's two limbs —
  * they woke together on one activation story, and a downstream caller
  * maps them to different consequences: `routing-failure` owes a
@@ -281,7 +300,60 @@ export type ChangedPaths = readonly string[] & { readonly [authoritative]: true 
  * line-split read has.
  */
 export function changedPathsFromRepo(baseRef: string, headRef: string, repoRoot: string): ChangedPaths {
-	return readChangedPaths(baseRef, headRef, repoRoot) as unknown as ChangedPaths;
+	// `--end-of-options` is the guard, not a flourish: without it a ref
+	// beginning with `-` is consumed as a git OPTION — measured: an
+	// `--output=`-shaped operand wrote a file and the read returned empty,
+	// so the change would route to no reviewer, silently. With the guard git
+	// refuses the operand while parsing options — measured: `fatal: option
+	// '--output=...' must come before non-option arguments` — the refusal
+	// direction, never the silent-empty one.
+	//
+	// The repo-locating GIT_* families are stripped from every child's
+	// environment through the dispatcher's own helper (§3.11: one hazard,
+	// one spelling — `commands/ship.ts` already imports it across the same
+	// boundary): without the scrub an ambient GIT_DIR / GIT_WORK_TREE /
+	// GIT_INDEX_FILE would redirect this read at a repository other than
+	// the one under review, while `cwd` still points here (§4.6).
+	const env = withoutRepoLocatingGitEnv(process.env);
+	// `cwd` is not a pin: git discovers its repository by walking UP from
+	// `cwd`, so a `repoRoot` naming any directory INSIDE a repository would
+	// silently answer about the enclosing one — §4.7's unpinned lookup. The
+	// read is pinned by deriving the toplevel the way `bind-state.ts` and
+	// `.githooks/_lib.sh` do and refusing on mismatch. Residual, enumerated
+	// (§3.11): the discovery-walk governors GIT_CEILING_DIRECTORIES and
+	// GIT_DISCOVERY_ACROSS_FILESYSTEM stay in the child env, and under the
+	// pin they cannot redirect the answer — a true toplevel resolves at its
+	// own `.git` before any walk begins, and on anything else they can only
+	// turn one refusal into another.
+	let toplevel: string;
+	try {
+		toplevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	} catch {
+		throw new ChangedPathsRefusal("root-unreadable");
+	}
+	if (realpathSync(toplevel) !== realpathSync(repoRoot)) {
+		throw new Error(
+			"changed-path read: the supplied repository root is a directory inside a repository, not the repository's " +
+				"own toplevel — an unpinned read would silently answer about the enclosing repository (§4.7)",
+		);
+	}
+	let out: string;
+	try {
+		out = execFileSync("git", ["diff", "--name-only", "-z", "--end-of-options", `${baseRef}...${headRef}`], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+	} catch {
+		throw new ChangedPathsRefusal("range-unreadable");
+	}
+	return out.split("\0").filter((entry) => entry.length > 0) as unknown as ChangedPaths;
 }
 
 /**

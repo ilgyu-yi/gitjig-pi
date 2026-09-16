@@ -38,7 +38,15 @@ function comment(body: string, authorId = "WRITER", id = 1) {
 	return { id, authorId, body };
 }
 
-function platformResponses(comments: unknown, currentIssue: PlatformIssueSnapshot = issue): string[] {
+function verdict(authorId = "WRITER", id = 1) {
+	return comment("<!-- activation-verdict: pass -->\n\nActivation passed.", authorId, id);
+}
+
+function platformResponses(
+	comments: unknown,
+	currentIssue: PlatformIssueSnapshot = issue,
+	headRepositoryId = "REPO_1",
+): string[] {
 	return [
 		JSON.stringify({ id: "REPO_1", nameWithOwner: "owner/repo", url: "https://github.com/owner/repo" }),
 		JSON.stringify({
@@ -50,7 +58,7 @@ function platformResponses(comments: unknown, currentIssue: PlatformIssueSnapsho
 			baseRefOid: "a".repeat(40),
 			headRefName: "topic",
 			headRefOid: "b".repeat(40),
-			headRepository: { id: "REPO_1" },
+			headRepository: { id: headRepositoryId },
 			closingIssuesReferences: [
 				{
 					id: currentIssue.id,
@@ -75,7 +83,8 @@ describe("review subject criterion union", () => {
 		assert.deepEqual(
 			activationCriteriaFromComments(issue, "WRITER", [
 				comment("ordinary prose", "OTHER", 1),
-				comment(activationBody(["activation-only criterion", "retained criterion"]), "WRITER", 2),
+				verdict("WRITER", 2),
+				comment(activationBody(["activation-only criterion", "retained criterion"]), "WRITER", 3),
 			]),
 			["#212: activation-only criterion", "#212: retained criterion"],
 		);
@@ -84,18 +93,29 @@ describe("review subject criterion union", () => {
 	it("fails closed on missing, malformed, mismatched, or ambiguous activation evidence", () => {
 		assert.equal(activationCriteriaFromComments(issue, "WRITER", []), undefined);
 		assert.equal(
-			activationCriteriaFromComments(issue, "WRITER", [comment(activationBody([], "OTHER_ISSUE"))]),
-			undefined,
-		);
-		assert.equal(
-			activationCriteriaFromComments(issue, "WRITER", [comment(`${activationBody([])} trailing`)]),
+			activationCriteriaFromComments(issue, "WRITER", [
+				verdict(),
+				comment(activationBody([], "OTHER_ISSUE"), "WRITER", 2),
+			]),
 			undefined,
 		);
 		assert.equal(
 			activationCriteriaFromComments(issue, "WRITER", [
-				comment(activationBody([]), "WRITER", 1),
-				comment(activationBody([]), "WRITER", 2),
+				verdict(),
+				comment(`${activationBody([])} trailing`, "WRITER", 2),
 			]),
+			undefined,
+		);
+		assert.equal(
+			activationCriteriaFromComments(issue, "WRITER", [
+				verdict(),
+				comment(activationBody([]), "WRITER", 2),
+				comment(activationBody([]), "WRITER", 3),
+			]),
+			undefined,
+		);
+		assert.equal(
+			activationCriteriaFromComments(issue, "WRITER", [verdict("OTHER"), comment(activationBody([]), "WRITER", 2)]),
 			undefined,
 		);
 	});
@@ -113,6 +133,7 @@ describe("review subject criterion union", () => {
 	it("fetches the activation snapshot from the explicit issue route and seals the union", async () => {
 		const responses = platformResponses([
 			[
+				{ id: 90, body: "<!-- activation-verdict: pass -->\n\nActivation passed.", user: { node_id: "WRITER" } },
 				{
 					id: 91,
 					body: activationBody(["activation-only criterion", "retained criterion"]),
@@ -144,10 +165,25 @@ describe("review subject criterion union", () => {
 		assert.equal(
 			admitReviewSubject({
 				...subject,
-				activation: [{ ...subject.activation[0], comment: { ...subject.activation[0].comment, body: "changed" } }],
+				activation: [{ ...subject.activation[0], snapshot: { ...subject.activation[0].snapshot, body: "changed" } }],
 			}),
 			undefined,
 		);
+	});
+
+	it("admits a fork pull request while keeping the base and closing issues on the target repository", async () => {
+		const responses = platformResponses(
+			[
+				[
+					{ id: 90, body: "<!-- activation-verdict: pass -->", user: { node_id: "WRITER" } },
+					{ id: 91, body: activationBody(["retained criterion"]), user: { node_id: "WRITER" } },
+				],
+			],
+			issue,
+			"FORK_REPO",
+		);
+		const subject = await fetchReviewSubject("/repo", 223, async () => responses.shift());
+		assert.equal(subject?.context.pullRequest.head.repositoryId, "FORK_REPO");
 	});
 
 	it("refuses a subject when the activation comment population is unavailable or ambiguous", async () => {
@@ -155,8 +191,9 @@ describe("review subject criterion union", () => {
 			[],
 			[
 				[
-					{ id: 1, body: activationBody([]), user: { node_id: "WRITER" } },
+					{ id: 1, body: "<!-- activation-verdict: pass -->", user: { node_id: "WRITER" } },
 					{ id: 2, body: activationBody([]), user: { node_id: "WRITER" } },
+					{ id: 3, body: activationBody([]), user: { node_id: "WRITER" } },
 				],
 			],
 		]) {

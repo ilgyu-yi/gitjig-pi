@@ -4,8 +4,10 @@
  * Warning-surface roster: EXEMPT — this module returns file text or undefined;
  * it emits no warning, record, or thrown operator-facing text.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
+
+const MAX_REVIEW_ROUND_SPEC_BYTES = 1024 * 1024;
 
 /**
  * Read one repository-owned command input through a single file capability.
@@ -56,7 +58,13 @@ export function readRepositoryInput(
 		const fd = openSync(leafPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		try {
 			const opened = fstatSync(fd);
-			if (!opened.isFile() || opened.dev !== leaf.dev || opened.ino !== leaf.ino) return undefined;
+			if (
+				!opened.isFile() ||
+				opened.dev !== leaf.dev ||
+				opened.ino !== leaf.ino ||
+				opened.size > MAX_REVIEW_ROUND_SPEC_BYTES
+			)
+				return undefined;
 			const currentRoot = lstatSync(root);
 			if (
 				!currentRoot.isDirectory() ||
@@ -76,7 +84,18 @@ export function readRepositoryInput(
 					return undefined;
 			}
 			if (realpathSync(leafPath) !== leafPath) return undefined;
-			return readFileSync(fd, "utf8");
+			// Read at most one byte beyond the cap. The descriptor may be written
+			// after fstat, so its earlier size is only a fast refusal, never the
+			// bound itself.
+			const bytes = Buffer.allocUnsafe(MAX_REVIEW_ROUND_SPEC_BYTES + 1);
+			let length = 0;
+			while (length < bytes.length) {
+				const count = readSync(fd, bytes, length, bytes.length - length, null);
+				if (count === 0) break;
+				length += count;
+			}
+			if (length > MAX_REVIEW_ROUND_SPEC_BYTES) return undefined;
+			return bytes.toString("utf8", 0, length);
 		} finally {
 			closeSync(fd);
 		}

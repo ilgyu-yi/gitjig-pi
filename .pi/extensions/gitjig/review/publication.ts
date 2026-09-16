@@ -8,8 +8,6 @@
  */
 import { type PublishResult, performPublish } from "../publish/index.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
-import { composeDiagnosisRecord, createDiagnosisRecord } from "./diagnosis-record.ts";
-import type { DiagnosisInput, StateSummary } from "./history.ts";
 import {
 	admitPlatformReviewContext,
 	admitReviewSubject,
@@ -129,34 +127,4 @@ export async function publishAndRefetchReviewRecord(
 		if (receipt !== undefined) return { ok: true, receipt };
 	}
 	return { ok: false, cause: "the published review record did not refetch exactly" };
-}
-
-/**
- * The post-state transaction: compose §1.4's durable diagnosis record from
- * the sealed subject and the complete triggering history, then land it
- * through the same attested publish-and-refetch path. Nothing is durable
- * until the receipt is admitted, so a composed-but-unconfirmed record is a
- * refusal rather than a record the next round would read back.
- */
-export async function commitPostStateDiagnosis(
-	source: ReviewSubject,
-	history: readonly StateSummary[],
-	diagnosis: DiagnosisInput,
-	repoRoot: string,
-	stateRoot: string,
-	publish: Publish = performPublish,
-	fetchComments: FetchComments = fetchAttestedReviewComments,
-): Promise<ReviewPublicationOutcome> {
-	const subject = admitReviewSubject(source);
-	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
-	const record = createDiagnosisRecord(subject, history, diagnosis);
-	if (record === undefined) return { ok: false, cause: "the post-state diagnosis record was not composable" };
-	return publishAndRefetchReviewRecord(
-		composeDiagnosisRecord(record),
-		subject,
-		repoRoot,
-		stateRoot,
-		publish,
-		fetchComments,
-	);
 }

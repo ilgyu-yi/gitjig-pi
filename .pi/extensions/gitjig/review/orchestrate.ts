@@ -25,8 +25,10 @@
  * context); concurrency here neither adds nor subtracts from it, and a
  * serial loop would only make one round slower.
  */
+import { execFileSync } from "node:child_process";
 import type { DispatchOutcome, RunDispatchOptions } from "../dispatch/index.ts";
 import { runDispatch } from "../dispatch/index.ts";
+import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import { type BriefTiming, composeJudgeBrief, composeReviewerBrief, type ReviewFences } from "./briefs.ts";
 import { slotResultFromDispatch } from "./join.ts";
 import {
@@ -38,14 +40,7 @@ import {
 	panelOutcome,
 	type SlotResult,
 } from "./panel.ts";
-import {
-	composeReviewRecord,
-	type RepairRecord,
-	type ReviewRecord,
-	type RoundSummary,
-	type SlotRecord,
-} from "./record.ts";
-import { resolveRepositoryHead } from "./repository.ts";
+import { composeReviewRecord, type ReviewRecord, type RoundSummary, type SlotRecord } from "./record.ts";
 import {
 	type AdjudicationInput,
 	adjudicationFromDispatch,
@@ -62,7 +57,6 @@ export type RoundOptions = {
 	manifest: Manifest;
 	fences: ReviewFences;
 	changeDescription: string;
-	repair?: RepairRecord;
 	timing?: BriefTiming;
 	/**
 	 * The one seam to §4.9's dispatcher — `makeDispatcher` for the real
@@ -107,12 +101,13 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 	const required = deriveRequiredSlots(changed, policy);
 	// The record's pin is the resolved head, not the caller's spelling of
 	// it — §1.6's reviewed-head rule — resolved BEFORE any dispatch so the
-	// same hash pins every dispatch of the round. The repository capability
-	// owns child isolation and full-object validation for every review probe.
-	const head = resolveRepositoryHead(options.repoRoot, options.headRef);
-	if (head === undefined) {
-		throw new Error("review round: the requested review head could not be resolved");
-	}
+	// same hash pins every dispatch of the round. Same env discipline as
+	// the changed-path read: an ambient GIT_DIR must not redirect the pin.
+	const head = execFileSync("git", ["rev-parse", "--verify", `${options.headRef}^{commit}`], {
+		cwd: options.repoRoot,
+		encoding: "utf8",
+		env: withoutRepoLocatingGitEnv(process.env),
+	}).trim();
 
 	// The round's durable prose (issue #203). §1.9's admission burden
 	// defaults to RECORD, DO NOT ADMIT and both briefs route such an item
@@ -194,7 +189,6 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 		bundle: buildBundle(results, required),
 		adjudication,
 		review,
-		...(options.repair === undefined ? {} : { repair: options.repair }),
 		// Always present on this path, empty where no admitted return wrote
 		// prose. The key is optional in the record's shape for records written
 		// before it existed, not for rounds this function drives.

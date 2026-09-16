@@ -6,18 +6,18 @@
  * and criterion manifest — comes from the platform-attested ReviewSubject,
  * never from the caller.
  */
+import { execFileSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
+import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import { quoted } from "../quote.ts";
 import type { BriefTiming, ReviewFences } from "../review/briefs.ts";
 import {
 	type AttestedCommentPopulation,
-	diagnosesFromAttestedComments,
 	fetchAttestedReviewComments,
 	recordsFromAttestedComments,
 } from "../review/comments.ts";
-import { type DiagnosisRecord, diagnosisForHistory } from "../review/diagnosis-record.ts";
 import {
 	admitDiagnosis,
 	type Consequence,
@@ -31,9 +31,8 @@ import {
 } from "../review/history.ts";
 import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchestrate.ts";
 import type { ReviewPublicationOutcome } from "../review/publication.ts";
-import { commitPostStateDiagnosis, publishAndRefetchReviewRecord } from "../review/publication.ts";
-import type { RepairRecord, ReviewRecord } from "../review/record.ts";
-import { readRepairPatch, resolveRepositoryHead } from "../review/repository.ts";
+import { publishAndRefetchReviewRecord } from "../review/publication.ts";
+import type { ReviewRecord } from "../review/record.ts";
 import {
 	fetchReviewSubject,
 	type ReviewSubject,
@@ -47,7 +46,6 @@ const REFUSE_SPEC =
 const HANDOFF_SUBJECT = "review-round handed off: the platform-attested review subject could not be established";
 const HANDOFF_HEAD = "review-round handed off: the attested head is not the head this clone resolves";
 const HANDOFF_DRIFT = "review-round handed off: the review subject changed while the round ran";
-const HANDOFF_DIAGNOSIS_RECORD = "review-round handed off: the post-state diagnosis record was not made durable";
 const HANDOFF_HISTORY = "review-round handed off: installed review history could not be read";
 const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnosis was unavailable or required parking";
 const HANDOFF_REENTRY = "review-round handed off: the diagnosis invalidated a gate that must be re-entered";
@@ -105,16 +103,9 @@ export type ReviewRoundSeams = {
 	refetchSubject: (repoRoot: string, subject: ReviewSubject) => Promise<ReviewSubject | undefined>;
 	readComments: (repoRoot: string, subject: ReviewSubject) => Promise<AttestedCommentPopulation>;
 	recordsFromComments: (population: AttestedCommentPopulation, writerId: string) => ReviewRecord[] | undefined;
-	diagnosesFromComments: (population: AttestedCommentPopulation, writerId: string) => DiagnosisRecord[] | undefined;
-	readRepair: (repoRoot: string, from: string, to: string) => string | undefined;
 	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
-	commitDiagnosis: (
-		subject: ReviewSubject,
-		history: readonly StateSummary[],
-		diagnosis: DiagnosisInput,
-	) => Promise<ReviewPublicationOutcome>;
 	resolveHead: (repoRoot: string, headRef: string) => string | undefined;
 };
 
@@ -209,7 +200,7 @@ function reentryConsequence(consequence: Consequence): TerminalSeed | undefined 
  * body this process just composed (§1.4's record the acting agent does not
  * author, issue #212's acceptance criterion 2).
  */
-type DurableState = { history: StateSummary[]; diagnosis?: DiagnosisInput };
+type DurableState = { history: StateSummary[] };
 
 async function durableState(
 	repoRoot: string,
@@ -218,16 +209,12 @@ async function durableState(
 ): Promise<DurableState | undefined> {
 	const population = await seams.readComments(repoRoot, subject);
 	const records = seams.recordsFromComments(population, subject.writerId);
-	const diagnoses = seams.diagnosesFromComments(population, subject.writerId);
 	// The substrate is the platform's own comment record on the subject this
 	// command already attested, so for this call site it is installed by
 	// construction and §1.4's absent limb has no case here.
 	const availability = historyAvailability(true, records);
-	if (!availability.available || diagnoses === undefined) return undefined;
-	const history = repairHistory(availability.records);
-	const matched = diagnosisForHistory(subject, history, diagnoses);
-	if (!matched.ok) return undefined;
-	return matched.diagnosis === undefined ? { history } : { history, diagnosis: matched.diagnosis };
+	if (!availability.available) return undefined;
+	return { history: repairHistory(availability.records) };
 }
 
 export async function driveReviewRound(
@@ -248,29 +235,21 @@ export async function driveReviewRound(
 		let diagnosedHistory: string | undefined;
 
 		const currentSubject = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) !== undefined;
-		const diagnose = async (history: StateSummary[], existing?: DiagnosisInput): Promise<TerminalSeed | undefined> => {
-			let diagnosis = existing;
-			if (diagnosis === undefined) {
-				const admitted = admitDiagnosis(
-					await dispatch(
-						composeDiagnosisBrief(history, {
-							changeDescription: spec.changeDescription,
-							withheldHead: head,
-							timing: briefTiming,
-						}),
-						head,
-					),
-				);
-				if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
-				diagnosis = admitted.diagnosis;
-				state = { phase: "diagnosis-admitted", diagnosis };
-				if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
-				if (!(await seams.commitDiagnosis(subject, history, diagnosis)).ok)
-					return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS_RECORD, reentry: "none" };
-				if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
-			} else {
-				state = { phase: "diagnosis-admitted", diagnosis };
-			}
+		const diagnose = async (history: StateSummary[]): Promise<TerminalSeed | undefined> => {
+			const admitted = admitDiagnosis(
+				await dispatch(
+					composeDiagnosisBrief(history, {
+						changeDescription: spec.changeDescription,
+						withheldHead: head,
+						timing: briefTiming,
+					}),
+					head,
+				),
+			);
+			if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
+			const diagnosis = admitted.diagnosis;
+			state = { phase: "diagnosis-admitted", diagnosis };
+			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			diagnosedHistory = JSON.stringify(history);
 			return reentryConsequence(diagnosisConsequence(diagnosis.value, diagnosis.invalidation));
 		};
@@ -281,20 +260,10 @@ export async function driveReviewRound(
 		if (before === undefined)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
 		if (triggerFires(before.history)) {
-			const stop = await diagnose(before.history, before.diagnosis);
+			const stop = await diagnose(before.history);
 			if (stop !== undefined) return finish(state, stop);
-		} else if (before.diagnosis !== undefined) {
-			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
 		}
 
-		let repair: RepairRecord | undefined;
-		const prior = before.history.at(-1);
-		if (prior !== undefined && prior.head !== head) {
-			const patch = seams.readRepair(repoRoot, prior.head, head);
-			if (patch === undefined)
-				return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
-			repair = { from: prior.head, to: head, patch };
-		}
 		const round = await seams.runRound({
 			repoRoot,
 			baseRef: subject.context.pullRequest.base.oid,
@@ -302,7 +271,6 @@ export async function driveReviewRound(
 			manifest: subjectCriterionManifest(subject),
 			fences: spec.fences,
 			changeDescription: spec.changeDescription,
-			...(repair === undefined ? {} : { repair }),
 			timing: briefTiming,
 			dispatch,
 		});
@@ -316,10 +284,24 @@ export async function driveReviewRound(
 		if (after === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
 		if (!triggerFires(after.history) || JSON.stringify(after.history) === diagnosedHistory)
 			return finish(state, { disposition: "posted", review: round.review });
-		const stop = await diagnose(after.history, after.diagnosis);
+		const stop = await diagnose(after.history);
 		return finish(state, stop ?? { disposition: "posted", review: round.review });
 	} catch {
 		return finish(state, { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" });
+	}
+}
+
+function resolveLocalHead(repoRoot: string, ref: string): string | undefined {
+	try {
+		const head = execFileSync("git", ["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env: withoutRepoLocatingGitEnv(process.env),
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+		return /^[0-9a-f]{40}$/.test(head) ? head : undefined;
+	} catch {
+		return undefined;
 	}
 }
 
@@ -356,8 +338,6 @@ export function registerReviewRoundCommand(
 					refetchSubject: refetchReviewSubject,
 					readComments: (root, current) => fetchAttestedReviewComments(root, current.context),
 					recordsFromComments: recordsFromAttestedComments,
-					diagnosesFromComments: diagnosesFromAttestedComments,
-					readRepair: readRepairPatch,
 					makeDispatch: (input) =>
 						makeDispatcher({
 							callerRepoRoot: repoRoot,
@@ -367,9 +347,7 @@ export function registerReviewRoundCommand(
 						}),
 					runRound: reviewRound,
 					publishRecord: (body, current) => publishAndRefetchReviewRecord(body, current, repoRoot, stateRoot),
-					commitDiagnosis: (current, history, diagnosis) =>
-						commitPostStateDiagnosis(current, history, diagnosis, repoRoot, stateRoot),
-					resolveHead: resolveRepositoryHead,
+					resolveHead: resolveLocalHead,
 				};
 				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
 			}
