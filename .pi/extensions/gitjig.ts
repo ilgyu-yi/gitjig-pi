@@ -68,8 +68,8 @@ export default function gitjig(pi: ExtensionAPI) {
 
 	pi.on("session_start", (_event, ctx) => {
 		record("session-start", "session_start received; appending the registration entry");
-		sessionSurface.attach(ctx);
 		pi.appendEntry("gitjig-registration", { repoRoot, stateRoot, seamActive, auditWritable });
+		sessionSurface.attach(ctx);
 		// Tier-2 bind advisory (§5.2, §5.9): classifies the clone the SESSION
 		// stands in from the configuration git resolves; debounced,
 		// timeout-bounded, and degrading to silence — never a session abort.

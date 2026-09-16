@@ -128,7 +128,10 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 		renderResult(result, options, theme, context) {
 			const terminal = publishTerminal(result.details, context.isError);
 			const first = result.content[0];
-			const detail = options.expanded && terminal !== "success" && first?.type === "text" ? first.text : undefined;
+			const detail =
+				options.expanded && !context.isError && terminal !== "success" && first?.type === "text"
+					? first.text
+					: undefined;
 			return renderActTerminal(terminal, theme, detail);
 		},
 	});

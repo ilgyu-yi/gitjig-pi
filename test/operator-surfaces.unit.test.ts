@@ -11,6 +11,7 @@ import { dispatchTarget, dispatchTerminal, registerDispatchTool } from "../.pi/e
 import { PUBLISH_DESTINATION_KINDS } from "../.pi/extensions/gitjig/publish/executor.ts";
 import { publishTarget, publishTerminal, registerPublishTool } from "../.pi/extensions/gitjig/publish/index.ts";
 import { SessionSurface } from "../.pi/extensions/gitjig/session-surface.ts";
+import gitjig from "../.pi/extensions/gitjig.ts";
 
 const theme = {
 	fg: (color: string, text: string) => `[${color}]${text}`,
@@ -179,8 +180,12 @@ describe("#131 collapsed operator-visible acts", () => {
 				{ isError: false },
 			),
 		);
+		const hostError = "host error carrying an unowned operand";
+		const errored = rendered(tool.renderResult(result({}, hostError), { expanded: true }, theme, { isError: true }));
 		assert.match(refused, /refuse.*destination/);
 		assert.match(unverified, /outcome-unverified/);
+		assert.equal(errored, "[error]✗ failure");
+		assert.ok(!errored.includes(hostError));
 	});
 
 	it("classification and target tables are total over malformed and exceptional shapes", () => {
@@ -296,6 +301,62 @@ describe("#131 persistent session surface", () => {
 			assert.deepEqual(events, ["active", "refusal", "active", "success", "active", "failure"]);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("the composition root attaches and passes the one surface while preserving registration on a bad UI", async () => {
+		const state = mkdtempSync(join(tmpdir(), "gitjig-composition-surface-"));
+		const previous = process.env.GITJIG_TEST_STATE_ROOT;
+		process.env.GITJIG_TEST_STATE_ROOT = state;
+		try {
+			let sessionStart: ((event: unknown, ctx: unknown) => unknown) | undefined;
+			const entries: Array<{ type: string; data: unknown }> = [];
+			const statuses: string[] = [];
+			const tools: RegisteredTool[] = [];
+			const pi = {
+				registerTool: (tool: unknown) => tools.push(tool as RegisteredTool),
+				registerCommand: () => {},
+				on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
+					if (event === "session_start") sessionStart = handler;
+				},
+				appendEntry: (type: string, data: unknown) => entries.push({ type, data }),
+			} as unknown as ExtensionAPI;
+			gitjig(pi);
+			assert.ok(sessionStart, "composition root registered no session_start handler");
+			await sessionStart(
+				{},
+				{
+					hasUI: true,
+					ui: { theme, setStatus: (_key: string, text: string) => statuses.push(text) },
+				},
+			);
+			assert.ok(entries.some((entry) => entry.type === "gitjig-registration"));
+			assert.equal(statuses.at(-1), "[dim]delegate idle");
+			const dispatch = tools.find(
+				(tool) =>
+					"renderCall" in tool &&
+					"renderResult" in tool &&
+					tool.renderCall({}, theme, {}).render(80).join("").includes("Dispatch"),
+			);
+			assert.ok(dispatch, "composition root registered no dispatch tool");
+			await dispatch.execute("refuse", { brief: "x", delegateArgv: [] });
+			assert.equal(statuses.at(-1), "[warning]delegate refusal");
+
+			const registrations = entries.filter((entry) => entry.type === "gitjig-registration").length;
+			await sessionStart(
+				{},
+				{
+					get hasUI() {
+						throw new Error("host ui unavailable");
+					},
+					ui: {},
+				},
+			);
+			assert.equal(entries.filter((entry) => entry.type === "gitjig-registration").length, registrations + 1);
+		} finally {
+			if (previous === undefined) delete process.env.GITJIG_TEST_STATE_ROOT;
+			else process.env.GITJIG_TEST_STATE_ROOT = previous;
+			rmSync(state, { recursive: true, force: true });
 		}
 	});
 

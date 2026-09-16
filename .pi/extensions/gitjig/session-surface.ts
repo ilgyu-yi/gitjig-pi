@@ -21,8 +21,14 @@ export class SessionSurface {
 		this.ui = undefined;
 		// Pi's JSON/print implementations are no-ops, but the explicit guard is
 		// the aid-direction contract: a headless run never depends on a UI call.
-		if (!ctx.hasUI) return;
-		this.ui = ctx.ui;
+		try {
+			if (!ctx.hasUI) return;
+			this.ui = ctx.ui;
+		} catch {
+			// A malformed host UI context is an unavailable aid, never a session
+			// dependency. Leave the projection detached and continue startup.
+			return;
+		}
 		this.refresh();
 	}
 

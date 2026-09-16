@@ -73,6 +73,13 @@ describe("#131 named isolated operator-surface mutants", () => {
 
 	it("kills structured-target, styling, headless, fail-open, boundary, and activity mutants", () => {
 		kill(
+			"publish-host-error-redaction",
+			"publish/index.ts",
+			'options.expanded && !context.isError && terminal !== "success"',
+			'options.expanded && terminal !== "success"',
+			`import assert from "node:assert/strict"; import {registerPublishTool} from "./gitjig/publish/index.ts"; let tool; registerPublishTool({registerTool:x=>tool=x},"/repo","/state"); const secret="host-error-secret"; const theme={fg:(_c,x)=>x,bold:x=>x}; const component=tool.renderResult({content:[{type:"text",text:secret}],details:{}},{expanded:true},theme,{isError:true}); assert.ok(!component.render(100).join("\\n").includes(secret));`,
+		);
+		kill(
 			"publish-body-redaction",
 			"publish/index.ts",
 			"return `PR comment${number}`;",
