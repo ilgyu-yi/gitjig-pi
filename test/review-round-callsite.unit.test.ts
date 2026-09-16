@@ -886,6 +886,32 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
+	it("hands off when the subject drifts during post-diagnosis history confirmation", async () => {
+		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		let reads = 0;
+		let stale = false;
+		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "stale subject" };
+		const outcome = await driveReviewRound(
+			spec(),
+			"/unused",
+			seams({
+				readComments: async () => {
+					reads += 1;
+					if (reads === 2) stale = true;
+					return population(bodies);
+				},
+				refetchSubject: async (_root, current) => (stale ? undefined : current),
+				makeDispatch: diagnosisDispatch(diagnosis),
+			}),
+		);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the review subject changed while the round ran",
+			reentry: "none",
+			diagnosis,
+		});
+	});
+
 	it("hands off when durable history changes during diagnosis", async () => {
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
 		let rounds = 0;

@@ -269,6 +269,7 @@ export async function driveReviewRound(
 			const confirmed = await durableState(repoRoot, subject, seams, requiredReceipt);
 			if (confirmed === undefined || JSON.stringify(confirmed.history) !== JSON.stringify(history))
 				return { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" };
+			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			diagnosedHistory = JSON.stringify(history);
 			return reentryConsequence(diagnosisConsequence(diagnosis.value, diagnosis.invalidation));
 		};
