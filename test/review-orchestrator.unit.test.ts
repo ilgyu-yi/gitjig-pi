@@ -1315,6 +1315,71 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(seen[0].brief, "the brief text", "makeDispatcher did not forward the brief");
 	});
 
+	it("makeDispatcher re-sends the identical dispatch once, and only on the failed-run refusal", async () => {
+		const o = orchestrate();
+		const failedRun = "dispatch refused: the delegated run reported failure; no return is admitted from a failed run";
+		const seen: RunDispatchOptions[] = [];
+		const run =
+			(outcomes: DispatchOutcome[]) =>
+			(options: RunDispatchOptions): Promise<DispatchOutcome> => {
+				seen.push(options);
+				return Promise.resolve(outcomes[seen.length - 1] ?? outcomes[outcomes.length - 1]);
+			};
+
+		// The one measured transient class (#220): two of three slots hit it in
+		// one round and both returned cleanly on an identical re-dispatch.
+		const recovered = await o.makeDispatcher(
+			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
+			run([{ disposition: "refused", cause: failedRun }, admitted(approvedPayload)]),
+		)("the brief text", "the-resolved-head");
+		assert.equal(seen.length, 2, "the failed-run refusal drew no second send");
+		assert.deepEqual(
+			seen[1],
+			seen[0],
+			"the retry was not the identical dispatch \u2014 the second send must repeat the same options, brief and pin " +
+				"byte for byte, never a reassembled one",
+		);
+		assert.equal(recovered.disposition, "admitted", "the retry's own outcome did not reach the caller");
+
+		// One retry, never a loop: a second failed run is the caller's answer.
+		seen.length = 0;
+		const persistent = await o.makeDispatcher(
+			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
+			run([{ disposition: "refused", cause: failedRun }]),
+		)("the brief text", "the-resolved-head");
+		assert.equal(seen.length, 2, "a persistently failing run was re-sent more or fewer than once");
+		assert.deepEqual(persistent, { disposition: "refused", cause: failedRun });
+
+		// Every other refusal stands on its first answer: none was measured
+		// transient, and re-sending one would spend a delegate on a decided fact.
+		for (const cause of [
+			"dispatch refused: the delegate could not be run from this session's environment; nothing started and nothing is admitted",
+			"dispatch refused: the delegate exceeded its run bound and was terminated; nothing is admitted",
+			"dispatch refused: no readable return landed at the return slot; a delegate stream is not the crossing",
+			"dispatch refused: the return is oversize or malformed against the closed return schema; it is refused whole, never truncated",
+			"dispatch refused: the return names a caller-held operand; the return channel is content-free and the return is refused whole",
+			`${failedRun} `,
+		]) {
+			seen.length = 0;
+			const outcome = await o.makeDispatcher(
+				{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
+				run([{ disposition: "refused", cause }]),
+			)("the brief text", "the-resolved-head");
+			assert.equal(seen.length, 1, `a non-transient refusal was re-sent: ${cause}`);
+			assert.deepEqual(outcome, { disposition: "refused", cause });
+		}
+
+		// An admitted return is never re-sent, whatever its `ok`.
+		for (const ok of [true, false]) {
+			seen.length = 0;
+			await o.makeDispatcher(
+				{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: ["x"] },
+				run([{ disposition: "admitted", ok, summary: "RESULT", compare: "confirmed" }]),
+			)("the brief text", "the-resolved-head");
+			assert.equal(seen.length, 1, `an admitted return was re-sent (ok: ${String(ok)})`);
+		}
+	});
+
 	it("the round hands the ADMISSION the caller's manifest — a deferrable ruling defers only on the real one", async () => {
 		const o = orchestrate();
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
