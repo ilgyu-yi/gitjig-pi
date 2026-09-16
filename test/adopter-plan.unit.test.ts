@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import { buildPin, encodePin } from "../.pi/extensions/gitjig/install/pin.ts";
 import {
@@ -188,6 +189,15 @@ describe("#250 total old/new union planner", () => {
 		});
 		assert.equal(initialExactPin.outcome, "converged");
 		assert.equal(initialExactPin.members.at(-1)?.cause, "pin-exact-next");
+		const initialForeignPin = planComposition({
+			nextPinBytes: Buffer.from(encodePin(nextPin)),
+			priorPinBytes: null,
+			occupants: occupied({ ...base, ".pi/gitjig.pin.json": "foreign" }),
+		});
+		assert.deepEqual(
+			[initialForeignPin.outcome, initialForeignPin.members.at(-1)?.action, initialForeignPin.members.at(-1)?.cause],
+			["refused", "refuse", "foreign-occupant"],
+		);
 	});
 
 	it("seals the plan evidence before handing it to final verification", () => {
@@ -237,6 +247,11 @@ describe("#250 total old/new union planner", () => {
 		resurrected.set(".pi/prompts/gone", { kind: "bytes", bytes: Buffer.from("foreign") });
 		assert.equal(verifyPlannedState(plan, resurrected, Buffer.from(encodePin(nextPin))), "refused");
 		assert.equal(verifyPlannedState(plan, final, Buffer.from(encodePin(oldPin))), "refused");
+		const malformedPinBytes = Buffer.from("{");
+		const malformedPlan = { ...plan, pinDigest: createHash("sha256").update(malformedPinBytes).digest("hex") };
+		const malformedFinal = new Map(final);
+		malformedFinal.set(".pi/gitjig.pin.json", { kind: "bytes", bytes: malformedPinBytes });
+		assert.equal(verifyPlannedState(malformedPlan, malformedFinal, malformedPinBytes), "refused");
 		const refused = { ...plan, outcome: "refused" as const };
 		assert.equal(verifyPlannedState(refused, final, Buffer.from(encodePin(nextPin))), "refused");
 		const convergedPlan = planComposition({
@@ -259,6 +274,17 @@ describe("#250 total old/new union planner", () => {
 		};
 		const malformedNext = planComposition({ ...common, nextPinBytes: Buffer.from("{"), priorPinBytes: null });
 		assert.deepEqual([malformedNext.outcome, malformedNext.members[0]?.cause], ["refused", "malformed-next-pin"]);
+		const replacementPin = buildPin({ ...source, owner: "\ufffd" }, rev("b"), []);
+		const encodedReplacement = Buffer.from(encodePin(replacementPin));
+		const replacementAt = encodedReplacement.indexOf(Buffer.from("\ufffd"));
+		assert.notEqual(replacementAt, -1);
+		const invalidUtf8 = Buffer.concat([
+			encodedReplacement.subarray(0, replacementAt),
+			Buffer.from([0xff]),
+			encodedReplacement.subarray(replacementAt + 3),
+		]);
+		const malformedBytes = planComposition({ ...common, nextPinBytes: invalidUtf8, priorPinBytes: null });
+		assert.equal(malformedBytes.members[0]?.cause, "malformed-next-pin");
 		const malformedPrior = planComposition({ ...common, priorPinBytes: Buffer.from("{") });
 		assert.equal(malformedPrior.outcome, "refused");
 		assert.ok(malformedPrior.members.every((item) => item.cause === "malformed-prior-pin"));

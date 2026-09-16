@@ -70,6 +70,13 @@ describe("#250 named isolated guard mutants", () => {
 
 	it("kills path, snapshot, descriptor, schema-order, and aggregate mutants", () => {
 		kill(
+			"candidate-root",
+			"classifier.ts",
+			"!CANDIDATE_ROOTS.includes(parts[0] as (typeof CANDIDATE_ROOTS)[number])",
+			"false",
+			`import assert from "node:assert/strict"; import {classifyCandidate} from "./install/classifier.ts"; assert.throws(()=>classifyCandidate("outside/file",Buffer.from("x")));`,
+		);
+		kill(
 			"unicode-scalars",
 			"classifier.ts",
 			"if (hasLoneSurrogate(value))",
@@ -116,7 +123,7 @@ describe("#250 named isolated guard mutants", () => {
 			"classifier.ts",
 			" | constants.O_NOFOLLOW",
 			"",
-			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync,symlinkSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"),outside=join(root,"outside"); writeFileSync(file,"in"); writeFileSync(outside,"out"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){renameSync(file,outside+"-checked");symlinkSync(outside+"-checked",file)}}}));`,
+			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync,symlinkSync,rmSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"),outside=join(root,"outside"); writeFileSync(file,"in"); writeFileSync(outside,"out"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){renameSync(file,outside+"-checked");symlinkSync(outside+"-checked",file)}},afterRead(p){if(p===".github/a"){rmSync(file);renameSync(outside+"-checked",file)}}}));`,
 		);
 		kill(
 			"opened-identity",
@@ -126,18 +133,32 @@ describe("#250 named isolated guard mutants", () => {
 			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,rmSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"); writeFileSync(file,"old"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){rmSync(file);writeFileSync(file,"new")}}}));`,
 		);
 		kill(
-			"post-file-identity",
+			"post-pathname-identity",
 			"classifier.ts",
-			"!sameObject(opened, fstatSync(descriptor))",
+			"!sameObject(opened, lstatSync(childAbs))",
 			"false",
-			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,chmodSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const f=join(root,".github/a"); writeFileSync(f,"x"); assert.throws(()=>observeCandidates(root,{afterRead(p){if(p===".github/a")chmodSync(f,0o600)}}));`,
+			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"),d=join(root,".github"),f=join(d,"a"),old=join(root,"old"); mkdirSync(d,{recursive:true}); writeFileSync(f,"old"); assert.throws(()=>observeCandidates(root,{afterRead(){renameSync(f,old);writeFileSync(f,"new")}}));`,
+		);
+		kill(
+			"directory-membership",
+			"classifier.ts",
+			"beforeNames.length !== afterNames.length",
+			"false",
+			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"),d=join(root,".github"); mkdirSync(d,{recursive:true}); writeFileSync(join(d,"a"),"a"); assert.throws(()=>observeCandidates(root,{afterDirectoryRead(p){if(p===".github")writeFileSync(join(d,"b"),"b")}}));`,
+		);
+		kill(
+			"snapshot-byte-order",
+			"classifier.ts",
+			"const sorted = [...members].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));",
+			"const sorted = [...members].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);",
+			`import assert from "node:assert/strict"; import {renderMembershipSnapshot} from "./install/classifier.ts"; const m=JSON.parse(renderMembershipSnapshot([{path:".github/\\u{10000}",disposition:"handed-over"},{path:".github/\\ue000",disposition:"handed-over"}])).members; assert.equal(m[0].path,".github/\\ue000");`,
 		);
 		kill(
 			"post-directory-identity",
 			"classifier.ts",
 			"!sameObject(before, after)",
 			"false",
-			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"),d=join(root,".github"); mkdirSync(d,{recursive:true}); writeFileSync(join(d,"a"),"x"); assert.throws(()=>observeCandidates(root,{afterDirectoryRead(p){if(p===".github"){renameSync(d,d+"-old");mkdirSync(d)}}}));`,
+			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"),d=join(root,".github"); mkdirSync(d,{recursive:true}); writeFileSync(join(d,"a"),"x"); assert.throws(()=>observeCandidates(root,{afterDirectoryRead(p){if(p===".github"){renameSync(d,d+"-old");mkdirSync(d);writeFileSync(join(d,"a"),"x")}}}));`,
 		);
 		kill(
 			"snapshot-disposition",
@@ -152,6 +173,20 @@ describe("#250 named isolated guard mutants", () => {
 			"Buffer.compare(Buffer.from(previous.path), Buffer.from(current.path)) >= 0",
 			"false",
 			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin,digestRecord} from "./install/pin.ts"; import {createHash} from "node:crypto"; const s={provider:"github",host:"github.com",owner:"o",repository:"r"}; const p=buildPin(s,"a".repeat(40),[{path:".github/a",class:"handed-over",bytes:Buffer.from("a")},{path:".githooks/b",class:"handed-over",bytes:Buffer.from("b")}]); p.manifest.reverse(); p.payloadDigest=createHash("sha256").update(Buffer.concat(p.manifest.map(digestRecord))).digest("hex"); const text=JSON.stringify(p,(_,v)=>typeof v==="bigint"?Number(v):v); assert.throws(()=>parsePin(text));`,
+		);
+		kill(
+			"parser-reserved-pin-path",
+			"pin.ts",
+			'if (path === GENERATED_PIN_PATH) throw new PinRefusal("manifest path is reserved for the generated pin");',
+			'if (false) throw new PinRefusal("manifest path is reserved for the generated pin");',
+			`import assert from "node:assert/strict"; import {createHash} from "node:crypto"; import {buildPin,digestRecord,encodePin,parsePin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[{path:".pi/prompts/a",class:"carried",bytes:Buffer.from("x")}]),e={...p.manifest[0],path:".pi/gitjig.pin.json"},h=createHash("sha256").update(digestRecord(e)).digest("hex"); assert.throws(()=>parsePin(encodePin(p).replace(".pi/prompts/a",e.path).replaceAll(p.payloadDigest,h)));`,
+		);
+		kill(
+			"build-pin-byte-order",
+			"pin.ts",
+			"Buffer.compare(Buffer.from(a.path), Buffer.from(b.path))",
+			"a.path < b.path ? -1 : a.path > b.path ? 1 : 0",
+			`import assert from "node:assert/strict"; import {buildPin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[{path:".github/\\u{10000}",class:"handed-over",bytes:Buffer.from("a")},{path:".github/\\ue000",class:"handed-over",bytes:Buffer.from("b")}]); assert.equal(p.manifest[0].path,".github/\\ue000");`,
 		);
 		kill(
 			"source-empty-name",
@@ -219,6 +254,13 @@ describe("#250 named isolated guard mutants", () => {
 	});
 
 	it("kills changed-source, class-transition, replace, and whole-refusal mutants", () => {
+		kill(
+			"strict-pin-utf8",
+			"plan.ts",
+			"pinUtf8.decode(bytes)",
+			'bytes.toString("utf8")',
+			`import assert from "node:assert/strict"; import {buildPin,encodePin} from "./install/pin.ts"; import {planComposition} from "./install/plan.ts"; const p=Buffer.from(encodePin(buildPin({provider:"github",host:"github.com",owner:"\\ufffd",repository:"r"},"a".repeat(40),[]))),i=p.indexOf(Buffer.from("\\ufffd")),bad=Buffer.concat([p.subarray(0,i),Buffer.from([255]),p.subarray(i+3)]); assert.equal(planComposition({nextPinBytes:bad,priorPinBytes:null,occupants:new Map()}).members[0].cause,"malformed-next-pin");`,
+		);
 		kill(
 			"malformed-next-pin",
 			"plan.ts",
@@ -358,6 +400,20 @@ describe("#250 named isolated guard mutants", () => {
 			"const cls = next?.class ?? old?.class;",
 			'const cls = "handed-over" as const;',
 			`${pinSetup} const added=buildPin(source,"b".repeat(40),[member(".pi/prompts/a","carried","new")]); const p=planComposition({nextPinBytes:Buffer.from(encodePin(added)),priorPinBytes:null,occupants:new Map([[".pi/prompts/a",{kind:"absent"}],[".pi/gitjig.pin.json",{kind:"absent"}]])}); assert.equal(p.members[0].class,"carried");`,
+		);
+		kill(
+			"initial-foreign-pin",
+			"plan.ts",
+			'!prior && pinOccupant.kind === "absent"',
+			"!prior",
+			`${pinSetup} const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:null,occupants:new Map([[".githooks/a",{kind:"bytes",bytes:Buffer.from("new")}],[".pi/gitjig.pin.json",{kind:"bytes",bytes:Buffer.from("foreign")}]] )}); assert.equal(p.outcome,"refused");`,
+		);
+		kill(
+			"verify-malformed-pin",
+			"plan.ts",
+			'} catch {\n\t\treturn "refused";\n\t}',
+			"} catch (error) {\n\t\tthrow error;\n\t}",
+			`import assert from "node:assert/strict"; import {createHash} from "node:crypto"; import {buildPin,encodePin} from "./install/pin.ts"; import {planComposition,verifyPlannedState} from "./install/plan.ts"; const p0=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[]),bytes=Buffer.from(encodePin(p0)),p=planComposition({nextPinBytes:bytes,priorPinBytes:null,occupants:new Map([[".pi/gitjig.pin.json",{kind:"absent"}]])}),bad=Buffer.from("{"),forged={...p,pinDigest:createHash("sha256").update(bad).digest("hex")}; assert.equal(verifyPlannedState(forged,new Map([[".pi/gitjig.pin.json",{kind:"bytes",bytes:bad}]]),bad),"refused");`,
 		);
 		kill(
 			"initial-exact-pin",

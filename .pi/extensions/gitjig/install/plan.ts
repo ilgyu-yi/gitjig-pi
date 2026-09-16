@@ -1,5 +1,6 @@
 /** Warning-surface roster: EXEMPT — plan causes are fixed tokens, not rendered operands. */
 import { createHash } from "node:crypto";
+import { TextDecoder } from "node:util";
 import { GENERATED_PIN_PATH, type PinEntry, type PinV1, parsePin, sourceEqual } from "./pin.ts";
 
 export type PlanAction = "land" | "replace" | "retire" | "converged" | "refuse";
@@ -39,6 +40,8 @@ export interface PlanInput {
 }
 
 const PIN_PATH = GENERATED_PIN_PATH;
+const pinUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const decodePin = (bytes: Buffer): string => pinUtf8.decode(bytes);
 const digest = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
 function matches(occupant: Occupant, entry: PinEntry): boolean {
 	return (
@@ -81,7 +84,7 @@ function globalRefusal(next: PinV1, pinBytes: Buffer, cause: PlanCause, prior: P
 export function planComposition(input: PlanInput): CompositionPlan {
 	let next: PinV1;
 	try {
-		next = parsePin(input.nextPinBytes.toString("utf8"));
+		next = parsePin(decodePin(input.nextPinBytes));
 	} catch {
 		return Object.freeze({
 			outcome: "refused",
@@ -93,7 +96,7 @@ export function planComposition(input: PlanInput): CompositionPlan {
 	let prior: PinV1 | null = null;
 	if (input.priorPinBytes !== null) {
 		try {
-			prior = parsePin(input.priorPinBytes.toString("utf8"));
+			prior = parsePin(decodePin(input.priorPinBytes));
 		} catch {
 			return globalRefusal(next, input.nextPinBytes, "malformed-prior-pin");
 		}
@@ -168,7 +171,7 @@ export function verifyPlannedState(
 	if (plan.outcome === "refused" || digest(pinBytes) !== plan.pinDigest) return "refused";
 	let pin: PinV1;
 	try {
-		pin = parsePin(pinBytes.toString("utf8"));
+		pin = parsePin(decodePin(pinBytes));
 	} catch {
 		return "refused";
 	}

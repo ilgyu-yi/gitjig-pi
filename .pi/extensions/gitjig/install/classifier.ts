@@ -163,7 +163,7 @@ function walk(
 			if (!opened.isFile() || !sameObject(stats, opened)) throw new ClassificationRefusal("candidate identity changed");
 			bytes = readFileSync(descriptor);
 			options.afterRead?.(path);
-			if (!sameObject(opened, fstatSync(descriptor))) throw new ClassificationRefusal("candidate identity changed");
+			if (!sameObject(opened, lstatSync(childAbs))) throw new ClassificationRefusal("candidate identity changed");
 		} catch (error) {
 			if (error instanceof ClassificationRefusal) throw error;
 			throw new ClassificationRefusal("candidate is unreadable or was replaced");
@@ -176,12 +176,23 @@ function walk(
 	}
 	options.afterDirectoryRead?.(decodeCandidatePath(relative));
 	let after: Stats;
+	let afterEntries: ReturnType<typeof readdirSync>;
 	try {
 		after = lstatSync(abs);
+		afterEntries = readdirSync(abs, { withFileTypes: true, encoding: "buffer" });
 	} catch {
 		throw new ClassificationRefusal("candidate directory identity changed");
 	}
-	if (!after.isDirectory() || after.isSymbolicLink() || !sameObject(before, after))
+	const names = (values: ReturnType<typeof readdirSync>) => values.map((entry) => entry.name).sort(Buffer.compare);
+	const beforeNames = names(entries);
+	const afterNames = names(afterEntries);
+	if (
+		!after.isDirectory() ||
+		after.isSymbolicLink() ||
+		!sameObject(before, after) ||
+		!beforeNames.every((name, index) => name.equals(afterNames[index] ?? Buffer.alloc(0))) ||
+		beforeNames.length !== afterNames.length
+	)
 		throw new ClassificationRefusal("candidate directory identity changed");
 }
 

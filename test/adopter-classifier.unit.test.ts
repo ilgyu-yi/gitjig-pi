@@ -86,6 +86,7 @@ describe("#250 exact source-only marker and ordered classifier", () => {
 			".github/e\u0301",
 			".github/\ud800",
 			".github/\udc00",
+			"outside/file",
 		])
 			assert.throws(() => classifyCandidate(path, Buffer.from("x\n")));
 	});
@@ -124,8 +125,8 @@ describe("#250 candidate observation and checked snapshot", () => {
 		}
 	});
 
-	it("refuses post-read file and post-walk directory identity changes", () => {
-		for (const phase of ["file", "directory"] as const) {
+	it("refuses post-read pathname and post-walk directory identity or membership changes", () => {
+		for (const phase of ["file", "pathname", "directory", "membership"] as const) {
 			const fixture = mkdtempSync(join(tmpdir(), `gitjig-post-${phase}-`));
 			const directory = join(fixture, ".github");
 			const candidate = join(directory, "a");
@@ -136,22 +137,29 @@ describe("#250 candidate observation and checked snapshot", () => {
 					() =>
 						observeCandidates(
 							fixture,
-							phase === "file"
+							phase === "file" || phase === "pathname"
 								? {
 										afterRead(path) {
-											if (path === ".github/a") chmodSync(candidate, 0o600);
+											if (path !== ".github/a") return;
+											if (phase === "file") chmodSync(candidate, 0o600);
+											else {
+												renameSync(candidate, join(fixture, "old"));
+												writeFileSync(candidate, "new");
+											}
 										},
 									}
 								: {
 										afterDirectoryRead(path) {
-											if (path === ".github") {
+											if (path !== ".github") return;
+											if (phase === "directory") {
 												renameSync(directory, `${directory}-old`);
 												mkdirSync(directory);
-											}
+												writeFileSync(candidate, "x");
+											} else writeFileSync(join(directory, "added"), "new");
 										},
 									},
 						),
-					/identity/,
+					/identity|membership/,
 				);
 			} finally {
 				rmSync(fixture, { recursive: true, force: true });
@@ -189,6 +197,16 @@ describe("#250 candidate observation and checked snapshot", () => {
 		);
 		assert.throws(() =>
 			renderMembershipSnapshot([{ path: ".github/a", disposition: "handed-over", extra: true } as Membership]),
+		);
+		const byteOrdered = JSON.parse(
+			renderMembershipSnapshot([
+				{ path: ".github/\u{10000}", disposition: "handed-over" },
+				{ path: ".github/\ue000", disposition: "handed-over" },
+			]),
+		) as { members: Membership[] };
+		assert.deepEqual(
+			byteOrdered.members.map((member) => member.path),
+			[".github/\ue000", ".github/\u{10000}"],
 		);
 		assert.deepEqual(JSON.parse(rendered), {
 			schemaVersion: 1,

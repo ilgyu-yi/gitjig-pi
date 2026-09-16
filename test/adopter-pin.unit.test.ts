@@ -94,6 +94,23 @@ describe("#250 pin-v1 closed codec and digest grammar", () => {
 			.replace(".pi/prompts/a", "../outside")
 			.replaceAll(valid.payloadDigest, invalidAggregate);
 		assert.throws(() => parsePin(invalidPathPin), /outside|canonical/);
+		const reservedEntry = { ...validEntry, path: ".pi/gitjig.pin.json" };
+		const reservedAggregate = createHash("sha256").update(digestRecord(reservedEntry)).digest("hex");
+		const reservedPathPin = encodePin(valid)
+			.replace(".pi/prompts/a", ".pi/gitjig.pin.json")
+			.replaceAll(valid.payloadDigest, reservedAggregate);
+		assert.throws(() => parsePin(reservedPathPin), /reserved/);
+	});
+
+	it("sorts manifests by unsigned UTF-8 bytes", () => {
+		const pin = buildPin(source, revision, [
+			{ path: ".github/\u{10000}", class: "handed-over", bytes: Buffer.from("a") },
+			{ path: ".github/\ue000", class: "handed-over", bytes: Buffer.from("b") },
+		]);
+		assert.deepEqual(
+			pin.manifest.map((entry) => entry.path),
+			[".github/\ue000", ".github/\u{10000}"],
+		);
 	});
 
 	it("hashes an empty carried projection as SHA-256 of empty bytes", () => {
