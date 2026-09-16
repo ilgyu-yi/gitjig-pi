@@ -65,6 +65,14 @@ const CONTRACT_CLAUSES = [
 		"Acquisition obtains bytes from the platform-attested source at exactly `revision`, reconstructs the complete manifest and both aggregate digests, and refuses before any target mutation on any mismatch.",
 	],
 	[
+		"provision and freshness digest reuse",
+		"Provisioning and freshness reconstruct the carried records with this same grammar.",
+	],
+	[
+		"pin-version non-reinterpretation",
+		"Another provider or algorithm requires a new version, never reinterpretation of v1.",
+	],
+	[
 		"reviewed PR payload boundary",
 		"The PR atomically carries all admitted handed-over actions plus exactly one pin and no carried member.",
 	],
@@ -104,6 +112,18 @@ const CONTRACT_CLAUSES = [
 	[
 		"whole-phase pre-mutation refusal",
 		"The **whole phase refuses before mutation** if any member refuses; no partial-success pin exists.",
+	],
+	[
+		"closed terminal results and final verification",
+		"Terminal results are `verified`, `converged`, or `refused`, with fixed phase/member causes, and success requires final verification.",
+	],
+	[
+		"prior-attestation ownership limit and occupant precedence",
+		"Prior attestation plus current byte equality proves ownership of exact old bytes; it is not a general overwrite license. Foreign or locally customized bytes win and are never overwritten.",
+	],
+	[
+		"idempotence and exclusion at creation",
+		"Install and registration are idempotent. Carried files and shell-created state are excluded at creation.",
 	],
 ] as const;
 
