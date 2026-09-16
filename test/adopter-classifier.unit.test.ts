@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -51,6 +60,7 @@ describe("#250 exact source-only marker and ordered classifier", () => {
 			classifyMarker(Buffer.from([0x23, 0x21, 0x2f, 0x62, 0x69, 0x6e, 0x2f, 0x73, 0x68, 0x0a, 0xff, 0x0a])),
 		);
 		assert.equal(classifyMarker(Buffer.from("name: x\n# gitjig: source-only\n")), "absent");
+		assert.equal(classifyMarker(Buffer.from("#!/usr/bin/env gitjig:")), "absent");
 	});
 
 	it("classifies every settled path branch in order", () => {
@@ -114,6 +124,41 @@ describe("#250 candidate observation and checked snapshot", () => {
 		}
 	});
 
+	it("refuses post-read file and post-walk directory identity changes", () => {
+		for (const phase of ["file", "directory"] as const) {
+			const fixture = mkdtempSync(join(tmpdir(), `gitjig-post-${phase}-`));
+			const directory = join(fixture, ".github");
+			const candidate = join(directory, "a");
+			mkdirSync(directory);
+			writeFileSync(candidate, "x");
+			try {
+				assert.throws(
+					() =>
+						observeCandidates(
+							fixture,
+							phase === "file"
+								? {
+										afterRead(path) {
+											if (path === ".github/a") chmodSync(candidate, 0o600);
+										},
+									}
+								: {
+										afterDirectoryRead(path) {
+											if (path === ".github") {
+												renameSync(directory, `${directory}-old`);
+												mkdirSync(directory);
+											}
+										},
+									},
+						),
+					/identity/,
+				);
+			} finally {
+				rmSync(fixture, { recursive: true, force: true });
+			}
+		}
+	});
+
 	it("refuses non-regular, unreadable, and non-UTF-8 candidates", () => {
 		assert.throws(() => decodeCandidatePath(Buffer.concat([Buffer.from(".github/"), Buffer.from([0xff])])), /UTF-8/);
 		for (const shape of ["non-regular", "unreadable"] as const) {
@@ -139,6 +184,9 @@ describe("#250 candidate observation and checked snapshot", () => {
 			{ path: ".github/a", disposition: "source-only" },
 		]);
 		assert.throws(() => renderMembershipSnapshot([{ path: "../outside", disposition: "carried" }]));
+		assert.throws(() =>
+			renderMembershipSnapshot([{ path: ".github/a", disposition: "invalid" as Membership["disposition"] }]),
+		);
 		assert.throws(() =>
 			renderMembershipSnapshot([{ path: ".github/a", disposition: "handed-over", extra: true } as Membership]),
 		);

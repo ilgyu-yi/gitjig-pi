@@ -40,8 +40,16 @@ describe("#250 one composition owner", () => {
 		});
 		assert.equal(result.candidates.length, 5);
 		assert.deepEqual(
-			result.pin.manifest.map((entry) => entry.path),
-			[".githooks/adopter", ".pi/extensions/gitjig.ts", "changelog_unreleased/TEMPLATE.md"],
+			JSON.parse(result.membershipSnapshot).members,
+			result.candidates.map(({ path, disposition }) => ({ path, disposition })),
+		);
+		assert.deepEqual(
+			result.pin.manifest.map(({ path, class: memberClass }) => [path, memberClass]),
+			[
+				[".githooks/adopter", "handed-over"],
+				[".pi/extensions/gitjig.ts", "carried"],
+				["changelog_unreleased/TEMPLATE.md", "handed-over"],
+			],
 		);
 		assert.equal(result.plan.outcome, "planned");
 		assert.equal(result.pinBytes.toString(), encodePin(result.pin));

@@ -63,6 +63,8 @@ describe("#250 pin-v1 closed codec and digest grammar", () => {
 		assert.throws(() => parsePin(empty.replace('"provider":"github"', '"provider":"gitlab"')), /source/);
 		assert.throws(() => parsePin(empty.replace('"host":"github.com"', '"host":"example.com"')), /source/);
 		assert.throws(() => parsePin(empty.replace('"Owner"', '"bad/name"')), /source/);
+		assert.throws(() => parsePin(empty.replace('"Owner"', '""')), /source/);
+		assert.throws(() => parsePin(empty.replace('"Owner"', '"O\\u0308"')), /source/);
 		assert.throws(() => parsePin(empty.replace('"Owner"', '"\\ud800"')), /source/);
 		assert.throws(() => parsePin(empty.replace(revision, revision.toUpperCase())), /revision/);
 		assert.throws(() => parsePin(empty.replace('"sha256-v1"', '"sha256-v2"')), /version/);
@@ -79,6 +81,19 @@ describe("#250 pin-v1 closed codec and digest grammar", () => {
 		assert.throws(() => parsePin(member.replace('"path":".githooks/a"', '"extra":true,"path":".githooks/a"')), /keys/);
 		assert.throws(() => parsePin(member.replace('"handed-over"', '"unknown"')), /class/);
 		assert.throws(() => parsePin(member.replace(/"digest":"[0-9a-f]{64}"/, '"digest":"A"')), /digest/);
+		assert.throws(
+			() => buildPin(source, revision, [{ path: ".pi/gitjig.pin.json", class: "carried", bytes: Buffer.from("x") }]),
+			/reserved/,
+		);
+		const valid = buildPin(source, revision, [{ path: ".pi/prompts/a", class: "carried", bytes: Buffer.from("x") }]);
+		const validEntry = valid.manifest[0];
+		assert.ok(validEntry);
+		const invalidEntry = { ...validEntry, path: "../outside" };
+		const invalidAggregate = createHash("sha256").update(digestRecord(invalidEntry)).digest("hex");
+		const invalidPathPin = encodePin(valid)
+			.replace(".pi/prompts/a", "../outside")
+			.replaceAll(valid.payloadDigest, invalidAggregate);
+		assert.throws(() => parsePin(invalidPathPin), /outside|canonical/);
 	});
 
 	it("hashes an empty carried projection as SHA-256 of empty bytes", () => {

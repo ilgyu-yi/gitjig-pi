@@ -35,6 +35,7 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const REVISION = /^[0-9a-f]{40}$/;
 const UINT64_MAX = (1n << 64n) - 1n;
 const UINT32_MAX = 0xffff_ffff;
+export const GENERATED_PIN_PATH = ".pi/gitjig.pin.json";
 
 export class PinRefusal extends Error {
 	constructor(cause: string) {
@@ -208,6 +209,7 @@ function validateEntry(value: JsonValue): PinEntry {
 	const raw = object(value, ["path", "class", "size", "digest"], "manifest entry");
 	const path = string(required(raw, "path"), "manifest path");
 	validateCandidatePath(path);
+	if (path === GENERATED_PIN_PATH) throw new PinRefusal("manifest path is reserved for the generated pin");
 	const cls = raw.class;
 	if (cls !== "handed-over" && cls !== "carried") throw new PinRefusal("manifest class is invalid");
 	if (typeof raw.size !== "bigint" || raw.size < 0n || raw.size > UINT64_MAX)
@@ -265,6 +267,7 @@ export function buildPin(source: PinSource, revision: string, inputs: readonly P
 	const manifest = inputs
 		.map((input) => {
 			validateCandidatePath(input.path);
+			if (input.path === GENERATED_PIN_PATH) throw new PinRefusal("manifest path is reserved for the generated pin");
 			if (input.class !== "handed-over" && input.class !== "carried") throw new PinRefusal("manifest class is invalid");
 			return { path: input.path, class: input.class, size: BigInt(input.bytes.length), digest: hash(input.bytes) };
 		})

@@ -1,6 +1,6 @@
 /** Warning-surface roster: EXEMPT — plan causes are fixed tokens, not rendered operands. */
 import { createHash } from "node:crypto";
-import { type PinEntry, type PinV1, parsePin, sourceEqual } from "./pin.ts";
+import { GENERATED_PIN_PATH, type PinEntry, type PinV1, parsePin, sourceEqual } from "./pin.ts";
 
 export type PlanAction = "land" | "replace" | "retire" | "converged" | "refuse";
 export type PlanOutcome = "planned" | "converged" | "refused";
@@ -15,6 +15,7 @@ export type PlanCause =
 	| "pin-exact-old"
 	| "foreign-occupant"
 	| "unmeasured-occupant"
+	| "malformed-next-pin"
 	| "malformed-prior-pin"
 	| "changed-source"
 	| "class-transition";
@@ -37,7 +38,7 @@ export interface PlanInput {
 	occupants: ReadonlyMap<string, Occupant>;
 }
 
-const PIN_PATH = ".pi/gitjig.pin.json";
+const PIN_PATH = GENERATED_PIN_PATH;
 const digest = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
 function matches(occupant: Occupant, entry: PinEntry): boolean {
 	return (
@@ -78,7 +79,17 @@ function globalRefusal(next: PinV1, pinBytes: Buffer, cause: PlanCause, prior: P
 }
 
 export function planComposition(input: PlanInput): CompositionPlan {
-	const next = parsePin(input.nextPinBytes.toString("utf8"));
+	let next: PinV1;
+	try {
+		next = parsePin(input.nextPinBytes.toString("utf8"));
+	} catch {
+		return Object.freeze({
+			outcome: "refused",
+			members: Object.freeze([Object.freeze(refused(PIN_PATH, "pin", "malformed-next-pin"))]),
+			pinDigest: digest(input.nextPinBytes),
+			nextPayloadDigest: "",
+		});
+	}
 	let prior: PinV1 | null = null;
 	if (input.priorPinBytes !== null) {
 		try {

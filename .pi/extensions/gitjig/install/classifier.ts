@@ -15,8 +15,10 @@ export interface ObservedCandidate extends Membership {
 	bytes: Buffer;
 }
 export interface ObservationOptions {
-	/** Test seam for a replacement exactly after pathname classification. */
+	/** Test seams for replacements at exact pathname/descriptor phases. */
 	afterLstat?: (path: string) => void;
+	afterRead?: (path: string) => void;
+	afterDirectoryRead?: (path: string) => void;
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -44,7 +46,7 @@ function lineAt(bytes: Buffer, start: number): { text: string; terminated: boole
 
 export function classifyMarker(bytes: Buffer): "source-only" | "absent" | "refuse" {
 	const first = lineAt(bytes, 0);
-	const eligible = first.text.startsWith("#!") && first.terminated ? lineAt(bytes, first.next) : first;
+	const eligible = first.text.startsWith("#!") ? lineAt(bytes, first.next) : first;
 	if (eligible.terminated && DECLARATIONS.has(eligible.text)) return "source-only";
 	return eligible.text.includes("gitjig:") ? "refuse" : "absent";
 }
@@ -160,6 +162,7 @@ function walk(
 			const opened = fstatSync(descriptor);
 			if (!opened.isFile() || !sameObject(stats, opened)) throw new ClassificationRefusal("candidate identity changed");
 			bytes = readFileSync(descriptor);
+			options.afterRead?.(path);
 			if (!sameObject(opened, fstatSync(descriptor))) throw new ClassificationRefusal("candidate identity changed");
 		} catch (error) {
 			if (error instanceof ClassificationRefusal) throw error;
@@ -171,6 +174,7 @@ function walk(
 		if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition");
 		out.push({ path, disposition, bytes });
 	}
+	options.afterDirectoryRead?.(decodeCandidatePath(relative));
 	let after: Stats;
 	try {
 		after = lstatSync(abs);

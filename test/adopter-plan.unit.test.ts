@@ -96,18 +96,18 @@ describe("#250 total old/new union planner", () => {
 
 	it("totalizes retained, added, and retired occupant states", () => {
 		const cases = [
-			[".githooks/a", "old", "replace"],
-			[".githooks/a", "new", "converged"],
-			[".githooks/a", null, "refuse"],
-			[".githooks/a", "foreign", "refuse"],
-			[".pi/prompts/new", null, "land"],
-			[".pi/prompts/new", "new", "converged"],
-			[".pi/prompts/new", "foreign", "refuse"],
-			[".pi/prompts/gone", "gone", "retire"],
-			[".pi/prompts/gone", null, "converged"],
-			[".pi/prompts/gone", "foreign", "refuse"],
+			[".githooks/a", "old", "replace", "exact-old", "handed-over"],
+			[".githooks/a", "new", "converged", "exact-next", "handed-over"],
+			[".githooks/a", null, "refuse", "foreign-occupant", "handed-over"],
+			[".githooks/a", "foreign", "refuse", "foreign-occupant", "handed-over"],
+			[".pi/prompts/new", null, "land", "initial-absent", "carried"],
+			[".pi/prompts/new", "new", "converged", "exact-next", "carried"],
+			[".pi/prompts/new", "foreign", "refuse", "foreign-occupant", "carried"],
+			[".pi/prompts/gone", "gone", "retire", "exact-old", "carried"],
+			[".pi/prompts/gone", null, "converged", "already-retired", "carried"],
+			[".pi/prompts/gone", "foreign", "refuse", "foreign-occupant", "carried"],
 		] as const;
-		for (const [path, body, action] of cases) {
+		for (const [path, body, action, cause, memberClass] of cases) {
 			const states = occupied({
 				".githooks/a": "new",
 				".pi/prompts/gone": null,
@@ -120,7 +120,8 @@ describe("#250 total old/new union planner", () => {
 				priorPinBytes: Buffer.from(encodePin(oldPin)),
 				occupants: states,
 			});
-			assert.equal(plan.members.find((item) => item.path === path)?.action, action, path);
+			const member = plan.members.find((item) => item.path === path);
+			assert.deepEqual([member?.action, member?.cause, member?.class], [action, cause, memberClass], path);
 			assert.equal(plan.outcome === "refused", action === "refuse", path);
 		}
 		for (const path of [".githooks/a", ".pi/prompts/new", ".pi/prompts/gone"]) {
@@ -143,18 +144,18 @@ describe("#250 total old/new union planner", () => {
 
 	it("totalizes pin occupants and derives the fully converged outcome", () => {
 		const base = { ".githooks/a": "new", ".pi/prompts/gone": null, ".pi/prompts/new": "new" };
-		for (const [pinBody, action] of [
-			[encodePin(nextPin), "converged"],
-			[encodePin(oldPin), "replace"],
-			[null, "refuse"],
-			["foreign", "refuse"],
+		for (const [pinBody, action, cause] of [
+			[encodePin(nextPin), "converged", "pin-exact-next"],
+			[encodePin(oldPin), "replace", "pin-exact-old"],
+			[null, "refuse", "foreign-occupant"],
+			["foreign", "refuse", "foreign-occupant"],
 		] as const) {
 			const plan = planComposition({
 				nextPinBytes: Buffer.from(encodePin(nextPin)),
 				priorPinBytes: Buffer.from(encodePin(oldPin)),
 				occupants: occupied({ ...base, ".pi/gitjig.pin.json": pinBody }),
 			});
-			assert.equal(plan.members.at(-1)?.action, action);
+			assert.deepEqual([plan.members.at(-1)?.action, plan.members.at(-1)?.cause], [action, cause]);
 			assert.equal(plan.outcome === "refused", action === "refuse");
 		}
 		const missing = occupied({ ...base, ".pi/gitjig.pin.json": encodePin(oldPin) });
@@ -180,6 +181,13 @@ describe("#250 total old/new union planner", () => {
 			occupants: occupied({ ...base, ".pi/gitjig.pin.json": encodePin(nextPin) }),
 		});
 		assert.equal(exactRerun.outcome, "converged");
+		const initialExactPin = planComposition({
+			nextPinBytes: Buffer.from(encodePin(nextPin)),
+			priorPinBytes: null,
+			occupants: occupied({ ...base, ".pi/gitjig.pin.json": encodePin(nextPin) }),
+		});
+		assert.equal(initialExactPin.outcome, "converged");
+		assert.equal(initialExactPin.members.at(-1)?.cause, "pin-exact-next");
 	});
 
 	it("seals the plan evidence before handing it to final verification", () => {
@@ -249,7 +257,11 @@ describe("#250 total old/new union planner", () => {
 				".pi/gitjig.pin.json": encodePin(oldPin),
 			}),
 		};
-		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from("{") }).outcome, "refused");
+		const malformedNext = planComposition({ ...common, nextPinBytes: Buffer.from("{"), priorPinBytes: null });
+		assert.deepEqual([malformedNext.outcome, malformedNext.members[0]?.cause], ["refused", "malformed-next-pin"]);
+		const malformedPrior = planComposition({ ...common, priorPinBytes: Buffer.from("{") });
+		assert.equal(malformedPrior.outcome, "refused");
+		assert.ok(malformedPrior.members.every((item) => item.cause === "malformed-prior-pin"));
 		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(oldPin)) }).outcome, "refused");
 		const foreign = buildPin({ ...source, owner: "elsewhere" }, rev("a"), [
 			member(".pi/prompts/prior-only", "carried", "old"),
@@ -257,7 +269,10 @@ describe("#250 total old/new union planner", () => {
 		const changedSource = planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(foreign)) });
 		assert.equal(changedSource.outcome, "refused");
 		assert.ok(changedSource.members.some((item) => item.path === ".pi/prompts/prior-only"));
+		assert.ok(changedSource.members.every((item) => item.cause === "changed-source"));
 		const oldClass = buildPin(source, rev("a"), [member(".githooks/a", "carried", "old")]);
-		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(oldClass)) }).outcome, "refused");
+		const classChange = planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(oldClass)) });
+		assert.equal(classChange.outcome, "refused");
+		assert.ok(classChange.members.every((item) => item.cause === "class-transition"));
 	});
 });
