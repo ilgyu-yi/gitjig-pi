@@ -353,8 +353,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			'signal ?? "unknown"',
 		],
 	},
+	{ file: "gitjig/publish/index.ts", allow: [] },
 	{
-		file: "gitjig/publish/index.ts",
+		file: "gitjig/publish/service.ts",
 		allow: [
 			// Carriers of this module's own fixed causes.
 			"cause",

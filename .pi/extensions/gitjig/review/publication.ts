@@ -6,7 +6,7 @@
  * account-level independence; #241 assigns semantic separation to the
  * ordered agent capacities under one account.
  */
-import { type PublishResult, performPublish } from "../publish/index.ts";
+import { type PublishResult, performPublish } from "../publish/service.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
 import {
 	admitPlatformReviewContext,

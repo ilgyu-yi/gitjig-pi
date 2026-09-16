@@ -695,14 +695,43 @@ describe("review-round production call site", () => {
 		assert.equal(ran, 0);
 	});
 
-	it("refuses to post a record after the subject drifted under the round", async () => {
-		let posts = 0;
+	it("hands off before opening the panel when history-read time changes the subject", async () => {
+		let rounds = 0;
 		assert.deepEqual(
 			await driveReviewRound(
 				spec(),
 				"/unused",
 				seams({
 					refetchSubject: async () => undefined,
+					runRound: async () => {
+						rounds += 1;
+						return ROUND;
+					},
+				}),
+			),
+			{
+				disposition: "hand-off",
+				cause: "review-round handed off: the review subject changed while the round ran",
+				reentry: "none",
+			},
+		);
+		assert.equal(rounds, 0);
+	});
+
+	it("refuses to post a record after the subject drifted under the round", async () => {
+		let checks = 0;
+		let rounds = 0;
+		let posts = 0;
+		assert.deepEqual(
+			await driveReviewRound(
+				spec(),
+				"/unused",
+				seams({
+					refetchSubject: async (_root, current) => (++checks === 1 ? current : undefined),
+					runRound: async () => {
+						rounds += 1;
+						return ROUND;
+					},
 					publishRecord: async (body) => {
 						posts += 1;
 						return receipt(body);
@@ -715,16 +744,24 @@ describe("review-round production call site", () => {
 				reentry: "none",
 			},
 		);
+		assert.equal(rounds, 1);
 		assert.equal(posts, 0);
 	});
 
 	it("hands off when the subject drifts after publication", async () => {
 		let checks = 0;
+		let posts = 0;
 		assert.deepEqual(
 			await driveReviewRound(
 				spec(),
 				"/unused",
-				seams({ refetchSubject: async (_root, current) => (++checks === 1 ? current : undefined) }),
+				seams({
+					refetchSubject: async (_root, current) => (++checks <= 2 ? current : undefined),
+					publishRecord: async (body) => {
+						posts += 1;
+						return receipt(body);
+					},
+				}),
 			),
 			{
 				disposition: "hand-off",
@@ -732,7 +769,8 @@ describe("review-round production call site", () => {
 				reentry: "none",
 			},
 		);
-		assert.equal(checks, 2);
+		assert.equal(checks, 3);
+		assert.equal(posts, 1);
 	});
 
 	it("hands off when a marked record is unreadable instead of shortening history", async () => {

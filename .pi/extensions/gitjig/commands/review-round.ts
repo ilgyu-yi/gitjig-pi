@@ -263,6 +263,8 @@ export async function driveReviewRound(
 			const stop = await diagnose(before.history);
 			if (stop !== undefined) return finish(state, stop);
 		}
+		if (!(await currentSubject()))
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 
 		const round = await seams.runRound({
 			repoRoot,
