@@ -645,6 +645,63 @@ describe("review-round production call site", () => {
 		assert.equal(briefs.length, 1, "a caller-supplied review target must refuse before dispatch");
 	});
 
+	it("reads the prior durable record into history across a clone boundary", async () => {
+		const first = repo();
+		const secondRoot = mkdtempSync(join(tmpdir(), "gitjig-review-next-clone-"));
+		dirs.push(secondRoot);
+		execFileSync("git", ["clone", "-q", first.root, secondRoot]);
+		const comments: { id: number; authorId: string; body: string }[] = [];
+		const readRoots: string[] = [];
+		let diagnoses = 0;
+
+		const run = async (root: string, current: ReviewSubject, record: ReviewRecord) =>
+			driveReviewRound(
+				spec(),
+				root,
+				seams({
+					fetchSubject: async () => current,
+					refetchSubject: async () => current,
+					resolveHead: () => current.context.pullRequest.head.oid,
+					readComments: async (seenRoot) => {
+						readRoots.push(seenRoot);
+						return { ok: true, comments: [...comments] };
+					},
+					runRound: async () => ({
+						review: record.review,
+						record,
+						recordBody: composeReviewRecord(record),
+					}),
+					publishRecord: async (body) => {
+						const commentId = comments.length + 1;
+						comments.push({ id: commentId, authorId: current.writerId, body });
+						return {
+							ok: true,
+							receipt: {
+								repositoryId: current.context.repository.id,
+								pullRequestId: current.context.pullRequest.id,
+								headOid: current.context.pullRequest.head.oid,
+								commentId,
+								authorId: current.writerId,
+								body,
+							},
+						};
+					},
+					makeDispatch: diagnosisDispatch({ value: "NONE", invalidation: "nothing", evidence: "cross-clone" }),
+				}),
+			);
+
+		assert.equal(
+			(await run(first.root, subject(first.base, first.base), repairRecord(first.base))).disposition,
+			"posted",
+		);
+		const second = await run(secondRoot, subject(first.base, first.head), repairRecord(first.head));
+		if ("diagnosis" in second && second.diagnosis !== undefined) diagnoses += 1;
+		assert.equal(second.disposition, "posted");
+		assert.equal(diagnoses, 1, "the second clone must diagnose the two-record history");
+		assert.ok(readRoots.includes(first.root));
+		assert.ok(readRoots.includes(secondRoot));
+	});
+
 	it("takes repository, base, head and criteria from the subject alone", async () => {
 		let options: RoundOptions | undefined;
 		const sealed = subject(HEAD_A, HEAD_B);
