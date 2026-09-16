@@ -59,7 +59,7 @@ class JsonReader {
 		throw new PinRefusal(cause);
 	}
 	private ws(): void {
-		while (/\s/u.test(this.text[this.at] ?? "")) this.at++;
+		while (this.at < this.text.length && "\t\n\r ".includes(this.text[this.at] ?? "")) this.at++;
 	}
 	private value(): JsonValue {
 		this.ws();

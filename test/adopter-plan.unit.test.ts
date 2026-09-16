@@ -173,6 +173,13 @@ describe("#250 total old/new union planner", () => {
 			occupants: occupied({ ...base, ".pi/gitjig.pin.json": encodePin(nextPin) }),
 		});
 		assert.equal(converged.outcome, "converged");
+		assert.equal(converged.members.at(-1)?.cause, "pin-exact-next");
+		const exactRerun = planComposition({
+			nextPinBytes: Buffer.from(encodePin(nextPin)),
+			priorPinBytes: Buffer.from(encodePin(nextPin)),
+			occupants: occupied({ ...base, ".pi/gitjig.pin.json": encodePin(nextPin) }),
+		});
+		assert.equal(exactRerun.outcome, "converged");
 	});
 
 	it("seals the plan evidence before handing it to final verification", () => {
@@ -218,6 +225,9 @@ describe("#250 total old/new union planner", () => {
 		const diverged = new Map(final);
 		diverged.set(".githooks/a", { kind: "bytes", bytes: Buffer.from("diverged") });
 		assert.equal(verifyPlannedState(plan, diverged, Buffer.from(encodePin(nextPin))), "refused");
+		const resurrected = new Map(final);
+		resurrected.set(".pi/prompts/gone", { kind: "bytes", bytes: Buffer.from("foreign") });
+		assert.equal(verifyPlannedState(plan, resurrected, Buffer.from(encodePin(nextPin))), "refused");
 		assert.equal(verifyPlannedState(plan, final, Buffer.from(encodePin(oldPin))), "refused");
 		const refused = { ...plan, outcome: "refused" as const };
 		assert.equal(verifyPlannedState(refused, final, Buffer.from(encodePin(nextPin))), "refused");
@@ -241,8 +251,12 @@ describe("#250 total old/new union planner", () => {
 		};
 		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from("{") }).outcome, "refused");
 		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(oldPin)) }).outcome, "refused");
-		const foreign = buildPin({ ...source, owner: "elsewhere" }, rev("a"), []);
-		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(foreign)) }).outcome, "refused");
+		const foreign = buildPin({ ...source, owner: "elsewhere" }, rev("a"), [
+			member(".pi/prompts/prior-only", "carried", "old"),
+		]);
+		const changedSource = planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(foreign)) });
+		assert.equal(changedSource.outcome, "refused");
+		assert.ok(changedSource.members.some((item) => item.path === ".pi/prompts/prior-only"));
 		const oldClass = buildPin(source, rev("a"), [member(".githooks/a", "carried", "old")]);
 		assert.equal(planComposition({ ...common, priorPinBytes: Buffer.from(encodePin(oldClass)) }).outcome, "refused");
 	});

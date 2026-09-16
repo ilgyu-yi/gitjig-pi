@@ -63,8 +63,16 @@ function result(outcome: PlanOutcome, members: PlannedMember[], next: PinV1, pin
 		nextPayloadDigest: next.payloadDigest,
 	});
 }
-function globalRefusal(next: PinV1, pinBytes: Buffer, cause: PlanCause): CompositionPlan {
-	const members = next.manifest.map((entry) => refused(entry.path, entry.class, cause));
+function globalRefusal(next: PinV1, pinBytes: Buffer, cause: PlanCause, prior: PinV1 | null = null): CompositionPlan {
+	const oldByPath = new Map((prior?.manifest ?? []).map((entry) => [entry.path, entry]));
+	const nextByPath = new Map(next.manifest.map((entry) => [entry.path, entry]));
+	const members = [...new Set([...oldByPath.keys(), ...nextByPath.keys()])]
+		.sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)))
+		.map((path) => {
+			const entry = nextByPath.get(path) ?? oldByPath.get(path);
+			if (!entry) throw new Error("global refusal union invariant failed");
+			return refused(path, entry.class, cause);
+		});
 	members.push(refused(PIN_PATH, "pin", cause));
 	return result("refused", members, next, pinBytes);
 }
@@ -78,13 +86,15 @@ export function planComposition(input: PlanInput): CompositionPlan {
 		} catch {
 			return globalRefusal(next, input.nextPinBytes, "malformed-prior-pin");
 		}
-		if (!sourceEqual(prior.source, next.source)) return globalRefusal(next, input.nextPinBytes, "changed-source");
+		if (!sourceEqual(prior.source, next.source))
+			return globalRefusal(next, input.nextPinBytes, "changed-source", prior);
 	}
 	const oldByPath = new Map((prior?.manifest ?? []).map((entry) => [entry.path, entry]));
 	const nextByPath = new Map(next.manifest.map((entry) => [entry.path, entry]));
 	for (const [path, old] of oldByPath) {
 		const nextEntry = nextByPath.get(path);
-		if (nextEntry && nextEntry.class !== old.class) return globalRefusal(next, input.nextPinBytes, "class-transition");
+		if (nextEntry && nextEntry.class !== old.class)
+			return globalRefusal(next, input.nextPinBytes, "class-transition", prior);
 	}
 	const paths = [...new Set([...oldByPath.keys(), ...nextByPath.keys()])].sort((a, b) =>
 		Buffer.compare(Buffer.from(a), Buffer.from(b)),

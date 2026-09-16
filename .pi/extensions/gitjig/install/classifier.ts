@@ -204,7 +204,14 @@ export function renderMembershipSnapshot(members: readonly Membership[]): string
 	const sorted = [...members].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
 	if (
 		new Set(sorted.map((m) => m.path)).size !== sorted.length ||
-		sorted.some((m) => !DISPOSITIONS.includes(m.disposition))
+		sorted.some((member) => {
+			try {
+				validateCandidatePath(member.path);
+			} catch {
+				return true;
+			}
+			return Object.keys(member).sort().join(",") !== "disposition,path" || !DISPOSITIONS.includes(member.disposition);
+		})
 	)
 		throw new ClassificationRefusal("snapshot membership is not closed");
 	return `${JSON.stringify({ schemaVersion: 1, members: sorted }, null, "\t")}\n`;

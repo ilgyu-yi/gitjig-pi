@@ -24,7 +24,9 @@ describe("#250 pin-v1 closed codec and digest grammar", () => {
 		assert.equal(pin.carriedDigest, "4bab2630baa4ed206e7671ee41a231c32caa178e77078a24de32aa7cca99566c");
 	});
 
-	it("round-trips max uint64 and rejects every noncanonical numeric boundary", () => {
+	it("round-trips zero and max uint64 and rejects every noncanonical numeric boundary", () => {
+		const zero = buildPin(source, revision, [{ path: ".pi/prompts/empty", class: "carried", bytes: Buffer.alloc(0) }]);
+		assert.equal(parsePin(encodePin(zero)).manifest[0]?.size, 0n);
 		const entry = {
 			path: ".githooks/a",
 			class: "handed-over" as const,
@@ -48,6 +50,8 @@ describe("#250 pin-v1 closed codec and digest grammar", () => {
 
 	it("rejects duplicate, unknown nested keys, and every closed field domain", () => {
 		const empty = encodePin(buildPin(source, revision, []));
+		for (const whitespace of ["\u00a0", "\u2028"])
+			assert.throws(() => parsePin(empty.replace(":1", `${whitespace}:1`)), /invalid|colon|separator|trailing/);
 		assert.throws(
 			() => parsePin(empty.replace('{"schemaVersion":1', '{"schemaVersion":1,"schemaVersion":1')),
 			/duplicate/,

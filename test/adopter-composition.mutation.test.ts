@@ -79,6 +79,27 @@ describe("#250 named isolated guard mutants", () => {
 			`import assert from "node:assert/strict"; import {classifyMarker} from "./install/classifier.ts"; assert.equal(classifyMarker(Buffer.from("#!/bin/sh\\n// gitjig: source-only\\n")),"source-only");`,
 		);
 		kill(
+			"snapshot-path-domain",
+			"classifier.ts",
+			"validateCandidatePath(member.path);",
+			"void member.path;",
+			`import assert from "node:assert/strict"; import {renderMembershipSnapshot} from "./install/classifier.ts"; assert.throws(()=>renderMembershipSnapshot([{path:"../outside",disposition:"carried"}]));`,
+		);
+		kill(
+			"snapshot-closed-member",
+			"classifier.ts",
+			'Object.keys(member).sort().join(",") !== "disposition,path"',
+			"false",
+			`import assert from "node:assert/strict"; import {renderMembershipSnapshot} from "./install/classifier.ts"; assert.throws(()=>renderMembershipSnapshot([{path:".github/a",disposition:"handed-over",extra:true}]));`,
+		);
+		kill(
+			"json-whitespace",
+			"pin.ts",
+			'"\\t\\n\\r ".includes(this.text[this.at] ?? "")',
+			'/\\s/u.test(this.text[this.at] ?? "")',
+			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[]); assert.throws(()=>parsePin(encodePin(p).replace(":1","\\u00a0:1")));`,
+		);
+		kill(
 			"snapshot-duplicate",
 			"classifier.ts",
 			"new Set(sorted.map((m) => m.path)).size !== sorted.length",
@@ -107,6 +128,20 @@ describe("#250 named isolated guard mutants", () => {
 			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin,digestRecord} from "./install/pin.ts"; import {createHash} from "node:crypto"; const s={provider:"github",host:"github.com",owner:"o",repository:"r"}; const p=buildPin(s,"a".repeat(40),[{path:".github/a",class:"handed-over",bytes:Buffer.from("a")},{path:".githooks/b",class:"handed-over",bytes:Buffer.from("b")}]); p.manifest.reverse(); p.payloadDigest=createHash("sha256").update(Buffer.concat(p.manifest.map(digestRecord))).digest("hex"); const text=JSON.stringify(p,(_,v)=>typeof v==="bigint"?Number(v):v); assert.throws(()=>parsePin(text));`,
 		);
 		kill(
+			"source-percent-name",
+			"pin.ts",
+			'!value.includes("%")',
+			"true",
+			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"bad%name",repository:"r"},"a".repeat(40),[]); assert.throws(()=>parsePin(encodePin(p)));`,
+		);
+		kill(
+			"uint64-zero",
+			"pin.ts",
+			"raw.size < 0n",
+			"raw.size <= 0n",
+			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[{path:".pi/prompts/a",class:"carried",bytes:Buffer.alloc(0)}]); assert.equal(parsePin(encodePin(p)).manifest[0].size,0n);`,
+		);
+		kill(
 			"schema-version",
 			"pin.ts",
 			"raw.schemaVersion !== 1n",
@@ -130,6 +165,13 @@ describe("#250 named isolated guard mutants", () => {
 	});
 
 	it("kills changed-source, class-transition, replace, and whole-refusal mutants", () => {
+		kill(
+			"global-refusal-union",
+			"plan.ts",
+			"const members = [...new Set([...oldByPath.keys(), ...nextByPath.keys()])]",
+			"const members = [...new Set([...nextByPath.keys()])]",
+			`${pinSetup} const prior=buildPin({...source,owner:"x"},"a".repeat(40),[member(".pi/prompts/prior","carried","old")]); const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:Buffer.from(encodePin(prior)),occupants:occupants("old")}); assert.ok(p.members.some(x=>x.path===".pi/prompts/prior"));`,
+		);
 		kill(
 			"changed-source",
 			"plan.ts",
@@ -181,6 +223,20 @@ describe("#250 named isolated guard mutants", () => {
 			'cause: "pin-initial"',
 			'cause: "foreign-occupant"',
 			`${pinSetup} const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:null,occupants:new Map([[".githooks/a",{kind:"absent"}],[".pi/gitjig.pin.json",{kind:"absent"}]])}); assert.equal(p.members.at(-1).cause,"pin-initial");`,
+		);
+		kill(
+			"pin-next-cause",
+			"plan.ts",
+			'cause: "pin-exact-next"',
+			'cause: "foreign-occupant"',
+			`${pinSetup} const states=occupants("new"); states.set(".pi/gitjig.pin.json",{kind:"bytes",bytes:Buffer.from(encodePin(nextPin))}); const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:Buffer.from(encodePin(oldPin)),occupants:states}); assert.equal(p.members.at(-1).cause,"pin-exact-next");`,
+		);
+		kill(
+			"retirement-verification",
+			"plan.ts",
+			'occupants.get(member.path)?.kind !== "absent"',
+			"!occupants.has(member.path)",
+			`import assert from "node:assert/strict"; import {buildPin,encodePin} from "./install/pin.ts"; import {planComposition,verifyPlannedState} from "./install/plan.ts"; const s={provider:"github",host:"github.com",owner:"o",repository:"r"}; const old=buildPin(s,"a".repeat(40),[{path:".pi/prompts/gone",class:"carried",bytes:Buffer.from("old")}]); const next=buildPin(s,"b".repeat(40),[]); const p=planComposition({nextPinBytes:Buffer.from(encodePin(next)),priorPinBytes:Buffer.from(encodePin(old)),occupants:new Map([[".pi/prompts/gone",{kind:"bytes",bytes:Buffer.from("old")}],[".pi/gitjig.pin.json",{kind:"bytes",bytes:Buffer.from(encodePin(old))}]])}); const final=new Map([[".pi/prompts/gone",{kind:"bytes",bytes:Buffer.from("foreign")}],[".pi/gitjig.pin.json",{kind:"bytes",bytes:Buffer.from(encodePin(next))}]]); assert.equal(verifyPlannedState(p,final,Buffer.from(encodePin(next))),"refused");`,
 		);
 		kill(
 			"pin-replace",

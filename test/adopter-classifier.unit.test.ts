@@ -9,6 +9,7 @@ import {
 	classifyCandidate,
 	classifyMarker,
 	decodeCandidatePath,
+	type Membership,
 	observeCandidates,
 	renderMembershipSnapshot,
 } from "../.pi/extensions/gitjig/install/classifier.ts";
@@ -137,6 +138,10 @@ describe("#250 candidate observation and checked snapshot", () => {
 			{ path: ".pi/prompts/z.md", disposition: "carried" },
 			{ path: ".github/a", disposition: "source-only" },
 		]);
+		assert.throws(() => renderMembershipSnapshot([{ path: "../outside", disposition: "carried" }]));
+		assert.throws(() =>
+			renderMembershipSnapshot([{ path: ".github/a", disposition: "handed-over", extra: true } as Membership]),
+		);
 		assert.deepEqual(JSON.parse(rendered), {
 			schemaVersion: 1,
 			members: [
