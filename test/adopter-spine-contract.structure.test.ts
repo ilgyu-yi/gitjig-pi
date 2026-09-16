@@ -4,79 +4,148 @@ import test from "node:test";
 
 const spec = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
 
-function section(doc: string, start: string, end: string): string {
-	const from = doc.indexOf(start);
-	const to = doc.indexOf(end, from + start.length);
-	assert.notEqual(from, -1, `missing section ${start}`);
-	assert.notEqual(to, -1, `missing section ${end}`);
-	return doc.slice(from, to);
-}
+const CONTRACT_CLAUSES = [
+	[
+		"candidate universe and invalid candidates",
+		"The **candidate universe** is every regular file reached before filtering under `.pi/`, `.github/`, `.githooks/`, and `changelog_unreleased/`; unreadable, non-regular, symlink, or invalid-path candidates refuse the whole plan.",
+	],
+	[
+		"canonical path grammar",
+		"Paths are UTF-8 NFC, `/`-separated repository-relative values with no empty, dot, dot-dot, NUL, backslash, or absolute component.",
+	],
+	[
+		"marker spelling, termination, and position",
+		"A source-only declaration is exactly `# gitjig: source-only` or `// gitjig: source-only`, LF- or CRLF-terminated on byte line 1, or line 2 when line 1 is a `#!` interpreter line.",
+	],
+	[
+		"invalid eligible marker refusal",
+		"A BOM or another spelling is not a declaration; an eligible line containing `gitjig:` but not matching exactly refuses.",
+	],
+	[
+		"ordered total classifier",
+		"Classification is ordered and total: valid marker → **source-only**; `changelog_unreleased/TEMPLATE.md` → **handed-over**; other `changelog_unreleased/**` → **instance-state**; `.pi/extensions/gitjig.ts`, `.pi/extensions/gitjig/**`, and `.pi/prompts/**` → **carried**; another `.pi/**` → refuse until settled; `.github/**` and `.githooks/**` → **handed-over**.",
+	],
+	[
+		"membership snapshot",
+		"All four dispositions remain in one path-sorted committed membership snapshot, so add, remove, rename, declaration, and disposition change fail its check until reviewed.",
+	],
+	[
+		"path-stable ownership",
+		"Handed/carried ownership is path-stable: a same-path transition is invalid; moving a capability is retire-old plus add-new at distinct paths.",
+	],
+	[
+		"closed pin identity domain",
+		'The pin\'s closed v1 JSON contains exactly `schemaVersion: 1`; platform-attested `source` (`provider: "github"`, `host: "github.com"`, and the platform-returned canonical spelling of non-empty NFC owner/repository names with no slash, control, or percent encoding); a 40-lowercase-hex immutable `revision`; `digest: "sha256-v1"`; a path-sorted manifest of `{path,class,size,digest}` entries; and `payloadDigest` plus `carriedDigest`.',
+	],
+	["closed manifest class domain", "`class` is exactly `handed-over` or `carried`."],
+	[
+		"closed manifest size domain",
+		"`size` is the unsigned file-byte length in the JSON integer domain, written as canonical base-10 digits with no sign, fraction, exponent, or leading zero except the value `0`, and no greater than uint64 max.",
+	],
+	[
+		"closed digest spelling",
+		"Every member and aggregate digest is exactly 64 lowercase hexadecimal characters and represents SHA-256.",
+	],
+	[
+		"manifest order and record framing",
+		"Manifest order is unsigned UTF-8 path-byte order. Each digest record is one class byte (`0x48` handed, `0x43` carried), uint32-big-endian path-byte length, path bytes, uint64-big-endian file-byte length, and the raw 32-byte member digest.",
+	],
+	[
+		"aggregate digest projections",
+		"`payloadDigest` hashes all concatenated records; `carriedDigest` hashes only carried records; an empty projection hashes the empty byte string.",
+	],
+	[
+		"pre-write acquisition verification",
+		"Acquisition obtains bytes from the platform-attested source at exactly `revision`, reconstructs the complete manifest and both aggregate digests, and refuses before any target mutation on any mismatch.",
+	],
+	[
+		"reviewed PR payload boundary",
+		"The PR atomically carries all admitted handed-over actions plus exactly one pin and no carried member.",
+	],
+	["first-provision occupant rule", "First provision admits carried destinations only when absent or exact-next."],
+	[
+		"later-provision transition matrix",
+		"Later provision validates its schema/source/revision/digests, then plans over old and new manifests: shared paths admit exact-old or exact-next; next-only paths admit absent or exact-next; prior-only paths admit exact-old or absent.",
+	],
+	[
+		"transition action mapping",
+		"Those states mean replace/converge, land/converge, and retire/converged-retirement; every other occupant refuses.",
+	],
+	[
+		"crash rerun and skipped revisions",
+		"A clone may skip revisions and a crash prefix may rerun without trusting a success claim.",
+	],
+	[
+		"installed authority advancement",
+		"The installed record advances atomically only after every carried action, exclusion, binding, final carried-manifest comparison, and effective-binding verification succeeds.",
+	],
+	[
+		"closed composition actions and no-prior state",
+		"Composition plans over the **old and new manifests** with closed actions `land`, `replace`, `retire`, `converged`, and `refuse`. Without a prior pin, only absent or exact-next destinations admit.",
+	],
+	[
+		"prior-pin and foreign-occupant refusal",
+		"The pin replaces only when its bytes exactly equal the admitted prior pin. Malformed/changed-source pins, missing ownership entries, foreign occupants, and bytes matching neither old nor new refuse.",
+	],
+	[
+		"whole-phase pre-mutation refusal",
+		"The **whole phase refuses before mutation** if any member refuses; no partial-success pin exists.",
+	],
+] as const;
 
 function assertSpine(doc: string): void {
-	const tierTwo = section(
-		doc,
-		"**Tier 2 — the local git-hook tier.**",
-		"**Tier 3 — CI gates and the server-side ruleset.**",
-	);
-	const install = section(doc, "## 4. Substrate and install contract", "## 5. Cross-cutting contracts");
-	const selfContained = section(doc, "### 5.1 Self-contained artifacts", "### 5.2 Graceful degradation");
-	const milestone = section(doc, "## 6. Self-governance milestone", "### 6.1 Substrate posture");
-
-	assert.match(install, /`# gitjig: source-only` or `\/\/ gitjig: source-only`/);
-	assert.match(install, /valid marker → \*\*source-only\*\*;/);
-	assert.match(install, /\.pi\/extensions\/gitjig\.ts[^\n]+→ \*\*carried\*\*/);
-	assert.match(install, /`\.github\/\*\*` and `\.githooks\/\*\*` → \*\*handed-over\*\*/);
-	assert.match(install, /another `\.pi\/\*\*` → refuse until settled/);
-	assert.match(install, /40-lowercase-hex immutable `revision`/);
-	assert.match(install, /`class` is exactly `handed-over` or `carried`/);
-	assert.match(install, /Every member and aggregate digest is exactly 64 lowercase hexadecimal characters/);
-	assert.match(install, /all admitted handed-over actions plus exactly one pin and no carried member/);
-	assert.match(install, /old and new manifests/);
-	assert.match(install, /whole phase refuses before mutation/);
-	assert.match(install, /prior-only paths admit exact-old or absent/);
-	assert.match(install, /advances atomically only after every carried action/);
-	assert.match(tierTwo, /handed-over[\s\S]+carried/);
-	assert.match(selfContained, /handed-over[\s\S]+carried/);
-	assert.match(milestone, /handed-over[\s\S]+carried/);
-}
-
-function hasSourceOnlyMarker(raw: string): boolean {
-	const lines = raw.split(/\n/).map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
-	const index = lines[0]?.startsWith("#!") ? 1 : 0;
-	return lines[index] === "# gitjig: source-only" || lines[index] === "// gitjig: source-only";
-}
-
-test("#249 pins the canonical adopter spine relationships", () => assertSpine(spec));
-
-test("#249's contract lock reds the four independently measured weakenings", () => {
-	for (const [name, mutant] of [
-		[
-			"unknown pi member handed over",
-			spec.replace("another `.pi/**` → refuse until settled", "another `.pi/**` → handed-over"),
-		],
-		[
-			"marker grammar widened",
-			spec.replace("`# gitjig: source-only` or `// gitjig: source-only`", "a line containing source-only"),
-		],
-		["revision made mutable", spec.replace("40-lowercase-hex immutable `revision`", "mutable `revision`")],
-		[
-			"carried members enter PR",
-			spec.replace(
-				"all admitted handed-over actions plus exactly one pin and no carried member",
-				"all handed-over and carried members",
-			),
-		],
+	for (const [name, clause] of CONTRACT_CLAUSES) {
+		assert.ok(doc.includes(clause), `missing canonical ${name} clause`);
+	}
+	for (const [start, end] of [
+		["**Tier 2 — the local git-hook tier.**", "**Tier 3 — CI gates and the server-side ruleset.**"],
+		["### 5.1 Self-contained artifacts", "### 5.2 Graceful degradation"],
+		["## 6. Self-governance milestone", "### 6.1 Substrate posture"],
 	] as const) {
-		assert.throws(() => assertSpine(mutant), name);
+		const body = doc.slice(doc.indexOf(start), doc.indexOf(end, doc.indexOf(start) + start.length));
+		assert.match(body, /handed-over[\s\S]+carried/);
+	}
+}
+
+type MarkerResult = "source-only" | "absent" | "refuse";
+
+function classifyMarker(raw: string): MarkerResult {
+	const firstEnd = raw.indexOf("\n");
+	const first = firstEnd < 0 ? raw : raw.slice(0, firstEnd).replace(/\r$/, "");
+	const eligibleStart = first.startsWith("#!") ? firstEnd + 1 : 0;
+	if (eligibleStart <= 0 && first.startsWith("#!")) return "absent";
+	const eligibleEnd = raw.indexOf("\n", eligibleStart);
+	const eligible = (eligibleEnd < 0 ? raw.slice(eligibleStart) : raw.slice(eligibleStart, eligibleEnd)).replace(
+		/\r$/,
+		"",
+	);
+	const terminated = eligibleEnd >= 0;
+	if (terminated && (eligible === "# gitjig: source-only" || eligible === "// gitjig: source-only"))
+		return "source-only";
+	return eligible.includes("gitjig:") ? "refuse" : "absent";
+}
+
+test("#249 pins every closed adopter-spine branch and transition", () => assertSpine(spec));
+
+test("#249's contract lock reds removal of every canonical branch", () => {
+	for (const [name, clause] of CONTRACT_CLAUSES) {
+		assert.throws(() => assertSpine(spec.replace(clause, "")), name);
 	}
 });
 
-test("#249's source-only declaration parser distinguishes legal positions", () => {
-	assert.equal(hasSourceOnlyMarker("# gitjig: source-only\nname: x\n"), true);
-	assert.equal(hasSourceOnlyMarker("#!/bin/sh\n# gitjig: source-only\n"), true);
-	assert.equal(hasSourceOnlyMarker("// gitjig: source-only\nconst x = 1;\n"), true);
-	assert.equal(hasSourceOnlyMarker("name: x\n# gitjig: source-only\n"), false);
-	assert.equal(hasSourceOnlyMarker("# GITJIG: source-only\n"), false);
+test("#249's marker model distinguishes declaration, absence, and refusal", () => {
+	for (const raw of ["# gitjig: source-only\nname: x\n", "# gitjig: source-only\r\n", "// gitjig: source-only\n"])
+		assert.equal(classifyMarker(raw), "source-only");
+	assert.equal(classifyMarker("#!/bin/sh\n# gitjig: source-only\n"), "source-only");
+	for (const [raw, expected] of [
+		["# gitjig: source-only", "refuse"],
+		["name: x\n# gitjig: source-only\n", "absent"],
+		["# GITJIG: source-only\n", "absent"],
+		["# gitjig: source only\n", "refuse"],
+		["\uFEFF# gitjig: source-only\n", "refuse"],
+		["name: x\n", "absent"],
+	] as const)
+		assert.equal(classifyMarker(raw), expected);
 });
 
 test("#249 marks every currently declared development-only substrate file at its legal head", () => {
@@ -86,6 +155,6 @@ test("#249 marks every currently declared development-only substrate file at its
 		"../.github/workflows/check-merge-review.yml",
 		"../.github/workflows/check-merge-review.mjs",
 	]) {
-		assert.equal(hasSourceOnlyMarker(readFileSync(new URL(path, import.meta.url), "utf8")), true, path);
+		assert.equal(classifyMarker(readFileSync(new URL(path, import.meta.url), "utf8")), "source-only", path);
 	}
 });
