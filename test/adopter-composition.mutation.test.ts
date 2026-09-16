@@ -130,7 +130,7 @@ describe("#250 named isolated guard mutants", () => {
 			"classifier.ts",
 			"!sameObject(stats, opened)",
 			"false",
-			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,rmSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"); writeFileSync(file,"old"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){rmSync(file);writeFileSync(file,"new")}}}));`,
+			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"); writeFileSync(file,"old"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){renameSync(file,join(root,"old"));writeFileSync(file,"new")}}}));`,
 		);
 		kill(
 			"post-pathname-identity",
