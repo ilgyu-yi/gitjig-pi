@@ -38,7 +38,13 @@ import {
 	panelOutcome,
 	type SlotResult,
 } from "./panel.ts";
-import { composeReviewRecord, type ReviewRecord, type RoundSummary, type SlotRecord } from "./record.ts";
+import {
+	composeReviewRecord,
+	type RepairRecord,
+	type ReviewRecord,
+	type RoundSummary,
+	type SlotRecord,
+} from "./record.ts";
 import { resolveRepositoryHead } from "./repository.ts";
 import {
 	type AdjudicationInput,
@@ -56,6 +62,7 @@ export type RoundOptions = {
 	manifest: Manifest;
 	fences: ReviewFences;
 	changeDescription: string;
+	repair?: RepairRecord;
 	timing?: BriefTiming;
 	/**
 	 * The one seam to §4.9's dispatcher — `makeDispatcher` for the real
@@ -187,6 +194,7 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 		bundle: buildBundle(results, required),
 		adjudication,
 		review,
+		...(options.repair === undefined ? {} : { repair: options.repair }),
 		// Always present on this path, empty where no admitted return wrote
 		// prose. The key is optional in the record's shape for records written
 		// before it existed, not for rounds this function drives.

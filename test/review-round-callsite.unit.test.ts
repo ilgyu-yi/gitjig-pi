@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -19,13 +28,16 @@ import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutr
 import { scanBody } from "../.pi/extensions/gitjig/publish/scan.ts";
 import {
 	type AttestedCommentPopulation,
+	diagnosesFromAttestedComments,
 	fetchAttestedReviewComments,
 	recordsFromAttestedComments,
 } from "../.pi/extensions/gitjig/review/comments.ts";
+import { composeDiagnosisRecord, createDiagnosisRecord } from "../.pi/extensions/gitjig/review/diagnosis-record.ts";
 import {
 	DIAGNOSIS_VALUES,
 	type DiagnosisInput,
 	INVALIDATIONS,
+	repairHistory,
 	type StateSummary,
 } from "../.pi/extensions/gitjig/review/history.ts";
 import { type RoundOptions, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
@@ -216,6 +228,8 @@ function seams(overrides: Partial<ReviewRoundSeams> = {}): ReviewRoundSeams {
 		refetchSubject: async (_root, current) => current,
 		readComments: async () => population([]),
 		recordsFromComments: recordsFromAttestedComments,
+		diagnosesFromComments: diagnosesFromAttestedComments,
+		readRepair: () => "patch",
 		resolveHead: () => HEAD_B,
 		makeDispatch: () => async () => {
 			throw new Error("no dispatch was expected");
@@ -716,6 +730,23 @@ describe("review-round production call site", () => {
 		assert.equal(posts, 0);
 	});
 
+	it("hands off when the subject drifts after publication", async () => {
+		let checks = 0;
+		assert.deepEqual(
+			await driveReviewRound(
+				spec(),
+				"/unused",
+				seams({ refetchSubject: async (_root, current) => (++checks === 1 ? current : undefined) }),
+			),
+			{
+				disposition: "hand-off",
+				cause: "review-round handed off: the review subject changed while the round ran",
+				reentry: "none",
+			},
+		);
+		assert.equal(checks, 2);
+	});
+
 	it("hands off when a marked record is unreadable instead of shortening history", async () => {
 		let ran = false;
 		const outcome = await driveReviewRound(
@@ -835,8 +866,8 @@ describe("review-round production call site", () => {
 					}),
 				);
 				const continues = value === "NONE" && invalidation === "nothing";
-				assert.equal(rounds, 1, `${value}/${invalidation}: round count`);
-				assert.equal(publishes, 1, `${value}/${invalidation}: publish count`);
+				assert.equal(rounds, continues ? 1 : 0, `${value}/${invalidation}: round count`);
+				assert.equal(publishes, continues ? 1 : 0, `${value}/${invalidation}: publish count`);
 				assert.equal(records, 1, `${value}/${invalidation}: diagnosis record count`);
 				assert.ok("diagnosis" in outcome, `${value}/${invalidation}: diagnosis absent`);
 				if ("diagnosis" in outcome) assert.deepEqual(outcome.diagnosis, { value, invalidation, evidence: "measured" });
@@ -849,6 +880,43 @@ describe("review-round production call site", () => {
 				}
 			}
 		}
+	});
+
+	it("consumes an exact durable diagnosis before another round", async () => {
+		const historyRecords = [repairRecord(HEAD_A), repairRecord(HEAD_B)];
+		const history = repairHistory(historyRecords);
+		const diagnosis = { value: "STAGNATION" as const, invalidation: "nothing" as const, evidence: "durable" };
+		const record = createDiagnosisRecord(subject(), history, diagnosis);
+		assert.ok(record !== undefined);
+		let dispatched = 0;
+		let rounds = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			"/unused",
+			seams({
+				readComments: async () =>
+					population([
+						...historyRecords.map(composeReviewRecord),
+						composeDiagnosisRecord(record as NonNullable<typeof record>),
+					]),
+				makeDispatch: () => async () => {
+					dispatched += 1;
+					throw new Error("durable diagnosis should be consumed");
+				},
+				runRound: async () => {
+					rounds += 1;
+					return ROUND;
+				},
+			}),
+		);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the required history diagnosis was unavailable or required parking",
+			reentry: "none",
+			diagnosis,
+		});
+		assert.equal(dispatched, 0);
+		assert.equal(rounds, 0);
 	});
 
 	it("occasions no diagnosis where the trigger does not fire", async () => {
@@ -949,7 +1017,7 @@ describe("review-round production call site", () => {
 		]) {
 			assert.deepEqual(
 				await driveReviewRound(spec(), "/unused", item.seams),
-				{ disposition: "hand-off", cause: item.cause, reentry: "none" },
+				{ disposition: "hand-off", cause: item.cause, reentry: "none", diagnosis },
 				item.name,
 			);
 		}
@@ -974,6 +1042,20 @@ describe("review-round production call site", () => {
 		assert.equal(readRepositoryInput(fixture.root, "dangling.json"), undefined);
 		symlinkSync(join(fixture.root, "loop.json"), join(fixture.root, "loop.json"));
 		assert.equal(readRepositoryInput(fixture.root, "loop.json"), undefined);
+	});
+
+	it("refuses an ancestor replaced after the repository walk", () => {
+		const fixture = repo();
+		mkdirSync(join(fixture.root, "inside"));
+		writeFileSync(join(fixture.root, "inside", "round.json"), "inside");
+		const moved = join(fixture.root, "moved");
+		assert.equal(
+			readRepositoryInput(fixture.root, "inside/round.json", () => {
+				renameSync(join(fixture.root, "inside"), moved);
+				symlinkSync(moved, join(fixture.root, "inside"));
+			}),
+			undefined,
+		);
 	});
 
 	it("refuses a FIFO input without blocking on a writer", () => {

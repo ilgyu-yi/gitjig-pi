@@ -41,7 +41,6 @@
  * escape, and that choice is the renderer's boundary, not this one's.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import {
@@ -60,24 +59,32 @@ import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody } from
 /** The tool name §3.3's egress row records, verbatim. */
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
 
-const PublishParams = Type.Object({
-	body: Type.String({ description: "The exact text to publish; scanned and neutralized before any send." }),
-	destination: Type.Object({
-		kind: Type.Union(PUBLISH_DESTINATION_KINDS.map((k) => Type.Literal(k))),
-		number: Type.Optional(
-			Type.Number({
-				description: "The issue or pull request number acted on. Required for the comment and body kinds.",
-			}),
-		),
-		title: Type.Optional(
-			Type.String({
-				description:
-					"The title of the issue or pull request being created. Required for the create kinds, and " +
-					"scanned as published text in its own right.",
-			}),
-		),
-	}),
-});
+const PublishParams = {
+	type: "object",
+	additionalProperties: false,
+	required: ["body", "destination"],
+	properties: {
+		body: { type: "string", description: "The exact text to publish; scanned and neutralized before any send." },
+		destination: {
+			type: "object",
+			additionalProperties: false,
+			required: ["kind"],
+			properties: {
+				kind: { enum: PUBLISH_DESTINATION_KINDS },
+				number: {
+					type: "number",
+					description: "The issue or pull request number acted on. Required for the comment and body kinds.",
+				},
+				title: {
+					type: "string",
+					description:
+						"The title of the issue or pull request being created. Required for the create kinds, and " +
+						"scanned as published text in its own right.",
+				},
+			},
+		},
+	},
+} as const;
 
 export interface PublishResult {
 	content: Array<{ type: "text"; text: string }>;

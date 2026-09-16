@@ -13,12 +13,13 @@ import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
  * Every child is quiet by construction; callers receive only typed/fixed
  * consequences and never Git's localized diagnostics.
  */
-function quietGit(repoRoot: string, args: readonly string[]): string {
+function quietGit(repoRoot: string, args: readonly string[], maxBuffer?: number): string {
 	return execFileSync("git", [...args], {
 		cwd: repoRoot,
 		encoding: "utf8",
 		env: withoutRepoLocatingGitEnv(process.env),
 		stdio: ["ignore", "pipe", "pipe"],
+		...(maxBuffer === undefined ? {} : { maxBuffer }),
 	});
 }
 
@@ -45,6 +46,18 @@ export function resolveRepositoryHead(repoRoot: string, ref: string): string | u
 	try {
 		const head = quietGit(repoRoot, ["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]).trim();
 		return /^[0-9a-f]{40}$/.test(head) ? head : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Capture the bounded machine-produced repair artifact between reviewed heads. */
+export function readRepairPatch(repoRoot: string, from: string, to: string): string | undefined {
+	if (resolveRepositoryHead(repoRoot, from) !== from || resolveRepositoryHead(repoRoot, to) !== to || from === to)
+		return undefined;
+	try {
+		const patch = quietGit(repoRoot, ["diff", "--no-ext-diff", "--binary", "--end-of-options", from, to], 48 * 1024);
+		return patch.length > 0 ? patch : undefined;
 	} catch {
 		return undefined;
 	}

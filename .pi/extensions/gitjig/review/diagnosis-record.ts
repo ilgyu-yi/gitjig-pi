@@ -107,6 +107,26 @@ export function createDiagnosisRecord(
 	});
 }
 
+export type DiagnosisRecordMatch = { ok: true; diagnosis?: DiagnosisInput } | { ok: false };
+
+/** Read a durable ruling only when it binds exactly to the current subject and complete history. */
+export function diagnosisForHistory(
+	source: ReviewSubject,
+	history: readonly StateSummary[],
+	records: readonly DiagnosisRecord[],
+): DiagnosisRecordMatch {
+	const heads = history.map((state) => state.head);
+	let matched: DiagnosisInput | undefined;
+	for (const record of records) {
+		if (JSON.stringify(record.historyHeads) !== JSON.stringify(heads)) continue;
+		const expected = createDiagnosisRecord(source, history, record.diagnosis);
+		if (expected === undefined || JSON.stringify(record) !== JSON.stringify(expected)) return { ok: false };
+		if (matched !== undefined && JSON.stringify(matched) !== JSON.stringify(record.diagnosis)) return { ok: false };
+		matched = record.diagnosis;
+	}
+	return matched === undefined ? { ok: true } : { ok: true, diagnosis: matched };
+}
+
 export function composeDiagnosisRecord(record: DiagnosisRecord): string {
 	const admitted = admitDiagnosisRecord(record);
 	if (admitted === undefined) throw new Error("diagnosis record is not admissible");

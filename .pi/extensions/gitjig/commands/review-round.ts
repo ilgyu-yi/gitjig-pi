@@ -13,9 +13,11 @@ import { quoted } from "../quote.ts";
 import type { BriefTiming, ReviewFences } from "../review/briefs.ts";
 import {
 	type AttestedCommentPopulation,
+	diagnosesFromAttestedComments,
 	fetchAttestedReviewComments,
 	recordsFromAttestedComments,
 } from "../review/comments.ts";
+import { type DiagnosisRecord, diagnosisForHistory } from "../review/diagnosis-record.ts";
 import {
 	admitDiagnosis,
 	type Consequence,
@@ -30,8 +32,8 @@ import {
 import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchestrate.ts";
 import type { ReviewPublicationOutcome } from "../review/publication.ts";
 import { commitPostStateDiagnosis, publishAndRefetchReviewRecord } from "../review/publication.ts";
-import type { ReviewRecord } from "../review/record.ts";
-import { resolveRepositoryHead } from "../review/repository.ts";
+import type { RepairRecord, ReviewRecord } from "../review/record.ts";
+import { readRepairPatch, resolveRepositoryHead } from "../review/repository.ts";
 import {
 	fetchReviewSubject,
 	type ReviewSubject,
@@ -103,6 +105,8 @@ export type ReviewRoundSeams = {
 	refetchSubject: (repoRoot: string, subject: ReviewSubject) => Promise<ReviewSubject | undefined>;
 	readComments: (repoRoot: string, subject: ReviewSubject) => Promise<AttestedCommentPopulation>;
 	recordsFromComments: (population: AttestedCommentPopulation, writerId: string) => ReviewRecord[] | undefined;
+	diagnosesFromComments: (population: AttestedCommentPopulation, writerId: string) => DiagnosisRecord[] | undefined;
+	readRepair: (repoRoot: string, from: string, to: string) => string | undefined;
 	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
@@ -205,18 +209,25 @@ function reentryConsequence(consequence: Consequence): TerminalSeed | undefined 
  * body this process just composed (§1.4's record the acting agent does not
  * author, issue #212's acceptance criterion 2).
  */
-async function durableHistory(
+type DurableState = { history: StateSummary[]; diagnosis?: DiagnosisInput };
+
+async function durableState(
 	repoRoot: string,
 	subject: ReviewSubject,
 	seams: ReviewRoundSeams,
-): Promise<StateSummary[] | undefined> {
-	const records = seams.recordsFromComments(await seams.readComments(repoRoot, subject), subject.writerId);
+): Promise<DurableState | undefined> {
+	const population = await seams.readComments(repoRoot, subject);
+	const records = seams.recordsFromComments(population, subject.writerId);
+	const diagnoses = seams.diagnosesFromComments(population, subject.writerId);
 	// The substrate is the platform's own comment record on the subject this
 	// command already attested, so for this call site it is installed by
-	// construction and §1.4's absent limb has no case here. A clone that cannot
-	// reach the platform never gets a subject and never arrives at this line.
+	// construction and §1.4's absent limb has no case here.
 	const availability = historyAvailability(true, records);
-	return availability.available ? repairHistory(availability.records) : undefined;
+	if (!availability.available || diagnoses === undefined) return undefined;
+	const history = repairHistory(availability.records);
+	const matched = diagnosisForHistory(subject, history, diagnoses);
+	if (!matched.ok) return undefined;
+	return matched.diagnosis === undefined ? { history } : { history, diagnosis: matched.diagnosis };
 }
 
 export async function driveReviewRound(
@@ -232,13 +243,58 @@ export async function driveReviewRound(
 		const head = subject.context.pullRequest.head.oid;
 		if (seams.resolveHead(repoRoot, head) !== head)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_HEAD, reentry: "none" });
-		// Read the substrate BEFORE spending a round on it: an unreadable
-		// history hands off (§1.4's present-but-cannot-measure limb) rather
-		// than producing a review state no next round could ever read.
-		if ((await durableHistory(repoRoot, subject, seams)) === undefined)
-			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
 		const dispatch = seams.makeDispatch(spec);
 		const briefTiming = spec.timing ?? alignedTiming(spec.timeoutMs ?? REVIEW_ROUND_RUN_BOUND_MS);
+		let diagnosedHistory: string | undefined;
+
+		const currentSubject = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) !== undefined;
+		const diagnose = async (history: StateSummary[], existing?: DiagnosisInput): Promise<TerminalSeed | undefined> => {
+			let diagnosis = existing;
+			if (diagnosis === undefined) {
+				const admitted = admitDiagnosis(
+					await dispatch(
+						composeDiagnosisBrief(history, {
+							changeDescription: spec.changeDescription,
+							withheldHead: head,
+							timing: briefTiming,
+						}),
+						head,
+					),
+				);
+				if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
+				diagnosis = admitted.diagnosis;
+				state = { phase: "diagnosis-admitted", diagnosis };
+				if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+				if (!(await seams.commitDiagnosis(subject, history, diagnosis)).ok)
+					return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS_RECORD, reentry: "none" };
+				if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+			} else {
+				state = { phase: "diagnosis-admitted", diagnosis };
+			}
+			diagnosedHistory = JSON.stringify(history);
+			return reentryConsequence(diagnosisConsequence(diagnosis.value, diagnosis.invalidation));
+		};
+
+		// A trigger already present at invocation gates the round; another state
+		// cannot reset it before its durable ruling is consumed.
+		const before = await durableState(repoRoot, subject, seams);
+		if (before === undefined)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+		if (triggerFires(before.history)) {
+			const stop = await diagnose(before.history, before.diagnosis);
+			if (stop !== undefined) return finish(state, stop);
+		} else if (before.diagnosis !== undefined) {
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+		}
+
+		let repair: RepairRecord | undefined;
+		const prior = before.history.at(-1);
+		if (prior !== undefined && prior.head !== head) {
+			const patch = seams.readRepair(repoRoot, prior.head, head);
+			if (patch === undefined)
+				return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+			repair = { from: prior.head, to: head, patch };
+		}
 		const round = await seams.runRound({
 			repoRoot,
 			baseRef: subject.context.pullRequest.base.oid,
@@ -246,35 +302,21 @@ export async function driveReviewRound(
 			manifest: subjectCriterionManifest(subject),
 			fences: spec.fences,
 			changeDescription: spec.changeDescription,
+			...(repair === undefined ? {} : { repair }),
 			timing: briefTiming,
 			dispatch,
 		});
-		if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
+		if (!(await currentSubject()))
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 		if (!(await seams.publishRecord(round.recordBody, subject)).ok)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
-		const history = await durableHistory(repoRoot, subject, seams);
-		if (history === undefined)
-			return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
-		if (!triggerFires(history)) return finish(state, { disposition: "posted", review: round.review });
-		const admitted = admitDiagnosis(
-			await dispatch(
-				composeDiagnosisBrief(history, {
-					changeDescription: spec.changeDescription,
-					withheldHead: head,
-					timing: briefTiming,
-				}),
-				head,
-			),
-		);
-		if (!admitted.available)
-			return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" });
-		state = { phase: "diagnosis-admitted", diagnosis: admitted.diagnosis };
-		// Durable before the consequence: the ruling that gates continuation is
-		// made durable before anything acts on it (§1.9, §1.4).
-		if (!(await seams.commitDiagnosis(subject, history, admitted.diagnosis)).ok)
-			return finish(state, { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS_RECORD, reentry: "none" });
-		const stop = reentryConsequence(diagnosisConsequence(admitted.diagnosis.value, admitted.diagnosis.invalidation));
+		if (!(await currentSubject()))
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
+		const after = await durableState(repoRoot, subject, seams);
+		if (after === undefined) return finish(state, { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" });
+		if (!triggerFires(after.history) || JSON.stringify(after.history) === diagnosedHistory)
+			return finish(state, { disposition: "posted", review: round.review });
+		const stop = await diagnose(after.history, after.diagnosis);
 		return finish(state, stop ?? { disposition: "posted", review: round.review });
 	} catch {
 		return finish(state, { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" });
@@ -317,6 +359,8 @@ export function registerReviewRoundCommand(
 					},
 					readComments: (root, current) => fetchAttestedReviewComments(root, current.context),
 					recordsFromComments: recordsFromAttestedComments,
+					diagnosesFromComments: diagnosesFromAttestedComments,
+					readRepair: readRepairPatch,
 					makeDispatch: (input) =>
 						makeDispatcher({
 							callerRepoRoot: repoRoot,
