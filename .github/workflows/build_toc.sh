@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# gitjig: source-only
 # .github/workflows/build_toc.sh — regenerate a SPEC's Table of contents.
 #
 # Usage:
@@ -136,9 +135,8 @@ if [ "$MODE" = "--migrate" ]; then
     # Transactional splice into a TEMP copy — the live SPEC is untouched until
     # the final atomic mv.
     #
-    # This and the three sibling mktemp calls below are the shell's fourth
-    # ambient-rooted write location, scored against SPEC §5.5's state
-    # boundary with the others (issue #127). A bare mktemp is rooted at the
+    # This and the three sibling mktemp calls below are ambient-rooted writes.
+    # A bare mktemp is rooted at the
     # ambient temporary root by definition, so it can land inside a
     # repository the shell does not govern. Enumerated rather than closed,
     # on the secret-scan spool's own ground: every path here unlinks or

@@ -1497,7 +1497,7 @@ describe("fail-posture inventory (§3.9)", () => {
 				// The record writer's own subshell leaves a RECORD, not the hook:
 				// its `exit 0` lines are the ones naming the sink or its `_ga_`
 				// locals, and none of them decides whether a check runs.
-				.filter((line) => !/_ga_|GITJIG_AUDIT_SINK/.test(line))
+				.filter((line) => !/_ga_|PROJECT_AUDIT_SINK/.test(line))
 		);
 	}
 

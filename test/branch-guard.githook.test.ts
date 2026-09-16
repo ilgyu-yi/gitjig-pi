@@ -304,7 +304,7 @@ describe("derivation of the protected identity (issue #59, SPEC §3.3 stage 2, �
 describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { skip: IS_WINDOWS }, () => {
 	it("a pre-seeded derivation cache in the push environment cannot decide the verdict", () => {
 		// git hands the PUSHER's environment to hooks, so an exported
-		// _GITJIG_BG_* pair would otherwise pre-seed the verdict three ways:
+		// _PROJECT_BG_* pair would otherwise pre-seed the verdict three ways:
 		// a traceless disarm (state=disarmed, no warn record emitted), a decoy
 		// identity (P set to something that is not the protected ref), and a
 		// set -u abort. The helper's source-time `unset -v` discards them.
@@ -314,7 +314,7 @@ describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { sk
 		try {
 			seedLocalCommit(fixture);
 			const attempt = pushRefs(fixture, [PROTECTED], {
-				env: { _GITJIG_BG_STATE: "armed", _GITJIG_BG_P: "aadecoyzq" },
+				env: { _PROJECT_BG_STATE: "armed", _PROJECT_BG_P: "aadecoyzq" },
 			});
 			assertPushRefused(attempt, "pre-seeded decoy identity");
 			assertRefnameContentFree(attempt, PROTECTED, "pre-seeded decoy identity");
@@ -332,7 +332,7 @@ describe("the push gate's own repairs are pinned (issue #63, SPEC §3.12)", { sk
 		try {
 			seedLocalCommit(fixture);
 			const attempt = pushRefs(fixture, [PROTECTED], {
-				env: { _GITJIG_BG_STATE: "disarmed" },
+				env: { _PROJECT_BG_STATE: "disarmed" },
 			});
 			assertPushRefused(attempt, "pre-seeded traceless disarm");
 		} finally {

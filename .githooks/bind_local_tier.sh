@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# gitjig: source-only
 # .githooks/bind_local_tier.sh — the committed arming instrument for the
-# local git-hook tier (SPEC §3.2 arming path, §4.1, §4.6, §4.7).
+# local git-hook tier.
 #
 # One documented run from the repository root of a clone of this repository
 # arms the committed hook chain for THAT clone. The adapters derive their own
@@ -12,8 +11,8 @@
 #      unset there gets the relative `.githooks` (resolving against each
 #      worktree's own top); a value the clone itself carries is compared
 #      RESOLVED (cd + pwd -P), so an equivalent spelling is a no-op and
-#      only a truly different target is refused (§4.7
-#      target's-choice-wins). Scope is load-bearing on both sides: the
+#      only a truly different operator-selected target is refused. Scope is
+#      load-bearing on both sides: the
 #      activation is persistent and per-clone, so an ambient global or
 #      system value neither stands in for it nor blocks it, while the final
 #      verification also reads the EFFECTIVE value git actually resolves;
@@ -36,10 +35,10 @@
 # git still does not honor after the append. Re-running always heals
 # states this instrument created; it never overwrites what another writer
 # owns. This run writes nothing under `.gitjig/`: per-clone state there is
-# data the tier's own record writer creates when it first records (§4.2).
+# data the tier's own record writer creates when it first records.
 #
-# This file is not hook-named, so git never executes it (SPEC §4.1's
-# inertness argument); it runs only by explicit operator invocation.
+# This file is not hook-named, so git never executes it; it runs only by
+# explicit operator invocation.
 set -uo pipefail
 
 # Constructed-environment hardening for every git child (#39): the
@@ -66,8 +65,8 @@ unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_INDEX_FILE GIT_N
 unset GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT GIT_CEILING_DIRECTORIES
 # The write-relocating family: every documented variable that makes a git
 # child CREATE OR APPEND a file at a path the ENVIRONMENT names. A
-# GIT_TRACE=<path> escapes §4.7's write set, since tracing is on by the mere
-# presence of the variable. The roster is enumerated from git's own
+# GIT_TRACE=<path> escapes this instrument's write set, since tracing is on
+# by the mere presence of the variable. The roster is enumerated from git's own
 # documentation rather than from memory —
 #   man git | col -b | grep -o 'GIT_[A-Z0-9_]*' | sort -u
 # — and every GIT_TRACE* member it names is unset, the non-path
@@ -158,7 +157,7 @@ read_config() {
 #   multi-valued key reaches a refusal with rc 0 and `--unset` is dead there;
 #   `--unset-all` is the live act, and only where the read counted more than
 #   one, since clearing N values a refusal named one of is the same
-#   target's-choice violation in the other direction (§4.7).
+#   target's-choice violation in the other direction.
 #
 #   `git help config` --includes — "Defaults to off when a specific file is
 #   given (e.g., using --file, --global, etc)", so a scope can RESOLVE a value
@@ -188,7 +187,7 @@ do_bind() {
     warn 'bind_local_tier.sh: no repository top resolved here - git rev-parse --show-toplevel gave no answer. Run it from inside a clone of this repository.'
     return 2
   fi
-  # Root-only (§4.7): every write below lands at the repository top,
+  # Root-only: every write below lands at the repository top,
   # wherever the instrument was invoked from. The top is re-read PHYSICALLY
   # after the cd, so the containment test below compares two physically
   # resolved paths and never one of each.
@@ -198,7 +197,7 @@ do_bind() {
   # Activation: unset gets the relative spelling (per-worktree resolution);
   # a pre-set value is compared RESOLVED, never byte-wise.
   #
-  # SCOPE SPLIT (§4.7): the write decision reads the LOCAL scope only. The
+  # SCOPE SPLIT: the write decision reads the LOCAL scope only. The
   # activation this instrument makes is persistent and per-clone, so an
   # ambient global or system value must not stand in for it — it travels
   # with the environment, not with the clone, and taking it as "already
@@ -265,8 +264,8 @@ do_bind() {
   # a key this clone does not carry (rc 1) from one it carries as the empty
   # string (rc 0): git hands back the same empty value for both, so a
   # discarded status makes the run overwrite a "no hooks" setting the
-  # operator chose - a value this clone carries, which §4.7 leaves to its
-  # target. Only rc 1 activates; rc 0 falls through to the compare below,
+  # operator chose. That value belongs to its operator-selected target. Only
+  # rc 1 activates; rc 0 falls through to the compare below,
   # where an empty value cannot equal the committed directory and takes the
   # skip-with-warning path that already exists. Any other status also lands
   # there: this read did not establish an absent key, and refusing without
@@ -275,8 +274,8 @@ do_bind() {
   # `--path` makes the compare read what GIT reads: it expands a `~/`-spelled
   # value to the absolute path git itself resolves core.hooksPath to, and
   # leaves a relative spelling untouched, so an equivalent spelling of the
-  # committed adapters is the no-op §4.7 names rather than a foreign
-  # collision. It is used for RESOLUTION only - the operator-facing message
+  # committed adapters is a no-op rather than a foreign collision. It is used
+  # for resolution only; the operator-facing message
   # below shows the raw spelling they typed. The read goes through
   # `read_config` so the value it compares is the byte string git resolves,
   # trailing newline included (that function's note).
@@ -328,14 +327,14 @@ do_bind() {
       # will not fire: local is not the top of git's precedence, and a
       # worktree-scope value naming the committed .githooks makes the clone
       # effectively bound while this read still refuses. Verification does not
-      # inherit the write's scope binding (§4.7) - and neither does a refusal.
+      # inherit the write's scope binding - and neither does a refusal.
       clear_act --local local
       warn "bind_local_tier.sh: this clone's own config carries a core.hooksPath that does not resolve to the committed .githooks directory - that target's choice wins, so it is left unchanged and this run wrote no activation. What git actually resolves is a separate question this refusal does not answer; 'git config --get core.hooksPath' reads the merged value. To bind this clone at its own scope, $_ca_act, then re-run from the repository root: $RE_ARM"
       return 5
     fi
   fi
 
-  # Exclusion at creation (§4.1, §5.5): the committed anchor answers on
+  # Exclusion at creation: the committed anchor answers on
   # every normal clone; the fallback writes the RESOLVED info/exclude.
   _bd_verified=' (core.hooksPath + exclusion)'
   if git check-ignore -q -- .gitjig/state/audit.jsonl </dev/null 2>/dev/null; then
@@ -406,7 +405,7 @@ do_bind() {
     #
     #   THE OPERATOR'S LAST LINE IS THEIRS, so an unterminated one is
     #   terminated BEFORE the append. Concatenating onto it silently rewrites
-    #   a rule this run does not own into a different pattern (§4.7) - and the
+    #   a rule this run does not own into a different pattern - and the
     #   re-ask below cannot see it, because the appended pattern still works
     #   while the damage is to a path nothing here asks about.
     #
@@ -511,11 +510,10 @@ do_bind() {
     # What step 3 gives is a bounded PLACE to look rather than a rule, and the
     # census is what bounds it: only those files can outrank the exclusion.
     #
-    # The issue-#74 arms in `test/bind-instrument.githook.test.ts` measure
-    # this, including one that enumerates a shape space over the axes named
-    # above - the negation's spelling and location, whether `.gitjig/` is on
+    # The verification suite measures this with a shape space over the axes named
+    # above: the negation's spelling and location, whether `.gitjig/` is on
     # disk, whether the sink is tracked, and what competing ordinary pattern
-    # is present - runs this procedure on each shape that reaches the arm, and
+    # is present. It runs this procedure on each shape that reaches the arm and
     # requires it to terminate with the sink ignored. That space is a
     # constructed sample, not an exhaustive one: what it establishes is that
     # the procedure terminates on every shape it contains.

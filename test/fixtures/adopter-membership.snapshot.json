@@ -3,87 +3,87 @@
 	"members": [
 		{
 			"path": ".githooks/_lib.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/bind_local_tier.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/commit-msg",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/helpers/.gitattributes",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/helpers/branch_guard.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/helpers/conventional_commit.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/helpers/secret-patterns",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/helpers/secret_scan.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/pre-commit",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".githooks/pre-push",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/ISSUE_TEMPLATE/bug-report.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/ISSUE_TEMPLATE/config.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/ISSUE_TEMPLATE/directive-proposal.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/ISSUE_TEMPLATE/discussion.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/ISSUE_TEMPLATE/execution-under-directive.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/ISSUE_TEMPLATE/task.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/auto-clear-awaiting-author.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/auto-status-proposed.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/build_toc.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/check-changelog.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/check-changelog.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/check-merge-review.mjs",
@@ -103,35 +103,35 @@
 		},
 		{
 			"path": ".github/workflows/check-ssot-home.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/check-ssot-home.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/check-toc.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/detect_bare_refs_directive.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/dir-mode-post-merge.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/initiative-feedback-label.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/issues-to-project-mirror.yml",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/resolve_parent_directive.sh",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/source-checks.yml",
@@ -311,7 +311,7 @@
 		},
 		{
 			"path": "changelog_unreleased/TEMPLATE.md",
-			"disposition": "source-only"
+			"disposition": "handed-over"
 		},
 		{
 			"path": "changelog_unreleased/added/.gitkeep",
@@ -575,6 +575,10 @@
 		},
 		{
 			"path": "changelog_unreleased/changed/250.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/251.md",
 			"disposition": "instance-state"
 		},
 		{

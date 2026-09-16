@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# gitjig: source-only
 # .githooks/_lib.sh — shared prelude for the local git-hook enforcement tier.
 # Every adapter (pre-commit / pre-push / commit-msg) sources this FIRST. It
 # carries the tier's runtime as committed code and exposes:
@@ -9,16 +8,16 @@
 #                                            audit_log, returns non-zero.
 #   safe_source / audit_log               — the two runtime primitives.
 #
-# This file DERIVES the two locations the tier needs (§3.2, §4.1, §4.2,
-# §4.6) from ONE source the invoking environment cannot move — this file's
+# This file derives the two locations the tier needs from one source the
+# invoking environment cannot move — this file's
 # own installed position: the helper directory beside it, and the record
 # sink at the top of the repository these adapters are committed in. Both
 # sides of the sink therefore perform one derivation rather than agreeing on
-# two supplied values (§4.6). The derivation is bounded by a refusal: where
+# two supplied values. The derivation is bounded by a refusal: where
 # that repository is not the one this operation runs against, the tier runs
 # no check and says so on stderr, because a tier whose checks are committed
 # in another repository would write its records there too, across the
-# boundary §5.5 draws.
+# repository boundary stated here.
 #
 # The delegated interface the adapters require of the helper directory:
 #   branch_guard.sh        → current_branch, is_protected_branch
@@ -56,7 +55,7 @@ unset CDPATH
 # adapters' position is not: git runs a hook with cwd at the work tree it was
 # told to use, so `GIT_WORK_TREE=<ancestor>` on a `git commit` moves the
 # operation's top to a directory the caller chose, and a sink derived from it
-# lands outside the repository §5.5 bounds the shell to.
+# lands outside the repository governed by these hooks.
 #
 # The scrub is three variables measured to move THIS child's answer, each on
 # its own: `GIT_DIR` makes it answer the `-C` directory itself, `GIT_WORK_TREE`
@@ -93,8 +92,8 @@ if [ -z "$_gh_top" ] || [ "$_gh_top" != "$_gh_op_top" ]; then
   printf '[dev-shell] local hook tier not enforced: the repository these hooks are committed in did not resolve to the one this operation runs against, so this hook ran no check and wrote no record\n' >&2
   exit 0
 fi
-GITJIG_SHELL_HELPERS="$_gh_here/helpers"
-GITJIG_AUDIT_SINK="$_gh_top/.gitjig/state/audit.jsonl"
+PROJECT_SHELL_HELPERS="$_gh_here/helpers"
+PROJECT_AUDIT_SINK="$_gh_top/.gitjig/state/audit.jsonl"
 
 # audit_log <action> <category> [text...] — append ONE sanitized JSON
 # record to the sink: control bytes stripped, backslash and double-quote
@@ -103,7 +102,7 @@ GITJIG_AUDIT_SINK="$_gh_top/.gitjig/state/audit.jsonl"
 # close its field and open another. Delivery does not: the shell's printf
 # writes through a stdio buffer, so a record larger than that buffer
 # reaches the sink as several appends, and a second shell writer appending
-# concurrently can land between them. Residual (§3.11), measured on darwin
+# concurrently can land between them. Residual, measured on darwin
 # 25.6.0 / GNU bash 3.2.57 (arm64) at three concurrent writers of 200
 # records each: at 200, 700 and 900 bytes of text every one of the 600 lines
 # parses; at 1000, 2000 and 8000 some do not. The edge tracks THAT host's
@@ -138,27 +137,12 @@ GITJIG_AUDIT_SINK="$_gh_top/.gitjig/state/audit.jsonl"
 # they are not this writer's to own, and a link planted there retargets the
 # whole clone, not just this trail.
 #
-# This function is not the sink's only writer, and the refusals above bind
-# THIS one. The extension runtime appends to the same file through
-# `appendAuditRecord` (.pi/extensions/gitjig/audit.ts), which opens with
-# O_NOFOLLOW|O_NONBLOCK and holds the descriptor to an fstat verdict.
-# Neither writer contains the other, and what each covers divides. On the
-# LINK dimension this one refuses all three components of the sink path
-# named above, while the TS open's O_NOFOLLOW binds the final component
-# alone: a link at the container or at the state directory is followed there
-# (measured: `appendAuditRecord` writes through a link at either component
-# to a destination outside the repository and returns success, where this
-# function drops the record). On three dimensions the TS verdict refuses
-# what this one does not measure at all — a sink whose inode carries more
-# than one name, a sink owned by another account, and any group or other
-# mode bit. This writer appends to all three. That is this writer's
-# enumerated residual (§3.11), stated here rather than closed: a shell `[ ]`
-# probe cannot ask them of the descriptor it is about to write, and asking
-# them of the PATH is a different question. The link checks themselves are
-# probe-then-append — the shell has no O_NOFOLLOW open, so between `[ -L ]`
-# and `>>` a link can be swapped in at a checked component; the TS sibling's
-# guarded open closes that window at the one component it guards. The TS
-# side states its own ancestor residual in that file's header (§5.5).
+# The refusals above bind this writer alone. It does not measure whether the
+# sink inode has another name, whether another account owns it, or whether
+# group/other mode bits are set. It also uses probe-then-append because the
+# portable shell has no O_NOFOLLOW open, so a checked component can be
+# exchanged between `[ -L ]` and `>>`. Those are this writer's explicit
+# residuals; callers must not infer stronger file-descriptor guarantees.
 audit_log() {
   (
     umask 177
@@ -173,16 +157,16 @@ audit_log() {
     esac
     _ga_text=$(printf '%s' "$*" | LC_ALL=C tr -d '\000-\037\177' | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
     _ga_ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) || _ga_ts=unknown
-    _ga_dir="${GITJIG_AUDIT_SINK%/*}"
+    _ga_dir="${PROJECT_AUDIT_SINK%/*}"
     _ga_ns="${_ga_dir%/*}"
     # Namespace container, state directory, sink file (header note).
     [ -L "$_ga_ns" ] && exit 0
     [ -L "$_ga_dir" ] && exit 0
     [ -d "$_ga_dir" ] || (umask 077; mkdir -p "$_ga_dir") 2>/dev/null || exit 0
-    [ -L "$GITJIG_AUDIT_SINK" ] && exit 0
-    [ -e "$GITJIG_AUDIT_SINK" ] && [ ! -f "$GITJIG_AUDIT_SINK" ] && exit 0
+    [ -L "$PROJECT_AUDIT_SINK" ] && exit 0
+    [ -e "$PROJECT_AUDIT_SINK" ] && [ ! -f "$PROJECT_AUDIT_SINK" ] && exit 0
     printf '{"timestamp":"%s","category":"%s","action":"%s","text":"%s"}\n' \
-      "$_ga_ts" "$_ga_category" "$_ga_action" "$_ga_text" >> "$GITJIG_AUDIT_SINK"
+      "$_ga_ts" "$_ga_category" "$_ga_action" "$_ga_text" >> "$PROJECT_AUDIT_SINK"
   ) 2>/dev/null || true
   return 0
 }
@@ -191,7 +175,7 @@ audit_log() {
 # (non-zero) on a miss or on a source that hands back a non-zero status.
 # Both shapes leave exactly one record naming the file, in the caller's own
 # category: a git operation that folds several hooks over the same degraded
-# helper set leaves one record per folded surface (§3.9's per-arm loudness),
+# helper set leaves one record per folded surface,
 # never a shared, collapsed one. A source that does not hand control back at
 # all is the githook_source trap's shape, below.
 safe_source() {
@@ -220,8 +204,8 @@ safe_source() {
 # The line it prints names no CAUSE, because the trap cannot measure one:
 # `$?` inside it is 0 both for a sourced `exit 0` and for a signal that
 # killed the shell mid-source. It prints at all because this fold turns what
-# would otherwise have been a refusal into an allow, and §3.9 forbids a
-# disarmed allow that reads like an enforced one — one stderr line plus one
+# would otherwise have been a refusal into an allow. A disarmed allow must
+# not read like an enforced one — one stderr line plus one
 # audit record naming the file.
 #
 # The window has to know whether it is the OUTERMOST one, because a helper may
@@ -248,11 +232,11 @@ safe_source() {
 #
 #   later helper exits NON-ZERO → the commit is REFUSED with no stderr line
 #     and no source-incomplete record: the wedged hook with nothing printed
-#     that this fold exists to prevent, and the refusal on machinery §5.2
-#     says this tier never takes.
+#     that this fold exists to prevent, and a machinery refusal this tier
+#     never takes.
 #   later helper exits ZERO → the commit is CREATED with no line and no
 #     record: that helper's arm never ran and nothing says so, which is the
-#     disarmed allow §3.9 forbids to read like an enforced one. Worse than
+#     disarmed allow that must not read like an enforced one. Worse than
 #     the first, and the one a passing helper reaches.
 #
 # The frame count folds open in both, with its line and its record.
@@ -293,9 +277,9 @@ safe_source() {
 # That argument deliberately makes no claim about WHO can write where, because
 # an earlier revision here did and was wrong. It said the helpers are this
 # repository's own committed files and that planting a hostile one needs write
-# access to `.githooks/`. Neither holds: SPEC §3.2 has the tier sourcing what
-# stands at the derived position in the working tree, COMMITTED OR NOT, and
-# `safe_source` tests only that the file exists; and SPEC enumerates a
+# access to `.githooks/`. Neither holds: the tier sources what stands at the
+# derived position in the working tree, committed or not, and `safe_source`
+# tests only that the file exists; a
 # `helpers` component linked out of the repository as sourced with no refusal
 # taken anywhere — measured, hostile bytes written only at such a link target
 # forge the allow with this file untouched. The conclusion stands on the
@@ -304,7 +288,7 @@ safe_source() {
 # Outside those terms the outcome is not this tier's to decide, and the fold's
 # line and record may not run.
 #
-# Enumerated residuals, in place (SPEC §3.11). `FUNCNAME` is not beyond a
+# Enumerated residuals, in place. `FUNCNAME` is not beyond a
 # determined helper's reach, and an earlier claim here that it was is
 # WITHDRAWN as measured false. `unset FUNCNAME` does not refuse: the name goes
 # away entirely — `declare -p` reports it not found — and is thereafter an
@@ -340,7 +324,7 @@ githook_source() {
   if _gh_src_outermost; then
     trap 'printf "[dev-shell] local hook tier not enforced: a helper did not finish sourcing, so this hook stopped there and ran none of its remaining checks\n" >&2; ( audit_log warn "${_gh_src_cat:-git-hook-tier}" source-incomplete "${_gh_src_file:-unknown}" ) >/dev/null 2>&1 || true; exit 0' EXIT
   fi
-  safe_source "$GITJIG_SHELL_HELPERS/$_gh_src_file" "$_gh_src_cat"
+  safe_source "$PROJECT_SHELL_HELPERS/$_gh_src_file" "$_gh_src_cat"
   _gh_src_rc=$?
   # Recomputed, never remembered: a value carried across the source is a value
   # the sourced file had a turn to change.

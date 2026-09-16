@@ -204,7 +204,7 @@ function recordsNaming(attempt: CommitAttempt, file: string): string[] {
 
 /**
  * The file below satisfies the retired delegation contract exactly —
- * `safe_source`, `audit_log`, `GITJIG_SHELL_HELPERS` — and additionally
+ * `safe_source`, `audit_log`, `PROJECT_SHELL_HELPERS` — and additionally
  * defines a function named `exit`. A tier that SOURCES it hands its own
  * shell to it: the arms' refusals set a status that the redefined `exit`
  * discards, so the scan prints its refusal over a commit that lands. A tier
@@ -216,8 +216,8 @@ function plantRetiredBinding(root: string): void {
 		join(root, RETIRED_BINDING_REL),
 		[
 			"# zqplanted binding at the retired path (test substrate).",
-			`GITJIG_SHELL_HELPERS='${join(root, ".githooks", "helpers")}'`,
-			"export GITJIG_SHELL_HELPERS",
+			`PROJECT_SHELL_HELPERS='${join(root, ".githooks", "helpers")}'`,
+			"export PROJECT_SHELL_HELPERS",
 			"safe_source() {",
 			'  if [ -f "$1" ]; then',
 			'    . "$1"',
@@ -330,7 +330,7 @@ describe("an activated hooks path is the whole binding (issue #68, SPEC §3.2, �
 			mkdirSync(empty);
 			appendFileSync(
 				join(mutant.root, ".githooks", "_lib.sh"),
-				`\nGITJIG_SHELL_HELPERS='${empty}'\nexport GITJIG_SHELL_HELPERS\n`,
+				`\nPROJECT_SHELL_HELPERS='${empty}'\nexport PROJECT_SHELL_HELPERS\n`,
 			);
 			stageFile(mutant, "zqmutleak.txt", `${AWS_SECRET}\n`);
 			const attempt = commitWithMessage(mutant, "chore: exercise the derivation mutant\n");

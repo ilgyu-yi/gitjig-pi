@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# gitjig: source-only
 # .githooks/pre-commit — local-tier adapter. Blocks a direct commit
 # to a protected branch and a staged secret by SOURCING and CALLING the shared
 # helpers — it copies NO check logic (single-source invariant).
@@ -10,17 +9,16 @@
 # shellcheck source=/dev/null
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# 1) Direct commit to the one derived protected identity P (SPEC 3.3's
-#    ref-identity semantics; master/release/* stay enumerated-unmodeled).
+# 1) Direct commit to the one derived protected identity P. Other names such
+#    as master or release/* are outside this arm unless one is the derived P.
 githook_source branch_guard.sh branch || exit 0
 githook_require current_branch branch
 githook_require is_protected_branch branch
 # current_branch is a TOTAL function: a valid short branch name, or nothing
 # plus a failure. Its status is observed rather than discarded — an empty
 # subject compared against P answers "not protected" by accident, and
-# accidental correctness is not a disposition (SPEC 3.9's total-function
-# rule: an out-of-domain value that errors both sides of a comparison must
-# not collapse the check to "valid").
+# accidental correctness is not a disposition: an out-of-domain value that
+# errors both sides of a comparison must not collapse the check to "valid".
 _gh_branch=""
 if _gh_branch="$(current_branch)"; then
   if is_protected_branch "$_gh_branch"; then
@@ -28,8 +26,8 @@ if _gh_branch="$(current_branch)"; then
     exit 1
   fi
 else
-  # HEAD is on no branch, so this arm has no subject. SPEC 3.3's commit-arm
-  # paragraph records that as a SCOPE boundary — the row guards a commit made
+  # HEAD is on no branch, so this arm has no subject. That is a scope boundary:
+  # this arm guards a commit made
   # ON a protected branch — and refusing here would block bisect, any
   # checkout of a commit, and every rebase including one of an ordinary
   # feature branch. The state is still a state under 5.9's disarm bar, so it
@@ -37,7 +35,7 @@ else
   # deliberately NOT 3.9's "not enforced" wording: a scope boundary is not
   # machinery degradation, and borrowing that wording would misattribute a
   # cause the tier did not suffer. Note the wider residual this does NOT
-  # cover, recorded at SPEC 3.3: git runs no pre-commit for a commit a
+  # cover: git runs no pre-commit for a commit a
   # rebase REPLAYS, so those never reach this arm at all.
   if command -v audit_log >/dev/null 2>&1; then
     ( audit_log warn branch not-evaluated 'protected-branch commit arm not evaluated: HEAD is on no branch, so the arm has no subject (a scope boundary, not a degraded gate)' ) </dev/null >/dev/null 2>&1 || true
