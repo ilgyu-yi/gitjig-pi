@@ -43,6 +43,7 @@
  * consumer is the dispatcher's brief slot.
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
+import { type BriefTiming, composeDelegateDeadlines, DEFAULT_TIMING, DELEGATE_RETURN_CONTRACT } from "./briefs.ts";
 // RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
 // type-only import of an absent or renamed module reds `tsc` with the
 // compiler's own message, never an authored one. The suite stays green
@@ -249,10 +250,11 @@ function isMember<T extends string>(domain: readonly T[], value: unknown): value
  */
 export function composeDiagnosisBrief(
 	history: readonly StateSummary[],
-	context: { changeDescription: string },
+	context: { changeDescription: string; withheldHead?: string; timing?: BriefTiming },
 ): string {
 	const lines = history.flatMap((state, index) => {
-		const header = `  ${index + 1}. head ${state.head} resolved ${state.outcome}`;
+		const renderedHead = state.head === context.withheldHead ? "(current operand withheld)" : state.head;
+		const header = `  ${index + 1}. head ${renderedHead} resolved ${state.outcome}`;
 		const findings =
 			state.findings.length === 0
 				? ["       findings: (none)"]
@@ -289,6 +291,10 @@ export function composeDiagnosisBrief(
 		'Your ruling rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"value": <one of the four>, "invalidation": <one of the three>, "evidence": <non-empty command or citation>}.',
 		"An unstated value is never inferred; absence is not NONE.",
+		"",
+		DELEGATE_RETURN_CONTRACT,
+		"",
+		composeDelegateDeadlines(context.timing ?? DEFAULT_TIMING),
 	].join("\n");
 }
 
