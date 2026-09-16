@@ -123,7 +123,13 @@ import {
 const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 
 /** The expected governed-home multiset — governed commands on their ruled surfaces. */
-const EXPECTED_GOVERNED_ROWS = ["authoring-brief|extension", "review|extension", "ship|extension", "work-on|prompt"];
+const EXPECTED_GOVERNED_ROWS = [
+	"authoring-brief|extension",
+	"review-round|extension",
+	"review|extension",
+	"ship|extension",
+	"work-on|prompt",
+];
 
 function subjectAbsent(arm: string, subject: string): string {
 	return (

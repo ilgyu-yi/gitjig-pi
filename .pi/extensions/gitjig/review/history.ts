@@ -43,12 +43,13 @@
  * consumer is the dispatcher's brief slot.
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
+import { type BriefTiming, composeDelegateDeadlines, DEFAULT_TIMING, DELEGATE_RETURN_CONTRACT } from "./briefs.ts";
 // RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
 // type-only import of an absent or renamed module reds `tsc` with the
 // compiler's own message, never an authored one. The suite stays green
 // on that failure, so the type-check step is load-bearing here and is
 // not a convenience — the same shape the tag witness discloses.
-import type { OUTCOMES, ReviewRecord } from "./record.ts";
+import type { OUTCOMES, RepairRecord, ReviewRecord } from "./record.ts";
 
 /**
  * One review state's outcome, mapped from a RESOLVED record's
@@ -81,6 +82,7 @@ export type StateSummary = {
 	outcome: StateOutcome;
 	findings: string[];
 	rulings: StateRuling[];
+	repair?: RepairRecord;
 };
 
 /**
@@ -193,7 +195,13 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 		if (!byHead.has(record.head)) {
 			order.push(record.head);
 		}
-		byHead.set(record.head, { head: record.head, outcome, findings, rulings });
+		byHead.set(record.head, {
+			head: record.head,
+			outcome,
+			findings,
+			rulings,
+			...(record.repair === undefined ? {} : { repair: record.repair }),
+		});
 	}
 	return order.map((head) => byHead.get(head) as StateSummary);
 }
@@ -249,10 +257,11 @@ function isMember<T extends string>(domain: readonly T[], value: unknown): value
  */
 export function composeDiagnosisBrief(
 	history: readonly StateSummary[],
-	context: { changeDescription: string },
+	context: { changeDescription: string; withheldHead?: string; timing?: BriefTiming },
 ): string {
 	const lines = history.flatMap((state, index) => {
-		const header = `  ${index + 1}. head ${state.head} resolved ${state.outcome}`;
+		const renderedHead = state.head === context.withheldHead ? "(current operand withheld)" : state.head;
+		const header = `  ${index + 1}. head ${renderedHead} resolved ${state.outcome}`;
 		const findings =
 			state.findings.length === 0
 				? ["       findings: (none)"]
@@ -261,7 +270,14 @@ export function composeDiagnosisBrief(
 			(ruling) =>
 				`       ruling: ${ruling.validity}${ruling.severity ? `/${ruling.severity}` : ""} on ${ruling.finding} — evidence: ${ruling.evidence}`,
 		);
-		return [header, ...findings, ...rulings];
+		const repair =
+			state.repair === undefined
+				? ["       repair: (none recorded)"]
+				: [
+						`       repair from ${state.repair.from} to ${state.repair.to === context.withheldHead ? "(current operand withheld)" : state.repair.to}:`,
+						state.repair.patch,
+					];
+		return [header, ...findings, ...repair, ...rulings];
 	});
 	return [
 		"You are the JUDGE performing §1.4's repair-history diagnosis — the Judge's second capacity, a semantic",
@@ -289,6 +305,10 @@ export function composeDiagnosisBrief(
 		'Your ruling rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"value": <one of the four>, "invalidation": <one of the three>, "evidence": <non-empty command or citation>}.',
 		"An unstated value is never inferred; absence is not NONE.",
+		"",
+		DELEGATE_RETURN_CONTRACT,
+		"",
+		composeDelegateDeadlines(context.timing ?? DEFAULT_TIMING),
 	].join("\n");
 }
 

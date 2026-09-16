@@ -74,7 +74,14 @@ type HistoryModule = {
 	INVALIDATIONS: string[];
 	repairHistory(records: ReviewRecord[]): StateSummary[];
 	triggerFires(history: StateSummary[]): boolean;
-	composeDiagnosisBrief(history: StateSummary[], context: { changeDescription: string }): string;
+	composeDiagnosisBrief(
+		history: StateSummary[],
+		context: {
+			changeDescription: string;
+			withheldHead?: string;
+			timing?: { firstReturnSeconds: number; finalReturnSeconds: number };
+		},
+	): string;
 	admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission;
 	diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence;
 	historyAvailability(
@@ -599,6 +606,24 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 		}
 	});
 
+	it("carries the closed return envelope and caller-aligned provisional/final deadlines", () => {
+		const text = mod().composeDiagnosisBrief([state()], {
+			changeDescription: "d",
+			timing: { firstReturnSeconds: 600, finalReturnSeconds: 900 },
+		});
+		for (const needle of [
+			"The schema is CLOSED",
+			'"ok": boolean',
+			'"summary": string',
+			'"reviewedHead": string',
+			'"payload": string',
+			"T0+600 seconds",
+			"T0+900 seconds",
+		]) {
+			assert.ok(text.includes(needle), needle);
+		}
+	});
+
 	it("pins the per-state header and the change description — the head/outcome sequence IS the history", () => {
 		const text = mod().composeDiagnosisBrief([state({ head: "f".repeat(40), outcome: "repair" })], {
 			changeDescription: "zq the change description",
@@ -672,6 +697,18 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 
 	const headerLines = (text: string): string[] =>
 		text.split("\n").filter((line) => /^ {2}\d+\. head \S+ resolved /.test(line));
+
+	it("withholds the caller-held current operand while retaining older history heads", () => {
+		const oldHead = "a".repeat(40);
+		const currentHead = "b".repeat(40);
+		const text = mod().composeDiagnosisBrief([state({ head: oldHead }), state({ head: currentHead })], {
+			changeDescription: "d",
+			withheldHead: currentHead,
+		});
+		assert.match(text, new RegExp(oldHead));
+		assert.doesNotMatch(text, new RegExp(currentHead));
+		assert.match(text, /head \(current operand withheld\) resolved repair/);
+	});
 
 	it("renders EVERY state, not only one — each state's own finding and ruling evidence appears", () => {
 		const history = multi();

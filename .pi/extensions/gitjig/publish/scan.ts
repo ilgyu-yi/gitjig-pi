@@ -58,9 +58,11 @@
  *
  * Measurement pipeline (§3.3, ordered): (1) a NUL-bearing body is
  * out-of-domain; (2) Unicode format characters (category Cf) are stripped
- * before matching — the over-match closure for a split span; (3) matching
- * runs per line over the byte-domain reading of the stripped text (each
- * line's UTF-8 bytes viewed one-byte-one-code-unit), converged with the
+ * before matching — the over-match closure for a split span; (3) JSON-style
+ * Unicode escapes are decoded into a second semantic view, so reversible
+ * record encoding cannot hide a withheld span; (4) matching runs per line
+ * over both byte-domain views (each line's UTF-8 bytes viewed
+ * one-byte-one-code-unit), converged with the
  * tier-2 scan's `LC_ALL=C` byte semantics. A refuse-match outcome carries
  * pattern IDs and 1-based line locators and never the matched text (§3.8).
  */
@@ -353,33 +355,34 @@ export function inCommonSubset(ere: string): boolean {
  * Throws `PatternSourceError` exactly when the rule source is unusable.
  */
 export function scanBody(body: string): ScanOutcome {
-	if (body.includes("\u0000")) {
+	const stripped = body.replace(/\p{Cf}/gu, "");
+	const semantic = stripped.replace(/\\u([0-9a-fA-F]{4})/g, (_whole, hex: string) =>
+		String.fromCharCode(Number.parseInt(hex, 16)),
+	);
+	if (stripped.includes("\u0000") || semantic.includes("\u0000")) {
 		return { disposition: "refuse-out-of-domain" };
 	}
-	const stripped = body.replace(/\p{Cf}/gu, "");
 	const patterns = loadCommittedPatterns();
 	const patternIds: string[] = [];
 	const lines: number[] = [];
-	stripped.split("\n").forEach((line, index) => {
-		// One byte, one code unit: the UTF-8 bytes of the line re-read as
-		// latin1, so a multibyte codepoint interrupts a counted class run
-		// exactly as it does under the tier-2 engine's byte semantics (§3.3).
-		const byteView = Buffer.from(line, "utf8").toString("latin1");
-		let matched = false;
-		for (const pattern of patterns) {
-			if (pattern.regexp.test(byteView)) {
-				matched = true;
-				if (!patternIds.includes(pattern.id)) {
-					patternIds.push(pattern.id);
+	for (const view of [stripped, semantic]) {
+		view.split("\n").forEach((line, index) => {
+			// One byte, one code unit: the UTF-8 bytes of each line re-read as
+			// latin1, so a multibyte codepoint interrupts a counted class run
+			// exactly as it does under the tier-2 engine's byte semantics (§3.3).
+			const bytes = Buffer.from(line, "utf8").toString("latin1");
+			let matched = false;
+			for (const pattern of patterns) {
+				if (pattern.regexp.test(bytes)) {
+					matched = true;
+					if (!patternIds.includes(pattern.id)) patternIds.push(pattern.id);
 				}
 			}
-		}
-		if (matched) {
-			lines.push(index + 1);
-		}
-	});
+			if (matched && !lines.includes(index + 1)) lines.push(index + 1);
+		});
+	}
 	if (patternIds.length > 0) {
-		return { disposition: "refuse-match", patternIds, lines };
+		return { disposition: "refuse-match", patternIds, lines: lines.sort((left, right) => left - right) };
 	}
 	return { disposition: "clean" };
 }

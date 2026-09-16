@@ -60,6 +60,9 @@ export type SlotRecord = { slot: Slot; valid: boolean; reason?: string };
  */
 export type RoundSummary = { from: "slot" | "judge"; slot?: Slot; text: string };
 
+/** Machine-read artifact change between consecutive reviewed heads. */
+export type RepairRecord = { from: string; to: string; patch: string };
+
 export type ReviewRecord = {
 	/** The full hash of the head this review state is pinned to (§1.6). */
 	head: string;
@@ -68,6 +71,8 @@ export type ReviewRecord = {
 	/** The admitted Judge input, evidence verbatim — null where no Judge ran. */
 	adjudication: AdjudicationInput | null;
 	review: ReviewState;
+	/** Present when this state follows a different reviewed head. */
+	repair?: RepairRecord;
 	/**
 	 * The round's durable prose, one entry per admitted return that wrote
 	 * one (issue #203). OPTIONAL, and that is load-bearing rather than
@@ -78,7 +83,7 @@ export type ReviewRecord = {
 	summaries?: RoundSummary[];
 };
 
-const RECORD_KEYS = new Set(["head", "slots", "bundle", "adjudication", "review", "summaries"]);
+const RECORD_KEYS = new Set(["head", "slots", "bundle", "adjudication", "review", "repair", "summaries"]);
 
 const SUMMARY_KEYS = new Set(["from", "slot", "text"]);
 
@@ -98,6 +103,46 @@ function isRoundSummary(value: unknown): boolean {
 }
 
 /**
+ * Encode the delimiters every neutralization pass needs while they are
+ * inside JSON strings. JSON parsing restores the original code units, so
+ * egress sees no actionable spelling and the history reader sees the exact
+ * recorded values. Structural JSON bytes and the marker stay readable.
+ */
+export function inertJsonStrings(json: string): string {
+	let rendered = "";
+	let insideString = false;
+	let escaped = false;
+	for (const character of json) {
+		if (!insideString) {
+			rendered += character;
+			if (character === '"') insideString = true;
+			continue;
+		}
+		if (escaped) {
+			rendered += character;
+			escaped = false;
+			continue;
+		}
+		if (character === "\\") {
+			rendered += character;
+			escaped = true;
+			continue;
+		}
+		if (character === '"') {
+			rendered += character;
+			insideString = false;
+			continue;
+		}
+		if ("@#-:/".includes(character)) {
+			rendered += `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+		} else {
+			rendered += character;
+		}
+	}
+	return rendered;
+}
+
+/**
  * Compose the record body: the marker line pinning the head, then the
  * record as fenced JSON. The render is machine-emitted from the record
  * value — never typed prose — so what the reader parses is what the
@@ -110,7 +155,7 @@ export function composeReviewRecord(record: ReviewRecord): string {
 		": " +
 		record.head +
 		" -->\n\n```json\n" +
-		JSON.stringify(record, null, "\t") +
+		inertJsonStrings(JSON.stringify(record, null, "\t")) +
 		"\n```\n"
 	);
 }
@@ -135,6 +180,19 @@ function isSlotRecord(value: unknown): boolean {
 	return (
 		Object.keys(value).every((key) => key === "slot" || key === "valid" || key === "reason") &&
 		(value.reason === undefined || typeof value.reason === "string")
+	);
+}
+
+function isRepairRecord(value: unknown, head: string): boolean {
+	return (
+		isObject(value) &&
+		Object.keys(value).length === 3 &&
+		typeof value.from === "string" &&
+		/^[0-9a-f]{40}$/.test(value.from) &&
+		typeof value.to === "string" &&
+		value.to === head &&
+		typeof value.patch === "string" &&
+		value.patch.length > 0
 	);
 }
 
@@ -352,6 +410,9 @@ export function parseReviewRecord(body: string): ReviewRecord | undefined {
 		return undefined;
 	}
 	if (!isReviewState(candidate.review)) {
+		return undefined;
+	}
+	if (candidate.repair !== undefined && !isRepairRecord(candidate.repair, candidate.head)) {
 		return undefined;
 	}
 	// Absent is a state and an EMPTY LIST is a different one: a round in
