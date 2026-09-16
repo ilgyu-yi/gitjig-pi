@@ -72,6 +72,13 @@ describe("#250 named isolated guard mutants", () => {
 			`import assert from "node:assert/strict"; import {validateCandidatePath} from "./install/classifier.ts"; assert.throws(()=>validateCandidatePath(".github/\\ud800"));`,
 		);
 		kill(
+			"marker-line-two-slash",
+			"classifier.ts",
+			'if (eligible.terminated && DECLARATIONS.has(eligible.text)) return "source-only";',
+			'if (eligible.terminated && DECLARATIONS.has(eligible.text) && !(first !== eligible && eligible.text.startsWith("//"))) return "source-only";',
+			`import assert from "node:assert/strict"; import {classifyMarker} from "./install/classifier.ts"; assert.equal(classifyMarker(Buffer.from("#!/bin/sh\\n// gitjig: source-only\\n")),"source-only");`,
+		);
+		kill(
 			"snapshot-duplicate",
 			"classifier.ts",
 			"new Set(sorted.map((m) => m.path)).size !== sorted.length",
@@ -98,6 +105,20 @@ describe("#250 named isolated guard mutants", () => {
 			"Buffer.compare(Buffer.from(previous.path), Buffer.from(current.path)) >= 0",
 			"false",
 			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin,digestRecord} from "./install/pin.ts"; import {createHash} from "node:crypto"; const s={provider:"github",host:"github.com",owner:"o",repository:"r"}; const p=buildPin(s,"a".repeat(40),[{path:".github/a",class:"handed-over",bytes:Buffer.from("a")},{path:".githooks/b",class:"handed-over",bytes:Buffer.from("b")}]); p.manifest.reverse(); p.payloadDigest=createHash("sha256").update(Buffer.concat(p.manifest.map(digestRecord))).digest("hex"); const text=JSON.stringify(p,(_,v)=>typeof v==="bigint"?Number(v):v); assert.throws(()=>parsePin(text));`,
+		);
+		kill(
+			"schema-version",
+			"pin.ts",
+			"raw.schemaVersion !== 1n",
+			"false",
+			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[]); assert.throws(()=>parsePin(encodePin(p).replace('"schemaVersion":1','"schemaVersion":2')));`,
+		);
+		kill(
+			"carried-aggregate",
+			"pin.ts",
+			"carriedDigest !== aggregate(manifest, true)",
+			"false",
+			`import assert from "node:assert/strict"; import {buildPin,encodePin,parsePin} from "./install/pin.ts"; const p=buildPin({provider:"github",host:"github.com",owner:"o",repository:"r"},"a".repeat(40),[{path:".pi/prompts/a",class:"carried",bytes:Buffer.from("a")}]); assert.throws(()=>parsePin(encodePin(p).replace('"carriedDigest":"'+p.carriedDigest+'"','"carriedDigest":"'+"0".repeat(64)+'"')));`,
 		);
 		kill(
 			"payload-aggregate",
@@ -141,11 +162,25 @@ describe("#250 named isolated guard mutants", () => {
 
 	it("kills unmeasured, pin-transition, and final-verification mutants", () => {
 		kill(
+			"sealed-plan-members",
+			"plan.ts",
+			"Object.freeze(members.map((member) => Object.freeze({ ...member })))",
+			"members.map((member) => Object.freeze({ ...member }))",
+			`${pinSetup} const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:Buffer.from(encodePin(oldPin)),occupants:occupants("old")}); assert.throws(()=>p.members.pop());`,
+		);
+		kill(
 			"unmeasured-member",
 			"plan.ts",
 			"if (!occupant) {",
 			"if (false) {",
 			`${pinSetup} const states=occupants("old"); states.delete(".githooks/a"); const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:Buffer.from(encodePin(oldPin)),occupants:states}); assert.equal(p.outcome,"refused");`,
+		);
+		kill(
+			"pin-initial-cause",
+			"plan.ts",
+			'cause: "pin-initial"',
+			'cause: "foreign-occupant"',
+			`${pinSetup} const p=planComposition({nextPinBytes:Buffer.from(encodePin(nextPin)),priorPinBytes:null,occupants:new Map([[".githooks/a",{kind:"absent"}],[".pi/gitjig.pin.json",{kind:"absent"}]])}); assert.equal(p.members.at(-1).cause,"pin-initial");`,
 		);
 		kill(
 			"pin-replace",

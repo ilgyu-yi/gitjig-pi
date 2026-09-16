@@ -26,10 +26,10 @@ export interface PlannedMember {
 	cause: PlanCause;
 }
 export interface CompositionPlan {
-	outcome: PlanOutcome;
-	members: PlannedMember[];
-	pinDigest: string;
-	nextPayloadDigest: string;
+	readonly outcome: PlanOutcome;
+	readonly members: readonly Readonly<PlannedMember>[];
+	readonly pinDigest: string;
+	readonly nextPayloadDigest: string;
 }
 export interface PlanInput {
 	nextPinBytes: Buffer;
@@ -55,7 +55,13 @@ function lookup(occupants: ReadonlyMap<string, Occupant>, path: string): Occupan
 }
 
 function result(outcome: PlanOutcome, members: PlannedMember[], next: PinV1, pinBytes: Buffer): CompositionPlan {
-	return { outcome, members, pinDigest: digest(pinBytes), nextPayloadDigest: next.payloadDigest };
+	const sealedMembers = Object.freeze(members.map((member) => Object.freeze({ ...member })));
+	return Object.freeze({
+		outcome,
+		members: sealedMembers,
+		pinDigest: digest(pinBytes),
+		nextPayloadDigest: next.payloadDigest,
+	});
 }
 function globalRefusal(next: PinV1, pinBytes: Buffer, cause: PlanCause): CompositionPlan {
 	const members = next.manifest.map((entry) => refused(entry.path, entry.class, cause));

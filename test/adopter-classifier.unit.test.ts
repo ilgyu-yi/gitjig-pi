@@ -33,6 +33,9 @@ describe("#250 exact source-only marker and ordered classifier", () => {
 			"# gitjig: source-only\r\n",
 			"// gitjig: source-only\n",
 			"#!/bin/sh\n# gitjig: source-only\n",
+			"#!/bin/sh\n// gitjig: source-only\n",
+			"#!/bin/sh\r\n# gitjig: source-only\r\n",
+			"#!/bin/sh\r\n// gitjig: source-only\r\n",
 		])
 			assert.equal(classifyMarker(Buffer.from(body)), "source-only");
 		for (const body of [
@@ -43,6 +46,9 @@ describe("#250 exact source-only marker and ordered classifier", () => {
 			"\ufeff# gitjig: source-only\n",
 		])
 			assert.equal(classifyMarker(Buffer.from(body)), "refuse");
+		assert.throws(() =>
+			classifyMarker(Buffer.from([0x23, 0x21, 0x2f, 0x62, 0x69, 0x6e, 0x2f, 0x73, 0x68, 0x0a, 0xff, 0x0a])),
+		);
 		assert.equal(classifyMarker(Buffer.from("name: x\n# gitjig: source-only\n")), "absent");
 	});
 

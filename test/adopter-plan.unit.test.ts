@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildPin, encodePin } from "../.pi/extensions/gitjig/install/pin.ts";
-import { type Occupant, planComposition, verifyPlannedState } from "../.pi/extensions/gitjig/install/plan.ts";
+import {
+	type Occupant,
+	type PlannedMember,
+	planComposition,
+	verifyPlannedState,
+} from "../.pi/extensions/gitjig/install/plan.ts";
 
 const source = { provider: "github" as const, host: "github.com" as const, owner: "o", repository: "r" };
 const rev = (n: string) => n.repeat(40);
@@ -34,6 +39,7 @@ describe("#250 total old/new union planner", () => {
 			occupants: occupied({ ".githooks/a": null, ".pi/prompts/new": "new", ".pi/gitjig.pin.json": null }),
 		});
 		assert.equal(land.outcome, "planned");
+		assert.equal(land.members.at(-1)?.cause, "pin-initial");
 		assert.deepEqual(
 			land.members.map((x) => [x.path, x.action]),
 			[
@@ -167,6 +173,23 @@ describe("#250 total old/new union planner", () => {
 			occupants: occupied({ ...base, ".pi/gitjig.pin.json": encodePin(nextPin) }),
 		});
 		assert.equal(converged.outcome, "converged");
+	});
+
+	it("seals the plan evidence before handing it to final verification", () => {
+		const plan = planComposition({
+			nextPinBytes: Buffer.from(encodePin(nextPin)),
+			priorPinBytes: Buffer.from(encodePin(oldPin)),
+			occupants: occupied({
+				".githooks/a": "old",
+				".pi/prompts/gone": "gone",
+				".pi/prompts/new": null,
+				".pi/gitjig.pin.json": encodePin(oldPin),
+			}),
+		});
+		assert.ok(Object.isFrozen(plan));
+		assert.ok(Object.isFrozen(plan.members));
+		assert.ok(plan.members.every(Object.isFrozen));
+		assert.throws(() => (plan.members as PlannedMember[]).pop(), TypeError);
 	});
 
 	it("reports verified only after the final manifest and pin comparison", () => {

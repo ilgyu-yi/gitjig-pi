@@ -54,10 +54,21 @@ describe("#250 pin-v1 closed codec and digest grammar", () => {
 		);
 		assert.throws(() => parsePin(empty.replace('"digest":"sha256-v1"', '"extra":true,"digest":"sha256-v1"')), /keys/);
 		assert.throws(() => parsePin(empty.replace('"owner":"Owner"', '"extra":true,"owner":"Owner"')), /keys/);
+		assert.throws(() => parsePin(empty.replace('"owner":"Owner"', '"owner":"Owner","owner":"Other"')), /duplicate/);
+		assert.throws(() => parsePin(empty.replace('"schemaVersion":1', '"schemaVersion":2')), /version/);
+		assert.throws(() => parsePin(empty.replace('"provider":"github"', '"provider":"gitlab"')), /source/);
+		assert.throws(() => parsePin(empty.replace('"host":"github.com"', '"host":"example.com"')), /source/);
 		assert.throws(() => parsePin(empty.replace('"Owner"', '"bad/name"')), /source/);
 		assert.throws(() => parsePin(empty.replace('"Owner"', '"\\ud800"')), /source/);
 		assert.throws(() => parsePin(empty.replace(revision, revision.toUpperCase())), /revision/);
 		assert.throws(() => parsePin(empty.replace('"sha256-v1"', '"sha256-v2"')), /version/);
+		const emptyPin = buildPin(source, revision, []);
+		assert.throws(() => parsePin(empty.replace(emptyPin.payloadDigest, "0".repeat(64))), /aggregate/);
+		assert.throws(
+			() =>
+				parsePin(empty.replace(`"carriedDigest":"${emptyPin.carriedDigest}"`, `"carriedDigest":"${"1".repeat(64)}"`)),
+			/aggregate/,
+		);
 		const member = encodePin(
 			buildPin(source, revision, [{ path: ".githooks/a", class: "handed-over", bytes: Buffer.from("a") }]),
 		);
