@@ -1,8 +1,13 @@
 /**
- * Adopter substrate composition — DECIDES, never acts (SPEC §4.1
- * namespaces, §4.2 target-parameterization, §4.7's installer boundary).
+ * LEGACY PRE-SETTLEMENT COMPOSER (issue #116).
  *
- * This module answers three questions and stops:
+ * This module predates issue #249 and does NOT implement current SPEC
+ * §§4.1–4.7: it has no four-disposition classifier, membership snapshot,
+ * pin-v1 codec, old/new union planner, or whole-phase refusal. Issue #250
+ * owns that replacement. Its exports remain unchanged here solely as the
+ * measured baseline; the historical descriptions below are non-normative.
+ *
+ * This module answers three legacy questions and stops:
  *   1. Which committed bytes constitute the shell's substrate?
  *   2. Where does each land in an adopting repository?
  *   3. What does the instrument refuse to do?
@@ -44,8 +49,8 @@ import { existsSync, lstatSync, readdirSync, readFileSync, type Stats } from "no
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 
 /**
- * The namespaces §4.1 states, minus `.gitjig/` which is never committed.
- * A fifth namespace joins this set by being named in §4.1 first.
+ * Legacy namespace set retained until #250 replaces this composer. It is
+ * not the current SPEC's classifier or membership authority.
  */
 export const SHELL_NAMESPACES = [".pi", ".github", ".githooks", "changelog_unreleased"] as const;
 
@@ -69,7 +74,7 @@ export interface ComposeInput {
 }
 
 /**
- * The delivery seam (§4.3). Composition never calls the network or the
+ * Legacy delivery seam. Composition never calls the network or the
  * platform; a delivery implementation takes the composed set and opens the
  * reviewed PR that carries it. Named here so the delivery change
  * implements an interface rather than inventing one, and so this module

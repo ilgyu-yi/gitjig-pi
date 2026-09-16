@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # detect_bare_refs_directive.sh — bare-`Refs`-to-default detector.
 #
 # Sourced by .github/workflows/dir-mode-post-merge.yml (after actions/checkout)

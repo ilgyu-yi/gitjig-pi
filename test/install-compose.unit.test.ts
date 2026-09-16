@@ -1,25 +1,13 @@
 /**
- * Adopter substrate composition (issue #116; SPEC §4.1 namespaces, §4.2
- * target-parameterization, §4.7's installer boundary).
+ * Legacy pre-#249 composer characterization (issue #116).
  *
- * Subject under test: the composition-and-refusal half of the adopter
- * install path — which committed bytes constitute the shell's substrate,
- * where each may land in an adopting repository, and what the instrument
- * refuses to do. Every arm runs against a fixture directory tree; nothing
- * here touches the network, the platform, or a repository outside its own
- * temp root.
- *
- * WHAT THIS SUITE DOES NOT COVER, and why: delivery — opening the reviewed
- * PR that carries the composed set (§4.3) — is a separate Execution. It
- * publishes into a repository this shell does not govern, which is past the
- * merge ceiling (§5.6), so it is stopped at a named seam here and the seam
- * is driven with a recording fixture implementation.
- *
- * The namespace SET is SPEC-stated (§4.1 names `.pi/`, `.github/`,
- * `.githooks/`, `changelog_unreleased/`), so it is a committed constant
- * here and is the one thing in this instrument not derived from the tree.
- * Everything WITHIN a namespace is walked, never listed — that is what the
- * roster arm below pins.
+ * These arms preserve the measured behavior that issue #250 must replace;
+ * they do NOT certify current SPEC §§4.1–4.7. In particular, this subject
+ * has no four-disposition classifier, membership snapshot, pin-v1 codec,
+ * old/new union planner, or whole-phase refusal. Runtime acceptance remains
+ * unchanged in the settlement PR, so the old behavior stays executable and
+ * explicitly labeled rather than being silently read as the new contract.
+ * Every arm uses a fixture tree and touches no network or external repo.
  */
 import assert from "node:assert/strict";
 import {
@@ -64,7 +52,7 @@ after(() => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-describe("the substrate set is derived from the tree (issue #116, §2.4, §6.1)", () => {
+describe("legacy #116 substrate-set behavior retained for #250 replacement", () => {
 	it("walks each shell-owned namespace rather than reading a roster", () => {
 		const src = mkdtempSync(join(root, "src-"));
 		write(join(src, ".githooks/pre-commit").slice(root.length + 1), "#!/bin/sh\n");
@@ -107,13 +95,13 @@ describe("the substrate set is derived from the tree (issue #116, §2.4, §6.1)"
 		);
 	});
 
-	it("SHELL_NAMESPACES matches §4.1's stated set exactly", () => {
+	it("records the legacy SHELL_NAMESPACES set exactly", () => {
 		// Compared as a SET, not a sorted sequence: `.githooks` sorts before
 		// `.github` (`o` < `u` at index 5), and a hand-written sorted literal
 		// gets that wrong. The property is membership; ordering is not part
 		// of the contract.
 		assert.deepEqual(new Set(SHELL_NAMESPACES), new Set([".pi", ".github", ".githooks", "changelog_unreleased"]));
-		assert.equal(SHELL_NAMESPACES.length, 4, "a namespace joined or left without §4.1 being re-read");
+		assert.equal(SHELL_NAMESPACES.length, 4, "the legacy baseline changed before #250 replacement");
 		assert.ok(
 			!SHELL_NAMESPACES.includes(".gitjig" as never),
 			"per-clone state is never committed and must never be substrate (§4.1)",
@@ -121,7 +109,7 @@ describe("the substrate set is derived from the tree (issue #116, §2.4, §6.1)"
 	});
 });
 
-describe("destinations stay inside shell-owned namespaces (issue #116, §4.1)", () => {
+describe("legacy destinations stay inside the old namespace set (issue #116)", () => {
 	it("refuses a member whose destination escapes via a parent component", () => {
 		const src = mkdtempSync(join(root, "src-"));
 		write(join(src, ".githooks/ok.sh").slice(root.length + 1), "ok\n");
@@ -441,7 +429,7 @@ describe("acting on the composition writes nothing outside the namespaces (issue
 	});
 });
 
-describe("a pre-existing asset is never overwritten (issue #116, §4.7)", () => {
+describe("legacy composer leaves a pre-existing asset untouched (issue #116)", () => {
 	it("lands where the destination is absent", () => {
 		const src = mkdtempSync(join(root, "src-"));
 		write(join(src, ".githooks/new.sh").slice(root.length + 1), "body\n");
@@ -491,7 +479,7 @@ describe("a pre-existing asset is never overwritten (issue #116, §4.7)", () => 
 	});
 });
 
-describe("the composition writes nothing (issue #116, §4.7's enumerated actions)", () => {
+describe("the legacy composition writes nothing (issue #116)", () => {
 	it("composing leaves the destination tree byte-identical", () => {
 		// Composition DECIDES; it does not act. The delivery seam acts, and
 		// its fixture implementation below is what records the intent. An

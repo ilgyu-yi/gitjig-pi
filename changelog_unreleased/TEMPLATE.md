@@ -1,3 +1,4 @@
+# gitjig: source-only
 # Changelog fragment authoring
 
 Every PR that lands an end-user-observable change adds a **changelog fragment** to this directory. The next `/release X.Y.Z` consolidates all present fragments into a new section in `CHANGELOG.md` at repo root, grouped by category, and deletes the consumed fragments in the same commit.

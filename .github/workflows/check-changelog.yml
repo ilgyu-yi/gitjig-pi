@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: check-changelog
 
 # Per-PR fragment-gate for the release backbone.

@@ -1,3 +1,4 @@
+# gitjig: source-only
 blank_issues_enabled: false
 # Discussions are not enabled on this repo (verified 2026-08-28 via
 # `gh api repos/ilgyu-yi/gitjig-pi --jq .has_discussions` → false).

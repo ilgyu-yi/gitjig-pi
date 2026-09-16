@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: auto-clear-awaiting-author
 
 # When an author edits an Issue body after a review resolved to `repair`

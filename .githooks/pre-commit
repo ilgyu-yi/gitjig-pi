@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # .githooks/pre-commit — local-tier adapter. Blocks a direct commit
 # to a protected branch and a staged secret by SOURCING and CALLING the shared
 # helpers — it copies NO check logic (single-source invariant).

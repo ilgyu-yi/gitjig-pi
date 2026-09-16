@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: Directive proposal
 description: Propose a Directive — a medium-term directional context that scopes several Execution Issues. Maintainer triages via `/triage`.
 title: "directive: <one-line objective>"

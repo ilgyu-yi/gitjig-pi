@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const spec = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
 
@@ -26,8 +28,12 @@ const CONTRACT_CLAUSES = [
 		"Classification is ordered and total: valid marker → **source-only**; `changelog_unreleased/TEMPLATE.md` → **handed-over**; other `changelog_unreleased/**` → **instance-state**; `.pi/extensions/gitjig.ts`, `.pi/extensions/gitjig/**`, and `.pi/prompts/**` → **carried**; another `.pi/**` → refuse until settled; `.github/**` and `.githooks/**` → **handed-over**.",
 	],
 	[
-		"membership snapshot",
-		"All four dispositions remain in one path-sorted committed membership snapshot, so add, remove, rename, declaration, and disposition change fail its check until reviewed.",
+		"closed four-disposition membership snapshot",
+		"All four dispositions remain in the path-sorted committed snapshot `test/fixtures/adopter-membership.snapshot.json`. Its closed v1 JSON has exactly `schemaVersion: 1` and `members`; `members` contains every valid source candidate exactly once as `{path,disposition}`, ordered by unsigned UTF-8 path bytes, and `disposition` is exactly `source-only`, `instance-state`, `handed-over`, or `carried`.",
+	],
+	[
+		"snapshot check ownership",
+		"The snapshot is development evidence outside the candidate universe, never payload or pin input. This settlement defines but does not create it; #250 materializes it and adds the check that reconstructs it from the classifier, so candidate add, remove, rename, declaration, or disposition change then fails until the snapshot changes in the same reviewed commit.",
 	],
 	[
 		"path-stable ownership",
@@ -61,6 +67,14 @@ const CONTRACT_CLAUSES = [
 	[
 		"reviewed PR payload boundary",
 		"The PR atomically carries all admitted handed-over actions plus exactly one pin and no carried member.",
+	],
+	[
+		"handed-over hook runtime boundary",
+		"The adapters and the `_lib.sh`/`helpers/` runtime they invoke are one **handed-over** hook layer committed in an adopter; tier 2 has no carried execution seam.",
+	],
+	[
+		"source-bound assets wait for excision",
+		"Existing source-bound candidates declare source-only until #251 removes that declaration together with the dependency that required it; no asset is admitted to handed-over first and remediated later.",
 	],
 	["first-provision occupant rule", "First provision admits carried destinations only when absent or exact-next."],
 	[
@@ -148,13 +162,21 @@ test("#249's marker model distinguishes declaration, absence, and refusal", () =
 		assert.equal(classifyMarker(raw), expected);
 });
 
-test("#249 marks every currently declared development-only substrate file at its legal head", () => {
-	for (const path of [
-		"../.github/workflows/source-checks.yml",
-		"../.github/workflows/suite.yml",
-		"../.github/workflows/check-merge-review.yml",
-		"../.github/workflows/check-merge-review.mjs",
-	]) {
-		assert.equal(classifyMarker(readFileSync(new URL(path, import.meta.url), "utf8")), "source-only", path);
+function filesBelow(root: string): string[] {
+	return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+		const path = join(root, entry.name);
+		return entry.isDirectory() ? filesBelow(path) : [path];
+	});
+}
+
+test("#249 keeps current source-bound candidates out of handoff until #251", () => {
+	const root = fileURLToPath(new URL("..", import.meta.url));
+	const paths = [
+		...filesBelow(join(root, ".github")),
+		...filesBelow(join(root, ".githooks")),
+		join(root, "changelog_unreleased/TEMPLATE.md"),
+	];
+	for (const path of paths) {
+		assert.equal(classifyMarker(readFileSync(path, "utf8")), "source-only", path);
 	}
 });

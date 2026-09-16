@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # .githooks/pre-push — local-tier adapter. Iterates ALL stdin ref
 # lines (`<local-ref> <local-oid> <remote-ref> <remote-oid>`, one per ref) and
 # blocks a push whose remote ref targets a protected branch, by CALLING

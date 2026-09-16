@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gitjig: source-only
 # .github/workflows/build_toc.sh — regenerate a SPEC's Table of contents.
 #
 # Usage:

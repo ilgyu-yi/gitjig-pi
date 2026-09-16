@@ -1,3 +1,4 @@
+# gitjig: source-only
 # .githooks/helpers/secret_scan.sh — the staged-secret class's delegated
 # scan (SPEC §3.3 secret row + staged-scan semantics statement; the
 # interface contract `.githooks/_lib.sh` states for this file). Sourced by
