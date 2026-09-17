@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
-import { lstatSync, readdirSync, readFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const root = repoRoot();
 const spec = readFileSync(join(root, "SPEC.md"), "utf8");
-const thisFile = fileURLToPath(import.meta.url);
 
 function section(source: string, heading: string, nextHeading: string): string {
 	const start = source.indexOf(heading);
@@ -22,19 +21,45 @@ function requireTokens(subject: string, label: string, tokens: readonly string[]
 	}
 }
 
+function normalizedRows(block: string): string[] {
+	return block
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.includes("|"))
+		.map((line) =>
+			line
+				.split("|")
+				.map((cell) => cell.trim())
+				.join(" | "),
+		);
+}
+
+function fencedAfter(subject: string, anchor: string): string {
+	const start = subject.indexOf(anchor);
+	assert.ok(start >= 0, `missing fenced-block anchor ${anchor}`);
+	const open = subject.indexOf("```text\n", start);
+	const close = subject.indexOf("\n```", open + 8);
+	assert.ok(open >= 0 && close > open, `missing text fence after ${anchor}`);
+	return subject.slice(open + 8, close);
+}
+
 function panelContract(source: string): void {
 	requireTokens(section(source, "### 1.7 The reviewer panel", "### 1.8 Plan contest"), "SPEC §1.7", [
 		"automatic return-protocol redispatch",
 		"numeric exit and a missing return",
 		"retries exactly once",
-		"initially `available`, and changes it to `spent` before sending the retry",
+		"Each required-slot dispatch owns one boolean retry state",
+		"sibling panel slots, a Judge dispatch, and later review rounds own distinct state",
 		"unrelated to §1.4's per-lineage recovery allowance",
 		"retry-return-protocol",
+		"repeats the same options and pin",
 		"\\n\\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.",
-		"no third dispatch occurs within that orchestrator invocation",
+		"each written `\\n` denotes one U+000A byte sequence",
+		"no third send occurs for that required-slot dispatch",
 		"separately initiated later review round remains",
 		"neither supplies a result nor creates a verdict",
 		"cause-keyed, identical-brief retry in the current orchestrator is retired",
+		"sleeps as runtime behavior under §5.3",
 	]);
 }
 
@@ -43,63 +68,103 @@ function delegatedContract(source: string): void {
 		"Dispatcher-scoped return-slot rule",
 		"zero or nonzero numeric exit",
 		"A valid complete return is admitted on output validity alone regardless of that exit code.",
-		"complete provisional return",
+		"closed return schema and the consuming role's existing result grammar are both satisfied",
 		"dispatcher cannot attest how much investigation preceded those bytes",
-		"signal termination, timeout, and abort",
-		"non-dispatch delegated consumer",
+		"panel completeness, Judge or history-diagnosis input, gated approval evidence",
+		"complete-panel prerequisite on an unattended ready path",
+		"malformed, incomplete, missing, or wrong-surface output remains no result",
+		"signal termination, timeout, and abort do not inspect or admit a return",
+		"non-dispatch delegated consumer keeps its own settled output predicate",
 		"outcome-unverified",
+		"No dispatcher diagnostic code or retry predicate transfers by analogy.",
 		"current dispatcher's pre-inspection nonzero-exit refusal is a tracked code defect",
+		"sleeps as runtime behavior under §5.3",
 	]);
 }
 
 const CODE_MESSAGES = [
-	"PARAMETER_REFUSED        | dispatch refused: dispatcher parameters were invalid; nothing started",
-	"PROVISION_FAILED         | dispatch refused: the isolated execution context could not be provisioned; nothing started",
-	"SPAWN_FAILED             | dispatch refused: the delegate could not be started; no return was inspected",
-	"SIGNAL_TERMINATED        | dispatch refused: the delegate terminated by signal; no return was inspected",
-	"TIMED_OUT                | dispatch refused: the delegate exceeded its run bound; no return was inspected",
-	"ABORTED                  | dispatch refused: the delegate run was aborted; no return was inspected",
-	"RETURN_MISSING           | dispatch refused: no return file was present after the delegate exited",
-	"RETURN_NOT_REGULAR       | dispatch refused: the return slot was not a regular file",
-	"RETURN_OVERSIZE          | dispatch refused: the return exceeded the 65536-byte bound",
-	"RETURN_UNREADABLE        | dispatch refused: the return could not be read exactly",
-	"RETURN_JSON_INVALID      | dispatch refused: the return was not valid UTF-8 JSON",
-	"RETURN_SCHEMA_INVALID    | dispatch refused: the return did not match the closed schema",
-	"RETURN_OPERAND_REJECTED  | dispatch refused: the return named a caller-held operand",
-	"INTERNAL_FAILED          | dispatch refused: the dispatcher encountered an internal failure",
-	"ADMITTED                 | dispatch admitted",
+	"PARAMETER_REFUSED | dispatch refused: dispatcher parameters were invalid; nothing started",
+	"PROVISION_FAILED | dispatch refused: the isolated execution context could not be provisioned; nothing started",
+	"SPAWN_FAILED | dispatch refused: the delegate could not be started; no return was inspected",
+	"SIGNAL_TERMINATED | dispatch refused: the delegate terminated by signal; no return was inspected",
+	"TIMED_OUT | dispatch refused: the delegate exceeded its run bound; no return was inspected",
+	"ABORTED | dispatch refused: the delegate run was aborted; no return was inspected",
+	"RETURN_MISSING | dispatch refused: no return file was present after the delegate exited",
+	"RETURN_NOT_REGULAR | dispatch refused: the return slot was not a regular file",
+	"RETURN_OVERSIZE | dispatch refused: the return exceeded the 65536-byte bound",
+	"RETURN_UNREADABLE | dispatch refused: the return could not be read exactly",
+	"RETURN_JSON_INVALID | dispatch refused: the return was not valid UTF-8 JSON",
+	"RETURN_SCHEMA_INVALID | dispatch refused: the return did not match the closed schema",
+	"RETURN_OPERAND_REJECTED | dispatch refused: the return named a caller-held operand",
+	"INTERNAL_FAILED | dispatch refused: the dispatcher encountered an internal failure",
+	"ADMITTED | dispatch admitted",
+] as const;
+
+const PRECEDENCE_ROWS = [
+	"parameter refusal | preflight | not-started | not-inspected | not-reached | PARAMETER_REFUSED",
+	"provision failure | provision | not-started | not-inspected | not-reached | PROVISION_FAILED",
+	"spawn failure | spawn | not-started | not-inspected | not-reached | SPAWN_FAILED",
+	"timeout | run | timed-out | not-inspected | not-reached | TIMED_OUT",
+	"abort | run | aborted | not-inspected | not-reached | ABORTED",
+	"signal termination | run | signaled | not-inspected | not-reached | SIGNAL_TERMINATED",
+	"numeric exit + invalid return | return | exited | exact invalid class | not-reached | corresponding RETURN_*",
+	"numeric exit + valid, no expected operand | return | exited | admitted | not-requested | ADMITTED",
+	"numeric exit + valid, expected operand | compare | exited | admitted | confirmed or invalid | ADMITTED",
+	"internal before run outcome | current phase | internal-failed | not-inspected | not-reached | INTERNAL_FAILED",
+	"internal after run outcome | current phase | preserved observed run class | last fully classified return class | last fully classified compare class | INTERNAL_FAILED",
 ] as const;
 
 function layerContract(source: string): void {
-	requireTokens(section(source, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts"), "SPEC §4.9", [
+	const layer = section(source, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts");
+	requireTokens(layer, "SPEC §4.9", [
+		"Closed structured return",
+		"exactly `{ok:boolean, summary:string, reviewedHead?:string, payload?:string}` and no unknown key",
+		"reviewedHead` is the delegate's independently resolved reviewed head",
+		"payload` is an opaque caller-interpreted string",
 		"Dispatcher diagnostic envelope",
 		"current dispatcher lacks this envelope and remains a tracked code defect",
+		"sleep as runtime behavior under §5.3",
+		"no child stream byte, delegate event prose, command, error text, summary, payload, operator trace, or caller-held compare operand",
 		"schemaVersion: 1",
 		'phase: "preflight" | "provision" | "spawn" | "run" | "return" | "compare" | "serialize"',
 		'run.class: "not-started" | "exited" | "signaled" | "timed-out" | "aborted" | "internal-failed"',
 		'return.class: "not-inspected" | "missing" | "not-regular" | "oversize" | "unreadable" | "json-invalid" | "schema-invalid" | "operand-rejected" | "admitted"',
 		'compare.class: "not-reached" | "not-requested" | "confirmed" | "invalid"',
-		"immediately before entered-handler parameter validation through completion of outcome serialization",
+		"saturated integer in `[0, Number.MAX_SAFE_INTEGER]`",
+		"immediately before outcome serialization begins",
 		"signed-32-bit integer `exitCode`",
 		"^SIG[A-Z0-9]{1,12}$",
 		"sentinel string `unavailable`",
-		...CODE_MESSAGES,
-		"Lifecycle and return precedence",
-		"Parameter refusal precedes provisioning",
-		"A claimed timeout, abort, or signal termination precedes return inspection",
-		"Every numeric exit reaches return inspection",
-		"internal before run outcome | current phase | internal-failed",
-		"internal after run outcome  | current phase | preserved observed run class",
-		"Impossible combinations",
-		'Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`',
+		"Keys occur in the grammar's order when serialized.",
+		"A refusal's `cause` equals its diagnostic `message`",
+		"Child bytes never supply any code, message, or cause.",
+		"Parameter refusal precedes provisioning.",
+		"Inspection classifies, in order, missing slot, non-regular slot, oversize bytes, unreadable bytes, invalid UTF-8 or JSON, closed-schema mismatch, caller-held operand, or admitted return.",
+		"Comparison follows only an admitted return",
+		"without returning either operand",
+		"preserves every earlier fully classified fact",
+		'status="admitted"` requires `code="ADMITTED"` and `return.class="admitted"',
+		'An uninspected or invalid return requires `compare.class="not-reached"`',
+		"INTERNAL_FAILED` at serialize phase may preserve an already completed compare result",
+		"An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate.",
+		"Any constructor request outside these combinations becomes `INTERNAL_FAILED`",
+		'{disposition:"admitted",ok,summary,payload?,compare?,diagnostic}',
+		'{disposition:"refused",cause,diagnostic}',
+		"Persisted `details` is exactly `{disposition,ok?,compare?,diagnostic}`",
+		"never carries summary, payload, or raw trace",
+		"Model-visible final `content` is exactly one text item",
 		"refusal is exactly the compact JSON serialization of the diagnostic",
 		"complete return file remains at most 65,536 bytes",
 		"524,288 UTF-8 bytes",
 		"diagnostic serialization is at most 1,536 UTF-8 bytes",
 		"2,048 UTF-8 bytes",
 		"4,096 UTF-8 bytes",
-		"never carries summary, payload, or raw trace",
+		"A bound breach is `INTERNAL_FAILED`, never truncation.",
+		"measures each complete serialized surface, not its unframed fields",
+		"diagnostic is decision-neutral except where §1.7 explicitly consumes",
 	]);
+	assert.deepEqual(normalizedRows(fencedAfter(layer, "Codes and messages are one-to-one and exact:")), CODE_MESSAGES);
+	assert.deepEqual(normalizedRows(fencedAfter(layer, "The ordinary rows are:")), PRECEDENCE_ROWS);
 }
 
 function validateContract(source: string): void {
@@ -113,12 +178,13 @@ function sourceFiles(directory: string): string[] {
 	for (const entry of readdirSync(directory)) {
 		const path = join(directory, entry);
 		const stat = lstatSync(path);
-		if (stat.isSymbolicLink()) {
-			continue;
-		}
+		assert.ok(
+			!stat.isSymbolicLink(),
+			`production corpus contains an unmeasured symbolic link: ${relative(root, path)}`,
+		);
 		if (stat.isDirectory()) {
 			files.push(...sourceFiles(path));
-		} else if (/\.(?:ts|mjs)$/.test(entry)) {
+		} else if (stat.isFile()) {
 			files.push(path);
 		}
 	}
@@ -126,44 +192,74 @@ function sourceFiles(directory: string): string[] {
 }
 
 describe("Execution #264 contract settlement", () => {
-	it("pins §1.7's bounded automatic retry and its separation from verdicts and later rounds", () => {
-		panelContract(spec);
-	});
+	it("pins §1.7's bounded per-slot retry and its separation from verdicts and later rounds", () => panelContract(spec));
+	it("pins §3.10's dispatcher scope, gate-reaching residual, and non-dispatch boundary", () => delegatedContract(spec));
+	it("pins §4.9's complete grammar, messages, rows, precedence, surfaces, and bounds", () => layerContract(spec));
 
-	it("pins §3.10's dispatcher scope, complete-output residual, and non-dispatch boundary", () => {
-		delegatedContract(spec);
-	});
-
-	it("pins §4.9's complete grammar, messages, precedence, surfaces, and every byte bound", () => {
-		layerContract(spec);
-	});
-
-	it("kills representative meaning-inverting SPEC mutants", () => {
-		const mutants = [
-			spec.replace("no third dispatch occurs within that orchestrator invocation", "keeps dispatching without a bound"),
-			spec.replace("retries exactly once", "retries repeatedly"),
-			spec.replace(
+	it("kills representative meaning-inverting SPEC mutants for every contract region", () => {
+		const replacements: ReadonlyArray<readonly [string, string]> = [
+			["Each required-slot dispatch owns one boolean retry state", "Each panel owns an unbounded retry counter"],
+			["repeats the same options and pin", "changes the options and pin"],
+			["each written `\\n` denotes one U+000A byte sequence", "each written \\n is literal text"],
+			["no third send occurs for that required-slot dispatch", "sends until a return appears"],
+			["sleeps as runtime behavior under §5.3", "is already enforced by the current runtime"],
+			[
 				"A valid complete return is admitted on output validity alone regardless of that exit code.",
-				"A valid complete return is refused whenever the exit code is nonzero.",
-			),
-			spec.replace("diagnostic serialization is at most 1,536 UTF-8 bytes", "diagnostic serialization is unbounded"),
-			spec.replace("complete return file remains at most 65,536 bytes", "complete return file has no bound"),
-			spec.replace(CODE_MESSAGES[6], "RETURN_MISSING           | any message the child supplies"),
-			spec.replace("^SIG[A-Z0-9]{1,12}$", "any string the child supplies"),
-			spec.replace("never carries summary, payload, or raw trace", "may carry summary, payload, and raw trace"),
+				"A valid return is refused after nonzero exit.",
+			],
+			["malformed, incomplete, missing, or wrong-surface output remains no result", "malformed output is admitted"],
+			["No dispatcher diagnostic code or retry predicate transfers by analogy.", "Every consumer inherits the retry"],
+			[
+				"exactly `{ok:boolean, summary:string, reviewedHead?:string, payload?:string}` and no unknown key",
+				"accepts any JSON object",
+			],
+			["saturated integer in `[0, Number.MAX_SAFE_INTEGER]`", "an unbounded float"],
+			["Keys occur in the grammar's order when serialized.", "Keys serialize in any order."],
+			["A refusal's `cause` equals its diagnostic `message`", "A refusal cause is child-authored"],
+			["Child bytes never supply any code, message, or cause.", "Child bytes supply messages."],
+			["Inspection classifies, in order", "Inspection classifies in any order"],
+			["Comparison follows only an admitted return", "Comparison precedes return admission"],
+			["without returning either operand", "while returning both operands"],
+			["preserves every earlier fully classified fact", "discards earlier facts"],
+			[
+				"An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate.",
+				"Nonzero exit always refuses.",
+			],
+			[
+				"Any constructor request outside these combinations becomes `INTERNAL_FAILED`",
+				"Invalid combinations are normalized",
+			],
+			["never carries summary, payload, or raw trace", "carries summary, payload, and raw trace"],
+			["A bound breach is `INTERNAL_FAILED`, never truncation.", "A bound breach is silently truncated."],
+			["measures each complete serialized surface, not its unframed fields", "measures unframed fields only"],
 		];
-		for (const mutant of mutants) {
-			assert.notEqual(mutant, spec, "the mutation fixture failed to alter SPEC.md");
-			assert.throws(() => validateContract(mutant));
+		for (const [from, to] of replacements) {
+			assert.ok(spec.includes(from), `mutation source is absent: ${from}`);
+			const mutant = spec.replace(from, to);
+			assert.throws(
+				() => validateContract(mutant),
+				(error: unknown) =>
+					error instanceof assert.AssertionError && error.message.includes(JSON.stringify(from).slice(0, -1)),
+				`mutant survived: ${from}`,
+			);
 		}
 	});
 
-	it("keeps production non-dispatch §3.10 consumers free of dispatcher-only vocabulary", () => {
-		const productionRoots = [join(root, ".pi", "extensions", "gitjig"), join(root, ".github")];
-		const cited = productionRoots
-			.flatMap(sourceFiles)
-			.filter((path) => path !== thisFile)
-			.filter((path) => readFileSync(path, "utf8").includes("§3.10"));
+	it("refuses symbolic-link omissions from the production corpus", () => {
+		const fixture = mkdtempSync(join(tmpdir(), "gitjig-264-corpus-"));
+		symlinkSync("missing-target", join(fixture, "consumer.ts"));
+		assert.throws(() => sourceFiles(fixture), /unmeasured symbolic link/);
+	});
+
+	it("keeps every production non-dispatch §3.10 consumer free of dispatcher-only vocabulary", () => {
+		const productionRoots = [join(root, ".pi"), join(root, ".github"), join(root, ".githooks")];
+		const cited = productionRoots.flatMap(sourceFiles).filter((path) => {
+			try {
+				return readFileSync(path, "utf8").includes("§3.10");
+			} catch {
+				return false;
+			}
+		});
 		const nonDispatch = cited.filter((path) => {
 			const rel = relative(root, path).replaceAll("\\", "/");
 			return (
@@ -176,13 +272,14 @@ describe("Execution #264 contract settlement", () => {
 		for (const path of nonDispatch) {
 			const body = readFileSync(path, "utf8");
 			for (const token of ["DispatcherDiagnostic", "retry-return-protocol", "RETURN_MISSING"]) {
-				assert.ok(
-					!body.includes(token),
-					`${relative(root, path)} is a non-dispatch §3.10 consumer but absorbed ${token}`,
-				);
+				assert.ok(!body.includes(token), `${relative(root, path)} absorbed dispatcher-only ${token}`);
 			}
 		}
 		const publisher = readFileSync(join(root, ".pi/extensions/gitjig/publish/executor.ts"), "utf8");
-		requireTokens(publisher, "publish executor control", ["code === 0", 'settle({ outcome: "outcome-unverified" })']);
+		requireTokens(publisher, "publish executor control", [
+			"} else if (code === 0) {",
+			'settle({ outcome: "outcome-unverified" })',
+			"the delegated run reported failure",
+		]);
 	});
 });
