@@ -73,22 +73,22 @@ import { renderActCall, renderActTerminal } from "../act-render.ts";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import type { SessionSurface, TerminalClass } from "../session-surface.ts";
-import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
-import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
+import { admitReturn } from "./admit.ts";
 import {
-	cleanupDispatchContext,
-	type DispatchContext,
-	PROVISION_REFUSAL_CAUSES,
-	provisionDispatchContext,
-} from "./provision.ts";
+	type CompareClass,
+	type DiagnosticCode,
+	type DispatcherDiagnostic,
+	makeDiagnostic,
+	type ReturnClass,
+	type RunClass,
+	serializeDiagnostic,
+} from "./diagnostics.ts";
+import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
+import { cleanupDispatchContext, type DispatchContext, provisionDispatchContext } from "./provision.ts";
 import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
-
-/** Provision failure, refused through the composed pipeline (§3.9). */
-const REFUSE_PROVISION =
-	"dispatch refused: the isolated execution context could not be provisioned at the expected head; nothing ran";
 
 /** Inadmissible argv from the tool surface — refused before any spawn. */
 const REFUSE_ARGV = "dispatch refused: the delegate argv is not an admissible non-empty vector of strings";
@@ -118,8 +118,16 @@ const REFUSE_TIMEOUT_MS =
 	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
 
 export type DispatchOutcome =
-	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
-	| { disposition: "refused"; cause: string };
+	| {
+			disposition: "admitted";
+			ok: boolean;
+			summary: string;
+			payload?: string;
+			compare?: "confirmed" | "invalid";
+			/** Present on every real dispatcher outcome; optional only for typed consumer test seams. */
+			diagnostic?: DispatcherDiagnostic;
+	  }
+	| { disposition: "refused"; cause: string; diagnostic?: DispatcherDiagnostic };
 
 /**
  * The shortest run the CONTAINMENT branch will act on (issue #104). Below
@@ -204,15 +212,55 @@ export interface RunDispatchOptions {
 }
 
 async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
-	// Content-free by construction: every `text` below is a fixed literal
-	// or a fixed cause — no delegate byte, no operand, no absolute path.
+	const started = performance.now();
+	const durationMs = (): number => Math.max(0, performance.now() - started);
 	const record = (action: string, text: string): void => {
 		appendAuditRecord(options.stateRoot, { category: "dispatch", action, text });
 	};
-	const refuse = (action: string, cause: string): DispatchOutcome => {
-		record(action, cause);
-		return { disposition: "refused", cause };
+	const diagnostic = (
+		code: DiagnosticCode,
+		phase: DispatcherDiagnostic["phase"],
+		runClass: RunClass,
+		returnClass: ReturnClass = "not-inspected",
+		compareClass: CompareClass = "not-reached",
+		exitCode: number | null = null,
+		signal: string | null = null,
+	): DispatcherDiagnostic =>
+		makeDiagnostic({
+			status: code === "ADMITTED" ? "admitted" : "refused",
+			phase,
+			run: { class: runClass, exitCode, signal },
+			return: { class: returnClass },
+			compare: { class: compareClass },
+			durationMs: durationMs(),
+			code,
+		});
+	const refuse = (
+		action: string,
+		code: DiagnosticCode,
+		phase: DispatcherDiagnostic["phase"],
+		runClass: RunClass,
+		returnClass: ReturnClass = "not-inspected",
+		compareClass: CompareClass = "not-reached",
+		exitCode: number | null = null,
+		signal: string | null = null,
+	): DispatchOutcome => {
+		const value = diagnostic(code, phase, runClass, returnClass, compareClass, exitCode, signal);
+		record(action, value.message);
+		return { disposition: "refused", cause: value.message, diagnostic: value };
 	};
+
+	if (
+		!Array.isArray(options.delegateArgv) ||
+		options.delegateArgv.length === 0 ||
+		options.delegateArgv.some((entry) => typeof entry !== "string") ||
+		typeof options.brief !== "string" ||
+		(options.expectedRef !== undefined && typeof options.expectedRef !== "string") ||
+		(options.timeoutMs !== undefined &&
+			(!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > MAX_RUN_BOUND_MS))
+	) {
+		return refuse("refuse-parameter", "PARAMETER_REFUSED", "preflight", "not-started");
+	}
 
 	let context: DispatchContext;
 	try {
@@ -220,12 +268,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			brief: options.brief,
 			expectedRef: options.expectedRef,
 		});
-	} catch (error) {
-		// A known provision cause passes through as-is (each is a fixed
-		// content-free literal); anything else refuses on the generic cause.
-		const thrown = error instanceof Error ? error.message : "";
-		const known = (Object.values(PROVISION_REFUSAL_CAUSES) as string[]).includes(thrown);
-		return refuse("refuse-provision", known ? thrown : REFUSE_PROVISION);
+	} catch {
+		return refuse("refuse-provision", "PROVISION_FAILED", "provision", "not-started");
 	}
 	record("run-started", "dispatch run started: the bounded delegate child is being observed");
 	try {
@@ -266,21 +310,42 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		if (!retainTrace(options.stateRoot, trace)) {
 			record("trace-degraded", "dispatch trace retention degraded: bounded operator evidence was not retained");
 		}
-		if (run.spawnFailed) {
-			return refuse("refuse-delegate-absent", REFUSAL_CAUSES.delegateAbsent);
+		if (run.spawnFailed) return refuse("refuse-delegate-absent", "SPAWN_FAILED", "spawn", "not-started");
+		if (run.timedOut) return refuse("refuse-bound-exceeded", "TIMED_OUT", "run", "timed-out");
+		if (run.aborted) return refuse("refuse-aborted", "ABORTED", "run", "aborted");
+		if (run.signal !== null) {
+			return refuse(
+				"refuse-signal",
+				"SIGNAL_TERMINATED",
+				"run",
+				"signaled",
+				"not-inspected",
+				"not-reached",
+				null,
+				run.signal,
+			);
 		}
-		if (run.timedOut) {
-			return refuse("refuse-bound-exceeded", REFUSAL_CAUSES.boundExceeded);
-		}
-		if (run.aborted) {
-			return refuse("refuse-aborted", REFUSAL_CAUSES.aborted);
-		}
-		if (run.exitCode !== 0) {
-			return refuse("refuse-failed-run", REFUSAL_CAUSES.failedRun);
-		}
+		const exitCode = run.exitCode ?? -1;
 		const admission = admitReturn(context.returnPath);
 		if (!admission.admitted) {
-			return refuse("refuse-return", admission.cause);
+			const codeByClass = {
+				missing: "RETURN_MISSING",
+				"not-regular": "RETURN_NOT_REGULAR",
+				oversize: "RETURN_OVERSIZE",
+				unreadable: "RETURN_UNREADABLE",
+				"json-invalid": "RETURN_JSON_INVALID",
+				"schema-invalid": "RETURN_SCHEMA_INVALID",
+				"operand-rejected": "RETURN_OPERAND_REJECTED",
+			} as const;
+			return refuse(
+				"refuse-return",
+				codeByClass[admission.class],
+				"return",
+				"exited",
+				admission.class,
+				"not-reached",
+				exitCode,
+			);
 		}
 		// The scan reaches EVERY byte that crosses, not the summary alone:
 		// the opaque `payload` slot (issue #169) is delegate-authored like
@@ -290,9 +355,36 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			namesHeldOperand(admission.summary, context.heldHash) ||
 			(admission.payload !== undefined && namesHeldOperand(admission.payload, context.heldHash))
 		) {
-			return refuse("refuse-operand-named", REFUSAL_CAUSES.operandNamed);
+			return refuse(
+				"refuse-operand-named",
+				"RETURN_OPERAND_REJECTED",
+				"return",
+				"exited",
+				"operand-rejected",
+				"not-reached",
+				exitCode,
+			);
 		}
-		const outcome: DispatchOutcome = { disposition: "admitted", ok: admission.ok, summary: admission.summary };
+		const compareClass: CompareClass =
+			options.expectedRef === undefined
+				? "not-requested"
+				: admission.reviewedHead === context.heldHash
+					? "confirmed"
+					: "invalid";
+		const admittedDiagnostic = diagnostic(
+			"ADMITTED",
+			options.expectedRef === undefined ? "return" : "compare",
+			"exited",
+			"admitted",
+			compareClass,
+			exitCode,
+		);
+		const outcome: DispatchOutcome = {
+			disposition: "admitted",
+			ok: admission.ok,
+			summary: admission.summary,
+			diagnostic: admittedDiagnostic,
+		};
 		if (admission.payload !== undefined) {
 			outcome.payload = admission.payload;
 		}
@@ -438,6 +530,18 @@ export function registerDispatchTool(
 				updateSurface(() => surface?.dispatchFinished(dispatchTerminal(value.details)));
 				return value;
 			};
+			const parameterRefusal = (): DispatchToolResult => {
+				const diagnostic = makeDiagnostic({
+					status: "refused",
+					phase: "preflight",
+					run: { class: "not-started", exitCode: null, signal: null },
+					return: { class: "not-inspected" },
+					compare: { class: "not-reached" },
+					durationMs: 0,
+					code: "PARAMETER_REFUSED",
+				});
+				return finish(result(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic }));
+			};
 			try {
 				updateSurface(() => surface?.dispatchStarted());
 				const delegateArgv: unknown = params.delegateArgv;
@@ -447,14 +551,14 @@ export function registerDispatchTool(
 					delegateArgv.some((entry) => typeof entry !== "string")
 				) {
 					appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-argv", text: REFUSE_ARGV });
-					return finish(result(REFUSE_ARGV, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const brief: unknown = params.brief;
 				if (typeof brief !== "string") {
 					// No coercion: a `String()`-coerced "undefined" brief is a
 					// silently wrong dispatch, not an admitted one.
 					appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-brief", text: REFUSE_BRIEF });
-					return finish(result(REFUSE_BRIEF, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const expectedRef: unknown = params.expectedRef;
 				if (expectedRef !== undefined && typeof expectedRef !== "string") {
@@ -466,7 +570,7 @@ export function registerDispatchTool(
 						action: "refuse-expected-ref",
 						text: REFUSE_EXPECTED_REF,
 					});
-					return finish(result(REFUSE_EXPECTED_REF, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const timeoutMs: unknown = params.timeoutMs;
 				if (
@@ -484,7 +588,7 @@ export function registerDispatchTool(
 						action: "refuse-timeout-ms",
 						text: REFUSE_TIMEOUT_MS,
 					});
-					return finish(result(REFUSE_TIMEOUT_MS, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const outcome = await runDispatch({
 					callerRepoRoot: repoRoot,
@@ -499,7 +603,13 @@ export function registerDispatchTool(
 					},
 				});
 				if (outcome.disposition === "refused") {
-					return finish(result(outcome.cause, { disposition: "refused" }));
+					const diagnostic = outcome.diagnostic;
+					return finish(
+						result(diagnostic === undefined ? outcome.cause : serializeDiagnostic(diagnostic), {
+							disposition: "refused",
+							...(diagnostic === undefined ? {} : { diagnostic }),
+						}),
+					);
 				}
 				const compareClause = outcome.compare === undefined ? "" : `; compare ${outcome.compare}`;
 				return finish(
@@ -507,6 +617,7 @@ export function registerDispatchTool(
 						disposition: "admitted",
 						ok: outcome.ok,
 						...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
+						...(outcome.diagnostic === undefined ? {} : { diagnostic: outcome.diagnostic }),
 					}),
 				);
 			} catch (error) {

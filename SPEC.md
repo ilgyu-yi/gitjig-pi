@@ -42,30 +42,30 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
 | &nbsp;&nbsp;§3.9 | Fail policy | 593 |
 | &nbsp;&nbsp;§3.10 | Delegated computation | 607 |
-| &nbsp;&nbsp;§3.11 | Gate design | 623 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 645 |
-| §4 | Substrate and install contract | 655 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 659 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 671 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 679 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 685 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 689 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 693 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 705 |
-| &nbsp;&nbsp;§4.8 | The command layer | 715 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 772 |
-| §5 | Cross-cutting contracts | 893 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 897 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 903 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 907 |
-| &nbsp;&nbsp;§5.4 | Work language | 911 |
-| &nbsp;&nbsp;§5.5 | State boundary | 915 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 923 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 935 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 945 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 953 |
-| §6 | Self-governance milestone | 965 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 976 |
+| &nbsp;&nbsp;§3.11 | Gate design | 622 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 644 |
+| §4 | Substrate and install contract | 654 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 658 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 670 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 678 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 684 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 688 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 692 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 704 |
+| &nbsp;&nbsp;§4.8 | The command layer | 714 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 771 |
+| §5 | Cross-cutting contracts | 892 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 896 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 902 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 906 |
+| &nbsp;&nbsp;§5.4 | Work language | 910 |
+| &nbsp;&nbsp;§5.5 | State boundary | 914 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 922 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 934 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 944 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 952 |
+| §6 | Self-governance milestone | 964 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 975 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -612,7 +612,6 @@ A component that delegates work to an external interpreter or tool under a fail-
 
 This is an instance of §1.6's named deferred limitation that the pin binds the artifact rather than the cognitive act, not a second gate or a claim that dispatcher telemetry observes cognitive completeness. It has no separately observable trigger: the provisional is overwritten in place, and a clear that survives to inspection is indistinguishable from an equally shaped final clear. The limitation reopens only when a non-delegate source of finality exists to settle and fail closed at the consumer; until then the existing complete-panel and `merge-review` gates retain their stated evidence checks but do not erase this honest residual. The contract accepts that false-clear risk rather than treating exit status as evidence of cognitive completeness; malformed, incomplete, missing, or wrong-surface output remains no result. Spawn failure, signal termination, timeout, and abort do not inspect or admit a return. This paragraph re-roles “a failed run” and “a run that succeeded partially” only for the dispatcher's closed return-slot protocol. A non-dispatch delegated consumer keeps its own settled output predicate and lifecycle meaning; in particular, a publisher may continue to refuse nonzero exit and classify a zero exit without its required anchored result as `outcome-unverified`. No dispatcher diagnostic code or retry predicate transfers by analogy.
 
-This rule is a **spec-ahead settlement** under §0.3. The current dispatcher's pre-inspection nonzero-exit refusal is a tracked code defect under Directive #262; this rule sleeps as runtime behavior under §5.3 until the derived dispatcher instrument lands, and that implementing change removes this status paragraph.
 
 What failing closed *means* depends on the component's role. A **pre-processor** that cannot vouch for its output returns the input **unchanged**, so the gate still runs against the full text — an unreduced input can only over-match, a recoverable false block, while admitted junk under-matches, a silent wrong allow. A consumer that **iterates** a result set treats empty-but-well-formed as suspect — a completed check that checked nothing is indistinguishable at the call site from all-clear — so its validity predicate is *valid AND non-empty*. And where **every** byte string is a legitimate output, no predicate over the output alone can work; validity is established by a framing protocol a degraded producer cannot satisfy, never inspected as a shape. A lossy fallback **refuses** what it cannot process rather than answering a different, weaker question: a weaker parse is a second implementation reaching its own verdicts silently. And a tool that rewrites a tracked file is **transactional**: it validates before mutating, builds the result out of place, replaces atomically, and no-ops when already converged — a torn or partial write is a silent wrong allow against every reader of that file.
 
@@ -783,7 +782,7 @@ A **dispatch instrument** composes a delegate's brief in §1.5's dispatch-facts 
 
 **Closed structured return.** The sole delegate-authored computational result occupies `<scratch>/return.json`; because the delegate's working directory is the provisioned tree beside that scratch-owned slot, its brief names the same file as `../return.json`. It is one UTF-8 JSON regular file of at most 65,536 bytes with exactly `{ok:boolean, summary:string, reviewedHead?:string, payload?:string}` and no unknown key. `reviewedHead` is the delegate's independently resolved reviewed head; where the caller supplied an expected ref, the dispatcher compares it with the held resolved object and returns only `confirmed` or `invalid`. `payload` is an opaque caller-interpreted string. The caller-held operand scan covers every byte of `summary` and `payload`; `reviewedHead` is consumed only by the blind comparison and never returned. Invalid UTF-8 or JSON, an unknown key, a missing or wrongly typed required field, or a wrongly typed optional field refuses the return whole.
 
-**Dispatcher diagnostic envelope.** The contract below is a **spec-ahead settlement** under §0.3. The current dispatcher lacks this envelope and remains a tracked code defect under Directive #262; these rules sleep as runtime behavior under §5.3 until the derived dispatcher instrument lands, and that implementing change removes this status sentence.
+**Dispatcher diagnostic envelope.**
 
 Every invocation that enters the settled dispatcher returns one closed, dispatcher-authored diagnostic beside its admitted result or refusal. It contains dispatcher observations and fixed literals only: no child stream byte, delegate event prose, command, error text, summary, payload, operator trace, or caller-held compare operand. A child can influence its bounded numeric exit status, but the dispatcher observes and types that process fact; this admitted residual does not make child-authored text a diagnostic source. Tool-parameter schema rejection occurs before invocation and therefore produces the substrate's validation error rather than this envelope; parameter validation after entry uses the envelope.
 
