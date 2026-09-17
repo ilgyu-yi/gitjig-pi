@@ -81,7 +81,7 @@ import {
 	PROVISION_REFUSAL_CAUSES,
 	provisionDispatchContext,
 } from "./provision.ts";
-import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
+import { renderTraceSnapshot, retainTrace, type TraceLifecycle, type TraceSnapshot } from "./trace.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
@@ -240,8 +240,17 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 				options.onTrace?.(snapshot);
 			},
 		});
+		const fallbackLifecycle: TraceLifecycle = run.timedOut
+			? "timed-out"
+			: run.aborted
+				? "aborted"
+				: run.spawnFailed
+					? "spawn-failed"
+					: run.exitCode === 0
+						? "completed"
+						: "failed";
 		const trace = terminalTrace ?? {
-			lifecycle: "spawn-failed" as const,
+			lifecycle: fallbackLifecycle,
 			lines: [],
 			counters: {
 				stdoutBytes: 0,

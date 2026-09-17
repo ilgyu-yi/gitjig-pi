@@ -115,6 +115,18 @@ describe("#132 bounded delegate trace", () => {
 		assert.throws(() => process.kill(grandchild, 0), /ESRCH/);
 	});
 
+	it("emits the correct terminal lifecycle when cancellation precedes spawn", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const lifecycles: string[] = [];
+		const outcome = await runDelegate({ treeDir: root(), stateDir: root() } as never, ["sh"], {
+			signal: controller.signal,
+			onTrace: (snapshot) => lifecycles.push(snapshot.lifecycle),
+		});
+		assert.equal(outcome.aborted, true);
+		assert.deepEqual(lifecycles, ["aborted"]);
+	});
+
 	it("keeps timeout terminal when a later abort races the bound", async () => {
 		const tree = root();
 		const stateDir = join(tree, "state");

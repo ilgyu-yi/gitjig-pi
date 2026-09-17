@@ -81,14 +81,6 @@ export function runDelegate(
 ): Promise<DelegateRunOutcome> {
 	return new Promise((resolve) => {
 		const trace = new BoundedDelegateTrace();
-		if (argv.length === 0) {
-			resolve({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
-			return;
-		}
-		if (options.signal?.aborted) {
-			resolve({ exitCode: null, timedOut: false, aborted: true, spawnFailed: false });
-			return;
-		}
 		let settled = false;
 		let termination: "none" | "abort" | "timeout" = "none";
 		let updateTimer: ReturnType<typeof setTimeout> | undefined;
@@ -136,6 +128,14 @@ export function runDelegate(
 			emitTrace(lifecycleOf(outcome));
 			resolve(outcome);
 		};
+		if (argv.length === 0) {
+			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			return;
+		}
+		if (options.signal?.aborted) {
+			settle({ exitCode: null, timedOut: false, aborted: true, spawnFailed: false });
+			return;
+		}
 		// Passthrough with the repo-locating and config-injection GIT_*
 		// families deleted — the one shared scrub provision's own git
 		// children ride too (§1.5) — and the one state seam rebound (§5.5);
@@ -236,6 +236,11 @@ export function runDelegate(
 			});
 		});
 		// Always drained. Retention is bounded and never applies backpressure.
+		// A grace/watchdog settlement destroys these streams while a descendant
+		// may still hold the pipe; late stream errors are presentation failures,
+		// not reasons to crash the extension host or alter the run outcome.
+		child.stdout.on("error", () => {});
+		child.stderr.on("error", () => {});
 		child.stdout.on("data", (chunk: Buffer) => {
 			trace.consume("stdout", chunk);
 			scheduleTrace();
