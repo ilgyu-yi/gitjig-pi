@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
@@ -22,16 +22,21 @@ function requireTokens(subject: string, label: string, tokens: readonly string[]
 }
 
 function normalizedRows(block: string): string[] {
-	return block
+	const lines = block
 		.split("\n")
 		.map((line) => line.trim())
-		.filter((line) => line.includes("|"))
-		.map((line) =>
-			line
-				.split("|")
-				.map((cell) => cell.trim())
-				.join(" | "),
-		);
+		.filter(Boolean);
+	assert.deepEqual(
+		lines.filter((line) => line.includes("|")).length,
+		lines.length,
+		"a closed table fence contains a non-row line",
+	);
+	return lines.map((line) =>
+		line
+			.split("|")
+			.map((cell) => cell.trim())
+			.join(" | "),
+	);
 }
 
 function fencedAfter(subject: string, anchor: string): string {
@@ -86,10 +91,11 @@ function delegatedContract(source: string): void {
 		"Requiring every early provisional to carry a non-clear verdict is the rejected mitigation",
 		"panel completeness, Judge or history-diagnosis input, gated approval evidence",
 		"complete-panel prerequisite on an unattended ready path",
-		"second instance of §1.6's named deferred limitation",
-		"bypass vector of §3.3's `merge-review` row",
-		"§4.9 dispatcher derivation cycle owns hardening it",
-		"observed early clear that differs from the later overwrite's verdict",
+		"instance of §1.6's named deferred limitation",
+		"no separately observable trigger",
+		"provisional is overwritten in place",
+		"non-delegate source of finality exists to settle and fail closed at the consumer",
+		"complete-panel and `merge-review` gates retain their stated evidence checks",
 		"malformed, incomplete, missing, or wrong-surface output remains no result",
 		"A complete provisional return remains complete output when the process later exits nonzero",
 		"signal termination, timeout, and abort do not inspect or admit a return",
@@ -183,11 +189,15 @@ function layerContract(source: string): void {
 		"Parameter refusal precedes provisioning.",
 		"Inspection classifies, in order, missing slot, non-regular slot, oversize bytes, unreadable bytes, invalid UTF-8 or JSON, closed-schema mismatch, caller-held operand, or admitted return.",
 		"Comparison follows only an admitted return",
+		"expected operand with absent `reviewedHead` gives `invalid`",
+		"exact equality gives `confirmed` while mismatch gives `invalid`",
 		"without returning either operand",
 		"preserves every earlier fully classified fact",
 		"observability degradation and never alter this disposition",
 		'status="admitted"` holds if and only if `code="ADMITTED"',
 		'every other code requires `status="refused"`',
+		"`confirmed` requires an expected operand, a present `reviewedHead`, exact equality, and compare phase",
+		"`invalid` requires an expected operand and compare phase and covers absent `reviewedHead` or mismatch",
 		'An uninspected or invalid return requires `compare.class="not-reached"`',
 		"INTERNAL_FAILED` at serialize phase may preserve an already completed compare result",
 		"An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate.",
@@ -304,8 +314,9 @@ describe("Execution #264 contract settlement", () => {
 				"Requiring every early provisional to carry a non-clear verdict is the rejected mitigation",
 				"No safer provisional alternative exists",
 			],
-			["second instance of §1.6's named deferred limitation", "unrelated to review integrity"],
-			["observed early clear that differs from the later overwrite's verdict", "no hardening trigger exists"],
+			["instance of §1.6's named deferred limitation", "unrelated to review integrity"],
+			["no separately observable trigger", "a complete observable trigger exists"],
+			["provisional is overwritten in place", "every provisional version is retained"],
 			["malformed, incomplete, missing, or wrong-surface output remains no result", "malformed output is admitted"],
 			["No dispatcher diagnostic code or retry predicate transfers by analogy.", "Every consumer inherits the retry"],
 			["occupies `<scratch>/return.json`", "occupies an unspecified path"],
@@ -323,6 +334,7 @@ describe("Execution #264 contract settlement", () => {
 			["Child bytes never supply any code, message, or cause.", "Child bytes supply messages."],
 			["Inspection classifies, in order", "Inspection classifies in any order"],
 			["Comparison follows only an admitted return", "Comparison precedes return admission"],
+			["expected operand with absent `reviewedHead` gives `invalid`", "absent reviewedHead gives confirmed"],
 			["without returning either operand", "while returning both operands"],
 			["preserves every earlier fully classified fact", "discards earlier facts"],
 			["observability degradation and never alter this disposition", "observability failure refuses the dispatch"],
@@ -366,8 +378,16 @@ describe("Execution #264 contract settlement", () => {
 				"RETURN_OVERSIZE | child message",
 			],
 			[
+				"ADMITTED                 | dispatch admitted",
+				"ADMITTED                 | dispatch admitted\nChild bytes may supply messages and causes.",
+			],
+			[
 				"numeric exit + invalid return | return | exited     | exact invalid class | not-reached | corresponding RETURN_*",
 				"numeric exit + invalid return | compare | exited | admitted | confirmed | ADMITTED",
+			],
+			[
+				"internal after run outcome  | current phase | preserved observed run class | last fully classified return class | last fully classified compare class | INTERNAL_FAILED",
+				"internal after run outcome  | current phase | preserved observed run class | last fully classified return class | last fully classified compare class | INTERNAL_FAILED\nany row above may be overridden by child-reported text",
 			],
 		] as const) {
 			assert.ok(spec.includes(from), `table mutation source is absent: ${from}`);
@@ -386,19 +406,24 @@ describe("Execution #264 contract settlement", () => {
 		assert.throws(() => sourceFiles(fixture), /unmeasured symbolic link/);
 	});
 
-	it("proves the dispatcher-vocabulary sweep detects absorption and honors exact exemptions", () => {
-		const fixture = mkdtempSync(join(tmpdir(), "gitjig-264-absorber-"));
-		const consumer = join(fixture, "consumer.ts");
-		writeFileSync(consumer, "const leaked = 'RETURN_MISSING';\n");
-		assert.deepEqual(absorbedDispatcherTokens([consumer]), [`${relative(root, consumer)}:RETURN_MISSING`]);
-		for (const rel of REVIEW_COMMANDS) {
+	it("proves every dispatcher token is detected and every exemption arm is exact", () => {
+		const consumer = join(tmpdir(), "gitjig-264-absorber.ts");
+		for (const token of DISPATCH_TOKENS) {
+			assert.deepEqual(absorbedDispatcherTokenBody(consumer, token), [`${relative(root, consumer)}:${token}`]);
+		}
+		const exempt = [
+			".pi/extensions/gitjig/dispatch/index.ts",
+			".pi/extensions/gitjig/review/orchestrate.ts",
+			...REVIEW_COMMANDS,
+		];
+		for (const rel of exempt) {
 			const path = join(root, rel);
-			assert.ok(lstatSync(path).isFile(), `allowlisted review command is absent: ${rel}`);
-			assert.deepEqual(absorbedDispatcherTokenBody(path, "RETURN_MISSING"), []);
+			assert.ok(lstatSync(path).isFile(), `dispatcher-owned exemption is absent: ${rel}`);
+			assert.deepEqual(absorbedDispatcherTokenBody(path, DISPATCH_TOKENS.join(" ")), []);
 		}
 	});
 
-	it("sleeps explicitly until dispatcher vocabulary lands, then excludes non-dispatch consumers", () => {
+	it("records the spec-ahead sleep until dispatcher vocabulary lands", () => {
 		const productionRoots = [join(root, ".pi"), join(root, ".github"), join(root, ".githooks")];
 		const production = productionRoots.flatMap(sourceFiles);
 		assert.ok(
@@ -409,12 +434,7 @@ describe("Execution #264 contract settlement", () => {
 			const body = readFileSync(path, "utf8");
 			return DISPATCH_TOKENS.some((token) => body.includes(token));
 		});
-		if (!vocabularyLanded) {
-			requireTokens(section(spec, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts"), "sleeping guard", [
-				"current dispatcher lacks this envelope and remains a tracked code defect",
-				"sleep as runtime behavior under §5.3",
-			]);
-		}
+		assert.equal(vocabularyLanded, false, "dispatcher vocabulary landed; activate the sleeping corpus guard");
 		assert.deepEqual(absorbedDispatcherTokens(production), []);
 	});
 });
