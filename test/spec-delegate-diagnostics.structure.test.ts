@@ -59,12 +59,16 @@ function panelContract(source: string): void {
 		"sibling calls never share or replenish it",
 		"unrelated to §1.4's per-lineage recovery allowance",
 		"standing brief contract for each such call instructs the delegate",
+		"changes it to `spent` before its one retry",
 		"repeats the same options and pin",
 		"\\n\\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.",
 		"each written `\\n` denotes one U+000A byte sequence",
+		"absence of the required file is the sole trigger",
+		"A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result",
 		"no third send occurs for that call",
 		"new call with its own one-retry bound",
 		"neither supplies a result nor creates a verdict",
+		"Immediately before the second send",
 		"retry-return-protocol` through the optional in-process event callback it owns",
 		"fixture consumes that callback to prove one event corresponds to exactly one authorized second send",
 		"not a delegate JSON event, audit record, operator trace, tool content, details, or session message",
@@ -168,7 +172,10 @@ function layerContract(source: string): void {
 		"covers every byte of `summary` and `payload`",
 		"`reviewedHead` is consumed only by the blind comparison and never returned",
 		"Dispatcher diagnostic envelope",
+		"Every invocation that enters the settled dispatcher returns one closed, dispatcher-authored diagnostic",
 		"dispatcher observations and fixed literals only",
+		"A child can influence its bounded numeric exit status, but the dispatcher observes and types that process fact",
+		"Tool-parameter schema rejection occurs before invocation",
 		"current dispatcher lacks this envelope and remains a tracked code defect",
 		"sleep as runtime behavior under §5.3",
 		"no child stream byte, delegate event prose, command, error text, summary, payload, operator trace, or caller-held compare operand",
@@ -187,6 +194,8 @@ function layerContract(source: string): void {
 		"A refusal's `cause` equals its diagnostic `message`",
 		"Child bytes never supply any code, message, or cause.",
 		"Parameter refusal precedes provisioning.",
+		"Once spawned, one terminal claim selects the first observed timeout, abort, signal termination, or numeric exit",
+		"Every numeric exit reaches return inspection regardless of exit code.",
 		"Inspection classifies, in order, missing slot, non-regular slot, oversize bytes, unreadable bytes, invalid UTF-8 or JSON, closed-schema mismatch, caller-held operand, or admitted return.",
 		"Comparison follows only an admitted return",
 		"expected operand with absent `reviewedHead` gives `invalid`",
@@ -196,6 +205,7 @@ function layerContract(source: string): void {
 		"observability degradation and never alter this disposition",
 		'status="admitted"` holds if and only if `code="ADMITTED"',
 		'every other code requires `status="refused"`',
+		'Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`',
 		"`confirmed` requires an expected operand, a present `reviewedHead`, exact equality, and compare phase",
 		"`invalid` requires an expected operand and compare phase and covers absent `reviewedHead` or mismatch",
 		'An uninspected or invalid return requires `compare.class="not-reached"`',
@@ -251,6 +261,7 @@ function sourceFiles(directory: string): string[] {
 	return files;
 }
 
+// The first is a forecast implementation name; only the last two are SPEC-fixed literals.
 const DISPATCH_TOKENS = ["DispatcherDiagnostic", "retry-return-protocol", "RETURN_MISSING"] as const;
 const REVIEW_COMMANDS = new Set([
 	".pi/extensions/gitjig/commands/review.ts",
@@ -281,14 +292,21 @@ function absorbedDispatcherTokens(paths: readonly string[]): string[] {
 describe("Execution #264 contract settlement", () => {
 	it("pins §1.7's bounded per-slot retry and its separation from verdicts and later rounds", () => panelContract(spec));
 	it("pins §3.10's dispatcher scope, gate-reaching residual, and non-dispatch boundary", () => delegatedContract(spec));
-	it("pins §4.9's complete grammar, messages, rows, precedence, surfaces, and bounds", () => layerContract(spec));
+	it("pins §4.9's exact grammar, messages and rows, and named precedence, surface and bound tokens", () =>
+		layerContract(spec));
 
 	it("kills representative meaning-inverting SPEC mutants for every contract region", () => {
 		const replacements: ReadonlyArray<readonly [string, string]> = [
 			["Every dispatcher call made by the review orchestrator", "Only the first panel slot"],
 			["sibling calls never share or replenish it", "all calls share and replenish it"],
+			["changes it to `spent` before its one retry", "changes it to spent after its retry"],
 			["repeats the same options and pin", "changes the options and pin"],
 			["each written `\\n` denotes one U+000A byte sequence", "each written \\n is literal text"],
+			["absence of the required file is the sole trigger", "any refusal is a retry trigger"],
+			[
+				"A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result",
+				"A second missing return supplies a result",
+			],
 			["retries exactly once", "retries until a return appears"],
 			[
 				"\\n\\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.",
@@ -296,6 +314,7 @@ describe("Execution #264 contract settlement", () => {
 			],
 			["neither supplies a result nor creates a verdict", "supplies a result and creates a verdict"],
 			["no third send occurs for that call", "sends until a return appears"],
+			["Immediately before the second send", "Long after the second send"],
 			[
 				"retry-return-protocol` through the optional in-process event callback it owns",
 				"retry-return-protocol` through model content",
@@ -326,17 +345,35 @@ describe("Execution #264 contract settlement", () => {
 			],
 			["covers every byte of `summary` and `payload`", "covers the first line of summary"],
 			["`reviewedHead` is consumed only by the blind comparison and never returned", "reviewedHead is returned"],
+			[
+				"Every invocation that enters the settled dispatcher returns one closed, dispatcher-authored diagnostic",
+				"Some invocations return no diagnostic",
+			],
 			["dispatcher observations and fixed literals only", "child stream bytes are admitted"],
+			[
+				"A child can influence its bounded numeric exit status, but the dispatcher observes and types that process fact",
+				"A child supplies diagnostic text directly",
+			],
+			["Tool-parameter schema rejection occurs before invocation", "Tool-parameter rejection occurs after invocation"],
 			["saturated integer in `[0, Number.MAX_SAFE_INTEGER]`", "an unbounded float"],
 			["measured by a monotonic clock", "measured by wall clock"],
 			["Keys occur in the grammar's order when serialized.", "Keys serialize in any order."],
 			["A refusal's `cause` equals its diagnostic `message`", "A refusal cause is child-authored"],
 			["Child bytes never supply any code, message, or cause.", "Child bytes supply messages."],
+			[
+				"Once spawned, one terminal claim selects the first observed timeout, abort, signal termination, or numeric exit",
+				"Several terminal claims are recorded",
+			],
+			["Every numeric exit reaches return inspection regardless of exit code.", "Only zero exit reaches inspection."],
 			["Inspection classifies, in order", "Inspection classifies in any order"],
 			["Comparison follows only an admitted return", "Comparison precedes return admission"],
 			["expected operand with absent `reviewedHead` gives `invalid`", "absent reviewedHead gives confirmed"],
 			["without returning either operand", "while returning both operands"],
 			["preserves every earlier fully classified fact", "discards earlier facts"],
+			[
+				'Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`',
+				"Every refusal may preserve an admitted return",
+			],
 			["observability degradation and never alter this disposition", "observability failure refuses the dispatch"],
 			[
 				"An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate.",
