@@ -41,6 +41,15 @@ describe("#267 isolated diagnostic mutants", () => {
 		);
 	});
 
+	it("kills the runtime return-class mapping mutant", () => {
+		kill(
+			"return-code-map",
+			'missing: "RETURN_MISSING"',
+			'missing: "RETURN_NOT_REGULAR"',
+			'const {RETURN_CODE_BY_CLASS:m}=await import("./dispatch/diagnostics.ts"); assert.equal(m.missing,"RETURN_MISSING");',
+		);
+	});
+
 	it("kills code-to-return-class and compare-phase mutants independently", () => {
 		kill(
 			"code-class",

@@ -84,6 +84,7 @@ import {
 	type DiagnosticCode,
 	type DispatcherDiagnostic,
 	makeDiagnostic,
+	RETURN_CODE_BY_CLASS,
 	type ReturnClass,
 	type RunClass,
 	serializeDiagnostic,
@@ -355,18 +356,9 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const admission = admitReturn(context.returnPath);
 		if (!admission.admitted) {
 			observedReturn = admission.class;
-			const codeByClass = {
-				missing: "RETURN_MISSING",
-				"not-regular": "RETURN_NOT_REGULAR",
-				oversize: "RETURN_OVERSIZE",
-				unreadable: "RETURN_UNREADABLE",
-				"json-invalid": "RETURN_JSON_INVALID",
-				"schema-invalid": "RETURN_SCHEMA_INVALID",
-				"operand-rejected": "RETURN_OPERAND_REJECTED",
-			} as const;
 			return refuse(
 				"refuse-return",
-				codeByClass[admission.class],
+				RETURN_CODE_BY_CLASS[admission.class],
 				"return",
 				"exited",
 				admission.class,
@@ -437,11 +429,12 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		record("admitted", "dispatch admitted: the bounded return crossed from the return.json slot");
 		return outcome;
 	} catch {
+		const failedRunClass = observedRun.class === "not-started" ? "internal-failed" : observedRun.class;
 		return refuse(
 			"refuse-internal",
 			"INTERNAL_FAILED",
 			currentPhase,
-			observedRun.class,
+			failedRunClass,
 			observedReturn,
 			observedCompare,
 			observedRun.exitCode,
@@ -533,11 +526,18 @@ function surfaceBytes(value: unknown): number {
 	return Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value), "utf8");
 }
 
-function internalSurfaceResult(source: DispatcherDiagnostic): DispatchToolResult {
+function internalSurfaceResult(
+	source: DispatcherDiagnostic,
+	phase: DispatcherDiagnostic["phase"] = "serialize",
+): DispatchToolResult {
+	const run =
+		source.run.class === "not-started"
+			? { class: "internal-failed" as const, exitCode: null, signal: null }
+			: source.run;
 	const diagnostic = makeDiagnostic({
 		status: "refused",
-		phase: "serialize",
-		run: source.run,
+		phase,
+		run,
 		return: source.return,
 		compare: source.compare,
 		durationMs: source.durationMs,
@@ -733,7 +733,7 @@ export function registerDispatchTool(
 						durationMs: Math.max(0, performance.now() - enteredAt),
 						code: "PARAMETER_REFUSED",
 					});
-				return finish(internalSurfaceResult(source));
+				return finish(internalSurfaceResult(source, "preflight"));
 			}
 		},
 		renderCall(args, theme) {

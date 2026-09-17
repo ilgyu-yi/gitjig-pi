@@ -1461,8 +1461,13 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 			signal: throwingSignal,
 		});
 		assert.equal(outcome.disposition, "refused");
-		const diagnostic = (outcome as { diagnostic: { code: string; phase: string; message: string } }).diagnostic;
-		assert.deepEqual([diagnostic.code, diagnostic.phase], ["INTERNAL_FAILED", "run"]);
+		const diagnostic = (
+			outcome as { diagnostic: { code: string; phase: string; run: { class: string }; message: string } }
+		).diagnostic;
+		assert.deepEqual(
+			[diagnostic.code, diagnostic.phase, diagnostic.run.class],
+			["INTERNAL_FAILED", "run", "internal-failed"],
+		);
 		assert.ok(!JSON.stringify(outcome).includes("zq private exception"));
 	});
 

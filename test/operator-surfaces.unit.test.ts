@@ -333,7 +333,13 @@ describe("#131 persistent session surface", () => {
 			assert.equal((admitted.details as { disposition?: unknown }).disposition, "admitted");
 			assert.equal(events.at(-1), "success");
 			const internal = await tool.execute("throw", null as unknown as Record<string, unknown>);
-			assert.equal((internal.details as { diagnostic?: { code?: unknown } }).diagnostic?.code, "INTERNAL_FAILED");
+			const internalDiagnostic = (
+				internal.details as { diagnostic?: { code?: unknown; phase?: unknown; run?: { class?: unknown } } }
+			).diagnostic;
+			assert.deepEqual(
+				[internalDiagnostic?.code, internalDiagnostic?.phase, internalDiagnostic?.run?.class],
+				["INTERNAL_FAILED", "preflight", "internal-failed"],
+			);
 			assert.equal(events.at(-1), "refusal");
 			const outsideTool = await runDispatch({
 				callerRepoRoot: root,

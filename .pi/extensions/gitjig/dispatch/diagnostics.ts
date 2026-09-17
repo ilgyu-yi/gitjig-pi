@@ -18,6 +18,16 @@ export const DIAGNOSTIC_MESSAGES = {
 } as const;
 
 export type DiagnosticCode = keyof typeof DIAGNOSTIC_MESSAGES;
+
+export const RETURN_CODE_BY_CLASS = {
+	missing: "RETURN_MISSING",
+	"not-regular": "RETURN_NOT_REGULAR",
+	oversize: "RETURN_OVERSIZE",
+	unreadable: "RETURN_UNREADABLE",
+	"json-invalid": "RETURN_JSON_INVALID",
+	"schema-invalid": "RETURN_SCHEMA_INVALID",
+	"operand-rejected": "RETURN_OPERAND_REJECTED",
+} as const;
 export type DiagnosticPhase = "preflight" | "provision" | "spawn" | "run" | "return" | "compare" | "serialize";
 export type RunClass = "not-started" | "exited" | "signaled" | "timed-out" | "aborted" | "internal-failed";
 export type ReturnClass =
@@ -107,7 +117,28 @@ function coherent(input: DiagnosticInput): boolean {
 			input.return.class === "admitted" &&
 			(input.compare.class === "not-requested" ? input.phase === "return" : input.phase === "compare")
 		);
-	return input.code === "INTERNAL_FAILED" && input.status === "refused";
+	if (input.code !== "INTERNAL_FAILED" || input.status !== "refused") return false;
+	if (input.run.class === "internal-failed") {
+		return (
+			["preflight", "provision", "spawn", "run", "serialize"].includes(input.phase) &&
+			input.return.class === "not-inspected" &&
+			input.compare.class === "not-reached"
+		);
+	}
+	if (input.run.class === "not-started") return false;
+	if (input.run.class !== "exited") {
+		return (
+			(input.phase === "run" || input.phase === "serialize") &&
+			input.return.class === "not-inspected" &&
+			input.compare.class === "not-reached"
+		);
+	}
+	if (!["run", "return", "compare", "serialize"].includes(input.phase)) return false;
+	if (input.phase === "run") return input.return.class === "not-inspected" && input.compare.class === "not-reached";
+	if (input.return.class !== "admitted") return input.compare.class === "not-reached";
+	return (
+		input.compare.class === "not-requested" || input.compare.class === "confirmed" || input.compare.class === "invalid"
+	);
 }
 
 function internalDiagnostic(durationMs: number): DispatcherDiagnostic {

@@ -16,6 +16,7 @@ interface AdmitModule {
 
 interface DiagnosticsModule {
 	DIAGNOSTIC_MESSAGES: Readonly<Record<string, string>>;
+	RETURN_CODE_BY_CLASS: Readonly<Record<string, string>>;
 	makeDiagnostic(input: Record<string, unknown>): unknown;
 	serializeDiagnostic(value: unknown): string;
 }
@@ -44,6 +45,19 @@ describe("#267 closed dispatcher diagnostics", () => {
 			RETURN_OPERAND_REJECTED: "dispatch refused: the return named a caller-held operand",
 			INTERNAL_FAILED: "dispatch refused: the dispatcher encountered an internal failure",
 			ADMITTED: "dispatch admitted",
+		});
+	});
+
+	it("owns the exact return-class to code mapping", async () => {
+		const mod = await diagnostics();
+		assert.deepEqual(mod.RETURN_CODE_BY_CLASS, {
+			missing: "RETURN_MISSING",
+			"not-regular": "RETURN_NOT_REGULAR",
+			oversize: "RETURN_OVERSIZE",
+			unreadable: "RETURN_UNREADABLE",
+			"json-invalid": "RETURN_JSON_INVALID",
+			"schema-invalid": "RETURN_SCHEMA_INVALID",
+			"operand-rejected": "RETURN_OPERAND_REJECTED",
 		});
 	});
 
@@ -135,6 +149,37 @@ describe("#267 closed dispatcher diagnostics", () => {
 			code: "INTERNAL_FAILED",
 		}) as { code: string; compare: { class: string } };
 		assert.deepEqual([preserved.code, preserved.compare.class], ["INTERNAL_FAILED", "confirmed"]);
+		for (const impossible of [
+			{
+				phase: "return",
+				run: { class: "not-started", exitCode: null, signal: null },
+				return: { class: "missing" },
+				compare: { class: "not-reached" },
+			},
+			{
+				phase: "serialize",
+				run: { class: "timed-out", exitCode: null, signal: null },
+				return: { class: "admitted" },
+				compare: { class: "not-requested" },
+			},
+			{
+				phase: "preflight",
+				run: { class: "exited", exitCode: 0, signal: null },
+				return: { class: "json-invalid" },
+				compare: { class: "not-reached" },
+			},
+		] as const) {
+			const normalized = mod.makeDiagnostic({
+				status: "refused",
+				...impossible,
+				durationMs: 1,
+				code: "INTERNAL_FAILED",
+			}) as {
+				run: { class: string };
+				return: { class: string };
+			};
+			assert.deepEqual([normalized.run.class, normalized.return.class], ["internal-failed", "not-inspected"]);
+		}
 	});
 
 	it("turns an impossible constructor request into INTERNAL_FAILED", async () => {
