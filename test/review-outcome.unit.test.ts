@@ -370,7 +370,7 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewe
 		assert.deepEqual(novel.returned, { failure: "malformed" }, "an unenumerated refusal cause escaped the mapping");
 	});
 
-	it("the success path is measured through runDispatch: a stub delegate's payload joins to a valid SlotResult (#173)", async () => {
+	it("a complete pre-nonzero-exit return crosses runDispatch, direct slot join, and panel unchanged (#267)", async () => {
 		const j = joins();
 		const p = panel();
 		// The reviewer result crosses as committed tree content (the dispatch
@@ -387,7 +387,11 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewe
 			callerRepoRoot: repo,
 			stateRoot: scratchDir("gitjig-join-state-"),
 			brief: "zq join brief: write the templated return",
-			delegateArgv: ["sh", "-c", 'sed "s/@HEAD@/$(git rev-parse HEAD)/" zq-return-template.json > ../return.json'],
+			delegateArgv: [
+				"sh",
+				"-c",
+				'sed "s/@HEAD@/$(git rev-parse HEAD)/" zq-return-template.json > ../return.json; exit 17',
+			],
 			expectedRef: "main",
 		});
 		assert.equal(result.compare, "confirmed", "the live blind compare did not confirm through the join");

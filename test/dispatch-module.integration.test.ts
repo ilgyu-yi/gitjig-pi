@@ -1416,6 +1416,34 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		assert.equal(outcome.diagnostic?.code, "ADMITTED");
 	});
 
+	it("§3.10 signal termination is distinct and never inspects a planted return", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "signal-termination");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: [
+				"sh",
+				"-c",
+				`printf '%s' '{"ok":true,"summary":"must not cross"}' > ../return.json; kill -TERM $$`,
+			],
+			timeoutMs: 30_000,
+		});
+		assert.equal(outcome.disposition, "refused");
+		const diagnostic = (
+			outcome as {
+				diagnostic?: { code: string; run: { class: string; signal: string | null }; return: { class: string } };
+			}
+		).diagnostic;
+		assert.equal(diagnostic?.code, "SIGNAL_TERMINATED");
+		assert.equal(diagnostic?.run.class, "signaled");
+		assert.equal(diagnostic?.run.signal, "SIGTERM");
+		assert.equal(diagnostic?.return.class, "not-inspected");
+		assert.ok(!JSON.stringify(outcome).includes("must not cross"));
+	});
+
 	it("§3.10 delegate absent: an unspawnable delegate refuses with a record, never a wedge", async () => {
 		const index = await requireModule<IndexModule>("index.ts", "delegate-absent");
 		const repo = mintRepo(PAYLOADS);

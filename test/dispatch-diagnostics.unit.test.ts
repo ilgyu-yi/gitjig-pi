@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -7,6 +8,11 @@ import { repoRoot } from "./harness/run-pi.ts";
 
 const root = repoRoot();
 const diagnosticsPath = join(root, ".pi/extensions/gitjig/dispatch/diagnostics.ts");
+
+interface AdmitModule {
+	admitReturn(path: string): { admitted: boolean; class: string; cause?: string };
+	RETURN_LIMIT_BYTES: number;
+}
 
 interface DiagnosticsModule {
 	DIAGNOSTIC_MESSAGES: Readonly<Record<string, string>>;
@@ -39,6 +45,37 @@ describe("#267 closed dispatcher diagnostics", () => {
 			INTERNAL_FAILED: "dispatch refused: the dispatcher encountered an internal failure",
 			ADMITTED: "dispatch admitted",
 		});
+	});
+
+	it("classifies each directly constructible return failure without collapsing it", async () => {
+		const admitPath = join(root, ".pi/extensions/gitjig/dispatch/admit.ts");
+		const admit = (await import(`${pathToFileURL(admitPath).href}?v=${Date.now()}`)) as AdmitModule;
+		const dir = mkdtempSync(join(tmpdir(), "gitjig-267-return-"));
+		assert.equal(admit.admitReturn(join(dir, "missing.json")).class, "missing");
+		mkdirSync(join(dir, "directory.json"));
+		assert.equal(admit.admitReturn(join(dir, "directory.json")).class, "not-regular");
+		symlinkSync("missing-target", join(dir, "link.json"));
+		assert.equal(admit.admitReturn(join(dir, "link.json")).class, "not-regular");
+		writeFileSync(join(dir, "oversize.json"), "x".repeat(admit.RETURN_LIMIT_BYTES + 1));
+		assert.equal(admit.admitReturn(join(dir, "oversize.json")).class, "oversize");
+		writeFileSync(join(dir, "json.json"), Buffer.from([0xff]));
+		assert.equal(admit.admitReturn(join(dir, "json.json")).class, "json-invalid");
+		writeFileSync(join(dir, "schema.json"), '{"ok":true,"summary":"x","extra":1}');
+		assert.equal(admit.admitReturn(join(dir, "schema.json")).class, "schema-invalid");
+	});
+
+	it("turns an impossible constructor request into INTERNAL_FAILED", async () => {
+		const mod = await diagnostics();
+		const value = mod.makeDiagnostic({
+			status: "admitted",
+			phase: "compare",
+			run: { class: "exited", exitCode: 0, signal: "SIGTERM" },
+			return: { class: "missing" },
+			compare: { class: "confirmed" },
+			durationMs: Number.POSITIVE_INFINITY,
+			code: "ADMITTED",
+		}) as { code: string; status: string; durationMs: number };
+		assert.deepEqual([value.code, value.status, value.durationMs], ["INTERNAL_FAILED", "refused", 0]);
 	});
 
 	it("serializes the closed grammar in normative key order", async () => {

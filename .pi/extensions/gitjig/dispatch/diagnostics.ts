@@ -59,7 +59,37 @@ function boundedDuration(value: number): number {
 	return Math.min(Number.MAX_SAFE_INTEGER, Math.trunc(value));
 }
 
+function coherent(input: DiagnosticInput): boolean {
+	const admitted = input.code === "ADMITTED";
+	if ((input.status === "admitted") !== admitted) return false;
+	if (admitted && (input.run.class !== "exited" || input.return.class !== "admitted")) return false;
+	if (input.run.class === "exited") {
+		if (!Number.isInteger(input.run.exitCode) || input.run.exitCode === null || input.run.signal !== null) return false;
+	} else if (input.run.class === "signaled") {
+		if (input.run.exitCode !== null || input.run.signal === null || !/^SIG[A-Z0-9]{1,12}$/.test(input.run.signal))
+			return false;
+	} else if (input.run.exitCode !== null || input.run.signal !== null) return false;
+	if (input.return.class !== "admitted" && input.compare.class !== "not-reached") return false;
+	if (input.compare.class === "not-requested" && input.return.class !== "admitted") return false;
+	return true;
+}
+
+function internalDiagnostic(durationMs: number): DispatcherDiagnostic {
+	return {
+		schemaVersion: 1,
+		status: "refused",
+		phase: "serialize",
+		run: { class: "internal-failed", exitCode: null, signal: null },
+		return: { class: "not-inspected" },
+		compare: { class: "not-reached" },
+		durationMs: boundedDuration(durationMs),
+		code: "INTERNAL_FAILED",
+		message: DIAGNOSTIC_MESSAGES.INTERNAL_FAILED,
+	};
+}
+
 export function makeDiagnostic(input: DiagnosticInput): DispatcherDiagnostic {
+	if (!coherent(input)) return internalDiagnostic(input.durationMs);
 	return {
 		schemaVersion: 1,
 		status: input.status,
@@ -74,5 +104,7 @@ export function makeDiagnostic(input: DiagnosticInput): DispatcherDiagnostic {
 }
 
 export function serializeDiagnostic(value: DispatcherDiagnostic): string {
-	return JSON.stringify(value);
+	const serialized = JSON.stringify(value);
+	if (Buffer.byteLength(serialized, "utf8") <= 1_536) return serialized;
+	return JSON.stringify(internalDiagnostic(value.durationMs));
 }

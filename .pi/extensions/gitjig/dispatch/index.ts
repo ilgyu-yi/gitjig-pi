@@ -325,7 +325,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 				run.signal,
 			);
 		}
-		const exitCode = run.exitCode ?? -1;
+		if (run.exitCode === null) return refuse("refuse-internal", "INTERNAL_FAILED", "run", "internal-failed");
+		const exitCode = run.exitCode;
 		const admission = admitReturn(context.returnPath);
 		if (!admission.admitted) {
 			const codeByClass = {
@@ -517,6 +518,7 @@ export function registerDispatchTool(
 		// unknown — and widens no field: each is read into an `unknown` local
 		// and admitted by its own predicate, exactly as before.
 		async execute(_toolCallId, params: Record<string, unknown>, signal, onUpdate) {
+			const enteredAt = performance.now();
 			const updateSurface = (update: () => void): void => {
 				try {
 					update();
@@ -537,7 +539,7 @@ export function registerDispatchTool(
 					run: { class: "not-started", exitCode: null, signal: null },
 					return: { class: "not-inspected" },
 					compare: { class: "not-reached" },
-					durationMs: 0,
+					durationMs: Math.max(0, performance.now() - enteredAt),
 					code: "PARAMETER_REFUSED",
 				});
 				return finish(result(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic }));
