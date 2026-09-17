@@ -72,16 +72,12 @@ function panelContract(source: string): void {
 		"retry-return-protocol` through the optional in-process event callback it owns",
 		"fixture consumes that callback to prove one event corresponds to exactly one authorized second send",
 		"not a delegate JSON event, audit record, operator trace, tool content, details, or session message",
-		"A throwing callback degrades open",
-		"chosen silence registered at §5.2",
+		"A throwing callback is swallowed",
+		"fixture-only assertion seam is not best-effort operational automation",
+		"§5.2's surfaced-signal obligation does not attach",
 		"cause-keyed, identical-brief retry in the current orchestrator is retired",
 		"diagnostic envelope lands first",
 		"activate this paragraph under §5.3",
-	]);
-	requireTokens(section(source, "### 5.2 Graceful degradation", "### 5.3 Gate-activation conditions"), "SPEC §5.2", [
-		"Two silences are chosen rather than inherited",
-		"§1.7's optional retry-event callback is fixture-only",
-		"no production or session surface exists on which to announce that loss",
 	]);
 }
 
@@ -321,7 +317,7 @@ describe("Execution #264 contract settlement", () => {
 				"retry-return-protocol` through the optional in-process event callback it owns",
 				"retry-return-protocol` through model content",
 			],
-			["A throwing callback degrades open", "A throwing callback refuses the dispatch"],
+			["A throwing callback is swallowed", "A throwing callback refuses the dispatch"],
 			["diagnostic envelope lands first", "orchestrator retry lands first"],
 			[
 				"A valid complete return is admitted on output validity alone regardless of that exit code.",
