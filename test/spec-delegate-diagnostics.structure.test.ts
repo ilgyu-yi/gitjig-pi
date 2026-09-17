@@ -23,6 +23,9 @@ function requireTokens(subject: string, label: string, tokens: readonly string[]
 function sourceFiles(directory: string): string[] {
 	const files: string[] = [];
 	for (const entry of readdirSync(directory)) {
+		if ([".git", ".gitjig", "node_modules"].includes(entry)) {
+			continue;
+		}
 		const path = join(directory, entry);
 		const stat = statSync(path);
 		if (stat.isDirectory()) {
@@ -97,7 +100,7 @@ describe("Directive #262 contract settlement", () => {
 			"A claimed timeout, abort, or signal termination precedes return inspection",
 			"Every numeric exit reaches return inspection",
 			"Impossible combinations",
-			"Only `INTERNAL_FAILED` may preserve `return.class=\"admitted\"` with `status=\"refused\"`",
+			'Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`',
 		]);
 	});
 
@@ -108,9 +111,11 @@ describe("Directive #262 contract settlement", () => {
 			.filter((path) => readFileSync(path, "utf8").includes("§3.10"));
 		const nonDispatch = cited.filter((path) => {
 			const rel = relative(root, path).replaceAll("\\", "/");
-			return !rel.startsWith(".pi/extensions/gitjig/dispatch/") &&
+			return (
+				!rel.startsWith(".pi/extensions/gitjig/dispatch/") &&
 				!rel.startsWith(".pi/extensions/gitjig/review/") &&
-				!rel.startsWith(".pi/extensions/gitjig/commands/review");
+				!rel.startsWith(".pi/extensions/gitjig/commands/review")
+			);
 		});
 		assert.ok(nonDispatch.length > 0, "the §3.10 consumer sweep found no non-dispatch control population");
 		for (const path of nonDispatch) {
