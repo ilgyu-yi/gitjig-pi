@@ -48,18 +48,24 @@ function panelContract(source: string): void {
 		"automatic return-protocol redispatch",
 		"numeric exit and a missing return",
 		"retries exactly once",
-		"Each required-slot dispatch owns one boolean retry state",
-		"sibling panel slots, a Judge dispatch, and later review rounds own distinct state",
+		"Every dispatcher call made by the review orchestrator",
+		"a required panel slot, a Judge or history-diagnosis call",
+		"a discretionary same-round or later-round redispatch",
+		"sibling calls never share or replenish it",
 		"unrelated to §1.4's per-lineage recovery allowance",
-		"retry-return-protocol",
+		"standing brief contract for each such call instructs the delegate",
 		"repeats the same options and pin",
 		"\\n\\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.",
 		"each written `\\n` denotes one U+000A byte sequence",
-		"no third send occurs for that required-slot dispatch",
-		"separately initiated later review round remains",
+		"no third send occurs for that call",
+		"new call with its own one-retry bound",
 		"neither supplies a result nor creates a verdict",
+		"retry-return-protocol` through its caller-owned in-process event sink",
+		"not a delegate JSON event, audit record, operator trace, tool content, details, or session message",
+		"An absent or throwing sink degrades open",
 		"cause-keyed, identical-brief retry in the current orchestrator is retired",
-		"sleeps as runtime behavior under §5.3",
+		"diagnostic envelope lands first",
+		"activate this paragraph under §5.3",
 	]);
 }
 
@@ -198,11 +204,17 @@ describe("Execution #264 contract settlement", () => {
 
 	it("kills representative meaning-inverting SPEC mutants for every contract region", () => {
 		const replacements: ReadonlyArray<readonly [string, string]> = [
-			["Each required-slot dispatch owns one boolean retry state", "Each panel owns an unbounded retry counter"],
+			["Every dispatcher call made by the review orchestrator", "Only the first panel slot"],
+			["sibling calls never share or replenish it", "all calls share and replenish it"],
 			["repeats the same options and pin", "changes the options and pin"],
 			["each written `\\n` denotes one U+000A byte sequence", "each written \\n is literal text"],
-			["no third send occurs for that required-slot dispatch", "sends until a return appears"],
-			["sleeps as runtime behavior under §5.3", "is already enforced by the current runtime"],
+			["no third send occurs for that call", "sends until a return appears"],
+			[
+				"retry-return-protocol` through its caller-owned in-process event sink",
+				"retry-return-protocol` through model content",
+			],
+			["An absent or throwing sink degrades open", "A throwing sink refuses the dispatch"],
+			["diagnostic envelope lands first", "orchestrator retry lands first"],
 			[
 				"A valid complete return is admitted on output validity alone regardless of that exit code.",
 				"A valid return is refused after nonzero exit.",
@@ -230,6 +242,14 @@ describe("Execution #264 contract settlement", () => {
 				"Invalid combinations are normalized",
 			],
 			["never carries summary, payload, or raw trace", "carries summary, payload, and raw trace"],
+			["complete return file remains at most 65,536 bytes", "complete return file remains at most 655,360 bytes"],
+			["524,288 UTF-8 bytes", "5,242,880 UTF-8 bytes"],
+			[
+				"diagnostic serialization is at most 1,536 UTF-8 bytes",
+				"diagnostic serialization is at most 15,360 UTF-8 bytes",
+			],
+			["2,048 UTF-8 bytes", "20,480 UTF-8 bytes"],
+			["4,096 UTF-8 bytes", "40,960 UTF-8 bytes"],
 			["A bound breach is `INTERNAL_FAILED`, never truncation.", "A bound breach is silently truncated."],
 			["measures each complete serialized surface, not its unframed fields", "measures unframed fields only"],
 		];
@@ -243,6 +263,24 @@ describe("Execution #264 contract settlement", () => {
 				`mutant survived: ${from}`,
 			);
 		}
+
+		for (const [from, to] of [
+			[
+				"RETURN_OVERSIZE          | dispatch refused: the return exceeded the 65536-byte bound",
+				"RETURN_OVERSIZE | child message",
+			],
+			[
+				"numeric exit + invalid return | return | exited     | exact invalid class | not-reached | corresponding RETURN_*",
+				"numeric exit + invalid return | compare | exited | admitted | confirmed | ADMITTED",
+			],
+		] as const) {
+			assert.ok(spec.includes(from), `table mutation source is absent: ${from}`);
+			assert.throws(
+				() => validateContract(spec.replace(from, to)),
+				(error: unknown) => error instanceof assert.AssertionError && error.operator === "deepStrictEqual",
+				`table mutant survived: ${from}`,
+			);
+		}
 	});
 
 	it("refuses symbolic-link omissions from the production corpus", () => {
@@ -253,14 +291,8 @@ describe("Execution #264 contract settlement", () => {
 
 	it("keeps every production non-dispatch §3.10 consumer free of dispatcher-only vocabulary", () => {
 		const productionRoots = [join(root, ".pi"), join(root, ".github"), join(root, ".githooks")];
-		const cited = productionRoots.flatMap(sourceFiles).filter((path) => {
-			try {
-				return readFileSync(path, "utf8").includes("§3.10");
-			} catch {
-				return false;
-			}
-		});
-		const nonDispatch = cited.filter((path) => {
+		const production = productionRoots.flatMap(sourceFiles);
+		const nonDispatch = production.filter((path) => {
 			const rel = relative(root, path).replaceAll("\\", "/");
 			return (
 				!rel.startsWith(".pi/extensions/gitjig/dispatch/") &&
@@ -276,8 +308,9 @@ describe("Execution #264 contract settlement", () => {
 			}
 		}
 		const publisher = readFileSync(join(root, ".pi/extensions/gitjig/publish/executor.ts"), "utf8");
+		assert.match(publisher, /else\s+if\s*\(\s*code\s*===\s*0\s*\)/);
+		assert.doesNotMatch(publisher, /else\s+if\s*\(\s*code\s*===\s*0\s*(?:\|\||&&)/);
 		requireTokens(publisher, "publish executor control", [
-			"} else if (code === 0) {",
 			'settle({ outcome: "outcome-unverified" })',
 			"the delegated run reported failure",
 		]);
