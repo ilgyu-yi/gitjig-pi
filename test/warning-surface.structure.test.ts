@@ -339,6 +339,16 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"outcome.compare",
 			// The verdict clause composed from the two above.
 			"compareClause",
+			// Numeric reductions only; no path or raw delegate byte.
+			"counters.stdoutBytes",
+			"counters.stderrBytes",
+			"counters.stdoutLines",
+			"counters.stderrLines",
+			"counters.truncatedLines",
+			"counters.evictedLines",
+			"counters.decodeReplacements",
+			// Closed lifecycle union produced by the local executor.
+			"trace.lifecycle",
 			// `outcome.summary` is NOT here: it is externally written text —
 			// a delegate controls it byte for byte — and it now crosses the
 			// composition through quoted() (issue #97). The behavioural
@@ -351,6 +361,24 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// the raw message reaches a surface on the one branch where it is
 			// a member of that set, and the generic cause is used otherwise.
 			'const thrown = error instanceof Error ? error.message : "";',
+		],
+	},
+	{
+		file: "gitjig/dispatch/trace.ts",
+		allow: [
+			// Stream label, fixed truncation suffix, numeric timestamp and
+			// runtime-minted UUID; none carries a hostile path component.
+			'line.stream === "stdout" ? "out" : "err"',
+			'line.truncated ? " [truncated]" : ""',
+			"now",
+			"randomUUID()",
+			// Closed lifecycle union and its fixed local-map projection.
+			"snapshot.lifecycle",
+			"heading",
+			// Whole-record serializer applies the same inert control-byte pass.
+			"stringifyInertJson(snapshot)",
+			// Every member is assembled from a fixed stream label and quoted line.
+			'lines.join("\\n")',
 		],
 	},
 	{

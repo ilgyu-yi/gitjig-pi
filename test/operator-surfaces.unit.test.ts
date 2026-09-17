@@ -30,7 +30,7 @@ type RegisteredTool = {
 	renderCall(args: unknown, theme: FakeTheme, context: unknown): Component;
 	renderResult(
 		result: ToolResult,
-		options: { expanded: boolean },
+		options: { expanded: boolean; isPartial?: boolean },
 		theme: FakeTheme,
 		context: { isError: boolean },
 	): Component;
@@ -101,6 +101,24 @@ describe("#131 collapsed operator-visible acts", () => {
 			tool.renderResult(result({ disposition: "refused" }), { expanded: false }, theme, { isError: false }),
 		);
 		assert.deepEqual([success, failure, refusal], ["[success]✓ success", "[error]✗ failure", "[warning]! refusal"]);
+	});
+
+	it("the dispatch partial renderer exposes trace content only while the result is partial", () => {
+		const tool = capture((pi) => registerDispatchTool(pi, "/repo", "/state"));
+		const marker = "zq-operator-partial-marker";
+		const partial = rendered(
+			tool.renderResult(result({}, marker), { expanded: false, isPartial: true }, theme, { isError: false }),
+		);
+		const terminal = rendered(
+			tool.renderResult(
+				result({ disposition: "admitted", ok: true }, marker),
+				{ expanded: false, isPartial: false },
+				theme,
+				{ isError: false },
+			),
+		);
+		assert.ok(partial.includes(marker));
+		assert.ok(!terminal.includes(marker));
 	});
 
 	it("expanded dispatch exposes a fixed refusal cause but never an admitted delegate payload", () => {

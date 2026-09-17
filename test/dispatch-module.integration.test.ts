@@ -171,7 +171,7 @@ interface ExecutorModule {
 		context: DispatchContext,
 		argv: string[],
 		options?: { timeoutMs?: number },
-	): Promise<{ exitCode: number | null; timedOut: boolean; spawnFailed: boolean }>;
+	): Promise<{ exitCode: number | null; timedOut: boolean; aborted: boolean; spawnFailed: boolean }>;
 }
 
 interface AdmitModule {
@@ -180,7 +180,7 @@ interface AdmitModule {
 	):
 		| { admitted: true; ok: boolean; summary: string; reviewedHead?: string; payload?: string }
 		| { admitted: false; cause: string };
-	REFUSAL_CAUSES: { delegateAbsent: string; missingReturn: string; malformedReturn: string };
+	REFUSAL_CAUSES: { delegateAbsent: string; aborted: string; missingReturn: string; malformedReturn: string };
 	RETURN_LIMIT_BYTES: number;
 }
 
@@ -196,6 +196,7 @@ interface IndexModule {
 		delegateArgv: string[];
 		expectedRef?: string;
 		timeoutMs?: number;
+		onTrace?: (snapshot: unknown) => void;
 	}): Promise<DispatchOutcome>;
 	registerDispatchTool(pi: unknown, repoRoot: string, stateRoot: string): void;
 	DISPATCH_TOOL_NAME: string;
@@ -1041,9 +1042,9 @@ describe("the executor's child is drained and seam-scoped (issue #88, SPEC §4.9
 		const run = await executor.runDelegate(context, [""], { timeoutMs: 5_000 });
 		assert.deepEqual(
 			run,
-			{ exitCode: null, timedOut: false, spawnFailed: true },
+			{ exitCode: null, timedOut: false, aborted: false, spawnFailed: true },
 			"spawn-throw: a synchronous spawn throw did not settle { exitCode: null, timedOut: false, " +
-				"spawnFailed: true } — the child never started, which is §3.10's delegate-absent class, " +
+				"aborted: false, spawnFailed: true } — the child never started, which is §3.10's delegate-absent class, " +
 				"never an escaped rejection",
 		);
 		const sink = mintStateRoot();
@@ -1604,6 +1605,54 @@ describe("the blind compare and the operand scan (issue #88, SPEC §4.9, §1.6)"
 	});
 });
 
+describe("#132 dispatch observability outcomes", () => {
+	it("audits bounded terminal reductions and surfaces retention loss without changing admission", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "trace-degraded");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		writeFileSync(join(sink.stateRoot, "dispatch-traces"), "blocked");
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", `printf 'zqtrace\\n' >&2; ${COPY("payload-valid.json")}`],
+			timeoutMs: 30_000,
+		});
+		assert.equal(outcome.disposition, "admitted");
+		const lines = dispatchAuditLines(sink);
+		assert.ok(
+			lines.some((line) => line.includes('"action":"run-started"')),
+			JSON.stringify(lines),
+		);
+		const terminal = lines.find((line) => line.includes('"action":"run-terminal"'));
+		if (terminal === undefined) assert.fail(`missing terminal audit: ${JSON.stringify(lines)}`);
+		assert.ok(terminal.includes("class=completed"), terminal);
+		assert.ok(terminal.includes("stderr-lines=1"), terminal);
+		assert.equal(terminal.includes("zqtrace"), false);
+		assert.ok(
+			lines.some((line) => line.includes('"action":"trace-degraded"')),
+			JSON.stringify(lines),
+		);
+	});
+
+	it("surfaces a throwing progress sink without changing admission", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "trace-update-degraded");
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: mintRepo(PAYLOADS),
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			timeoutMs: 30_000,
+			onTrace: () => {
+				throw new Error("zq presentation failure");
+			},
+		});
+		assert.equal(outcome.disposition, "admitted");
+		assert.ok(dispatchAuditLines(sink).some((line) => line.includes('"action":"trace-update-degraded"')));
+	});
+});
+
 // ---------------------------------------------------------------------------
 // Tool surface: no parameter is coerced — present-but-wrong-typed refuses.
 // ---------------------------------------------------------------------------
@@ -1615,6 +1664,7 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 		execute(
 			toolCallId: string,
 			params: Record<string, unknown>,
+			signal?: AbortSignal,
 		): Promise<{ content: Array<{ type: string; text: string }>; details: Record<string, unknown> }>;
 	}
 
@@ -1677,6 +1727,25 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 			"bound-schema: the bound is advertised under a type that is not number — every caller's numeric " +
 				`bound is refused by the substrate and the parameter is reachable by nobody (§4.9): ${JSON.stringify(tool.parameters.properties.timeoutMs)}`,
 		);
+	});
+
+	it("threads tool cancellation into a distinct abort refusal and admits no prepared return", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "tool-abort");
+		const sink = mintStateRoot();
+		const tool = register("tool-abort", index, mintRepo(PAYLOADS), sink.stateRoot);
+		const controller = new AbortController();
+		controller.abort();
+		const result = await tool.execute(
+			"zq-toolcall",
+			{ brief: BRIEF, delegateArgv: ["sh", "-c", COPY("payload-valid.json")], timeoutMs: 30_000 },
+			controller.signal,
+		);
+		assert.equal(result.details.disposition, "refused");
+		assert.equal(
+			result.content[0]?.text,
+			(await requireModule<AdmitModule>("admit.ts", "tool-abort")).REFUSAL_CAUSES.aborted,
+		);
+		assert.ok(dispatchAuditLines(sink).some((line) => line.includes('"action":"refuse-aborted"')));
 	});
 
 	it("a caller-supplied bound BELOW the delegate's own duration terminates it", async () => {

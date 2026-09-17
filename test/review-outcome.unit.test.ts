@@ -41,7 +41,9 @@ const DISPATCH_DIR = "/.pi/extensions/gitjig/dispatch/";
 
 type Slot = { lens: string; surface: string };
 type Compare = "confirmed" | "invalid" | "absent";
-type ReviewerReturn = { token: "APPROVED" | "FINDINGS"; findings: string[] } | { failure: "timeout" | "malformed" };
+type ReviewerReturn =
+	| { token: "APPROVED" | "FINDINGS"; findings: string[] }
+	| { failure: "timeout" | "aborted" | "malformed" };
 type SlotResult = { slot: Slot; compare: Compare; returned: ReviewerReturn };
 type PanelOutcome =
 	| { outcome: "incomplete"; missing: Slot[] }
@@ -345,18 +347,18 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewe
 		);
 	});
 
-	it("refusals map totally: the bound-exceeded class is the timeout cause, every other cause is malformed", () => {
+	it("refusals map totally: bound-exceeded and aborted keep distinct causes, every other cause is malformed", () => {
 		const j = joins();
 		const p = panel();
 		const causes = refusalCauses();
 		assert.ok(Object.keys(causes).length >= 6, "the dispatcher's exported refusal-cause set shrank unexpectedly");
 		for (const [name, cause] of Object.entries(causes)) {
 			const result = j.slotResultFromDispatch(SLOT, { disposition: "refused", cause });
-			const expected = name === "boundExceeded" ? "timeout" : "malformed";
+			const expected = name === "boundExceeded" ? "timeout" : name === "aborted" ? "aborted" : "malformed";
 			assert.deepEqual(
 				result.returned,
 				{ failure: expected },
-				`the refusal cause ${name} did not map to ${expected} — §1.7 names timed-out as its own cause, and ` +
+				`the refusal cause ${name} did not map to ${expected} — §1.7 keeps interruption causes distinct, and ` +
 					"the mapping is enumerated over the dispatcher's exported causes so a new cause cannot land unmapped",
 			);
 			assert.equal(result.compare, "absent", `a refused dispatch (${name}) recorded a compare it never ran`);

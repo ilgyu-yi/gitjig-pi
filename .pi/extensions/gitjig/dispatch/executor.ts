@@ -14,10 +14,10 @@
  * children (§1.5), and the ONE state seam is rebound —
  * `GITJIG_TEST_STATE_ROOT=<scratch>/state`
  * (§5.5's disposable-root carve-out, pointed inside the scratch so the
- * delegate's state dies with the dispatch). Both streams are drained
- * UNRECORDED: no delegate stream byte is held anywhere it could later
- * cross a return or failure channel (§4.9's content-free channels; the
- * drain also keeps a flooding delegate off the kernel-buffer wedge).
+ * delegate's state dies with the dispatch). Both streams are always drained
+ * into §4.9's bounded operator-only trace reducer: retention never pauses a
+ * pipe, so a flooding delegate cannot wedge on a kernel buffer, and no trace
+ * byte enters the final return, failure, compare, details, or audit channel.
  *
  * Two timers, one phase each (the measured race class this split
  * closes): the kill timer bounds the RUN and is cleared the moment the
@@ -34,11 +34,14 @@
  * named, not claimed closed. The group kill fires on the timeout path
  * alone: a delegate-spawned child surviving a normal exit or a
  * post-spawn error is not group-killed, inherits the passthrough
- * environment, and outlives the scratch's removal.
+ * environment, and outlives the scratch's removal. Operator abort sends
+ * SIGTERM to the group, escalates to SIGKILL after the stream grace, and a
+ * second finite grace settles even if process or pipe teardown never reports.
  */
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { type DispatchContext, withoutRepoLocatingGitEnv } from "./provision.ts";
+import { BoundedDelegateTrace, TRACE_UPDATE_MS, type TraceLifecycle, type TraceSnapshot } from "./trace.ts";
 
 /** Grace for stream flush after exit, when an orphan may hold the pipes. */
 const STREAM_GRACE_MS = 2_000;
@@ -60,29 +63,85 @@ export const MAX_RUN_BOUND_MS = 2_147_483_647;
 export interface DelegateRunOutcome {
 	exitCode: number | null;
 	timedOut: boolean;
+	aborted: boolean;
 	/** True iff the child never started — §3.10's delegate-absent class. */
 	spawnFailed: boolean;
+}
+
+export interface DelegateRunOptions {
+	timeoutMs?: number;
+	signal?: AbortSignal;
+	onTrace?: (snapshot: TraceSnapshot) => void;
+	onTraceError?: () => void;
+}
+
+export function lifecycleOf(outcome: DelegateRunOutcome): TraceLifecycle {
+	if (outcome.spawnFailed) return "spawn-failed";
+	if (outcome.timedOut) return "timed-out";
+	if (outcome.aborted) return "aborted";
+	return outcome.exitCode === 0 ? "completed" : "failed";
 }
 
 export function runDelegate(
 	context: DispatchContext,
 	argv: string[],
-	options: { timeoutMs?: number } = {},
+	options: DelegateRunOptions = {},
 ): Promise<DelegateRunOutcome> {
 	return new Promise((resolve) => {
-		if (argv.length === 0) {
-			resolve({ exitCode: null, timedOut: false, spawnFailed: true });
-			return;
-		}
+		const trace = new BoundedDelegateTrace();
 		let settled = false;
-		let timedOut = false;
-		const settle = (outcome: DelegateRunOutcome): void => {
-			if (settled) {
-				return;
+		let termination: "none" | "abort" | "timeout" = "none";
+		let updateTimer: ReturnType<typeof setTimeout> | undefined;
+		let killTimer: ReturnType<typeof setTimeout> | undefined;
+		let graceTimer: ReturnType<typeof setTimeout> | undefined;
+		let abortEscalation: ReturnType<typeof setTimeout> | undefined;
+		let outerTimer: ReturnType<typeof setTimeout> | undefined;
+		let abortListener: (() => void) | undefined;
+		let releaseChildResources = (): void => {};
+		const emitTrace = (lifecycle: TraceLifecycle = "running"): void => {
+			if (updateTimer !== undefined) clearTimeout(updateTimer);
+			updateTimer = undefined;
+			try {
+				options.onTrace?.(trace.snapshot(lifecycle));
+			} catch {
+				// Operator presentation is fail-open and cannot decide the run.
+				try {
+					options.onTraceError?.();
+				} catch {}
 			}
+		};
+		const scheduleTrace = (): void => {
+			if (options.onTrace === undefined || updateTimer !== undefined) return;
+			updateTimer = setTimeout(() => emitTrace(), TRACE_UPDATE_MS);
+		};
+		const cleanup = (): void => {
+			for (const timer of [updateTimer, killTimer, graceTimer, abortEscalation, outerTimer]) {
+				if (timer !== undefined) clearTimeout(timer);
+			}
+			updateTimer = undefined;
+			killTimer = undefined;
+			graceTimer = undefined;
+			abortEscalation = undefined;
+			outerTimer = undefined;
+			if (abortListener !== undefined) options.signal?.removeEventListener("abort", abortListener);
+		};
+		const settle = (outcome: DelegateRunOutcome): void => {
+			if (settled) return;
 			settled = true;
+			cleanup();
+			releaseChildResources();
+			trace.finish();
+			emitTrace(lifecycleOf(outcome));
 			resolve(outcome);
 		};
+		if (argv.length === 0) {
+			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			return;
+		}
+		if (options.signal?.aborted) {
+			settle({ exitCode: null, timedOut: false, aborted: true, spawnFailed: false });
+			return;
+		}
 		// Passthrough with the repo-locating and config-injection GIT_*
 		// families deleted — the one shared scrub provision's own git
 		// children ride too (§1.5) — and the one state seam rebound (§5.5);
@@ -110,52 +169,112 @@ export function runDelegate(
 			// tool-surface guard admits): nothing started, no timer is armed
 			// yet, and the outcome settles into §3.10's delegate-absent class —
 			// a raw rejection would escape the closed refusal taxonomy.
-			settle({ exitCode: null, timedOut: false, spawnFailed: true });
+			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
 			return;
 		}
+		// libuv can report descriptor exhaustion asynchronously while returning
+		// a ChildProcess whose typed pipe tuple was never initialized. Catch its
+		// eventual error and settle before any stream dereference or timer arm.
+		if (child.pid === undefined || child.stdout === null || child.stderr === null) {
+			child.on("error", () => {});
+			child.stdout?.on("error", () => {});
+			child.stderr?.on("error", () => {});
+			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			return;
+		}
+		releaseChildResources = () => {
+			// A grace or watchdog settlement may precede `close` when an orphan
+			// holds the inherited pipes. Stop those handles from keeping the host
+			// alive after the bounded promise has settled. Nothing in this event-
+			// callback cleanup may escape into the extension host.
+			try {
+				child.stdout.destroy();
+				child.stderr.destroy();
+				child.unref();
+			} catch {}
+		};
 		let spawned = false;
 		child.on("spawn", () => {
 			spawned = true;
+			// The explicit start update makes a silent long-running delegate
+			// visible before its first byte arrives (§4.9).
+			emitTrace("running");
 		});
-		const killTimer = setTimeout(() => {
-			timedOut = true;
+		const killGroup = (signal: NodeJS.Signals): void => {
 			if (typeof child.pid === "number") {
 				try {
-					process.kill(-child.pid, "SIGKILL");
+					process.kill(-child.pid, signal);
 				} catch {
-					child.kill("SIGKILL");
+					child.kill(signal);
 				}
-			} else {
-				child.kill("SIGKILL");
-			}
+			} else child.kill(signal);
+		};
+		const armOuter = (): void => {
+			if (outerTimer !== undefined) return;
+			outerTimer = setTimeout(() => {
+				killGroup("SIGKILL");
+				settle({
+					exitCode: null,
+					timedOut: termination === "timeout",
+					aborted: termination === "abort",
+					spawnFailed: false,
+				});
+			}, STREAM_GRACE_MS * 2);
+		};
+		const abort = (): void => {
+			if (settled || termination !== "none") return;
+			termination = "abort";
+			killGroup("SIGTERM");
+			abortEscalation = setTimeout(() => killGroup("SIGKILL"), STREAM_GRACE_MS);
+			armOuter();
+		};
+		abortListener = abort;
+		options.signal?.addEventListener("abort", abort, { once: true });
+		killTimer = setTimeout(() => {
+			if (settled || termination !== "none") return;
+			termination = "timeout";
+			killGroup("SIGKILL");
+			armOuter();
 		}, options.timeoutMs ?? DEFAULT_RUN_BOUND_MS);
-		let graceTimer: ReturnType<typeof setTimeout> | undefined;
 		const decide = (code: number | null): void => {
-			clearTimeout(killTimer);
-			if (graceTimer !== undefined) {
-				clearTimeout(graceTimer);
-			}
-			settle({ exitCode: code, timedOut, spawnFailed: false });
+			settle({
+				exitCode: code,
+				timedOut: termination === "timeout",
+				aborted: termination === "abort",
+				spawnFailed: false,
+			});
 		};
 		child.on("error", () => {
-			clearTimeout(killTimer);
-			if (graceTimer !== undefined) {
-				clearTimeout(graceTimer);
-			}
 			// Delegate-absent iff the child never started: a post-spawn error
 			// is a run that ran, decided as a failed run, never as absence.
-			settle({ exitCode: null, timedOut, spawnFailed: !spawned });
+			settle({
+				exitCode: null,
+				timedOut: termination === "timeout",
+				aborted: termination === "abort",
+				spawnFailed: !spawned,
+			});
 		});
-		// Drained, never recorded (§4.9): the streams flow and no byte is kept.
-		child.stdout.resume();
-		child.stderr.resume();
+		// Always drained. Retention is bounded and never applies backpressure.
+		// A grace/watchdog settlement destroys these streams while a descendant
+		// may still hold the pipe; late stream errors are presentation failures,
+		// not reasons to crash the extension host or alter the run outcome.
+		child.stdout.on("error", () => {});
+		child.stderr.on("error", () => {});
+		child.stdout.on("data", (chunk: Buffer) => {
+			trace.consume("stdout", chunk);
+			scheduleTrace();
+		});
+		child.stderr.on("data", (chunk: Buffer) => {
+			trace.consume("stderr", chunk);
+			scheduleTrace();
+		});
 		child.on("exit", (code) => {
 			// The bound is on the child's run, which has just ended — cleared
-			// here, not in `decide`: an orphan can hold the pipes past the
-			// bound, and a kill timer still armed during the flush grace would
-			// mark an in-bound run timed out. From here the grace timer bounds
-			// the flush alone.
-			clearTimeout(killTimer);
+			// here: an orphan can hold the pipes past the bound, and a kill timer
+			// still armed during the flush grace would mark an in-bound run timed
+			// out. From here the grace timer bounds the flush alone.
+			if (killTimer !== undefined) clearTimeout(killTimer);
+			killTimer = undefined;
 			graceTimer = setTimeout(() => decide(code), STREAM_GRACE_MS);
 		});
 		child.on("close", (code) => decide(code));

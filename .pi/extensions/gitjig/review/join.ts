@@ -80,7 +80,12 @@ export function reviewerReturnFromPayload(payload: string | undefined): Reviewer
  */
 export function slotResultFromDispatch(slot: Slot, outcome: DispatchOutcome): SlotResult {
 	if (outcome.disposition === "refused") {
-		const failure = outcome.cause === REFUSAL_CAUSES.boundExceeded ? "timeout" : "malformed";
+		const failure =
+			outcome.cause === REFUSAL_CAUSES.boundExceeded
+				? "timeout"
+				: outcome.cause === REFUSAL_CAUSES.aborted
+					? "aborted"
+					: "malformed";
 		return receive(slot, "absent", { failure });
 	}
 	const compare: Compare = outcome.compare ?? "absent";

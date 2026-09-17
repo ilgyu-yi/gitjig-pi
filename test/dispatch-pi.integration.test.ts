@@ -90,7 +90,9 @@ import {
 const TOOL = "gitjig_dispatch";
 const SUBSTRATE_NOT_FOUND = /Tool gitjig_dispatch not found/;
 const CHILD_MARKER = "DELEGATE_DONE marker-alpha";
+const TRACE_MARKER = "TRACE_ONLY_MARKER_zq132";
 const SUMMARY = `the child session relayed ${CHILD_MARKER}`;
+const OBSERVABILITY_SUBSTRATE = "0.85.1";
 
 function toolUnregistered(arm: string): string {
 	return (
@@ -142,6 +144,7 @@ const DELEGATE_SCRIPT = [
 	"head=$(git rev-parse HEAD)",
 	"out=$(pi -p 'run the delegate script' -a --session-dir zq-child-sessions --provider scripted " +
 		"--model scripted-model < /dev/null 2> zq-child-stderr || printf '%s' PI_CHILD_FAILED)",
+	`printf '%s\\n' '${TRACE_MARKER}' >&2`,
 	'case "$out" in',
 	`*"${CHILD_MARKER}"*) printf '{"ok":true,"summary":"${SUMMARY}","reviewedHead":"%s"}' "$head" > ../return.json ;;`,
 	`*) printf '{"ok":false,"summary":"the child session missed its marker"}' > ../return.json ;;`,
@@ -182,7 +185,7 @@ before(async () => {
 	git("add", ".pi", "zq-delegate.sh", "zq-child-script.json", "zq-base.txt");
 	git("commit", "-q", "-m", "zq dispatch caller fixture");
 	heldHash = git("rev-parse", "HEAD").trim();
-	result = await runPi(fixture, { timeoutMs: 180_000 });
+	result = await runPi(fixture, { timeoutMs: 180_000, outputMode: "json" });
 });
 
 after(() => {
@@ -340,13 +343,53 @@ describe("the dispatch round trip: clone, child session, bounded return (issue #
 		);
 	});
 
-	it("the dispatch act lands category-dispatch audit records through the landed writer", () => {
+	it("the dispatch act lands start and completed terminal reductions through the landed writer", () => {
 		requireOwnResult("audit-record");
+		const lines = dispatchAuditLines();
 		assert.ok(
-			dispatchAuditLines().length >= 1,
-			`audit-record: no "category":"dispatch" record on the audit trail — the dispatcher's acts ride the ` +
-				`landed writer (issue #88 authored contract; §5.5); audit: ${JSON.stringify(auditLines())}`,
+			lines.some((line) => line.includes('"action":"run-started"')),
+			JSON.stringify(lines),
 		);
+		const terminal = lines.find((line) => line.includes('"action":"run-terminal"'));
+		if (terminal === undefined) assert.fail(`missing terminal audit: ${JSON.stringify(lines)}`);
+		assert.ok(terminal.includes("class=completed"), terminal);
+		assert.ok(terminal.includes("stderr-lines=1"), terminal);
+		assert.equal(terminal.includes(TRACE_MARKER), false);
+	});
+
+	it("emits a distinctive marker on the real JSON update surface and retains it, but persists it nowhere model-visible", () => {
+		assert.equal(
+			result.piVersion,
+			OBSERVABILITY_SUBSTRATE,
+			`cannot measure partial-render separation on uncalibrated Pi ${result.piVersion}`,
+		);
+		assert.ok(
+			result.stdout
+				.split("\n")
+				.filter(Boolean)
+				.map((line) => JSON.parse(line) as { type?: string; partialResult?: unknown })
+				.some((event) => {
+					const partial = event.partialResult === undefined ? undefined : JSON.stringify(event.partialResult);
+					return event.type === "tool_execution_update" && partial?.includes(TRACE_MARKER) === true;
+				}),
+			`the real Pi JSON host surface never emitted the operator-only update marker\n${diagnostics()}`,
+		);
+		const traceDir = join(fixture.stateDir, "dispatch-traces");
+		const traces = readdirSync(traceDir).map((name) => readFileSync(join(traceDir, name), "utf8"));
+		assert.equal(
+			traces.some((trace) => trace.includes(TRACE_MARKER)),
+			true,
+			"operator trace missed marker",
+		);
+		assert.equal(
+			dispatchResults().some((message) => JSON.stringify(message).includes(TRACE_MARKER)),
+			false,
+		);
+		assert.equal(
+			auditLines().some((line) => line.includes(TRACE_MARKER)),
+			false,
+		);
+		assert.equal(JSON.stringify(readSessionEntries(fixture)).includes(TRACE_MARKER), false);
 	});
 
 	it("operand absence: no held-hash run on the tool result, the audit trail, or the transcript (args residual excluded)", () => {

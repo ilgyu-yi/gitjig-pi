@@ -28,19 +28,21 @@
  * ever rides a cause. The five §3.10 outcome classes map onto them —
  * delegate absent and failed run and bound exceeded are decided by the
  * caller from the run shape; junk, partial, and wrong-stream land on the
- * two return-side causes here.
+ * two return-side causes here. Invocation cancellation has its own fixed
+ * cause so callers never misrecord interruption as malformed output.
  */
 import { lstatSync, readFileSync, type Stats } from "node:fs";
 
 /** The return bound — beyond it the return is refused whole (§4.9). */
 export const RETURN_LIMIT_BYTES = 64 * 1024;
 
-/** The fixed content-free refusal causes, one per outcome class (§3.10). */
+/** Fixed content-free refusal causes for §3.10 outcomes and cancellation. */
 export const REFUSAL_CAUSES = {
 	delegateAbsent:
 		"dispatch refused: the delegate could not be run from this session's environment; nothing started and nothing is admitted",
 	failedRun: "dispatch refused: the delegated run reported failure; no return is admitted from a failed run",
 	boundExceeded: "dispatch refused: the delegate exceeded its run bound and was terminated; nothing is admitted",
+	aborted: "dispatch refused: the delegate run was aborted; nothing is admitted",
 	missingReturn:
 		"dispatch refused: no readable return landed at the return slot; a delegate stream is not the crossing",
 	malformedReturn:
