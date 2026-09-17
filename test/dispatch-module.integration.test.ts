@@ -1445,6 +1445,31 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		assert.ok(!JSON.stringify(outcome).includes("must not cross"));
 	});
 
+	it("keeps an observed numeric exit over a later abort during stream-flush grace", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "exit-before-abort");
+		const repo = mintRepo(PAYLOADS);
+		const controller = new AbortController();
+		const abort = setTimeout(() => controller.abort(), 700);
+		try {
+			const outcome = await index.runDispatch({
+				callerRepoRoot: repo,
+				stateRoot: mintStateRoot().stateRoot,
+				brief: BRIEF,
+				delegateArgv: ["sh", "-c", `sleep 8 & printf '%s' '{"ok":true,"summary":"exit won"}' > ../return.json; exit 0`],
+				timeoutMs: 30_000,
+				signal: controller.signal,
+			});
+			assert.equal(outcome.disposition, "admitted");
+			assert.ok(outcome.diagnostic);
+			assert.deepEqual(
+				[outcome.diagnostic.run.class, outcome.diagnostic.run.exitCode, outcome.diagnostic.code],
+				["exited", 0, "ADMITTED"],
+			);
+		} finally {
+			clearTimeout(abort);
+		}
+	});
+
 	it("converts a post-entry computational exception into INTERNAL_FAILED and cleans up", async () => {
 		const index = await requireModule<IndexModule>("index.ts", "internal-failed");
 		const repo = mintRepo(PAYLOADS);

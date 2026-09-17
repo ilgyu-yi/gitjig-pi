@@ -733,7 +733,7 @@ export function registerDispatchTool(
 						durationMs: Math.max(0, performance.now() - enteredAt),
 						code: "PARAMETER_REFUSED",
 					});
-				return finish(internalSurfaceResult(source, "preflight"));
+				return finish(internalSurfaceResult(source, lastDiagnostic === undefined ? "preflight" : "serialize"));
 			}
 		},
 		renderCall(args, theme) {

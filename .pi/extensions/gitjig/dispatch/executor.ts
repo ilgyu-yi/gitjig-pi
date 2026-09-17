@@ -274,6 +274,12 @@ export function runDelegate(
 			scheduleTrace();
 		});
 		child.on("exit", (code, signal) => {
+			// A numeric/signal exit is the first observed terminal claim. Once it
+			// arrives, a later operator abort during pipe-flush grace cannot replace it.
+			if (termination === "none" && abortListener !== undefined) {
+				options.signal?.removeEventListener("abort", abortListener);
+				abortListener = undefined;
+			}
 			// The bound is on the child's run, which has just ended — cleared
 			// here: an orphan can hold the pipes past the bound, and a kill timer
 			// still armed during the flush grace would mark an in-bound run timed
