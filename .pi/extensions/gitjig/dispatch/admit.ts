@@ -1,25 +1,33 @@
+/**
+ * Closed return-slot admission (§4.9). lstat precedes every read so links,
+ * FIFOs, devices and directories refuse without being followed or opened;
+ * the whole regular file is bounded before and after reading, decoded as
+ * fatal UTF-8, parsed as JSON, and checked against the exact schema. Each
+ * failure retains its dispatcher-owned class and fixed message. Delegate
+ * streams are never an input to this module.
+ */
 import { lstatSync, readFileSync, type Stats } from "node:fs";
-import type { ReturnClass } from "./diagnostics.ts";
+import { DIAGNOSTIC_MESSAGES, type ReturnClass } from "./diagnostics.ts";
 
 export const RETURN_LIMIT_BYTES = 65_536;
 
 /** Compatibility keys remain until #266 removes the old retry consumer. */
 export const REFUSAL_CAUSES = {
-	delegateAbsent: "dispatch refused: the delegate could not be started; no return was inspected",
+	delegateAbsent: DIAGNOSTIC_MESSAGES.SPAWN_FAILED,
 	failedRun: "dispatch refused: the delegated run reported failure; no return is admitted from a failed run",
-	boundExceeded: "dispatch refused: the delegate exceeded its run bound; no return was inspected",
-	aborted: "dispatch refused: the delegate run was aborted; no return was inspected",
-	missingReturn: "dispatch refused: no return file was present after the delegate exited",
-	malformedReturn: "dispatch refused: the return did not match the closed schema",
-	operandNamed: "dispatch refused: the return named a caller-held operand",
+	boundExceeded: DIAGNOSTIC_MESSAGES.TIMED_OUT,
+	aborted: DIAGNOSTIC_MESSAGES.ABORTED,
+	missingReturn: DIAGNOSTIC_MESSAGES.RETURN_MISSING,
+	malformedReturn: DIAGNOSTIC_MESSAGES.RETURN_SCHEMA_INVALID,
+	operandNamed: DIAGNOSTIC_MESSAGES.RETURN_OPERAND_REJECTED,
 } as const;
 
 const RETURN_CAUSES = {
 	missing: REFUSAL_CAUSES.missingReturn,
-	"not-regular": "dispatch refused: the return slot was not a regular file",
-	oversize: "dispatch refused: the return exceeded the 65536-byte bound",
-	unreadable: "dispatch refused: the return could not be read exactly",
-	"json-invalid": "dispatch refused: the return was not valid UTF-8 JSON",
+	"not-regular": DIAGNOSTIC_MESSAGES.RETURN_NOT_REGULAR,
+	oversize: DIAGNOSTIC_MESSAGES.RETURN_OVERSIZE,
+	unreadable: DIAGNOSTIC_MESSAGES.RETURN_UNREADABLE,
+	"json-invalid": DIAGNOSTIC_MESSAGES.RETURN_JSON_INVALID,
 	"schema-invalid": REFUSAL_CAUSES.malformedReturn,
 	"operand-rejected": REFUSAL_CAUSES.operandNamed,
 } as const;

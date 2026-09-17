@@ -202,6 +202,7 @@ interface IndexModule {
 		delegateArgv: string[];
 		expectedRef?: string;
 		timeoutMs?: number;
+		signal?: AbortSignal;
 		onTrace?: (snapshot: unknown) => void;
 	}): Promise<DispatchOutcome>;
 	registerDispatchTool(pi: unknown, repoRoot: string, stateRoot: string): void;
@@ -1442,6 +1443,27 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		assert.equal(diagnostic?.run.signal, "SIGTERM");
 		assert.equal(diagnostic?.return.class, "not-inspected");
 		assert.ok(!JSON.stringify(outcome).includes("must not cross"));
+	});
+
+	it("converts a post-entry computational exception into INTERNAL_FAILED and cleans up", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "internal-failed");
+		const repo = mintRepo(PAYLOADS);
+		const throwingSignal = Object.defineProperty({}, "aborted", {
+			get() {
+				throw new Error("zq private exception");
+			},
+		}) as AbortSignal;
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: mintStateRoot().stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			signal: throwingSignal,
+		});
+		assert.equal(outcome.disposition, "refused");
+		const diagnostic = (outcome as { diagnostic: { code: string; phase: string; message: string } }).diagnostic;
+		assert.deepEqual([diagnostic.code, diagnostic.phase], ["INTERNAL_FAILED", "run"]);
+		assert.ok(!JSON.stringify(outcome).includes("zq private exception"));
 	});
 
 	it("§3.10 delegate absent: an unspawnable delegate refuses with a record, never a wedge", async () => {

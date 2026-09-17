@@ -1418,10 +1418,11 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(seen.length, 1, "a rejected send was retried");
 	});
 
-	it("makeDispatcher re-sends no refusal but the exact failed-run cause (issue #220)", async () => {
+	it("keeps the new RETURN_MISSING refusal dormant until #266 replaces failedRun", async () => {
 		// Every other refusal stands on its first answer: none was measured
 		// transient, and re-sending one would spend a delegate on a decided fact.
 		for (const cause of [
+			"dispatch refused: no return file was present after the delegate exited",
 			"dispatch refused: the delegate could not be run from this session's environment; nothing started and nothing is admitted",
 			"dispatch refused: the delegate exceeded its run bound and was terminated; nothing is admitted",
 			"dispatch refused: no readable return landed at the return slot; a delegate stream is not the crossing",

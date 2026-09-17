@@ -62,16 +62,52 @@ function boundedDuration(value: number): number {
 function coherent(input: DiagnosticInput): boolean {
 	const admitted = input.code === "ADMITTED";
 	if ((input.status === "admitted") !== admitted) return false;
-	if (admitted && (input.run.class !== "exited" || input.return.class !== "admitted")) return false;
 	if (input.run.class === "exited") {
-		if (!Number.isInteger(input.run.exitCode) || input.run.exitCode === null || input.run.signal !== null) return false;
+		if (
+			input.run.exitCode === null ||
+			!Number.isInteger(input.run.exitCode) ||
+			input.run.exitCode < -2_147_483_648 ||
+			input.run.exitCode > 2_147_483_647 ||
+			input.run.signal !== null
+		)
+			return false;
 	} else if (input.run.class === "signaled") {
 		if (input.run.exitCode !== null || input.run.signal === null || !/^SIG[A-Z0-9]{1,12}$/.test(input.run.signal))
 			return false;
 	} else if (input.run.exitCode !== null || input.run.signal !== null) return false;
 	if (input.return.class !== "admitted" && input.compare.class !== "not-reached") return false;
 	if (input.compare.class === "not-requested" && input.return.class !== "admitted") return false;
-	return true;
+	if (
+		(input.compare.class === "confirmed" || input.compare.class === "invalid") &&
+		input.phase !== "compare" &&
+		!(input.code === "INTERNAL_FAILED" && input.phase === "serialize")
+	)
+		return false;
+	const ordinary: Partial<Record<DiagnosticCode, readonly [DiagnosticPhase, RunClass, ReturnClass]>> = {
+		PARAMETER_REFUSED: ["preflight", "not-started", "not-inspected"],
+		PROVISION_FAILED: ["provision", "not-started", "not-inspected"],
+		SPAWN_FAILED: ["spawn", "not-started", "not-inspected"],
+		SIGNAL_TERMINATED: ["run", "signaled", "not-inspected"],
+		TIMED_OUT: ["run", "timed-out", "not-inspected"],
+		ABORTED: ["run", "aborted", "not-inspected"],
+		RETURN_MISSING: ["return", "exited", "missing"],
+		RETURN_NOT_REGULAR: ["return", "exited", "not-regular"],
+		RETURN_OVERSIZE: ["return", "exited", "oversize"],
+		RETURN_UNREADABLE: ["return", "exited", "unreadable"],
+		RETURN_JSON_INVALID: ["return", "exited", "json-invalid"],
+		RETURN_SCHEMA_INVALID: ["return", "exited", "schema-invalid"],
+		RETURN_OPERAND_REJECTED: ["return", "exited", "operand-rejected"],
+	};
+	const expected = ordinary[input.code];
+	if (expected !== undefined)
+		return input.phase === expected[0] && input.run.class === expected[1] && input.return.class === expected[2];
+	if (input.code === "ADMITTED")
+		return (
+			input.run.class === "exited" &&
+			input.return.class === "admitted" &&
+			(input.compare.class === "not-requested" ? input.phase === "return" : input.phase === "compare")
+		);
+	return input.code === "INTERNAL_FAILED" && input.status === "refused";
 }
 
 function internalDiagnostic(durationMs: number): DispatcherDiagnostic {

@@ -239,6 +239,7 @@ const REVIEW_DELEGATE_SCRIPT = [
 	"#!/bin/sh",
 	"head=$(git rev-parse HEAD)",
 	`printf '{"ok":true,"summary":"${REVIEW_SUMMARY}","reviewedHead":"%s"}' "$head" > ../return.json`,
+	"exit 17",
 	"",
 ].join("\n");
 

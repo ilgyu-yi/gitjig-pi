@@ -64,6 +64,79 @@ describe("#267 closed dispatcher diagnostics", () => {
 		assert.equal(admit.admitReturn(join(dir, "schema.json")).class, "schema-invalid");
 	});
 
+	it("binds every ordinary code to its exact phase, run class, and return class", async () => {
+		const mod = await diagnostics();
+		const rows = [
+			["PARAMETER_REFUSED", "preflight", "not-started", "not-inspected"],
+			["PROVISION_FAILED", "provision", "not-started", "not-inspected"],
+			["SPAWN_FAILED", "spawn", "not-started", "not-inspected"],
+			["SIGNAL_TERMINATED", "run", "signaled", "not-inspected"],
+			["TIMED_OUT", "run", "timed-out", "not-inspected"],
+			["ABORTED", "run", "aborted", "not-inspected"],
+			["RETURN_MISSING", "return", "exited", "missing"],
+			["RETURN_NOT_REGULAR", "return", "exited", "not-regular"],
+			["RETURN_OVERSIZE", "return", "exited", "oversize"],
+			["RETURN_UNREADABLE", "return", "exited", "unreadable"],
+			["RETURN_JSON_INVALID", "return", "exited", "json-invalid"],
+			["RETURN_SCHEMA_INVALID", "return", "exited", "schema-invalid"],
+			["RETURN_OPERAND_REJECTED", "return", "exited", "operand-rejected"],
+		] as const;
+		for (const [code, phase, runClass, returnClass] of rows) {
+			const value = mod.makeDiagnostic({
+				status: "refused",
+				phase,
+				run: {
+					class: runClass,
+					exitCode: runClass === "exited" ? 17 : null,
+					signal: runClass === "signaled" ? "SIGTERM" : null,
+				},
+				return: { class: returnClass },
+				compare: { class: "not-reached" },
+				durationMs: 1,
+				code,
+			}) as { code: string };
+			assert.equal(value.code, code);
+			const wrong = mod.makeDiagnostic({
+				status: "refused",
+				phase: phase === "return" ? "run" : "return",
+				run: {
+					class: runClass,
+					exitCode: runClass === "exited" ? 17 : null,
+					signal: runClass === "signaled" ? "SIGTERM" : null,
+				},
+				return: { class: returnClass },
+				compare: { class: "not-reached" },
+				durationMs: 1,
+				code,
+			}) as { code: string };
+			assert.equal(wrong.code, "INTERNAL_FAILED", `${code} admitted the wrong phase`);
+		}
+	});
+
+	it("rejects out-of-range exit codes and preserves completed compare facts for serialize failure", async () => {
+		const mod = await diagnostics();
+		const huge = mod.makeDiagnostic({
+			status: "admitted",
+			phase: "return",
+			run: { class: "exited", exitCode: 2 ** 40, signal: null },
+			return: { class: "admitted" },
+			compare: { class: "not-requested" },
+			durationMs: 1,
+			code: "ADMITTED",
+		}) as { code: string };
+		assert.equal(huge.code, "INTERNAL_FAILED");
+		const preserved = mod.makeDiagnostic({
+			status: "refused",
+			phase: "serialize",
+			run: { class: "exited", exitCode: 0, signal: null },
+			return: { class: "admitted" },
+			compare: { class: "confirmed" },
+			durationMs: 1,
+			code: "INTERNAL_FAILED",
+		}) as { code: string; compare: { class: string } };
+		assert.deepEqual([preserved.code, preserved.compare.class], ["INTERNAL_FAILED", "confirmed"]);
+	});
+
 	it("turns an impossible constructor request into INTERNAL_FAILED", async () => {
 		const mod = await diagnostics();
 		const value = mod.makeDiagnostic({
