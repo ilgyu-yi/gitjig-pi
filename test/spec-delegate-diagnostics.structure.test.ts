@@ -208,6 +208,8 @@ function layerContract(source: string): void {
 		'Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`',
 		"`confirmed` requires an expected operand, a present `reviewedHead`, exact equality, and compare phase",
 		"`invalid` requires an expected operand and compare phase and covers absent `reviewedHead` or mismatch",
+		"compare-phase requirement on `confirmed` and `invalid` is relieved in exactly one case",
+		"already completed compare result of either class",
 		'An uninspected or invalid return requires `compare.class="not-reached"`',
 		"INTERNAL_FAILED` at serialize phase may preserve an already completed compare result",
 		"An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate.",
@@ -373,6 +375,10 @@ describe("Execution #264 contract settlement", () => {
 			[
 				'Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`',
 				"Every refusal may preserve an admitted return",
+			],
+			[
+				"compare-phase requirement on `confirmed` and `invalid` is relieved in exactly one case",
+				"only invalid may survive serialize phase",
 			],
 			["observability degradation and never alter this disposition", "observability failure refuses the dispatch"],
 			[
