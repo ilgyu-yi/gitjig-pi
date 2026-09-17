@@ -90,6 +90,7 @@ import {
 const TOOL = "gitjig_dispatch";
 const SUBSTRATE_NOT_FOUND = /Tool gitjig_dispatch not found/;
 const CHILD_MARKER = "DELEGATE_DONE marker-alpha";
+const TRACE_MARKER = "TRACE_ONLY_MARKER_zq132";
 const SUMMARY = `the child session relayed ${CHILD_MARKER}`;
 
 function toolUnregistered(arm: string): string {
@@ -138,6 +139,7 @@ const CHILD_SCRIPT = `${JSON.stringify([{ kind: "text", text: CHILD_MARKER }], n
  */
 const DELEGATE_SCRIPT = [
 	"#!/bin/sh",
+	`printf '%s\\n' '${TRACE_MARKER}' >&2`,
 	"cp zq-child-script.json script.json",
 	"head=$(git rev-parse HEAD)",
 	"out=$(pi -p 'run the delegate script' -a --session-dir zq-child-sessions --provider scripted " +
@@ -347,6 +349,25 @@ describe("the dispatch round trip: clone, child session, bounded return (issue #
 			`audit-record: no "category":"dispatch" record on the audit trail — the dispatcher's acts ride the ` +
 				`landed writer (issue #88 authored contract; §5.5); audit: ${JSON.stringify(auditLines())}`,
 		);
+	});
+
+	it("retains a distinctive stream marker only in the operator trace, never final result, audit, or real transcript", () => {
+		const traceDir = join(fixture.stateDir, "dispatch-traces");
+		const traces = readdirSync(traceDir).map((name) => readFileSync(join(traceDir, name), "utf8"));
+		assert.equal(
+			traces.some((trace) => trace.includes(TRACE_MARKER)),
+			true,
+			"operator trace missed marker",
+		);
+		assert.equal(
+			dispatchResults().some((message) => JSON.stringify(message).includes(TRACE_MARKER)),
+			false,
+		);
+		assert.equal(
+			auditLines().some((line) => line.includes(TRACE_MARKER)),
+			false,
+		);
+		assert.equal(JSON.stringify(readSessionEntries(fixture)).includes(TRACE_MARKER), false);
 	});
 
 	it("operand absence: no held-hash run on the tool result, the audit trail, or the transcript (args residual excluded)", () => {

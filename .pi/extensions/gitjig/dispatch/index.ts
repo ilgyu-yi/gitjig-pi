@@ -68,6 +68,7 @@
  * to weigh, and §4.9's injectable-context residual already carries it.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { renderActCall, renderActTerminal } from "../act-render.ts";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
@@ -80,6 +81,7 @@ import {
 	PROVISION_REFUSAL_CAUSES,
 	provisionDispatchContext,
 } from "./provision.ts";
+import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
@@ -114,6 +116,8 @@ const REFUSE_EXPECTED_REF = "dispatch refused: the expected ref is present but n
  */
 const REFUSE_TIMEOUT_MS =
 	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
+
+const REFUSE_ABORTED = "dispatch refused: the delegate run was aborted; nothing is admitted";
 
 export type DispatchOutcome =
 	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
@@ -195,6 +199,10 @@ export interface RunDispatchOptions {
 	timeoutMs?: number;
 	/** Optional operator projection for non-tool callers such as the command spine. */
 	surface?: SessionSurface;
+	/** Cancellation belongs to the invocation and reaches the child process group. */
+	signal?: AbortSignal;
+	/** Transient operator-only trace; callers must never serialize it as a final result. */
+	onTrace?: (snapshot: TraceSnapshot) => void;
 }
 
 async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
@@ -221,8 +229,40 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const known = (Object.values(PROVISION_REFUSAL_CAUSES) as string[]).includes(thrown);
 		return refuse("refuse-provision", known ? thrown : REFUSE_PROVISION);
 	}
+	record("run-started", "dispatch run started: the bounded delegate child is being observed");
 	try {
-		const run = await runDelegate(context, options.delegateArgv, { timeoutMs: options.timeoutMs });
+		let terminalTrace: TraceSnapshot | undefined;
+		const run = await runDelegate(context, options.delegateArgv, {
+			timeoutMs: options.timeoutMs,
+			signal: options.signal,
+			onTrace: (snapshot) => {
+				terminalTrace = snapshot;
+				options.onTrace?.(snapshot);
+			},
+		});
+		const trace = terminalTrace ?? {
+			lines: [],
+			counters: {
+				stdoutBytes: 0,
+				stderrBytes: 0,
+				stdoutLines: 0,
+				stderrLines: 0,
+				truncatedLines: 0,
+				evictedLines: 0,
+				decodeReplacements: 0,
+			},
+		};
+		const counters = trace.counters;
+		record(
+			"run-terminal",
+			`dispatch run terminal: stdout-bytes=${counters.stdoutBytes}; stderr-bytes=${counters.stderrBytes}; stdout-lines=${counters.stdoutLines}; stderr-lines=${counters.stderrLines}; truncated-lines=${counters.truncatedLines}; evicted-lines=${counters.evictedLines}; decode-replacements=${counters.decodeReplacements}`,
+		);
+		if (!retainTrace(options.stateRoot, trace)) {
+			record("trace-degraded", "dispatch trace retention degraded: bounded operator evidence was not retained");
+		}
+		if (options.signal?.aborted) {
+			return refuse("refuse-aborted", REFUSE_ABORTED);
+		}
 		if (run.spawnFailed) {
 			return refuse("refuse-delegate-absent", REFUSAL_CAUSES.delegateAbsent);
 		}
@@ -378,7 +418,7 @@ export function registerDispatchTool(
 		// every line below already assumes — an object whose fields are
 		// unknown — and widens no field: each is read into an `unknown` local
 		// and admitted by its own predicate, exactly as before.
-		async execute(_toolCallId, params: Record<string, unknown>) {
+		async execute(_toolCallId, params: Record<string, unknown>, signal, onUpdate) {
 			const updateSurface = (update: () => void): void => {
 				try {
 					update();
@@ -447,6 +487,14 @@ export function registerDispatchTool(
 					delegateArgv: delegateArgv as string[],
 					expectedRef,
 					timeoutMs,
+					signal,
+					onTrace: (snapshot) => {
+						try {
+							onUpdate?.({ content: [{ type: "text", text: renderTraceSnapshot(snapshot) }], details: {} });
+						} catch {
+							// Partial rendering is a fail-open aid and cannot decide the dispatch.
+						}
+					},
 				});
 				if (outcome.disposition === "refused") {
 					return finish(result(outcome.cause, { disposition: "refused" }));
@@ -468,6 +516,10 @@ export function registerDispatchTool(
 			return renderActCall("Dispatch", dispatchTarget(args), theme);
 		},
 		renderResult(result, options, theme, context) {
+			if (options.isPartial) {
+				const first = result.content[0];
+				return new Text(first?.type === "text" ? theme.fg("toolOutput", first.text) : "", 0, 0);
+			}
 			const terminal = dispatchTerminal(result.details, context.isError);
 			const first = result.content[0];
 			const detail = options.expanded && terminal === "refusal" && first?.type === "text" ? first.text : undefined;

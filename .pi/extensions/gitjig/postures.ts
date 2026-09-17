@@ -513,6 +513,14 @@ export const POSTURES: readonly PostureRow[] = [
 			"The installed record is authority for later updates and advances last; an unconfirmed write leaves the run refused and safely rerunnable.",
 	},
 	{
+		dependency: "dispatch-observability",
+		failureShape:
+			"the transient update callback, bounded trace retention/pruning, or lifecycle audit append cannot surface operator evidence",
+		posture: "open",
+		justification:
+			"Observability is a best-effort aid (§5.2), not dispatch evidence: its loss is surfaced where possible and never changes the delegate run, admission, compare, or refusal already owned by the dispatcher.",
+	},
+	{
 		dependency: "adopter-delivery-platform",
 		failureShape:
 			"the platform throws, returns no snapshot, or returns a snapshot that does not exactly confirm the requested draft change",
