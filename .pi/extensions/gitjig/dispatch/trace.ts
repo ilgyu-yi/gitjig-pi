@@ -38,7 +38,10 @@ export interface TraceLine {
 	truncated: boolean;
 }
 
+export type TraceLifecycle = "running" | "completed" | "failed" | "aborted" | "timed-out" | "spawn-failed";
+
 export interface TraceSnapshot {
+	lifecycle: TraceLifecycle;
 	lines: readonly TraceLine[];
 	counters: Readonly<TraceCounters>;
 }
@@ -85,8 +88,9 @@ export class BoundedDelegateTrace {
 		}
 	}
 
-	snapshot(): TraceSnapshot {
+	snapshot(lifecycle: TraceLifecycle = "running"): TraceSnapshot {
 		return {
+			lifecycle,
 			lines: this.retained.map((line) => ({ ...line })),
 			counters: { ...this.counters },
 		};
@@ -131,14 +135,22 @@ export function renderTraceSnapshot(snapshot: TraceSnapshot): string {
 		(line) =>
 			`${line.stream === "stdout" ? "out" : "err"}> ${quoted(line.text)}${line.truncated ? " [truncated]" : ""}`,
 	);
-	return lines.length === 0 ? "delegate running · no output observed" : `delegate running\n${lines.join("\n")}`;
+	const heading = `delegate ${snapshot.lifecycle}`;
+	return lines.length === 0 ? `${heading} · no output observed` : `${heading}\n${lines.join("\n")}`;
 }
 
 export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Date.now()): boolean {
 	let fd: number | undefined;
 	try {
 		const directory = join(stateRoot, TRACE_DIRECTORY);
-		mkdirSync(directory, { recursive: true, mode: STATE_DIR_MODE });
+		try {
+			// The state root is owned and created by its resolver. This writer
+			// creates only its one child and never asks recursive mkdir to follow
+			// or mint an ancestor on its behalf.
+			mkdirSync(directory, { mode: STATE_DIR_MODE });
+		} catch (error) {
+			if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) return false;
+		}
 		const directoryStats = lstatSync(directory);
 		if (!directoryStats.isDirectory() || directoryStats.isSymbolicLink() || (directoryStats.mode & 0o077) !== 0)
 			return false;

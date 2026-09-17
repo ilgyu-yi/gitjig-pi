@@ -41,7 +41,7 @@
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { type DispatchContext, withoutRepoLocatingGitEnv } from "./provision.ts";
-import { BoundedDelegateTrace, TRACE_UPDATE_MS, type TraceSnapshot } from "./trace.ts";
+import { BoundedDelegateTrace, TRACE_UPDATE_MS, type TraceLifecycle, type TraceSnapshot } from "./trace.ts";
 
 /** Grace for stream flush after exit, when an orphan may hold the pipes. */
 const STREAM_GRACE_MS = 2_000;
@@ -63,6 +63,7 @@ export const MAX_RUN_BOUND_MS = 2_147_483_647;
 export interface DelegateRunOutcome {
 	exitCode: number | null;
 	timedOut: boolean;
+	aborted: boolean;
 	/** True iff the child never started — §3.10's delegate-absent class. */
 	spawnFailed: boolean;
 }
@@ -80,32 +81,59 @@ export function runDelegate(
 ): Promise<DelegateRunOutcome> {
 	return new Promise((resolve) => {
 		const trace = new BoundedDelegateTrace();
-		if (argv.length === 0 || options.signal?.aborted) {
-			resolve({ exitCode: null, timedOut: false, spawnFailed: true });
+		if (argv.length === 0) {
+			resolve({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			return;
+		}
+		if (options.signal?.aborted) {
+			resolve({ exitCode: null, timedOut: false, aborted: true, spawnFailed: false });
 			return;
 		}
 		let settled = false;
-		let timedOut = false;
-		let aborted = false;
+		let termination: "none" | "abort" | "timeout" = "none";
 		let updateTimer: ReturnType<typeof setTimeout> | undefined;
-		const emitTrace = (): void => {
+		let killTimer: ReturnType<typeof setTimeout> | undefined;
+		let graceTimer: ReturnType<typeof setTimeout> | undefined;
+		let abortEscalation: ReturnType<typeof setTimeout> | undefined;
+		let outerTimer: ReturnType<typeof setTimeout> | undefined;
+		let abortListener: (() => void) | undefined;
+		let releaseChildResources = (): void => {};
+		const emitTrace = (lifecycle: TraceLifecycle = "running"): void => {
 			updateTimer = undefined;
 			try {
-				options.onTrace?.(trace.snapshot());
+				options.onTrace?.(trace.snapshot(lifecycle));
 			} catch {
 				// Operator presentation is fail-open and cannot decide the run.
 			}
 		};
 		const scheduleTrace = (): void => {
 			if (options.onTrace === undefined || updateTimer !== undefined) return;
-			updateTimer = setTimeout(emitTrace, TRACE_UPDATE_MS);
+			updateTimer = setTimeout(() => emitTrace(), TRACE_UPDATE_MS);
+		};
+		const cleanup = (): void => {
+			for (const timer of [updateTimer, killTimer, graceTimer, abortEscalation, outerTimer]) {
+				if (timer !== undefined) clearTimeout(timer);
+			}
+			updateTimer = undefined;
+			killTimer = undefined;
+			graceTimer = undefined;
+			abortEscalation = undefined;
+			outerTimer = undefined;
+			if (abortListener !== undefined) options.signal?.removeEventListener("abort", abortListener);
+		};
+		const lifecycleOf = (outcome: DelegateRunOutcome): TraceLifecycle => {
+			if (outcome.timedOut) return "timed-out";
+			if (outcome.aborted) return "aborted";
+			if (outcome.spawnFailed) return "spawn-failed";
+			return outcome.exitCode === 0 ? "completed" : "failed";
 		};
 		const settle = (outcome: DelegateRunOutcome): void => {
 			if (settled) return;
 			settled = true;
-			if (updateTimer !== undefined) clearTimeout(updateTimer);
+			cleanup();
+			releaseChildResources();
 			trace.finish();
-			emitTrace();
+			emitTrace(lifecycleOf(outcome));
 			resolve(outcome);
 		};
 		// Passthrough with the repo-locating and config-injection GIT_*
@@ -135,12 +163,23 @@ export function runDelegate(
 			// tool-surface guard admits): nothing started, no timer is armed
 			// yet, and the outcome settles into §3.10's delegate-absent class —
 			// a raw rejection would escape the closed refusal taxonomy.
-			settle({ exitCode: null, timedOut: false, spawnFailed: true });
+			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
 			return;
 		}
+		releaseChildResources = () => {
+			// A grace or watchdog settlement may precede `close` when an orphan
+			// holds the inherited pipes. Stop those handles from keeping the host
+			// alive after the bounded promise has settled.
+			child.stdout.destroy();
+			child.stderr.destroy();
+			child.unref();
+		};
 		let spawned = false;
 		child.on("spawn", () => {
 			spawned = true;
+			// The explicit start update makes a silent long-running delegate
+			// visible before its first byte arrives (§4.9).
+			emitTrace("running");
 		});
 		const killGroup = (signal: NodeJS.Signals): void => {
 			if (typeof child.pid === "number") {
@@ -151,46 +190,50 @@ export function runDelegate(
 				}
 			} else child.kill(signal);
 		};
-		let abortEscalation: ReturnType<typeof setTimeout> | undefined;
-		let outerTimer: ReturnType<typeof setTimeout> | undefined;
 		const armOuter = (): void => {
 			if (outerTimer !== undefined) return;
 			outerTimer = setTimeout(() => {
 				killGroup("SIGKILL");
-				settle({ exitCode: null, timedOut, spawnFailed: false });
+				settle({
+					exitCode: null,
+					timedOut: termination === "timeout",
+					aborted: termination === "abort",
+					spawnFailed: false,
+				});
 			}, STREAM_GRACE_MS * 2);
 		};
 		const abort = (): void => {
-			if (settled || aborted) return;
-			aborted = true;
+			if (settled || termination !== "none") return;
+			termination = "abort";
 			killGroup("SIGTERM");
 			abortEscalation = setTimeout(() => killGroup("SIGKILL"), STREAM_GRACE_MS);
 			armOuter();
 		};
+		abortListener = abort;
 		options.signal?.addEventListener("abort", abort, { once: true });
-		const killTimer = setTimeout(() => {
-			timedOut = true;
+		killTimer = setTimeout(() => {
+			if (settled || termination !== "none") return;
+			termination = "timeout";
 			killGroup("SIGKILL");
 			armOuter();
 		}, options.timeoutMs ?? DEFAULT_RUN_BOUND_MS);
-		let graceTimer: ReturnType<typeof setTimeout> | undefined;
 		const decide = (code: number | null): void => {
-			clearTimeout(killTimer);
-			if (outerTimer !== undefined) clearTimeout(outerTimer);
-			if (abortEscalation !== undefined) clearTimeout(abortEscalation);
-			if (graceTimer !== undefined) clearTimeout(graceTimer);
-			options.signal?.removeEventListener("abort", abort);
-			settle({ exitCode: code, timedOut, spawnFailed: false });
+			settle({
+				exitCode: code,
+				timedOut: termination === "timeout",
+				aborted: termination === "abort",
+				spawnFailed: false,
+			});
 		};
 		child.on("error", () => {
-			clearTimeout(killTimer);
-			if (outerTimer !== undefined) clearTimeout(outerTimer);
-			if (abortEscalation !== undefined) clearTimeout(abortEscalation);
-			if (graceTimer !== undefined) clearTimeout(graceTimer);
-			options.signal?.removeEventListener("abort", abort);
 			// Delegate-absent iff the child never started: a post-spawn error
 			// is a run that ran, decided as a failed run, never as absence.
-			settle({ exitCode: null, timedOut, spawnFailed: !spawned });
+			settle({
+				exitCode: null,
+				timedOut: termination === "timeout",
+				aborted: termination === "abort",
+				spawnFailed: !spawned,
+			});
 		});
 		// Always drained. Retention is bounded and never applies backpressure.
 		child.stdout.on("data", (chunk: Buffer) => {
@@ -203,11 +246,11 @@ export function runDelegate(
 		});
 		child.on("exit", (code) => {
 			// The bound is on the child's run, which has just ended — cleared
-			// here, not in `decide`: an orphan can hold the pipes past the
-			// bound, and a kill timer still armed during the flush grace would
-			// mark an in-bound run timed out. From here the grace timer bounds
-			// the flush alone.
-			clearTimeout(killTimer);
+			// here: an orphan can hold the pipes past the bound, and a kill timer
+			// still armed during the flush grace would mark an in-bound run timed
+			// out. From here the grace timer bounds the flush alone.
+			if (killTimer !== undefined) clearTimeout(killTimer);
+			killTimer = undefined;
 			graceTimer = setTimeout(() => decide(code), STREAM_GRACE_MS);
 		});
 		child.on("close", (code) => decide(code));

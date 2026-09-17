@@ -241,6 +241,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			},
 		});
 		const trace = terminalTrace ?? {
+			lifecycle: "spawn-failed" as const,
 			lines: [],
 			counters: {
 				stdoutBytes: 0,
@@ -255,19 +256,19 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const counters = trace.counters;
 		record(
 			"run-terminal",
-			`dispatch run terminal: stdout-bytes=${counters.stdoutBytes}; stderr-bytes=${counters.stderrBytes}; stdout-lines=${counters.stdoutLines}; stderr-lines=${counters.stderrLines}; truncated-lines=${counters.truncatedLines}; evicted-lines=${counters.evictedLines}; decode-replacements=${counters.decodeReplacements}`,
+			`dispatch run terminal: class=${trace.lifecycle}; stdout-bytes=${counters.stdoutBytes}; stderr-bytes=${counters.stderrBytes}; stdout-lines=${counters.stdoutLines}; stderr-lines=${counters.stderrLines}; truncated-lines=${counters.truncatedLines}; evicted-lines=${counters.evictedLines}; decode-replacements=${counters.decodeReplacements}`,
 		);
 		if (!retainTrace(options.stateRoot, trace)) {
 			record("trace-degraded", "dispatch trace retention degraded: bounded operator evidence was not retained");
 		}
-		if (options.signal?.aborted) {
+		if (run.timedOut) {
+			return refuse("refuse-bound-exceeded", REFUSAL_CAUSES.boundExceeded);
+		}
+		if (run.aborted) {
 			return refuse("refuse-aborted", REFUSE_ABORTED);
 		}
 		if (run.spawnFailed) {
 			return refuse("refuse-delegate-absent", REFUSAL_CAUSES.delegateAbsent);
-		}
-		if (run.timedOut) {
-			return refuse("refuse-bound-exceeded", REFUSAL_CAUSES.boundExceeded);
 		}
 		if (run.exitCode !== 0) {
 			return refuse("refuse-failed-run", REFUSAL_CAUSES.failedRun);

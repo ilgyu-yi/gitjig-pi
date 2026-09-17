@@ -1041,9 +1041,9 @@ describe("the executor's child is drained and seam-scoped (issue #88, SPEC §4.9
 		const run = await executor.runDelegate(context, [""], { timeoutMs: 5_000 });
 		assert.deepEqual(
 			run,
-			{ exitCode: null, timedOut: false, spawnFailed: true },
+			{ exitCode: null, timedOut: false, aborted: false, spawnFailed: true },
 			"spawn-throw: a synchronous spawn throw did not settle { exitCode: null, timedOut: false, " +
-				"spawnFailed: true } — the child never started, which is §3.10's delegate-absent class, " +
+				"aborted: false, spawnFailed: true } — the child never started, which is §3.10's delegate-absent class, " +
 				"never an escaped rejection",
 		);
 		const sink = mintStateRoot();

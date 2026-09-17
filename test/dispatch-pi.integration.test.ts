@@ -92,6 +92,7 @@ const SUBSTRATE_NOT_FOUND = /Tool gitjig_dispatch not found/;
 const CHILD_MARKER = "DELEGATE_DONE marker-alpha";
 const TRACE_MARKER = "TRACE_ONLY_MARKER_zq132";
 const SUMMARY = `the child session relayed ${CHILD_MARKER}`;
+const OBSERVABILITY_SUBSTRATE = "0.85.1";
 
 function toolUnregistered(arm: string): string {
 	return (
@@ -184,7 +185,7 @@ before(async () => {
 	git("add", ".pi", "zq-delegate.sh", "zq-child-script.json", "zq-base.txt");
 	git("commit", "-q", "-m", "zq dispatch caller fixture");
 	heldHash = git("rev-parse", "HEAD").trim();
-	result = await runPi(fixture, { timeoutMs: 180_000 });
+	result = await runPi(fixture, { timeoutMs: 180_000, outputMode: "json" });
 });
 
 after(() => {
@@ -351,7 +352,23 @@ describe("the dispatch round trip: clone, child session, bounded return (issue #
 		);
 	});
 
-	it("retains a distinctive stream marker only in the operator trace, never final result, audit, or real transcript", () => {
+	it("emits a distinctive marker on the real JSON update surface and retains it, but persists it nowhere model-visible", () => {
+		assert.equal(
+			result.piVersion,
+			OBSERVABILITY_SUBSTRATE,
+			`cannot measure partial-render separation on uncalibrated Pi ${result.piVersion}`,
+		);
+		assert.ok(
+			result.stdout
+				.split("\n")
+				.filter(Boolean)
+				.map((line) => JSON.parse(line) as { type?: string; partialResult?: unknown })
+				.some(
+					(event) =>
+						event.type === "tool_execution_update" && JSON.stringify(event.partialResult).includes(TRACE_MARKER),
+				),
+			`the real Pi JSON host surface never emitted the operator-only update marker\n${diagnostics()}`,
+		);
 		const traceDir = join(fixture.stateDir, "dispatch-traces");
 		const traces = readdirSync(traceDir).map((name) => readFileSync(join(traceDir, name), "utf8"));
 		assert.equal(

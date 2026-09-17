@@ -347,6 +347,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"counters.truncatedLines",
 			"counters.evictedLines",
 			"counters.decodeReplacements",
+			// Closed lifecycle union produced by the local executor.
+			"trace.lifecycle",
 			// `outcome.summary` is NOT here: it is externally written text —
 			// a delegate controls it byte for byte — and it now crosses the
 			// composition through quoted() (issue #97). The behavioural
@@ -370,6 +372,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			'line.truncated ? " [truncated]" : ""',
 			"now",
 			"randomUUID()",
+			// Closed lifecycle union and its fixed local-map projection.
+			"snapshot.lifecycle",
+			"heading",
 			// Every member is assembled from a fixed stream label and quoted line.
 			'lines.join("\\n")',
 		],
