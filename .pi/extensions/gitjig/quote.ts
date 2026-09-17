@@ -104,6 +104,11 @@ function escapeRaw(raw: string): string {
 	return `\\u${raw.codePointAt(0)?.toString(16).padStart(4, "0")}`;
 }
 
+/** JSON serialization with the at-rest control classes encoded. */
+export function stringifyInertJson(value: object): string {
+	return JSON.stringify(value).replace(RAW_CLASSES, escapeRaw);
+}
+
 /**
  * The escaped, quote-delimited rendering of `value` — see the header.
  * `delimiter` selects the extent-marking only: `"json"` (the default) for

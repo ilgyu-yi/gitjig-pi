@@ -45,7 +45,9 @@ import { repoRoot } from "./harness/run-pi.ts";
 const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
 
 type Slot = { lens: string; surface: string };
-type ReviewerReturn = { token: "APPROVED" | "FINDINGS"; findings: string[] } | { failure: "timeout" | "malformed" };
+type ReviewerReturn =
+	| { token: "APPROVED" | "FINDINGS"; findings: string[] }
+	| { failure: "timeout" | "aborted" | "malformed" };
 type Compare = "confirmed" | "invalid" | "absent";
 /** The module brands this; the suite mirrors its shape and casts at `receive`. */
 type SlotResult = { slot: Slot; compare: Compare; returned: ReviewerReturn };
@@ -578,6 +580,7 @@ describe("§1.7 routing coverage — the refusal is live (issue #172)", () => {
 describe("§1.6/§1.7 an invalid slot is a missing result, never a verdict (issue #169)", () => {
 	const causes: [string, (p: PanelModule) => SlotResult, string][] = [
 		["timed out", (p) => p.receive(LENS_A, "confirmed", { failure: "timeout" }), "timed out"],
+		["was aborted", (p) => p.receive(LENS_A, "confirmed", { failure: "aborted" }), "aborted"],
 		["returned malformed output", (p) => p.receive(LENS_A, "confirmed", { failure: "malformed" }), "malformed return"],
 		[
 			"failed the blind compare",

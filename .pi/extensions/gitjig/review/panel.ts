@@ -85,7 +85,7 @@ export type Slot = { lens: string; surface: string };
 export type ReviewerReturn =
 	| { token: "APPROVED" | "FINDINGS"; findings: string[] }
 	/** The shapes §1.7 names that carry no reviewer output at all. */
-	| { failure: "timeout" | "malformed" };
+	| { failure: "timeout" | "aborted" | "malformed" };
 
 /** §1.6's blind-compare outcome. */
 export type Compare = "confirmed" | "invalid" | "absent";
@@ -433,7 +433,13 @@ export function decideValidity(result: SlotResult, slot: Slot): { valid: boolean
 		return { valid: false, reason: "reviewed a surface other than the one the slot required" };
 	}
 	if ("failure" in result.returned) {
-		return { valid: false, reason: result.returned.failure === "timeout" ? "timed out" : "malformed return" };
+		const reason =
+			result.returned.failure === "timeout"
+				? "timed out"
+				: result.returned.failure === "aborted"
+					? "aborted"
+					: "malformed return";
+		return { valid: false, reason };
 	}
 	if (result.compare !== "confirmed") {
 		return { valid: false, reason: "blind compare not confirmed" };

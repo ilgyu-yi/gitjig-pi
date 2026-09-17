@@ -72,6 +72,14 @@ export interface DelegateRunOptions {
 	timeoutMs?: number;
 	signal?: AbortSignal;
 	onTrace?: (snapshot: TraceSnapshot) => void;
+	onTraceError?: () => void;
+}
+
+export function lifecycleOf(outcome: DelegateRunOutcome): TraceLifecycle {
+	if (outcome.spawnFailed) return "spawn-failed";
+	if (outcome.timedOut) return "timed-out";
+	if (outcome.aborted) return "aborted";
+	return outcome.exitCode === 0 ? "completed" : "failed";
 }
 
 export function runDelegate(
@@ -91,11 +99,15 @@ export function runDelegate(
 		let abortListener: (() => void) | undefined;
 		let releaseChildResources = (): void => {};
 		const emitTrace = (lifecycle: TraceLifecycle = "running"): void => {
+			if (updateTimer !== undefined) clearTimeout(updateTimer);
 			updateTimer = undefined;
 			try {
 				options.onTrace?.(trace.snapshot(lifecycle));
 			} catch {
 				// Operator presentation is fail-open and cannot decide the run.
+				try {
+					options.onTraceError?.();
+				} catch {}
 			}
 		};
 		const scheduleTrace = (): void => {
@@ -112,12 +124,6 @@ export function runDelegate(
 			abortEscalation = undefined;
 			outerTimer = undefined;
 			if (abortListener !== undefined) options.signal?.removeEventListener("abort", abortListener);
-		};
-		const lifecycleOf = (outcome: DelegateRunOutcome): TraceLifecycle => {
-			if (outcome.timedOut) return "timed-out";
-			if (outcome.aborted) return "aborted";
-			if (outcome.spawnFailed) return "spawn-failed";
-			return outcome.exitCode === 0 ? "completed" : "failed";
 		};
 		const settle = (outcome: DelegateRunOutcome): void => {
 			if (settled) return;
@@ -166,13 +172,26 @@ export function runDelegate(
 			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
 			return;
 		}
+		// libuv can report descriptor exhaustion asynchronously while returning
+		// a ChildProcess whose typed pipe tuple was never initialized. Catch its
+		// eventual error and settle before any stream dereference or timer arm.
+		if (child.pid === undefined || child.stdout === null || child.stderr === null) {
+			child.on("error", () => {});
+			child.stdout?.on("error", () => {});
+			child.stderr?.on("error", () => {});
+			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			return;
+		}
 		releaseChildResources = () => {
 			// A grace or watchdog settlement may precede `close` when an orphan
 			// holds the inherited pipes. Stop those handles from keeping the host
-			// alive after the bounded promise has settled.
-			child.stdout.destroy();
-			child.stderr.destroy();
-			child.unref();
+			// alive after the bounded promise has settled. Nothing in this event-
+			// callback cleanup may escape into the extension host.
+			try {
+				child.stdout.destroy();
+				child.stderr.destroy();
+				child.unref();
+			} catch {}
 		};
 		let spawned = false;
 		child.on("spawn", () => {

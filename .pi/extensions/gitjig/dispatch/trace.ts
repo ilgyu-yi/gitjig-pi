@@ -10,9 +10,9 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { STATE_DIR_MODE, STATE_FILE_MODE, STATE_PATH_GUARD_FLAGS, sinkRefusal } from "../audit.ts";
-import { quoted } from "../quote.ts";
+import { quoted, stringifyInertJson } from "../quote.ts";
 
 export const TRACE_LINE_BYTES = 8 * 1024;
 export const TRACE_LINES = 20;
@@ -112,7 +112,14 @@ export class BoundedDelegateTrace {
 		const state = this.states[stream];
 		const bytes = Buffer.concat(state.kept, state.keptBytes);
 		let text = bytes.toString("utf8");
-		const replacements = [...text].filter((value) => value === "�").length;
+		let literalReplacements = 0;
+		for (let index = 0; index + 2 < bytes.length; index++) {
+			if (bytes[index] === 0xef && bytes[index + 1] === 0xbf && bytes[index + 2] === 0xbd) {
+				literalReplacements++;
+				index += 2;
+			}
+		}
+		const replacements = [...text].filter((value) => value === "�").length - literalReplacements;
 		this.counters.decodeReplacements += replacements;
 		const points = [...text];
 		if (points.length > TRACE_RENDER_CODEPOINTS) text = points.slice(0, TRACE_RENDER_CODEPOINTS).join("");
@@ -142,6 +149,7 @@ export function renderTraceSnapshot(snapshot: TraceSnapshot): string {
 export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Date.now()): boolean {
 	let fd: number | undefined;
 	try {
+		if (!isAbsolute(stateRoot)) return false;
 		const directory = join(stateRoot, TRACE_DIRECTORY);
 		try {
 			// The state root is owned and created by its resolver. This writer
@@ -160,8 +168,15 @@ export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Da
 			constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | STATE_PATH_GUARD_FLAGS,
 			STATE_FILE_MODE,
 		);
-		if (sinkRefusal(fstatSync(fd), path) !== undefined) return false;
-		writeFileSync(fd, `${JSON.stringify(snapshot)}\n`);
+		if (sinkRefusal(fstatSync(fd), path) !== undefined) {
+			closeSync(fd);
+			fd = undefined;
+			try {
+				unlinkSync(path);
+			} catch {}
+			return false;
+		}
+		writeFileSync(fd, `${stringifyInertJson(snapshot)}\n`);
 		closeSync(fd);
 		fd = undefined;
 		const entries = readdirSync(directory)

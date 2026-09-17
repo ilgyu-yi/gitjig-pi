@@ -74,14 +74,14 @@ import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import type { SessionSurface, TerminalClass } from "../session-surface.ts";
 import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
-import { MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
+import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import {
 	cleanupDispatchContext,
 	type DispatchContext,
 	PROVISION_REFUSAL_CAUSES,
 	provisionDispatchContext,
 } from "./provision.ts";
-import { renderTraceSnapshot, retainTrace, type TraceLifecycle, type TraceSnapshot } from "./trace.ts";
+import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
@@ -116,8 +116,6 @@ const REFUSE_EXPECTED_REF = "dispatch refused: the expected ref is present but n
  */
 const REFUSE_TIMEOUT_MS =
 	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
-
-const REFUSE_ABORTED = "dispatch refused: the delegate run was aborted; nothing is admitted";
 
 export type DispatchOutcome =
 	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
@@ -232,6 +230,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 	record("run-started", "dispatch run started: the bounded delegate child is being observed");
 	try {
 		let terminalTrace: TraceSnapshot | undefined;
+		let traceUpdateDegraded = false;
 		const run = await runDelegate(context, options.delegateArgv, {
 			timeoutMs: options.timeoutMs,
 			signal: options.signal,
@@ -239,18 +238,12 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 				terminalTrace = snapshot;
 				options.onTrace?.(snapshot);
 			},
+			onTraceError: () => {
+				traceUpdateDegraded = true;
+			},
 		});
-		const fallbackLifecycle: TraceLifecycle = run.timedOut
-			? "timed-out"
-			: run.aborted
-				? "aborted"
-				: run.spawnFailed
-					? "spawn-failed"
-					: run.exitCode === 0
-						? "completed"
-						: "failed";
 		const trace = terminalTrace ?? {
-			lifecycle: fallbackLifecycle,
+			lifecycle: lifecycleOf(run),
 			lines: [],
 			counters: {
 				stdoutBytes: 0,
@@ -267,17 +260,20 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			"run-terminal",
 			`dispatch run terminal: class=${trace.lifecycle}; stdout-bytes=${counters.stdoutBytes}; stderr-bytes=${counters.stderrBytes}; stdout-lines=${counters.stdoutLines}; stderr-lines=${counters.stderrLines}; truncated-lines=${counters.truncatedLines}; evicted-lines=${counters.evictedLines}; decode-replacements=${counters.decodeReplacements}`,
 		);
+		if (traceUpdateDegraded) {
+			record("trace-update-degraded", "dispatch trace update degraded: operator progress was not presented");
+		}
 		if (!retainTrace(options.stateRoot, trace)) {
 			record("trace-degraded", "dispatch trace retention degraded: bounded operator evidence was not retained");
+		}
+		if (run.spawnFailed) {
+			return refuse("refuse-delegate-absent", REFUSAL_CAUSES.delegateAbsent);
 		}
 		if (run.timedOut) {
 			return refuse("refuse-bound-exceeded", REFUSAL_CAUSES.boundExceeded);
 		}
 		if (run.aborted) {
-			return refuse("refuse-aborted", REFUSE_ABORTED);
-		}
-		if (run.spawnFailed) {
-			return refuse("refuse-delegate-absent", REFUSAL_CAUSES.delegateAbsent);
+			return refuse("refuse-aborted", REFUSAL_CAUSES.aborted);
 		}
 		if (run.exitCode !== 0) {
 			return refuse("refuse-failed-run", REFUSAL_CAUSES.failedRun);
@@ -499,11 +495,7 @@ export function registerDispatchTool(
 					timeoutMs,
 					signal,
 					onTrace: (snapshot) => {
-						try {
-							onUpdate?.({ content: [{ type: "text", text: renderTraceSnapshot(snapshot) }], details: {} });
-						} catch {
-							// Partial rendering is a fail-open aid and cannot decide the dispatch.
-						}
+						onUpdate?.({ content: [{ type: "text", text: renderTraceSnapshot(snapshot) }], details: {} });
 					},
 				});
 				if (outcome.disposition === "refused") {

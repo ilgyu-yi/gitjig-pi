@@ -375,6 +375,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// Closed lifecycle union and its fixed local-map projection.
 			"snapshot.lifecycle",
 			"heading",
+			// Whole-record serializer applies the same inert control-byte pass.
+			"stringifyInertJson(snapshot)",
 			// Every member is assembled from a fixed stream label and quoted line.
 			'lines.join("\\n")',
 		],

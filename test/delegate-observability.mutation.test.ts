@@ -50,12 +50,20 @@ describe("#132 named isolated observability mutants", () => {
 			"export const TRACE_RENDER_CODEPOINTS = 5_120;",
 			`${imported} const t=new BoundedDelegateTrace(); t.consume("stdout",Buffer.from("🙂".repeat(513)+"\\n")); t.finish(); assert.equal([...t.snapshot().lines[0].text].length,512);`,
 		);
+		const retentionImport = `import assert from "node:assert/strict"; import {mkdtempSync,readdirSync} from "node:fs"; import {tmpdir} from "node:os"; import {join} from "node:path"; import {BoundedDelegateTrace,retainTrace,TRACE_DIRECTORY} from "./gitjig/dispatch/trace.ts"; const state=mkdtempSync(join(tmpdir(),"zq-retain-")); const snapshot=new BoundedDelegateTrace().snapshot("completed");`;
 		kill(
 			"retention-age-bound",
 			"trace.ts",
 			"export const TRACE_RETAIN_MS = 7 * 24 * 60 * 60 * 1000;",
 			"export const TRACE_RETAIN_MS = 70 * 24 * 60 * 60 * 1000;",
-			`import assert from "node:assert/strict"; import {TRACE_RETAIN_MS} from "./gitjig/dispatch/trace.ts"; assert.equal(TRACE_RETAIN_MS,604800000);`,
+			`${retentionImport} assert.equal(retainTrace(state,snapshot,1),true); assert.equal(retainTrace(state,snapshot,604800002),true); assert.equal(readdirSync(join(state,TRACE_DIRECTORY)).length,1);`,
+		);
+		kill(
+			"retention-count-bound",
+			"trace.ts",
+			"export const TRACE_RETAIN_COUNT = 50;",
+			"export const TRACE_RETAIN_COUNT = 5;",
+			`${retentionImport} for(let i=0;i<6;i++)assert.equal(retainTrace(state,snapshot,i),true); assert.equal(readdirSync(join(state,TRACE_DIRECTORY)).length,6);`,
 		);
 		kill(
 			"stderr-attribution",

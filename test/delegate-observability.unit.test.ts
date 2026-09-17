@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import { runDelegate } from "../.pi/extensions/gitjig/dispatch/executor.ts";
 import {
 	BoundedDelegateTrace,
@@ -58,18 +60,16 @@ describe("#132 bounded delegate trace", () => {
 		assert.match(renderTraceSnapshot(new BoundedDelegateTrace().snapshot("failed")), /^delegate failed ·/);
 	});
 
-	it("retains owner-only files and prunes by both count and age", () => {
+	it("retains owner-only files and prunes independently by count", () => {
 		const state = root();
 		const snapshot = new BoundedDelegateTrace().snapshot("completed");
-		const oldNow = 1_000_000;
-		assert.equal(retainTrace(state, snapshot, oldNow), true);
 		for (let index = 0; index < TRACE_RETAIN_COUNT + 3; index++)
-			assert.equal(retainTrace(state, snapshot, oldNow + TRACE_RETAIN_MS + 1 + index), true);
+			assert.equal(retainTrace(state, snapshot, index), true);
 		const directory = join(state, TRACE_DIRECTORY);
 		const files = readdirSync(directory);
 		assert.equal(files.length, TRACE_RETAIN_COUNT);
 		assert.equal(
-			files.some((name) => name.startsWith(`${oldNow}-`)),
+			files.some((name) => name.startsWith("0-")),
 			false,
 		);
 		assert.equal(lstatSync(directory).mode & 0o077, 0);
@@ -77,7 +77,32 @@ describe("#132 bounded delegate trace", () => {
 		assert.equal(JSON.parse(readFileSync(join(directory, files[0]), "utf8")).lifecycle, "completed");
 	});
 
+	it("prunes by age below the count bound", () => {
+		const state = root();
+		const snapshot = new BoundedDelegateTrace().snapshot("completed");
+		assert.equal(retainTrace(state, snapshot, 1), true);
+		assert.equal(retainTrace(state, snapshot, TRACE_RETAIN_MS + 2), true);
+		const files = readdirSync(join(state, TRACE_DIRECTORY));
+		assert.equal(files.length, 1);
+		assert.equal(files[0].startsWith(`${TRACE_RETAIN_MS + 2}-`), true);
+	});
+
+	it("encodes hostile at-rest controls and counts only decoder-introduced replacements", () => {
+		const state = root();
+		const trace = new BoundedDelegateTrace();
+		const text = "literal-�\u007f\u009b\u2028";
+		trace.consume("stderr", Buffer.concat([Buffer.from(text), Buffer.from([0xff]), Buffer.from("\n")]));
+		trace.finish();
+		const snapshot = trace.snapshot("failed");
+		assert.equal(snapshot.counters.decodeReplacements, 1);
+		assert.equal(retainTrace(state, snapshot), true);
+		const raw = readFileSync(join(state, TRACE_DIRECTORY, readdirSync(join(state, TRACE_DIRECTORY))[0]), "utf8");
+		for (const rawControl of ["\u007f", "\u009b", "\u2028"]) assert.equal(raw.includes(rawControl), false);
+		assert.equal(JSON.parse(raw).lines[0].text, `${text}�`);
+	});
+
 	it("refuses an absent state root and a linked trace directory without creating or following either", () => {
+		assert.equal(retainTrace("relative-state", new BoundedDelegateTrace().snapshot()), false);
 		const absent = join(root(), "missing-state-root");
 		assert.equal(retainTrace(absent, new BoundedDelegateTrace().snapshot()), false);
 		assert.equal(existsSync(absent), false);
@@ -87,6 +112,23 @@ describe("#132 bounded delegate trace", () => {
 		symlinkSync(outside, join(state, TRACE_DIRECTORY));
 		assert.equal(retainTrace(state, new BoundedDelegateTrace().snapshot()), false);
 		assert.deepEqual(readdirSync(outside), []);
+	});
+
+	it("settles descriptor-exhausted spawn as delegate-absent without an uncaught stream failure", () => {
+		const executorUrl = pathToFileURL(join(process.cwd(), ".pi/extensions/gitjig/dispatch/executor.ts")).href;
+		const probe = `import {closeSync,mkdirSync,mkdtempSync,openSync} from "node:fs"; import {tmpdir} from "node:os"; import {join} from "node:path"; import {runDelegate} from ${JSON.stringify(executorUrl)}; const tree=mkdtempSync(join(tmpdir(),"zq-emfile-")); const stateDir=join(tree,"state"); mkdirSync(stateDir); const fds=[]; try{for(;;)fds.push(openSync("/dev/null","r"))}catch{} const outcome=await runDelegate({treeDir:tree,stateDir},["sh"],{timeoutMs:100}); await new Promise(r=>setTimeout(r,20)); for(const fd of fds){try{closeSync(fd)}catch{}} process.stdout.write(JSON.stringify(outcome));`;
+		const measured = spawnSync(
+			"sh",
+			["-c", 'ulimit -n 64; exec "$@"', "sh", process.execPath, "--input-type=module", "-e", probe],
+			{ cwd: process.cwd(), encoding: "utf8", timeout: 5_000 },
+		);
+		assert.equal(measured.status, 0, measured.stderr);
+		assert.deepEqual(JSON.parse(measured.stdout), {
+			exitCode: null,
+			timedOut: false,
+			aborted: false,
+			spawnFailed: true,
+		});
 	});
 
 	it("propagates TERM then KILL to the child group without misclassifying abort as timeout", async () => {
