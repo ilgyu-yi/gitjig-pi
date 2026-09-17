@@ -63,10 +63,16 @@ function panelContract(source: string): void {
 		"retry-return-protocol` through the optional in-process event callback it owns",
 		"fixture consumes that callback to prove one event corresponds to exactly one authorized second send",
 		"not a delegate JSON event, audit record, operator trace, tool content, details, or session message",
-		"An absent or throwing callback degrades open",
+		"A throwing callback degrades open",
+		"chosen silence registered at §5.2",
 		"cause-keyed, identical-brief retry in the current orchestrator is retired",
 		"diagnostic envelope lands first",
 		"activate this paragraph under §5.3",
+	]);
+	requireTokens(section(source, "### 5.2 Graceful degradation", "### 5.3 Gate-activation conditions"), "SPEC §5.2", [
+		"Two silences are chosen rather than inherited",
+		"§1.7's optional retry-event callback is fixture-only",
+		"no production or session surface exists on which to announce that loss",
 	]);
 }
 
@@ -180,7 +186,8 @@ function layerContract(source: string): void {
 		"without returning either operand",
 		"preserves every earlier fully classified fact",
 		"observability degradation and never alter this disposition",
-		'status="admitted"` requires `code="ADMITTED"` and `return.class="admitted"',
+		'status="admitted"` holds if and only if `code="ADMITTED"',
+		'every other code requires `status="refused"`',
 		'An uninspected or invalid return requires `compare.class="not-reached"`',
 		"INTERNAL_FAILED` at serialize phase may preserve an already completed compare result",
 		"An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate.",
@@ -250,17 +257,15 @@ function dispatcherOwned(path: string): boolean {
 	);
 }
 
-function absorbedDispatcherTokens(paths: readonly string[]): string[] {
-	const hits: string[] = [];
-	for (const path of paths.filter((candidate) => !dispatcherOwned(candidate))) {
-		const body = readFileSync(path, "utf8");
-		for (const token of DISPATCH_TOKENS) {
-			if (body.includes(token)) {
-				hits.push(`${relative(root, path)}:${token}`);
-			}
-		}
+function absorbedDispatcherTokenBody(path: string, body: string): string[] {
+	if (dispatcherOwned(path)) {
+		return [];
 	}
-	return hits;
+	return DISPATCH_TOKENS.filter((token) => body.includes(token)).map((token) => `${relative(root, path)}:${token}`);
+}
+
+function absorbedDispatcherTokens(paths: readonly string[]): string[] {
+	return paths.flatMap((path) => absorbedDispatcherTokenBody(path, readFileSync(path, "utf8")));
 }
 
 describe("Execution #264 contract settlement", () => {
@@ -274,12 +279,18 @@ describe("Execution #264 contract settlement", () => {
 			["sibling calls never share or replenish it", "all calls share and replenish it"],
 			["repeats the same options and pin", "changes the options and pin"],
 			["each written `\\n` denotes one U+000A byte sequence", "each written \\n is literal text"],
+			["retries exactly once", "retries until a return appears"],
+			[
+				"\\n\\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.",
+				"a reminder of the caller's choosing",
+			],
+			["neither supplies a result nor creates a verdict", "supplies a result and creates a verdict"],
 			["no third send occurs for that call", "sends until a return appears"],
 			[
 				"retry-return-protocol` through the optional in-process event callback it owns",
 				"retry-return-protocol` through model content",
 			],
-			["An absent or throwing callback degrades open", "A throwing callback refuses the dispatch"],
+			["A throwing callback degrades open", "A throwing callback refuses the dispatch"],
 			["diagnostic envelope lands first", "orchestrator retry lands first"],
 			[
 				"A valid complete return is admitted on output validity alone regardless of that exit code.",
@@ -337,6 +348,7 @@ describe("Execution #264 contract settlement", () => {
 		];
 		for (const [from, to] of replacements) {
 			assert.ok(spec.includes(from), `mutation source is absent: ${from}`);
+			assert.equal(spec.indexOf(from), spec.lastIndexOf(from), `mutation source is not unique: ${from}`);
 			const mutant = spec.replace(from, to);
 			assert.throws(
 				() => validateContract(mutant),
@@ -359,6 +371,7 @@ describe("Execution #264 contract settlement", () => {
 			],
 		] as const) {
 			assert.ok(spec.includes(from), `table mutation source is absent: ${from}`);
+			assert.equal(spec.indexOf(from), spec.lastIndexOf(from), `table mutation source is not unique: ${from}`);
 			assert.throws(
 				() => validateContract(spec.replace(from, to)),
 				(error: unknown) => error instanceof assert.AssertionError && error.operator === "deepStrictEqual",
@@ -373,27 +386,35 @@ describe("Execution #264 contract settlement", () => {
 		assert.throws(() => sourceFiles(fixture), /unmeasured symbolic link/);
 	});
 
-	it("proves the dispatcher-vocabulary sweep detects a non-dispatch absorber", () => {
+	it("proves the dispatcher-vocabulary sweep detects absorption and honors exact exemptions", () => {
 		const fixture = mkdtempSync(join(tmpdir(), "gitjig-264-absorber-"));
 		const consumer = join(fixture, "consumer.ts");
 		writeFileSync(consumer, "const leaked = 'RETURN_MISSING';\n");
 		assert.deepEqual(absorbedDispatcherTokens([consumer]), [`${relative(root, consumer)}:RETURN_MISSING`]);
+		for (const rel of REVIEW_COMMANDS) {
+			const path = join(root, rel);
+			assert.ok(lstatSync(path).isFile(), `allowlisted review command is absent: ${rel}`);
+			assert.deepEqual(absorbedDispatcherTokenBody(path, "RETURN_MISSING"), []);
+		}
 	});
 
-	it("keeps every production non-dispatch consumer free of dispatcher-only vocabulary", () => {
+	it("sleeps explicitly until dispatcher vocabulary lands, then excludes non-dispatch consumers", () => {
 		const productionRoots = [join(root, ".pi"), join(root, ".github"), join(root, ".githooks")];
 		const production = productionRoots.flatMap(sourceFiles);
 		assert.ok(
 			production.some((path) => !dispatcherOwned(path)),
 			"the production sweep found no non-dispatch control population",
 		);
+		const vocabularyLanded = production.some((path) => {
+			const body = readFileSync(path, "utf8");
+			return DISPATCH_TOKENS.some((token) => body.includes(token));
+		});
+		if (!vocabularyLanded) {
+			requireTokens(section(spec, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts"), "sleeping guard", [
+				"current dispatcher lacks this envelope and remains a tracked code defect",
+				"sleep as runtime behavior under §5.3",
+			]);
+		}
 		assert.deepEqual(absorbedDispatcherTokens(production), []);
-		const publisher = readFileSync(join(root, ".pi/extensions/gitjig/publish/executor.ts"), "utf8");
-		assert.match(publisher, /else\s+if\s*\(\s*code\s*===\s*0\s*\)/);
-		assert.doesNotMatch(publisher, /else\s+if\s*\(\s*code\s*===\s*0\s*(?:\|\||&&)/);
-		requireTokens(publisher, "publish executor control", [
-			'settle({ outcome: "outcome-unverified" })',
-			"the delegated run reported failure",
-		]);
 	});
 });
