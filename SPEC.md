@@ -19,53 +19,53 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.5 | Delegated work | 175 |
 | &nbsp;&nbsp;§1.6 | Review integrity | 187 |
 | &nbsp;&nbsp;§1.7 | The reviewer panel | 201 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 223 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 235 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 276 |
-| §2 | Artifact hierarchy and lifecycle | 284 |
-| &nbsp;&nbsp;§2.1 | Issue types | 288 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 301 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 317 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 321 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 338 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 377 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 389 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 399 |
-| §3 | Enforcement-layer architecture | 411 |
-| &nbsp;&nbsp;§3.1 | The constraint | 415 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 422 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 430 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 544 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 548 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 562 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 574 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 587 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 601 |
-| &nbsp;&nbsp;§3.11 | Gate design | 611 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 633 |
-| §4 | Substrate and install contract | 643 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 647 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 659 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 667 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 673 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 677 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 681 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 693 |
-| &nbsp;&nbsp;§4.8 | The command layer | 703 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 760 |
-| §5 | Cross-cutting contracts | 808 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 812 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 818 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 822 |
-| &nbsp;&nbsp;§5.4 | Work language | 826 |
-| &nbsp;&nbsp;§5.5 | State boundary | 830 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 838 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 850 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 860 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 868 |
-| §6 | Self-governance milestone | 880 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 891 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 229 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 241 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 282 |
+| §2 | Artifact hierarchy and lifecycle | 290 |
+| &nbsp;&nbsp;§2.1 | Issue types | 294 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 307 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 323 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 327 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 344 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 383 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 395 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 405 |
+| §3 | Enforcement-layer architecture | 417 |
+| &nbsp;&nbsp;§3.1 | The constraint | 421 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 428 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 436 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 550 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 554 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 558 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 568 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 593 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 607 |
+| &nbsp;&nbsp;§3.11 | Gate design | 623 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 645 |
+| §4 | Substrate and install contract | 655 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 659 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 671 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 679 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 685 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 689 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 693 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 705 |
+| &nbsp;&nbsp;§4.8 | The command layer | 715 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 772 |
+| §5 | Cross-cutting contracts | 893 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 897 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 903 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 907 |
+| &nbsp;&nbsp;§5.4 | Work language | 911 |
+| &nbsp;&nbsp;§5.5 | State boundary | 915 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 923 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 935 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 945 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 953 |
+| §6 | Self-governance milestone | 965 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 976 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -215,6 +215,12 @@ Majority vote is the **rejected design**, recorded here so it is not re-proposed
 **Panel completeness.** A panel is **complete** when every required slot has returned a valid result — validity being the caller's fact (§1.6). Completeness is the panel's whole contract: there is no threshold below it and no quorum above it.
 
 **An invalid slot is a missing result, never a verdict.** A slot that timed out, was aborted, returned malformed or unparseable output, failed the blind compare, or reviewed a surface other than the one it was required for has produced *no result*. It is never read as an approval, never as a rejection, and never as an abstention that some denominator absorbs. An incomplete panel is therefore not a review outcome at all: the caller re-dispatches the missing slots, or the review is **incomplete**, a state that stops the flow at whichever gate consumes the review — among the gated approvals §3.7 enumerates, all but the activation flip, which consumes §2.2's activation verdict rather than a panel review — rather than passing it: the evidence-gate direction of §5.2.
+
+**The automatic return-protocol redispatch.** One mechanical subcase of that caller act is fixed rather than discretionary: when the dispatcher's first result records a numeric exit and a missing return, the review orchestrator retries exactly once. Every dispatcher call made by the review orchestrator — a required panel slot, a Judge or history-diagnosis call, or a discretionary same-round or later-round redispatch — owns its own boolean retry state, initially `available`, and changes it to `spent` before its one retry; sibling calls never share or replenish it, and it is unrelated to §1.4's per-lineage recovery allowance. The standing brief contract for each such call instructs the delegate to write a short, complete provisional closed-schema return early and overwrite it with the final return before its bound. The retry repeats the same options and pin and the same semantic brief with exactly this suffix: `\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.` Here each written `\n` denotes one U+000A byte sequence in the composed string, so the suffix begins with exactly two newlines. The reminder intentionally repeats that standing instruction because absence of the required file is the sole trigger; the suffix is the only brief change. A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result, and no third send occurs for that call. A separate discretionary redispatch is a new call with its own one-retry bound, so the caller's existing authority to re-dispatch is neither removed nor converted into an unbounded retry inside one call. This automatic act neither supplies a result nor creates a verdict: only the retry's independently valid return can satisfy the consuming panel, Judge, or diagnosis role.
+
+Immediately before the second send, the review orchestrator emits `retry-return-protocol` through the optional in-process event callback it owns. The review-orchestrator fixture consumes that callback to prove one event corresponds to exactly one authorized second send; no production persistence consumer is owed. The event is exactly that fixed literal with no delegate field or prose; it is not a delegate JSON event, audit record, operator trace, tool content, details, or session message. An absent callback is the normal no-instrumentation case. A throwing callback is swallowed and cannot alter either dispatch or its returned outcome. This fixture-only assertion seam is not best-effort operational automation: no production capability degrades, no session surface exists, and §5.2's surfaced-signal obligation does not attach.
+
+This paragraph is a **spec-ahead settlement** on §0.3's terms: the cause-keyed, identical-brief retry in the current orchestrator is retired by this contract and is a tracked code defect under Directive #262, not a second retry that coexists. The dispatcher implementation of §3.10's numeric-exit inspection and §4.9's diagnostic envelope lands first; only then does the derived orchestrator change replace the old call site and activate this paragraph under §5.3. That implementing change removes this status sentence.
 
 **One semantic adjudication point.** With the vote retired, review carries exactly **one** semantic adjudication point for discovered findings: the Judge (§1.9). This is stated rather than left implicit because the retired design distributed judgment across the voters, and a successor that re-adds a semantic step anywhere — a reviewer ruling its own finding valid, a caller filtering the bundle, a second adjudicator after the Judge — reintroduces the multiplicity without the vote that once bounded it.
 
@@ -602,6 +608,12 @@ The norm is **procedural today**, enforced at review (§2.3); the posture invent
 
 A component that delegates work to an external interpreter or tool under a fail-closed contract admits the result on **output validity alone** — never on the process's exit status, and never on a presence probe. Both answer a question the contract does not ask ("did something run?") in place of the one it does ("may I use this result?"). The fail-closed set is enumerated **by outcome, not by cause**: the delegate absent; a failed run; a run that succeeded with junk output; a run that succeeded partially; and the payload landing on the wrong stream. A status-only test decides exactly two of those five and silently accepts the rest.
 
+**Dispatcher-scoped return-slot rule.** For §4.9 return-slot delegation through the dispatcher, a zero or nonzero numeric exit settles only the process lifecycle and always reaches bounded return inspection. A valid complete return is admitted on output validity alone regardless of that exit code. A complete provisional return remains complete output when the process later exits nonzero; the process's partial execution does not turn valid complete output into the fail-closed “run that succeeded partially” class. “Complete” means that the closed return schema and the consuming role's existing result grammar are both satisfied; the dispatcher cannot attest how much investigation preceded those bytes. The accepted residual is that an early complete review result may be less investigated than a later overwrite: output validity cannot distinguish the two without adding a delegate-authored finality claim, which this contract deliberately does not trust. Requiring every early provisional to carry a non-clear verdict is the rejected mitigation: it improves a cooperative delegate's default, but the delegate selects both the timing and verdict and can still write an early clear, so the instruction cannot establish the structural guarantee this admission boundary would claim. Such a result counts wherever that same typed result already counts — panel completeness, Judge or history-diagnosis input, gated approval evidence, and the complete-panel prerequisite on an unattended ready path — while every independent consumer and landing gate still applies its own checks.
+
+This is an instance of §1.6's named deferred limitation that the pin binds the artifact rather than the cognitive act, not a second gate or a claim that dispatcher telemetry observes cognitive completeness. It has no separately observable trigger: the provisional is overwritten in place, and a clear that survives to inspection is indistinguishable from an equally shaped final clear. The limitation reopens only when a non-delegate source of finality exists to settle and fail closed at the consumer; until then the existing complete-panel and `merge-review` gates retain their stated evidence checks but do not erase this honest residual. The contract accepts that false-clear risk rather than treating exit status as evidence of cognitive completeness; malformed, incomplete, missing, or wrong-surface output remains no result. Spawn failure, signal termination, timeout, and abort do not inspect or admit a return. This paragraph re-roles “a failed run” and “a run that succeeded partially” only for the dispatcher's closed return-slot protocol. A non-dispatch delegated consumer keeps its own settled output predicate and lifecycle meaning; in particular, a publisher may continue to refuse nonzero exit and classify a zero exit without its required anchored result as `outcome-unverified`. No dispatcher diagnostic code or retry predicate transfers by analogy.
+
+This rule is a **spec-ahead settlement** under §0.3. The current dispatcher's pre-inspection nonzero-exit refusal is a tracked code defect under Directive #262; this rule sleeps as runtime behavior under §5.3 until the derived dispatcher instrument lands, and that implementing change removes this status paragraph.
+
 What failing closed *means* depends on the component's role. A **pre-processor** that cannot vouch for its output returns the input **unchanged**, so the gate still runs against the full text — an unreduced input can only over-match, a recoverable false block, while admitted junk under-matches, a silent wrong allow. A consumer that **iterates** a result set treats empty-but-well-formed as suspect — a completed check that checked nothing is indistinguishable at the call site from all-clear — so its validity predicate is *valid AND non-empty*. And where **every** byte string is a legitimate output, no predicate over the output alone can work; validity is established by a framing protocol a degraded producer cannot satisfy, never inspected as a shape. A lossy fallback **refuses** what it cannot process rather than answering a different, weaker question: a weaker parse is a second implementation reaching its own verdicts silently. And a tool that rewrites a tracked file is **transactional**: it validates before mutating, builds the result out of place, replaces atomically, and no-ops when already converged — a torn or partial write is a silent wrong allow against every reader of that file.
 
 **Freshness is validated on both operands.** A time-to-live comparison against an unvalidated clock reading is not a bound at all, and the validation precedes the arithmetic its own failure could skip — an error that unwinds past the decision point leaves zero records, the worst failure shape, detectable only by counting records against a known-good control. Failure classes are keyed by **outcome shape, not mechanism**: one intuitive label ("non-numeric") can span several mechanisms with different verdicts, so the guard rejects on shape rather than patching any one mechanism. A guarded surface must not host inputs that can disarm its own guard — a write the guard itself permits must not be able to forge the guard's decisions — and the mitigation for such a class applies **uniformly, with an empty exemption set and a structural lock**, so a new site cannot drift in unguarded.
@@ -768,6 +780,79 @@ A **dispatch instrument** composes a delegate's brief in §1.5's dispatch-facts 
 **Rejected forms, recorded** so they are not silently reintroduced (§1.8's idiom): the skill and prompt-template surfaces are instruction-placement surfaces, contingent on a model's cooperation by construction, and cannot home the instrument. And §4.8's ordered rung list does not transfer here: that form partitions a heterogeneous population across exclusive surfaces, while this section fixes one instrument kind's home by capability, and plurality appears only at invocation.
 
 **Content-free return channels.** The dispatcher's return and failure channels are content-free with respect to caller-held compare operands at every call site: a compare outcome crosses back as validity alone, never naming both values — the idiom of §3.9's content-free refusal records. The measured ground is the `TRANSCRIPT` row below — a registered tool's result enters the run's session file — and the judgment it grounds is §1.6's: an expected head the caller must never reveal cannot be allowed into an injectable context, or every later blind compare at that head becomes echoable at the `merge-review` gate (§3.3).
+
+**Closed structured return.** The sole delegate-authored computational result occupies `<scratch>/return.json`; because the delegate's working directory is the provisioned tree beside that scratch-owned slot, its brief names the same file as `../return.json`. It is one UTF-8 JSON regular file of at most 65,536 bytes with exactly `{ok:boolean, summary:string, reviewedHead?:string, payload?:string}` and no unknown key. `reviewedHead` is the delegate's independently resolved reviewed head; where the caller supplied an expected ref, the dispatcher compares it with the held resolved object and returns only `confirmed` or `invalid`. `payload` is an opaque caller-interpreted string. The caller-held operand scan covers every byte of `summary` and `payload`; `reviewedHead` is consumed only by the blind comparison and never returned. Invalid UTF-8 or JSON, an unknown key, a missing or wrongly typed required field, or a wrongly typed optional field refuses the return whole.
+
+**Dispatcher diagnostic envelope.** The contract below is a **spec-ahead settlement** under §0.3. The current dispatcher lacks this envelope and remains a tracked code defect under Directive #262; these rules sleep as runtime behavior under §5.3 until the derived dispatcher instrument lands, and that implementing change removes this status sentence.
+
+Every invocation that enters the settled dispatcher returns one closed, dispatcher-authored diagnostic beside its admitted result or refusal. It contains dispatcher observations and fixed literals only: no child stream byte, delegate event prose, command, error text, summary, payload, operator trace, or caller-held compare operand. A child can influence its bounded numeric exit status, but the dispatcher observes and types that process fact; this admitted residual does not make child-authored text a diagnostic source. Tool-parameter schema rejection occurs before invocation and therefore produces the substrate's validation error rather than this envelope; parameter validation after entry uses the envelope.
+
+The closed grammar is:
+
+```text
+diagnostic = {
+  schemaVersion: 1,
+  status: "admitted" | "refused",
+  phase: "preflight" | "provision" | "spawn" | "run" | "return" | "compare" | "serialize",
+  run: { class, exitCode, signal },
+  return: { class },
+  compare: { class },
+  durationMs,
+  code,
+  message
+}
+run.class: "not-started" | "exited" | "signaled" | "timed-out" | "aborted" | "internal-failed"
+return.class: "not-inspected" | "missing" | "not-regular" | "oversize" | "unreadable" | "json-invalid" | "schema-invalid" | "operand-rejected" | "admitted"
+compare.class: "not-reached" | "not-requested" | "confirmed" | "invalid"
+```
+
+`durationMs` is a saturated integer in `[0, Number.MAX_SAFE_INTEGER]`, measured by a monotonic clock from immediately before entered-handler parameter validation to a second reading taken immediately before outcome serialization begins; the fixed value is then serialized and bounded. Only `run.class="exited"` carries an observed signed-32-bit integer `exitCode` and null `signal`; only `run.class="signaled"` carries null `exitCode` and an observed `signal` matching `^SIG[A-Z0-9]{1,12}$`. Every other run class carries null for both. Keys occur in the grammar's order when serialized.
+
+Codes and messages are one-to-one and exact:
+
+```text
+PARAMETER_REFUSED        | dispatch refused: dispatcher parameters were invalid; nothing started
+PROVISION_FAILED         | dispatch refused: the isolated execution context could not be provisioned; nothing started
+SPAWN_FAILED             | dispatch refused: the delegate could not be started; no return was inspected
+SIGNAL_TERMINATED        | dispatch refused: the delegate terminated by signal; no return was inspected
+TIMED_OUT                | dispatch refused: the delegate exceeded its run bound; no return was inspected
+ABORTED                  | dispatch refused: the delegate run was aborted; no return was inspected
+RETURN_MISSING           | dispatch refused: no return file was present after the delegate exited
+RETURN_NOT_REGULAR       | dispatch refused: the return slot was not a regular file
+RETURN_OVERSIZE          | dispatch refused: the return exceeded the 65536-byte bound
+RETURN_UNREADABLE        | dispatch refused: the return could not be read exactly
+RETURN_JSON_INVALID      | dispatch refused: the return was not valid UTF-8 JSON
+RETURN_SCHEMA_INVALID    | dispatch refused: the return did not match the closed schema
+RETURN_OPERAND_REJECTED  | dispatch refused: the return named a caller-held operand
+INTERNAL_FAILED          | dispatch refused: the dispatcher encountered an internal failure
+ADMITTED                 | dispatch admitted
+```
+
+A refusal's `cause` equals its diagnostic `message`; admission has no `cause`. Child bytes never supply any code, message, or cause.
+
+**Lifecycle and return precedence.** The following order is total after entry. Parameter refusal precedes provisioning. Provision failure precedes spawn, and spawn failure precedes a live run. Once spawned, one terminal claim selects the first observed timeout, abort, signal termination, or numeric exit. A claimed timeout, abort, or signal termination precedes return inspection and fixes `return.class="not-inspected"` and `compare.class="not-reached"`. Every numeric exit reaches return inspection regardless of exit code. Inspection classifies, in order, missing slot, non-regular slot, oversize bytes, unreadable bytes, invalid UTF-8 or JSON, closed-schema mismatch, caller-held operand, or admitted return. Comparison follows only an admitted return: no expected operand gives `not-requested`; an expected operand with absent `reviewedHead` gives `invalid`, and otherwise exact equality gives `confirmed` while mismatch gives `invalid`, without returning either operand. A computational or framing exception becomes `INTERNAL_FAILED` at the phase that threw and preserves every earlier fully classified fact: before any run outcome it sets `run.class="internal-failed"`; after a run outcome it preserves that one observed class. Trace, retention, rendering, and audit failures are observability degradation and never alter this disposition.
+
+The ordinary rows are:
+
+```text
+parameter refusal       | preflight | not-started | not-inspected | not-reached   | PARAMETER_REFUSED
+provision failure       | provision | not-started | not-inspected | not-reached   | PROVISION_FAILED
+spawn failure           | spawn     | not-started | not-inspected | not-reached   | SPAWN_FAILED
+timeout                  | run       | timed-out   | not-inspected | not-reached   | TIMED_OUT
+abort                    | run       | aborted     | not-inspected | not-reached   | ABORTED
+signal termination       | run       | signaled    | not-inspected | not-reached   | SIGNAL_TERMINATED
+numeric exit + invalid return | return | exited     | exact invalid class | not-reached | corresponding RETURN_*
+numeric exit + valid, no expected operand | return | exited | admitted | not-requested | ADMITTED
+numeric exit + valid, expected operand | compare | exited | admitted | confirmed or invalid | ADMITTED
+internal before run outcome | current phase | internal-failed | not-inspected | not-reached | INTERNAL_FAILED
+internal after run outcome  | current phase | preserved observed run class | last fully classified return class | last fully classified compare class | INTERNAL_FAILED
+```
+
+**Impossible combinations.** `status="admitted"` holds if and only if `code="ADMITTED"`, and requires `return.class="admitted"`; every other code requires `status="refused"`, and every ordinary refusal code requires its named lifecycle or return class. Only `INTERNAL_FAILED` may preserve `return.class="admitted"` with `status="refused"`. `confirmed`, `invalid`, and `not-requested` require an admitted return; `confirmed` requires an expected operand, a present `reviewedHead`, exact equality, and compare phase; `invalid` requires an expected operand and compare phase and covers absent `reviewedHead` or mismatch; `not-requested` requires no expected operand. The compare-phase requirement on `confirmed` and `invalid` is relieved in exactly one case: `INTERNAL_FAILED` at serialize phase may preserve an already completed compare result of either class. An uninspected or invalid return requires `compare.class="not-reached"`. Observed exit code and signal are mutually exclusive and occur only on their owning run classes; `not-started` and every other non-observing class carry null for both. An admitted result after numeric nonzero exit is valid; exit status is diagnostic metadata, never an admission predicate. Any constructor request outside these combinations becomes `INTERNAL_FAILED`, never a normalized plausible state.
+
+**Serialization surfaces and bounds.** The in-process outcome is exactly `{disposition:"admitted",ok,summary,payload?,compare?,diagnostic}` or `{disposition:"refused",cause,diagnostic}`. Persisted `details` is exactly `{disposition,ok?,compare?,diagnostic}` and never carries summary, payload, or raw trace. Model-visible final `content` is exactly one text item: admission uses the existing bounded admitted summary rendering; refusal is exactly the compact JSON serialization of the diagnostic, whose fixed `message` already carries the `dispatch refused: ` prefix. The complete return file remains at most 65,536 bytes. After all JSON/string escaping and framing, the complete admitted in-process outcome and admitted content are each at most 524,288 UTF-8 bytes; any diagnostic serialization is at most 1,536 UTF-8 bytes; any refused in-process outcome and refused content are each at most 2,048 UTF-8 bytes; and persisted details is at most 4,096 UTF-8 bytes. A bound breach is `INTERNAL_FAILED`, never truncation. The implementation measures each complete serialized surface, not its unframed fields.
+
+The diagnostic is decision-neutral except where §1.7 explicitly consumes the numeric-exit/missing-return pair for its one automatic retry. Admission remains the return validator's fact, comparison remains validity-only, and no diagnostic field establishes review completeness, a verdict, workflow authority, or an operator-trace lookup.
 
 **Operator-only execution evidence.** A second channel may expose delegate streams to the operator only; it is not a return, failure, compare, or audit-content channel. Its raw bytes never enter the final tool `content` or `details`, the admitted structured return, a session transcript, or a blind-compare operand or result. The substrate fact this separation stands on is measured rather than assumed: against Pi 0.85.1 on 2026-09-17, a real JSON-mode session emits the trace as `tool_execution_update`, the registered TUI renderer exposes its content only on the `isPartial` branch, and session persistence receives the final tool result with the distinctive trace marker absent. The real-session event/transcript arm pins that version and the renderer arm pins the branch; drift fails as cannot-measure, never granting permission to serialize the trace. Another loaded extension can observe tool-update events and may persist what this instrument does not; that third-party-listener path is a named residual outside the dispatcher's control. The operator trace may retain facts the delegate can derive independently inside its pinned clone, including its own current head; that is operator-only execution evidence, never the caller-held expected-ref operand supplied to a compare or a value read back into a compare.
 
