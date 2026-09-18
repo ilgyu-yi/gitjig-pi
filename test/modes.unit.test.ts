@@ -3,7 +3,9 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { recordModeRun, resolveModes } from "../.pi/extensions/gitjig/modes.ts";
+import gitjig from "../.pi/extensions/gitjig.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -52,6 +54,34 @@ describe("#278 independent total mode resolution", () => {
 		assert.equal(duplicate.mergeMode, "off");
 		assert.equal(duplicate.decisionMode, "autonomous");
 		assert.deepEqual(duplicate.refusals, ["merge-mode:invocation-conflict"]);
+	});
+
+	it("refuses extension registration when the durable run record is unwritable", () => {
+		const stateRoot = root();
+		const path = join(stateRoot, "mode-runs.jsonl");
+		writeFileSync(path, "");
+		chmodSync(path, 0o666);
+		const prior = process.env.GITJIG_TEST_STATE_ROOT;
+		process.env.GITJIG_TEST_STATE_ROOT = stateRoot;
+		let registrations = 0;
+		try {
+			assert.throws(
+				() =>
+					gitjig({
+						registerTool: () => {
+							registrations += 1;
+						},
+						registerCommand: () => {
+							registrations += 1;
+						},
+					} as unknown as ExtensionAPI),
+				/mode run record unavailable/,
+			);
+			assert.equal(registrations, 0);
+		} finally {
+			if (prior === undefined) delete process.env.GITJIG_TEST_STATE_ROOT;
+			else process.env.GITJIG_TEST_STATE_ROOT = prior;
+		}
 	});
 
 	it("durably records both values and sources under a repository key", () => {

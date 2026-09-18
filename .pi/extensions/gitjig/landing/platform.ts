@@ -17,6 +17,30 @@ const REQUIRED_CONTEXTS = [
 	"ac-closeout",
 ];
 
+export function normalizeReviewActorType(value: unknown): "User" | "Bot" | "Unknown" {
+	return value === "User" ? "User" : value === "Bot" ? "Bot" : "Unknown";
+}
+
+export function landingPermission(value: unknown): "ADMIN" | "MAINTAIN" | undefined {
+	const role =
+		typeof record(value)?.role_name === "string" ? String(record(value)?.role_name).toLowerCase() : undefined;
+	return role === "admin" ? "ADMIN" : role === "maintain" ? "MAINTAIN" : undefined;
+}
+
+export function activeRulesetApplies(detail: unknown, baseRef: string): boolean {
+	const ruleset = record(detail);
+	if (!ruleset || ruleset.target !== "branch") return false;
+	const ref = record(record(ruleset.conditions)?.ref_name);
+	const include = array(ref?.include);
+	const exclude = array(ref?.exclude);
+	const subject = `refs/heads/${baseRef}`;
+	return (
+		(include.includes("~DEFAULT_BRANCH") || include.includes(subject)) &&
+		!exclude.includes("~DEFAULT_BRANCH") &&
+		!exclude.includes(subject)
+	);
+}
+
 function parse(value: string | undefined): unknown {
 	if (value === undefined) return undefined;
 	try {
@@ -39,12 +63,48 @@ async function api(host: string, repository: string, repoRoot: string, endpoint:
 	return parse(await runPlatformRead(["api", "--hostname", host, path], repoRoot));
 }
 
+export function selectCurrentConsumption(
+	comments: readonly { id: unknown; authorId: unknown; body: unknown }[],
+	currentEscape: { commentId: number; replayKey: string } | undefined,
+	headSha: string,
+	baseSha: string,
+	engine: Pick<LifecycleEngine, "RECORD_MARKERS" | "parseMarkedRecord" | "admitLandingClaim" | "admitLandingTerminal">,
+): { claims: { commentId: number; consumerRunId: string }[]; terminalPresent: boolean } {
+	const claims = comments
+		.flatMap((comment) => {
+			const claim = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.landingClaim);
+			const claimRecord = record(claim);
+			return currentEscape !== undefined &&
+				engine.admitLandingClaim(claim) &&
+				claimRecord?.consumerId === comment.authorId &&
+				claimRecord?.replayKey === currentEscape.replayKey &&
+				claimRecord?.escapeCommentId === currentEscape.commentId &&
+				claimRecord?.headSha === headSha &&
+				claimRecord?.baseSha === baseSha &&
+				Number.isSafeInteger(comment.id)
+				? [{ commentId: Number(comment.id), consumerRunId: String(claimRecord?.consumerRunId) }]
+				: [];
+		})
+		.sort((left, right) => left.commentId - right.commentId);
+	const terminalPresent = comments.some((comment) => {
+		const terminal = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.landingTerminal);
+		const terminalRecord = record(terminal);
+		return (
+			currentEscape !== undefined &&
+			engine.admitLandingTerminal(terminal) &&
+			terminalRecord?.escapeCommentId === currentEscape.commentId &&
+			terminalRecord?.headSha === headSha &&
+			terminalRecord?.baseSha === baseSha
+		);
+	});
+	return { claims, terminalPresent };
+}
+
 export interface PlatformLandingLoad {
 	snapshot?: LandingSnapshot;
 	engine?: LifecycleEngine;
 	consumerId?: string;
 	arm: string;
-	comments: unknown[];
 }
 
 export async function loadPlatformLanding(
@@ -55,14 +115,14 @@ export async function loadPlatformLanding(
 	_now: string,
 ): Promise<PlatformLandingLoad> {
 	if (!HOST.test(host) || !REPOSITORY.test(repository) || !Number.isSafeInteger(prNumber) || prNumber <= 0)
-		return { arm: "address-invalid", comments: [] };
+		return { arm: "address-invalid" };
 	const [repoRaw, prRaw] = await Promise.all([
 		api(host, repository, repoRoot, ""),
 		api(host, repository, repoRoot, `pulls/${prNumber}`),
 	]);
 	const repo = record(repoRaw);
 	const pr = record(prRaw);
-	if (!repo || !pr) return { arm: "platform-unreadable", comments: [] };
+	if (!repo || !pr) return { arm: "platform-unreadable" };
 	const repositoryId = repo.node_id;
 	const pullRequestId = pr.node_id;
 	const head = record(pr.head);
@@ -76,7 +136,7 @@ export async function loadPlatformLanding(
 		typeof base?.ref !== "string" ||
 		typeof author?.node_id !== "string"
 	)
-		return { arm: "subject-unmeasurable", comments: [] };
+		return { arm: "subject-unmeasurable" };
 	const headSha = String(head?.sha);
 	const baseSha = String(base?.sha);
 	const baseRef = String(base?.ref);
@@ -84,7 +144,7 @@ export async function loadPlatformLanding(
 	const [owner, name] = repository.split("/") as [string, string];
 	const threadQuery =
 		"query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}";
-	const [reviewsRaw, commentsRaw, rulesetsRaw, checksRaw, viewerRaw, threadsRaw] = await Promise.all([
+	const [reviewsRaw, commentsRaw, rulesetsRaw, checksRaw, viewerRaw, threadsRaw, baseBranchRaw] = await Promise.all([
 		api(host, repository, repoRoot, `pulls/${prNumber}/reviews?per_page=100`),
 		api(host, repository, repoRoot, `issues/${prNumber}/comments?per_page=100`),
 		api(host, repository, repoRoot, "rulesets?includes_parents=true&per_page=100"),
@@ -109,35 +169,44 @@ export async function loadPlatformLanding(
 				repoRoot,
 			),
 		),
+		api(host, repository, repoRoot, `branches/${encodeURIComponent(baseRef)}`),
 	]);
 
 	if (array(reviewsRaw).length === 100 || array(commentsRaw).length === 100 || array(rulesetsRaw).length === 100)
-		return { arm: "platform-population-incomplete", comments: [] };
+		return { arm: "platform-population-incomplete" };
 	if (Number(record(checksRaw)?.total_count ?? 0) > array(record(checksRaw)?.check_runs).length)
-		return { arm: "platform-population-incomplete", comments: [] };
+		return { arm: "platform-population-incomplete" };
 
 	const content = async (path: string): Promise<Record<string, unknown> | undefined> =>
 		record(
 			await api(host, repository, repoRoot, `contents/${path}?ref=${encodeURIComponent(String(repo.default_branch))}`),
 		);
-	const [engineBlob, policyBlob, topologyBlob] = await Promise.all([
+	const [engineBlob, policyBlob, policyCarrierBlob, topologyBlob] = await Promise.all([
 		content(".github/workflows/gitjig-lifecycle.mjs"),
 		content(".github/workflows/landing-policy.mjs"),
+		content(".github/landing-policy.json"),
 		content(".github/landing-topology.json"),
 	]);
 	const enginePath = join(repoRoot, ".github/workflows/gitjig-lifecycle.mjs");
 	const policyPath = join(repoRoot, ".github/workflows/landing-policy.mjs");
-	if (
-		!trustedDefaultBranchBytes(enginePath, engineBlob?.sha) ||
-		!trustedDefaultBranchBytes(policyPath, policyBlob?.sha)
-	)
-		return { arm: "trusted-engine-policy-mismatch", comments: [] };
+	const engineBytes = trustedDefaultBranchBytes(enginePath, engineBlob?.sha);
+	const policyBytes = trustedDefaultBranchBytes(policyPath, policyBlob?.sha);
+	if (!engineBytes || !policyBytes) return { arm: "trusted-engine-policy-mismatch" };
 	let engine: LifecycleEngine;
+	let appPolicyConfigured = false;
 	try {
-		engine = (await import("../../../../.github/workflows/gitjig-lifecycle.mjs")) as LifecycleEngine;
-		await import("../../../../.github/workflows/landing-policy.mjs");
+		engine = (await import(`data:text/javascript;base64,${engineBytes.toString("base64")}`)) as LifecycleEngine;
+		const policyModule = (await import(`data:text/javascript;base64,${policyBytes.toString("base64")}`)) as {
+			parseLandingPolicy(value: unknown): { ok: boolean };
+		};
+		if (policyCarrierBlob?.encoding === "base64" && typeof policyCarrierBlob.content === "string") {
+			const policyValue: unknown = JSON.parse(
+				Buffer.from(policyCarrierBlob.content.replace(/\s/g, ""), "base64").toString("utf8"),
+			);
+			appPolicyConfigured = policyModule.parseLandingPolicy(policyValue).ok;
+		}
 	} catch {
-		return { arm: "shared-module-unloadable", comments: [] };
+		return { arm: "shared-module-unloadable" };
 	}
 
 	const rulesets = array(rulesetsRaw)
@@ -151,18 +220,7 @@ export async function loadPlatformLanding(
 			? record(await api(host, repository, repoRoot, `rulesets/${String(items[0]?.id)}`))
 			: undefined;
 	const [humanDetail, coreDetail] = await Promise.all([detailFor(human), detailFor(coreRulesets)]);
-	const applies = (detail: Record<string, unknown> | undefined): boolean => {
-		if (!detail || detail.target !== "branch") return false;
-		const ref = record(record(detail.conditions)?.ref_name);
-		const include = array(ref?.include);
-		const exclude = array(ref?.exclude);
-		const subject = `refs/heads/${baseRef}`;
-		return (
-			(include.includes("~DEFAULT_BRANCH") || include.includes(subject)) &&
-			!exclude.includes("~DEFAULT_BRANCH") &&
-			!exclude.includes(subject)
-		);
-	};
+	const applies = (detail: Record<string, unknown> | undefined): boolean => activeRulesetApplies(detail, baseRef);
 	const rule = (detail: Record<string, unknown> | undefined, type: string) =>
 		array(detail?.rules)
 			.map(record)
@@ -206,7 +264,7 @@ export async function loadPlatformLanding(
 		const review = record(item);
 		return {
 			actorId: record(review?.user)?.node_id,
-			actorType: record(review?.user)?.type === "Bot" ? "Bot" : "User",
+			actorType: normalizeReviewActorType(record(review?.user)?.type),
 			association: review?.author_association,
 			state: review?.state,
 			headSha: review?.commit_id,
@@ -227,8 +285,9 @@ export async function loadPlatformLanding(
 			.map((check) => String(check?.name)),
 	);
 	const requiredContexts =
-		configuredContexts.length === REQUIRED_CONTEXTS.length &&
-		REQUIRED_CONTEXTS.every((context) => configuredContexts.includes(context) && successful.has(context));
+		REQUIRED_CONTEXTS.every((context) => configuredContexts.includes(context)) &&
+		configuredContexts.length > 0 &&
+		configuredContexts.every((context) => successful.has(context));
 	const commentRecords = array(commentsRaw).map((item) => {
 		const comment = record(item);
 		const user = record(comment?.user);
@@ -255,13 +314,10 @@ export async function loadPlatformLanding(
 		);
 		const context = {
 			carryingCommentAuthorId: comment.authorId,
-			livePermission:
-				permission?.user_permission === "admin"
-					? "ADMIN"
-					: permission?.user_permission === "maintain"
-						? "MAINTAIN"
-						: null,
-			appAttested: false,
+			livePermission: landingPermission(permission) ?? null,
+			// A configured carrier is necessary but not sufficient: this REST surface
+			// supplies no installation identity, so the App arm remains closed.
+			appAttested: record(escapeRecord)?.producerKind === "app" ? false : appPolicyConfigured,
 			now: _now,
 			repositoryId,
 			pullRequestId,
@@ -278,20 +334,10 @@ export async function loadPlatformLanding(
 				context,
 			});
 	}
-	const admittedClaims = comments
-		.flatMap((comment) => {
-			const claim = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.landingClaim);
-			const claimRecord = record(claim);
-			return engine.admitLandingClaim(claim) &&
-				claimRecord?.consumerId === comment.authorId &&
-				Number.isSafeInteger(comment.id)
-				? [{ commentId: Number(comment.id), consumerRunId: String(claimRecord?.consumerRunId) }]
-				: [];
-		})
-		.sort((left, right) => left.commentId - right.commentId);
-	const terminalPresent = comments.some((comment) =>
-		engine.admitLandingTerminal(engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.landingTerminal)),
-	);
+	const currentEscape = escapeCandidates.length === 1 ? escapeCandidates[0] : undefined;
+	const consumption = selectCurrentConsumption(comments, currentEscape, headSha, baseSha, engine);
+	const admittedClaims = consumption.claims;
+	const terminalPresent = consumption.terminalPresent;
 	const claimExists = admittedClaims.length > 0;
 	const acCloseout = successful.has("ac-closeout") && configuredContexts.includes("ac-closeout");
 	const core: CoreFacts = {
@@ -313,19 +359,18 @@ export async function loadPlatformLanding(
 			repo.allow_rebase_merge === false &&
 			array(corePullParameters?.allowed_merge_methods).length === 1 &&
 			array(corePullParameters?.allowed_merge_methods)[0] === "merge",
-		headFresh: pr.mergeable_state === "clean",
-		baseFresh: pr.mergeable_state === "clean",
+		headFresh: true,
+		baseFresh: record(record(baseBranchRaw)?.commit)?.sha === baseSha,
 		history: coreApplies && rule(coreDetail, "non_fast_forward") !== undefined,
 		open: pr.state === "open",
 		nonDraft: pr.draft === false,
 		mergeable: pr.mergeable === true,
-		upToDate: pr.mergeable_state === "clean",
+		upToDate: !new Set(["behind", "dirty", "unknown", "unstable"]).has(String(pr.mergeable_state)),
 	};
 	return {
 		arm: "loaded",
 		engine,
 		consumerId: typeof record(viewerRaw)?.node_id === "string" ? String(record(viewerRaw)?.node_id) : undefined,
-		comments,
 		snapshot: {
 			repositoryId,
 			pullRequestId,
@@ -342,9 +387,9 @@ export async function loadPlatformLanding(
 			standingChangesRequested,
 			topologyActive,
 			escape:
-				escapeCandidates.length === 1
+				currentEscape !== undefined
 					? {
-							...escapeCandidates[0],
+							...currentEscape,
 							alreadyClaimed: claimExists || terminalPresent,
 							claim: admittedClaims[0],
 							terminalPresent,
@@ -359,7 +404,6 @@ export function platformLandingEffects(
 	repository: string,
 	prNumber: number,
 	repoRoot: string,
-	consumerId: string,
 ): LandingEffects {
 	const post = async (endpoint: string, fields: string[] = []): Promise<unknown> =>
 		parse(
@@ -387,18 +431,34 @@ export function platformLandingEffects(
 			)) !== undefined,
 		readClaims: async () => {
 			const raw = array(await api(host, repository, repoRoot, `issues/${prNumber}/comments?per_page=100`));
-			const viewer = record(parse(await runPlatformRead(["api", "--hostname", host, "user"], repoRoot)));
-			const login = typeof viewer?.login === "string" ? viewer.login : undefined;
-			const permission = login
-				? record(await api(host, repository, repoRoot, `collaborators/${encodeURIComponent(login)}/permission`))
-				: undefined;
-			const authorized = new Set(["admin", "maintain", "write"]).has(String(permission?.user_permission));
-			return {
-				comments: raw.map((item) => {
-					const comment = record(item);
-					return { id: comment?.id, authorId: record(comment?.user)?.node_id, body: comment?.body };
+			if (raw.length === 100) return undefined;
+			const normalized = raw.map((item) => {
+				const comment = record(item);
+				const user = record(comment?.user);
+				return { id: comment?.id, authorId: user?.node_id, authorLogin: user?.login, body: comment?.body };
+			});
+			const claimAuthors = new Map<string, string>();
+			for (const comment of normalized)
+				if (
+					typeof comment.body === "string" &&
+					comment.body.startsWith("<!-- lifecycle-landing-claim: v1 -->") &&
+					typeof comment.authorId === "string" &&
+					typeof comment.authorLogin === "string"
+				)
+					claimAuthors.set(comment.authorId, comment.authorLogin);
+			const permissions = await Promise.all(
+				[...claimAuthors].map(async ([actorId, login]) => {
+					const permission = record(
+						await api(host, repository, repoRoot, `collaborators/${encodeURIComponent(login)}/permission`),
+					);
+					return new Set(["admin", "maintain", "write"]).has(String(permission?.role_name).toLowerCase())
+						? actorId
+						: undefined;
 				}),
-				authorizedConsumerIds: authorized ? [consumerId] : [],
+			);
+			return {
+				comments: normalized.map(({ id, authorId, body }) => ({ id, authorId, body })),
+				authorizedConsumerIds: permissions.filter((value): value is string => value !== undefined),
 			};
 		},
 		rereadHeads: async () => {
@@ -437,8 +497,9 @@ export function platformLandingEffects(
 				return pull?.merged === false ? "not-landed" : "unknown";
 			const commit = record(await api(host, repository, repoRoot, `commits/${pull.merge_commit_sha}`));
 			const parents = array(commit?.parents).map(record);
-			if (parents.length !== 2) return "not-landed";
-			return parents[0]?.sha === baseSha && parents[1]?.sha === headSha ? "landed" : "not-landed";
+			if (parents.length !== 2) return "unknown";
+			if (parents[1]?.sha !== headSha) return "unknown";
+			return parents[0]?.sha === baseSha ? "landed" : "unknown";
 		},
 	};
 }

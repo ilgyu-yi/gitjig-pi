@@ -175,6 +175,40 @@ describe("#278 append-only escape claim", () => {
 		]);
 	});
 
+	it("never removes the label when the terminal comment write fails", async () => {
+		let removed = false;
+		const result = await executeGuardedLanding(
+			{
+				mode: "on",
+				snapshot: snapshot({
+					quorum: { measurable: true, required: 1, approvals: 0 },
+					topologyActive: true,
+					escape: {
+						commentId: 4,
+						replayKey: "escape:4",
+						record: {},
+						context: {},
+						alreadyClaimed: true,
+						claim: { commentId: 9, consumerRunId: "crashed-run" },
+					},
+				}),
+				consumerId: "U_consumer",
+				now: "2026-01-01T00:00:00Z",
+				engine,
+			},
+			effects({
+				comment: async () => 0,
+				removeLabel: async () => {
+					removed = true;
+					return true;
+				},
+				verifyMerge: async () => "not-landed",
+			}),
+		);
+		assert.equal(result.arm, "reconciliation-terminal-write");
+		assert.equal(removed, false);
+	});
+
 	it("reconciles a crash-after-claim without issuing a second merge", async () => {
 		let merges = 0;
 		const result = await executeGuardedLanding(
@@ -222,12 +256,18 @@ describe("#278 append-only escape claim", () => {
 		};
 		const later = engine.createLandingClaim({ ...base, consumerRunId: "run-later" });
 		const earlier = engine.createLandingClaim({ ...base, consumerRunId: "run-earlier" });
+		const other = engine.createLandingClaim({
+			...base,
+			consumerId: "U_other",
+			consumerRunId: "run-other",
+		});
 		const comments = [
 			{ id: 12, authorId: "U_consumer", body: engine.encodeRecord(engine.RECORD_MARKERS.landingClaim, later) },
 			{ id: 9, authorId: "U_consumer", body: engine.encodeRecord(engine.RECORD_MARKERS.landingClaim, earlier) },
+			{ id: 8, authorId: "U_other", body: engine.encodeRecord(engine.RECORD_MARKERS.landingClaim, other) },
 			{ id: 1, authorId: "U_forged", body: engine.encodeRecord(engine.RECORD_MARKERS.landingClaim, earlier) },
 		];
-		assert.equal(engine.landingClaimWinner(comments, "escape:4", ["U_consumer"])?.id, 9);
+		assert.equal(engine.landingClaimWinner(comments, "escape:4", ["U_consumer", "U_other"])?.id, 8);
 	});
 
 	it("writes terminal before removing the bypass label", async () => {

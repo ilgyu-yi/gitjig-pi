@@ -62,7 +62,11 @@ export interface LifecycleEngine {
 	validateEscapeRecord(record: unknown, context: unknown): { ok: boolean; arm: string };
 	admitLandingClaim(value: unknown): boolean;
 	admitLandingTerminal(value: unknown): boolean;
-	examineEscapeTransition(record: unknown, context: unknown, observedAt: string): { ok: boolean; arm: string };
+	examineEscapeTransition(
+		record: unknown,
+		context: unknown,
+		observedAt: string,
+	): { ok: boolean; arm: string; plan?: readonly { kind: string; body?: string }[] };
 	createLandingClaim(input: unknown): unknown;
 	landingClaimWinner(
 		comments: unknown[],
@@ -132,7 +136,10 @@ async function writeEscapeTerminal(
 	if (!escapeState) return false;
 	if (arm) {
 		const refusal = input.engine.escapeRefusalRecord(arm, input.now);
-		await effects.comment(input.engine.encodeRecord(input.engine.RECORD_MARKERS.escapeRefusal, refusal));
+		const refusalId = await effects.comment(
+			input.engine.encodeRecord(input.engine.RECORD_MARKERS.escapeRefusal, refusal),
+		);
+		if (!Number.isSafeInteger(refusalId) || refusalId <= 0) return false;
 	}
 	const terminal = input.engine.createLandingTerminalPlan({
 		escapeCommentId: escapeState.commentId,
@@ -145,8 +152,10 @@ async function writeEscapeTerminal(
 	});
 	if (!terminal.ok || terminal.plan === undefined) return false;
 	for (const operation of terminal.plan) {
-		if (operation.kind === "comment" && typeof operation.body === "string") await effects.comment(operation.body);
-		else if (operation.kind === "remove-label" && typeof operation.label === "string") {
+		if (operation.kind === "comment" && typeof operation.body === "string") {
+			const commentId = await effects.comment(operation.body);
+			if (!Number.isSafeInteger(commentId) || commentId <= 0) return false;
+		} else if (operation.kind === "remove-label" && typeof operation.label === "string") {
 			if (!(await effects.removeLabel(operation.label))) return false;
 		} else return false;
 	}
@@ -166,14 +175,18 @@ export async function executeGuardedLanding(
 			return { outcome: "unverified-outcome", arm: "reconciliation-unverified", consumerRunId };
 		const reconciliationInput = { ...input, consumerRunId: pendingClaim.consumerRunId };
 		const outcome = verified === "landed" ? "landed" : "refused";
-		await writeEscapeTerminal(
+		const recorded = await writeEscapeTerminal(
 			reconciliationInput,
 			effects,
 			pendingClaim.commentId,
 			outcome,
 			outcome === "refused" ? "claimed-run-not-landed" : undefined,
 		);
-		return { outcome, arm: `reconciled-${outcome}`, consumerRunId: pendingClaim.consumerRunId };
+		return {
+			outcome,
+			arm: recorded ? `reconciled-${outcome}` : "reconciliation-terminal-write",
+			consumerRunId: pendingClaim.consumerRunId,
+		};
 	}
 	const decision = decideLanding(input.mode, input.snapshot);
 	if (decision.kind === "ready") return { outcome: "ready", arm: decision.arm };
@@ -185,7 +198,12 @@ export async function executeGuardedLanding(
 		if (!escapeState) return { outcome: "refused", arm: "escape-absent", consumerRunId };
 		const examination = input.engine.examineEscapeTransition(escapeState.record, escapeState.context, input.now);
 		if (!examination.ok) {
-			await writeEscapeTerminal(executionInput, effects, null, "refused", examination.arm);
+			const refusalOperation = examination.plan?.[0];
+			if (refusalOperation?.kind !== "comment" || typeof refusalOperation.body !== "string")
+				return { outcome: "refused", arm: "escape-refusal-plan", consumerRunId };
+			const refusalId = await effects.comment(refusalOperation.body);
+			if (Number.isSafeInteger(refusalId) && refusalId > 0)
+				await writeEscapeTerminal(executionInput, effects, null, "refused");
 			return { outcome: "refused", arm: examination.arm, consumerRunId };
 		}
 		const claim = input.engine.createLandingClaim({
@@ -204,6 +222,8 @@ export async function executeGuardedLanding(
 			return { outcome: "refused", arm: "claim-invalid", consumerRunId };
 		}
 		claimCommentId = await effects.comment(input.engine.encodeRecord(input.engine.RECORD_MARKERS.landingClaim, claim));
+		if (!Number.isSafeInteger(claimCommentId) || claimCommentId <= 0)
+			return { outcome: "refused", arm: "claim-write", consumerRunId };
 		const population = await effects.readClaims();
 		const winner = population
 			? input.engine.landingClaimWinner(population.comments, escapeState.replayKey, population.authorizedConsumerIds)
@@ -234,6 +254,13 @@ export async function executeGuardedLanding(
 			await writeEscapeTerminal(executionInput, effects, claimCommentId, "refused", "merge-not-landed");
 		return { outcome: "refused", arm: "merge-not-landed", consumerRunId };
 	}
-	if (claimCommentId !== undefined) await writeEscapeTerminal(executionInput, effects, claimCommentId, "landed");
+	if (claimCommentId !== undefined) {
+		const recorded = await writeEscapeTerminal(executionInput, effects, claimCommentId, "landed");
+		return {
+			outcome: "landed",
+			arm: recorded ? decision.route : "landed-terminal-write",
+			consumerRunId,
+		};
+	}
 	return { outcome: "landed", arm: decision.route, consumerRunId };
 }
