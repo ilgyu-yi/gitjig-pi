@@ -569,4 +569,40 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"No copied fallback may become a rival predicate; recovery is to restore the committed handed-over asset from the addressed repository and replay the refused transition.",
 	},
+	{
+		dependency: "landing-policy-presence",
+		failureShape: "the committed landing-policy carrier is absent, duplicated, or unreadable",
+		posture: "closed",
+		justification:
+			"Absent policy cannot attest an App. The false-block cost is a dormant optional App arm; restore the one null-safe handed-over carrier before retrying.",
+	},
+	{
+		dependency: "landing-policy-schema",
+		failureShape: "the landing-policy document has an unknown version, key, kind, or malformed identity field",
+		posture: "closed",
+		justification:
+			"Guessing policy shape could turn data into authority. The false-block cost is a dormant optional App arm; repair the closed versioned document and retry.",
+	},
+	{
+		dependency: "landing-policy-provenance",
+		failureShape:
+			"the default-branch policy blob identity is absent, stale, malformed, unreadable, or differs from the local bytes",
+		posture: "closed",
+		justification:
+			"Contributor-controlled or unmeasured bytes cannot attest an App. The false-block cost is a dormant optional App arm; refresh the addressed default-branch blob evidence and retry.",
+	},
+	{
+		dependency: "landing-policy-repository-binding",
+		failureShape: "the repository observed for policy evidence differs from the explicitly addressed repository",
+		posture: "closed",
+		justification:
+			"Cross-repository identity evidence could authorize the wrong installation. The false-block cost is a dormant optional App arm; address and re-read the intended repository.",
+	},
+	{
+		dependency: "landing-policy-app-producer",
+		failureShape: "the admitted committed policy carries the explicit null-disabled App producer",
+		posture: "closed",
+		justification:
+			"Null is an intentional absence of App authority, never a default identity. The false-block cost is none for ordinary human operation; a later target-owned activation must attest an App before retrying that optional arm.",
+	},
 ];
