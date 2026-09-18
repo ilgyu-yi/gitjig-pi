@@ -10,7 +10,12 @@ const exactObject = (value, keys) =>
 	Object.keys(value).length === keys.length &&
 	keys.every((key) => own(value, key));
 /** @param {unknown} value */
-const nonEmpty = (value) => typeof value === "string" && value.trim() === value && value.length > 0;
+const nonEmpty = (value) =>
+	typeof value === "string" &&
+	value.trim() === value &&
+	value.length > 0 &&
+	value.normalize("NFC") === value &&
+	!/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value);
 /** @param {unknown} value */
 const objectId = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value);
 
@@ -70,6 +75,21 @@ export function attestLandingPolicy(bytes, evidence) {
 		return { ok: false, arm: "policy-schema-invalid" };
 	}
 	return parseLandingPolicy(value);
+}
+
+/**
+ * @param {unknown} entries
+ * @param {unknown} evidence
+ */
+export function loadLandingPolicy(entries, evidence) {
+	if (!Array.isArray(entries)) return { ok: false, arm: "policy-unreadable" };
+	const matches = entries.filter(
+		(entry) =>
+			exactObject(entry, ["path", "bytes"]) &&
+			/** @type {Record<string, unknown>} */ (entry).path === ".github/landing-policy.json",
+	);
+	if (matches.length !== 1) return { ok: false, arm: matches.length === 0 ? "policy-absent" : "policy-duplicate" };
+	return attestLandingPolicy(/** @type {Record<string, unknown>} */ (matches[0]).bytes, evidence);
 }
 
 /** @param {unknown} value */

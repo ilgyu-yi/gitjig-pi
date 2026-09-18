@@ -36,6 +36,7 @@
 	"include": [
 		".pi/**/*.ts",
 		".github/workflows/gitjig-lifecycle.mjs",
+		".github/workflows/landing-policy.mjs",
 		".github/workflows/lifecycle-event.mjs",
 		"test/**/*.ts"
 	]

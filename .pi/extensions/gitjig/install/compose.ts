@@ -6,6 +6,7 @@
  * provisioning consume this result; neither owns a second membership,
  * destination, collision, digest, or action predicate.
  */
+import { sourceProjectionAdmits } from "../../../../.github/workflows/landing-policy.mjs";
 import { type ObservedCandidate, observeCandidates, renderMembershipSnapshot } from "./classifier.ts";
 import { buildPin, encodePin, type PinSource, type PinV1 } from "./pin.ts";
 import { type CompositionPlan, type Occupant, planComposition } from "./plan.ts";
@@ -27,6 +28,16 @@ export interface AdopterComposition {
 
 export function composeAdopter(input: CompositionInput): AdopterComposition {
 	const candidates = observeCandidates(input.sourceRoot);
+	const landingPolicy = candidates.find(({ path }) => path === ".github/landing-policy.json");
+	if (landingPolicy) {
+		let value: unknown;
+		try {
+			value = JSON.parse(landingPolicy.bytes.toString("utf8"));
+		} catch {
+			throw new Error("source landing policy is not the null-disabled scaffold");
+		}
+		if (!sourceProjectionAdmits(value)) throw new Error("source landing policy is not the null-disabled scaffold");
+	}
 	const membershipSnapshot = renderMembershipSnapshot(
 		candidates.map(({ path, disposition }) => ({ path, disposition })),
 	);

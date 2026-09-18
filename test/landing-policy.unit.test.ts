@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import {
 	attestLandingPolicy,
 	gitBlobObjectId,
+	loadLandingPolicy,
 	parseLandingPolicy,
 	sourceProjectionAdmits,
 } from "../.github/workflows/landing-policy.mjs";
@@ -38,6 +39,10 @@ describe("#279 null-only landing policy carrier", () => {
 			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "" } },
 			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: " I_node" } },
 			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I_node", extra: true } },
+			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I\nnode" } },
+			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I\u0000node" } },
+			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I\ud800node" } },
+			{ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "e\u0301" } },
 		])
 			assert.equal(parseLandingPolicy(value).ok, false);
 	});
@@ -57,6 +62,18 @@ describe("#279 null-only landing policy carrier", () => {
 		);
 		assert.equal(attestLandingPolicy(bytes, {}).arm, "policy-provenance-unverifiable");
 		assert.equal(attestLandingPolicy("not bytes", evidence).arm, "policy-unreadable");
+		assert.equal(
+			attestLandingPolicy(bytes, { ...evidence, addressedRepositoryId: "R\nother" }).arm,
+			"policy-provenance-unverifiable",
+		);
+	});
+
+	it("owns absent and duplicate carrier population refusal", () => {
+		assert.equal(loadLandingPolicy([], evidence).arm, "policy-absent");
+		assert.equal(loadLandingPolicy("not entries", evidence).arm, "policy-unreadable");
+		const entry = { path: ".github/landing-policy.json", bytes };
+		assert.equal(loadLandingPolicy([entry, entry], evidence).arm, "policy-duplicate");
+		assert.equal(loadLandingPolicy([entry], evidence).arm, "policy-unavailable");
 	});
 
 	it("rejects populated source projection instead of exporting target identity", () => {
