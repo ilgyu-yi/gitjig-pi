@@ -48,7 +48,7 @@ const HANDOFF_SUBJECT = "review-round handed off: the platform-attested review s
 const HANDOFF_HEAD = "review-round handed off: the attested head is not the head this clone resolves";
 const HANDOFF_DRIFT = "review-round handed off: the review subject changed while the round ran";
 const HANDOFF_HISTORY = "review-round handed off: installed review history could not be read";
-const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnosis was unavailable or required parking";
+const HANDOFF_DIAGNOSIS = "review-round handed off: the required history diagnosis was unavailable or required handoff";
 const HANDOFF_REENTRY = "review-round handed off: the diagnosis invalidated a gate that must be re-entered";
 const HANDOFF_PUBLISH = "review-round handed off: the durable review record was not confirmed published";
 const HANDOFF_ROUND = "review-round handed off: the composed round could not produce a terminal result";
@@ -187,7 +187,7 @@ export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefine
 function reentryConsequence(consequence: Consequence): TerminalSeed | undefined {
 	switch (consequence.reentry) {
 		case "none":
-			return consequence.park ? { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" } : undefined;
+			return consequence.handoff ? { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" } : undefined;
 		case "plan":
 			return { disposition: "hand-off", cause: HANDOFF_REENTRY, reentry: "plan" };
 		case "authorization":

@@ -990,7 +990,7 @@ describe("review-round production call site", () => {
 		assert.equal(ran, false, "an unreadable history must not spend a round");
 	});
 
-	it("parks after the triggering record is durable, and never before the round", async () => {
+	it("hands off after the triggering record is durable, and never before the round", async () => {
 		const briefs: string[] = [];
 		const order: string[] = [];
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
@@ -1025,7 +1025,7 @@ describe("review-round production call site", () => {
 		assert.equal(briefs[0].includes(HEAD_B), false, "the round's own head stays withheld from the diagnosis brief");
 		assert.deepEqual(outcome, {
 			disposition: "hand-off",
-			cause: "review-round handed off: the required history diagnosis was unavailable or required parking",
+			cause: "review-round handed off: the required history diagnosis was unavailable or required handoff",
 			reentry: "none",
 			diagnosis,
 		});

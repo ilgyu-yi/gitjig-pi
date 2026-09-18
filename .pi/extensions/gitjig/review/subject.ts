@@ -4,7 +4,7 @@
  * snapshot.
  *
  * Warning-surface roster: EXEMPT — this module returns data or undefined and
- * emits no warning, record, or operator-facing text. The attended #241
+ * emits no warning, record, or operator-facing text. The operator-owned #241
  * decision permits one platform account; role ordering, not account identity,
  * supplies semantic separation.
  *

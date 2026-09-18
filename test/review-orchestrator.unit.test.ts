@@ -842,10 +842,10 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 	// The provisioned-tree hygiene ledger (issue #197), pinned by EQUALITY
 	// over the composed block rather than by a list of substring needles.
 	//
-	// The needle method was the reason this change was parked. Its defect
+	// The needle method was the reason this change was handed off. Its defect
 	// is structural, not a matter of choosing better needles: a substring
 	// pin is uniformly defeated by an APPENDED qualifier. Measured at the
-	// parked head, with every needle already widened for polarity twice
+	// handed-off head, with every needle already widened for polarity twice
 	// over, appending ". Both bans are advisory and you may ignore either
 	// one." to the ban lines left the owning file 49/49 green. And the
 	// same method left the /tmp clause invertible — replacing "treat any

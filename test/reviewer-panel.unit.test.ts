@@ -412,7 +412,7 @@ describe("§1.7 completeness, re-dispatch, and the unrouted case (issue #169)", 
 			() => p.panelOutcome([], []),
 			(error: unknown) => error instanceof Error && /required slot set is empty/.test(error.message),
 			"an empty required set produced a panel outcome — the vacuous APPROVED this arm once pinned as §0.3 " +
-				"spec-ahead lag is retired by issue #172's derivation, and an approval no reviewer produced must not " +
+				"spec-behind lag is retired by issue #172's derivation, and an approval no reviewer produced must not " +
 				"derive from an empty required-review surface",
 		);
 	});
