@@ -23,7 +23,7 @@
  * DECISION — the diagnosis is admitted fail-closed, and absence is
  * NEVER read as NONE. §1.4: "absence is not NONE, and an unreadable
  * history is never read as STAGNATION." A refused, unconfirmed, or
- * malformed diagnosis dispatch is a hand-off and parks because no valid
+ * malformed diagnosis dispatch emits a handoff because no valid
  * value can select recovery, never a value. The one open-direction
  * limb is the substrate's absence in a clone, which fails open with a
  * warning — a property of a clone, not of a moment.
@@ -110,7 +110,7 @@ export type DiagnosisAdmission =
 	| { available: true; diagnosis: DiagnosisInput }
 	| { available: false; disposition: "hand-off"; reason: string };
 
-export type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
+export type Consequence = { proceed: boolean; handoff: boolean; reentry: "none" | "plan" | "authorization" };
 
 /**
  * Assemble the repair history from the durable review records, in the
@@ -349,7 +349,7 @@ function diagnosisFromPayload(payload: string | undefined): DiagnosisInput | und
 /**
  * Admit a diagnosis dispatch, fail-closed (§1.4/§1.6). A refused,
  * `ok:false`, unconfirmed-compare, or malformed return is a HAND-OFF —
- * without a valid value or route it parks, never read as NONE. This is
+ * without a valid value or route it hands off, never read as NONE. This is
  * the present-but-cannot-measure limb; the caller supplies
  * the absent-substrate limb through `historyAvailability`.
  */
@@ -376,7 +376,7 @@ export function admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission {
 
 /**
  * The currently instrumented handoff consumer (§1.4). NONE continues;
- * STAGNATION, OSCILLATION and INDETERMINATE park. The invalidation
+ * STAGNATION, OSCILLATION and INDETERMINATE hand off. The invalidation
  * finding routes the re-entry gate independently of the value — plan →
  * §1.8, authorization → §1.2/§2.2, nothing → no re-entry. This function
  * exposes no decision-mode input and therefore cannot claim the contract's
@@ -385,9 +385,9 @@ export function admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission {
 export function diagnosisConsequence(value: DiagnosisValue, invalidation: Invalidation): Consequence {
 	const reentry = invalidation === "plan" ? "plan" : invalidation === "authorization" ? "authorization" : "none";
 	if (value === "NONE") {
-		return { proceed: true, park: false, reentry };
+		return { proceed: true, handoff: false, reentry };
 	}
-	return { proceed: false, park: true, reentry };
+	return { proceed: false, handoff: true, reentry };
 }
 
 /**

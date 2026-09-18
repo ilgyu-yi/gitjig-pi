@@ -61,18 +61,11 @@
  *     `"category":"dispatch"` audit records through the landed writer,
  *     the admission carrying `"action":"admitted"`.
  *   - `ship` is an extension command registered from the gitjig entry; it
- *     performs no merge and reaches no network; its registered
- *     `description` names the three offline undecidables — the
- *     platform-held review verdict, the platform-held AC state, and the
- *     merge act; on invocation it appends a session entry
- *     `customType: "gitjig-ship"` whose data carries a `composition`
- *     token, `"satisfied"` or `"unsatisfied"`. Both directions of the
- *     report shape are bound: a fact-less invocation composes
- *     `"unsatisfied"`, and an invocation supplying the landed fact
- *     grammar (`verdict-head=<the caller repo's real head> ac=closed`)
- *     composes `"satisfied"` — the satisfied run over its own caller
- *     fixture, because the ship anchor asserts exactly one `gitjig-ship`
- *     entry per fixture.
+ *     performs no landing and reaches no network; its registered description
+ *     names the platform-held AC state and landing act as offline undecidables.
+ *     It appends `customType: "gitjig-ship"` with a `composition` token,
+ *     `"satisfied"` or `"unsatisfied"`. A fact-less invocation is
+ *     `"unsatisfied"`; `ac=closed` is `"satisfied"`.
  *
  * TEMPLATE NORMS (AC 4). A lexical read of `.pi/prompts/work-on.md`'s
  * committed bytes: the issue-first-entry token (§1.1's standard flow) and
@@ -352,7 +345,6 @@ let heldHash: string;
 let satisfiedFixture: Fixture;
 let satisfiedShipRun: PiRunResult;
 /** The satisfied run's operand: its own fixture repo's HEAD, supplied on the prompt line alone. */
-let satisfiedHeldHash: string;
 
 before(async () => {
 	// The headless-dispatch probe rides its own fixture so its throwaway
@@ -441,11 +433,7 @@ before(async () => {
 	execFileSync("git", ["init", "-q", "-b", "main", satisfiedFixture.root], { encoding: "utf8" });
 	satisfiedGit("add", ".pi", "zq-satisfied-base.txt");
 	satisfiedGit("commit", "-q", "-m", "zq ship satisfied-direction caller fixture");
-	satisfiedHeldHash = satisfiedGit("rev-parse", "HEAD").trim();
-	satisfiedShipRun = await runPi(satisfiedFixture, {
-		prompt: `/ship verdict-head=${satisfiedHeldHash} ac=closed`,
-		timeoutMs: 120_000,
-	});
+	satisfiedShipRun = await runPi(satisfiedFixture, { prompt: "/ship ac=closed", timeoutMs: 120_000 });
 });
 
 after(() => {
@@ -728,94 +716,28 @@ describe("the review round trip: /review dispatches the one dispatcher (issue #9
 	});
 });
 
-describe("the ship composition: caller-supplied facts, offline undecidables named (issue #91 AC 3)", () => {
-	it("ship's registration record names the three offline undecidables", () => {
-		const row = requireGovernedRow("ship-description", "ship", "the ship extension command");
-		const description = row.description ?? "";
-		// Lexical bind of the contract, not of any phrasing: the description
-		// must name the platform-held review VERDICT, the platform-held AC
-		// state, and the MERGE act as what ship cannot decide offline.
-		for (const [token, undecidable] of [
-			[/verdict/i, "the platform-held review verdict"],
-			[/\bAC\b/, "the platform-held AC state"],
-			[/merge/i, "the merge act"],
-		] as Array<[RegExp, string]>) {
-			assert.ok(
-				token.test(description),
-				`ship-description: the registered description does not name ${undecidable} — the registration ` +
-					`record is where ship states what it cannot decide offline (issue #91 AC 3); got: "${description}"`,
-			);
-		}
+describe("the ship composition: AC closeout only (issue #91 AC 3)", () => {
+	it("names the two offline undecidables and no review verdict", () => {
+		const description = requireGovernedRow("ship-description", "ship", "the ship extension command").description ?? "";
+		assert.match(description, /\bAC\b/);
+		assert.match(description, /landing/i);
+		assert.doesNotMatch(description, /verdict/i);
 	});
 
-	it("a fact-less invocation composes 'unsatisfied' — the report's distinguishing half in the unsatisfied direction", () => {
-		// This arm binds the report SHAPE on the one invocation every grammar
-		// accepts — no facts supplied — where the composition cannot be
-		// satisfied; exact equality on the composition field (never
-		// containment: "unsatisfied" contains "satisfied") is what makes this
-		// arm the distinguishing half it claims.
-		const entry = requireShipEntry("ship-composition");
-		const data = (entry as { data?: { composition?: unknown } }).data;
-		assert.equal(
-			data?.composition,
-			"unsatisfied",
-			`ship-composition: a fact-less /ship did not report an unsatisfied composition — the composed ` +
-				`report must distinguish a satisfied from an unsatisfied composition, and with no caller-supplied ` +
-				`facts nothing the merge-boundary rows name is discharged; entry: ${JSON.stringify(entry)}`,
-		);
+	it("reports unsatisfied without AC closure", () => {
+		const data = (requireShipEntry("ship-composition") as { data?: { composition?: unknown } }).data;
+		assert.equal(data?.composition, "unsatisfied");
 	});
 
-	it("a fact-bearing invocation composes 'satisfied' — the report's other direction", () => {
-		const entry = requireSatisfiedShipEntry("ship-satisfied");
-		const data = (entry as { data?: { composition?: unknown; verdictPinned?: unknown; acClosure?: unknown } }).data;
-		assert.equal(
-			data?.composition,
-			"satisfied",
-			`ship-satisfied: /ship with verdict-head=<the fixture repo's real head> ac=closed did not compose ` +
-				`'satisfied' — the composed report must distinguish both directions, and here every fact the ` +
-				`merge-boundary rows name is discharged; entry: ${JSON.stringify(entry)}`,
-		);
-		assert.equal(
-			data?.verdictPinned,
-			"confirmed",
-			`ship-satisfied: the supplied verdict head byte-equals the fixture's once-resolved local head and the ` +
-				`per-check token is not 'confirmed'; entry: ${JSON.stringify(entry)}`,
-		);
-		assert.equal(
-			data?.acClosure,
-			"asserted",
-			`ship-satisfied: ac=closed was supplied and the per-check token is not 'asserted'; entry: ` +
-				`${JSON.stringify(entry)}`,
-		);
-	});
-
-	it("operand absence on the satisfied run: the prompt-line head lands in zero session entries, audit lines, and output bytes", () => {
-		// Non-vacuous by the arm above: the same held head satisfied the
-		// byte-equality, so it DID reach the handler — through the prompt
-		// line, the one surface the operator supplied it on.
-		requireSatisfiedShipEntry("ship-satisfied-operand-absence");
-		for (const entry of readSessionEntries(satisfiedFixture)) {
-			assert.deepEqual(
-				heldOperandRuns(JSON.stringify(entry), satisfiedHeldHash),
-				[],
-				"ship-satisfied-operand-absence: the supplied verdict head reached a session entry — an expected " +
-					"head in an injectable context makes every later blind compare at that head echoable (§4.9, §1.6)",
-			);
-		}
-		for (const line of existsSync(satisfiedFixture.auditFile) ? readAuditLines(satisfiedFixture) : []) {
-			assert.deepEqual(
-				heldOperandRuns(line, satisfiedHeldHash),
-				[],
-				"ship-satisfied-operand-absence: the supplied verdict head reached the audit trail (§3.8's " +
-					"refusal-record rule; §4.9)",
-			);
-		}
-		assert.deepEqual(
-			heldOperandRuns(satisfiedShipRun.stdout + satisfiedShipRun.stderr, satisfiedHeldHash),
-			[],
-			"ship-satisfied-operand-absence: the supplied verdict head reached the run's terminal output — the " +
-				"command layer's visible surfaces inherit the dispatcher's content-free channels (§4.9)",
-		);
+	it("reports satisfied when ac=closed is supplied", () => {
+		const data = (
+			requireSatisfiedShipEntry("ship-satisfied") as {
+				data?: { composition?: unknown; acClosure?: unknown; verdictPinned?: unknown };
+			}
+		).data;
+		assert.equal(data?.composition, "satisfied");
+		assert.equal(data?.acClosure, "asserted");
+		assert.equal(data?.verdictPinned, undefined, "retired review composition survived in /ship");
 	});
 });
 

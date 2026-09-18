@@ -62,7 +62,7 @@ type DiagnosisAdmission =
 	// `historyAvailability`. This mirror had already drifted from the module
 	// once; nothing in this file pins it against the source at this head.
 	| { available: false; disposition: "hand-off"; reason: string };
-type Consequence = { proceed: boolean; park: boolean; reentry: "none" | "plan" | "authorization" };
+type Consequence = { proceed: boolean; handoff: boolean; reentry: "none" | "plan" | "authorization" };
 
 type HistoryModule = {
 	// Mirrored as MUTABLE arrays on purpose. Production declares these
@@ -653,7 +653,7 @@ describe("§1.4 the diagnosis brief carries the findings and asks both outputs (
 	// ACROSS states, oldest first: a brief free to carry one state, or to
 	// carry them reordered, makes STAGNATION and OSCILLATION unrulable, and
 	// the Judge's likely false NONE returns a still-open problem to ordinary
-	// flow on a history that warranted a park — a silent wrong-allow.
+	// flow on a history that warranted a handoff — a silent wrong-allow.
 	const multi = (): StateSummary[] =>
 		(
 			[
@@ -1129,7 +1129,7 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 	/** The contract, restated independently of the implementation (§1.4). */
 	const expected = (value: (typeof VALUES)[number], invalidation: (typeof INVALIDATIONS)[number]) => ({
 		proceed: value === "NONE",
-		park: value !== "NONE",
+		handoff: value !== "NONE",
 		reentry: invalidation === "nothing" ? "none" : invalidation,
 	});
 
@@ -1140,7 +1140,7 @@ describe("§1.4 the deterministic consumer (issue #186)", () => {
 					mod().diagnosisConsequence(value, invalidation),
 					expected(value, invalidation),
 					`the current handoff consumer's cell ${value} x ${invalidation} does not match its mapping — NONE ` +
-						"returns to ordinary flow, the other three park, and invalidation routes the re-entry gate " +
+						"returns to ordinary flow, the other three hand off, and invalidation routes the re-entry gate " +
 						"INDEPENDENTLY of the value (AC4: arms pin the total mapping)",
 				);
 			});
@@ -1218,7 +1218,7 @@ describe("§1.4 the two fail limbs — the 2 x 3 cell set of historyAvailability
 			}
 			// Readable, empty or not: AVAILABLE, and the records come through
 			// unchanged. An empty history is measurable, not unmeasurable —
-			// treating it as a hand-off parks the FIRST review of every change,
+			// treating it as a hand-off interrupts the FIRST review of every change,
 			// which is the wrong-block direction §3.12 forbids as squarely as
 			// the wrong-allow one.
 			// The expected value must NOT be the array passed in, or an
@@ -1336,7 +1336,7 @@ describe("§1.4 the admission carries EVERY enforced member through the parser",
 	// home for the same property (§3.11): under that derivation, deleting a
 	// member from either Set leaves the arms and tsc green — including
 	// deleting "NONE", which refuses every advancing history's ruling and
-	// parks every change forever.
+	// hands off every change forever.
 	//
 	// The falsifier: deleting ANY single member from either array must red.
 	// That requires a POSITIVE admission per member, not merely a refusal.
@@ -1352,7 +1352,7 @@ describe("§1.4 the admission carries EVERY enforced member through the parser",
 					{ available: true, diagnosis: input },
 					`a well-formed ruling of ${value} × ${invalidation} was not admitted with its own two outputs and ` +
 						"evidence — the member is absent from the array the parser enforces over, so a valid ruling is being " +
-						"refused as malformed; for NONE that parks every change forever, inverting the one relief §1.4 grants",
+						"refused as malformed; for NONE that hands off every change forever, inverting the one relief §1.4 grants",
 				);
 			});
 		}
@@ -1422,7 +1422,7 @@ describe("§1.4 the domains are pinned on the LIVE enforcing homes, never on the
 			[...VALUES],
 			"history.ts's DIAGNOSIS_VALUES — the home the parser narrows over AND the home DiagnosisValue is derived " +
 				"from — no longer carries §1.4's four taxonomy values. A member dropped here refuses a valid ruling " +
-				"(for NONE, that parks every change forever); a member added here admits a value §1.4 does not define",
+				"(for NONE, that hands off every change forever); a member added here admits a value §1.4 does not define",
 		);
 		assert.deepEqual(
 			[...h.INVALIDATIONS],
@@ -1713,7 +1713,7 @@ describe("§1.4 the domains are pinned on the LIVE enforcing homes, never on the
 			assert.ok(
 				brief.includes(key),
 				`the brief never names the key ${JSON.stringify(key)} that the parser enforces — a Judge told a ` +
-					"different shape than the one admitted returns malformed rulings, and every change then parks " +
+					"different shape than the one admitted returns malformed rulings, and every change then hands off " +
 					"(§3.11: one property, one home; where there are two, an arm ties them)",
 			);
 		}

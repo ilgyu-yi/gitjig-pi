@@ -66,10 +66,6 @@
 			"disposition": "handed-over"
 		},
 		{
-			"path": ".github/workflows/auto-clear-awaiting-author.yml",
-			"disposition": "handed-over"
-		},
-		{
 			"path": ".github/workflows/auto-status-proposed.yml",
 			"disposition": "handed-over"
 		},
@@ -84,14 +80,6 @@
 		{
 			"path": ".github/workflows/check-changelog.yml",
 			"disposition": "handed-over"
-		},
-		{
-			"path": ".github/workflows/check-merge-review.mjs",
-			"disposition": "source-only"
-		},
-		{
-			"path": ".github/workflows/check-merge-review.yml",
-			"disposition": "source-only"
 		},
 		{
 			"path": ".github/workflows/check-provenance.sh",
@@ -310,10 +298,6 @@
 			"disposition": "carried"
 		},
 		{
-			"path": ".pi/extensions/gitjig/review/merge-gate.ts",
-			"disposition": "carried"
-		},
-		{
 			"path": ".pi/extensions/gitjig/review/orchestrate.ts",
 			"disposition": "carried"
 		},
@@ -406,10 +390,6 @@
 			"disposition": "instance-state"
 		},
 		{
-			"path": "changelog_unreleased/added/15.md",
-			"disposition": "instance-state"
-		},
-		{
 			"path": "changelog_unreleased/added/169.md",
 			"disposition": "instance-state"
 		},
@@ -431,10 +411,6 @@
 		},
 		{
 			"path": "changelog_unreleased/added/19.md",
-			"disposition": "instance-state"
-		},
-		{
-			"path": "changelog_unreleased/added/190.md",
 			"disposition": "instance-state"
 		},
 		{
@@ -546,10 +522,6 @@
 			"disposition": "instance-state"
 		},
 		{
-			"path": "changelog_unreleased/changed/143.md",
-			"disposition": "instance-state"
-		},
-		{
 			"path": "changelog_unreleased/changed/144.md",
 			"disposition": "instance-state"
 		},
@@ -646,6 +618,10 @@
 			"disposition": "instance-state"
 		},
 		{
+			"path": "changelog_unreleased/changed/273.md",
+			"disposition": "instance-state"
+		},
+		{
 			"path": "changelog_unreleased/changed/37.md",
 			"disposition": "instance-state"
 		},
@@ -683,10 +659,6 @@
 		},
 		{
 			"path": "changelog_unreleased/fixed/139.md",
-			"disposition": "instance-state"
-		},
-		{
-			"path": "changelog_unreleased/fixed/194.md",
 			"disposition": "instance-state"
 		},
 		{

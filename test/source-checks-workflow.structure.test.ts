@@ -62,11 +62,11 @@ function recordedContexts(label: string, pattern: RegExp): string[] {
 
 const TIER3_CONTEXTS = recordedContexts(
 	"§3.2 tier-3 source-repository",
-	/In this source repository the workflow gates \(([^)]*)\) run as required status checks/,
+	/current unsplit configuration requires the workflow contexts \(([^)]*)\)/,
 );
 const SHAPE_CONTEXTS = recordedContexts(
 	"§4.3 server-config shape",
-	/required-check contexts equal the CI job names \(([^)]*)\)/,
+	/Current source required-check contexts equal the CI job names \(([^)]*)\)/,
 );
 
 /** Every workflow file, comment-stripped, keyed by basename. */
