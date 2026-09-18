@@ -82,10 +82,11 @@ export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBod
  * back, everything else — provision, isolation, bounded return, blind
  * compare — the dispatcher's own (§4.9).
  *
- * This seam also owns the one transport retry (issue #220). It is the
- * caller side of a refusal the dispatcher reports correctly, so it belongs
- * neither in `dispatch/`, which must keep reporting it, nor in `briefs.ts`,
- * which composes semantics and takes no transport act.
+ * This seam also owns #266's one return-protocol retry: only a numeric
+ * exit with a missing return appends the fixed reminder, emits the optional
+ * pre-send fixture event, and spends this call's allowance. The dispatcher
+ * still only reports measured facts, while `briefs.ts` owns wording and
+ * takes no transport act.
  */
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
