@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 422 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 429 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 437 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 542 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 546 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 550 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 562 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 578 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 602 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 616 |
-| &nbsp;&nbsp;§3.11 | Gate design | 630 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 652 |
-| §4 | Substrate and install contract | 662 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 666 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 678 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 686 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 692 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 696 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 700 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 712 |
-| &nbsp;&nbsp;§4.8 | The command layer | 722 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 779 |
-| §5 | Cross-cutting contracts | 898 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 902 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 908 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 912 |
-| &nbsp;&nbsp;§5.4 | Work language | 916 |
-| &nbsp;&nbsp;§5.5 | State boundary | 920 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 928 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 940 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 950 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 958 |
-| §6 | Self-governance milestone | 970 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 981 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 544 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 548 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 564 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 604 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 618 |
+| &nbsp;&nbsp;§3.11 | Gate design | 632 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 654 |
+| §4 | Substrate and install contract | 664 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 668 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 680 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 688 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 694 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 698 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 702 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 714 |
+| &nbsp;&nbsp;§4.8 | The command layer | 724 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 781 |
+| §5 | Cross-cutting contracts | 900 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 904 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 910 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 914 |
+| &nbsp;&nbsp;§5.4 | Work language | 918 |
+| &nbsp;&nbsp;§5.5 | State boundary | 922 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 930 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 942 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 952 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 960 |
+| §6 | Self-governance milestone | 972 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 983 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
