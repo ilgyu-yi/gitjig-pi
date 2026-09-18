@@ -71,7 +71,7 @@ describe("#131 collapsed operator-visible acts", () => {
 			"success, failure, or refusal",
 			"Refusal never borrows success styling or wording",
 			"active-dispatch count",
-			"Merge mode is excluded until the owning §5.6 mode instrument lands",
+			"Phase-3 resolver feeds its resolved merge-mode value and source",
 			"Current issue or PR and workflow phase are excluded",
 			"A UI-less mode makes no status call",
 		])
@@ -261,7 +261,7 @@ describe("#131 persistent session surface", () => {
 		const review = readFileSync(join(root, "gitjig/commands/review.ts"), "utf8");
 		const round = readFileSync(join(root, "gitjig/commands/review-round.ts"), "utf8");
 		assert.ok(entry.includes("registerDispatchTool(pi, repoRoot, stateRoot, sessionSurface)"));
-		assert.ok(entry.includes("registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface)"));
+		assert.ok(entry.includes("registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface, modes)"));
 		assert.ok(commands.includes("registerReviewCommand(pi, repoRoot, stateRoot, surface)"));
 		assert.ok(commands.includes("registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface)"));
 		assert.ok(review.includes("surface,"));
@@ -279,10 +279,10 @@ describe("#131 persistent session surface", () => {
 		surface.dispatchFinished("refusal");
 		surface.attach(ctx);
 		assert.deepEqual(writes, [
-			["gitjig-session", "[dim]delegate idle"],
-			["gitjig-session", "[accent]delegate active (1)"],
-			["gitjig-session", "[warning]delegate refusal"],
-			["gitjig-session", "[dim]delegate idle"],
+			["gitjig-session", "[dim]delegate idle · [dim]merge off (default)"],
+			["gitjig-session", "[accent]delegate active (1) · [dim]merge off (default)"],
+			["gitjig-session", "[warning]delegate refusal · [dim]merge off (default)"],
+			["gitjig-session", "[dim]delegate idle · [dim]merge off (default)"],
 		]);
 	});
 
@@ -382,7 +382,7 @@ describe("#131 persistent session surface", () => {
 				},
 			);
 			assert.ok(entries.some((entry) => entry.type === "gitjig-registration"));
-			assert.equal(statuses.at(-1), "[dim]delegate idle");
+			assert.equal(statuses.at(-1), "[dim]delegate idle · [dim]merge off (default)");
 			const dispatch = tools.find(
 				(tool) =>
 					"renderCall" in tool &&
@@ -391,7 +391,7 @@ describe("#131 persistent session surface", () => {
 			);
 			assert.ok(dispatch, "composition root registered no dispatch tool");
 			await dispatch.execute("refuse", { brief: "x", delegateArgv: [] });
-			assert.equal(statuses.at(-1), "[warning]delegate refusal");
+			assert.equal(statuses.at(-1), "[warning]delegate refusal · [dim]merge off (default)");
 
 			const registrations = entries.filter((entry) => entry.type === "gitjig-registration").length;
 			await sessionStart(

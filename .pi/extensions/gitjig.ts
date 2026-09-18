@@ -22,6 +22,7 @@ import { maybeAdviseBindState } from "./gitjig/bind-state.ts";
 import { registerSpineCommands } from "./gitjig/commands/index.ts";
 import { registerDispatchTool } from "./gitjig/dispatch/index.ts";
 import { locateRepoRoot } from "./gitjig/locate.ts";
+import { recordModeRun, resolveModes } from "./gitjig/modes.ts";
 import { registerPublishTool } from "./gitjig/publish/index.ts";
 import { SessionSurface } from "./gitjig/session-surface.ts";
 import { resolveStateRoot } from "./gitjig/state-root.ts";
@@ -29,6 +30,10 @@ import { resolveStateRoot } from "./gitjig/state-root.ts";
 export default function gitjig(pi: ExtensionAPI) {
 	const repoRoot = locateRepoRoot();
 	const { root: stateRoot, seamActive } = resolveStateRoot();
+	const modes = resolveModes({ argv: process.argv, env: process.env, stateRoot });
+	const modeRecordWritten = recordModeRun(stateRoot, repoRoot, modes);
+	if (!modeRecordWritten)
+		throw new Error("[gitjig] mode run record unavailable: refusing run before command registration");
 
 	// The egress publish boundary (§3.3's egress row): registration is
 	// load-legal; every action the tool takes runs inside its execute.
@@ -38,11 +43,12 @@ export default function gitjig(pi: ExtensionAPI) {
 	// tool call site; every act it takes runs inside its execute. The shared
 	// surface projects only activity and terminal class, never return bytes.
 	const sessionSurface = new SessionSurface();
+	sessionSurface.setMergeMode(modes.mergeMode, modes.mergeSource);
 	registerDispatchTool(pi, repoRoot, stateRoot, sessionSurface);
 
 	// The command spine (§4.8): rung-1 review, review-round, and ship
 	// extension commands; every act they take runs inside a handler.
-	registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface);
+	registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface, modes);
 
 	// Every append outcome of this session, folded: false the moment any
 	// append degrades open. Reported on the registration entry below.
@@ -68,7 +74,14 @@ export default function gitjig(pi: ExtensionAPI) {
 
 	pi.on("session_start", (_event, ctx) => {
 		record("session-start", "session_start received; appending the registration entry");
-		pi.appendEntry("gitjig-registration", { repoRoot, stateRoot, seamActive, auditWritable });
+		pi.appendEntry("gitjig-registration", {
+			repoRoot,
+			stateRoot,
+			seamActive,
+			auditWritable,
+			modes,
+			modeRecordWritten,
+		});
 		sessionSurface.attach(ctx);
 		// Tier-2 bind advisory (§5.2, §5.9): classifies the clone the SESSION
 		// stands in from the configuration git resolves; debounced,

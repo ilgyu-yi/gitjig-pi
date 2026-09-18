@@ -5,9 +5,15 @@
  */
 import { spawn } from "node:child_process";
 import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
+import { runPlatformRead } from "./read.ts";
 
 const TIMEOUT_MS = 10_000;
 const GRACE_MS = 2_000;
+
+/** Bounded output-bearing mutation transport; callers own a closed argv grammar and parse the acknowledgement. */
+export function runPlatformMutation(argv: string[], repoRoot: string): Promise<string | undefined> {
+	return runPlatformRead(argv, repoRoot);
+}
 
 /** Add one lifecycle label through a closed, explicit-host mutation spelling. */
 export function addPlatformIssueLabel(

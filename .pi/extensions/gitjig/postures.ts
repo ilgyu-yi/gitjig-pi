@@ -605,4 +605,64 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"Null is an intentional absence of App authority, never a default identity. The false-block cost is none for ordinary human operation; a later target-owned activation must attest an App before retrying that optional arm.",
 	},
+	{
+		dependency: "mode-resolution-input",
+		failureShape: "a mode source is unreadable, duplicated, conflicting, or outside its closed value set",
+		posture: "closed",
+		justification:
+			"An unknown ceiling cannot authorize landing or autonomous continuation. The false-block cost is merge mode off or decision handoff; repair the named source and start a new run.",
+	},
+	{
+		dependency: "mode-run-record",
+		failureShape: "the repository-keyed run-start mode record cannot be written completely",
+		posture: "closed",
+		justification:
+			"A run whose irreversible ceiling cannot later be established does not start. The false-block cost is the whole Tier-1 run; restore the owner-only state root and retry.",
+	},
+	{
+		dependency: "landing-platform-snapshot",
+		failureShape:
+			"any addressed PR, ruleset, review, context, thread, actor, head, base, or repository fact is absent, stale, malformed, or unreadable",
+		posture: "closed",
+		justification:
+			"A landing consumer never vouches from an incomplete platform snapshot. The false-block cost is delayed optional automation; refresh platform access or the malformed fact and retry while human Tier 3 remains available.",
+	},
+	{
+		dependency: "landing-trusted-engine",
+		failureShape:
+			"the local lifecycle or policy module is absent, unloadable, or differs from the addressed default-branch blob",
+		posture: "closed",
+		justification:
+			"Contributor-head predicates cannot decide landing. The false-block cost is delayed optional automation; restore exact default-branch bytes and retry.",
+	},
+	{
+		dependency: "landing-quorum-ruleset",
+		failureShape: "exactly one active applicable human-approval ruleset with a positive quorum cannot be measured",
+		posture: "closed",
+		justification:
+			"Unmeasurable quorum is never unmet quorum and opens neither route. The false-block cost is all automated landing before Phase 4; install or repair the split ruleset, then retry.",
+	},
+	{
+		dependency: "landing-topology-activation",
+		failureShape:
+			"the committed Phase-4 topology record is absent, malformed, stale, or mismatched to the live split rulesets",
+		posture: "closed",
+		justification:
+			"No discretionary route exists before independently attested split topology. The false-block cost is only the optional escape; Phase 4 owns creating or repairing the record.",
+	},
+	{
+		dependency: "landing-claim-write",
+		failureShape:
+			"a claim comment cannot be written or the complete author-attested claim population cannot be re-read",
+		posture: "closed",
+		justification:
+			"No run may merge without winning the append-only total order. The false-block cost is a permanently consumed escape after a durable claim; reconcile it as refused and create fresh authority.",
+	},
+	{
+		dependency: "landing-merge-outcome",
+		failureShape: "the exact-head merge response or required merge-parent verification is unavailable",
+		posture: "closed",
+		justification:
+			"An unknown platform result is never retried or guessed. The false-block cost is an unverified non-reusable claim; restore reads and reconcile the one attempted outcome.",
+	},
 ];
