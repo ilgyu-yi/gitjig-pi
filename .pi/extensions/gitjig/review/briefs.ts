@@ -89,6 +89,9 @@ export type BriefTiming = { firstReturnSeconds: number; finalReturnSeconds: numb
  */
 export const DEFAULT_TIMING: BriefTiming = { firstReturnSeconds: 900, finalReturnSeconds: 1400 };
 
+export const RETURN_PROTOCOL_RETRY_SUFFIX =
+	"\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.";
+
 /** The caller's fences — what a slot may not raise or propose. */
 export type ReviewFences = {
 	outOfScope: readonly string[];

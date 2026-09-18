@@ -11,10 +11,8 @@ import { DIAGNOSTIC_MESSAGES, type ReturnClass } from "./diagnostics.ts";
 
 export const RETURN_LIMIT_BYTES = 65_536;
 
-/** Compatibility keys remain until #266 removes the old retry consumer. */
 export const REFUSAL_CAUSES = {
 	delegateAbsent: DIAGNOSTIC_MESSAGES.SPAWN_FAILED,
-	failedRun: "dispatch refused: the delegated run reported failure; no return is admitted from a failed run",
 	boundExceeded: DIAGNOSTIC_MESSAGES.TIMED_OUT,
 	aborted: DIAGNOSTIC_MESSAGES.ABORTED,
 	missingReturn: DIAGNOSTIC_MESSAGES.RETURN_MISSING,

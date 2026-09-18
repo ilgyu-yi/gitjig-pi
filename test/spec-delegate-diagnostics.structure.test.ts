@@ -3,6 +3,7 @@ import { lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync } from "
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
+import { RETURN_PROTOCOL_RETRY_SUFFIX } from "../.pi/extensions/gitjig/review/briefs.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const root = repoRoot();
@@ -75,9 +76,6 @@ function panelContract(source: string): void {
 		"A throwing callback is swallowed",
 		"fixture-only assertion seam is not best-effort operational automation",
 		"§5.2's surfaced-signal obligation does not attach",
-		"cause-keyed, identical-brief retry in the current orchestrator is retired",
-		"diagnostic envelope lands first",
-		"activate this paragraph under §5.3",
 	]);
 }
 
@@ -285,6 +283,16 @@ function absorbedDispatcherTokens(paths: readonly string[]): string[] {
 
 describe("Execution #264 contract settlement", () => {
 	it("pins §1.7's bounded per-slot retry and its separation from verdicts and later rounds", () => panelContract(spec));
+	it("locks the shipped retry suffix to §1.7's byte sequence", () => {
+		const panel = section(spec, "### 1.7 The reviewer panel", "### 1.8 Plan contest");
+		const written = /with exactly this suffix: `([^`]*)`/.exec(panel)?.[1];
+		assert.ok(written, "SPEC §1.7 has no written retry suffix to lock");
+		assert.equal(
+			written.replaceAll("\\n", "\n"),
+			RETURN_PROTOCOL_RETRY_SUFFIX,
+			"the shipped retry suffix drifted from SPEC §1.7's byte sequence",
+		);
+	});
 	it("pins §3.10's dispatcher scope, gate-reaching residual, and non-dispatch boundary", () => delegatedContract(spec));
 	it("pins §4.9's exact grammar, messages and rows, and named precedence, surface and bound tokens", () =>
 		layerContract(spec));
@@ -314,7 +322,6 @@ describe("Execution #264 contract settlement", () => {
 				"retry-return-protocol` through model content",
 			],
 			["A throwing callback is swallowed", "A throwing callback refuses the dispatch"],
-			["diagnostic envelope lands first", "orchestrator retry lands first"],
 			[
 				"A valid complete return is admitted on output validity alone regardless of that exit code.",
 				"A valid return is refused after nonzero exit.",

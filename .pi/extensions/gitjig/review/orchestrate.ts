@@ -26,11 +26,16 @@
  * serial loop would only make one round slower.
  */
 import { execFileSync } from "node:child_process";
-import { REFUSAL_CAUSES } from "../dispatch/admit.ts";
 import type { DispatchOutcome, RunDispatchOptions } from "../dispatch/index.ts";
 import { runDispatch } from "../dispatch/index.ts";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
-import { type BriefTiming, composeJudgeBrief, composeReviewerBrief, type ReviewFences } from "./briefs.ts";
+import {
+	type BriefTiming,
+	composeJudgeBrief,
+	composeReviewerBrief,
+	RETURN_PROTOCOL_RETRY_SUFFIX,
+	type ReviewFences,
+} from "./briefs.ts";
 import { slotResultFromDispatch } from "./join.ts";
 import {
 	buildBundle,
@@ -77,10 +82,8 @@ export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBod
  * back, everything else — provision, isolation, bounded return, blind
  * compare — the dispatcher's own (§4.9).
  *
- * This seam also owns the one transport retry (issue #220). It is the
- * caller side of a refusal the dispatcher reports correctly, so it belongs
- * neither in `dispatch/`, which must keep reporting it, nor in `briefs.ts`,
- * which composes semantics and takes no transport act.
+ * This seam owns the review dispatch retry required by SPEC §1.7;
+ * `briefs.ts` owns its caller-composed wording and takes no transport act.
  */
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
@@ -88,26 +91,32 @@ export function makeDispatcher(
 	// running a delegate — a statically-imported runDispatch is a wiring an
 	// arm cannot observe (issue #184).
 	run: (options: RunDispatchOptions) => Promise<DispatchOutcome> = runDispatch,
+	onEvent?: (event: "retry-return-protocol") => void,
 ): (brief: string, expectedHead: string) => Promise<DispatchOutcome> {
 	return async (brief, expectedHead) => {
 		// The held operand is the round's resolved head, never a caller-fixed
 		// ref: provision resolves the expectedRef once per dispatch, so only a
 		// hash already resolved by the round makes every dispatch's pin the
-		// same pin (issue #184). One composed send, reused verbatim by the
-		// retry below — nothing about the dispatch is reassembled for it, so
-		// the second send cannot differ from the first.
-		const send = () => run({ ...options, brief, expectedRef: expectedHead });
-		const first = await send();
-		// Exactly one of §3.10's outcome classes was measured transient: two of
-		// three slots in one round drew the failed-run refusal and both returned
-		// cleanly on an identical re-dispatch (issue #220). The test is the exact
-		// cause, so a delegate-absent, bound-exceeded, missing, malformed or
-		// operand-naming refusal stands on its first answer rather than spending
-		// a second delegate on a fact already decided.
-		if (first.disposition !== "refused" || first.cause !== REFUSAL_CAUSES.failedRun) {
-			return first;
+		// same pin (issue #184).
+		const send = (semanticBrief: string) => run({ ...options, brief: semanticBrief, expectedRef: expectedHead });
+		let retryAvailable = true;
+		let outcome = await send(brief);
+		while (
+			outcome.disposition === "refused" &&
+			outcome.diagnostic.run.class === "exited" &&
+			Number.isInteger(outcome.diagnostic.run.exitCode) &&
+			outcome.diagnostic.return.class === "missing" &&
+			retryAvailable
+		) {
+			retryAvailable = false;
+			try {
+				onEvent?.("retry-return-protocol");
+			} catch {
+				// Fixture-only observation cannot alter the authorized transport act.
+			}
+			outcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);
 		}
-		return send();
+		return outcome;
 	};
 }
 
