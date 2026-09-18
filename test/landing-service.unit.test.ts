@@ -276,6 +276,7 @@ describe("#278 append-only escape claim", () => {
 			escapeCommentId: 4,
 			claimCommentId: 9,
 			consumerRunId: "run-one",
+			writerId: "U_consumer",
 			consumedAt: "2026-01-01T00:00:00Z",
 			outcome: "refused",
 			headSha: HEAD,

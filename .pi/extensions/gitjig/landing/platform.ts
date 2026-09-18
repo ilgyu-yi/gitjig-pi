@@ -95,6 +95,9 @@ export function selectCurrentConsumption(
 		return (
 			currentEscape !== undefined &&
 			engine.admitLandingTerminal(terminal) &&
+			terminalRecord?.writerId === comment.authorId &&
+			typeof comment.authorId === "string" &&
+			authorizedConsumerIds.includes(comment.authorId) &&
 			terminalRecord?.escapeCommentId === currentEscape.commentId &&
 			terminalRecord?.headSha === headSha &&
 			terminalRecord?.baseSha === baseSha
@@ -343,7 +346,8 @@ export async function loadPlatformLanding(
 		commentRecords.map(async (comment) => {
 			if (
 				typeof comment.body !== "string" ||
-				!comment.body.startsWith(engine.RECORD_MARKERS.landingClaim) ||
+				(!comment.body.startsWith(engine.RECORD_MARKERS.landingClaim) &&
+					!comment.body.startsWith(engine.RECORD_MARKERS.landingTerminal)) ||
 				typeof comment.authorId !== "string" ||
 				typeof comment.authorLogin !== "string"
 			)

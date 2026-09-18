@@ -145,6 +145,7 @@ async function writeEscapeTerminal(
 		escapeCommentId: escapeState.commentId,
 		claimCommentId,
 		consumerRunId: input.consumerRunId,
+		writerId: input.consumerId,
 		consumedAt: input.now,
 		outcome,
 		headSha: input.snapshot.headSha,

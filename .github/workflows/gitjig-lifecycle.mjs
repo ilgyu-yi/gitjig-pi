@@ -35,6 +35,7 @@ const LANDING_TERMINAL_KEYS = [
 	"escapeCommentId",
 	"claimCommentId",
 	"consumerRunId",
+	"writerId",
 	"consumedAt",
 	"outcome",
 	"headSha",
@@ -638,6 +639,7 @@ export function admitLandingTerminal(value) {
 		value.escapeCommentId > 0 &&
 		(value.claimCommentId === null || (Number.isSafeInteger(value.claimCommentId) && value.claimCommentId > 0)) &&
 		nonempty(value.consumerRunId) &&
+		nonempty(value.writerId) &&
 		instant(value.consumedAt) &&
 		TERMINAL_ESCAPE_OUTCOMES.has(value.outcome) &&
 		OID.test(value.headSha ?? "") &&
@@ -652,6 +654,7 @@ export function createLandingTerminalPlan(input) {
 		escapeCommentId: input.escapeCommentId,
 		claimCommentId: input.claimCommentId,
 		consumerRunId: input.consumerRunId,
+		writerId: input.writerId,
 		consumedAt: input.consumedAt,
 		outcome: input.outcome,
 		headSha: input.headSha,

@@ -42,6 +42,7 @@ describe("#278 platform snapshot normalization", () => {
 			escapeCommentId: 3,
 			claimCommentId: 8,
 			consumerRunId: "old-run",
+			writerId: "U_one",
 			consumedAt: "2026-01-01T00:00:00Z",
 			outcome: "refused",
 			headSha: "c".repeat(40),
