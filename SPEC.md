@@ -19,53 +19,53 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.5 | Delegated work | 175 |
 | &nbsp;&nbsp;§1.6 | Review integrity | 187 |
 | &nbsp;&nbsp;§1.7 | The reviewer panel | 201 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 229 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 241 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 282 |
-| §2 | Artifact hierarchy and lifecycle | 290 |
-| &nbsp;&nbsp;§2.1 | Issue types | 294 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 307 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 323 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 327 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 344 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 383 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 395 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 405 |
-| §3 | Enforcement-layer architecture | 417 |
-| &nbsp;&nbsp;§3.1 | The constraint | 421 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 428 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 436 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 550 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 554 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 558 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 568 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 593 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 607 |
-| &nbsp;&nbsp;§3.11 | Gate design | 621 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 643 |
-| §4 | Substrate and install contract | 653 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 657 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 669 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 677 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 683 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 687 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 691 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 703 |
-| &nbsp;&nbsp;§4.8 | The command layer | 713 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 770 |
-| §5 | Cross-cutting contracts | 889 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 893 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 899 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 903 |
-| &nbsp;&nbsp;§5.4 | Work language | 907 |
-| &nbsp;&nbsp;§5.5 | State boundary | 911 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 919 |
-| &nbsp;&nbsp;§5.7 | Unattended conduct | 931 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 941 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 949 |
-| §6 | Self-governance milestone | 961 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 972 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 227 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 239 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 280 |
+| §2 | Artifact hierarchy and lifecycle | 288 |
+| &nbsp;&nbsp;§2.1 | Issue types | 292 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 305 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 321 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 325 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 342 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 381 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 393 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 403 |
+| §3 | Enforcement-layer architecture | 415 |
+| &nbsp;&nbsp;§3.1 | The constraint | 419 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 426 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 434 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 548 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 552 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 556 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 566 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 578 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 591 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 605 |
+| &nbsp;&nbsp;§3.11 | Gate design | 619 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 641 |
+| §4 | Substrate and install contract | 651 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 655 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 667 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 675 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 681 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 685 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 689 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 701 |
+| &nbsp;&nbsp;§4.8 | The command layer | 711 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 768 |
+| §5 | Cross-cutting contracts | 887 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 891 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 897 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 901 |
+| &nbsp;&nbsp;§5.4 | Work language | 905 |
+| &nbsp;&nbsp;§5.5 | State boundary | 909 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 917 |
+| &nbsp;&nbsp;§5.7 | Unattended conduct | 929 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 939 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 947 |
+| §6 | Self-governance milestone | 959 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 970 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -219,8 +219,6 @@ Majority vote is the **rejected design**, recorded here so it is not re-proposed
 **The automatic return-protocol redispatch.** One mechanical subcase of that caller act is fixed rather than discretionary: when the dispatcher's first result records a numeric exit and a missing return, the review orchestrator retries exactly once. Every dispatcher call made by the review orchestrator — a required panel slot, a Judge or history-diagnosis call, or a discretionary same-round or later-round redispatch — owns its own boolean retry state, initially `available`, and changes it to `spent` before its one retry; sibling calls never share or replenish it, and it is unrelated to §1.4's per-lineage recovery allowance. The standing brief contract for each such call instructs the delegate to write a short, complete provisional closed-schema return early and overwrite it with the final return before its bound. The retry repeats the same options and pin and the same semantic brief with exactly this suffix: `\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.` Here each written `\n` denotes one U+000A byte sequence in the composed string, so the suffix begins with exactly two newlines. The reminder intentionally repeats that standing instruction because absence of the required file is the sole trigger; the suffix is the only brief change. A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result, and no third send occurs for that call. A separate discretionary redispatch is a new call with its own one-retry bound, so the caller's existing authority to re-dispatch is neither removed nor converted into an unbounded retry inside one call. This automatic act neither supplies a result nor creates a verdict: only the retry's independently valid return can satisfy the consuming panel, Judge, or diagnosis role.
 
 Immediately before the second send, the review orchestrator emits `retry-return-protocol` through the optional in-process event callback it owns. The review-orchestrator fixture consumes that callback to prove one event corresponds to exactly one authorized second send; no production persistence consumer is owed. The event is exactly that fixed literal with no delegate field or prose; it is not a delegate JSON event, audit record, operator trace, tool content, details, or session message. An absent callback is the normal no-instrumentation case. A throwing callback is swallowed and cannot alter either dispatch or its returned outcome. This fixture-only assertion seam is not best-effort operational automation: no production capability degrades, no session surface exists, and §5.2's surfaced-signal obligation does not attach.
-
-This paragraph is a **spec-ahead settlement** on §0.3's terms: the cause-keyed, identical-brief retry in the current orchestrator is retired by this contract and is a tracked code defect under Directive #262, not a second retry that coexists. The dispatcher implementation of §3.10's numeric-exit inspection and §4.9's diagnostic envelope lands first; only then does the derived orchestrator change replace the old call site and activate this paragraph under §5.3. That implementing change removes this status sentence.
 
 **One semantic adjudication point.** With the vote retired, review carries exactly **one** semantic adjudication point for discovered findings: the Judge (§1.9). This is stated rather than left implicit because the retired design distributed judgment across the voters, and a successor that re-adds a semantic step anywhere — a reviewer ruling its own finding valid, a caller filtering the bundle, a second adjudicator after the Judge — reintroduces the multiplicity without the vote that once bounded it.
 

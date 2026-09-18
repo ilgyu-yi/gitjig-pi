@@ -247,7 +247,10 @@ const retryOptions = () => ({ callerRepoRoot: "/r", stateRoot: "/s", delegateArg
  * Every send an arm expects is seeded, and a call past the seeded set throws,
  * so an unbounded-retry mutant reds here rather than hanging the run.
  */
-function retryProbe(outcomes: DispatchOutcome[], onEvent?: (event: string) => void): {
+function retryProbe(
+	outcomes: DispatchOutcome[],
+	onEvent?: (event: string) => void,
+): {
 	seen: RunDispatchOptions[];
 	expected: RunDispatchOptions;
 	dispatch: () => Promise<DispatchOutcome>;
