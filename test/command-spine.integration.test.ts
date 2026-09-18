@@ -118,6 +118,7 @@ const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 /** The expected governed-home multiset — governed commands on their ruled surfaces. */
 const EXPECTED_GOVERNED_ROWS = [
 	"authoring-brief|extension",
+	"land|extension",
 	"review-round|extension",
 	"review|extension",
 	"ship|extension",
@@ -127,7 +128,7 @@ const EXPECTED_GOVERNED_ROWS = [
 function subjectAbsent(arm: string, subject: string): string {
 	return (
 		`${arm}: ${subject} does not resolve, so this arm's subject does not exist to be measured. SPEC ` +
-		`§4.8's worked cases place work-on at .pi/prompts/work-on.md and review/ship as extension commands ` +
+		`§4.8's worked cases place work-on at .pi/prompts/work-on.md and review/ship/land as extension commands ` +
 		`from the gitjig entry`
 	);
 }

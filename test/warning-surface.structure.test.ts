@@ -243,8 +243,12 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// carries a caller or delegate byte.
 			"this.activeDispatches",
 			"this.lastTerminal",
+			// Closed resolver domains and source enum; neither carries actor bytes.
+			"this.mergeMode",
+			"this.mergeSource",
 			// Already-themed composition of the same closed state.
 			"delegate",
+			"mode",
 		],
 	},
 	{

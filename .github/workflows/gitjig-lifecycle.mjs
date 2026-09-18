@@ -11,11 +11,35 @@ export const RECORD_MARKERS = Object.freeze({
 	blockedTerminal: "<!-- lifecycle-blocked-terminal: v1 -->",
 	handoffTerminal: "<!-- lifecycle-handoff-terminal: v1 -->",
 	escapeTerminal: "<!-- lifecycle-escape-terminal: v1 -->",
+	landingClaim: "<!-- lifecycle-landing-claim: v1 -->",
+	landingTerminal: "<!-- lifecycle-landing-terminal: v1 -->",
 });
 
 const OID = /^[0-9a-f]{40}$/;
 const ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const TERMINAL_ESCAPE_OUTCOMES = new Set(["landed", "refused"]);
+const LANDING_CLAIM_KEYS = [
+	"schemaVersion",
+	"escapeCommentId",
+	"replayKey",
+	"consumerRunId",
+	"consumerId",
+	"repositoryId",
+	"pullRequestId",
+	"headSha",
+	"baseSha",
+	"claimedAt",
+];
+const LANDING_TERMINAL_KEYS = [
+	"schemaVersion",
+	"escapeCommentId",
+	"claimCommentId",
+	"consumerRunId",
+	"consumedAt",
+	"outcome",
+	"headSha",
+	"baseSha",
+];
 
 /** @param {any} value @param {string[]} keys */
 function exactObject(value, keys) {
@@ -550,6 +574,93 @@ export function terminateEscapeTransition(input) {
 	return {
 		ok: true,
 		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.escapeTerminal, terminal), "merge:bypass-permitted"),
+	};
+}
+
+/** @param {any} value */
+export function admitLandingClaim(value) {
+	return (
+		exactObject(value, LANDING_CLAIM_KEYS) &&
+		value.schemaVersion === 1 &&
+		Number.isSafeInteger(value.escapeCommentId) &&
+		value.escapeCommentId > 0 &&
+		nonempty(value.replayKey) &&
+		nonempty(value.consumerRunId) &&
+		nonempty(value.consumerId) &&
+		nonempty(value.repositoryId) &&
+		nonempty(value.pullRequestId) &&
+		OID.test(value.headSha ?? "") &&
+		OID.test(value.baseSha ?? "") &&
+		instant(value.claimedAt)
+	);
+}
+
+/** @param {any} input */
+export function createLandingClaim(input) {
+	const claim = {
+		schemaVersion: 1,
+		escapeCommentId: input.escapeCommentId,
+		replayKey: input.replayKey,
+		consumerRunId: input.consumerRunId,
+		consumerId: input.consumerId,
+		repositoryId: input.repositoryId,
+		pullRequestId: input.pullRequestId,
+		headSha: input.headSha,
+		baseSha: input.baseSha,
+		claimedAt: input.claimedAt,
+	};
+	return admitLandingClaim(claim) ? claim : undefined;
+}
+
+/** Lowest platform comment id wins; unattested or unauthorized comments never claim. @param {any[]} comments @param {string} replayKey @param {string[]} authorizedConsumerIds */
+export function landingClaimWinner(comments, replayKey, authorizedConsumerIds) {
+	if (!Array.isArray(comments) || !nonempty(replayKey) || !Array.isArray(authorizedConsumerIds)) return undefined;
+	const admitted = comments.flatMap((comment) => {
+		if (!exactObject(comment, ["id", "authorId", "body"]) || !Number.isSafeInteger(comment.id) || comment.id <= 0)
+			return [];
+		const claim = parseMarkedRecord(comment.body, RECORD_MARKERS.landingClaim);
+		return admitLandingClaim(claim) &&
+			claim.replayKey === replayKey &&
+			claim.consumerId === comment.authorId &&
+			authorizedConsumerIds.includes(comment.authorId)
+			? [{ id: comment.id, claim }]
+			: [];
+	});
+	return admitted.sort((left, right) => left.id - right.id)[0];
+}
+
+/** @param {any} value */
+export function admitLandingTerminal(value) {
+	return (
+		exactObject(value, LANDING_TERMINAL_KEYS) &&
+		value.schemaVersion === 1 &&
+		Number.isSafeInteger(value.escapeCommentId) &&
+		value.escapeCommentId > 0 &&
+		(value.claimCommentId === null || (Number.isSafeInteger(value.claimCommentId) && value.claimCommentId > 0)) &&
+		nonempty(value.consumerRunId) &&
+		instant(value.consumedAt) &&
+		TERMINAL_ESCAPE_OUTCOMES.has(value.outcome) &&
+		OID.test(value.headSha ?? "") &&
+		OID.test(value.baseSha ?? "")
+	);
+}
+
+/** @param {any} input */
+export function createLandingTerminalPlan(input) {
+	const terminal = {
+		schemaVersion: 1,
+		escapeCommentId: input.escapeCommentId,
+		claimCommentId: input.claimCommentId,
+		consumerRunId: input.consumerRunId,
+		consumedAt: input.consumedAt,
+		outcome: input.outcome,
+		headSha: input.headSha,
+		baseSha: input.baseSha,
+	};
+	if (!admitLandingTerminal(terminal)) return { ok: false, arm: "landing-terminal" };
+	return {
+		ok: true,
+		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.landingTerminal, terminal), "merge:bypass-permitted"),
 	};
 }
 

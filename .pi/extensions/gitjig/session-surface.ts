@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { MergeMode, ModeSource } from "./modes.ts";
 
 export type TerminalClass = "success" | "failure" | "refusal";
 
@@ -13,6 +14,8 @@ export class SessionSurface {
 	private ui: StatusUI | undefined;
 	private activeDispatches = 0;
 	private lastTerminal: TerminalClass | undefined;
+	private mergeMode: MergeMode = "off";
+	private mergeSource: ModeSource = "default";
 
 	attach(ctx: Pick<ExtensionContext, "hasUI" | "ui">): void {
 		// A resumed/reloaded session starts with no act owned by this instance.
@@ -29,6 +32,12 @@ export class SessionSurface {
 			// dependency. Leave the projection detached and continue startup.
 			return;
 		}
+		this.refresh();
+	}
+
+	setMergeMode(value: MergeMode, source: ModeSource): void {
+		this.mergeMode = value;
+		this.mergeSource = source;
 		this.refresh();
 	}
 
@@ -56,7 +65,11 @@ export class SessionSurface {
 								this.lastTerminal === "success" ? "success" : this.lastTerminal === "refusal" ? "warning" : "error",
 								`delegate ${this.lastTerminal}`,
 							);
-			this.ui.setStatus("gitjig-session", delegate);
+			const mode = theme.fg(
+				this.mergeMode === "on" ? "warning" : "dim",
+				`merge ${this.mergeMode} (${this.mergeSource})`,
+			);
+			this.ui.setStatus("gitjig-session", `${delegate} · ${mode}`);
 		} catch {
 			// This is an aid (§5.2): a missing or throwing UI degrades to silence
 			// and never changes the dispatch or session-start act it decorates.
