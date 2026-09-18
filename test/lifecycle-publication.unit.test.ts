@@ -52,7 +52,8 @@ describe("#276 Resolver repair lifecycle publication", () => {
 				calls.push("label");
 				return true;
 			},
-			read: async () => "awaiting-author\n",
+			read: async (argv) =>
+				argv.includes(".login") ? "writer" : argv.includes(".role_name") ? "maintain" : "awaiting-author\n",
 		});
 		assert.equal(outcome.ok, true);
 		assert.deepEqual(calls, ["record", "label"]);
@@ -87,7 +88,8 @@ describe("#276 Resolver repair lifecycle publication", () => {
 				return { ok: false, cause: "unexpected" };
 			},
 			mutate: async () => true,
-			read: async () => "awaiting-author\n",
+			read: async (argv) =>
+				argv.includes(".login") ? "writer" : argv.includes(".role_name") ? "maintain" : "awaiting-author\n",
 		});
 		assert.equal(outcome.ok, true);
 		assert.equal(publications, 0);
@@ -108,8 +110,10 @@ describe("#276 Resolver repair lifecycle publication", () => {
 				},
 			}),
 			mutate: async () => false,
-			read: async () => {
-				throw new Error("must not read after failed mutation");
+			read: async (argv) => {
+				if (argv.includes(".login")) return "writer";
+				if (argv.includes(".role_name")) return "maintain";
+				throw new Error("must not read labels after failed mutation");
 			},
 		});
 		assert.deepEqual(outcome, {

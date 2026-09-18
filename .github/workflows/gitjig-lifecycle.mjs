@@ -176,7 +176,7 @@ export function admitAwaitingAuthorTerminal(value) {
 		value.recordCommentId > 0 &&
 		nonempty(value.clearerId) &&
 		instant(value.clearedAt) &&
-		new Set(["pull-synchronize", "issue-author-body-edit", "producer-supersede"]).has(value.cause) &&
+		new Set(["pull-synchronize", "issue-author-body-edit"]).has(value.cause) &&
 		nullableOid(value.subjectHead) &&
 		nullableOid(value.baseHead)
 	);
@@ -462,7 +462,7 @@ export function createEscapeTransition(input) {
 			? authorizedMaintainer(input.authoritySnapshot)
 			: authorizedPolicyProducer(input.authoritySnapshot, input.policy, input.evidence);
 	if (!authority || input.authoritySnapshot?.actorId !== record.producerId)
-		return { ok: false, arm: record.producerKind === "app" ? "policy-unavailable" : "producer-unauthorized" };
+		return { ok: false, arm: "producer-unauthorized" };
 	if (
 		ownBehalfRefusal({
 			producerId: record.producerId,
@@ -472,6 +472,21 @@ export function createEscapeTransition(input) {
 		})
 	)
 		return { ok: false, arm: "own-behalf" };
+	const subject = input.subjectSnapshot;
+	const creationValidity = validateEscapeRecord(record, {
+		carryingCommentAuthorId: input.authoritySnapshot.actorId,
+		livePermission: input.authoritySnapshot.permission,
+		appAttested: record.producerKind === "app",
+		now: input.currentTime,
+		repositoryId: subject?.repositoryId,
+		pullRequestId: subject?.pullRequestId,
+		headSha: subject?.headSha,
+		baseRef: subject?.baseRef,
+		baseSha: subject?.baseSha,
+		labelPresent: true,
+	});
+	if (!creationValidity.ok) return { ok: false, arm: creationValidity.arm };
+	if (input.currentTime !== record.appliedAt) return { ok: false, arm: "clock" };
 	return {
 		ok: true,
 		record,

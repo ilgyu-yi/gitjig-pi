@@ -7,7 +7,7 @@
  * ordered agent capacities under one account.
  */
 import { runPlatformRead } from "../platform/read.ts";
-import { runPlatformMutation } from "../platform/write.ts";
+import { addPlatformIssueLabel } from "../platform/write.ts";
 import { type PublishResult, performPublish } from "../publish/service.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
 import {
@@ -34,7 +34,7 @@ export type ReviewPublicationOutcome = { ok: true; receipt: ReviewPublicationRec
 export interface ResolverPublicationSeams {
 	fetchComments: FetchComments;
 	publishRecord: typeof publishAndRefetchReviewRecord;
-	mutate: typeof runPlatformMutation;
+	mutate: typeof addPlatformIssueLabel;
 	read: typeof runPlatformRead;
 }
 
@@ -47,7 +47,7 @@ export async function publishResolverRepairHandoff(
 	seams: ResolverPublicationSeams = {
 		fetchComments: fetchAttestedReviewComments,
 		publishRecord: publishAndRefetchReviewRecord,
-		mutate: runPlatformMutation,
+		mutate: addPlatformIssueLabel,
 		read: runPlatformRead,
 	},
 ): Promise<ReviewPublicationOutcome> {
@@ -60,6 +60,32 @@ export async function publishResolverRepairHandoff(
 	} catch {
 		return { ok: false, cause: "the handed-over lifecycle engine was unavailable" };
 	}
+	const host = subject.context.repository.host;
+	const repositoryName = subject.context.repository.nameWithOwner;
+	const writerLogin = await seams.read(["api", "--hostname", host, "user", "--jq", ".login"], repoRoot);
+	if (writerLogin === undefined || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(writerLogin))
+		return { ok: false, cause: "the Resolver writer identity was unavailable" };
+	const role = await seams.read(
+		[
+			"api",
+			"--hostname",
+			host,
+			`repos/${repositoryName}/collaborators/${encodeURIComponent(writerLogin)}/permission`,
+			"--jq",
+			".role_name",
+		],
+		repoRoot,
+	);
+	if (
+		!engine.authorizedMaintainer({
+			actorId: subject.writerId,
+			actorType: "User",
+			repositoryId: subject.context.repository.id,
+			addressedRepositoryId: subject.context.repository.id,
+			permission: role?.toUpperCase(),
+		})
+	)
+		return { ok: false, cause: "the Resolver writer lacked current maintainer authority" };
 	const population = await seams.fetchComments(repoRoot, subject.context);
 	if (!population.ok) return { ok: false, cause: "the current lifecycle record population was unavailable" };
 	const trusted = population.comments
@@ -113,16 +139,10 @@ export async function publishResolverRepairHandoff(
 		);
 		if (!published.ok) return published;
 	}
-	const repository = subject.context.repository.nameWithOwner;
-	if (
-		!(await seams.mutate(
-			["issue", "edit", String(pull.number), "--repo", repository, "--add-label", "awaiting-author"],
-			repoRoot,
-		))
-	)
+	if (!(await seams.mutate(host, repositoryName, pull.number, "awaiting-author", repoRoot)))
 		return { ok: false, cause: "the awaiting-author record was durable but its label mutation failed" };
 	const labels = await seams.read(
-		["issue", "view", String(pull.number), "--repo", repository, "--json", "labels", "--jq", ".labels[].name"],
+		["api", "--hostname", host, `repos/${repositoryName}/issues/${pull.number}`, "--jq", ".labels[].name"],
 		repoRoot,
 	);
 	if (labels === undefined || !labels.split("\n").includes("awaiting-author"))

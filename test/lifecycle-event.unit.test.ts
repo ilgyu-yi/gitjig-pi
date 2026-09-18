@@ -44,7 +44,7 @@ function platform() {
 		if (path.startsWith("/pulls/7/reviews")) return state.reviews;
 		if (path === "/issues/8") return state.issue;
 		if (path.includes("/comments?") && method === "GET") return state.comments;
-		if (path.includes("/collaborators/")) return { permission: "maintain" };
+		if (path.includes("/collaborators/")) return { permission: "write", role_name: "maintain" };
 		if (path.endsWith("/comments") && method === "POST") {
 			const body = JSON.parse(String(init.body)).body;
 			const comment = {
@@ -106,15 +106,15 @@ describe("#276 lifecycle event adapter", () => {
 		assert.equal(state.comments.length, 1);
 	});
 
-	it("supersedes distinct eligible producers and terminalizes the current one on a new head", async () => {
+	it("keeps exactly one current producer until the sanctioned new-head clearer", async () => {
 		const { state, api } = platform();
 		state.reviews.push(review("A"), review("B"));
 		await runLifecycleEvent({ event: reviewEvent("A"), repository: REPOSITORY, api, now: () => NOW });
 		await runLifecycleEvent({ event: reviewEvent("B"), repository: REPOSITORY, api, now: () => NOW });
-		assert.equal(state.comments.length, 3);
+		assert.equal(state.comments.length, 1);
 		state.pull.head.sha = OLD;
 		await runLifecycleEvent({ event: syncEvent(), repository: REPOSITORY, api, now: () => NOW });
-		assert.equal(state.comments.length, 4);
+		assert.equal(state.comments.length, 2);
 		assert.equal(state.labels.has("awaiting-author"), false);
 		assert.ok(
 			state.log.indexOf("POST /issues/7/comments") < state.log.lastIndexOf("DELETE /issues/7/labels/awaiting-author"),

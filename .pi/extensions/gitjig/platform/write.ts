@@ -9,8 +9,32 @@ import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 const TIMEOUT_MS = 10_000;
 const GRACE_MS = 2_000;
 
-/** Success means the bounded child exited zero; no output is admitted. */
-export function runPlatformMutation(argv: string[], repoRoot: string): Promise<boolean> {
+/** Add one lifecycle label through a closed, explicit-host mutation spelling. */
+export function addPlatformIssueLabel(
+	host: string,
+	repository: string,
+	issue: number,
+	label: string,
+	repoRoot: string,
+): Promise<boolean> {
+	if (
+		!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(host) ||
+		!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ||
+		!Number.isSafeInteger(issue) ||
+		issue <= 0 ||
+		label !== "awaiting-author"
+	)
+		return Promise.resolve(false);
+	const argv = [
+		"api",
+		"--hostname",
+		host,
+		"--method",
+		"POST",
+		`repos/${repository}/issues/${issue}/labels`,
+		"-f",
+		`labels[]=${label}`,
+	];
 	return new Promise((resolve) => {
 		let settled = false;
 		let terminating = false;

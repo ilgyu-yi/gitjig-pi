@@ -140,7 +140,8 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 	it("keeps session projection downstream of owning mode and lifecycle instruments", () => {
 		requireAll(sessions, [
 			"Merge mode is excluded until the owning §5.6 mode instrument lands",
-			"lifecycle labels and handoff state are excluded until their owning Phase-2 transition service lands",
+			"lifecycle labels and handoff records now have their owning Phase-2 transition service",
+			"remain excluded from this projection until #133 derives the persistent actor-neutral view",
 			"UI-less mode makes no status call",
 		]);
 	});

@@ -745,6 +745,28 @@ describe("review-round production call site", () => {
 		assert.deepEqual(options?.manifest, { state: "present", criteria: ["#212: the round completes"] });
 	});
 
+	it("publishes awaiting-author for a Resolver repair and hands off if that transition refuses", async () => {
+		let calls = 0;
+		const record = repairRecord(HEAD_B);
+		const outcome = await driveReviewRound(
+			spec(),
+			"/unused",
+			seams({
+				runRound: async () => ({ review: record.review, record, recordBody: composeReviewRecord(record) }),
+				publishAwaitingAuthor: async () => {
+					calls += 1;
+					return { ok: false, cause: "injected lifecycle refusal" };
+				},
+			}),
+		);
+		assert.equal(calls, 1);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the durable review record was not confirmed published",
+			reentry: "none",
+		});
+	});
+
 	it("hands off before any dispatch when the subject is unavailable or the clone disagrees", async () => {
 		let ran = 0;
 		const guard = {

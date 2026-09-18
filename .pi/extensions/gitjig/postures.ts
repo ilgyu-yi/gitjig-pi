@@ -509,12 +509,27 @@ export const POSTURES: readonly PostureRow[] = [
 			"Delivery reports no success unless repository, immutable base, draft PR identity, and every atomic change are confirmed exactly.",
 	},
 	{
-		dependency: "lifecycle-awaiting-author-platform-read",
+		dependency: "lifecycle-platform-read",
 		failureShape:
-			"the addressed repository, subject, actor identity, head, permission, clock, or record population is absent, stale, ambiguous, or unmeasurable",
+			"the lifecycle-transitions.yml awaiting-author job cannot read the addressed subject, actor identity, head, live permission, or marker population, or a value is stale, ambiguous, or unmeasurable",
 		posture: "closed",
 		justification:
-			"A lifecycle label without its freshly attested record can falsely claim handoff or escape authority; refusal preserves current state and recovery is to restore the named platform read and replay the idempotent event.",
+			"A lifecycle label without freshly attested identity and record state can falsely claim authority. The arm-specific cost is a delayed transition; restore the named API read, then replay the idempotent event.",
+	},
+	{
+		dependency: "lifecycle-clock-read",
+		failureShape:
+			"current time or a record time is absent, unparsable, stale, or cannot support exact expiry arithmetic",
+		posture: "closed",
+		justification:
+			"Guessing time can honor an expired escape. The false-block cost is a delayed escape examination; restore a readable UTC clock and replay before the record's independently measured expiry.",
+	},
+	{
+		dependency: "lifecycle-repository-binding",
+		failureShape: "a freshly read subject belongs to another repository, a fork, or an absent head repository",
+		posture: "closed",
+		justification:
+			"Mutating an ambiguously addressed subject risks the wrong repository. The false-block cost is no lifecycle transition for that delivery; re-open the change from a same-repository branch or repair the deleted head repository, then deliver a fresh event.",
 	},
 	{
 		dependency: "lifecycle-record-write",
@@ -536,6 +551,6 @@ export const POSTURES: readonly PostureRow[] = [
 		failureShape: "the handed-over engine is absent or unloadable at a workflow or carried Tier-1 call site",
 		posture: "closed",
 		justification:
-			"No copied fallback may become a rival predicate; recovery is to restore the pin-verified handed-over asset and replay the refused transition.",
+			"No copied fallback may become a rival predicate; recovery is to restore the committed handed-over asset from the addressed repository and replay the refused transition.",
 	},
 ];

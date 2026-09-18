@@ -300,6 +300,14 @@ describe("#276 transition service entry points", () => {
 			addressedRepositoryId: "R",
 			permission: "MAINTAIN",
 		},
+		subjectSnapshot: {
+			repositoryId: "R",
+			pullRequestId: "P",
+			headSha: HEAD,
+			baseRef: "main",
+			baseSha: BASE,
+		},
+		currentTime: "2026-09-18T00:00:00.000Z",
 		prAuthorId: "author",
 		beneficiaryIds: [],
 		controlledIdentityIds: [],
@@ -360,8 +368,11 @@ describe("#276 transition service entry points", () => {
 		});
 		assert.equal(
 			createEscapeTransition({ ...escapeInput(), producerKind: "app", producerPermission: null }).arm,
-			"policy-unavailable",
+			"producer-unauthorized",
 		);
+		assert.equal(createEscapeTransition({ ...escapeInput(), headSha: "invalid" }).arm, "record-head");
+		assert.equal(createEscapeTransition({ ...escapeInput(), reason: "" }).arm, "record-value");
+		assert.equal(createEscapeTransition({ ...escapeInput(), producerPermission: "ADMIN" }).arm, "producer-attestation");
 		for (const transition of ["escape-revoke", "escape-invalidate", "escape-expire"]) {
 			const terminal = terminateEscapeTransition({
 				recordCommentId: 3,

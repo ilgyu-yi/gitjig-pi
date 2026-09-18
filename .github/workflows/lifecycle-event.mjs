@@ -4,7 +4,9 @@
 import { readFile } from "node:fs/promises";
 import {
 	admitAwaitingAuthorRecord,
+	authorizedMaintainer,
 	encodeRecord,
+	executeTransitionPlan,
 	inspectAwaitingAuthorPopulation,
 	latestEligibleHumanReviews,
 	parseMarkedRecord,
@@ -80,7 +82,16 @@ async function attestComments(api, comments, subjectKind) {
 			const login = comment.user?.login;
 			if (typeof login !== "string" || login.length === 0) continue;
 			const authority = await api(`/collaborators/${encodeURIComponent(login)}/permission`);
-			if (authority?.permission === "maintain" || authority?.permission === "admin")
+			const permission = typeof authority?.role_name === "string" ? authority.role_name.toUpperCase() : undefined;
+			if (
+				authorizedMaintainer({
+					actorId: comment.user.node_id,
+					actorType: comment.user.type,
+					repositoryId: "addressed-repository",
+					addressedRepositoryId: "addressed-repository",
+					permission,
+				})
+			)
 				admitted.push({ ...common, attested: true });
 		}
 	}
@@ -97,18 +108,20 @@ async function population(api, number, subjectKind) {
 
 /** @param {any} api @param {number} number @param {readonly any[]} plan */
 async function execute(api, number, plan) {
-	for (const operation of plan) {
-		if (operation.kind === "comment")
-			await api(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body: operation.body }) });
-		else if (operation.kind === "add-label")
-			await api(`/issues/${number}/labels`, { method: "POST", body: JSON.stringify({ labels: [operation.label] }) });
-		else if (operation.kind === "remove-label") {
+	await executeTransitionPlan(plan, {
+		comment: async (body) => {
+			await api(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+		},
+		addLabel: async (label) => {
+			await api(`/issues/${number}/labels`, { method: "POST", body: JSON.stringify({ labels: [label] }) });
+		},
+		removeLabel: async (label) => {
 			const labels = await api(`/issues/${number}/labels?per_page=100`);
 			if (!Array.isArray(labels)) throw new Error("lifecycle adapter: label population malformed");
-			if (labels.some((label) => label?.name === operation.label))
-				await api(`/issues/${number}/labels/${encodeURIComponent(operation.label)}`, { method: "DELETE" });
-		}
-	}
+			if (labels.some((candidate) => candidate?.name === label))
+				await api(`/issues/${number}/labels/${encodeURIComponent(label)}`, { method: "DELETE" });
+		},
+	});
 }
 
 /** @param {any} pull @param {any} eventPull @param {string} repository */
@@ -135,26 +148,12 @@ export async function runLifecycleEvent({ event, repository, api, now = () => ne
 		const inspected = await population(api, number, "pull");
 		if (!inspected.ok) throw new Error(`lifecycle adapter: ${inspected.arm}`);
 		const current = inspected.current ?? [];
-		const existing = current.find(
-			({ record }) =>
-				record.producer === candidate.actorId &&
-				record.producerKind === "human-changes-requested" &&
-				record.subjectHead === pull.head.sha,
-		);
+		const existing = current[0];
 		if (existing !== undefined) {
+			if (existing.record.subjectHead !== pull.head.sha || existing.record.baseHead !== pull.base.sha)
+				throw new Error("lifecycle adapter: stale current record requires synchronization");
 			await execute(api, number, [{ kind: "add-label", label: LABEL }]);
 			return;
-		}
-		for (const superseded of current) {
-			const terminal = encodeRecord(RECORD_MARKERS.awaitingAuthorTerminal, {
-				recordCommentId: superseded.comment.id,
-				clearerId: "github-actions[bot]",
-				clearedAt: now(),
-				cause: "producer-supersede",
-				subjectHead: pull.head.sha,
-				baseHead: pull.base.sha,
-			});
-			await execute(api, number, [{ kind: "comment", body: terminal }]);
 		}
 		const body = encodeRecord(RECORD_MARKERS.awaitingAuthor, {
 			producer: candidate.actorId,
