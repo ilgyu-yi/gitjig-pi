@@ -410,18 +410,61 @@ async function fetchPullContext(
 		!Array.isArray(pullValue.closingIssuesReferences)
 	)
 		return undefined;
-	const closingIssues = pullValue.closingIssuesReferences.map((entry) => {
-		if (!object(entry, ["id", "number", "title", "body", "repository"]) || !platformNode(entry.repository))
+	const closingIssues: PlatformIssueSnapshot[] = [];
+	const issueIds = new Set<string>();
+	const issueNumbers = new Set<number>();
+	for (const entry of pullValue.closingIssuesReferences) {
+		if (
+			!object(entry, ["id", "number", "url", "repository"]) ||
+			!text(entry.id) ||
+			!Number.isSafeInteger(entry.number) ||
+			(entry.number as number) <= 0 ||
+			!object(entry.repository, ["id", "name", "owner"]) ||
+			!text(entry.repository.id) ||
+			!text(entry.repository.name) ||
+			!platformNode(entry.repository.owner) ||
+			entry.repository.id !== repositoryIdentity.id ||
+			!exactHttpsUrl(
+				entry.url,
+				repositoryIdentity.host,
+				`/${repositoryIdentity.nameWithOwner}/issues/${String(entry.number)}`,
+			) ||
+			issueIds.has(entry.id) ||
+			issueNumbers.has(entry.number as number)
+		)
 			return undefined;
-		return {
+		const issueValue = await readJson(
+			read,
+			[
+				"issue",
+				"view",
+				String(entry.number),
+				"--repo",
+				[repositoryIdentity.host, repositoryIdentity.nameWithOwner].join("/"),
+				"--json",
+				"id,number,url,title,body",
+			],
+			repoRoot,
+		);
+		if (
+			!object(issueValue, ["id", "number", "url", "title", "body"]) ||
+			issueValue.id !== entry.id ||
+			issueValue.number !== entry.number ||
+			issueValue.url !== entry.url ||
+			typeof issueValue.title !== "string" ||
+			typeof issueValue.body !== "string"
+		)
+			return undefined;
+		issueIds.add(entry.id);
+		issueNumbers.add(entry.number as number);
+		closingIssues.push({
 			id: entry.id,
-			repositoryId: entry.repository.id,
-			number: entry.number,
-			title: entry.title,
-			body: entry.body,
-		};
-	});
-	if (closingIssues.some((entry) => entry === undefined)) return undefined;
+			repositoryId: repositoryIdentity.id,
+			number: entry.number as number,
+			title: issueValue.title,
+			body: issueValue.body,
+		});
+	}
 	return admitPlatformReviewContext({
 		repository: repositoryIdentity,
 		pullRequest: {

@@ -207,6 +207,31 @@ describe("review subject criterion union", () => {
 		);
 	});
 
+	it("fails closed on duplicate locators and locator/read disagreement", async () => {
+		const duplicated = platformResponses([]);
+		const pull = JSON.parse(duplicated[1]) as { closingIssuesReferences: unknown[] };
+		pull.closingIssuesReferences.push(structuredClone(pull.closingIssuesReferences[0]));
+		duplicated[1] = JSON.stringify(pull);
+		assert.equal(await fetchReviewSubject("/repo", 223, async () => duplicated.shift()), undefined);
+
+		const moved = platformResponses([]);
+		const readIssue = JSON.parse(moved[2]) as { url: string };
+		readIssue.url = "https://github.com/owner/repo/issues/999";
+		moved[2] = JSON.stringify(readIssue);
+		assert.equal(await fetchReviewSubject("/repo", 223, async () => moved.shift()), undefined);
+	});
+
+	it("keeps zero closing references as a present empty criterion manifest", async () => {
+		const responses = platformResponses([]);
+		const pull = JSON.parse(responses[1]) as { closingIssuesReferences: unknown[] };
+		pull.closingIssuesReferences = [];
+		responses[1] = JSON.stringify(pull);
+		responses.splice(2, 1);
+		const subject = await fetchReviewSubject("/repo", 223, async () => responses.shift());
+		assert.deepEqual(subject?.criteria, []);
+		assert.deepEqual(subject?.context.pullRequest.closingIssues, []);
+	});
+
 	it("admits a fork pull request while keeping the base and closing issues on the target repository", async () => {
 		const responses = platformResponses(
 			[
