@@ -25,47 +25,47 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | §2 | Artifact hierarchy and lifecycle | 288 |
 | &nbsp;&nbsp;§2.1 | Issue types | 292 |
 | &nbsp;&nbsp;§2.2 | Lifecycle states | 305 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 318 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 322 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 339 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 378 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 392 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 402 |
-| §3 | Enforcement-layer architecture | 414 |
-| &nbsp;&nbsp;§3.1 | The constraint | 418 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 425 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 433 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 538 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 542 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 546 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 558 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 574 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 598 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 612 |
-| &nbsp;&nbsp;§3.11 | Gate design | 626 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 648 |
-| §4 | Substrate and install contract | 658 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 662 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 674 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 682 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 688 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 692 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 696 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 708 |
-| &nbsp;&nbsp;§4.8 | The command layer | 718 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 775 |
-| §5 | Cross-cutting contracts | 894 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 898 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 904 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 908 |
-| &nbsp;&nbsp;§5.4 | Work language | 912 |
-| &nbsp;&nbsp;§5.5 | State boundary | 916 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 924 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 936 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 946 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 954 |
-| §6 | Self-governance milestone | 966 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 977 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 322 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 326 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 343 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 382 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 396 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 406 |
+| §3 | Enforcement-layer architecture | 418 |
+| &nbsp;&nbsp;§3.1 | The constraint | 422 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 429 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 437 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 542 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 546 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 550 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 562 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 578 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 602 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 616 |
+| &nbsp;&nbsp;§3.11 | Gate design | 630 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 652 |
+| §4 | Substrate and install contract | 662 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 666 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 678 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 686 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 692 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 696 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 700 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 712 |
+| &nbsp;&nbsp;§4.8 | The command layer | 722 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 779 |
+| §5 | Cross-cutting contracts | 898 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 902 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 908 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 912 |
+| &nbsp;&nbsp;§5.4 | Work language | 916 |
+| &nbsp;&nbsp;§5.5 | State boundary | 920 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 928 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 940 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 950 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 958 |
+| §6 | Self-governance milestone | 970 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 981 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -145,7 +145,7 @@ The taxonomy value is exactly one of four, and this clause commits to them as th
 
 **The autonomous recovery allowance.** One allowance exists per stable change lineage, not per head, session, clone, mode selection, plan, or re-plan. Its **change key** is mechanically derived by the durable writer from platform-attested immutable identities: repository plus the sorted set of activated closing issues, or repository plus the pull request where no issue exists. A replacement pull request for the same activated issue set therefore reuses the key; the caller never supplies or mints it. A subject with unavailable or ambiguous attested identity hands off rather than receiving a key. A newly activated issue is a new lineage because activation, not an author's relabeling, admits that identity. The writer atomically changes the allowance from `available` to `claimed` **before** any intervention; claim, crash, invalid return, or unavailable actor consumes it, and no later event resets it for that lineage. The acting author cannot write, clear, or satisfy this record.
 
-The closed recovery record carries the derived change key; a tagged basis; both resolved modes and their sources; allowance state `available | claimed | consumed`; selected route; independent actor identity; bounded measurement provenance and result class where present; next gate; and terminal `continue | handoff`. A `history-diagnosis` basis carries triggering review-state identity, taxonomy value, and invalidation; a `finding-escalation` basis carries the effective finding and adjudication identity and invents no invalidation. Missing, unknown, duplicate, or misaligned fields handoff. One allowance admits one route-specific intervention followed by exactly one fresh independent ruling at the gate its basis names. For a history diagnosis, only a fresh NONE returns to ordinary flow under the unchanged execution ceiling; every non-NONE, incomplete, invalid, or unavailable result hands off. A second recovery request hands off.
+The closed recovery record carries the derived change key; a tagged basis; both resolved modes and their sources; allowance state `available | claimed | consumed`; selected route; independent actor identity; bounded measurement provenance and result class where present; next gate; and terminal `continue | handoff`. A `history-diagnosis` basis carries triggering review-state identity, taxonomy value, and invalidation; a `finding-escalation` basis carries the effective finding and adjudication identity and invents no invalidation. Missing, unknown, duplicate, or misaligned fields handoff. One allowance admits one route-specific intervention followed by exactly one fresh independent ruling at the gate its basis names. For a history diagnosis, only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling; every non-NONE, incomplete, invalid, or unavailable result hands off. A second recovery request hands off.
 
 The history-diagnosis route is bounded by taxonomy, while the existing invalidation finding remains its sole re-entry selector. **STAGNATION** runs a mutually blind §1.8-shaped contest over methods, independent of the author and prior planner; its Judge either selects and attests one materially different method or the change hands off. **OSCILLATION** uses the diagnosis only to identify the opposed adjudications — a semantic rereading is not §1.9 new evidence — and independently selects exactly one non-mutating discriminating measurement; only a genuinely new result may support reconsideration by a fresh Judge, otherwise the change hands off. **INDETERMINATE** independently selects and runs one bounded non-mutating measurement and then re-dispatches the history Judge once; measurement itself clears no gate. No admissible candidate, no discriminating measurement, a failed bound, or an unavailable independent actor hands off.
 
@@ -304,14 +304,18 @@ The type of an issue is its label — never inference from prose. The shipped is
 
 ### 2.2 Lifecycle states
 
-Four canonical actor-neutral states and records govern interruption and landing intent. Labels are records of state, never proof of identity, approval, evidence, capability, a passing check, or permission to perform an act.
+Four canonical actor-neutral states and records govern interruption and landing intent. Issue workflow states are encoded as labels; issues are the SSOT and any project-board mirror is derived, never authoritative. Labels are records of state, never proof of identity, approval, evidence, capability, a passing check, or permission to perform an act.
 
 - **`awaiting-author` is an Issue/PR handoff.** Exactly two producers exist: a Resolver `repair` disposition and an eligible-human PR `CHANGES_REQUESTED` review. Human review never contributes to §1.4's Resolver-repair count. The recorded producer kind and producer identity determine the clearer: PR synchronization to any new head clears a PR record; only an Issue body edit by that Issue's author clears an Issue record. A comment, label event, edit by another actor, dismissal, approval, or reopening never clears it. The replacement predicate and identity-aware transition writer are Phase 2 work under #261; the former any-actor comment clearer is removed in this settlement and no temporary writer replaces it.
 - **`blocked` is an Issue/PR condition record.** A valid block carries exactly `{condition,recovery,observedAt,subjectHead,baseHead}`; `condition` states a presently true objective condition and `recovery` states how it becomes false. The Phase-2 transition service owns writers and clearers. Clearing a blocker never activates proposed work: an Active item resumes Active, a Proposed item remains Proposed, and changed directives re-enter their existing activation gate before work resumes.
 - **A handoff is an interruption record, not a durable stop state.** It carries exactly `{cause,recipient,reentry,observedAt,subjectHead,baseHead}`. The component that cannot continue writes it before stopping; repeated observation of the same cause, recipient, re-entry, and heads is idempotent. Re-entry consumes the interruption on the owning gate's terms while the record remains durable history.
 - **`merge:bypass-permitted` is PR-only intent.** It is neither approval nor authority. Its closed escape record and consumption rules are §3.8's; no other lifecycle label can substitute for it.
 
-Exactly two Issue workflow states govern whether work may begin: **Proposed** and **Active**. Every new Issue enters Proposed. Work begins only after a trusted maintainer account has performed a substantive review of the Issue's content and the repository's committed activation rule has accepted that review's passing verdict marker. The marker grammar is closed and occupies the comment's first line: exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`. The first is the only passing token; the second records rejection and leaves the Issue Proposed with findings. A new adjudication mechanism collapses into that grammar rather than minting a third token (§1.6). The automation account is fixed by repository configuration, cannot be the Issue author for that activation, and no label event, project-field edit, or untrusted comment substitutes for the verdict. Activation may be performed through the repository's operator tooling, but the tooling is only the call site; the predicate remains actor and evidence based. Closing completes an Active Issue only after each acceptance criterion is explicitly resolved against evidence; this AC-closeout is a procedural landing gate today (§3.3).
+Exactly two Issue workflow states govern whether work may begin: **Proposed** (`status:proposed`, auto-stamped at filing) and **Active** (no status label). Every new Issue enters Proposed. Work begins only after a trusted maintainer account has performed a substantive review of the Issue's content and the repository's committed activation rule has accepted that review's passing verdict marker. The marker grammar is closed and occupies the comment's first line: exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`. The first is the only passing token; the second records rejection and leaves the Issue Proposed with findings. The substantive review adjudicates the body's claimed authorization case (§1.2): it rules whether the change's contract is normative, checks the precedence rule, confirms a pre-satisfying citation where one is claimed, and, for a new normative contract, confirms the reach-derived settlement mode and records the adjudicated reach in the verdict; any deviation's ground is recorded there too. A new adjudication mechanism collapses into the marker grammar rather than minting a third token (§1.6). The automation account is fixed by repository configuration, cannot be the Issue author for that activation, and no label event, project-field edit, or untrusted comment substitutes for the verdict. Activation may be performed through the repository's operator tooling, but the tooling is only the call site; the predicate remains actor and evidence based.
+
+An Active Issue closes as `completed` only through the flow: a merge closes through `Closes #N`, or a Directive closes through the explicit completion review below; `not planned` is the disposition otherwise. Before a merge closes an Issue, every acceptance criterion is explicitly resolved against evidence in an AC-closeout comment: checked, or marked N/A with a one-line reason. This AC-closeout is a procedural landing gate today (§3.3).
+
+**Upward closure.** The hierarchy closes upward: a merged change's outcome is reflected back onto the tier that scoped it, with a completeness floor that fires regardless of who performed the merge, and with an idempotency key the writer controls — a content marker, never an incidental shared attribute.
 
 An Active Directive not closed by a merge completes only through an explicit **completion review**. Its required evidence artifact is the platform comment from that substantive review: it binds the current Directive body, resolves every stated success signal against platform-resolvable evidence, identifies the reviewing actor through platform-attested identity, and carries the completion verdict at the committed rule's canonical position. Only a passing completion verdict permits the completed close; a rejection leaves the Directive Active with findings. Completion review is per-success-signal evidence sufficiency, never an overall impression. Revising a Directive supersedes its body (§2.5): the prior body is archived as a write-once record in the same act, and the revised body re-enters the same gate as the original activation; no transient lifecycle state is minted for a transition the archive-plus-log already witnesses. These lifecycle rules are procedural today, enforced at review (§2.3); their instruments derive later per §1.2's macro-phase clause.
 
@@ -533,7 +537,7 @@ The second is **§1.1's linkage line**: a body whose FIRST line is exactly that 
 
 *What neither gate establishes* (§3.11's report-only rule). `type-check` checks against the API of a **declared** dependency version, not against the runtime an adopter binds (§4.6), so agreement here is agreement with what the manifest pins and no more; where the manifest's pin and the substrate record's differ, the gate measures the former. `source-style` establishes conformance to a committed configuration, never that the configuration is the right one — a rule the configuration disables is not measured and its absence is visible only in that file.
 
-The placement rule is itself **procedural** (§3.1 rule 1): it binds SPEC authorship, the two rightmost columns of the table above are its only product, and it is enforced at review (§2.3). A misplaced row is a reversible document defect repaired by the next amendment; it never relaxes the guarded class's separately recorded §3.11 backstop obligation or turn a missing backstop into an accepted residual.
+The placement rule is itself **procedural** (§3.1 rule 1): it binds SPEC authorship, the two rightmost columns of the table above are its only product, and it is enforced at review (§2.3). A misplaced row is a reversible document defect repaired by the next amendment; it never relaxes the guarded class's separately recorded §3.11 backstop obligation or turns a missing backstop into an accepted residual.
 
 ### 3.4 Agent-agnosticism of the tiers
 

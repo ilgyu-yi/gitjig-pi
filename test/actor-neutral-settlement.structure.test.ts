@@ -90,9 +90,21 @@ function assertRepairContract(source: string): void {
 	requires(sectionIn(source, "### 0.3 Reading and amendment conventions", "## 1. Work norms"), [
 		"*spec-behind* (code lags a settled section",
 	]);
+	requires(sectionIn(source, "### 1.4 Cross-review repair", "### 1.5 Delegated work"), [
+		"only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling",
+	]);
 	requires(sectionIn(source, "### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc"), [
+		"issues are the SSOT and any project-board mirror is derived, never authoritative",
+		"**Proposed** (`status:proposed`, auto-stamped at filing)",
 		"exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`",
 		"The first is the only passing token",
+		"confirms a pre-satisfying citation where one is claimed",
+		"confirms the reach-derived settlement mode and records the adjudicated reach in the verdict",
+		"closes as `completed` only through the flow",
+		"`not planned` is the disposition otherwise",
+		"**Upward closure.** The hierarchy closes upward",
+		"completeness floor that fires regardless of who performed the merge",
+		"idempotency key the writer controls",
 	]);
 	requires(sectionIn(source, "### 2.6 SSOT change-reach protocol", "### 2.7 Canonical naming"), [
 		"The `change-reach` class is deliberately doorless",
@@ -342,9 +354,39 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "*spec-behind* (code lags a settled section",
 			},
 			{
+				anchor: "only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling",
+				replacement: "only a fresh NONE returns to ordinary flow under an execution ceiling",
+				expected: "only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling",
+			},
+			{
+				anchor: "issues are the SSOT and any project-board mirror is derived, never authoritative",
+				replacement: "issues and the project-board mirror are co-authoritative",
+				expected: "issues are the SSOT and any project-board mirror is derived, never authoritative",
+			},
+			{
+				anchor: "**Proposed** (`status:proposed`, auto-stamped at filing)",
+				replacement: "**Proposed** (auto-stamped at filing)",
+				expected: "**Proposed** (`status:proposed`, auto-stamped at filing)",
+			},
+			{
 				anchor: "exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`",
 				replacement: "exactly `ACTIVATE` or `REJECT`",
 				expected: "exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`",
+			},
+			{
+				anchor: "confirms the reach-derived settlement mode and records the adjudicated reach in the verdict",
+				replacement: "confirms the reach-derived settlement mode",
+				expected: "confirms the reach-derived settlement mode and records the adjudicated reach in the verdict",
+			},
+			{
+				anchor: "`not planned` is the disposition otherwise",
+				replacement: "any other close disposition is accepted",
+				expected: "`not planned` is the disposition otherwise",
+			},
+			{
+				anchor: "**Upward closure.** The hierarchy closes upward",
+				replacement: "**Closure.** The hierarchy may be synchronized upward",
+				expected: "**Upward closure.** The hierarchy closes upward",
 			},
 			{
 				anchor: "The `change-reach` class is deliberately doorless",
