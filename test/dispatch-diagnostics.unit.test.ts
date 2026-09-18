@@ -8,6 +8,7 @@ import { repoRoot } from "./harness/run-pi.ts";
 
 const root = repoRoot();
 const diagnosticsPath = join(root, ".pi/extensions/gitjig/dispatch/diagnostics.ts");
+const indexPath = join(root, ".pi/extensions/gitjig/dispatch/index.ts");
 
 interface AdmitModule {
 	admitReturn(path: string): { admitted: boolean; class: string; cause?: string };
@@ -16,9 +17,19 @@ interface AdmitModule {
 
 interface DiagnosticsModule {
 	DIAGNOSTIC_MESSAGES: Readonly<Record<string, string>>;
+	DIAGNOSTIC_SERIALIZED_LIMIT_BYTES: number;
 	RETURN_CODE_BY_CLASS: Readonly<Record<string, string>>;
 	makeDiagnostic(input: Record<string, unknown>): unknown;
 	serializeDiagnostic(value: unknown): string;
+}
+
+interface IndexModule {
+	DISPATCH_SURFACE_LIMITS: Readonly<Record<string, number>>;
+	boundToolResult(
+		value: { content: Array<{ type: "text"; text: string }>; details: Record<string, unknown> },
+		admitted: boolean,
+		diagnostic: unknown,
+	): { content: Array<{ type: "text"; text: string }>; details: Record<string, unknown> };
 }
 
 async function diagnostics(): Promise<DiagnosticsModule> {
@@ -194,6 +205,48 @@ describe("#267 closed dispatcher diagnostics", () => {
 			code: "ADMITTED",
 		}) as { code: string; status: string; durationMs: number };
 		assert.deepEqual([value.code, value.status, value.durationMs], ["INTERNAL_FAILED", "refused", 0]);
+	});
+
+	it("pins every completed serialization bound and converts each tool-surface breach to INTERNAL_FAILED", async () => {
+		const mod = await diagnostics();
+		const index = (await import(`${pathToFileURL(indexPath).href}?v=${Date.now()}`)) as IndexModule;
+		assert.equal(mod.DIAGNOSTIC_SERIALIZED_LIMIT_BYTES, 1_536);
+		assert.deepEqual(index.DISPATCH_SURFACE_LIMITS, {
+			refusedOutcome: 2_048,
+			admittedOutcome: 524_288,
+			refusedContent: 2_048,
+			admittedContent: 524_288,
+			details: 4_096,
+		});
+		const diagnostic = mod.makeDiagnostic({
+			status: "admitted",
+			phase: "return",
+			run: { class: "exited", exitCode: 0, signal: null },
+			return: { class: "admitted" },
+			compare: { class: "not-requested" },
+			durationMs: 1,
+			code: "ADMITTED",
+		});
+		const cases = [
+			{ admitted: false, content: "x".repeat(2_049), details: {} },
+			{ admitted: true, content: "x".repeat(524_289), details: {} },
+			{ admitted: false, content: "x", details: { padding: "x".repeat(4_097) } },
+			{ admitted: false, content: "x".repeat(500), details: { padding: "x".repeat(1_600) } },
+			{ admitted: true, content: "x".repeat(521_000), details: { padding: "x".repeat(3_900) } },
+		] as const;
+		for (const item of cases) {
+			const bounded = index.boundToolResult(
+				{ content: [{ type: "text", text: item.content }], details: item.details },
+				item.admitted,
+				diagnostic,
+			);
+			const internal = bounded.details.diagnostic as { code?: string; phase?: string };
+			assert.deepEqual(
+				[bounded.details.disposition, internal.code, internal.phase],
+				["refused", "INTERNAL_FAILED", "serialize"],
+			);
+			assert.ok(Buffer.byteLength(JSON.stringify(bounded), "utf8") <= 2_048);
+		}
 	});
 
 	it("serializes the closed grammar in normative key order", async () => {

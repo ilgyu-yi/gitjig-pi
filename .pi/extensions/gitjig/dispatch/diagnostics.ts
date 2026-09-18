@@ -170,8 +170,10 @@ export function makeDiagnostic(input: DiagnosticInput): DispatcherDiagnostic {
 	};
 }
 
+export const DIAGNOSTIC_SERIALIZED_LIMIT_BYTES = 1_536;
+
 export function serializeDiagnostic(value: DispatcherDiagnostic): string {
 	const serialized = JSON.stringify(value);
-	if (Buffer.byteLength(serialized, "utf8") <= 1_536) return serialized;
+	if (Buffer.byteLength(serialized, "utf8") <= DIAGNOSTIC_SERIALIZED_LIMIT_BYTES) return serialized;
 	return JSON.stringify(internalDiagnostic(value.durationMs));
 }

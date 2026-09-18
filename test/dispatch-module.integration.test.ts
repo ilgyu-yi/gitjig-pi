@@ -1470,7 +1470,7 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		}
 	});
 
-	it("converts a post-entry computational exception into INTERNAL_FAILED and cleans up", async () => {
+	it("converts a post-entry computational exception into INTERNAL_FAILED without leaking its text", async () => {
 		const index = await requireModule<IndexModule>("index.ts", "internal-failed");
 		const repo = mintRepo(PAYLOADS);
 		const throwingSignal = Object.defineProperty({}, "aborted", {
@@ -2093,6 +2093,11 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 			!("compare" in result.details),
 			"expectedref-absent: a compare verdict surfaced with no expectedRef — the compare rides only a " +
 				"caller-named expected head (§1.6 via §4.9)",
+		);
+		assert.deepEqual(
+			Object.keys(result.details),
+			["disposition", "ok", "diagnostic"],
+			"expectedref-absent: persisted admitted details carried summary, payload, or another non-contract field",
 		);
 	});
 });

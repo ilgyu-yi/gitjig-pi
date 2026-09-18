@@ -255,7 +255,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const value = diagnostic(code, phase, runClass, returnClass, compareClass, exitCode, signal);
 		record(action, value.message);
 		const outcome: DispatchOutcome = { disposition: "refused", cause: value.message, diagnostic: value };
-		if (surfaceBytes(outcome) <= 2_048) return outcome;
+		if (surfaceBytes(outcome) <= DISPATCH_SURFACE_LIMITS.refusedOutcome) return outcome;
 		const fallback = makeDiagnostic({
 			status: "refused",
 			phase: "serialize",
@@ -414,7 +414,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			// The blind compare (§1.6 via §4.9): validity alone crosses back.
 			outcome.compare = admission.reviewedHead === context.heldHash ? "confirmed" : "invalid";
 		}
-		if (surfaceBytes(outcome) > 524_288) {
+		if (surfaceBytes(outcome) > DISPATCH_SURFACE_LIMITS.admittedOutcome) {
 			return refuse(
 				"refuse-surface-bound",
 				"INTERNAL_FAILED",
@@ -518,6 +518,14 @@ interface DispatchToolResult {
 	details: Record<string, unknown>;
 }
 
+export const DISPATCH_SURFACE_LIMITS = Object.freeze({
+	refusedOutcome: 2_048,
+	admittedOutcome: 524_288,
+	refusedContent: 2_048,
+	admittedContent: 524_288,
+	details: 4_096,
+});
+
 function result(text: string, details: Record<string, unknown>): DispatchToolResult {
 	return { content: [{ type: "text", text }], details };
 }
@@ -546,16 +554,17 @@ function internalSurfaceResult(
 	return result(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic });
 }
 
-function boundToolResult(
+export function boundToolResult(
 	value: DispatchToolResult,
 	admitted: boolean,
 	diagnostic: DispatcherDiagnostic,
 ): DispatchToolResult {
-	const contentLimit = admitted ? 524_288 : 2_048;
+	const outcomeLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedOutcome : DISPATCH_SURFACE_LIMITS.refusedOutcome;
+	const contentLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedContent : DISPATCH_SURFACE_LIMITS.refusedContent;
 	if (
-		surfaceBytes(value) > (admitted ? 524_288 : 2_048) ||
+		surfaceBytes(value) > outcomeLimit ||
 		surfaceBytes(value.content[0]?.text ?? "") > contentLimit ||
-		surfaceBytes(value.details) > 4_096
+		surfaceBytes(value.details) > DISPATCH_SURFACE_LIMITS.details
 	) {
 		return internalSurfaceResult(diagnostic);
 	}
