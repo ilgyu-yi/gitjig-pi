@@ -1429,20 +1429,28 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 			),
 			{ disposition: "admitted" as const, ok: true, summary: "RESULT", compare: "invalid" as const },
 		]) {
-			const probe = retryProbe([outcome]);
+			const events: string[] = [];
+			const probe = retryProbe([outcome], (event) => events.push(event));
 			assert.deepEqual(await probe.dispatch(), outcome);
 			assert.equal(probe.seen.length, 1, `excluded outcome retried: ${JSON.stringify(outcome)}`);
+			assert.deepEqual(events, [], `excluded outcome emitted a retry event: ${JSON.stringify(outcome)}`);
 		}
 		const seen: RunDispatchOptions[] = [];
+		const events: string[] = [];
 		const thrown = new Error("the dispatcher threw");
 		await assert.rejects(
-			orchestrate().makeDispatcher(retryOptions(), (options) => {
-				seen.push(options);
-				return Promise.reject(thrown);
-			})(RETRY_BRIEF, RETRY_HEAD),
+			orchestrate().makeDispatcher(
+				retryOptions(),
+				(options) => {
+					seen.push(options);
+					return Promise.reject(thrown);
+				},
+				(event) => events.push(event),
+			)(RETRY_BRIEF, RETRY_HEAD),
 			(error: unknown) => error === thrown,
 		);
 		assert.equal(seen.length, 1);
+		assert.deepEqual(events, []);
 	});
 
 	it("the round hands the ADMISSION the caller's manifest — a deferrable ruling defers only on the real one", async () => {

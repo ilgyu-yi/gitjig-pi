@@ -20,8 +20,8 @@ const options={callerRepoRoot:"/r",stateRoot:"/s",delegateArgv:["delegate"],expe
 async function run(outcomes){const order=[];const seen=[];let cursor=0;const dispatch=makeDispatcher(options,(actual)=>{order.push("send");seen.push(actual);if(cursor>=outcomes.length) throw new Error("third send");return Promise.resolve(outcomes[cursor++]);},(event)=>order.push(event));const result=await dispatch("brief");return {order,seen,result};}
 let p=await run([missing(0),admitted]);assert.deepEqual(p.order,["send","retry-return-protocol","send"]);assert.equal(p.seen[1].brief,"brief\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.");assert.equal(p.result,admitted);
 p=await run([missing(7),missing(8)]);assert.equal(p.seen.length,2);assert.deepEqual(p.order,["send","retry-return-protocol","send"]);assert.deepEqual(p.result,missing(8));
-p=await run([{disposition:"refused",diagnostic:diagnostic({class:"signaled",exitCode:null,signal:"SIGTERM"},"missing")}]);assert.equal(p.seen.length,1);
-p=await run([{disposition:"refused",diagnostic:diagnostic({class:"exited",exitCode:3,signal:null},"regular")}]);assert.equal(p.seen.length,1);
+p=await run([{disposition:"refused",diagnostic:diagnostic({class:"signaled",exitCode:null,signal:"SIGTERM"},"missing")}]);assert.equal(p.seen.length,1);assert.deepEqual(p.order,["send"]);
+p=await run([{disposition:"refused",diagnostic:diagnostic({class:"exited",exitCode:3,signal:null},"regular")}]);assert.equal(p.seen.length,1);assert.deepEqual(p.order,["send"]);
 `;
 
 function kill(name: string, from: string, to: string): void {
@@ -56,9 +56,14 @@ describe("#266 isolated return-protocol retry mutants", () => {
 		kill("spent-before-send", "retryAvailable = false;", "retryAvailable = true;");
 	});
 
-	it("kills suffix, event identity, and event-order mutants independently", () => {
+	it("kills suffix, event identity, event count, and event-order mutants independently", () => {
 		kill("suffix", "brief + RETURN_PROTOCOL_RETRY_SUFFIX", "brief");
 		kill("event", 'onEvent?.("retry-return-protocol")', 'onEvent?.("retry-return-protocol-changed")');
+		kill(
+			"spurious-event",
+			"\t\treturn outcome;",
+			'\t\tconst emit = onEvent;\n\t\tif (outcome.disposition === "refused" && retryAvailable) {\n\t\t\ttry {\n\t\t\t\temit?.("retry-return-protocol");\n\t\t\t} catch {}\n\t\t}\n\t\treturn outcome;',
+		);
 		kill(
 			"event-order",
 			'onEvent?.("retry-return-protocol");\n\t\t\t} catch {\n\t\t\t\t// Fixture-only observation cannot alter the authorized transport act.\n\t\t\t}\n\t\t\toutcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);',
