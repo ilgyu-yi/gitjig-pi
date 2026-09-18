@@ -43,6 +43,40 @@ function verdict(authorId = "WRITER", id = 1) {
 	return comment("<!-- activation-verdict: pass -->\n\nActivation passed.", authorId, id);
 }
 
+interface ClosingIssueLocator {
+	id: string;
+	number: number;
+	url: string;
+	repository: { id: string; name: string; owner: { id: string; login: string } };
+}
+
+interface IssueRead {
+	id: string;
+	number: number;
+	url: string;
+	title: string;
+	body: string;
+}
+
+function platformComments(issueId = issue.id, issueNumber = issue.number): unknown {
+	return [
+		[
+			{
+				id: 90,
+				body: "<!-- activation-verdict: pass -->\n\nActivation passed.",
+				user: { node_id: "WRITER" },
+				author_association: "OWNER",
+			},
+			{
+				id: 91,
+				body: activationBody([], issueId, issueNumber),
+				user: { node_id: "WRITER" },
+				author_association: "OWNER",
+			},
+		],
+	];
+}
+
 function platformResponses(
 	comments: unknown,
 	currentIssue: PlatformIssueSnapshot = issue,
@@ -78,6 +112,19 @@ function platformResponses(
 		}),
 		JSON.stringify({ node_id: "WRITER" }),
 		JSON.stringify(comments),
+	];
+}
+
+function identityResponses(locators: readonly ClosingIssueLocator[], reads: readonly IssueRead[]): string[] {
+	const base = platformResponses([]);
+	const pull = JSON.parse(base[1]) as { closingIssuesReferences: ClosingIssueLocator[] };
+	pull.closingIssuesReferences = [...structuredClone(locators)];
+	return [
+		base[0],
+		JSON.stringify(pull),
+		...reads.map((entry) => JSON.stringify(entry)),
+		base[3],
+		...locators.map((entry) => JSON.stringify(platformComments(entry.id, entry.number))),
 	];
 }
 
@@ -207,18 +254,75 @@ describe("review subject criterion union", () => {
 		);
 	});
 
-	it("fails closed on duplicate locators and locator/read disagreement", async () => {
-		const duplicated = platformResponses([]);
-		const pull = JSON.parse(duplicated[1]) as { closingIssuesReferences: unknown[] };
-		pull.closingIssuesReferences.push(structuredClone(pull.closingIssuesReferences[0]));
-		duplicated[1] = JSON.stringify(pull);
-		assert.equal(await fetchReviewSubject("/repo", 223, async () => duplicated.shift()), undefined);
+	it("binds every closing-issue locator field to the explicit issue read", async (t) => {
+		const issueUrl = "https://github.com/owner/repo/issues/212";
+		const validLocator: ClosingIssueLocator = {
+			id: issue.id,
+			number: issue.number,
+			url: issueUrl,
+			repository: { id: issue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
+		};
+		const validRead: IssueRead = {
+			id: issue.id,
+			number: issue.number,
+			url: issueUrl,
+			title: issue.title,
+			body: issue.body,
+		};
+		const fetch = async (locators: ClosingIssueLocator[], reads: IssueRead[]) => {
+			const responses = identityResponses(locators, reads);
+			return fetchReviewSubject("/repo", 223, async () => responses.shift());
+		};
 
-		const moved = platformResponses([]);
-		const readIssue = JSON.parse(moved[2]) as { url: string };
-		readIssue.url = "https://github.com/owner/repo/issues/999";
-		moved[2] = JSON.stringify(readIssue);
-		assert.equal(await fetchReviewSubject("/repo", 223, async () => moved.shift()), undefined);
+		assert.notEqual(await fetch([validLocator], [validRead]), undefined, "the bound positive control must admit");
+
+		const cases: { name: string; locators: ClosingIssueLocator[]; reads: IssueRead[] }[] = [
+			{
+				name: "foreign locator repository id",
+				locators: [
+					{
+						...validLocator,
+						repository: { ...validLocator.repository, id: "FOREIGN_REPO" },
+					},
+				],
+				reads: [validRead],
+			},
+			{
+				name: "locator URL moved from the attested repository path",
+				locators: [{ ...validLocator, url: "https://github.com/owner/repo/issues/999" }],
+				reads: [{ ...validRead, url: "https://github.com/owner/repo/issues/999" }],
+			},
+			{
+				name: "repeated locator id",
+				locators: [validLocator, { ...validLocator, number: 213, url: "https://github.com/owner/repo/issues/213" }],
+				reads: [validRead, { ...validRead, number: 213, url: "https://github.com/owner/repo/issues/213" }],
+			},
+			{
+				name: "repeated locator number",
+				locators: [validLocator, { ...validLocator, id: "ISSUE_213" }],
+				reads: [validRead, { ...validRead, id: "ISSUE_213" }],
+			},
+			{
+				name: "issue-read id disagreement",
+				locators: [validLocator],
+				reads: [{ ...validRead, id: "ISSUE_999" }],
+			},
+			{
+				name: "issue-read number disagreement",
+				locators: [validLocator],
+				reads: [{ ...validRead, number: 999 }],
+			},
+			{
+				name: "issue-read URL disagreement",
+				locators: [validLocator],
+				reads: [{ ...validRead, url: "https://github.com/owner/repo/issues/999" }],
+			},
+		];
+		for (const shape of cases) {
+			await t.test(shape.name, async () => {
+				assert.equal(await fetch(shape.locators, shape.reads), undefined);
+			});
+		}
 	});
 
 	it("keeps zero closing references as a present empty criterion manifest", async () => {
