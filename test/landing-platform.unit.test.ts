@@ -54,12 +54,23 @@ describe("#278 platform snapshot normalization", () => {
 			{ id: 6, authorId: "U_one", body: engine.encodeRecord(engine.RECORD_MARKERS.landingClaim, claim(3, "stale")) },
 			{ id: 5, authorId: "U_one", body: terminalBody },
 		];
-		const selected = selectCurrentConsumption(comments, { commentId: 4, replayKey: "current" }, head, base, engine);
+		const selected = selectCurrentConsumption(
+			comments,
+			{ commentId: 4, replayKey: "current" },
+			head,
+			base,
+			["U_one"],
+			engine,
+		);
 		assert.deepEqual(
 			selected.claims.map(({ commentId }) => commentId),
 			[7],
 		);
 		assert.equal(selected.terminalPresent, false);
+		assert.deepEqual(
+			selectCurrentConsumption(comments, { commentId: 4, replayKey: "current" }, head, base, [], engine).claims,
+			[],
+		);
 	});
 
 	it("requires an active ruleset condition to include and not exclude the exact base", () => {
@@ -67,12 +78,13 @@ describe("#278 platform snapshot normalization", () => {
 			target: "branch",
 			conditions: { ref_name: { include, exclude } },
 		});
-		assert.equal(activeRulesetApplies(detail(["~DEFAULT_BRANCH"]), "main"), true);
-		assert.equal(activeRulesetApplies(detail(["refs/heads/main"]), "main"), true);
-		assert.equal(activeRulesetApplies(detail(["refs/heads/other"]), "main"), false);
-		assert.equal(activeRulesetApplies(detail(["~DEFAULT_BRANCH"], ["refs/heads/main"]), "main"), false);
+		assert.equal(activeRulesetApplies(detail(["~DEFAULT_BRANCH"]), "main", "main"), true);
+		assert.equal(activeRulesetApplies(detail(["refs/heads/main"]), "main", "main"), true);
+		assert.equal(activeRulesetApplies(detail(["refs/heads/other"]), "main", "main"), false);
+		assert.equal(activeRulesetApplies(detail(["~DEFAULT_BRANCH"]), "release", "main"), false);
+		assert.equal(activeRulesetApplies(detail(["~DEFAULT_BRANCH"], ["refs/heads/main"]), "main", "main"), false);
 		assert.equal(
-			activeRulesetApplies({ target: "tag", conditions: detail(["~DEFAULT_BRANCH"]).conditions }, "main"),
+			activeRulesetApplies({ target: "tag", conditions: detail(["~DEFAULT_BRANCH"]).conditions }, "main", "main"),
 			false,
 		);
 	});

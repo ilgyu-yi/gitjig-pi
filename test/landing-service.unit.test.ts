@@ -72,15 +72,16 @@ describe("#278 ordinary-first guarded landing", () => {
 			arm(decideLanding("on", snapshot({ quorum: { measurable: false, required: 0, approvals: 0 } }))),
 			"quorum-unmeasurable",
 		);
-		assert.equal(
-			arm(
-				decideLanding(
-					"on",
-					snapshot({ quorum: { measurable: true, required: 1, approvals: 0 }, standingChangesRequested: true }),
+		for (const approvals of [0, 1])
+			assert.equal(
+				arm(
+					decideLanding(
+						"on",
+						snapshot({ quorum: { measurable: true, required: 1, approvals }, standingChangesRequested: true }),
+					),
 				),
-			),
-			"standing-changes-requested",
-		);
+				"standing-changes-requested",
+			);
 		assert.equal(
 			arm(decideLanding("on", snapshot({ quorum: { measurable: true, required: 1, approvals: 0 } }))),
 			"topology-disabled",

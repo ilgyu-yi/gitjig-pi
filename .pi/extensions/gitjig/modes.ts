@@ -33,11 +33,23 @@ function invocationValues(argv: readonly string[], name: string): string[] {
 }
 
 function readState(stateRoot: string): { kind: "absent" | "invalid" | "valid"; value?: Record<string, unknown> } {
+	const path = join(stateRoot, "modes.json");
+	let fd: number | undefined;
 	try {
-		const value: unknown = JSON.parse(readFileSync(join(stateRoot, "modes.json"), "utf8"));
+		fd = openSync(path, constants.O_RDONLY | STATE_PATH_GUARD_FLAGS);
+		const stats = fstatSync(fd);
+		if (sinkRefusal(stats, path) !== undefined || stats.size > 64 * 1024) return { kind: "invalid" };
+		const value: unknown = JSON.parse(readFileSync(fd, "utf8"));
 		return exactObject(value, ["mergeMode", "decisionMode"]) ? { kind: "valid", value } : { kind: "invalid" };
 	} catch (error) {
 		return (error as { code?: string }).code === "ENOENT" ? { kind: "absent" } : { kind: "invalid" };
+	} finally {
+		if (fd !== undefined)
+			try {
+				closeSync(fd);
+			} catch {
+				// Safe resolution already completed; a later run re-measures this source.
+			}
 	}
 }
 

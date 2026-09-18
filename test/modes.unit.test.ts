@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -20,7 +20,9 @@ function root(): string {
 describe("#278 independent total mode resolution", () => {
 	it("resolves each precedence ladder independently", () => {
 		const stateRoot = root();
-		writeFileSync(join(stateRoot, "modes.json"), JSON.stringify({ mergeMode: "on", decisionMode: "autonomous" }));
+		writeFileSync(join(stateRoot, "modes.json"), JSON.stringify({ mergeMode: "on", decisionMode: "autonomous" }), {
+			mode: 0o600,
+		});
 		assert.deepEqual(resolveModes({ argv: [], env: {}, stateRoot }), {
 			mergeMode: "on",
 			mergeSource: "state",
@@ -41,7 +43,7 @@ describe("#278 independent total mode resolution", () => {
 
 	it("names malformed, unknown and duplicate sources and falls only that setting safe", () => {
 		const stateRoot = root();
-		writeFileSync(join(stateRoot, "modes.json"), "not json");
+		writeFileSync(join(stateRoot, "modes.json"), "not json", { mode: 0o600 });
 		const malformed = resolveModes({ argv: [], env: {}, stateRoot });
 		assert.deepEqual(malformed.refusals, ["merge-mode:state-invalid", "decision-mode:state-invalid"]);
 		assert.equal(malformed.mergeMode, "off");
@@ -54,6 +56,21 @@ describe("#278 independent total mode resolution", () => {
 		assert.equal(duplicate.mergeMode, "off");
 		assert.equal(duplicate.decisionMode, "autonomous");
 		assert.deepEqual(duplicate.refusals, ["merge-mode:invocation-conflict"]);
+	});
+
+	it("never follows or admits loose mode-state files", () => {
+		const stateRoot = root();
+		const target = join(stateRoot, "target.json");
+		writeFileSync(target, JSON.stringify({ mergeMode: "on", decisionMode: "autonomous" }), { mode: 0o600 });
+		symlinkSync(target, join(stateRoot, "modes.json"));
+		assert.deepEqual(resolveModes({ argv: [], env: {}, stateRoot }).refusals, [
+			"merge-mode:state-invalid",
+			"decision-mode:state-invalid",
+		]);
+		rmSync(join(stateRoot, "modes.json"));
+		writeFileSync(join(stateRoot, "modes.json"), JSON.stringify({ mergeMode: "on", decisionMode: "autonomous" }));
+		chmodSync(join(stateRoot, "modes.json"), 0o644);
+		assert.equal(resolveModes({ argv: [], env: {}, stateRoot }).mergeMode, "off");
 	});
 
 	it("refuses extension registration when the durable run record is unwritable", () => {

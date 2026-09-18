@@ -27,9 +27,9 @@ export function landingPermission(value: unknown): "ADMIN" | "MAINTAIN" | undefi
 	return role === "admin" ? "ADMIN" : role === "maintain" ? "MAINTAIN" : undefined;
 }
 
-export function activeRulesetApplies(detail: unknown, baseRef: string): boolean {
+export function activeRulesetApplies(detail: unknown, baseRef: string, defaultBranch: string): boolean {
 	const ruleset = record(detail);
-	if (!ruleset || ruleset.target !== "branch") return false;
+	if (!ruleset || ruleset.target !== "branch" || baseRef !== defaultBranch) return false;
 	const ref = record(record(ruleset.conditions)?.ref_name);
 	const include = array(ref?.include);
 	const exclude = array(ref?.exclude);
@@ -68,6 +68,7 @@ export function selectCurrentConsumption(
 	currentEscape: { commentId: number; replayKey: string } | undefined,
 	headSha: string,
 	baseSha: string,
+	authorizedConsumerIds: readonly string[],
 	engine: Pick<LifecycleEngine, "RECORD_MARKERS" | "parseMarkedRecord" | "admitLandingClaim" | "admitLandingTerminal">,
 ): { claims: { commentId: number; consumerRunId: string }[]; terminalPresent: boolean } {
 	const claims = comments
@@ -77,6 +78,8 @@ export function selectCurrentConsumption(
 			return currentEscape !== undefined &&
 				engine.admitLandingClaim(claim) &&
 				claimRecord?.consumerId === comment.authorId &&
+				typeof comment.authorId === "string" &&
+				authorizedConsumerIds.includes(comment.authorId) &&
 				claimRecord?.replayKey === currentEscape.replayKey &&
 				claimRecord?.escapeCommentId === currentEscape.commentId &&
 				claimRecord?.headSha === headSha &&
@@ -220,7 +223,8 @@ export async function loadPlatformLanding(
 			? record(await api(host, repository, repoRoot, `rulesets/${String(items[0]?.id)}`))
 			: undefined;
 	const [humanDetail, coreDetail] = await Promise.all([detailFor(human), detailFor(coreRulesets)]);
-	const applies = (detail: Record<string, unknown> | undefined): boolean => activeRulesetApplies(detail, baseRef);
+	const applies = (detail: Record<string, unknown> | undefined): boolean =>
+		activeRulesetApplies(detail, baseRef, String(repo.default_branch));
 	const rule = (detail: Record<string, unknown> | undefined, type: string) =>
 		array(detail?.rules)
 			.map(record)
@@ -335,7 +339,32 @@ export async function loadPlatformLanding(
 			});
 	}
 	const currentEscape = escapeCandidates.length === 1 ? escapeCandidates[0] : undefined;
-	const consumption = selectCurrentConsumption(comments, currentEscape, headSha, baseSha, engine);
+	const claimAuthorPermissions = await Promise.all(
+		commentRecords.map(async (comment) => {
+			if (
+				typeof comment.body !== "string" ||
+				!comment.body.startsWith(engine.RECORD_MARKERS.landingClaim) ||
+				typeof comment.authorId !== "string" ||
+				typeof comment.authorLogin !== "string"
+			)
+				return undefined;
+			const permission = record(
+				await api(host, repository, repoRoot, `collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
+			);
+			return new Set(["admin", "maintain", "write"]).has(String(permission?.role_name).toLowerCase())
+				? comment.authorId
+				: undefined;
+		}),
+	);
+	const authorizedClaimAuthors = claimAuthorPermissions.filter((value): value is string => value !== undefined);
+	const consumption = selectCurrentConsumption(
+		comments,
+		currentEscape,
+		headSha,
+		baseSha,
+		authorizedClaimAuthors,
+		engine,
+	);
 	const admittedClaims = consumption.claims;
 	const terminalPresent = consumption.terminalPresent;
 	const claimExists = admittedClaims.length > 0;
@@ -359,6 +388,8 @@ export async function loadPlatformLanding(
 			repo.allow_rebase_merge === false &&
 			array(corePullParameters?.allowed_merge_methods).length === 1 &&
 			array(corePullParameters?.allowed_merge_methods)[0] === "merge",
+		// Snapshot head existence is measured above; freshness is re-measured
+		// immediately before the exact-sha merge request by the service.
 		headFresh: true,
 		baseFresh: record(record(baseBranchRaw)?.commit)?.sha === baseSha,
 		history: coreApplies && rule(coreDetail, "non_fast_forward") !== undefined,

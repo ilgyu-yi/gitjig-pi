@@ -93,8 +93,8 @@ export function decideLanding(mode: MergeMode, snapshot: LandingSnapshot): Landi
 	const { quorum } = snapshot;
 	if (!quorum.measurable || !Number.isSafeInteger(quorum.required) || quorum.required <= 0)
 		return { kind: "refused", arm: "quorum-unmeasurable" };
-	if (quorum.approvals >= quorum.required) return { kind: "land", route: "ordinary" };
 	if (snapshot.standingChangesRequested) return { kind: "refused", arm: "standing-changes-requested" };
+	if (quorum.approvals >= quorum.required) return { kind: "land", route: "ordinary" };
 	if (!snapshot.topologyActive) return { kind: "refused", arm: "topology-disabled" };
 	if (snapshot.escape === undefined) return { kind: "refused", arm: "escape-absent" };
 	if (snapshot.escape.alreadyClaimed) return { kind: "refused", arm: "escape-consumed" };
