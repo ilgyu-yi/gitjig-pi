@@ -95,6 +95,40 @@ describe("#276 Resolver repair lifecycle publication", () => {
 		assert.equal(publications, 0);
 	});
 
+	it("reuses a current record from another freshly authorized Resolver", async () => {
+		const existingBody = `<!-- lifecycle-awaiting-author-record: v1 -->\n\n\`\`\`json\n${JSON.stringify({
+			producer: "OTHER",
+			producerKind: "resolver-repair",
+			observedAt: NOW,
+			subjectHead: HEAD,
+			baseHead: BASE,
+		})}\n\`\`\``;
+		let publications = 0;
+		const outcome = await publishResolverRepairHandoff(subject(), "/repo", "/state", () => NOW, {
+			fetchComments: async () => ({
+				ok: true,
+				comments: [
+					{
+						id: 5,
+						authorId: "OTHER",
+						authorLogin: "other",
+						authorType: "User",
+						body: existingBody,
+					},
+				],
+			}),
+			publishRecord: async () => {
+				publications += 1;
+				return { ok: false, cause: "unexpected" };
+			},
+			mutate: async () => true,
+			read: async (argv) =>
+				argv.includes(".login") ? "writer" : argv.includes(".role_name") ? "write" : "awaiting-author\n",
+		});
+		assert.equal(outcome.ok, true);
+		assert.equal(publications, 0);
+	});
+
 	it("preserves a durable record when label mutation fails", async () => {
 		const outcome = await publishResolverRepairHandoff(subject(), "/repo", "/state", () => NOW, {
 			fetchComments: async () => ({ ok: true, comments: [] }),

@@ -57,51 +57,50 @@ async function readReviews(api, number) {
 	}
 }
 
-/** @param {any} api @param {any[]} comments @param {"issue"|"pull"} subjectKind */
-async function attestComments(api, comments, subjectKind) {
-	const admitted = [];
+/** @param {any} api @param {any[]} comments @param {"issue"|"pull"} subjectKind @param {string} repository */
+async function attestComments(api, comments, subjectKind, repository) {
+	const examined = [];
 	for (const comment of comments) {
 		const body = comment?.body;
 		if (typeof body !== "string") continue;
 		const common = { id: comment.id, body, authorId: comment.user?.login };
 		if (body.startsWith(RECORD_MARKERS.awaitingAuthorTerminal)) {
-			if (workflowComment(comment)) admitted.push({ ...common, attested: true });
+			examined.push({ ...common, attested: workflowComment(comment) });
 			continue;
 		}
 		if (!body.startsWith(RECORD_MARKERS.awaitingAuthor)) continue;
 		const record = parseMarkedRecord(body, RECORD_MARKERS.awaitingAuthor);
-		if (!admitAwaitingAuthorRecord(record, subjectKind)) {
-			if (workflowComment(comment)) admitted.push({ ...common, attested: true });
-			continue;
-		}
-		if (record.producerKind === "human-changes-requested" && workflowComment(comment)) {
-			admitted.push({ ...common, attested: true });
-			continue;
-		}
-		if (record.producerKind === "resolver-repair" && record.producer === comment.user?.node_id) {
+		let attested =
+			admitAwaitingAuthorRecord(record, subjectKind) &&
+			record.producerKind === "human-changes-requested" &&
+			workflowComment(comment);
+		if (
+			admitAwaitingAuthorRecord(record, subjectKind) &&
+			record.producerKind === "resolver-repair" &&
+			record.producer === comment.user?.node_id
+		) {
 			const login = comment.user?.login;
-			if (typeof login !== "string" || login.length === 0) continue;
-			const authority = await api(`/collaborators/${encodeURIComponent(login)}/permission`);
-			const permission = typeof authority?.role_name === "string" ? authority.role_name.toUpperCase() : undefined;
-			if (
-				authorizedResolver({
+			if (typeof login === "string" && login.length > 0) {
+				const authority = await api(`/collaborators/${encodeURIComponent(login)}/permission`);
+				const permission = typeof authority?.role_name === "string" ? authority.role_name.toUpperCase() : undefined;
+				attested = authorizedResolver({
 					actorId: comment.user.node_id,
 					actorType: comment.user.type,
-					repositoryId: "addressed-repository",
-					addressedRepositoryId: "addressed-repository",
+					repositoryId: repository,
+					addressedRepositoryId: repository,
 					permission,
-				})
-			)
-				admitted.push({ ...common, attested: true });
+				});
+			}
 		}
+		examined.push({ ...common, attested });
 	}
-	return admitted;
+	return examined;
 }
 
-/** @param {any} api @param {number} number @param {"issue"|"pull"} subjectKind */
-async function population(api, number, subjectKind) {
+/** @param {any} api @param {number} number @param {"issue"|"pull"} subjectKind @param {string} repository */
+async function population(api, number, subjectKind, repository) {
 	return inspectAwaitingAuthorPopulation(
-		await attestComments(api, await readComments(api, number), subjectKind),
+		await attestComments(api, await readComments(api, number), subjectKind, repository),
 		subjectKind,
 	);
 }
@@ -145,7 +144,7 @@ export async function runLifecycleEvent({ event, repository, api, now = () => ne
 		const latest = latestEligibleHumanReviews(reviews, pull.user?.node_id, pull.head?.sha);
 		const candidate = latest.get(event.review?.user?.node_id);
 		if (candidate === undefined || candidate.dismissed || candidate.state !== "CHANGES_REQUESTED") return;
-		const inspected = await population(api, number, "pull");
+		const inspected = await population(api, number, "pull", repository);
 		if (!inspected.ok) throw new Error(`lifecycle adapter: ${inspected.arm}`);
 		const current = inspected.current ?? [];
 		const existing = current[0];
@@ -171,7 +170,7 @@ export async function runLifecycleEvent({ event, repository, api, now = () => ne
 		if (!Number.isSafeInteger(number)) throw new Error("lifecycle adapter: pull request number unavailable");
 		const pull = await api(`/pulls/${number}`);
 		requirePullSubject(pull, event.pull_request, repository);
-		const inspected = await population(api, number, "pull");
+		const inspected = await population(api, number, "pull", repository);
 		if (!inspected.ok && inspected.arm !== "record-ambiguous") throw new Error(`lifecycle adapter: ${inspected.arm}`);
 		const current = inspected.current ?? [];
 		const stale = current.filter(({ record }) => record.subjectHead !== pull.head.sha);
@@ -205,7 +204,7 @@ export async function runLifecycleEvent({ event, repository, api, now = () => ne
 		const authorId = issue.user?.node_id;
 		if (typeof actorId !== "string" || typeof authorId !== "string" || actorId.length === 0 || actorId !== authorId)
 			return;
-		const inspected = await population(api, number, "issue");
+		const inspected = await population(api, number, "issue", repository);
 		if (!inspected.ok && inspected.arm !== "record-ambiguous") throw new Error(`lifecycle adapter: ${inspected.arm}`);
 		const current = inspected.current ?? [];
 		const terminals = current.map((existing) =>

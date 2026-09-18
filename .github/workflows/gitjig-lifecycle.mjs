@@ -54,6 +54,7 @@ export function latestEligibleHumanReviews(reviews, prAuthorId, headSha) {
 			review.actorType !== "User" ||
 			!ASSOCIATIONS.has(review.association) ||
 			!nonempty(review.actorId) ||
+			(!review.dismissed && review.state !== "APPROVED" && review.state !== "CHANGES_REQUESTED") ||
 			review.actorId === prAuthorId ||
 			review.headSha !== headSha ||
 			!instant(review.submittedAt)
@@ -144,8 +145,17 @@ export function authorizedPolicyProducer(snapshot, policy, evidence) {
 	);
 }
 
-/** @param {{producerId:string,prAuthorId:string,beneficiaryIds?:string[],controlledIdentityIds?:string[]}} input */
-export function ownBehalfRefusal({ producerId, prAuthorId, beneficiaryIds = [], controlledIdentityIds = [] }) {
+/** @param {{producerId:string,prAuthorId:string,beneficiaryIds:string[],controlledIdentityIds:string[]}} input */
+export function ownBehalfRefusal({ producerId, prAuthorId, beneficiaryIds, controlledIdentityIds }) {
+	if (
+		!nonempty(producerId) ||
+		!nonempty(prAuthorId) ||
+		!Array.isArray(beneficiaryIds) ||
+		!beneficiaryIds.every(nonempty) ||
+		!Array.isArray(controlledIdentityIds) ||
+		!controlledIdentityIds.every(nonempty)
+	)
+		return true;
 	return producerId === prAuthorId || beneficiaryIds.includes(producerId) || controlledIdentityIds.includes(producerId);
 }
 
@@ -485,6 +495,12 @@ export function createEscapeTransition(input) {
 	)
 		return { ok: false, arm: "own-behalf" };
 	const subject = input.subjectSnapshot;
+	if (
+		!exactObject(subject, ["repositoryId", "pullRequestId", "headSha", "baseRef", "baseSha"]) ||
+		input.authoritySnapshot.repositoryId !== subject.repositoryId ||
+		input.authoritySnapshot.addressedRepositoryId !== subject.repositoryId
+	)
+		return { ok: false, arm: "authority-subject-mismatch" };
 	const creationValidity = validateEscapeRecord(record, {
 		carryingCommentAuthorId: input.authoritySnapshot.actorId,
 		livePermission: input.authoritySnapshot.permission,

@@ -36,6 +36,7 @@ function platform() {
 		labels: new Set<string>(),
 		log: [] as string[],
 		failRemove: false,
+		roleName: "maintain",
 	};
 	const api = async (path: string, init: RequestInit = {}): Promise<unknown> => {
 		const method = init.method ?? "GET";
@@ -44,7 +45,7 @@ function platform() {
 		if (path.startsWith("/pulls/7/reviews")) return state.reviews;
 		if (path === "/issues/8") return state.issue;
 		if (path.includes("/comments?") && method === "GET") return state.comments;
-		if (path.includes("/collaborators/")) return { permission: "write", role_name: "maintain" };
+		if (path.includes("/collaborators/")) return { permission: "write", role_name: state.roleName };
 		if (path.endsWith("/comments") && method === "POST") {
 			const body = JSON.parse(String(init.body)).body;
 			const comment = {
@@ -151,7 +152,7 @@ describe("#276 lifecycle event adapter", () => {
 		assert.equal(state.labels.has("awaiting-author"), false);
 	});
 
-	it("ignores forged comments and refuses malformed bot records", async () => {
+	it("refuses forged comments and malformed bot records", async () => {
 		const { state, api } = platform();
 		state.reviews.push(review());
 		state.comments.push({
@@ -165,10 +166,14 @@ describe("#276 lifecycle event adapter", () => {
 			}),
 			user: { login: "attacker", node_id: "ATTACKER", type: "User" },
 		});
+		await assert.rejects(
+			runLifecycleEvent({ event: reviewEvent(), repository: REPOSITORY, api, now: () => NOW }),
+			/record-unparseable/,
+		);
+		state.comments.length = 0;
 		await runLifecycleEvent({ event: reviewEvent(), repository: REPOSITORY, api, now: () => NOW });
-		assert.equal(state.comments.length, 2);
 		state.comments.push({
-			id: 3,
+			id: 2,
 			body: `${RECORD_MARKERS.awaitingAuthor}\nmalformed`,
 			user: { login: "github-actions[bot]", node_id: "BOT", type: "Bot" },
 		});
@@ -176,6 +181,38 @@ describe("#276 lifecycle event adapter", () => {
 			runLifecycleEvent({ event: reviewEvent(), repository: REPOSITORY, api, now: () => NOW }),
 			/record-unparseable/,
 		);
+	});
+
+	it("preserves an Issue record and label when producer identity is unresolvable", async () => {
+		const { state, api } = platform();
+		state.roleName = "read";
+		state.comments.push({
+			id: 1,
+			body: encodeRecord(RECORD_MARKERS.awaitingAuthor, {
+				producer: "AUTHOR",
+				producerKind: "resolver-repair",
+				observedAt: NOW,
+				subjectHead: null,
+				baseHead: null,
+			}),
+			user: { login: "author", node_id: "AUTHOR", type: "User" },
+		});
+		state.labels.add("awaiting-author");
+		await assert.rejects(
+			runLifecycleEvent({
+				event: {
+					action: "edited",
+					issue: { id: 91, number: 8 },
+					sender: { node_id: "AUTHOR" },
+					changes: { body: { from: "old" } },
+				},
+				repository: REPOSITORY,
+				api,
+			}),
+			/record-unparseable/,
+		);
+		assert.equal(state.comments.length, 1);
+		assert.equal(state.labels.has("awaiting-author"), true);
 	});
 
 	it("clears an Issue only for a body edit by its resolvable author", async () => {

@@ -94,6 +94,18 @@ describe("#276 shared actor predicates", () => {
 		);
 		assert.deepEqual(result, { ok: true, arm: "quorum-satisfied", count: 1, quorum: 1 });
 		assert.equal(eligibleApprovalCount([review()], "author", HEAD, 0).arm, "quorum-unmeasurable");
+		assert.equal(
+			eligibleApprovalCount(
+				[
+					review({ submittedAt: "2026-09-18T10:00:00.000Z" }),
+					review({ state: "COMMENTED", submittedAt: "2026-09-18T11:00:00.000Z" }),
+				],
+				"author",
+				HEAD,
+				1,
+			).ok,
+			true,
+		);
 	});
 
 	it("rejects stale, self, bot, unknown-association, dismissed, and comment-only review shapes", () => {
@@ -196,9 +208,18 @@ describe("#276 shared actor predicates", () => {
 	});
 
 	it("refuses every own-behalf principal", () => {
-		assert.equal(ownBehalfRefusal({ producerId: "x", prAuthorId: "x" }), true);
-		assert.equal(ownBehalfRefusal({ producerId: "x", prAuthorId: "a", beneficiaryIds: ["x"] }), true);
-		assert.equal(ownBehalfRefusal({ producerId: "x", prAuthorId: "a", controlledIdentityIds: ["x"] }), true);
+		assert.equal(
+			ownBehalfRefusal({ producerId: "x", prAuthorId: "x", beneficiaryIds: [], controlledIdentityIds: [] }),
+			true,
+		);
+		assert.equal(
+			ownBehalfRefusal({ producerId: "x", prAuthorId: "a", beneficiaryIds: ["x"], controlledIdentityIds: [] }),
+			true,
+		);
+		assert.equal(
+			ownBehalfRefusal({ producerId: "x", prAuthorId: "a", beneficiaryIds: [], controlledIdentityIds: ["x"] }),
+			true,
+		);
 	});
 });
 
@@ -394,6 +415,19 @@ describe("#276 transition service entry points", () => {
 			ok: false,
 			arm: "own-behalf",
 		});
+		const { prAuthorId: _author, ...missingOwnBehalf } = escapeInput();
+		assert.equal(createEscapeTransition(missingOwnBehalf).arm, "own-behalf");
+		assert.equal(
+			createEscapeTransition({
+				...escapeInput(),
+				authoritySnapshot: {
+					...escapeInput().authoritySnapshot,
+					repositoryId: "FOREIGN",
+					addressedRepositoryId: "FOREIGN",
+				},
+			}).arm,
+			"authority-subject-mismatch",
+		);
 		assert.equal(
 			createEscapeTransition({ ...escapeInput(), producerKind: "app", producerPermission: null }).arm,
 			"producer-unauthorized",

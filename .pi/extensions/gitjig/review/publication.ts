@@ -88,17 +88,51 @@ export async function publishResolverRepairHandoff(
 		return { ok: false, cause: "the Resolver writer lacked current collaborator authority" };
 	const population = await seams.fetchComments(repoRoot, subject.context);
 	if (!population.ok) return { ok: false, cause: "the current lifecycle record population was unavailable" };
-	const trusted = population.comments
-		.filter(
-			(comment) =>
-				comment.authorId === subject.writerId ||
-				(comment.authorLogin === "github-actions[bot]" && comment.authorType === "Bot"),
-		)
-		.map((comment) => ({
+	const trusted: Array<(typeof population.comments)[number] & { authorId: string; attested: boolean }> = [];
+	for (const comment of population.comments) {
+		const terminal = comment.body.startsWith(engine.RECORD_MARKERS.awaitingAuthorTerminal);
+		const awaiting = comment.body.startsWith(engine.RECORD_MARKERS.awaitingAuthor);
+		if (!terminal && !awaiting) continue;
+		const bot = comment.authorLogin === "github-actions[bot]" && comment.authorType === "Bot";
+		let attested = terminal ? bot : false;
+		if (awaiting) {
+			const record = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.awaitingAuthor);
+			if (record?.producerKind === "human-changes-requested") attested = bot;
+			if (
+				record?.producerKind === "resolver-repair" &&
+				record.producer === comment.authorId &&
+				comment.authorType === "User" &&
+				typeof comment.authorLogin === "string"
+			) {
+				const commentRole =
+					comment.authorId === subject.writerId
+						? role
+						: await seams.read(
+								[
+									"api",
+									"--hostname",
+									host,
+									`repos/${repositoryName}/collaborators/${encodeURIComponent(comment.authorLogin)}/permission`,
+									"--jq",
+									".role_name",
+								],
+								repoRoot,
+							);
+				attested = engine.authorizedResolver({
+					actorId: comment.authorId,
+					actorType: comment.authorType,
+					repositoryId: subject.context.repository.id,
+					addressedRepositoryId: subject.context.repository.id,
+					permission: commentRole?.toUpperCase(),
+				});
+			}
+		}
+		trusted.push({
 			...comment,
-			authorId: comment.authorType === "Bot" ? comment.authorLogin : comment.authorId,
-			attested: true,
-		}));
+			authorId: bot ? (comment.authorLogin ?? comment.authorId) : comment.authorId,
+			attested,
+		});
+	}
 	const inspected = engine.inspectAwaitingAuthorPopulation(trusted, "pull");
 	if (!inspected.ok) return { ok: false, cause: "the current lifecycle record population was ambiguous" };
 	const current = inspected.current?.[0];
