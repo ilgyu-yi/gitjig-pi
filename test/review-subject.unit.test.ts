@@ -64,11 +64,17 @@ function platformResponses(
 				{
 					id: currentIssue.id,
 					number: currentIssue.number,
-					title: currentIssue.title,
-					body: currentIssue.body,
-					repository: { id: currentIssue.repositoryId },
+					url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
+					repository: { id: currentIssue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
 				},
 			],
+		}),
+		JSON.stringify({
+			id: currentIssue.id,
+			number: currentIssue.number,
+			url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
+			title: currentIssue.title,
+			body: currentIssue.body,
 		}),
 		JSON.stringify({ node_id: "WRITER" }),
 		JSON.stringify(comments),
@@ -172,7 +178,16 @@ describe("review subject criterion union", () => {
 			"#212: retained criterion",
 			"#212: current-only criterion",
 		]);
-		assert.deepEqual(calls[3], [
+		assert.deepEqual(calls[2], [
+			"issue",
+			"view",
+			"212",
+			"--repo",
+			"github.com/owner/repo",
+			"--json",
+			"id,number,url,title,body",
+		]);
+		assert.deepEqual(calls[4], [
 			"api",
 			"--hostname",
 			"github.com",
