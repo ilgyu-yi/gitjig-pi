@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AC_CLOSEOUT_MARKER } from "../.github/workflows/ac-closeout.mjs";
-import { evaluatePull } from "../.github/workflows/ac-closeout-event.mjs";
+import { evaluatePull, runAcCloseoutEvent } from "../.github/workflows/ac-closeout-event.mjs";
 
 const head = "a".repeat(40);
 const base = "b".repeat(40);
@@ -73,6 +73,42 @@ function seams(runs: CheckRun[] | "unavailable") {
 }
 
 describe("ac-closeout check-run supersession", () => {
+	it("isolates Issue-event fan-out so one failing PR cannot suppress its siblings", async () => {
+		const evaluated: number[] = [];
+		await assert.rejects(
+			runAcCloseoutEvent({
+				event: { issue: { node_id: "ISSUE", number: 282 } },
+				repository: "o/r",
+				api: async (path) => {
+					if (path.startsWith("/pulls?state=open"))
+						return [1, 2].map((number) => ({
+							number,
+							base: { repo: { full_name: "o/r" } },
+							head: { repo: { full_name: "o/r" } },
+						}));
+					throw new Error("unexpected API call");
+				},
+				graphql: async () => ({
+					repository: {
+						pullRequest: {
+							closingIssuesReferences: {
+								nodes: [{ id: "ISSUE", number: 282, body: "" }],
+								pageInfo: { hasNextPage: false, endCursor: null },
+							},
+						},
+					},
+				}),
+				evaluate: async ({ number }) => {
+					evaluated.push(number);
+					if (number === 1) throw new Error("first unavailable");
+					return { ok: false, arm: "evidence-absent" };
+				},
+			}),
+			/ac-closeout: one or more independent PR evaluations failed/,
+		);
+		assert.deepEqual(evaluated, [1, 2]);
+	});
+
 	it("abandons its verdict when a newer-created run owns the head", async () => {
 		const seam = seams([{ id: 11, name: "ac-closeout", status: "in_progress", app: { slug: "github-actions" } }]);
 		assert.deepEqual(

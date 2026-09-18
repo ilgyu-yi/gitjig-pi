@@ -91,6 +91,7 @@ export function newestCheckConclusions(
 	const seenIds = new Set<number>();
 	for (const value of checks) {
 		const check = record(value);
+		if (record(check?.app)?.slug !== "github-actions") continue;
 		if (!check || typeof check.name !== "string" || !Number.isSafeInteger(check.id) || typeof check.status !== "string")
 			return undefined;
 		const id = Number(check.id);

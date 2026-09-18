@@ -38,18 +38,21 @@ async function closingIssues(graphql, owner, name, number) {
 	}
 }
 
-/** @param {Api} api */
-async function openPullNumbers(api) {
-	return (await paged(api, "/pulls?state=open")).map((pull) => pull?.number).filter(Number.isSafeInteger);
+/** @param {Api} api @param {string} repository */
+async function openPullNumbers(api, repository) {
+	return (await paged(api, "/pulls?state=open"))
+		.filter((pull) => pull?.base?.repo?.full_name === repository && pull?.head?.repo?.full_name === repository)
+		.map((pull) => pull?.number)
+		.filter(Number.isSafeInteger);
 }
 
-/** @param {any} event @param {Api} api @param {Graphql} graphql @param {string} owner @param {string} name */
-async function affectedPullNumbers(event, api, graphql, owner, name) {
+/** @param {any} event @param {Api} api @param {Graphql} graphql @param {string} owner @param {string} name @param {string} repository */
+async function affectedPullNumbers(event, api, graphql, owner, name, repository) {
 	if (event.pull_request && Number.isSafeInteger(event.pull_request.number)) return [event.pull_request.number];
 	const issue = event.issue;
 	if (!issue || event.issue?.pull_request || typeof issue.node_id !== "string") return [];
 	const result = [];
-	for (const number of await openPullNumbers(api)) {
+	for (const number of await openPullNumbers(api, repository)) {
 		if ((await closingIssues(graphql, owner, name, number)).some((candidate) => candidate.id === issue.node_id))
 			result.push(number);
 	}
@@ -175,12 +178,20 @@ export async function evaluatePull({ api, graphql, owner, name, repository, numb
 	return result;
 }
 
-/** @param {{event:any,repository:string,api:Api,graphql:Graphql}} input */
-export async function runAcCloseoutEvent({ event, repository, api, graphql }) {
+/** @param {{event:any,repository:string,api:Api,graphql:Graphql,evaluate?:typeof evaluatePull}} input */
+export async function runAcCloseoutEvent({ event, repository, api, graphql, evaluate = evaluatePull }) {
 	const [owner, name] = repository.split("/");
 	if (!owner || !name || `${owner}/${name}` !== repository) throw new Error("ac-closeout: repository malformed");
-	const numbers = await affectedPullNumbers(event, api, graphql, owner, name);
-	for (const number of numbers) await evaluatePull({ api, graphql, owner, name, repository, number });
+	const numbers = await affectedPullNumbers(event, api, graphql, owner, name, repository);
+	let failed = false;
+	for (const number of numbers) {
+		try {
+			await evaluate({ api, graphql, owner, name, repository, number });
+		} catch {
+			failed = true;
+		}
+	}
+	if (failed) throw new Error("ac-closeout: one or more independent PR evaluations failed");
 }
 
 async function main() {

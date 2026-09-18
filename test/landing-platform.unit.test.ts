@@ -15,32 +15,39 @@ import {
 import { gitBlobOid } from "../.pi/extensions/gitjig/landing/provenance.ts";
 
 const repoRoot = join(import.meta.dirname, "..");
+const actionCheck = { app: { slug: "github-actions" } };
 
 describe("#278 platform snapshot normalization", () => {
 	it("selects only the newest-created check and refuses malformed or tied populations", () => {
 		assert.deepEqual(
 			newestCheckConclusions([
-				{ id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
-				{ id: 1, name: "ac-closeout", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
+				{ ...actionCheck, id: 1, name: "ac-closeout", status: "completed", conclusion: "success" },
 			]),
 			new Map([["ac-closeout", { status: "completed", conclusion: "failure" }]]),
 		);
 		assert.equal(
 			newestCheckConclusions([
-				{ id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
-				{ id: 2, name: "ac-closeout", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
+				{ ...actionCheck, id: 2, name: "ac-closeout", status: "completed", conclusion: "success" },
 			]),
 			undefined,
 		);
 		assert.equal(
 			newestCheckConclusions([
-				{ id: 3, name: "suite", status: "completed", conclusion: "success" },
-				{ id: 2, name: "old", status: "completed", conclusion: "success" },
-				{ id: 2, name: "older-duplicate", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 3, name: "suite", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 2, name: "old", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 2, name: "older-duplicate", status: "completed", conclusion: "success" },
 			]),
 			undefined,
 		);
-		assert.equal(newestCheckConclusions([{ name: "ac-closeout", status: "completed" }]), undefined);
+		assert.equal(newestCheckConclusions([{ ...actionCheck, name: "ac-closeout", status: "completed" }]), undefined);
+		assert.deepEqual(
+			newestCheckConclusions([
+				{ id: 99, name: "ac-closeout", status: "completed", conclusion: "success", app: { slug: "other" } },
+			]),
+			new Map(),
+		);
 	});
 
 	it("never upgrades absent or unknown actor types to User", () => {
