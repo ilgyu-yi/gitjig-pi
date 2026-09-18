@@ -1,6 +1,7 @@
 /** Warning-surface roster: EXEMPT — platform bytes enter closed parsers/results and this adapter renders no text. */
 import { join } from "node:path";
 import { runPlatformRead } from "../platform/read.ts";
+import { runPlatformMutation } from "../platform/write.ts";
 import { trustedDefaultBranchBytes } from "./provenance.ts";
 import type { CoreFacts, LandingEffects, LandingSnapshot, LifecycleEngine } from "./service.ts";
 
@@ -27,6 +28,28 @@ export function landingPermission(value: unknown): "ADMIN" | "MAINTAIN" | undefi
 	return role === "admin" ? "ADMIN" : role === "maintain" ? "MAINTAIN" : undefined;
 }
 
+function refPatternMatches(pattern: unknown, subject: string): boolean | undefined {
+	if (pattern === "~ALL") return true;
+	if (typeof pattern !== "string" || pattern.length === 0) return undefined;
+	let expression = "^";
+	for (let index = 0; index < pattern.length; index += 1) {
+		const character = pattern[index];
+		if (character === "*") {
+			if (pattern[index + 1] === "*") {
+				expression += ".*";
+				index += 1;
+			} else expression += "[^/]*";
+		} else if (character === "?") expression += "[^/]";
+		else if (character === "[") return undefined;
+		else expression += character?.replace(/[\\^$+?.()|{}]/g, "\\$&") ?? "";
+	}
+	try {
+		return new RegExp(`${expression}$`, "u").test(subject);
+	} catch {
+		return undefined;
+	}
+}
+
 export function activeRulesetApplies(detail: unknown, baseRef: string, defaultBranch: string): boolean {
 	const ruleset = record(detail);
 	if (!ruleset || ruleset.target !== "branch" || baseRef !== defaultBranch) return false;
@@ -34,11 +57,11 @@ export function activeRulesetApplies(detail: unknown, baseRef: string, defaultBr
 	const include = array(ref?.include);
 	const exclude = array(ref?.exclude);
 	const subject = `refs/heads/${baseRef}`;
-	return (
-		(include.includes("~DEFAULT_BRANCH") || include.includes(subject)) &&
-		!exclude.includes("~DEFAULT_BRANCH") &&
-		!exclude.includes(subject)
-	);
+	const match = (pattern: unknown): boolean | undefined =>
+		pattern === "~DEFAULT_BRANCH" ? baseRef === defaultBranch : refPatternMatches(pattern, subject);
+	const excluded = exclude.map(match);
+	if (excluded.some((value) => value === true || value === undefined)) return false;
+	return include.map(match).some((value) => value === true);
 }
 
 function parse(value: string | undefined): unknown {
@@ -58,9 +81,17 @@ function array(value: unknown): unknown[] {
 	return Array.isArray(value) ? value : [];
 }
 
-async function api(host: string, repository: string, repoRoot: string, endpoint: string): Promise<unknown> {
+export type PlatformRunner = (argv: string[], repoRoot: string) => Promise<string | undefined>;
+
+async function api(
+	host: string,
+	repository: string,
+	repoRoot: string,
+	endpoint: string,
+	runner: PlatformRunner,
+): Promise<unknown> {
 	const path = endpoint === "" ? `repos/${repository}` : `repos/${repository}/${endpoint}`;
-	return parse(await runPlatformRead(["api", "--hostname", host, path], repoRoot));
+	return parse(await runner(["api", "--hostname", host, path], repoRoot));
 }
 
 export function selectCurrentConsumption(
@@ -70,7 +101,7 @@ export function selectCurrentConsumption(
 	baseSha: string,
 	authorizedConsumerIds: readonly string[],
 	engine: Pick<LifecycleEngine, "RECORD_MARKERS" | "parseMarkedRecord" | "admitLandingClaim" | "admitLandingTerminal">,
-): { claims: { commentId: number; consumerRunId: string }[]; terminalPresent: boolean } {
+): { claims: { commentId: number; consumerRunId: string; claimedAt: string }[]; terminalPresent: boolean } {
 	const claims = comments
 		.flatMap((comment) => {
 			const claim = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.landingClaim);
@@ -85,7 +116,13 @@ export function selectCurrentConsumption(
 				claimRecord?.headSha === headSha &&
 				claimRecord?.baseSha === baseSha &&
 				Number.isSafeInteger(comment.id)
-				? [{ commentId: Number(comment.id), consumerRunId: String(claimRecord?.consumerRunId) }]
+				? [
+						{
+							commentId: Number(comment.id),
+							consumerRunId: String(claimRecord?.consumerRunId),
+							claimedAt: String(claimRecord?.claimedAt),
+						},
+					]
 				: [];
 		})
 		.sort((left, right) => left.commentId - right.commentId);
@@ -119,13 +156,12 @@ export async function loadPlatformLanding(
 	prNumber: number,
 	repoRoot: string,
 	_now: string,
+	runner: PlatformRunner = runPlatformRead,
 ): Promise<PlatformLandingLoad> {
 	if (!HOST.test(host) || !REPOSITORY.test(repository) || !Number.isSafeInteger(prNumber) || prNumber <= 0)
 		return { arm: "address-invalid" };
-	const [repoRaw, prRaw] = await Promise.all([
-		api(host, repository, repoRoot, ""),
-		api(host, repository, repoRoot, `pulls/${prNumber}`),
-	]);
+	const repositoryApi = (endpoint: string) => api(host, repository, repoRoot, endpoint, runner);
+	const [repoRaw, prRaw] = await Promise.all([repositoryApi(""), repositoryApi(`pulls/${prNumber}`)]);
 	const repo = record(repoRaw);
 	const pr = record(prRaw);
 	if (!repo || !pr) return { arm: "platform-unreadable" };
@@ -151,13 +187,13 @@ export async function loadPlatformLanding(
 	const threadQuery =
 		"query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}";
 	const [reviewsRaw, commentsRaw, rulesetsRaw, checksRaw, viewerRaw, threadsRaw, baseBranchRaw] = await Promise.all([
-		api(host, repository, repoRoot, `pulls/${prNumber}/reviews?per_page=100`),
-		api(host, repository, repoRoot, `issues/${prNumber}/comments?per_page=100`),
-		api(host, repository, repoRoot, "rulesets?includes_parents=true&per_page=100"),
-		api(host, repository, repoRoot, `commits/${headSha}/check-runs?per_page=100`),
-		parse(await runPlatformRead(["api", "--hostname", host, "user"], repoRoot)),
+		repositoryApi(`pulls/${prNumber}/reviews?per_page=100`),
+		repositoryApi(`issues/${prNumber}/comments?per_page=100`),
+		repositoryApi("rulesets?includes_parents=true&per_page=100"),
+		repositoryApi(`commits/${headSha}/check-runs?per_page=100`),
+		parse(await runner(["api", "--hostname", host, "user"], repoRoot)),
 		parse(
-			await runPlatformRead(
+			await runner(
 				[
 					"api",
 					"--hostname",
@@ -175,7 +211,7 @@ export async function loadPlatformLanding(
 				repoRoot,
 			),
 		),
-		api(host, repository, repoRoot, `branches/${encodeURIComponent(baseRef)}`),
+		repositoryApi(`branches/${encodeURIComponent(baseRef)}`),
 	]);
 
 	if (array(reviewsRaw).length === 100 || array(commentsRaw).length === 100 || array(rulesetsRaw).length === 100)
@@ -184,9 +220,7 @@ export async function loadPlatformLanding(
 		return { arm: "platform-population-incomplete" };
 
 	const content = async (path: string): Promise<Record<string, unknown> | undefined> =>
-		record(
-			await api(host, repository, repoRoot, `contents/${path}?ref=${encodeURIComponent(String(repo.default_branch))}`),
-		);
+		record(await repositoryApi(`contents/${path}?ref=${encodeURIComponent(String(repo.default_branch))}`));
 	const [engineBlob, policyBlob, policyCarrierBlob, topologyBlob] = await Promise.all([
 		content(".github/workflows/gitjig-lifecycle.mjs"),
 		content(".github/workflows/landing-policy.mjs"),
@@ -223,7 +257,7 @@ export async function loadPlatformLanding(
 	const coreRulesets = activeNamed("core-governance");
 	const detailFor = async (items: Record<string, unknown>[]) =>
 		items.length === 1 && Number.isSafeInteger(items[0]?.id)
-			? record(await api(host, repository, repoRoot, `rulesets/${String(items[0]?.id)}`))
+			? record(await repositoryApi(`rulesets/${String(items[0]?.id)}`))
 			: undefined;
 	const [humanDetail, coreDetail] = await Promise.all([detailFor(human), detailFor(coreRulesets)]);
 	const applies = (detail: Record<string, unknown> | undefined): boolean =>
@@ -279,11 +313,10 @@ export async function loadPlatformLanding(
 			dismissed: review?.state === "DISMISSED",
 		};
 	});
-	const approval = engine.eligibleApprovalCount?.(normalizedReviews, authorId, headSha, required) as
-		| { ok: boolean; count?: number }
-		| undefined;
-	const standingChangesRequested = normalizedReviews.some((review) =>
-		engine.eligibleChangesRequested?.(review, authorId, headSha),
+	const approval = engine.eligibleApprovalCount(normalizedReviews, authorId, headSha, required);
+	const latestReviews = engine.latestEligibleHumanReviews(normalizedReviews, authorId, headSha);
+	const standingChangesRequested = [...latestReviews.values()].some(
+		(review) => review.dismissed !== true && review.state === "CHANGES_REQUESTED",
 	);
 	const checkRuns = array(record(checksRaw)?.check_runs).map(record);
 	const successful = new Set(
@@ -317,7 +350,7 @@ export async function loadPlatformLanding(
 		if (escapeRecord === undefined || typeof comment.authorLogin !== "string" || typeof comment.authorId !== "string")
 			continue;
 		const permission = record(
-			await api(host, repository, repoRoot, `collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
+			await repositoryApi(`collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
 		);
 		const context = {
 			carryingCommentAuthorId: comment.authorId,
@@ -353,7 +386,7 @@ export async function loadPlatformLanding(
 			)
 				return undefined;
 			const permission = record(
-				await api(host, repository, repoRoot, `collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
+				await repositoryApi(`collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
 			);
 			return new Set(["admin", "maintain", "write"]).has(String(permission?.role_name).toLowerCase())
 				? comment.authorId
@@ -439,10 +472,13 @@ export function platformLandingEffects(
 	repository: string,
 	prNumber: number,
 	repoRoot: string,
+	runner: PlatformRunner = runPlatformRead,
+	mutationRunner: PlatformRunner = runPlatformMutation,
 ): LandingEffects {
+	const repositoryApi = (endpoint: string) => api(host, repository, repoRoot, endpoint, runner);
 	const post = async (endpoint: string, fields: string[] = []): Promise<unknown> =>
 		parse(
-			await runPlatformRead(
+			await mutationRunner(
 				["api", "--hostname", host, "--method", "POST", `repos/${repository}/${endpoint}`, ...fields],
 				repoRoot,
 			),
@@ -453,7 +489,7 @@ export function platformLandingEffects(
 			return Number(result?.id ?? 0);
 		},
 		removeLabel: async (label) =>
-			(await runPlatformRead(
+			(await mutationRunner(
 				[
 					"api",
 					"--hostname",
@@ -465,7 +501,7 @@ export function platformLandingEffects(
 				repoRoot,
 			)) !== undefined,
 		readClaims: async () => {
-			const raw = array(await api(host, repository, repoRoot, `issues/${prNumber}/comments?per_page=100`));
+			const raw = array(await repositoryApi(`issues/${prNumber}/comments?per_page=100`));
 			if (raw.length === 100) return undefined;
 			const normalized = raw.map((item) => {
 				const comment = record(item);
@@ -483,9 +519,7 @@ export function platformLandingEffects(
 					claimAuthors.set(comment.authorId, comment.authorLogin);
 			const permissions = await Promise.all(
 				[...claimAuthors].map(async ([actorId, login]) => {
-					const permission = record(
-						await api(host, repository, repoRoot, `collaborators/${encodeURIComponent(login)}/permission`),
-					);
+					const permission = record(await repositoryApi(`collaborators/${encodeURIComponent(login)}/permission`));
 					return new Set(["admin", "maintain", "write"]).has(String(permission?.role_name).toLowerCase())
 						? actorId
 						: undefined;
@@ -497,7 +531,7 @@ export function platformLandingEffects(
 			};
 		},
 		rereadHeads: async () => {
-			const value = record(await api(host, repository, repoRoot, `pulls/${prNumber}`));
+			const value = record(await repositoryApi(`pulls/${prNumber}`));
 			const head = record(value?.head);
 			const base = record(value?.base);
 			return typeof head?.sha === "string" && typeof base?.sha === "string"
@@ -507,7 +541,7 @@ export function platformLandingEffects(
 		merge: async (expectedHeadSha) => {
 			const value = record(
 				parse(
-					await runPlatformRead(
+					await mutationRunner(
 						[
 							"api",
 							"--hostname",
@@ -527,14 +561,14 @@ export function platformLandingEffects(
 			return value?.merged === true ? "accepted" : value === undefined ? "unknown" : "rejected";
 		},
 		verifyMerge: async (headSha, baseSha) => {
-			const pull = record(await api(host, repository, repoRoot, `pulls/${prNumber}`));
+			const pull = record(await repositoryApi(`pulls/${prNumber}`));
 			if (!pull || pull.merged !== true || typeof pull.merge_commit_sha !== "string")
 				return pull?.merged === false ? "not-landed" : "unknown";
-			const commit = record(await api(host, repository, repoRoot, `commits/${pull.merge_commit_sha}`));
+			const commit = record(await repositoryApi(`commits/${pull.merge_commit_sha}`));
 			const parents = array(commit?.parents).map(record);
 			if (parents.length !== 2) return "unknown";
 			if (parents[1]?.sha !== headSha) return "unknown";
-			return parents[0]?.sha === baseSha ? "landed" : "unknown";
+			return parents[0]?.sha === baseSha ? "landed" : "landed-base-changed";
 		},
 	};
 }

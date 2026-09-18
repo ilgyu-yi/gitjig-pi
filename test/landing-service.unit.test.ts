@@ -190,7 +190,7 @@ describe("#278 append-only escape claim", () => {
 						record: {},
 						context: {},
 						alreadyClaimed: true,
-						claim: { commentId: 9, consumerRunId: "crashed-run" },
+						claim: { commentId: 9, consumerRunId: "crashed-run", claimedAt: "2025-12-31T23:00:00Z" },
 					},
 				}),
 				consumerId: "U_consumer",
@@ -210,6 +210,39 @@ describe("#278 append-only escape claim", () => {
 		assert.equal(removed, false);
 	});
 
+	it("does not reconcile another consumer's still-live claim", async () => {
+		let comments = 0;
+		const result = await executeGuardedLanding(
+			{
+				mode: "on",
+				snapshot: snapshot({
+					quorum: { measurable: true, required: 1, approvals: 0 },
+					topologyActive: true,
+					escape: {
+						commentId: 4,
+						replayKey: "escape:4",
+						record: {},
+						context: {},
+						alreadyClaimed: true,
+						claim: { commentId: 9, consumerRunId: "live-run", claimedAt: "2026-01-01T00:00:00Z" },
+					},
+				}),
+				consumerId: "U_consumer",
+				now: "2026-01-01T00:01:00Z",
+				engine,
+			},
+			effects({
+				comment: async () => {
+					comments += 1;
+					return 10;
+				},
+				verifyMerge: async () => "not-landed",
+			}),
+		);
+		assert.equal(result.arm, "claim-in-flight");
+		assert.equal(comments, 0);
+	});
+
 	it("reconciles a crash-after-claim without issuing a second merge", async () => {
 		let merges = 0;
 		const result = await executeGuardedLanding(
@@ -224,7 +257,7 @@ describe("#278 append-only escape claim", () => {
 						record: {},
 						context: {},
 						alreadyClaimed: true,
-						claim: { commentId: 9, consumerRunId: "crashed-run" },
+						claim: { commentId: 9, consumerRunId: "crashed-run", claimedAt: "2025-12-31T23:00:00Z" },
 					},
 				}),
 				consumerId: "U_consumer",

@@ -44,7 +44,7 @@ export interface LandingSnapshot {
 		record: unknown;
 		context: unknown;
 		alreadyClaimed: boolean;
-		claim?: { commentId: number; consumerRunId: string };
+		claim?: { commentId: number; consumerRunId: string; claimedAt: string };
 		terminalPresent?: boolean;
 	};
 }
@@ -73,13 +73,17 @@ export interface LifecycleEngine {
 		replayKey: string,
 		authorizedConsumerIds: string[],
 	): { id: number; claim: { consumerRunId: string } } | undefined;
-	eligibleApprovalCount?(
+	eligibleApprovalCount(
 		reviews: unknown[],
 		prAuthorId: string,
 		headSha: string,
 		quorum: number,
 	): { ok: boolean; count?: number };
-	eligibleChangesRequested?(review: unknown, prAuthorId: string, headSha: string): boolean;
+	latestEligibleHumanReviews(
+		reviews: unknown[],
+		prAuthorId: string,
+		headSha: string,
+	): Map<string, { state?: unknown; dismissed?: unknown }>;
 	createLandingTerminalPlan(input: unknown): {
 		ok: boolean;
 		arm?: string;
@@ -107,7 +111,7 @@ export interface LandingEffects {
 	readClaims(): Promise<{ comments: unknown[]; authorizedConsumerIds: string[] } | undefined>;
 	rereadHeads(): Promise<{ headSha: string; baseSha: string } | undefined>;
 	merge(expectedHeadSha: string): Promise<"accepted" | "rejected" | "unknown">;
-	verifyMerge(headSha: string, baseSha: string): Promise<"landed" | "not-landed" | "unknown">;
+	verifyMerge(headSha: string, baseSha: string): Promise<"landed" | "landed-base-changed" | "not-landed" | "unknown">;
 }
 
 export interface LandingExecutionInput {
@@ -174,8 +178,14 @@ export async function executeGuardedLanding(
 		const verified = await effects.verifyMerge(input.snapshot.headSha, input.snapshot.baseSha);
 		if (verified === "unknown")
 			return { outcome: "unverified-outcome", arm: "reconciliation-unverified", consumerRunId };
+		if (
+			verified === "not-landed" &&
+			Number.isFinite(Date.parse(pendingClaim.claimedAt)) &&
+			Date.parse(input.now) - Date.parse(pendingClaim.claimedAt) < 10 * 60 * 1000
+		)
+			return { outcome: "refused", arm: "claim-in-flight", consumerRunId: pendingClaim.consumerRunId };
 		const reconciliationInput = { ...input, consumerRunId: pendingClaim.consumerRunId };
-		const outcome = verified === "landed" ? "landed" : "refused";
+		const outcome = verified === "landed" || verified === "landed-base-changed" ? "landed" : "refused";
 		const recorded = await writeEscapeTerminal(
 			reconciliationInput,
 			effects,
@@ -259,9 +269,17 @@ export async function executeGuardedLanding(
 		const recorded = await writeEscapeTerminal(executionInput, effects, claimCommentId, "landed");
 		return {
 			outcome: "landed",
-			arm: recorded ? decision.route : "landed-terminal-write",
+			arm: recorded
+				? verified === "landed-base-changed"
+					? "landed-base-changed"
+					: decision.route
+				: "landed-terminal-write",
 			consumerRunId,
 		};
 	}
-	return { outcome: "landed", arm: decision.route, consumerRunId };
+	return {
+		outcome: "landed",
+		arm: verified === "landed-base-changed" ? "landed-base-changed" : decision.route,
+		consumerRunId,
+	};
 }
