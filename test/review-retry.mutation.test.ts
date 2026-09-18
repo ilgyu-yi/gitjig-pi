@@ -19,7 +19,7 @@ const admitted={disposition:"admitted",result:{ok:true,output:"{}",summary:"ok"}
 const options={callerRepoRoot:"/r",stateRoot:"/s",delegateArgv:["delegate"],expectedRef:"abc",timeoutMs:10};
 async function run(outcomes){const order=[];const seen=[];let cursor=0;const dispatch=makeDispatcher(options,(actual)=>{order.push("send");seen.push(actual);if(cursor>=outcomes.length) throw new Error("third send");return Promise.resolve(outcomes[cursor++]);},(event)=>order.push(event));const result=await dispatch("brief");return {order,seen,result};}
 let p=await run([missing(0),admitted]);assert.deepEqual(p.order,["send","retry-return-protocol","send"]);assert.equal(p.seen[1].brief,"brief\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.");assert.equal(p.result,admitted);
-p=await run([missing(7),missing(8)]);assert.equal(p.seen.length,2);assert.deepEqual(p.order,["send","retry-return-protocol","send"]);
+p=await run([missing(7),missing(8)]);assert.equal(p.seen.length,2);assert.deepEqual(p.order,["send","retry-return-protocol","send"]);assert.deepEqual(p.result,missing(8));
 p=await run([{disposition:"refused",diagnostic:diagnostic({class:"signaled",exitCode:null,signal:"SIGTERM"},"missing")}]);assert.equal(p.seen.length,1);
 p=await run([{disposition:"refused",diagnostic:diagnostic({class:"exited",exitCode:3,signal:null},"regular")}]);assert.equal(p.seen.length,1);
 `;

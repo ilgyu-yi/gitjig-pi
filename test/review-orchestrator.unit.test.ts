@@ -1394,8 +1394,8 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.deepEqual(await probe.dispatch(), firstRecovery);
 		assert.deepEqual(await probe.dispatch(), secondRecovery);
 		assert.equal(probe.seen.length, 4);
-		const persistent = retryProbe([missingReturn(0), missingReturn(0)]);
-		assert.deepEqual(await persistent.dispatch(), missingReturn(0));
+		const persistent = retryProbe([missingReturn(0), missingReturn(17)]);
+		assert.deepEqual(await persistent.dispatch(), missingReturn(17));
 		assert.equal(persistent.seen.length, 2, "a second missing return drew a third send");
 	});
 
