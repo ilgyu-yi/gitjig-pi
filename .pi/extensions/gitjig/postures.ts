@@ -508,4 +508,34 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"Delivery reports no success unless repository, immutable base, draft PR identity, and every atomic change are confirmed exactly.",
 	},
+	{
+		dependency: "lifecycle-awaiting-author-platform-read",
+		failureShape:
+			"the addressed repository, subject, actor identity, head, permission, clock, or record population is absent, stale, ambiguous, or unmeasurable",
+		posture: "closed",
+		justification:
+			"A lifecycle label without its freshly attested record can falsely claim handoff or escape authority; refusal preserves current state and recovery is to restore the named platform read and replay the idempotent event.",
+	},
+	{
+		dependency: "lifecycle-record-write",
+		failureShape:
+			"the authoritative platform comment cannot be written or re-read before the corresponding label mutation",
+		posture: "closed",
+		justification:
+			"Record-before-label ordering prevents label-only authority; the false-block cost is delayed transition and recovery is replay after platform comment writes recover.",
+	},
+	{
+		dependency: "lifecycle-label-mutation",
+		failureShape: "the record is durable but the following lifecycle-label add or remove fails",
+		posture: "closed",
+		justification:
+			"The durable partial state is recoverable by marker-keyed replay; treating it as success would leave record and visible state divergent.",
+	},
+	{
+		dependency: "lifecycle-shared-engine",
+		failureShape: "the handed-over engine is absent or unloadable at a workflow or carried Tier-1 call site",
+		posture: "closed",
+		justification:
+			"No copied fallback may become a rival predicate; recovery is to restore the pin-verified handed-over asset and replay the refused transition.",
+	},
 ];

@@ -8,7 +8,7 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**/*.ts", "**/*.json", "**/*.jsonc", "!**/node_modules"]
+		"includes": ["**/*.ts", "**/*.mjs", "**/*.json", "**/*.jsonc", "!**/node_modules"]
 	},
 	"formatter": {
 		"enabled": true,

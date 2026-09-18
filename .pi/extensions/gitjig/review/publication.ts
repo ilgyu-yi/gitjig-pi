@@ -6,6 +6,8 @@
  * account-level independence; #241 assigns semantic separation to the
  * ordered agent capacities under one account.
  */
+import { runPlatformRead } from "../platform/read.ts";
+import { runPlatformMutation } from "../platform/write.ts";
 import { type PublishResult, performPublish } from "../publish/service.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
 import {
@@ -28,6 +30,78 @@ export interface ReviewPublicationReceipt {
 }
 
 export type ReviewPublicationOutcome = { ok: true; receipt: ReviewPublicationReceipt } | { ok: false; cause: string };
+
+/** Publish the Resolver-repair lifecycle record through the same attested seam. */
+export async function publishResolverRepairHandoff(
+	source: ReviewSubject,
+	repoRoot: string,
+	stateRoot: string,
+	now: () => string = () => new Date().toISOString(),
+): Promise<ReviewPublicationOutcome> {
+	const subject = admitReviewSubject(source);
+	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
+	const pull = subject.context.pullRequest;
+	let engine: typeof import("../../../../.github/workflows/gitjig-lifecycle.mjs");
+	try {
+		engine = await import("../../../../.github/workflows/gitjig-lifecycle.mjs");
+	} catch {
+		return { ok: false, cause: "the handed-over lifecycle engine was unavailable" };
+	}
+	const population = await fetchAttestedReviewComments(repoRoot, subject.context);
+	if (!population.ok) return { ok: false, cause: "the current lifecycle record population was unavailable" };
+	const current = engine.admitCurrentAwaitingAuthor(
+		population.comments.filter((comment) => comment.authorId === subject.writerId),
+		"pull",
+	);
+	let published: ReviewPublicationOutcome;
+	if (
+		current !== undefined &&
+		current.record.producer === subject.writerId &&
+		current.record.subjectHead === pull.head.oid &&
+		current.record.baseHead === pull.base.oid
+	) {
+		published = {
+			ok: true,
+			receipt: {
+				repositoryId: subject.context.repository.id,
+				pullRequestId: pull.id,
+				headOid: pull.head.oid,
+				commentId: current.comment.id,
+				authorId: subject.writerId,
+				body: current.comment.body,
+			},
+		};
+	} else {
+		published = await publishAndRefetchReviewRecord(
+			engine.encodeRecord(engine.RECORD_MARKERS.awaitingAuthor, {
+				producer: subject.writerId,
+				producerKind: "resolver-repair",
+				observedAt: now(),
+				subjectHead: pull.head.oid,
+				baseHead: pull.base.oid,
+			}),
+			subject,
+			repoRoot,
+			stateRoot,
+		);
+		if (!published.ok) return published;
+	}
+	const repository = subject.context.repository.nameWithOwner;
+	if (
+		!(await runPlatformMutation(
+			["issue", "edit", String(pull.number), "--repo", repository, "--add-label", "awaiting-author"],
+			repoRoot,
+		))
+	)
+		return { ok: false, cause: "the awaiting-author record was durable but its label mutation failed" };
+	const labels = await runPlatformRead(
+		["issue", "view", String(pull.number), "--repo", repository, "--json", "labels", "--jq", ".labels[].name"],
+		repoRoot,
+	);
+	if (labels === undefined || !labels.split("\n").includes("awaiting-author"))
+		return { ok: false, cause: "the awaiting-author label did not re-read after its record" };
+	return published;
+}
 
 /** Publish only to the PR carried by one re-admitted platform context. */
 export async function publishReviewRecord(

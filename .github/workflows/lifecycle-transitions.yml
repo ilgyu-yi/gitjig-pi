@@ -1,0 +1,29 @@
+name: lifecycle-transitions
+
+# Events nominate a transition only. The handed-over adapter re-reads the
+# explicitly addressed subject and actor before record-first/label-second work.
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    types: [synchronize]
+  issues:
+    types: [edited]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  awaiting-author:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Apply identity-aware lifecycle transition
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/workflows/*-lifecycle-event.mjs

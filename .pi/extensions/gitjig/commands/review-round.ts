@@ -31,7 +31,7 @@ import {
 } from "../review/history.ts";
 import { makeDispatcher, type RoundResult, reviewRound } from "../review/orchestrate.ts";
 import type { ReviewPublicationOutcome, ReviewPublicationReceipt } from "../review/publication.ts";
-import { publishAndRefetchReviewRecord } from "../review/publication.ts";
+import { publishAndRefetchReviewRecord, publishResolverRepairHandoff } from "../review/publication.ts";
 import type { ReviewRecord } from "../review/record.ts";
 import {
 	fetchReviewSubject,
@@ -107,6 +107,7 @@ export type ReviewRoundSeams = {
 	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
+	publishAwaitingAuthor?: (subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
 	resolveHead: (repoRoot: string, headRef: string) => string | undefined;
 };
 
@@ -301,6 +302,13 @@ export async function driveReviewRound(
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 		const publication = await seams.publishRecord(round.recordBody, subject);
 		if (!publication.ok) return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
+		if (
+			round.review.state === "resolved" &&
+			round.review.resolution.outcome === "repair" &&
+			seams.publishAwaitingAuthor !== undefined &&
+			!(await seams.publishAwaitingAuthor(subject)).ok
+		)
+			return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });
 		if (!(await currentSubject()))
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });
 		const after = await durableState(repoRoot, subject, seams, publication.receipt);
@@ -377,6 +385,7 @@ export function registerReviewRoundCommand(
 						}),
 					runRound: reviewRound,
 					publishRecord: (body, current) => publishAndRefetchReviewRecord(body, current, repoRoot, stateRoot),
+					publishAwaitingAuthor: (current) => publishResolverRepairHandoff(current, repoRoot, stateRoot),
 					resolveHead: resolveLocalHead,
 				};
 				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
