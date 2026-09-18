@@ -27,9 +27,16 @@
 		"verbatimModuleSyntax": true,
 		"erasableSyntaxOnly": true,
 		"allowImportingTsExtensions": true,
+		"allowJs": true,
+		"checkJs": true,
 		"skipLibCheck": true,
 
 		"noEmit": true
 	},
-	"include": [".pi/**/*.ts", "test/**/*.ts"]
+	"include": [
+		".pi/**/*.ts",
+		".github/workflows/gitjig-lifecycle.mjs",
+		".github/workflows/lifecycle-event.mjs",
+		"test/**/*.ts"
+	]
 }

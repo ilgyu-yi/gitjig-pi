@@ -6,7 +6,10 @@ import { admitPlatformReviewContext, type PlatformReviewContext } from "./subjec
 type CommentRead = (argv: string[], repoRoot: string) => Promise<string | undefined>;
 
 export type AttestedCommentPopulation =
-	| { ok: true; comments: readonly { id: number; authorId: string; body: string }[] }
+	| {
+			ok: true;
+			comments: readonly { id: number; authorId: string; authorLogin?: string; authorType?: string; body: string }[];
+	  }
 	| { ok: false; cause: string };
 
 /** Read comments from one explicit platform repository and retain provenance fields. */
@@ -38,7 +41,7 @@ export async function fetchAttestedReviewComments(
 		const pages: unknown = JSON.parse(output);
 		if (!Array.isArray(pages) || !pages.every(Array.isArray))
 			return { ok: false, cause: "the platform comment response was not a page list" };
-		const comments: { id: number; authorId: string; body: string }[] = [];
+		const comments: { id: number; authorId: string; authorLogin?: string; authorType?: string; body: string }[] = [];
 		const ids = new Set<number>();
 		for (const page of pages) {
 			for (const comment of page) {
@@ -54,9 +57,12 @@ export async function fetchAttestedReviewComments(
 				)
 					return { ok: false, cause: "the platform comment response carried unreadable provenance" };
 				ids.add((comment as { id: number }).id);
+				const user = (comment as { user: { node_id: string; login?: unknown; type?: unknown } }).user;
 				comments.push({
 					id: (comment as { id: number }).id,
-					authorId: (comment as { user: { node_id: string } }).user.node_id,
+					authorId: user.node_id,
+					...(typeof user.login === "string" ? { authorLogin: user.login } : {}),
+					...(typeof user.type === "string" ? { authorType: user.type } : {}),
 					body: (comment as { body: string }).body,
 				});
 			}

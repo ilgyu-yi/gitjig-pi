@@ -42,8 +42,13 @@ function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] 
 		for (const rule of forbiddenDependencies) {
 			if (rule.pattern.test(text)) findings.push(`${candidate.path}: ${rule.name}`);
 		}
-		const brandingWithoutStateNamespace = text.replaceAll(".gitjig", ".project-state");
-		if (/gitjig/i.test(brandingWithoutStateNamespace)) findings.push(`${candidate.path}: source-shell branding`);
+		// #276 fixes this engine basename as the cross-tier contract; neutralize only
+		// that exact name while continuing to reject every other shell-brand use.
+		const neutralizeContractName = (value: string) =>
+			value.replaceAll(".gitjig", ".project-state").replaceAll("gitjig-lifecycle.mjs", "lifecycle-engine.mjs");
+		if (/gitjig/i.test(neutralizeContractName(text))) findings.push(`${candidate.path}: source-shell branding`);
+		if (/gitjig/i.test(neutralizeContractName(candidate.path)))
+			findings.push(`${candidate.path}: branded handed-over path`);
 	}
 	return findings;
 }
@@ -75,6 +80,12 @@ test("#251 named negative fixture catches a handed-over reference to a carried m
 		bytes: Buffer.from("run: node .pi/extensions/gitjig.ts\n"),
 	};
 	assert.ok(dependencyFindings([negative]).includes(".github/workflows/negative.yml: carried path"));
+	assert.deepEqual(
+		dependencyFindings([
+			{ ...negative, path: ".github/workflows/gitjig-rival.yml", bytes: Buffer.from("name: rival\n") },
+		]),
+		[".github/workflows/gitjig-rival.yml: branded handed-over path"],
+	);
 });
 
 test("#251 handed-over hooks execute after the carried tree is deleted", () => {

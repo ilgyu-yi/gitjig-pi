@@ -76,7 +76,7 @@ const INVENTORY_HOME = join(".pi", "extensions", "gitjig", "postures.ts");
 type SourceKind = "ts" | "hash";
 
 function kindOf(relPath: string): SourceKind {
-	return relPath.endsWith(".ts") ? "ts" : "hash";
+	return relPath.endsWith(".ts") || relPath.endsWith(".mjs") ? "ts" : "hash";
 }
 
 function stripTsComments(source: string): string {

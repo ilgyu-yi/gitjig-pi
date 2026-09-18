@@ -508,4 +508,65 @@ export const POSTURES: readonly PostureRow[] = [
 		justification:
 			"Delivery reports no success unless repository, immutable base, draft PR identity, and every atomic change are confirmed exactly.",
 	},
+	{
+		dependency: "lifecycle-platform-transport",
+		failureShape:
+			"the lifecycle-transitions.yml awaiting-author job lacks its trusted adapter or a required platform API read is unavailable",
+		posture: "closed",
+		justification:
+			"No mutation occurs without the adapter and complete API snapshot. The false-block cost is one delayed transition; restore the default-branch adapter or platform transport, then replay the delivery.",
+	},
+	{
+		dependency: "lifecycle-identity-read",
+		failureShape:
+			"a platform actor id, author id, actor type, collaborator role, or carrying-comment identity is absent, stale, or unresolvable",
+		posture: "closed",
+		justification:
+			"Guessing an identity can authorize the wrong producer or clearer. The false-block cost is a delayed handoff; restore the actor or permission endpoint response, then replay with a fresh identity snapshot.",
+	},
+	{
+		dependency: "lifecycle-record-population",
+		failureShape:
+			"a lifecycle marker population is malformed, carries an unknown shape, has duplicate terminal references, or admits more than one current record",
+		posture: "closed",
+		justification:
+			"Choosing among malformed or ambiguous records can erase the authoritative handoff. The false-block cost is a stuck lifecycle label; repair the marker-keyed comment history through the owning transition service, then replay.",
+	},
+	{
+		dependency: "lifecycle-clock-read",
+		failureShape:
+			"current time or a record time is absent, unparsable, stale, or cannot support exact expiry arithmetic",
+		posture: "closed",
+		justification:
+			"Guessing time can honor an expired escape. The false-block cost is a delayed escape examination; restore a readable UTC clock and replay before the record's independently measured expiry.",
+	},
+	{
+		dependency: "lifecycle-repository-binding",
+		failureShape: "a freshly read subject belongs to another repository, a fork, or an absent head repository",
+		posture: "closed",
+		justification:
+			"Mutating an ambiguously addressed subject risks the wrong repository. The false-block cost is no lifecycle transition for that delivery; re-open the change from a same-repository branch or repair the deleted head repository, then deliver a fresh event.",
+	},
+	{
+		dependency: "lifecycle-record-write",
+		failureShape:
+			"the authoritative platform comment cannot be written or re-read before the corresponding label mutation",
+		posture: "closed",
+		justification:
+			"Record-before-label ordering prevents label-only authority; the false-block cost is delayed transition and recovery is replay after platform comment writes recover.",
+	},
+	{
+		dependency: "lifecycle-label-mutation",
+		failureShape: "the record is durable but the following lifecycle-label add or remove fails",
+		posture: "closed",
+		justification:
+			"The durable partial state is recoverable by marker-keyed replay; treating it as success would leave record and visible state divergent.",
+	},
+	{
+		dependency: "lifecycle-shared-engine",
+		failureShape: "the handed-over engine is absent or unloadable at a workflow or carried Tier-1 call site",
+		posture: "closed",
+		justification:
+			"No copied fallback may become a rival predicate; recovery is to restore the committed handed-over asset from the addressed repository and replay the refused transition.",
+	},
 ];

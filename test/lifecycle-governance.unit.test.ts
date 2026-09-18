@@ -1,0 +1,529 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+	admitAwaitingAuthorRecord,
+	admitBlockedRecord,
+	admitCurrentAwaitingAuthor,
+	admitHandoffRecord,
+	admitSingleCurrentRecord,
+	authorizedMaintainer,
+	authorizedPolicyApp,
+	authorizedPolicyProducer,
+	authorizedResolver,
+	clearBlockedTransition,
+	createBlockedTransition,
+	createEscapeRecord,
+	createEscapeTransition,
+	createHandoffTransition,
+	ESCAPE_KEYS,
+	eligibleApprovalCount,
+	eligibleChangesRequested,
+	encodeRecord,
+	escapeRefusalRecord,
+	examineEscapeTransition,
+	executeTransitionPlan,
+	handoffKey,
+	ownBehalfRefusal,
+	RECORD_MARKERS,
+	recordThenLabelPlan,
+	reenterHandoffTransition,
+	terminalThenUnlabelPlan,
+	terminateEscapeTransition,
+	validateEscapeRecord,
+} from "../.github/workflows/gitjig-lifecycle.mjs";
+
+const HEAD = "a".repeat(40);
+const BASE = "b".repeat(40);
+const NOW = "2026-09-18T12:00:00.000Z";
+const review = (overrides = {}) => ({
+	actorId: "reviewer",
+	actorType: "User",
+	association: "MEMBER",
+	state: "APPROVED",
+	headSha: HEAD,
+	submittedAt: "2026-09-18T11:00:00.000Z",
+	dismissed: false,
+	...overrides,
+});
+
+function escapeRecord(overrides = {}) {
+	return {
+		schemaVersion: 1,
+		repositoryId: "R",
+		pullRequestId: "P",
+		headSha: HEAD,
+		baseRef: "main",
+		baseSha: BASE,
+		producerKind: "maintainer",
+		producerId: "maintainer",
+		producerPermission: "MAINTAIN",
+		reason: "quorum unavailable",
+		appliedAt: "2026-09-18T00:00:00.000Z",
+		expiresAt: "2026-09-19T00:00:00.000Z",
+		consumedAt: null,
+		consumerRunId: null,
+		outcome: null,
+		...overrides,
+	};
+}
+
+const context = {
+	carryingCommentAuthorId: "maintainer",
+	livePermission: "MAINTAIN",
+	appAttested: false,
+	repositoryId: "R",
+	pullRequestId: "P",
+	headSha: HEAD,
+	baseRef: "main",
+	baseSha: BASE,
+	now: NOW,
+	labelPresent: true,
+};
+
+describe("#276 shared actor predicates", () => {
+	it("counts unique latest current-head eligible approvals", () => {
+		const result = eligibleApprovalCount(
+			[
+				review({ submittedAt: "2026-09-18T10:00:00.000Z" }),
+				review({ state: "CHANGES_REQUESTED", submittedAt: "2026-09-18T11:00:00.000Z" }),
+				review({ actorId: "second", association: "OWNER" }),
+			],
+			"author",
+			HEAD,
+			1,
+		);
+		assert.deepEqual(result, { ok: true, arm: "quorum-satisfied", count: 1, quorum: 1 });
+		assert.equal(eligibleApprovalCount([review()], "author", HEAD, 0).arm, "quorum-unmeasurable");
+		assert.equal(
+			eligibleApprovalCount(
+				[
+					review({ submittedAt: "2026-09-18T10:00:00.000Z" }),
+					review({ state: "COMMENTED", submittedAt: "2026-09-18T11:00:00.000Z" }),
+				],
+				"author",
+				HEAD,
+				1,
+			).ok,
+			true,
+		);
+	});
+
+	it("rejects stale, self, bot, unknown-association, dismissed, and comment-only review shapes", () => {
+		for (const candidate of [
+			review({ headSha: BASE }),
+			review({ actorId: "author" }),
+			review({ actorType: "Bot" }),
+			review({ association: "CONTRIBUTOR" }),
+			review({ dismissed: true }),
+			review({ state: "COMMENTED" }),
+		])
+			assert.equal(eligibleApprovalCount([candidate], "author", HEAD, 1).count, 0);
+	});
+
+	it("shares eligibility with current-head changes-requested production", () => {
+		assert.equal(eligibleChangesRequested(review({ state: "CHANGES_REQUESTED" }), "author", HEAD), true);
+		assert.equal(
+			eligibleChangesRequested(review({ state: "CHANGES_REQUESTED", actorId: "author" }), "author", HEAD),
+			false,
+		);
+	});
+
+	it("admits only live explicit maintainer and policy identities", () => {
+		assert.equal(
+			authorizedMaintainer({
+				actorId: "u",
+				actorType: "User",
+				repositoryId: "R",
+				addressedRepositoryId: "R",
+				permission: "ADMIN",
+			}),
+			true,
+		);
+		assert.equal(
+			authorizedMaintainer({
+				actorId: "u",
+				actorType: "App",
+				repositoryId: "R",
+				addressedRepositoryId: "R",
+				permission: "ADMIN",
+			}),
+			false,
+		);
+		assert.equal(
+			authorizedPolicyApp(
+				{
+					actorId: "a",
+					actorType: "App",
+					installationId: 1,
+					nodeId: "N",
+					repositoryId: "R",
+					addressedRepositoryId: "R",
+				},
+				{ installationId: 1, nodeId: "N" },
+			),
+			true,
+		);
+		assert.equal(
+			authorizedPolicyApp(
+				{
+					actorId: "a",
+					actorType: "App",
+					installationId: 2,
+					nodeId: "N",
+					repositoryId: "R",
+					addressedRepositoryId: "R",
+				},
+				{ installationId: 1, nodeId: "N" },
+			),
+			false,
+		);
+		assert.equal(
+			authorizedPolicyProducer(
+				{
+					actorId: "a",
+					actorType: "App",
+					installationId: 1,
+					nodeId: "N",
+					repositoryId: "R",
+					addressedRepositoryId: "R",
+				},
+				{ installationId: 1, nodeId: "N" },
+				{ complete: true, outcome: "clear", prHead: HEAD, baseHead: BASE, currentPrHead: HEAD, currentBaseHead: BASE },
+			),
+			true,
+		);
+	});
+
+	it("admits Resolver collaborators without widening escape maintainer authority", () => {
+		const snapshot = {
+			actorId: "resolver",
+			actorType: "User",
+			repositoryId: "R",
+			addressedRepositoryId: "R",
+			permission: "WRITE",
+		};
+		assert.equal(authorizedResolver(snapshot), true);
+		assert.equal(authorizedMaintainer(snapshot), false);
+		assert.equal(authorizedResolver({ ...snapshot, permission: "READ" }), false);
+	});
+
+	it("refuses every own-behalf principal", () => {
+		assert.equal(
+			ownBehalfRefusal({ producerId: "x", prAuthorId: "x", beneficiaryIds: [], controlledIdentityIds: [] }),
+			true,
+		);
+		assert.equal(
+			ownBehalfRefusal({ producerId: "x", prAuthorId: "a", beneficiaryIds: ["x"], controlledIdentityIds: [] }),
+			true,
+		);
+		assert.equal(
+			ownBehalfRefusal({ producerId: "x", prAuthorId: "a", beneficiaryIds: [], controlledIdentityIds: ["x"] }),
+			true,
+		);
+	});
+});
+
+describe("#276 closed records and transition order", () => {
+	it("pins issue null heads and pull full heads", () => {
+		const issue = {
+			producer: "resolver",
+			producerKind: "resolver-repair",
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+		};
+		assert.equal(admitAwaitingAuthorRecord(issue, "issue"), true);
+		assert.equal(admitAwaitingAuthorRecord({ ...issue, subjectHead: HEAD }, "issue"), false);
+		assert.equal(
+			admitAwaitingAuthorRecord(
+				{ ...issue, producerKind: "human-changes-requested", subjectHead: HEAD, baseHead: BASE },
+				"pull",
+			),
+			true,
+		);
+	});
+
+	it("keeps blocked and handoff codecs exact and handoff idempotence keyed", () => {
+		assert.equal(
+			admitBlockedRecord({
+				condition: "dependency",
+				recovery: "merge it",
+				observedAt: NOW,
+				subjectHead: null,
+				baseHead: null,
+			}),
+			true,
+		);
+		const handoff = {
+			cause: "authorization",
+			recipient: "maintainer",
+			reentry: "approve",
+			observedAt: NOW,
+			subjectHead: HEAD,
+			baseHead: BASE,
+		};
+		assert.equal(admitHandoffRecord(handoff), true);
+		assert.equal(handoffKey(handoff), handoffKey({ ...handoff, observedAt: "2026-09-18T12:01:00.000Z" }));
+		assert.equal(admitHandoffRecord({ ...handoff, extra: true }), false);
+	});
+
+	it("writes records before labels and terminal records before unlabel", () => {
+		assert.deepEqual(
+			recordThenLabelPlan("record", "awaiting-author").map((step) => step.kind),
+			["comment", "add-label"],
+		);
+		assert.deepEqual(
+			terminalThenUnlabelPlan("terminal", "awaiting-author").map((step) => step.kind),
+			["comment", "remove-label"],
+		);
+	});
+
+	it("admits exactly one marker-keyed current record", () => {
+		const value = { condition: "dependency", recovery: "merge it", observedAt: NOW, subjectHead: null, baseHead: null };
+		const body = encodeRecord(RECORD_MARKERS.blocked, value);
+		assert.ok(admitSingleCurrentRecord([{ id: 1, body }], RECORD_MARKERS.blocked, admitBlockedRecord));
+		assert.equal(
+			admitSingleCurrentRecord(
+				[
+					{ id: 1, body },
+					{ id: 2, body },
+				],
+				RECORD_MARKERS.blocked,
+				admitBlockedRecord,
+			),
+			undefined,
+		);
+	});
+
+	it("terminalizes awaiting-author history without erasing it", () => {
+		const record = encodeRecord(RECORD_MARKERS.awaitingAuthor, {
+			producer: "author",
+			producerKind: "resolver-repair",
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+		});
+		assert.ok(admitCurrentAwaitingAuthor([{ id: 7, body: record, attested: true }], "issue"));
+		const terminal = encodeRecord(RECORD_MARKERS.awaitingAuthorTerminal, {
+			recordCommentId: 7,
+			clearerId: "github-actions[bot]",
+			clearedAt: NOW,
+			cause: "issue-author-body-edit",
+			subjectHead: null,
+			baseHead: null,
+		});
+		assert.equal(
+			admitCurrentAwaitingAuthor(
+				[
+					{ id: 7, body: record, attested: true },
+					{ id: 8, body: terminal, authorId: "github-actions[bot]", attested: true },
+				],
+				"issue",
+			),
+			undefined,
+		);
+	});
+});
+
+describe("#276 transition service entry points", () => {
+	const escapeInput = () => ({
+		...escapeRecord(),
+		authoritySnapshot: {
+			actorId: "maintainer",
+			actorType: "User",
+			repositoryId: "R",
+			addressedRepositoryId: "R",
+			permission: "MAINTAIN",
+		},
+		subjectSnapshot: {
+			repositoryId: "R",
+			pullRequestId: "P",
+			headSha: HEAD,
+			baseRef: "main",
+			baseSha: BASE,
+		},
+		currentTime: "2026-09-18T00:00:00.000Z",
+		prAuthorId: "author",
+		beneficiaryIds: [],
+		controlledIdentityIds: [],
+	});
+	const blocked = { condition: "dependency", recovery: "merge it", observedAt: NOW, subjectHead: null, baseHead: null };
+	const handoff = {
+		cause: "interruption",
+		recipient: "next-session",
+		reentry: "resume row",
+		observedAt: NOW,
+		subjectHead: null,
+		baseHead: null,
+	};
+
+	it("preserves blocked status and refuses changed Active activation", () => {
+		const creation = createBlockedTransition(blocked);
+		assert.ok(creation.ok && creation.plan);
+		assert.equal(creation.plan[0]?.kind, "comment");
+		const clear = clearBlockedTransition({
+			recordCommentId: 1,
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+			status: "Proposed",
+			directiveChanged: false,
+		});
+		assert.ok(clear.ok && clear.plan);
+		assert.equal(clear.preservedStatus, "Proposed");
+		assert.equal(clear.plan[1]?.kind, "remove-label");
+		assert.equal(clear.plan[1]?.label, "blocked");
+		const active = clearBlockedTransition({
+			recordCommentId: 1,
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+			status: "Active",
+			directiveChanged: false,
+		});
+		assert.equal(active.preservedStatus, "Active");
+		assert.deepEqual(
+			clearBlockedTransition({ ...blocked, recordCommentId: 1, status: "Active", directiveChanged: true }),
+			{ ok: false, arm: "activation-required" },
+		);
+	});
+
+	it("creates idempotent handoffs and retains terminal re-entry history", () => {
+		assert.deepEqual(createHandoffTransition({ ...handoff, recipient: "" }), {
+			ok: false,
+			arm: "handoff-record",
+		});
+		const created = createHandoffTransition(handoff);
+		assert.ok(created.ok && created.plan);
+		assert.equal(created.key, handoffKey(handoff));
+		const reentry = reenterHandoffTransition({
+			recordCommentId: 2,
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+		});
+		assert.ok(reentry.ok && reentry.plan);
+		assert.equal(reentry.plan[0]?.kind, "comment");
+	});
+
+	it("creates and terminalizes escape records with record-first label plans", () => {
+		const created = createEscapeTransition(escapeInput());
+		assert.ok(created.ok && created.plan);
+		assert.equal(created.plan[0]?.kind, "comment");
+		assert.equal(created.plan[1]?.kind, "add-label");
+		assert.deepEqual(createEscapeTransition({ ...escapeInput(), prAuthorId: "maintainer" }), {
+			ok: false,
+			arm: "own-behalf",
+		});
+		const { prAuthorId: _author, ...missingOwnBehalf } = escapeInput();
+		assert.equal(createEscapeTransition(missingOwnBehalf).arm, "own-behalf");
+		assert.equal(
+			createEscapeTransition({
+				...escapeInput(),
+				authoritySnapshot: {
+					...escapeInput().authoritySnapshot,
+					repositoryId: "FOREIGN",
+					addressedRepositoryId: "FOREIGN",
+				},
+			}).arm,
+			"authority-subject-mismatch",
+		);
+		assert.equal(
+			createEscapeTransition({ ...escapeInput(), producerKind: "app", producerPermission: null }).arm,
+			"producer-unauthorized",
+		);
+		assert.equal(createEscapeTransition({ ...escapeInput(), currentTime: "unreadable" }).arm, "clock");
+		assert.equal(createEscapeTransition({ ...escapeInput(), currentTime: NOW }).arm, "clock");
+		assert.equal(createEscapeTransition({ ...escapeInput(), headSha: "invalid" }).arm, "record-head");
+		assert.equal(createEscapeTransition({ ...escapeInput(), reason: "" }).arm, "record-value");
+		assert.equal(createEscapeTransition({ ...escapeInput(), producerPermission: "ADMIN" }).arm, "producer-attestation");
+		for (const transition of ["escape-revoke", "escape-invalidate", "escape-expire"]) {
+			const terminal = terminateEscapeTransition({
+				recordCommentId: 3,
+				transition,
+				observedAt: NOW,
+				subjectHead: HEAD,
+				baseHead: BASE,
+			});
+			assert.ok(terminal.ok && terminal.plan);
+			assert.equal(terminal.plan[1]?.kind, "remove-label");
+		}
+	});
+
+	it("writes exactly one content-free refusal per examined refusal", () => {
+		const decision = examineEscapeTransition(escapeRecord(), { ...context, labelPresent: false }, NOW);
+		assert.equal(decision.ok, false);
+		assert.equal(decision.plan.length, 1);
+		assert.equal(decision.plan[0].kind, "comment");
+		assert.doesNotMatch(decision.plan[0].body, /guarded|operand|count/);
+		assert.deepEqual(examineEscapeTransition(escapeRecord(), context, NOW).plan, []);
+	});
+
+	it("stops before labels when a record write fails", async () => {
+		const calls: string[] = [];
+		const transition = createBlockedTransition(blocked);
+		assert.ok(transition.ok && transition.plan);
+		await assert.rejects(
+			executeTransitionPlan(transition.plan, {
+				comment: async () => {
+					calls.push("comment");
+					throw new Error("write failed");
+				},
+				addLabel: async () => {
+					calls.push("add-label");
+				},
+				removeLabel: async () => {
+					calls.push("remove-label");
+				},
+			}),
+		);
+		assert.deepEqual(calls, ["comment"]);
+	});
+});
+
+describe("#276 escape validity", () => {
+	it("admits only the exact current unconsumed record", () => {
+		assert.deepEqual(Object.keys(escapeRecord()), ESCAPE_KEYS);
+		assert.deepEqual(validateEscapeRecord(escapeRecord(), context), { ok: true, arm: "valid" });
+	});
+
+	it("isolates subject, label, clock, expiry, consumption, producer, and shape refusals", () => {
+		const cases = [
+			[escapeRecord({ extra: true }), context, "record-shape"],
+			[escapeRecord({ schemaVersion: 2 }), context, "schema-version"],
+			[escapeRecord({ producerKind: "unknown" }), context, "producer-kind"],
+			[escapeRecord({ producerPermission: "WRITE" }), context, "producer-permission"],
+			[escapeRecord({ expiresAt: "2026-09-18T23:59:59.000Z" }), context, "expiry-shape"],
+			[escapeRecord(), { ...context, now: "2026-09-19T00:00:00.000Z" }, "expired"],
+			[escapeRecord(), { ...context, headSha: BASE }, "subject-mismatch"],
+			[escapeRecord(), { ...context, carryingCommentAuthorId: "other" }, "producer-attestation"],
+			[escapeRecord(), { ...context, livePermission: "WRITE" }, "producer-attestation"],
+			[escapeRecord(), { ...context, labelPresent: false }, "label-removed"],
+			[escapeRecord({ consumedAt: NOW, consumerRunId: "run", outcome: "refused" }), context, "consumed"],
+		];
+		for (const [record, ctx, arm] of cases) assert.equal(validateEscapeRecord(record, ctx).arm, arm);
+	});
+
+	it("closes the App permission field to explicit null", () => {
+		assert.equal(
+			validateEscapeRecord(escapeRecord({ producerKind: "app", producerId: "app", producerPermission: null }), {
+				...context,
+				carryingCommentAuthorId: "app",
+				livePermission: undefined,
+				appAttested: true,
+			}).ok,
+			true,
+		);
+		assert.equal(
+			validateEscapeRecord(escapeRecord({ producerKind: "app", producerPermission: "ADMIN" }), context).arm,
+			"producer-permission",
+		);
+	});
+
+	it("creates exact one-day unconsumed records and content-free refusals", () => {
+		const created = createEscapeRecord({ ...escapeRecord(), expiresAt: undefined });
+		assert.ok(created);
+		assert.equal(created.expiresAt, "2026-09-19T00:00:00.000Z");
+		assert.deepEqual(escapeRefusalRecord("label-removed", NOW), { arm: "label-removed", observedAt: NOW });
+	});
+});

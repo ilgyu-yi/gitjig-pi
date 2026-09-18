@@ -110,11 +110,23 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/workflows/gitjig-lifecycle.mjs",
+			"disposition": "handed-over"
+		},
+		{
 			"path": ".github/workflows/initiative-feedback-label.yml",
 			"disposition": "handed-over"
 		},
 		{
 			"path": ".github/workflows/issues-to-project-mirror.yml",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/lifecycle-event.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/lifecycle-transitions.yml",
 			"disposition": "handed-over"
 		},
 		{
@@ -243,6 +255,10 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/platform/read.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/platform/write.ts",
 			"disposition": "carried"
 		},
 		{
@@ -451,6 +467,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/267.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/276.md",
 			"disposition": "instance-state"
 		},
 		{

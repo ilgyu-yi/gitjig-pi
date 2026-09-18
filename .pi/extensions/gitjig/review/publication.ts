@@ -6,6 +6,8 @@
  * account-level independence; #241 assigns semantic separation to the
  * ordered agent capacities under one account.
  */
+import { runPlatformRead } from "../platform/read.ts";
+import { addPlatformIssueLabel } from "../platform/write.ts";
 import { type PublishResult, performPublish } from "../publish/service.ts";
 import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
 import {
@@ -28,6 +30,159 @@ export interface ReviewPublicationReceipt {
 }
 
 export type ReviewPublicationOutcome = { ok: true; receipt: ReviewPublicationReceipt } | { ok: false; cause: string };
+
+export interface ResolverPublicationSeams {
+	fetchComments: FetchComments;
+	publishRecord: typeof publishAndRefetchReviewRecord;
+	mutate: typeof addPlatformIssueLabel;
+	read: typeof runPlatformRead;
+}
+
+/** Publish the Resolver-repair lifecycle record through the same attested seam. */
+export async function publishResolverRepairHandoff(
+	source: ReviewSubject,
+	repoRoot: string,
+	stateRoot: string,
+	now: () => string = () => new Date().toISOString(),
+	seams: ResolverPublicationSeams = {
+		fetchComments: fetchAttestedReviewComments,
+		publishRecord: publishAndRefetchReviewRecord,
+		mutate: addPlatformIssueLabel,
+		read: runPlatformRead,
+	},
+): Promise<ReviewPublicationOutcome> {
+	const subject = admitReviewSubject(source);
+	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
+	const pull = subject.context.pullRequest;
+	let engine: typeof import("../../../../.github/workflows/gitjig-lifecycle.mjs");
+	try {
+		engine = await import("../../../../.github/workflows/gitjig-lifecycle.mjs");
+	} catch {
+		return { ok: false, cause: "the handed-over lifecycle engine was unavailable" };
+	}
+	const host = subject.context.repository.host;
+	const repositoryName = subject.context.repository.nameWithOwner;
+	const writerLogin = await seams.read(["api", "--hostname", host, "user", "--jq", ".login"], repoRoot);
+	if (writerLogin === undefined || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(writerLogin))
+		return { ok: false, cause: "the Resolver writer identity was unavailable" };
+	const role = await seams.read(
+		[
+			"api",
+			"--hostname",
+			host,
+			`repos/${repositoryName}/collaborators/${encodeURIComponent(writerLogin)}/permission`,
+			"--jq",
+			".role_name",
+		],
+		repoRoot,
+	);
+	if (
+		!engine.authorizedResolver({
+			actorId: subject.writerId,
+			actorType: "User",
+			repositoryId: subject.context.repository.id,
+			addressedRepositoryId: subject.context.repository.id,
+			permission: role?.toUpperCase(),
+		})
+	)
+		return { ok: false, cause: "the Resolver writer lacked current collaborator authority" };
+	const population = await seams.fetchComments(repoRoot, subject.context);
+	if (!population.ok) return { ok: false, cause: "the current lifecycle record population was unavailable" };
+	const trusted: Array<(typeof population.comments)[number] & { authorId: string; attested: boolean }> = [];
+	for (const comment of population.comments) {
+		const terminal = comment.body.startsWith(engine.RECORD_MARKERS.awaitingAuthorTerminal);
+		const awaiting = comment.body.startsWith(engine.RECORD_MARKERS.awaitingAuthor);
+		if (!terminal && !awaiting) continue;
+		const bot = comment.authorLogin === "github-actions[bot]" && comment.authorType === "Bot";
+		let attested = terminal ? bot : false;
+		if (awaiting) {
+			const record = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.awaitingAuthor);
+			if (record?.producerKind === "human-changes-requested") attested = bot;
+			if (
+				record?.producerKind === "resolver-repair" &&
+				record.producer === comment.authorId &&
+				comment.authorType === "User" &&
+				typeof comment.authorLogin === "string"
+			) {
+				const commentRole =
+					comment.authorId === subject.writerId
+						? role
+						: await seams.read(
+								[
+									"api",
+									"--hostname",
+									host,
+									`repos/${repositoryName}/collaborators/${encodeURIComponent(comment.authorLogin)}/permission`,
+									"--jq",
+									".role_name",
+								],
+								repoRoot,
+							);
+				attested = engine.authorizedResolver({
+					actorId: comment.authorId,
+					actorType: comment.authorType,
+					repositoryId: subject.context.repository.id,
+					addressedRepositoryId: subject.context.repository.id,
+					permission: commentRole?.toUpperCase(),
+				});
+			}
+		}
+		trusted.push({
+			...comment,
+			authorId: bot ? (comment.authorLogin ?? comment.authorId) : comment.authorId,
+			attested,
+		});
+	}
+	const inspected = engine.inspectAwaitingAuthorPopulation(trusted, "pull");
+	if (!inspected.ok) return { ok: false, cause: "the current lifecycle record population was ambiguous" };
+	const current = inspected.current?.[0];
+	if (
+		current !== undefined &&
+		(current.record.subjectHead !== pull.head.oid || current.record.baseHead !== pull.base.oid)
+	)
+		return { ok: false, cause: "the current lifecycle record was stale" };
+	let published: ReviewPublicationOutcome;
+	if (
+		current !== undefined &&
+		current.record.subjectHead === pull.head.oid &&
+		current.record.baseHead === pull.base.oid
+	) {
+		published = {
+			ok: true,
+			receipt: {
+				repositoryId: subject.context.repository.id,
+				pullRequestId: pull.id,
+				headOid: pull.head.oid,
+				commentId: current.comment.id,
+				authorId: current.comment.authorId,
+				body: current.comment.body,
+			},
+		};
+	} else {
+		published = await seams.publishRecord(
+			engine.encodeRecord(engine.RECORD_MARKERS.awaitingAuthor, {
+				producer: subject.writerId,
+				producerKind: "resolver-repair",
+				observedAt: now(),
+				subjectHead: pull.head.oid,
+				baseHead: pull.base.oid,
+			}),
+			subject,
+			repoRoot,
+			stateRoot,
+		);
+		if (!published.ok) return published;
+	}
+	if (!(await seams.mutate(host, repositoryName, pull.number, "awaiting-author", repoRoot)))
+		return { ok: false, cause: "the awaiting-author record was durable but its label mutation failed" };
+	const labels = await seams.read(
+		["api", "--hostname", host, `repos/${repositoryName}/issues/${pull.number}`, "--jq", ".labels[].name"],
+		repoRoot,
+	);
+	if (labels === undefined || !labels.split("\n").includes("awaiting-author"))
+		return { ok: false, cause: "the awaiting-author label did not re-read after its record" };
+	return published;
+}
 
 /** Publish only to the PR carried by one re-admitted platform context. */
 export async function publishReviewRecord(
