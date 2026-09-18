@@ -254,7 +254,7 @@ describe("review subject criterion union", () => {
 		);
 	});
 
-	it("binds the closing-issue locator id, number, URL, and repository id to the explicit issue read", async (t) => {
+	it("binds the closing-issue locator id, number, and URL to the explicit issue read and its repository id to the attested repository", async (t) => {
 		const issueUrl = "https://github.com/owner/repo/issues/212";
 		const validLocator: ClosingIssueLocator = {
 			id: issue.id,
