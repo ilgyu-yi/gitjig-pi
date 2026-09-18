@@ -509,12 +509,28 @@ export const POSTURES: readonly PostureRow[] = [
 			"Delivery reports no success unless repository, immutable base, draft PR identity, and every atomic change are confirmed exactly.",
 	},
 	{
-		dependency: "lifecycle-platform-read",
+		dependency: "lifecycle-platform-transport",
 		failureShape:
-			"the lifecycle-transitions.yml awaiting-author job cannot read the addressed subject, actor identity, head, live permission, or marker population, or a value is stale, ambiguous, or unmeasurable",
+			"the lifecycle-transitions.yml awaiting-author job lacks its trusted adapter or a required platform API read is unavailable",
 		posture: "closed",
 		justification:
-			"A lifecycle label without freshly attested identity and record state can falsely claim authority. The arm-specific cost is a delayed transition; restore the named API read, then replay the idempotent event.",
+			"No mutation occurs without the adapter and complete API snapshot. The false-block cost is one delayed transition; restore the default-branch adapter or platform transport, then replay the delivery.",
+	},
+	{
+		dependency: "lifecycle-identity-read",
+		failureShape:
+			"a platform actor id, author id, actor type, collaborator role, or carrying-comment identity is absent, stale, or unresolvable",
+		posture: "closed",
+		justification:
+			"Guessing an identity can authorize the wrong producer or clearer. The false-block cost is a delayed handoff; restore the actor or permission endpoint response, then replay with a fresh identity snapshot.",
+	},
+	{
+		dependency: "lifecycle-record-population",
+		failureShape:
+			"a lifecycle marker population is malformed, carries an unknown shape, has duplicate terminal references, or admits more than one current record",
+		posture: "closed",
+		justification:
+			"Choosing among malformed or ambiguous records can erase the authoritative handoff. The false-block cost is a stuck lifecycle label; repair the marker-keyed comment history through the owning transition service, then replay.",
 	},
 	{
 		dependency: "lifecycle-clock-read",

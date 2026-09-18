@@ -18,7 +18,8 @@ describe("#276 identity-aware lifecycle workflow", () => {
 
 	it("executes trusted base bytes through literal handed-over edges", () => {
 		assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
-		assert.match(workflow, /run: node \.github\/workflows\/lifecycle-event\.mjs/);
+		assert.match(workflow, /! -f \.github\/workflows\/lifecycle-event\.mjs/);
+		assert.match(workflow, /node \.github\/workflows\/lifecycle-event\.mjs/);
 		assert.match(adapter, /from "\.\/gitjig-lifecycle\.mjs"/);
 		assert.match(workflow, /group: lifecycle-/);
 	});

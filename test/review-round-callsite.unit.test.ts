@@ -246,6 +246,7 @@ function seams(overrides: Partial<ReviewRoundSeams> = {}): ReviewRoundSeams {
 			publishedBody = body;
 			return receipt(body);
 		},
+		publishAwaitingAuthor: async () => receipt("awaiting-author"),
 		...overrides,
 	};
 }

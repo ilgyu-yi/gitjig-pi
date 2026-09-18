@@ -107,7 +107,7 @@ export type ReviewRoundSeams = {
 	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
-	publishAwaitingAuthor?: (subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
+	publishAwaitingAuthor: (subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
 	resolveHead: (repoRoot: string, headRef: string) => string | undefined;
 };
 
@@ -305,7 +305,6 @@ export async function driveReviewRound(
 		if (
 			round.review.state === "resolved" &&
 			round.review.resolution.outcome === "repair" &&
-			seams.publishAwaitingAuthor !== undefined &&
 			!(await seams.publishAwaitingAuthor(subject)).ok
 		)
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_PUBLISH, reentry: "none" });

@@ -97,6 +97,18 @@ export function authorizedMaintainer(snapshot) {
 	);
 }
 
+/** Resolver records require a freshly addressed human collaborator role. */
+/** @param {any} snapshot */
+export function authorizedResolver(snapshot) {
+	return (
+		exactObject(snapshot, ["actorId", "actorType", "repositoryId", "addressedRepositoryId", "permission"]) &&
+		snapshot.actorType === "User" &&
+		nonempty(snapshot.actorId) &&
+		snapshot.repositoryId === snapshot.addressedRepositoryId &&
+		new Set(["WRITE", "MAINTAIN", "ADMIN"]).has(snapshot.permission)
+	);
+}
+
 /** @param {any} snapshot @param {any} policy */
 export function authorizedPolicyApp(snapshot, policy) {
 	return (
@@ -405,7 +417,7 @@ export function createBlockedTransition(record) {
 	if (!admitBlockedRecord(record)) return { ok: false, arm: "blocked-record" };
 	return {
 		ok: true,
-		plan: recordThenLabelPlan(encodeRecord(RECORD_MARKERS.blocked, record), "status:blocked"),
+		plan: recordThenLabelPlan(encodeRecord(RECORD_MARKERS.blocked, record), "blocked"),
 	};
 }
 
@@ -425,7 +437,7 @@ export function clearBlockedTransition(input) {
 	return {
 		ok: true,
 		preservedStatus: input.status,
-		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.blockedTerminal, terminal), "status:blocked"),
+		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.blockedTerminal, terminal), "blocked"),
 	};
 }
 

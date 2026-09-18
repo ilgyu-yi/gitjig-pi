@@ -9,6 +9,7 @@ import {
 	authorizedMaintainer,
 	authorizedPolicyApp,
 	authorizedPolicyProducer,
+	authorizedResolver,
 	clearBlockedTransition,
 	createBlockedTransition,
 	createEscapeRecord,
@@ -181,6 +182,19 @@ describe("#276 shared actor predicates", () => {
 		);
 	});
 
+	it("admits Resolver collaborators without widening escape maintainer authority", () => {
+		const snapshot = {
+			actorId: "resolver",
+			actorType: "User",
+			repositoryId: "R",
+			addressedRepositoryId: "R",
+			permission: "WRITE",
+		};
+		assert.equal(authorizedResolver(snapshot), true);
+		assert.equal(authorizedMaintainer(snapshot), false);
+		assert.equal(authorizedResolver({ ...snapshot, permission: "READ" }), false);
+	});
+
 	it("refuses every own-behalf principal", () => {
 		assert.equal(ownBehalfRefusal({ producerId: "x", prAuthorId: "x" }), true);
 		assert.equal(ownBehalfRefusal({ producerId: "x", prAuthorId: "a", beneficiaryIds: ["x"] }), true);
@@ -337,6 +351,16 @@ describe("#276 transition service entry points", () => {
 		assert.ok(clear.ok && clear.plan);
 		assert.equal(clear.preservedStatus, "Proposed");
 		assert.equal(clear.plan[1]?.kind, "remove-label");
+		assert.equal(clear.plan[1]?.label, "blocked");
+		const active = clearBlockedTransition({
+			recordCommentId: 1,
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+			status: "Active",
+			directiveChanged: false,
+		});
+		assert.equal(active.preservedStatus, "Active");
 		assert.deepEqual(
 			clearBlockedTransition({ ...blocked, recordCommentId: 1, status: "Active", directiveChanged: true }),
 			{ ok: false, arm: "activation-required" },
@@ -344,6 +368,10 @@ describe("#276 transition service entry points", () => {
 	});
 
 	it("creates idempotent handoffs and retains terminal re-entry history", () => {
+		assert.deepEqual(createHandoffTransition({ ...handoff, recipient: "" }), {
+			ok: false,
+			arm: "handoff-record",
+		});
 		const created = createHandoffTransition(handoff);
 		assert.ok(created.ok && created.plan);
 		assert.equal(created.key, handoffKey(handoff));
@@ -370,6 +398,8 @@ describe("#276 transition service entry points", () => {
 			createEscapeTransition({ ...escapeInput(), producerKind: "app", producerPermission: null }).arm,
 			"producer-unauthorized",
 		);
+		assert.equal(createEscapeTransition({ ...escapeInput(), currentTime: "unreadable" }).arm, "clock");
+		assert.equal(createEscapeTransition({ ...escapeInput(), currentTime: NOW }).arm, "clock");
 		assert.equal(createEscapeTransition({ ...escapeInput(), headSha: "invalid" }).arm, "record-head");
 		assert.equal(createEscapeTransition({ ...escapeInput(), reason: "" }).arm, "record-value");
 		assert.equal(createEscapeTransition({ ...escapeInput(), producerPermission: "ADMIN" }).arm, "producer-attestation");

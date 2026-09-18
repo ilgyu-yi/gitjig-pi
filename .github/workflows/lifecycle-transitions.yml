@@ -31,4 +31,9 @@ jobs:
       - name: Apply identity-aware lifecycle transition
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/workflows/lifecycle-event.mjs
+        run: |
+          if [[ ! -f .github/workflows/lifecycle-event.mjs ]]; then
+            printf '%s\n' 'lifecycle transition refused: trusted adapter unavailable'
+            exit 0
+          fi
+          node .github/workflows/lifecycle-event.mjs

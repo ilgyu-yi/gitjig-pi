@@ -106,6 +106,24 @@ describe("#276 lifecycle event adapter", () => {
 		assert.equal(state.comments.length, 1);
 	});
 
+	it("ignores a re-approved actor after an earlier changes request", async () => {
+		const { state, api } = platform();
+		state.reviews.push(review(), { ...review(), state: "APPROVED", submitted_at: "2026-09-18T00:01:00.000Z" });
+		await runLifecycleEvent({ event: reviewEvent(), repository: REPOSITORY, api, now: () => NOW });
+		assert.equal(state.comments.length, 0);
+	});
+
+	it("refuses repository and fork mismatches before mutation", async () => {
+		const { state, api } = platform();
+		state.reviews.push(review());
+		state.pull.head.repo.full_name = "fork/repo";
+		await assert.rejects(
+			runLifecycleEvent({ event: reviewEvent(), repository: REPOSITORY, api, now: () => NOW }),
+			/repository or fork mismatch/,
+		);
+		assert.equal(state.comments.length, 0);
+	});
+
 	it("keeps exactly one current producer until the sanctioned new-head clearer", async () => {
 		const { state, api } = platform();
 		state.reviews.push(review("A"), review("B"));

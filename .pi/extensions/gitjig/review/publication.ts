@@ -77,7 +77,7 @@ export async function publishResolverRepairHandoff(
 		repoRoot,
 	);
 	if (
-		!engine.authorizedMaintainer({
+		!engine.authorizedResolver({
 			actorId: subject.writerId,
 			actorType: "User",
 			repositoryId: subject.context.repository.id,
@@ -85,7 +85,7 @@ export async function publishResolverRepairHandoff(
 			permission: role?.toUpperCase(),
 		})
 	)
-		return { ok: false, cause: "the Resolver writer lacked current maintainer authority" };
+		return { ok: false, cause: "the Resolver writer lacked current collaborator authority" };
 	const population = await seams.fetchComments(repoRoot, subject.context);
 	if (!population.ok) return { ok: false, cause: "the current lifecycle record population was unavailable" };
 	const trusted = population.comments

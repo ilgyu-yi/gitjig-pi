@@ -51,6 +51,7 @@ function assertRetiredVocabularyAbsent(documents: ReadonlyMap<string, string>): 
 }
 
 const migratedSourcePaths = [
+	".github/workflows/gitjig-lifecycle.mjs",
 	".github/workflows/issues-to-project-mirror.yml",
 	".pi/extensions/gitjig/commands/review-round.ts",
 	".pi/extensions/gitjig/commands/ship.ts",

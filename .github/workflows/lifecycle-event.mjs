@@ -4,7 +4,7 @@
 import { readFile } from "node:fs/promises";
 import {
 	admitAwaitingAuthorRecord,
-	authorizedMaintainer,
+	authorizedResolver,
 	encodeRecord,
 	executeTransitionPlan,
 	inspectAwaitingAuthorPopulation,
@@ -84,7 +84,7 @@ async function attestComments(api, comments, subjectKind) {
 			const authority = await api(`/collaborators/${encodeURIComponent(login)}/permission`);
 			const permission = typeof authority?.role_name === "string" ? authority.role_name.toUpperCase() : undefined;
 			if (
-				authorizedMaintainer({
+				authorizedResolver({
 					actorId: comment.user.node_id,
 					actorType: comment.user.type,
 					repositoryId: "addressed-repository",

@@ -21,6 +21,13 @@ describe("#276 executable lifecycle engine gate reach", () => {
 		assert.ok(config.includes(`"${adapter}"`));
 	});
 
+	it("keeps the carried load refusal guarded with no copied lifecycle fallback", () => {
+		const publication = readFileSync(join(repoRoot(), ".pi/extensions/gitjig/review/publication.ts"), "utf8");
+		assert.match(publication, /await import\("\.\.\/\.\.\/\.\.\/\.\.\/\.github\/workflows\/gitjig-lifecycle\.mjs"\)/);
+		assert.match(publication, /the handed-over lifecycle engine was unavailable/);
+		assert.doesNotMatch(publication, /function authorizedMaintainer|function validateEscapeRecord/);
+	});
+
 	it("parses mjs comments with the code dialect in the one-home guard", () => {
 		const guard = readFileSync(join(repoRoot(), "test/posture-home.structure.test.ts"), "utf8");
 		assert.match(guard, /endsWith\("\.mjs"\)/);
