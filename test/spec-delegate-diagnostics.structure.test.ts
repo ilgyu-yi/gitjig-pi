@@ -102,8 +102,6 @@ function delegatedContract(source: string): void {
 		"non-dispatch delegated consumer keeps its own settled output predicate",
 		"outcome-unverified",
 		"No dispatcher diagnostic code or retry predicate transfers by analogy.",
-		"current dispatcher's pre-inspection nonzero-exit refusal is a tracked code defect",
-		"sleeps as runtime behavior under §5.3",
 	]);
 }
 
@@ -172,8 +170,6 @@ function layerContract(source: string): void {
 		"dispatcher observations and fixed literals only",
 		"A child can influence its bounded numeric exit status, but the dispatcher observes and types that process fact",
 		"Tool-parameter schema rejection occurs before invocation",
-		"current dispatcher lacks this envelope and remains a tracked code defect",
-		"sleep as runtime behavior under §5.3",
 		"no child stream byte, delegate event prose, command, error text, summary, payload, operator trace, or caller-held compare operand",
 		"schemaVersion: 1",
 		'phase: "preflight" | "provision" | "spawn" | "run" | "return" | "compare" | "serialize"',
@@ -462,7 +458,7 @@ describe("Execution #264 contract settlement", () => {
 		}
 	});
 
-	it("records the spec-ahead sleep until dispatcher vocabulary lands", () => {
+	it("keeps dispatcher vocabulary confined to dispatcher-owned production paths", () => {
 		const productionRoots = [join(root, ".pi"), join(root, ".github"), join(root, ".githooks")];
 		const production = productionRoots.flatMap(sourceFiles);
 		assert.ok(
@@ -473,7 +469,7 @@ describe("Execution #264 contract settlement", () => {
 			const body = readFileSync(path, "utf8");
 			return DISPATCH_TOKENS.some((token) => body.includes(token));
 		});
-		assert.equal(vocabularyLanded, false, "dispatcher vocabulary landed; activate the sleeping corpus guard");
+		assert.equal(vocabularyLanded, true, "dispatcher vocabulary is absent after the runtime contract activated");
 		assert.deepEqual(absorbedDispatcherTokens(production), []);
 	});
 });

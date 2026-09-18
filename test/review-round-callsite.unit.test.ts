@@ -49,6 +49,17 @@ const SLOT = { lens: "runtime", surface: "the shell's runtime extensions" };
 const FENCES = { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] };
 const REFUSE_SPEC_FOR_TEST =
 	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
+const ADMITTED_DIAGNOSTIC = {
+	schemaVersion: 1,
+	status: "admitted",
+	phase: "compare",
+	run: { class: "exited", exitCode: 0, signal: null },
+	return: { class: "admitted" },
+	compare: { class: "confirmed" },
+	durationMs: 1,
+	code: "ADMITTED",
+	message: "dispatch admitted",
+} as const;
 
 function repo(): { root: string; base: string; head: string } {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-review-callsite-"));
@@ -248,6 +259,7 @@ function diagnosisDispatch(payload: DiagnosisInput, seen: string[] = []) {
 			summary: "",
 			compare: "confirmed" as const,
 			payload: JSON.stringify(payload),
+			diagnostic: ADMITTED_DIAGNOSTIC,
 		};
 	};
 }
@@ -590,6 +602,7 @@ describe("review-round production call site", () => {
 					summary: "",
 					compare: "confirmed",
 					payload: JSON.stringify({ token: "APPROVED", findings: [] }),
+					diagnostic: ADMITTED_DIAGNOSTIC,
 				};
 			},
 			runRound: reviewRound,
@@ -929,6 +942,7 @@ describe("review-round production call site", () => {
 						summary: "",
 						compare: "confirmed",
 						payload: JSON.stringify(diagnosis),
+						diagnostic: ADMITTED_DIAGNOSTIC,
 					};
 				},
 				runRound: async () => {

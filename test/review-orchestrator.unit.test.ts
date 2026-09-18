@@ -25,6 +25,7 @@ import { pathToFileURL } from "node:url";
 // that closes the one shape the behavioural laws cannot reach (issue
 // #208). Erased before this file runs, so it adds no runtime dependency
 // — which is also its limit: it reds `tsc`, never this suite.
+import { DIAGNOSTIC_MESSAGES } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { Disposition as UpstreamDisposition } from "../.pi/extensions/gitjig/review/resolve.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
@@ -1418,16 +1419,14 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		assert.equal(seen.length, 1, "a rejected send was retried");
 	});
 
-	it("makeDispatcher re-sends no refusal but the exact failed-run cause (issue #220)", async () => {
+	it("keeps the new RETURN_MISSING refusal dormant until #266 replaces failedRun", async () => {
 		// Every other refusal stands on its first answer: none was measured
 		// transient, and re-sending one would spend a delegate on a decided fact.
 		for (const cause of [
-			"dispatch refused: the delegate could not be run from this session's environment; nothing started and nothing is admitted",
-			"dispatch refused: the delegate exceeded its run bound and was terminated; nothing is admitted",
-			"dispatch refused: no readable return landed at the return slot; a delegate stream is not the crossing",
-			"dispatch refused: the return is oversize or malformed against the closed return schema; it is refused whole, never truncated",
-			"dispatch refused: the return names a caller-held operand; the return channel is content-free and the return is refused whole",
-			// Strict-equality guard: a same-cause string with incidental whitespace must not match the transient class \u2014 this is not a seventh distinct refusal cause.
+			...Object.entries(DIAGNOSTIC_MESSAGES)
+				.filter(([code]) => code !== "ADMITTED")
+				.map(([, message]) => message),
+			// Strict-equality guard: incidental whitespace must not match the transient class.
 			`${FAILED_RUN} `,
 		]) {
 			const probe = retryProbe([{ disposition: "refused", cause }]);

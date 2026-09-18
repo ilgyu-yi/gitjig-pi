@@ -185,8 +185,14 @@ interface AdmitModule {
 }
 
 type DispatchOutcome =
-	| { disposition: "admitted"; ok: boolean; summary: string; compare?: "confirmed" | "invalid" }
-	| { disposition: "refused"; cause: string };
+	| {
+			disposition: "admitted";
+			ok: boolean;
+			summary: string;
+			compare?: "confirmed" | "invalid";
+			diagnostic?: { run: { class: string; exitCode: number | null }; code: string };
+	  }
+	| { disposition: "refused"; cause: string; diagnostic?: unknown };
 
 interface IndexModule {
 	runDispatch(options: {
@@ -196,6 +202,7 @@ interface IndexModule {
 		delegateArgv: string[];
 		expectedRef?: string;
 		timeoutMs?: number;
+		signal?: AbortSignal;
 		onTrace?: (snapshot: unknown) => void;
 	}): Promise<DispatchOutcome>;
 	registerDispatchTool(pi: unknown, repoRoot: string, stateRoot: string): void;
@@ -1042,8 +1049,8 @@ describe("the executor's child is drained and seam-scoped (issue #88, SPEC §4.9
 		const run = await executor.runDelegate(context, [""], { timeoutMs: 5_000 });
 		assert.deepEqual(
 			run,
-			{ exitCode: null, timedOut: false, aborted: false, spawnFailed: true },
-			"spawn-throw: a synchronous spawn throw did not settle { exitCode: null, timedOut: false, " +
+			{ exitCode: null, signal: null, timedOut: false, aborted: false, spawnFailed: true },
+			"spawn-throw: a synchronous spawn throw did not settle { exitCode: null, signal: null, timedOut: false, " +
 				"aborted: false, spawnFailed: true } — the child never started, which is §3.10's delegate-absent class, " +
 				"never an escaped rejection",
 		);
@@ -1259,8 +1266,8 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		assert.ok(!verdict.admitted, "payload-over-return-bound: an oversize payload was admitted");
 		assert.equal(
 			(verdict as { cause: string }).cause,
-			admit.REFUSAL_CAUSES.malformedReturn,
-			"payload-over-return-bound: the oversize payload did not refuse on the whole-return malformed cause",
+			"dispatch refused: the return exceeded the 65536-byte bound",
+			"payload-over-return-bound: the oversize payload did not refuse on the fixed oversize cause",
 		);
 		assert.ok(
 			!("payload" in verdict),
@@ -1344,8 +1351,8 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 			assert.ok(!verdict.admitted, "fifo-slot: a FIFO at the return slot was admitted — the slot is not a return");
 			assert.equal(
 				(verdict as { cause: string }).cause,
-				admit.REFUSAL_CAUSES.malformedReturn,
-				"fifo-slot: the FIFO did not refuse on the malformed cause — the regular-file verdict precedes any " +
+				"dispatch refused: the return slot was not a regular file",
+				"fifo-slot: the FIFO did not refuse on the not-regular cause — the regular-file verdict precedes any " +
 					"read, because a blocking open on a FIFO freezes the synchronous admit inside the extension " +
 					"host, where no timer can fire (§3.10's fail-closed set)",
 			);
@@ -1360,8 +1367,8 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 		assert.ok(!verdict.admitted, "symlink-slot: a symlinked return slot was admitted");
 		assert.equal(
 			(verdict as { cause: string }).cause,
-			admit.REFUSAL_CAUSES.malformedReturn,
-			"symlink-slot: the symlink did not refuse on the malformed cause — a followed link puts the size " +
+			"dispatch refused: the return slot was not a regular file",
+			"symlink-slot: the symlink did not refuse on the not-regular cause — a followed link puts the size " +
 				"gate on the target (a device reads unbounded), so the slot's own lstat type decides (§3.10)",
 		);
 	});
@@ -1386,6 +1393,107 @@ describe("admission: return.json is the sole, bounded, closed-schema crossing (i
 			],
 			"failed-run",
 		);
+	});
+
+	it("§3.10 numeric nonzero exit admits a complete valid return", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "nonzero-valid-return");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: [
+				"sh",
+				"-c",
+				`printf '%s' '{"ok":true,"summary":"complete before failure"}' > ../return.json; exit 17`,
+			],
+			timeoutMs: 30_000,
+		});
+		assert.equal(outcome.disposition, "admitted");
+		assert.equal((outcome as { summary: string }).summary, "complete before failure");
+		assert.equal(outcome.diagnostic?.run.class, "exited");
+		assert.equal(outcome.diagnostic?.run.exitCode, 17);
+		assert.equal(outcome.diagnostic?.code, "ADMITTED");
+	});
+
+	it("§3.10 signal termination is distinct and never inspects a planted return", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "signal-termination");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: sink.stateRoot,
+			brief: BRIEF,
+			delegateArgv: [
+				"sh",
+				"-c",
+				`printf '%s' '{"ok":true,"summary":"must not cross"}' > ../return.json; kill -TERM $$`,
+			],
+			timeoutMs: 30_000,
+		});
+		assert.equal(outcome.disposition, "refused");
+		const diagnostic = (
+			outcome as {
+				diagnostic?: { code: string; run: { class: string; signal: string | null }; return: { class: string } };
+			}
+		).diagnostic;
+		assert.equal(diagnostic?.code, "SIGNAL_TERMINATED");
+		assert.equal(diagnostic?.run.class, "signaled");
+		assert.equal(diagnostic?.run.signal, "SIGTERM");
+		assert.equal(diagnostic?.return.class, "not-inspected");
+		assert.ok(!JSON.stringify(outcome).includes("must not cross"));
+	});
+
+	it("keeps an observed numeric exit over a later abort during stream-flush grace", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "exit-before-abort");
+		const repo = mintRepo(PAYLOADS);
+		const controller = new AbortController();
+		const abort = setTimeout(() => controller.abort(), 700);
+		try {
+			const outcome = await index.runDispatch({
+				callerRepoRoot: repo,
+				stateRoot: mintStateRoot().stateRoot,
+				brief: BRIEF,
+				delegateArgv: ["sh", "-c", `sleep 8 & printf '%s' '{"ok":true,"summary":"exit won"}' > ../return.json; exit 0`],
+				timeoutMs: 30_000,
+				signal: controller.signal,
+			});
+			assert.equal(outcome.disposition, "admitted");
+			assert.ok(outcome.diagnostic);
+			assert.deepEqual(
+				[outcome.diagnostic.run.class, outcome.diagnostic.run.exitCode, outcome.diagnostic.code],
+				["exited", 0, "ADMITTED"],
+			);
+		} finally {
+			clearTimeout(abort);
+		}
+	});
+
+	it("converts a post-entry computational exception into INTERNAL_FAILED without leaking its text", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "internal-failed");
+		const repo = mintRepo(PAYLOADS);
+		const throwingSignal = Object.defineProperty({}, "aborted", {
+			get() {
+				throw new Error("zq private exception");
+			},
+		}) as AbortSignal;
+		const outcome = await index.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: mintStateRoot().stateRoot,
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", COPY("payload-valid.json")],
+			signal: throwingSignal,
+		});
+		assert.equal(outcome.disposition, "refused");
+		const diagnostic = (
+			outcome as { diagnostic: { code: string; phase: string; run: { class: string }; message: string } }
+		).diagnostic;
+		assert.deepEqual(
+			[diagnostic.code, diagnostic.phase, diagnostic.run.class],
+			["INTERNAL_FAILED", "run", "internal-failed"],
+		);
+		assert.ok(!JSON.stringify(outcome).includes("zq private exception"));
 	});
 
 	it("§3.10 delegate absent: an unspawnable delegate refuses with a record, never a wedge", async () => {
@@ -1741,10 +1849,7 @@ describe("the run bound is reachable from the tool surface (issue #94, SPEC §4.
 			controller.signal,
 		);
 		assert.equal(result.details.disposition, "refused");
-		assert.equal(
-			result.content[0]?.text,
-			(await requireModule<AdmitModule>("admit.ts", "tool-abort")).REFUSAL_CAUSES.aborted,
-		);
+		assert.deepEqual(JSON.parse(result.content[0]?.text ?? "null"), result.details.diagnostic);
 		assert.ok(dispatchAuditLines(sink).some((line) => line.includes('"action":"refuse-aborted"')));
 	});
 
@@ -1988,6 +2093,11 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 			!("compare" in result.details),
 			"expectedref-absent: a compare verdict surfaced with no expectedRef — the compare rides only a " +
 				"caller-named expected head (§1.6 via §4.9)",
+		);
+		assert.deepEqual(
+			Object.keys(result.details),
+			["disposition", "ok", "diagnostic"],
+			"expectedref-absent: persisted admitted details carried summary, payload, or another non-contract field",
 		);
 	});
 });

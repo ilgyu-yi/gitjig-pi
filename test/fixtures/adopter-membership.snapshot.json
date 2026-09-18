@@ -190,6 +190,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/dispatch/diagnostics.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/dispatch/executor.ts",
 			"disposition": "carried"
 		},
@@ -463,6 +467,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/25.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/267.md",
 			"disposition": "instance-state"
 		},
 		{

@@ -62,6 +62,7 @@ export const MAX_RUN_BOUND_MS = 2_147_483_647;
 
 export interface DelegateRunOutcome {
 	exitCode: number | null;
+	signal: NodeJS.Signals | null;
 	timedOut: boolean;
 	aborted: boolean;
 	/** True iff the child never started — §3.10's delegate-absent class. */
@@ -79,6 +80,7 @@ export function lifecycleOf(outcome: DelegateRunOutcome): TraceLifecycle {
 	if (outcome.spawnFailed) return "spawn-failed";
 	if (outcome.timedOut) return "timed-out";
 	if (outcome.aborted) return "aborted";
+	if (outcome.signal !== null) return "failed";
 	return outcome.exitCode === 0 ? "completed" : "failed";
 }
 
@@ -135,11 +137,11 @@ export function runDelegate(
 			resolve(outcome);
 		};
 		if (argv.length === 0) {
-			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			settle({ exitCode: null, signal: null, timedOut: false, aborted: false, spawnFailed: true });
 			return;
 		}
 		if (options.signal?.aborted) {
-			settle({ exitCode: null, timedOut: false, aborted: true, spawnFailed: false });
+			settle({ exitCode: null, signal: null, timedOut: false, aborted: true, spawnFailed: false });
 			return;
 		}
 		// Passthrough with the repo-locating and config-injection GIT_*
@@ -169,7 +171,7 @@ export function runDelegate(
 			// tool-surface guard admits): nothing started, no timer is armed
 			// yet, and the outcome settles into §3.10's delegate-absent class —
 			// a raw rejection would escape the closed refusal taxonomy.
-			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			settle({ exitCode: null, signal: null, timedOut: false, aborted: false, spawnFailed: true });
 			return;
 		}
 		// libuv can report descriptor exhaustion asynchronously while returning
@@ -179,7 +181,7 @@ export function runDelegate(
 			child.on("error", () => {});
 			child.stdout?.on("error", () => {});
 			child.stderr?.on("error", () => {});
-			settle({ exitCode: null, timedOut: false, aborted: false, spawnFailed: true });
+			settle({ exitCode: null, signal: null, timedOut: false, aborted: false, spawnFailed: true });
 			return;
 		}
 		releaseChildResources = () => {
@@ -215,6 +217,7 @@ export function runDelegate(
 				killGroup("SIGKILL");
 				settle({
 					exitCode: null,
+					signal: null,
 					timedOut: termination === "timeout",
 					aborted: termination === "abort",
 					spawnFailed: false,
@@ -236,9 +239,10 @@ export function runDelegate(
 			killGroup("SIGKILL");
 			armOuter();
 		}, options.timeoutMs ?? DEFAULT_RUN_BOUND_MS);
-		const decide = (code: number | null): void => {
+		const decide = (code: number | null, signal: NodeJS.Signals | null): void => {
 			settle({
 				exitCode: code,
+				signal,
 				timedOut: termination === "timeout",
 				aborted: termination === "abort",
 				spawnFailed: false,
@@ -249,6 +253,7 @@ export function runDelegate(
 			// is a run that ran, decided as a failed run, never as absence.
 			settle({
 				exitCode: null,
+				signal: null,
 				timedOut: termination === "timeout",
 				aborted: termination === "abort",
 				spawnFailed: !spawned,
@@ -268,15 +273,21 @@ export function runDelegate(
 			trace.consume("stderr", chunk);
 			scheduleTrace();
 		});
-		child.on("exit", (code) => {
+		child.on("exit", (code, signal) => {
+			// A numeric/signal exit is the first observed terminal claim. Once it
+			// arrives, a later operator abort during pipe-flush grace cannot replace it.
+			if (termination === "none" && abortListener !== undefined) {
+				options.signal?.removeEventListener("abort", abortListener);
+				abortListener = undefined;
+			}
 			// The bound is on the child's run, which has just ended — cleared
 			// here: an orphan can hold the pipes past the bound, and a kill timer
 			// still armed during the flush grace would mark an in-bound run timed
 			// out. From here the grace timer bounds the flush alone.
 			if (killTimer !== undefined) clearTimeout(killTimer);
 			killTimer = undefined;
-			graceTimer = setTimeout(() => decide(code), STREAM_GRACE_MS);
+			graceTimer = setTimeout(() => decide(code, signal), STREAM_GRACE_MS);
 		});
-		child.on("close", (code) => decide(code));
+		child.on("close", (code, signal) => decide(code, signal));
 	});
 }

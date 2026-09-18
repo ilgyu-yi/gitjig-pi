@@ -111,6 +111,18 @@ type ResolveModule = {
 	reviewOutcome(panel: PanelOutcome, admission: AdmitResult | undefined): ReviewState;
 };
 type AdmitModule = { REFUSAL_CAUSES: Record<string, string> };
+type HistoryModule = {
+	admitDiagnosis(outcome: DispatchOutcome): { available: boolean; diagnosis?: unknown };
+};
+type DispatchModule = {
+	runDispatch(options: {
+		callerRepoRoot: string;
+		stateRoot: string;
+		brief: string;
+		delegateArgv: string[];
+		expectedRef?: string;
+	}): Promise<DispatchOutcome>;
+};
 
 async function tryImport<T>(path: string): Promise<{ module?: T; error: string }> {
 	try {
@@ -123,6 +135,8 @@ async function tryImport<T>(path: string): Promise<{ module?: T; error: string }
 const panelImport = await tryImport<PanelModule>(`${repoRoot()}${REVIEW_DIR}panel.ts`);
 const joinImport = await tryImport<JoinModule>(`${repoRoot()}${REVIEW_DIR}join.ts`);
 const resolveImport = await tryImport<ResolveModule>(`${repoRoot()}${REVIEW_DIR}resolve.ts`);
+const dispatchImport = await tryImport<DispatchModule>(`${repoRoot()}${DISPATCH_DIR}index.ts`);
+const historyImport = await tryImport<HistoryModule>(`${repoRoot()}${REVIEW_DIR}history.ts`);
 const admitImport = await tryImport<AdmitModule>(`${repoRoot()}${DISPATCH_DIR}admit.ts`);
 
 function panel(): PanelModule {
@@ -370,7 +384,7 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewe
 		assert.deepEqual(novel.returned, { failure: "malformed" }, "an unenumerated refusal cause escaped the mapping");
 	});
 
-	it("the success path is measured through runDispatch: a stub delegate's payload joins to a valid SlotResult (#173)", async () => {
+	it("a complete pre-nonzero-exit return crosses runDispatch, direct slot join, and panel unchanged (#267)", async () => {
 		const j = joins();
 		const p = panel();
 		// The reviewer result crosses as committed tree content (the dispatch
@@ -387,7 +401,11 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewe
 			callerRepoRoot: repo,
 			stateRoot: scratchDir("gitjig-join-state-"),
 			brief: "zq join brief: write the templated return",
-			delegateArgv: ["sh", "-c", 'sed "s/@HEAD@/$(git rev-parse HEAD)/" zq-return-template.json > ../return.json'],
+			delegateArgv: [
+				"sh",
+				"-c",
+				'sed "s/@HEAD@/$(git rev-parse HEAD)/" zq-return-template.json > ../return.json; exit 17',
+			],
 			expectedRef: "main",
 		});
 		assert.equal(result.compare, "confirmed", "the live blind compare did not confirm through the join");
@@ -399,6 +417,53 @@ describe("§1.6/§1.7 the dispatch→slot join — the widened channel's reviewe
 			"the delegate's finding did not come out the far side of runDispatch → join → panel — the widened " +
 				"channel's success path is the join's own arm, not the widening's",
 		);
+	});
+
+	it("a Judge return completed before nonzero exit reaches adjudication admission", async () => {
+		assert.ok(dispatchImport.module, dispatchImport.error);
+		const r = resolves();
+		const payload = JSON.stringify({
+			dedupAttested: true,
+			rulings: [],
+		});
+		const template = JSON.stringify({ ok: true, summary: "zq judge done", reviewedHead: "@HEAD@", payload });
+		const repo = mintCallerRepo({ "zq-judge-template.json": template });
+		const outcome = await dispatchImport.module.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: scratchDir("gitjig-judge-state-"),
+			brief: "zq judge brief",
+			delegateArgv: [
+				"sh",
+				"-c",
+				'sed "s/@HEAD@/$(git rev-parse HEAD)/" zq-judge-template.json > ../return.json; exit 23',
+			],
+			expectedRef: "main",
+		});
+		assert.equal(outcome.disposition, "admitted");
+		assert.ok(r.adjudicationFromDispatch(outcome), "the valid pre-nonzero Judge result was discarded");
+	});
+
+	it("a history diagnosis completed before nonzero exit reaches diagnosis admission", async () => {
+		assert.ok(dispatchImport.module, dispatchImport.error);
+		assert.ok(historyImport.module, historyImport.error);
+		const payload = JSON.stringify({ value: "NONE", invalidation: "nothing", evidence: "zq measured" });
+		const repo = mintCallerRepo({
+			"zq-diagnosis.json": JSON.stringify({
+				ok: true,
+				summary: "zq diagnosis done",
+				reviewedHead: "@HEAD@",
+				payload,
+			}),
+		});
+		const outcome = await dispatchImport.module.runDispatch({
+			callerRepoRoot: repo,
+			stateRoot: scratchDir("gitjig-diagnosis-state-"),
+			brief: "zq diagnosis brief",
+			delegateArgv: ["sh", "-c", 'sed "s/@HEAD@/$(git rev-parse HEAD)/" zq-diagnosis.json > ../return.json; exit 29'],
+			expectedRef: "main",
+		});
+		assert.equal(outcome.disposition, "admitted");
+		assert.equal(historyImport.module.admitDiagnosis(outcome).available, true);
 	});
 
 	it("a delegate that outlives its bound joins to the timeout cause, through the real dispatcher", async () => {

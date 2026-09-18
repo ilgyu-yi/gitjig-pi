@@ -38,6 +38,11 @@
  * unremovable scratch warns on the audit trail and never converts a
  * decided outcome into a failure (§3.9).
  *
+ * Every entered invocation also carries §4.9's closed dispatcher diagnostic:
+ * fixed caller-observed lifecycle, return and comparison facts only. Refusal
+ * content is its compact JSON; admitted content keeps the authored summary
+ * frame while details retains diagnostics and excludes summary/payload.
+ *
  * The composed tool result is a FRAME plus a DELIMITED PAYLOAD (issue
  * #97). The dispatcher's own verdict tokens are composed from its own
  * bytes — a boolean and a closed verdict union — and the delegate's
@@ -73,22 +78,23 @@ import { renderActCall, renderActTerminal } from "../act-render.ts";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import type { SessionSurface, TerminalClass } from "../session-surface.ts";
-import { admitReturn, REFUSAL_CAUSES } from "./admit.ts";
-import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
+import { admitReturn } from "./admit.ts";
 import {
-	cleanupDispatchContext,
-	type DispatchContext,
-	PROVISION_REFUSAL_CAUSES,
-	provisionDispatchContext,
-} from "./provision.ts";
+	type CompareClass,
+	type DiagnosticCode,
+	type DispatcherDiagnostic,
+	makeDiagnostic,
+	RETURN_CODE_BY_CLASS,
+	type ReturnClass,
+	type RunClass,
+	serializeDiagnostic,
+} from "./diagnostics.ts";
+import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
+import { cleanupDispatchContext, type DispatchContext, provisionDispatchContext } from "./provision.ts";
 import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
-
-/** Provision failure, refused through the composed pipeline (§3.9). */
-const REFUSE_PROVISION =
-	"dispatch refused: the isolated execution context could not be provisioned at the expected head; nothing ran";
 
 /** Inadmissible argv from the tool surface — refused before any spawn. */
 const REFUSE_ARGV = "dispatch refused: the delegate argv is not an admissible non-empty vector of strings";
@@ -118,8 +124,15 @@ const REFUSE_TIMEOUT_MS =
 	"dispatch refused: the run bound is present but not an admissible positive number of milliseconds";
 
 export type DispatchOutcome =
-	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
-	| { disposition: "refused"; cause: string };
+	| {
+			disposition: "admitted";
+			ok: boolean;
+			summary: string;
+			payload?: string;
+			compare?: "confirmed" | "invalid";
+			diagnostic: DispatcherDiagnostic;
+	  }
+	| { disposition: "refused"; cause: string; diagnostic: DispatcherDiagnostic };
 
 /**
  * The shortest run the CONTAINMENT branch will act on (issue #104). Below
@@ -199,35 +212,89 @@ export interface RunDispatchOptions {
 	surface?: SessionSurface;
 	/** Cancellation belongs to the invocation and reaches the child process group. */
 	signal?: AbortSignal;
+	/** Handler monotonic start, supplied only by the registered tool wrapper. */
+	enteredAt?: number;
 	/** Transient operator-only trace; callers must never serialize it as a final result. */
 	onTrace?: (snapshot: TraceSnapshot) => void;
 }
 
 async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
-	// Content-free by construction: every `text` below is a fixed literal
-	// or a fixed cause — no delegate byte, no operand, no absolute path.
+	const started = options.enteredAt ?? performance.now();
+	const durationMs = (): number => Math.max(0, performance.now() - started);
 	const record = (action: string, text: string): void => {
 		appendAuditRecord(options.stateRoot, { category: "dispatch", action, text });
 	};
-	const refuse = (action: string, cause: string): DispatchOutcome => {
-		record(action, cause);
-		return { disposition: "refused", cause };
+	const diagnostic = (
+		code: DiagnosticCode,
+		phase: DispatcherDiagnostic["phase"],
+		runClass: RunClass,
+		returnClass: ReturnClass = "not-inspected",
+		compareClass: CompareClass = "not-reached",
+		exitCode: number | null = null,
+		signal: string | null = null,
+	): DispatcherDiagnostic =>
+		makeDiagnostic({
+			status: code === "ADMITTED" ? "admitted" : "refused",
+			phase,
+			run: { class: runClass, exitCode, signal },
+			return: { class: returnClass },
+			compare: { class: compareClass },
+			durationMs: durationMs(),
+			code,
+		});
+	const refuse = (
+		action: string,
+		code: DiagnosticCode,
+		phase: DispatcherDiagnostic["phase"],
+		runClass: RunClass,
+		returnClass: ReturnClass = "not-inspected",
+		compareClass: CompareClass = "not-reached",
+		exitCode: number | null = null,
+		signal: string | null = null,
+	): DispatchOutcome => {
+		const value = diagnostic(code, phase, runClass, returnClass, compareClass, exitCode, signal);
+		record(action, value.message);
+		const outcome: DispatchOutcome = { disposition: "refused", cause: value.message, diagnostic: value };
+		if (surfaceBytes(outcome) <= DISPATCH_SURFACE_LIMITS.refusedOutcome) return outcome;
+		const fallback = makeDiagnostic({
+			status: "refused",
+			phase: "serialize",
+			run: value.run,
+			return: value.return,
+			compare: value.compare,
+			durationMs: value.durationMs,
+			code: "INTERNAL_FAILED",
+		});
+		return { disposition: "refused", cause: fallback.message, diagnostic: fallback };
 	};
 
+	if (
+		!Array.isArray(options.delegateArgv) ||
+		options.delegateArgv.length === 0 ||
+		options.delegateArgv.some((entry) => typeof entry !== "string") ||
+		typeof options.brief !== "string" ||
+		(options.expectedRef !== undefined && typeof options.expectedRef !== "string") ||
+		(options.timeoutMs !== undefined &&
+			(!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > MAX_RUN_BOUND_MS))
+	) {
+		return refuse("refuse-parameter", "PARAMETER_REFUSED", "preflight", "not-started");
+	}
+
+	let currentPhase: DispatcherDiagnostic["phase"] = "provision";
+	let observedRun: DispatcherDiagnostic["run"] = { class: "not-started", exitCode: null, signal: null };
+	let observedReturn: ReturnClass = "not-inspected";
+	let observedCompare: CompareClass = "not-reached";
 	let context: DispatchContext;
 	try {
 		context = provisionDispatchContext(options.callerRepoRoot, {
 			brief: options.brief,
 			expectedRef: options.expectedRef,
 		});
-	} catch (error) {
-		// A known provision cause passes through as-is (each is a fixed
-		// content-free literal); anything else refuses on the generic cause.
-		const thrown = error instanceof Error ? error.message : "";
-		const known = (Object.values(PROVISION_REFUSAL_CAUSES) as string[]).includes(thrown);
-		return refuse("refuse-provision", known ? thrown : REFUSE_PROVISION);
+	} catch {
+		return refuse("refuse-provision", "PROVISION_FAILED", "provision", "not-started");
 	}
 	record("run-started", "dispatch run started: the bounded delegate child is being observed");
+	currentPhase = "run";
 	try {
 		let terminalTrace: TraceSnapshot | undefined;
 		let traceUpdateDegraded = false;
@@ -266,21 +333,38 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		if (!retainTrace(options.stateRoot, trace)) {
 			record("trace-degraded", "dispatch trace retention degraded: bounded operator evidence was not retained");
 		}
-		if (run.spawnFailed) {
-			return refuse("refuse-delegate-absent", REFUSAL_CAUSES.delegateAbsent);
+		if (run.spawnFailed) return refuse("refuse-delegate-absent", "SPAWN_FAILED", "spawn", "not-started");
+		if (run.timedOut) return refuse("refuse-bound-exceeded", "TIMED_OUT", "run", "timed-out");
+		if (run.aborted) return refuse("refuse-aborted", "ABORTED", "run", "aborted");
+		if (run.signal !== null) {
+			observedRun = { class: "signaled", exitCode: null, signal: run.signal };
+			return refuse(
+				"refuse-signal",
+				"SIGNAL_TERMINATED",
+				"run",
+				"signaled",
+				"not-inspected",
+				"not-reached",
+				null,
+				run.signal,
+			);
 		}
-		if (run.timedOut) {
-			return refuse("refuse-bound-exceeded", REFUSAL_CAUSES.boundExceeded);
-		}
-		if (run.aborted) {
-			return refuse("refuse-aborted", REFUSAL_CAUSES.aborted);
-		}
-		if (run.exitCode !== 0) {
-			return refuse("refuse-failed-run", REFUSAL_CAUSES.failedRun);
-		}
+		if (run.exitCode === null) return refuse("refuse-internal", "INTERNAL_FAILED", "run", "internal-failed");
+		const exitCode = run.exitCode;
+		observedRun = { class: "exited", exitCode, signal: null };
+		currentPhase = "return";
 		const admission = admitReturn(context.returnPath);
 		if (!admission.admitted) {
-			return refuse("refuse-return", admission.cause);
+			observedReturn = admission.class;
+			return refuse(
+				"refuse-return",
+				RETURN_CODE_BY_CLASS[admission.class],
+				"return",
+				"exited",
+				admission.class,
+				"not-reached",
+				exitCode,
+			);
 		}
 		// The scan reaches EVERY byte that crosses, not the summary alone:
 		// the opaque `payload` slot (issue #169) is delegate-authored like
@@ -290,9 +374,39 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			namesHeldOperand(admission.summary, context.heldHash) ||
 			(admission.payload !== undefined && namesHeldOperand(admission.payload, context.heldHash))
 		) {
-			return refuse("refuse-operand-named", REFUSAL_CAUSES.operandNamed);
+			return refuse(
+				"refuse-operand-named",
+				"RETURN_OPERAND_REJECTED",
+				"return",
+				"exited",
+				"operand-rejected",
+				"not-reached",
+				exitCode,
+			);
 		}
-		const outcome: DispatchOutcome = { disposition: "admitted", ok: admission.ok, summary: admission.summary };
+		observedReturn = "admitted";
+		const compareClass: CompareClass =
+			options.expectedRef === undefined
+				? "not-requested"
+				: admission.reviewedHead === context.heldHash
+					? "confirmed"
+					: "invalid";
+		observedCompare = compareClass;
+		currentPhase = options.expectedRef === undefined ? "return" : "compare";
+		const admittedDiagnostic = diagnostic(
+			"ADMITTED",
+			options.expectedRef === undefined ? "return" : "compare",
+			"exited",
+			"admitted",
+			compareClass,
+			exitCode,
+		);
+		const outcome: DispatchOutcome = {
+			disposition: "admitted",
+			ok: admission.ok,
+			summary: admission.summary,
+			diagnostic: admittedDiagnostic,
+		};
 		if (admission.payload !== undefined) {
 			outcome.payload = admission.payload;
 		}
@@ -300,8 +414,32 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			// The blind compare (§1.6 via §4.9): validity alone crosses back.
 			outcome.compare = admission.reviewedHead === context.heldHash ? "confirmed" : "invalid";
 		}
+		if (surfaceBytes(outcome) > DISPATCH_SURFACE_LIMITS.admittedOutcome) {
+			return refuse(
+				"refuse-surface-bound",
+				"INTERNAL_FAILED",
+				"serialize",
+				observedRun.class,
+				observedReturn,
+				observedCompare,
+				observedRun.exitCode,
+				observedRun.signal,
+			);
+		}
 		record("admitted", "dispatch admitted: the bounded return crossed from the return.json slot");
 		return outcome;
+	} catch {
+		const failedRunClass = observedRun.class === "not-started" ? "internal-failed" : observedRun.class;
+		return refuse(
+			"refuse-internal",
+			"INTERNAL_FAILED",
+			currentPhase,
+			failedRunClass,
+			observedReturn,
+			observedCompare,
+			observedRun.exitCode,
+			observedRun.signal,
+		);
 	} finally {
 		try {
 			cleanupDispatchContext(context);
@@ -380,8 +518,65 @@ interface DispatchToolResult {
 	details: Record<string, unknown>;
 }
 
+export const DISPATCH_SURFACE_LIMITS = Object.freeze({
+	refusedOutcome: 2_048,
+	admittedOutcome: 524_288,
+	refusedContent: 2_048,
+	admittedContent: 524_288,
+	details: 4_096,
+});
+
 function result(text: string, details: Record<string, unknown>): DispatchToolResult {
 	return { content: [{ type: "text", text }], details };
+}
+
+function surfaceBytes(value: unknown): number {
+	return Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value), "utf8");
+}
+
+function internalSurfaceResult(
+	source: DispatcherDiagnostic,
+	phase: DispatcherDiagnostic["phase"] = "serialize",
+): DispatchToolResult {
+	const run =
+		source.run.class === "not-started"
+			? { class: "internal-failed" as const, exitCode: null, signal: null }
+			: source.run;
+	const diagnostic = makeDiagnostic({
+		status: "refused",
+		phase,
+		run,
+		return: source.return,
+		compare: source.compare,
+		durationMs: source.durationMs,
+		code: "INTERNAL_FAILED",
+	});
+	return result(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic });
+}
+
+export function dispatchSurfaceBreaches(
+	value: DispatchToolResult,
+	admitted: boolean,
+): { outcome: boolean; content: boolean; details: boolean } {
+	const outcomeLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedOutcome : DISPATCH_SURFACE_LIMITS.refusedOutcome;
+	const contentLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedContent : DISPATCH_SURFACE_LIMITS.refusedContent;
+	return {
+		outcome: surfaceBytes(value) > outcomeLimit,
+		content: surfaceBytes(value.content[0]?.text ?? "") > contentLimit,
+		details: surfaceBytes(value.details) > DISPATCH_SURFACE_LIMITS.details,
+	};
+}
+
+export function boundToolResult(
+	value: DispatchToolResult,
+	admitted: boolean,
+	diagnostic: DispatcherDiagnostic,
+): DispatchToolResult {
+	const breaches = dispatchSurfaceBreaches(value, admitted);
+	if (breaches.outcome || breaches.content || breaches.details) {
+		return internalSurfaceResult(diagnostic);
+	}
+	return value;
 }
 
 export function dispatchTarget(args: unknown): string {
@@ -425,6 +620,7 @@ export function registerDispatchTool(
 		// unknown — and widens no field: each is read into an `unknown` local
 		// and admitted by its own predicate, exactly as before.
 		async execute(_toolCallId, params: Record<string, unknown>, signal, onUpdate) {
+			const enteredAt = performance.now();
 			const updateSurface = (update: () => void): void => {
 				try {
 					update();
@@ -432,11 +628,28 @@ export function registerDispatchTool(
 					// Presentation is a fail-open aid (§5.2), never an act dependency.
 				}
 			};
-			let terminalRecorded = false;
+			let lastDiagnostic: DispatcherDiagnostic | undefined;
 			const finish = (value: DispatchToolResult): DispatchToolResult => {
-				terminalRecorded = true;
 				updateSurface(() => surface?.dispatchFinished(dispatchTerminal(value.details)));
 				return value;
+			};
+			const parameterRefusal = (): DispatchToolResult => {
+				const diagnostic = makeDiagnostic({
+					status: "refused",
+					phase: "preflight",
+					run: { class: "not-started", exitCode: null, signal: null },
+					return: { class: "not-inspected" },
+					compare: { class: "not-reached" },
+					durationMs: Math.max(0, performance.now() - enteredAt),
+					code: "PARAMETER_REFUSED",
+				});
+				return finish(
+					boundToolResult(
+						result(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic }),
+						false,
+						diagnostic,
+					),
+				);
 			};
 			try {
 				updateSurface(() => surface?.dispatchStarted());
@@ -447,14 +660,14 @@ export function registerDispatchTool(
 					delegateArgv.some((entry) => typeof entry !== "string")
 				) {
 					appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-argv", text: REFUSE_ARGV });
-					return finish(result(REFUSE_ARGV, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const brief: unknown = params.brief;
 				if (typeof brief !== "string") {
 					// No coercion: a `String()`-coerced "undefined" brief is a
 					// silently wrong dispatch, not an admitted one.
 					appendAuditRecord(stateRoot, { category: "dispatch", action: "refuse-brief", text: REFUSE_BRIEF });
-					return finish(result(REFUSE_BRIEF, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const expectedRef: unknown = params.expectedRef;
 				if (expectedRef !== undefined && typeof expectedRef !== "string") {
@@ -466,7 +679,7 @@ export function registerDispatchTool(
 						action: "refuse-expected-ref",
 						text: REFUSE_EXPECTED_REF,
 					});
-					return finish(result(REFUSE_EXPECTED_REF, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const timeoutMs: unknown = params.timeoutMs;
 				if (
@@ -484,7 +697,7 @@ export function registerDispatchTool(
 						action: "refuse-timeout-ms",
 						text: REFUSE_TIMEOUT_MS,
 					});
-					return finish(result(REFUSE_TIMEOUT_MS, { disposition: "refused" }));
+					return parameterRefusal();
 				}
 				const outcome = await runDispatch({
 					callerRepoRoot: repoRoot,
@@ -493,25 +706,51 @@ export function registerDispatchTool(
 					delegateArgv: delegateArgv as string[],
 					expectedRef,
 					timeoutMs,
+					enteredAt,
 					signal,
 					onTrace: (snapshot) => {
 						onUpdate?.({ content: [{ type: "text", text: renderTraceSnapshot(snapshot) }], details: {} });
 					},
 				});
+				lastDiagnostic = outcome.diagnostic;
 				if (outcome.disposition === "refused") {
-					return finish(result(outcome.cause, { disposition: "refused" }));
+					return finish(
+						boundToolResult(
+							result(serializeDiagnostic(outcome.diagnostic), {
+								disposition: "refused",
+								diagnostic: outcome.diagnostic,
+							}),
+							false,
+							outcome.diagnostic,
+						),
+					);
 				}
 				const compareClause = outcome.compare === undefined ? "" : `; compare ${outcome.compare}`;
 				return finish(
-					result(`dispatch admitted (ok: ${outcome.ok})${compareClause}: ${quoted(outcome.summary)}`, {
-						disposition: "admitted",
-						ok: outcome.ok,
-						...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
-					}),
+					boundToolResult(
+						result(`dispatch admitted (ok: ${outcome.ok})${compareClause}: ${quoted(outcome.summary)}`, {
+							disposition: "admitted",
+							ok: outcome.ok,
+							...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
+							diagnostic: outcome.diagnostic,
+						}),
+						true,
+						outcome.diagnostic,
+					),
 				);
-			} catch (error) {
-				if (!terminalRecorded) updateSurface(() => surface?.dispatchFinished("failure"));
-				throw error;
+			} catch {
+				const source =
+					lastDiagnostic ??
+					makeDiagnostic({
+						status: "refused",
+						phase: "preflight",
+						run: { class: "not-started", exitCode: null, signal: null },
+						return: { class: "not-inspected" },
+						compare: { class: "not-reached" },
+						durationMs: Math.max(0, performance.now() - enteredAt),
+						code: "PARAMETER_REFUSED",
+					});
+				return finish(internalSurfaceResult(source, lastDiagnostic === undefined ? "preflight" : "serialize"));
 			}
 		},
 		renderCall(args, theme) {

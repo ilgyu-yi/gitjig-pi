@@ -332,8 +332,15 @@ describe("#131 persistent session surface", () => {
 			});
 			assert.equal((admitted.details as { disposition?: unknown }).disposition, "admitted");
 			assert.equal(events.at(-1), "success");
-			await assert.rejects(tool.execute("throw", null as unknown as Record<string, unknown>), TypeError);
-			assert.equal(events.at(-1), "failure");
+			const internal = await tool.execute("throw", null as unknown as Record<string, unknown>);
+			const internalDiagnostic = (
+				internal.details as { diagnostic?: { code?: unknown; phase?: unknown; run?: { class?: unknown } } }
+			).diagnostic;
+			assert.deepEqual(
+				[internalDiagnostic?.code, internalDiagnostic?.phase, internalDiagnostic?.run?.class],
+				["INTERNAL_FAILED", "preflight", "internal-failed"],
+			);
+			assert.equal(events.at(-1), "refusal");
 			const outsideTool = await runDispatch({
 				callerRepoRoot: root,
 				stateRoot: join(root, "state"),
@@ -342,7 +349,7 @@ describe("#131 persistent session surface", () => {
 				surface: recording,
 			});
 			assert.equal(outsideTool.disposition, "refused");
-			assert.deepEqual(events, ["active", "refusal", "active", "success", "active", "failure", "active", "refusal"]);
+			assert.deepEqual(events, ["active", "refusal", "active", "success", "active", "refusal", "active", "refusal"]);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

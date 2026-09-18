@@ -125,6 +125,7 @@ describe("#132 bounded delegate trace", () => {
 		assert.equal(measured.status, 0, measured.stderr);
 		assert.deepEqual(JSON.parse(measured.stdout), {
 			exitCode: null,
+			signal: null,
 			timedOut: false,
 			aborted: false,
 			spawnFailed: true,
