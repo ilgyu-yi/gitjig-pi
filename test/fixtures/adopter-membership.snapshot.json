@@ -110,10 +110,6 @@
 			"disposition": "handed-over"
 		},
 		{
-			"path": ".github/workflows/gitjig-lifecycle-event.mjs",
-			"disposition": "handed-over"
-		},
-		{
 			"path": ".github/workflows/gitjig-lifecycle.mjs",
 			"disposition": "handed-over"
 		},
@@ -123,6 +119,10 @@
 		},
 		{
 			"path": ".github/workflows/issues-to-project-mirror.yml",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/lifecycle-event.mjs",
 			"disposition": "handed-over"
 		},
 		{

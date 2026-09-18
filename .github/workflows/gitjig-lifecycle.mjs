@@ -8,6 +8,9 @@ export const RECORD_MARKERS = Object.freeze({
 	escape: "<!-- lifecycle-escape-record: v1 -->",
 	escapeRefusal: "<!-- lifecycle-escape-refusal: v1 -->",
 	awaitingAuthorTerminal: "<!-- lifecycle-awaiting-author-terminal: v1 -->",
+	blockedTerminal: "<!-- lifecycle-blocked-terminal: v1 -->",
+	handoffTerminal: "<!-- lifecycle-handoff-terminal: v1 -->",
+	escapeTerminal: "<!-- lifecycle-escape-terminal: v1 -->",
 });
 
 const OID = /^[0-9a-f]{40}$/;
@@ -57,7 +60,12 @@ export function latestEligibleHumanReviews(reviews, prAuthorId, headSha) {
 		)
 			continue;
 		const prior = latest.get(review.actorId);
-		if (prior === undefined || Date.parse(review.submittedAt) > Date.parse(prior.submittedAt))
+		if (
+			prior === undefined ||
+			Date.parse(review.submittedAt) > Date.parse(prior.submittedAt) ||
+			(Date.parse(review.submittedAt) === Date.parse(prior.submittedAt) &&
+				JSON.stringify(review) > JSON.stringify(prior))
+		)
 			latest.set(review.actorId, review);
 	}
 	return latest;
@@ -132,7 +140,8 @@ export function ownBehalfRefusal({ producerId, prAuthorId, beneficiaryIds = [], 
 const AWAITING_KEYS = ["producer", "producerKind", "observedAt", "subjectHead", "baseHead"];
 const BLOCKED_KEYS = ["condition", "recovery", "observedAt", "subjectHead", "baseHead"];
 const HANDOFF_KEYS = ["cause", "recipient", "reentry", "observedAt", "subjectHead", "baseHead"];
-const AWAITING_TERMINAL_KEYS = ["recordCommentId", "clearedAt", "cause", "subjectHead", "baseHead"];
+const AWAITING_TERMINAL_KEYS = ["recordCommentId", "clearerId", "clearedAt", "cause", "subjectHead", "baseHead"];
+const TRANSITION_TERMINAL_KEYS = ["recordCommentId", "transition", "observedAt", "subjectHead", "baseHead"];
 export const ESCAPE_KEYS = [
 	"schemaVersion",
 	"repositoryId",
@@ -165,8 +174,24 @@ export function admitAwaitingAuthorTerminal(value) {
 		exactObject(value, AWAITING_TERMINAL_KEYS) &&
 		Number.isSafeInteger(value.recordCommentId) &&
 		value.recordCommentId > 0 &&
+		nonempty(value.clearerId) &&
 		instant(value.clearedAt) &&
-		new Set(["pull-synchronize", "issue-author-body-edit"]).has(value.cause) &&
+		new Set(["pull-synchronize", "issue-author-body-edit", "producer-supersede"]).has(value.cause) &&
+		nullableOid(value.subjectHead) &&
+		nullableOid(value.baseHead)
+	);
+}
+
+/** @param {any} value */
+export function admitTransitionTerminal(value) {
+	return (
+		exactObject(value, TRANSITION_TERMINAL_KEYS) &&
+		Number.isSafeInteger(value.recordCommentId) &&
+		value.recordCommentId > 0 &&
+		new Set(["blocked-clear", "handoff-reentry", "escape-revoke", "escape-invalidate", "escape-expire"]).has(
+			value.transition,
+		) &&
+		instant(value.observedAt) &&
 		nullableOid(value.subjectHead) &&
 		nullableOid(value.baseHead)
 	);
@@ -260,21 +285,60 @@ export function admitSingleCurrentRecord(comments, marker, admit) {
 	return records.length === 1 ? records[0] : undefined;
 }
 
+/**
+ * Inspect one fully attested marker population. Adapters must set `attested: true`
+ * only after re-reading the carrying comment identity and its live authority.
+ * @param {any[]} comments @param {"issue"|"pull"} subjectKind
+ */
+export function inspectAwaitingAuthorPopulation(comments, subjectKind) {
+	if (!Array.isArray(comments)) return { ok: false, arm: "population-unmeasurable" };
+	const records = [];
+	const terminals = [];
+	for (const comment of comments) {
+		if (typeof comment?.body !== "string") continue;
+		if (comment.body.startsWith(RECORD_MARKERS.awaitingAuthor)) {
+			const record = parseMarkedRecord(comment.body, RECORD_MARKERS.awaitingAuthor);
+			if (
+				comment.attested !== true ||
+				!Number.isSafeInteger(comment.id) ||
+				record === undefined ||
+				!admitAwaitingAuthorRecord(record, subjectKind)
+			)
+				return { ok: false, arm: "record-unparseable" };
+			records.push({ comment, record });
+		}
+		if (comment.body.startsWith(RECORD_MARKERS.awaitingAuthorTerminal)) {
+			const record = parseMarkedRecord(comment.body, RECORD_MARKERS.awaitingAuthorTerminal);
+			if (
+				comment.attested !== true ||
+				record === undefined ||
+				!admitAwaitingAuthorTerminal(record) ||
+				comment.authorId !== record.clearerId
+			)
+				return { ok: false, arm: "terminal-unparseable" };
+			terminals.push({ comment, record });
+		}
+	}
+	const recordIds = new Set(records.map(({ comment }) => comment.id));
+	const terminalIds = terminals.map(({ record }) => record.recordCommentId);
+	if (terminalIds.some((id) => !recordIds.has(id)) || new Set(terminalIds).size !== terminalIds.length)
+		return { ok: false, arm: "terminal-ambiguous" };
+	const terminalized = new Set(terminalIds);
+	const current = records.filter(({ comment }) => !terminalized.has(comment.id));
+	const replayKeys = current.map(({ record }) =>
+		JSON.stringify([record.producer, record.producerKind, record.subjectHead, record.baseHead]),
+	);
+	if (new Set(replayKeys).size !== replayKeys.length || current.length > 1)
+		return { ok: false, arm: "record-ambiguous", current, terminals };
+	return { ok: true, current, terminals };
+}
+
+/** Compatibility helper for callers that require exactly one current record. */
 /** @param {any[]} comments @param {"issue"|"pull"} subjectKind */
 export function admitCurrentAwaitingAuthor(comments, subjectKind) {
-	const terminalized = new Set(
-		comments
-			.map((comment) => parseMarkedRecord(comment.body, RECORD_MARKERS.awaitingAuthorTerminal))
-			.filter(admitAwaitingAuthorTerminal)
-			.map((record) => record.recordCommentId),
-	);
-	const records = comments
-		.map((comment) => ({ comment, record: parseMarkedRecord(comment.body, RECORD_MARKERS.awaitingAuthor) }))
-		.filter(
-			({ comment, record }) =>
-				!terminalized.has(comment.id) && record !== undefined && admitAwaitingAuthorRecord(record, subjectKind),
-		);
-	return records.length === 1 ? records[0] : undefined;
+	const population = inspectAwaitingAuthorPopulation(comments, subjectKind);
+	const current = population.current ?? [];
+	return population.ok && current.length === 1 ? current[0] : undefined;
 }
 
 /** @param {string} recordBody @param {string} label */
@@ -333,4 +397,126 @@ export function createEscapeRecord(input) {
 /** @param {any} value */
 export function validTerminalEscapeFields(value) {
 	return instant(value.consumedAt) && nonempty(value.consumerRunId) && TERMINAL_ESCAPE_OUTCOMES.has(value.outcome);
+}
+
+/** Platform-neutral blocked writer; adapters execute the returned closed plan. */
+/** @param {any} record */
+export function createBlockedTransition(record) {
+	if (!admitBlockedRecord(record)) return { ok: false, arm: "blocked-record" };
+	return {
+		ok: true,
+		plan: recordThenLabelPlan(encodeRecord(RECORD_MARKERS.blocked, record), "status:blocked"),
+	};
+}
+
+/** Blocked clear never changes Proposed/Active and refuses changed Active Directives. */
+/** @param {any} input */
+export function clearBlockedTransition(input) {
+	if (!new Set(["Proposed", "Active"]).has(input.status)) return { ok: false, arm: "blocked-status" };
+	if (input.status === "Active" && input.directiveChanged === true) return { ok: false, arm: "activation-required" };
+	const terminal = {
+		recordCommentId: input.recordCommentId,
+		transition: "blocked-clear",
+		observedAt: input.observedAt,
+		subjectHead: input.subjectHead,
+		baseHead: input.baseHead,
+	};
+	if (!admitTransitionTerminal(terminal)) return { ok: false, arm: "blocked-terminal" };
+	return {
+		ok: true,
+		preservedStatus: input.status,
+		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.blockedTerminal, terminal), "status:blocked"),
+	};
+}
+
+/** @param {any} record */
+export function createHandoffTransition(record) {
+	if (!admitHandoffRecord(record)) return { ok: false, arm: "handoff-record" };
+	return {
+		ok: true,
+		key: handoffKey(record),
+		plan: [{ kind: "comment", body: encodeRecord(RECORD_MARKERS.handoff, record) }],
+	};
+}
+
+/** @param {any} input */
+export function reenterHandoffTransition(input) {
+	const terminal = {
+		recordCommentId: input.recordCommentId,
+		transition: "handoff-reentry",
+		observedAt: input.observedAt,
+		subjectHead: input.subjectHead,
+		baseHead: input.baseHead,
+	};
+	if (!admitTransitionTerminal(terminal)) return { ok: false, arm: "handoff-terminal" };
+	return { ok: true, plan: [{ kind: "comment", body: encodeRecord(RECORD_MARKERS.handoffTerminal, terminal) }] };
+}
+
+/** Escape creation remains record-first; absence of App policy must be decided before this entry point. */
+/** @param {any} input */
+export function createEscapeTransition(input) {
+	const record = createEscapeRecord(input);
+	if (record === undefined) return { ok: false, arm: "escape-record" };
+	const authority =
+		record.producerKind === "maintainer"
+			? authorizedMaintainer(input.authoritySnapshot)
+			: authorizedPolicyProducer(input.authoritySnapshot, input.policy, input.evidence);
+	if (!authority || input.authoritySnapshot?.actorId !== record.producerId)
+		return { ok: false, arm: record.producerKind === "app" ? "policy-unavailable" : "producer-unauthorized" };
+	if (
+		ownBehalfRefusal({
+			producerId: record.producerId,
+			prAuthorId: input.prAuthorId,
+			beneficiaryIds: input.beneficiaryIds,
+			controlledIdentityIds: input.controlledIdentityIds,
+		})
+	)
+		return { ok: false, arm: "own-behalf" };
+	return {
+		ok: true,
+		record,
+		plan: recordThenLabelPlan(encodeRecord(RECORD_MARKERS.escape, record), "merge:bypass-permitted"),
+	};
+}
+
+/** Every examined refusal has exactly one content-free terminal refusal write. */
+/** @param {any} record @param {any} context @param {string} observedAt */
+export function examineEscapeTransition(record, context, observedAt) {
+	const decision = validateEscapeRecord(record, context);
+	if (decision.ok) return { ok: true, arm: "valid", plan: [] };
+	const refusal = escapeRefusalRecord(decision.arm, observedAt);
+	return {
+		ok: false,
+		arm: decision.arm,
+		plan: [{ kind: "comment", body: encodeRecord(RECORD_MARKERS.escapeRefusal, refusal) }],
+	};
+}
+
+/** @param {any} input */
+export function terminateEscapeTransition(input) {
+	if (!new Set(["escape-revoke", "escape-invalidate", "escape-expire"]).has(input.transition))
+		return { ok: false, arm: "escape-transition" };
+	const terminal = {
+		recordCommentId: input.recordCommentId,
+		transition: input.transition,
+		observedAt: input.observedAt,
+		subjectHead: input.subjectHead,
+		baseHead: input.baseHead,
+	};
+	if (!admitTransitionTerminal(terminal)) return { ok: false, arm: "escape-terminal" };
+	return {
+		ok: true,
+		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.escapeTerminal, terminal), "merge:bypass-permitted"),
+	};
+}
+
+/** Execute one plan sequentially; a failed record write cannot reach a label operation. */
+/** @param {readonly any[]} plan @param {{comment:(body:string)=>Promise<void>,addLabel:(label:string)=>Promise<void>,removeLabel:(label:string)=>Promise<void>}} effects */
+export async function executeTransitionPlan(plan, effects) {
+	for (const operation of plan) {
+		if (operation.kind === "comment") await effects.comment(operation.body);
+		else if (operation.kind === "add-label") await effects.addLabel(operation.label);
+		else if (operation.kind === "remove-label") await effects.removeLabel(operation.label);
+		else throw new Error("unknown lifecycle transition operation");
+	}
 }

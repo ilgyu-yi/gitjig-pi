@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const engine = ".github/workflows/gitjig-lifecycle.mjs";
+const adapter = ".github/workflows/lifecycle-event.mjs";
 
 describe("#276 executable lifecycle engine gate reach", () => {
 	it("puts mjs under the real source-style configuration", () => {
@@ -17,6 +18,7 @@ describe("#276 executable lifecycle engine gate reach", () => {
 		assert.match(config, /"allowJs": true/);
 		assert.match(config, /"checkJs": true/);
 		assert.ok(config.includes(`"${engine}"`));
+		assert.ok(config.includes(`"${adapter}"`));
 	});
 
 	it("parses mjs comments with the code dialect in the one-home guard", () => {

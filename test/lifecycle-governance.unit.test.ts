@@ -9,17 +9,25 @@ import {
 	authorizedMaintainer,
 	authorizedPolicyApp,
 	authorizedPolicyProducer,
+	clearBlockedTransition,
+	createBlockedTransition,
 	createEscapeRecord,
+	createEscapeTransition,
+	createHandoffTransition,
 	ESCAPE_KEYS,
 	eligibleApprovalCount,
 	eligibleChangesRequested,
 	encodeRecord,
 	escapeRefusalRecord,
+	examineEscapeTransition,
+	executeTransitionPlan,
 	handoffKey,
 	ownBehalfRefusal,
 	RECORD_MARKERS,
 	recordThenLabelPlan,
+	reenterHandoffTransition,
 	terminalThenUnlabelPlan,
+	terminateEscapeTransition,
 	validateEscapeRecord,
 } from "../.github/workflows/gitjig-lifecycle.mjs";
 
@@ -260,9 +268,10 @@ describe("#276 closed records and transition order", () => {
 			subjectHead: null,
 			baseHead: null,
 		});
-		assert.ok(admitCurrentAwaitingAuthor([{ id: 7, body: record }], "issue"));
+		assert.ok(admitCurrentAwaitingAuthor([{ id: 7, body: record, attested: true }], "issue"));
 		const terminal = encodeRecord(RECORD_MARKERS.awaitingAuthorTerminal, {
 			recordCommentId: 7,
+			clearerId: "github-actions[bot]",
 			clearedAt: NOW,
 			cause: "issue-author-body-edit",
 			subjectHead: null,
@@ -271,13 +280,129 @@ describe("#276 closed records and transition order", () => {
 		assert.equal(
 			admitCurrentAwaitingAuthor(
 				[
-					{ id: 7, body: record },
-					{ id: 8, body: terminal },
+					{ id: 7, body: record, attested: true },
+					{ id: 8, body: terminal, authorId: "github-actions[bot]", attested: true },
 				],
 				"issue",
 			),
 			undefined,
 		);
+	});
+});
+
+describe("#276 transition service entry points", () => {
+	const escapeInput = () => ({
+		...escapeRecord(),
+		authoritySnapshot: {
+			actorId: "maintainer",
+			actorType: "User",
+			repositoryId: "R",
+			addressedRepositoryId: "R",
+			permission: "MAINTAIN",
+		},
+		prAuthorId: "author",
+		beneficiaryIds: [],
+		controlledIdentityIds: [],
+	});
+	const blocked = { condition: "dependency", recovery: "merge it", observedAt: NOW, subjectHead: null, baseHead: null };
+	const handoff = {
+		cause: "interruption",
+		recipient: "next-session",
+		reentry: "resume row",
+		observedAt: NOW,
+		subjectHead: null,
+		baseHead: null,
+	};
+
+	it("preserves blocked status and refuses changed Active activation", () => {
+		const creation = createBlockedTransition(blocked);
+		assert.ok(creation.ok && creation.plan);
+		assert.equal(creation.plan[0]?.kind, "comment");
+		const clear = clearBlockedTransition({
+			recordCommentId: 1,
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+			status: "Proposed",
+			directiveChanged: false,
+		});
+		assert.ok(clear.ok && clear.plan);
+		assert.equal(clear.preservedStatus, "Proposed");
+		assert.equal(clear.plan[1]?.kind, "remove-label");
+		assert.deepEqual(
+			clearBlockedTransition({ ...blocked, recordCommentId: 1, status: "Active", directiveChanged: true }),
+			{ ok: false, arm: "activation-required" },
+		);
+	});
+
+	it("creates idempotent handoffs and retains terminal re-entry history", () => {
+		const created = createHandoffTransition(handoff);
+		assert.ok(created.ok && created.plan);
+		assert.equal(created.key, handoffKey(handoff));
+		const reentry = reenterHandoffTransition({
+			recordCommentId: 2,
+			observedAt: NOW,
+			subjectHead: null,
+			baseHead: null,
+		});
+		assert.ok(reentry.ok && reentry.plan);
+		assert.equal(reentry.plan[0]?.kind, "comment");
+	});
+
+	it("creates and terminalizes escape records with record-first label plans", () => {
+		const created = createEscapeTransition(escapeInput());
+		assert.ok(created.ok && created.plan);
+		assert.equal(created.plan[0]?.kind, "comment");
+		assert.equal(created.plan[1]?.kind, "add-label");
+		assert.deepEqual(createEscapeTransition({ ...escapeInput(), prAuthorId: "maintainer" }), {
+			ok: false,
+			arm: "own-behalf",
+		});
+		assert.equal(
+			createEscapeTransition({ ...escapeInput(), producerKind: "app", producerPermission: null }).arm,
+			"policy-unavailable",
+		);
+		for (const transition of ["escape-revoke", "escape-invalidate", "escape-expire"]) {
+			const terminal = terminateEscapeTransition({
+				recordCommentId: 3,
+				transition,
+				observedAt: NOW,
+				subjectHead: HEAD,
+				baseHead: BASE,
+			});
+			assert.ok(terminal.ok && terminal.plan);
+			assert.equal(terminal.plan[1]?.kind, "remove-label");
+		}
+	});
+
+	it("writes exactly one content-free refusal per examined refusal", () => {
+		const decision = examineEscapeTransition(escapeRecord(), { ...context, labelPresent: false }, NOW);
+		assert.equal(decision.ok, false);
+		assert.equal(decision.plan.length, 1);
+		assert.equal(decision.plan[0].kind, "comment");
+		assert.doesNotMatch(decision.plan[0].body, /guarded|operand|count/);
+		assert.deepEqual(examineEscapeTransition(escapeRecord(), context, NOW).plan, []);
+	});
+
+	it("stops before labels when a record write fails", async () => {
+		const calls: string[] = [];
+		const transition = createBlockedTransition(blocked);
+		assert.ok(transition.ok && transition.plan);
+		await assert.rejects(
+			executeTransitionPlan(transition.plan, {
+				comment: async () => {
+					calls.push("comment");
+					throw new Error("write failed");
+				},
+				addLabel: async () => {
+					calls.push("add-label");
+				},
+				removeLabel: async () => {
+					calls.push("remove-label");
+				},
+			}),
+		);
+		assert.deepEqual(calls, ["comment"]);
 	});
 });
 

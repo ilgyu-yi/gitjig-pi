@@ -31,12 +31,25 @@ export interface ReviewPublicationReceipt {
 
 export type ReviewPublicationOutcome = { ok: true; receipt: ReviewPublicationReceipt } | { ok: false; cause: string };
 
+export interface ResolverPublicationSeams {
+	fetchComments: FetchComments;
+	publishRecord: typeof publishAndRefetchReviewRecord;
+	mutate: typeof runPlatformMutation;
+	read: typeof runPlatformRead;
+}
+
 /** Publish the Resolver-repair lifecycle record through the same attested seam. */
 export async function publishResolverRepairHandoff(
 	source: ReviewSubject,
 	repoRoot: string,
 	stateRoot: string,
 	now: () => string = () => new Date().toISOString(),
+	seams: ResolverPublicationSeams = {
+		fetchComments: fetchAttestedReviewComments,
+		publishRecord: publishAndRefetchReviewRecord,
+		mutate: runPlatformMutation,
+		read: runPlatformRead,
+	},
 ): Promise<ReviewPublicationOutcome> {
 	const subject = admitReviewSubject(source);
 	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
@@ -47,16 +60,30 @@ export async function publishResolverRepairHandoff(
 	} catch {
 		return { ok: false, cause: "the handed-over lifecycle engine was unavailable" };
 	}
-	const population = await fetchAttestedReviewComments(repoRoot, subject.context);
+	const population = await seams.fetchComments(repoRoot, subject.context);
 	if (!population.ok) return { ok: false, cause: "the current lifecycle record population was unavailable" };
-	const current = engine.admitCurrentAwaitingAuthor(
-		population.comments.filter((comment) => comment.authorId === subject.writerId),
-		"pull",
-	);
+	const trusted = population.comments
+		.filter(
+			(comment) =>
+				comment.authorId === subject.writerId ||
+				(comment.authorLogin === "github-actions[bot]" && comment.authorType === "Bot"),
+		)
+		.map((comment) => ({
+			...comment,
+			authorId: comment.authorType === "Bot" ? comment.authorLogin : comment.authorId,
+			attested: true,
+		}));
+	const inspected = engine.inspectAwaitingAuthorPopulation(trusted, "pull");
+	if (!inspected.ok) return { ok: false, cause: "the current lifecycle record population was ambiguous" };
+	const current = inspected.current?.[0];
+	if (
+		current !== undefined &&
+		(current.record.subjectHead !== pull.head.oid || current.record.baseHead !== pull.base.oid)
+	)
+		return { ok: false, cause: "the current lifecycle record was stale" };
 	let published: ReviewPublicationOutcome;
 	if (
 		current !== undefined &&
-		current.record.producer === subject.writerId &&
 		current.record.subjectHead === pull.head.oid &&
 		current.record.baseHead === pull.base.oid
 	) {
@@ -67,12 +94,12 @@ export async function publishResolverRepairHandoff(
 				pullRequestId: pull.id,
 				headOid: pull.head.oid,
 				commentId: current.comment.id,
-				authorId: subject.writerId,
+				authorId: current.comment.authorId,
 				body: current.comment.body,
 			},
 		};
 	} else {
-		published = await publishAndRefetchReviewRecord(
+		published = await seams.publishRecord(
 			engine.encodeRecord(engine.RECORD_MARKERS.awaitingAuthor, {
 				producer: subject.writerId,
 				producerKind: "resolver-repair",
@@ -88,13 +115,13 @@ export async function publishResolverRepairHandoff(
 	}
 	const repository = subject.context.repository.nameWithOwner;
 	if (
-		!(await runPlatformMutation(
+		!(await seams.mutate(
 			["issue", "edit", String(pull.number), "--repo", repository, "--add-label", "awaiting-author"],
 			repoRoot,
 		))
 	)
 		return { ok: false, cause: "the awaiting-author record was durable but its label mutation failed" };
-	const labels = await runPlatformRead(
+	const labels = await seams.read(
 		["issue", "view", String(pull.number), "--repo", repository, "--json", "labels", "--jq", ".labels[].name"],
 		repoRoot,
 	);

@@ -33,5 +33,10 @@
 
 		"noEmit": true
 	},
-	"include": [".pi/**/*.ts", ".github/workflows/gitjig-lifecycle.mjs", "test/**/*.ts"]
+	"include": [
+		".pi/**/*.ts",
+		".github/workflows/gitjig-lifecycle.mjs",
+		".github/workflows/lifecycle-event.mjs",
+		"test/**/*.ts"
+	]
 }
