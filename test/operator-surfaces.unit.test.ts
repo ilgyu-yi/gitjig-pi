@@ -71,7 +71,7 @@ describe("#131 collapsed operator-visible acts", () => {
 			"success, failure, or refusal",
 			"Refusal never borrows success styling or wording",
 			"active-dispatch count",
-			"Execution mode is excluded until the owning §5.6 mode instrument lands",
+			"Merge mode is excluded until the owning §5.6 mode instrument lands",
 			"Current issue or PR and workflow phase are excluded",
 			"A UI-less mode makes no status call",
 		])

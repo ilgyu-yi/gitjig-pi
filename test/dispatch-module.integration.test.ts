@@ -1591,14 +1591,14 @@ describe("the blind compare and the operand scan (issue #88, SPEC §4.9, §1.6)"
 			outcome.disposition,
 			"admitted",
 			`compare-invalid: the in-schema return was refused outright — the compare's verdict, not a schema ` +
-				`refusal, is what the merge-review row consumes: ${JSON.stringify(outcome)}`,
+				`refusal, is what the review-integrity caller consumes: ${JSON.stringify(outcome)}`,
 		);
 		assert.equal(
 			(outcome as { compare?: string }).compare,
 			"invalid",
 			"compare-invalid: a reviewedHead differing from the held hash did not surface as 'invalid' — with " +
 				"the tree pinned at provision, a misreported return is the ONLY way this compare can fail, and " +
-				"an always-confirmed dispatcher forges the merge-review row's evidence (§4.9, §3.3)",
+				"an always-confirmed dispatcher forges review-integrity evidence (§4.9, §1.6)",
 		);
 		const outcomeBytes = JSON.stringify(outcome);
 		assert.ok(

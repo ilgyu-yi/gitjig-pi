@@ -1458,7 +1458,6 @@ describe("fail-posture inventory (§3.9)", () => {
 				"local-tier-derivation → open",
 				"local-tier-derivation → open",
 				"local-tier-exclusion → closed",
-				"merge-review-record-lookup → closed",
 				"platform-file-listing → closed",
 				"provenance-reader → open",
 				"repo-root-discovery → open",

@@ -8,8 +8,8 @@
  * The caller acts §1.4 and §1.6-§1.9 assign ride this dispatcher; where
  * a §3.3 row consumes the property, the dispatcher is a CALL SITE of the
  * predicate that row owns, never a second implementation (§3.11). The
- * named instance: holding and comparing the expected head is evidence
- * production for the §3.3 `merge-review` row. With the tree pinned at
+ * named instance: holding and comparing the expected head is review-
+ * integrity evidence. With the tree pinned at
  * provision, the compare consumes the return's `reviewedHead` and crosses
  * back as VALIDITY alone — byte-equal to the held hash → `"confirmed"`;
  * mismatch, absent, or unconfirmable → `"invalid"`, never an approve —

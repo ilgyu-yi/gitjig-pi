@@ -6,7 +6,7 @@ type StatusUI = Pick<ExtensionContext["ui"], "setStatus" | "theme">;
 
 /**
  * The minimal persistent session projection (§5.9). It deliberately does not
- * infer issue, PR, workflow phase, or execution mode without an owning runtime,
+ * infer issue, PR, workflow phase, or merge mode without an owning runtime,
  * and it does not copy bind degradation out of its owning advisory surface.
  */
 export class SessionSurface {

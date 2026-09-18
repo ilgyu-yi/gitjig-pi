@@ -1,7 +1,10 @@
 name: issues-to-project-mirror
 
 # One-direction sync: Issue events → Project Item fields. The Project remains
-# a derived view; Issues are SSOT. On `issues.{opened, edited, labeled,
+# a derived view; Issues are SSOT. Mirror only: this workflow must not infer,
+# apply, or clear lifecycle labels such as `awaiting-author` or `blocked`;
+# the owning transition service does that, and this workflow only reflects
+# resulting Issue events. On `issues.{opened, edited, labeled,
 # unlabeled, closed, reopened, milestoned, demilestoned}`, derive the four
 # mirrored fields from the Issue's labels + body + open/closed state, and
 # write them to the Project Item that wraps this Issue (creating the Item
@@ -93,7 +96,7 @@ jobs:
             status_val="Completed"
           elif printf '%s' "$labels_json" | jq -e 'index("status:proposed") != null' >/dev/null 2>&1; then
             status_val="Proposed"
-          elif printf '%s' "$labels_json" | jq -e 'index("status:blocked") != null' >/dev/null 2>&1; then
+          elif printf '%s' "$labels_json" | jq -e 'index("blocked") != null' >/dev/null 2>&1; then
             status_val="Blocked"
           fi
           echo "status_val=$status_val" >> "$GITHUB_OUTPUT"
