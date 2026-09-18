@@ -41,7 +41,7 @@ export function registerLandCommand(pi: ExtensionAPI, repoRoot: string, modes: R
 					now,
 					engine: loaded.engine,
 				},
-				platformLandingEffects(host, repository, pr, repoRoot),
+				platformLandingEffects(host, repository, pr, repoRoot, loaded.engine.RECORD_MARKERS.landingClaim),
 			);
 			pi.appendEntry("gitjig-land", { ...result, modes });
 			pi.sendMessage({ customType: "gitjig-spine-turn", content: [], display: false }, { triggerTurn: true });

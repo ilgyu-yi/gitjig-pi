@@ -40,7 +40,7 @@ function refPatternMatches(pattern: unknown, subject: string): boolean | undefin
 				index += 1;
 			} else expression += "[^/]*";
 		} else if (character === "?") expression += "[^/]";
-		else if (character === "[") return undefined;
+		else if (new Set(["[", "]", "{", "}", "\\"]).has(character ?? "")) return undefined;
 		else expression += character?.replace(/[\\^$+?.()|{}]/g, "\\$&") ?? "";
 	}
 	try {
@@ -339,6 +339,26 @@ export async function loadPlatformLanding(
 	const threadNodes = array(threadRecord?.nodes).map(record);
 	const threadsMeasured = record(threadRecord?.pageInfo)?.hasNextPage === false;
 	const allThreadsResolved = threadsMeasured && threadNodes.every((thread) => thread?.isResolved === true);
+	const permissionCache = new Map<string, Promise<Record<string, unknown> | undefined>>();
+	const permissionFor = (login: string) => {
+		const prior = permissionCache.get(login);
+		if (prior) return prior;
+		const pending = repositoryApi(`collaborators/${encodeURIComponent(login)}/permission`).then(record);
+		permissionCache.set(login, pending);
+		return pending;
+	};
+	const terminatedEscapeIds = new Set<number>();
+	for (const comment of commentRecords) {
+		const terminal = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.escapeTerminal);
+		if (
+			!engine.admitTransitionTerminal(terminal) ||
+			typeof comment.authorLogin !== "string" ||
+			!Number.isSafeInteger(record(terminal)?.recordCommentId)
+		)
+			continue;
+		const permission = landingPermission(await permissionFor(comment.authorLogin));
+		if (permission) terminatedEscapeIds.add(Number(record(terminal)?.recordCommentId));
+	}
 	const labels = new Set(
 		array(pr.labels)
 			.map(record)
@@ -349,9 +369,7 @@ export async function loadPlatformLanding(
 		const escapeRecord = engine.parseMarkedRecord(comment.body, engine.RECORD_MARKERS.escape);
 		if (escapeRecord === undefined || typeof comment.authorLogin !== "string" || typeof comment.authorId !== "string")
 			continue;
-		const permission = record(
-			await repositoryApi(`collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
-		);
+		const permission = await permissionFor(comment.authorLogin);
 		const context = {
 			carryingCommentAuthorId: comment.authorId,
 			livePermission: landingPermission(permission) ?? null,
@@ -366,7 +384,11 @@ export async function loadPlatformLanding(
 			baseSha,
 			labelPresent: labels.has("merge:bypass-permitted"),
 		};
-		if (engine.validateEscapeRecord(escapeRecord, context).ok && Number.isSafeInteger(comment.id))
+		if (
+			engine.validateEscapeRecord(escapeRecord, context).ok &&
+			Number.isSafeInteger(comment.id) &&
+			!terminatedEscapeIds.has(Number(comment.id))
+		)
 			escapeCandidates.push({
 				commentId: Number(comment.id),
 				replayKey: JSON.stringify([repositoryId, pullRequestId, headSha, Number(comment.id)]),
@@ -385,9 +407,7 @@ export async function loadPlatformLanding(
 				typeof comment.authorLogin !== "string"
 			)
 				return undefined;
-			const permission = record(
-				await repositoryApi(`collaborators/${encodeURIComponent(comment.authorLogin)}/permission`),
-			);
+			const permission = await permissionFor(comment.authorLogin);
 			return new Set(["admin", "maintain", "write"]).has(String(permission?.role_name).toLowerCase())
 				? comment.authorId
 				: undefined;
@@ -472,6 +492,7 @@ export function platformLandingEffects(
 	repository: string,
 	prNumber: number,
 	repoRoot: string,
+	claimMarker: string,
 	runner: PlatformRunner = runPlatformRead,
 	mutationRunner: PlatformRunner = runPlatformMutation,
 ): LandingEffects {
@@ -512,7 +533,7 @@ export function platformLandingEffects(
 			for (const comment of normalized)
 				if (
 					typeof comment.body === "string" &&
-					comment.body.startsWith("<!-- lifecycle-landing-claim: v1 -->") &&
+					comment.body.startsWith(claimMarker) &&
 					typeof comment.authorId === "string" &&
 					typeof comment.authorLogin === "string"
 				)

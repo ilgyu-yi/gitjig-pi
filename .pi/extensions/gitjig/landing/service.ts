@@ -62,6 +62,7 @@ export interface LifecycleEngine {
 	validateEscapeRecord(record: unknown, context: unknown): { ok: boolean; arm: string };
 	admitLandingClaim(value: unknown): boolean;
 	admitLandingTerminal(value: unknown): boolean;
+	admitTransitionTerminal(value: unknown): boolean;
 	examineEscapeTransition(
 		record: unknown,
 		context: unknown,
