@@ -29,43 +29,43 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§2.4 | Evidence discipline | 322 |
 | &nbsp;&nbsp;§2.5 | Authoring doctrine | 339 |
 | &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 378 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 390 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 400 |
-| §3 | Enforcement-layer architecture | 412 |
-| &nbsp;&nbsp;§3.1 | The constraint | 416 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 423 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 431 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 536 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 540 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 544 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 556 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 570 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 592 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 606 |
-| &nbsp;&nbsp;§3.11 | Gate design | 620 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 642 |
-| §4 | Substrate and install contract | 652 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 656 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 668 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 676 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 682 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 686 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 690 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 702 |
-| &nbsp;&nbsp;§4.8 | The command layer | 712 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 769 |
-| §5 | Cross-cutting contracts | 888 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 892 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 898 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 902 |
-| &nbsp;&nbsp;§5.4 | Work language | 906 |
-| &nbsp;&nbsp;§5.5 | State boundary | 910 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 918 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 930 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 940 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 948 |
-| §6 | Self-governance milestone | 960 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 971 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 392 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 402 |
+| §3 | Enforcement-layer architecture | 414 |
+| &nbsp;&nbsp;§3.1 | The constraint | 418 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 425 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 433 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 538 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 542 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 546 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 558 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 574 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 598 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 612 |
+| &nbsp;&nbsp;§3.11 | Gate design | 626 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 648 |
+| §4 | Substrate and install contract | 658 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 662 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 674 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 682 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 688 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 692 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 696 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 708 |
+| &nbsp;&nbsp;§4.8 | The command layer | 718 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 775 |
+| §5 | Cross-cutting contracts | 894 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 898 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 904 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 908 |
+| &nbsp;&nbsp;§5.4 | Work language | 912 |
+| &nbsp;&nbsp;§5.5 | State boundary | 916 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 924 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 936 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 946 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 954 |
+| §6 | Self-governance milestone | 966 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 977 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -82,7 +82,7 @@ The SPEC governs the operating shell this repository ships — the norms it enfo
 
 ### 0.3 Reading and amendment conventions
 
-Sections are numbered (`## N.` / `### N.M`) and indexed by the generated table of contents, which records line numbers for targeted reads. Every edit to this document regenerates the table of contents in the same commit (`.github/workflows/build_toc.sh`; freshness is CI-enforced by `.github/workflows/check-toc.yml`). Amendments ride the standard flow like any other change, settled on §1.2's terms before anything derives from them. A disagreement between running code and this SPEC defaults to a **code defect** — the SPEC is never edited to match possibly-wrong code. Three dispositions, decided before any edit: *spec-ahead* (code lags a settled section — tracked as ordinary work), *code-ahead-correct* (the code embodies the better rule — the SPEC amendment is proposed and lands only through human approval), and *code-wrong* (the code is fixed). Drift between the two is detected and surfaced, never auto-corrected; no automated run ever applies an SSOT correction (§5.6, §5.7). Supporting documents, if a `docs/` tree ever exists, are thin pointers that lead with a reference into this SPEC (`.github/workflows/check-ssot-home.sh` enforces the discipline); contract prose lives here, not there — the consumer-side generalization of that discipline is §2.8.
+Sections are numbered (`## N.` / `### N.M`) and indexed by the generated table of contents, which records line numbers for targeted reads. Every edit to this document regenerates the table of contents in the same commit (`.github/workflows/build_toc.sh`; freshness is CI-enforced by `.github/workflows/check-toc.yml`). Amendments ride the standard flow like any other change, settled on §1.2's terms before anything derives from them. A disagreement between running code and this SPEC defaults to a **code defect** — the SPEC is never edited to match possibly-wrong code. Three dispositions, decided before any edit: *spec-behind* (code lags a settled section — tracked as ordinary work), *code-ahead-correct* (the code embodies the better rule — the SPEC amendment is proposed and lands only through human approval), and *code-wrong* (the code is fixed). Drift between the two is detected and surfaced, never auto-corrected; no automated run ever applies an SSOT correction (§5.6, §5.7). Supporting documents, if a `docs/` tree ever exists, are thin pointers that lead with a reference into this SPEC (`.github/workflows/check-ssot-home.sh` enforces the discipline); contract prose lives here, not there — the consumer-side generalization of that discipline is §2.8.
 
 ## 1. Work norms
 
@@ -311,7 +311,7 @@ Four canonical actor-neutral states and records govern interruption and landing 
 - **A handoff is an interruption record, not a durable stop state.** It carries exactly `{cause,recipient,reentry,observedAt,subjectHead,baseHead}`. The component that cannot continue writes it before stopping; repeated observation of the same cause, recipient, re-entry, and heads is idempotent. Re-entry consumes the interruption on the owning gate's terms while the record remains durable history.
 - **`merge:bypass-permitted` is PR-only intent.** It is neither approval nor authority. Its closed escape record and consumption rules are §3.8's; no other lifecycle label can substitute for it.
 
-Exactly two Issue workflow states govern whether work may begin: **Proposed** and **Active**. Every new Issue enters Proposed. Work begins only after a trusted maintainer account has performed a substantive review of the Issue's content and the repository's committed activation rule has accepted a committed verdict marker from that review. The marker's grammar is a closed set — activation's verdict token is exactly `ACTIVATE` or `REJECT` at the marker's canonical position — and a new adjudication mechanism collapses into that grammar rather than minting a third token (§1.6). The automation account is fixed by repository configuration, cannot be the Issue author for that activation, and no label event, project-field edit, or untrusted comment substitutes for the verdict. Activation may be performed through the repository's operator tooling, but the tooling is only the call site; the predicate remains actor and evidence based. Rejection leaves the Issue Proposed with findings. Closing completes an Active Issue only after each acceptance criterion is explicitly resolved against evidence; this AC-closeout is a procedural landing gate today (§3.3).
+Exactly two Issue workflow states govern whether work may begin: **Proposed** and **Active**. Every new Issue enters Proposed. Work begins only after a trusted maintainer account has performed a substantive review of the Issue's content and the repository's committed activation rule has accepted that review's passing verdict marker. The marker grammar is closed and occupies the comment's first line: exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`. The first is the only passing token; the second records rejection and leaves the Issue Proposed with findings. A new adjudication mechanism collapses into that grammar rather than minting a third token (§1.6). The automation account is fixed by repository configuration, cannot be the Issue author for that activation, and no label event, project-field edit, or untrusted comment substitutes for the verdict. Activation may be performed through the repository's operator tooling, but the tooling is only the call site; the predicate remains actor and evidence based. Closing completes an Active Issue only after each acceptance criterion is explicitly resolved against evidence; this AC-closeout is a procedural landing gate today (§3.3).
 
 An Active Directive not closed by a merge completes only through an explicit **completion review**. Its required evidence artifact is the platform comment from that substantive review: it binds the current Directive body, resolves every stated success signal against platform-resolvable evidence, identifies the reviewing actor through platform-attested identity, and carries the completion verdict at the committed rule's canonical position. Only a passing completion verdict permits the completed close; a rejection leaves the Directive Active with findings. Completion review is per-success-signal evidence sufficiency, never an overall impression. Revising a Directive supersedes its body (§2.5): the prior body is archived as a write-once record in the same act, and the revised body re-enters the same gate as the original activation; no transient lifecycle state is minted for a transition the archive-plus-log already witnesses. These lifecycle rules are procedural today, enforced at review (§2.3); their instruments derive later per §1.2's macro-phase clause.
 
@@ -385,6 +385,8 @@ The declaration binds **from first push**: pre-push amendment is free, and a lat
 
 Two sweep tiers, and the tier keys on **measured reach, never on direction**: whether a change retires or only adds must not decide sweep depth — an additive change has no pre-existing hits, so a direction-keyed measurement reads zero regardless of true breadth. **Term-sweep** (the default): sweep the candidate-term set, reading around each hit. **Read-through**: the affected sections read contiguously end to end — owed when the measured reach crosses the boundary of more than one section, or touches non-SSOT or test dependents; a whole-document pass is an explicit non-default reserved for a doctrine-wide rewrite. Completion is checked over the survivors of the declared set within declared scope ∩ touched paths; an undecidable comparison yields `inconclusive` with a failure exit — never pass-and-warn — reported to the completion gate, which has authority to fail, never to the judgment layer that backstops it.
 
+**Escape disposition.** The `change-reach` class is deliberately doorless. Its subject is a reversible completion decision before landing, and a sanctioned skip would erase the evidence the class exists to require. A false block is recovered in flow: correct or widen the cumulative trailers or the surviving artifact, rerun the owed term-sweep or read-through, and present the conclusive completion result again. An unavailable push history or an inconclusive survivor comparison is retried from the authoritative platform record, never bypassed or guessed. This is the class's explicit §3.8 total-coverage disposition; no label, actor, mode, or authored assertion substitutes for completion evidence.
+
 The protocol is **procedural today** — author-run at plan and completion time, review-enforced — homed as the `change-reach` row in §3.3's table; instruments derive later from this section per §1.2's macro-phase clause.
 
 ### 2.7 Canonical naming
@@ -426,7 +428,7 @@ This section states the first-class design constraint — pi provides no built-i
 
 **Tier 2 — the local git-hook tier.** The **handed-over** `.githooks/` adapters (`pre-commit`, `pre-push`, `commit-msg`) bind any local git operation — human, script, or any agent harness — once a clone activates them (`core.hooksPath=.githooks`). The adapters and the `_lib.sh`/`helpers/` runtime they invoke are one **handed-over** hook layer committed in an adopter; tier 2 has no carried execution seam. Carried assets host the separate in-process tier-1 surface and do not sit on a git-hook verdict path. This is an **advice tier**: it folds to `--no-verify` by design, and a clone that has not activated the hooks path no-ops rather than wedging git. The adapters carry no check logic; they delegate through the contract declared in `.githooks/_lib.sh`, which carries the tier's helper-source primitive and audit-record writer (§5.5) as handed-over code and **derives** the two locations the tier needs: the helper directory from its own installed position (§4.1), and the state root from the repository top the hook is running against (§4.6). What the tier sources is what stands at that derived position in the working tree, committed or not. The derivation is bounded by one refusal, taken over the adapter position alone: where the repository top discovered from the running adapter's own installed position is not the top of the repository the operation runs against, the tier runs no check and says so on stderr — a tier that resolved its checks outside the repository it was invoked in would write its records there too, across the boundary §5.5 draws. Two residuals ride that bound and are enumerated in place (§3.11) rather than closed. The helper directory is appended to the adapter position after the refusal is taken and is itself neither resolved nor re-tested, so a `helpers` component linked out of the repository is sourced and executed with no refusal on any surface. That is a residual to **§5.9's disarm bar** on the same argument §3.3 makes for its allow-list read — enforcement-disabling, since what the tier sources decides every delegated check; reachable by the one worktree-write the same principal already holds; and traceless by this paragraph's own words, no refusal anywhere being exactly the record that is missing — placed outside that bar here rather than left as an unmet one. A third state rides the same derivation and is a residual to the same bar, on the SAME ground the linked-out component above stands on: what the tier sources is what stands at the derived position in the working tree, committed or not, so an ordinary edit to an adapter or a helper — no link, no moved path, just different bytes — replaces every delegated check, and the bind advisory cannot see it, since it reads configuration and runs no program of the repository it classifies while the degradation arms key on absent files and absent functions. The door carries it, and carries the persistence with it: **the door's ground reaches a rewrite that later runs inherit, not merely a single bypass.** The actor who can write those bytes can already take every operation through `--no-verify`, as many times as they like, so a persistent edit grants that actor no outcome the tier's **sanctioned** door does not already grant. The qualifier is the discriminator and not decoration: bare outcome equivalence would excuse the tier-1 states too, since a publication composed outside that instrument is observed by no tier and its actor already holds the outcome. What separates them is that `--no-verify` is this tier's sanctioned escape (§3.8), while an out-of-reach path is not sanctioned at all — it is bound by §3.4's procedural obligation instead. Persistence changes how long the capability is convenient, never who holds it — and that is what the ground is about. Stated here because it is the reading the whole tier-2 family depends on: without it the linked-out component, the pattern read and the allow-list read would all lose their ground, all three being writes later runs inherit. The second residual below is a residual to the same bar, and owes its own clause rather than §3.8's: `GIT_WORK_TREE` is one spelling of it and is enumerated there, but a work tree named on the command line or in `core.worktree` reaches the same outcome — no hooks directory at the relative path, no adapter, no check — and §3.8's ground does not carry, since that section disposes of the environment channels it enumerated and measured, and this is not one of them. So the caller-named work tree, however it is named, is enforcement-disabling, reachable by one innocuous command, and traceless, and it stands outside the bar here as a recorded decision. And a refusal that lives inside a hook speaks only where a hook runs: under the relative `core.hooksPath` the bind instrument writes, an operation git resolves against a caller-named work tree finds no hooks directory there, runs no adapter, and reaches none of this. The delegated checks are branch guarding, staged-secret scanning, and commit-subject grammar. A present-but-incomplete helper degrades to allow, never to a false block — and the fold is **arm-ordered**: an adapter sources each arm's helper immediately before that arm runs, so a helper failure degrades that arm and every arm after it; an arm that has already run and decided is never undone. On the push surface the adapter calls its predicate once per ref line git streams on stdin, so a delegated check reads no stdin of its own: a check that consumes stdin removes ref lines from the iteration, and the arm then measures fewer refs than the push carries with nothing to show for the difference. A clone arms this tier through the committed bind instrument `.githooks/bind_local_tier.sh`: one idempotent run activates `core.hooksPath`, excludes the untracked state directory from version control at creation (§4.1), and verifies the effective bound state before reporting it (§4.7); the session surface's bind advisory (§5.2, §5.9) names any degraded binding state and that exact command.
 
-**Tier 3 — CI gates and server-side rulesets.** The target architecture splits landing facts between a `core-governance` ruleset and a `human-approval` ruleset. Core governance owns changelog, SSOT home, TOC freshness, source style, type check, suite, AC closeout, protected-branch landing, force-push protection, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history. Human approval owns only the eligible-human quorum. In this source repository the current unsplit configuration requires the workflow contexts (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`, `suite`) and carries the branch controls, but no approving review; it is therefore spec-behind pending Phase 4. Before the split-ruleset phase activates, the quorum escape is disabled: there is no bypass around the current hard floor. In an adopter, Tier 3 is the applicable handed-over workflow set and matching server configuration. This tier is the hard floor for every contributor and clone governed by that repository, including one where Tiers 1–2 are absent or bypassed.
+**Tier 3 — CI gates and server-side rulesets.** The target architecture splits landing facts between a `core-governance` ruleset and a `human-approval` ruleset. Core governance owns changelog, SSOT home, TOC freshness, source style, type check, suite, AC closeout, protected-branch landing and deletion protection, force-push protection, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history. Human approval owns only the eligible-human quorum. In this source repository the current unsplit configuration requires the workflow contexts (`fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`, `suite`) and carries the merge-commit-only method, non-fast-forward history, deletion protection, and review-thread resolution, but no approving review; it is therefore spec-behind pending Phase 4. Before the split-ruleset phase activates, the quorum escape is disabled: there is no bypass around the current hard floor. In an adopter, Tier 3 is the applicable handed-over workflow set and matching server configuration. This tier is the hard floor for every contributor and clone governed by that repository, including one where Tiers 1–2 are absent or bypassed.
 
 ### 3.3 Gate classes
 
@@ -531,11 +533,11 @@ The second is **§1.1's linkage line**: a body whose FIRST line is exactly that 
 
 *What neither gate establishes* (§3.11's report-only rule). `type-check` checks against the API of a **declared** dependency version, not against the runtime an adopter binds (§4.6), so agreement here is agreement with what the manifest pins and no more; where the manifest's pin and the substrate record's differ, the gate measures the former. `source-style` establishes conformance to a committed configuration, never that the configuration is the right one — a rule the configuration disables is not measured and its absence is visible only in that file.
 
-The placement rule is itself **procedural** (§3.1 rule 1): it binds SPEC authorship, the two rightmost columns of the table above are its only product, and it is enforced at review (§2.3). §3.6's hardening-trigger requirement does not fire on it — that requirement binds irreversible-class norms, and a mis-placed row is a reversible document defect the next amendment repairs.
+The placement rule is itself **procedural** (§3.1 rule 1): it binds SPEC authorship, the two rightmost columns of the table above are its only product, and it is enforced at review (§2.3). A misplaced row is a reversible document defect repaired by the next amendment; it never relaxes the guarded class's separately recorded §3.11 backstop obligation or turn a missing backstop into an accepted residual.
 
 ### 3.4 Agent-agnosticism of the tiers
 
-Tier placement never depends on a particular model or agent harness. Tier 1 is an optional in-process capability for cooperative operation; Tier 2 is an optional clone-local advice capability; Tier 3 is the Pi-independent repository floor. A human or another harness may operate with Tier 1 absent and Tier 2 unbound while Tier 3 still governs landing; §4.8 records the operator-surface capability lost when the command layer is absent. No automation identity satisfies a human-only predicate, and no human identity makes a core predicate optional. Wherever Tier 1 holds a class alone today, an out-of-reach path remains a named procedural residual until a structural backstop derives.
+No enforced norm depends on a specific agent or model (MISSION § "Success looks like > Agent-agnosticism"). Tier placement therefore never depends on a particular model or agent harness. Tier 1 is an optional in-process capability for cooperative operation; Tier 2 is an optional clone-local advice capability; Tier 3 is the pi-independent repository floor. A human or another harness may operate with Tier 1 absent and Tier 2 unbound while Tier 3 still governs landing; §4.8 records the operator-surface capability lost when the command layer is absent. No automation identity satisfies a human-only predicate, and no human identity makes a core predicate optional. Wherever Tier 1 holds a class alone today, an out-of-reach path remains a named procedural residual until a structural backstop derives.
 
 ### 3.5 Gate conduct
 
@@ -565,6 +567,8 @@ For approval steps that remain evidence-gated — activation, Directive completi
 
 Ordinary human landing uses native current platform review through the `human-approval` class, not an approval-evidence artifact. The discretionary path uses §3.8's closed authorization record, not approval evidence. A panel verdict remains ready-transition evidence and never substitutes for eligible-human quorum.
 
+**Escape disposition.** The `approval-evidence` class is deliberately doorless for all three reversible acts. A sanctioned skip would make the act occur without the attribution, subject, freshness, provenance, or integrity this section requires. A false block is recovered before the act: produce fresh canonical evidence, repair its binding or shape, or retry a failed platform lookup, then re-evaluate the same act. No label, actor, mode, hand-authored facsimile, human quorum, or landing escape substitutes for that evidence. This is the class's explicit §3.8 total-coverage disposition.
+
 The norm is homed as the re-roled `approval-evidence` row in §3.3 for its three named arms. Landing authorization is homed separately by the `core-governance` and `human-approval` rows.
 
 ### 3.8 Escape architecture
@@ -581,13 +585,15 @@ A policy producer is either an authorized maintainer acting under the own-behalf
 
 **Ordinary landing requires** current eligible-human quorum and all core governance. **Discretionary landing requires** all core governance plus both `merge:bypass-permitted` and one valid escape record. The label is PR-only intent: it is never approval, readiness, evidence, capability, a check, or a command. Escape is evaluated only after ordinary landing first and only when quorum alone blocks. Any failed core fact refuses before record consumption and core governance is doorless; the only Tier-3 door is the human quorum.
 
-Core governance is exhaustive here: changelog, ssot-home, toc-freshness, source-style, type-check, suite, ac-closeout, protected-branch landing, force-push, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history. No record, label, actor, mode, command, or ruleset bypass may waive one.
+Core governance is exhaustive here: changelog, ssot-home, toc-freshness, source-style, type-check, suite, ac-closeout, protected-branch landing and deletion protection, force-push, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history. No record, label, actor, mode, command, or ruleset bypass may waive one.
 
 A valid escape record is platform-attested and carries exactly `{schemaVersion,repositoryId,pullRequestId,headSha,baseRef,baseSha,producerKind,producerId,producerPermission,reason,appliedAt,expiresAt,consumedAt,consumerRunId,outcome}`. It binds the current repository, PR, head, base ref, and base head; identifies either `maintainer` or `app` producer under the predicates above; carries a non-empty reason; and has `expiresAt` exactly 24 hours after `appliedAt`. The label and record must both exist. Head or base movement, label removal, expiry, malformed or duplicate records, an unknown producer kind, failed attestation, or a previously consumed record invalidates the escape.
 
 The guarded landing consumer atomically claims one valid record before attempting the merge and consumes and removes the label on success or refusal. Its terminal record fixes `consumedAt`, `consumerRunId`, and outcome `landed | refused`; a crash after claim is refusal, never reusable authority. A content-free refusal names the failed class but never leaks a caller-held compare operand. Phase 3 owns this guarded consumer. Phase 2 owns the shared predicates and record transition library; Phase 4 owns the split rulesets. Until those phases land, no discretionary landing is available.
 
-**The local tier's door is a declared deferral.** Tier 2's sanctioned escape remains `--no-verify`; it is class-independent, unauditable from inside a skipped hook, and bounded by the Tier-3 floor rather than confused with landing authorization. `BASH_ENV`, hook-path retargeting through the `GIT_CONFIG_COUNT` family, and `GIT_WORK_TREE` are equivalent unobserved folds. They waive no Tier-3 fact.
+**The local tier's door and equivalent folds.** Tier 2's sanctioned escape is `--no-verify`, with no sanctioned in-hook token in front of it. It is class-independent, unauditable from inside a hook it prevents from running, and bounded by the Tier-3 floor rather than confused with landing authorization. The operator's recovery from a local false block is to retry that local act through this door; no Tier-3 fact is waived.
+
+The door is also a declared observability deferral. The equivalent environment folds are `BASH_ENV`, whose file the hook interpreter sources before any adapter line; the `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` family, which can retarget `core.hooksPath` for one operation; and the environment spelling `GIT_WORK_TREE`, which can move the top against which the relative hooks path resolves. Each channel was measured on a fresh armed clone against a same-run control that refused the same staged key; each let that key reach the commit with zero bytes on either stream and no audit record. Thus every listed channel is enforcement-disabling, reachable by one command, and traceless on its recorded ground. This paragraph places each outside **§5.9's disarm bar** as an enumerated residual with that ground, rather than treating enumeration alone as discharge. The disposition reaches the measured environment spellings only: a work tree selected on the command line or through `core.worktree` keeps the separate §3.2 disposition. The local bypass remains a residual beneath each class's §3.3 backstop; it grants no landing authority and reopens no door in core governance.
 
 ### 3.9 Fail policy
 

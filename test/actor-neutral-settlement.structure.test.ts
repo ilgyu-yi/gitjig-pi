@@ -8,11 +8,15 @@ const root = repoRoot();
 const read = (path: string): string => readFileSync(join(root, path), "utf8");
 const spec = read("SPEC.md");
 
-function section(heading: string, nextHeading: string): string {
-	const start = spec.indexOf(heading);
-	const end = spec.indexOf(nextHeading, start + heading.length);
+function sectionIn(source: string, heading: string, nextHeading: string): string {
+	const start = source.indexOf(heading);
+	const end = source.indexOf(nextHeading, start + heading.length);
 	assert.ok(start >= 0 && end > start, `missing section bounds: ${heading} -> ${nextHeading}`);
-	return spec.slice(start, end);
+	return source.slice(start, end);
+}
+
+function section(heading: string, nextHeading: string): string {
+	return sectionIn(spec, heading, nextHeading);
 }
 
 function requires(subject: string, tokens: readonly string[]): void {
@@ -46,12 +50,79 @@ function assertRetiredVocabularyAbsent(documents: ReadonlyMap<string, string>): 
 	}
 }
 
-const migrationDocuments = new Map(
-	["SPEC.md", "MISSION.md", "README.md", ...markdownFilesUnder("changelog_unreleased")].map((path) => [
+const migratedSourcePaths = [
+	".github/workflows/issues-to-project-mirror.yml",
+	".pi/extensions/gitjig/commands/review-round.ts",
+	".pi/extensions/gitjig/commands/ship.ts",
+	".pi/extensions/gitjig/dispatch/index.ts",
+	".pi/extensions/gitjig/postures.ts",
+	".pi/extensions/gitjig/review/history.ts",
+	".pi/extensions/gitjig/review/subject.ts",
+	".pi/extensions/gitjig/session-surface.ts",
+] as const;
+
+const changelogDocuments = new Map(markdownFilesUnder("changelog_unreleased").map((path) => [path, read(path)]));
+
+const migrationSurfaces = new Map(
+	["SPEC.md", "MISSION.md", "README.md", ...changelogDocuments.keys(), ...migratedSourcePaths].map((path) => [
 		path,
 		read(path),
 	]),
 );
+
+const supersededChangelogClaims = [
+	["finder-owned §1.4 severity", /SPEC §1\.4's finding-severity clause/u],
+	["finder-owned harm direction", /the finder records each finding's cost direction/u],
+	["retired ladder accounting", /enters no ladder or backstop count/u],
+	["retired fixed-denominator quorum", /the high-asymmetry fixed-denominator quorum \(§1\.7\)/u],
+	["retired Judge substitution", /author-as-judge/u],
+] as const;
+
+function assertCurrentChangelogClaims(documents: ReadonlyMap<string, string>): void {
+	for (const [path, body] of documents) {
+		for (const [claim, pattern] of supersededChangelogClaims) {
+			assert.ok(!pattern.test(body), `superseded changelog claim survives in ${path}: ${claim}`);
+		}
+	}
+}
+
+function assertRepairContract(source: string): void {
+	requires(sectionIn(source, "### 0.3 Reading and amendment conventions", "## 1. Work norms"), [
+		"*spec-behind* (code lags a settled section",
+	]);
+	requires(sectionIn(source, "### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc"), [
+		"exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`",
+		"The first is the only passing token",
+	]);
+	requires(sectionIn(source, "### 2.6 SSOT change-reach protocol", "### 2.7 Canonical naming"), [
+		"The `change-reach` class is deliberately doorless",
+		"correct or widen the cumulative trailers or the surviving artifact",
+	]);
+	requires(sectionIn(source, "### 3.2 The three tiers", "### 3.3 Gate classes"), [
+		"protected-branch landing and deletion protection",
+		"merge-commit-only method, non-fast-forward history, deletion protection, and review-thread resolution",
+	]);
+	requires(sectionIn(source, "### 3.3 Gate classes", "### 3.4 Agent-agnosticism of the tiers"), [
+		"A misplaced row is a reversible document defect",
+		"separately recorded §3.11 backstop obligation",
+	]);
+	requires(sectionIn(source, "### 3.4 Agent-agnosticism of the tiers", "### 3.5 Gate conduct"), [
+		"No enforced norm depends on a specific agent or model",
+		'MISSION § "Success looks like > Agent-agnosticism"',
+		"pi-independent repository floor",
+	]);
+	requires(sectionIn(source, "### 3.7 Approval-gate completeness", "### 3.8 Escape architecture"), [
+		"The `approval-evidence` class is deliberately doorless",
+		"produce fresh canonical evidence",
+	]);
+	requires(sectionIn(source, "### 3.8 Escape architecture", "### 3.9 Fail policy"), [
+		"protected-branch landing and deletion protection",
+		"`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` family",
+		"Each channel was measured on a fresh armed clone",
+		"outside **§5.9's disarm bar**",
+		"work tree selected on the command line or through `core.worktree` keeps the separate §3.2 disposition",
+	]);
+}
 
 const lifecycle = section("### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc");
 const tiers = section("### 3.2 The three tiers", "### 3.3 Gate classes");
@@ -125,7 +196,7 @@ describe("#273 actor-neutral landing settlement", () => {
 			"only Tier-3 door",
 			"human quorum",
 			"changelog, ssot-home, toc-freshness, source-style, type-check, suite, ac-closeout",
-			"protected-branch landing, force-push, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history",
+			"protected-branch landing and deletion protection, force-push, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history",
 		]);
 		assert.ok(tiers.includes("Before the split-ruleset phase activates, the quorum escape is disabled"));
 	});
@@ -225,24 +296,130 @@ describe("#273 actor-neutral landing settlement", () => {
 		}
 	});
 
-	it("guards retired actor and mode vocabulary across every migrated durable document", () => {
-		assertRetiredVocabularyAbsent(migrationDocuments);
-		for (const [inserted, expected] of [
-			["An unattended run hands off at this boundary.", /\\bunattended\\b/],
-			["A run parks at this boundary.", /\\bpark\(\?:ed\|ing\|s\)\?\\b/],
+	it("guards retired actor and mode vocabulary across every migrated durable settlement surface", () => {
+		assertRetiredVocabularyAbsent(migrationSurfaces);
+		for (const { path, anchor, inserted, expected } of [
+			{
+				path: "SPEC.md",
+				anchor: "### 3.7 Approval-gate completeness",
+				inserted: "An unattended run hands off at this boundary.",
+				expected: /retired actor\/mode vocabulary survives in SPEC\.md: \\bunattended\\b/,
+			},
+			{
+				path: ".pi/extensions/gitjig/session-surface.ts",
+				anchor: " * The minimal persistent session projection (§5.9).",
+				inserted: " * An unattended run parks at this boundary.",
+				expected:
+					/retired actor\/mode vocabulary survives in \.pi\/extensions\/gitjig\/session-surface\.ts: \\bunattended\\b/,
+			},
+			{
+				path: ".github/workflows/issues-to-project-mirror.yml",
+				anchor: "# One-direction sync: Issue events → Project Item fields.",
+				inserted: "# A review-gated run uses the retired carrier here.",
+				expected:
+					/retired actor\/mode vocabulary survives in \.github\/workflows\/issues-to-project-mirror\.yml: review-gated/,
+			},
 		] as const) {
-			const mutated = new Map(migrationDocuments);
-			mutated.set(
-				"SPEC.md",
-				spec.replace("### 3.7 Approval-gate completeness", `${inserted}\n\n### 3.7 Approval-gate completeness`),
-			);
-			assert.notEqual(mutated.get("SPEC.md"), spec, "full-SPEC retired-vocabulary mutant anchor did not match");
+			const original = migrationSurfaces.get(path);
+			if (original === undefined) assert.fail(`missing retired-vocabulary mutant subject: ${path}`);
+			assert.ok(original.includes(anchor), `retired-vocabulary mutant anchor did not match: ${path}`);
+			const mutated = new Map(migrationSurfaces);
+			mutated.set(path, original.replace(anchor, `${inserted}\n${anchor}`));
 			assert.throws(
 				() => assertRetiredVocabularyAbsent(mutated),
+				(error: unknown) => error instanceof Error && expected.test(error.message),
+				`retired-vocabulary mutant reached the wrong guard: ${path}`,
+			);
+		}
+	});
+
+	it("pins the repaired contract as coherent sections and attributes each mutant to its missing member", () => {
+		assertRepairContract(spec);
+		for (const { anchor, replacement, expected } of [
+			{
+				anchor: "*spec-behind* (code lags a settled section",
+				replacement: "*spec-ahead* (code lags a settled section",
+				expected: "*spec-behind* (code lags a settled section",
+			},
+			{
+				anchor: "exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`",
+				replacement: "exactly `ACTIVATE` or `REJECT`",
+				expected: "exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`",
+			},
+			{
+				anchor: "The `change-reach` class is deliberately doorless",
+				replacement: "The `change-reach` class is procedural",
+				expected: "The `change-reach` class is deliberately doorless",
+			},
+			{
+				anchor: "protected-branch landing and deletion protection",
+				replacement: "protected-branch landing",
+				expected: "protected-branch landing and deletion protection",
+			},
+			{
+				anchor: "A misplaced row is a reversible document defect",
+				replacement: "A misplaced row does not trigger hardening",
+				expected: "A misplaced row is a reversible document defect",
+			},
+			{
+				anchor: "No enforced norm depends on a specific agent or model",
+				replacement: "Tier placement does not depend on a specific agent or model",
+				expected: "No enforced norm depends on a specific agent or model",
+			},
+			{
+				anchor: "pi-independent repository floor",
+				replacement: "Pi-independent repository floor",
+				expected: "pi-independent repository floor",
+			},
+			{
+				anchor: "The `approval-evidence` class is deliberately doorless",
+				replacement: "The `approval-evidence` class remains procedural",
+				expected: "The `approval-evidence` class is deliberately doorless",
+			},
+			{
+				anchor: "Each channel was measured on a fresh armed clone",
+				replacement: "Each channel is an equivalent fold",
+				expected: "Each channel was measured on a fresh armed clone",
+			},
+		] as const) {
+			const mutated = spec.replace(anchor, replacement);
+			assert.notEqual(mutated, spec, `repair-contract mutant anchor did not match: ${anchor}`);
+			assert.throws(
+				() => assertRepairContract(mutated),
+				(error: unknown) => error instanceof Error && error.message === `missing contract token: ${expected}`,
+				`repair-contract mutant reached the wrong guard: ${anchor}`,
+			);
+		}
+	});
+
+	it("audits the full unreleased changelog corpus for superseded settlement claims", () => {
+		assertCurrentChangelogClaims(changelogDocuments);
+		for (const { path, inserted, expected } of [
+			{
+				path: "changelog_unreleased/changed/142.md",
+				inserted: "SPEC §1.4's finding-severity clause",
+				expected: "finder-owned §1.4 severity",
+			},
+			{
+				path: "changelog_unreleased/added/13.md",
+				inserted: "the high-asymmetry fixed-denominator quorum (§1.7)",
+				expected: "retired fixed-denominator quorum",
+			},
+			{
+				path: "changelog_unreleased/changed/144.md",
+				inserted: "author-as-judge",
+				expected: "retired Judge substitution",
+			},
+		] as const) {
+			const original = changelogDocuments.get(path);
+			assert.ok(original, `missing changelog mutant subject: ${path}`);
+			const mutated = new Map(changelogDocuments);
+			mutated.set(path, `${original.trimEnd()} ${inserted}\n`);
+			assert.throws(
+				() => assertCurrentChangelogClaims(mutated),
 				(error: unknown) =>
-					error instanceof Error &&
-					/retired actor\/mode vocabulary survives in SPEC\.md/.test(error.message) &&
-					expected.test(error.message),
+					error instanceof Error && error.message === `superseded changelog claim survives in ${path}: ${expected}`,
+				`changelog mutant reached the wrong guard: ${path}`,
 			);
 		}
 	});
@@ -256,6 +433,16 @@ describe("#273 actor-neutral landing settlement", () => {
 		const commandFragment = read("changelog_unreleased/added/91.md");
 		requires(commandFragment, ["`ac-closeout`", "platform-held AC state", "landing decision"]);
 		assert.ok(!commandFragment.includes("merge-boundary"));
+		requires(read("changelog_unreleased/changed/142.md"), [
+			"SPEC §1.9",
+			"Judge explicitly rules",
+			"deterministic Resolver",
+		]);
+		requires(read("changelog_unreleased/added/13.md"), [
+			"reviewer panel as search diversification",
+			"routing coverage",
+		]);
+		requires(read("changelog_unreleased/changed/144.md"), ["independent Judge", "no author substitution"]);
 	});
 
 	it("keeps mission and adopter-facing prose actor-neutral", () => {

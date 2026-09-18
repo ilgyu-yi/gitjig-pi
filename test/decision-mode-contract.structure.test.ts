@@ -108,11 +108,14 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		]);
 	});
 
-	it("pins handoff conduct and rejects a durable parked state", () => {
+	it("pins handoff conduct and attributes a durable-park insertion to the retired-member guard", () => {
 		assertConductAcceptedSet(spec);
-		const wrong = spec.replace("A hard blocker emits one handoff record", "A hard blocker parks");
-		assert.notEqual(wrong, spec, "handoff mutant anchor did not match");
-		assert.throws(() => assertConductAcceptedSet(wrong));
+		const wrong = spec.replace(
+			"A hard blocker emits one handoff record",
+			"A hard blocker emits one handoff record and then parks",
+		);
+		assert.notEqual(wrong, spec, "durable-park insertion mutant anchor did not match");
+		assert.throws(() => assertConductAcceptedSet(wrong), /retired durable-stop member survives: parks/);
 	});
 
 	it("pins §1.4's lineage-scoped recovery and every handoff terminal", () => {
