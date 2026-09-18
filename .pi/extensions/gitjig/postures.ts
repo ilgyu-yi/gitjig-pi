@@ -570,6 +570,38 @@ export const POSTURES: readonly PostureRow[] = [
 			"No copied fallback may become a rival predicate; recovery is to restore the committed handed-over asset from the addressed repository and replay the refused transition.",
 	},
 	{
+		dependency: "ac-closeout-criterion-owner",
+		failureShape:
+			"the handed-over criterion owner is absent, unloadable, or inapplicable to the carried review subject",
+		posture: "closed",
+		justification:
+			"No copied fallback may redefine criteria. Review admission reports an absent manifest rather than the empty manifest; restore the handed-over owner and retry.",
+	},
+	{
+		dependency: "ac-closeout-platform-population",
+		failureShape:
+			"closing-Issue, reverse Issue-to-PR, comment, actor, PR body/head/base, or pagination evidence is absent, malformed, stale, ambiguous, or unreadable",
+		posture: "closed",
+		justification:
+			"A partial population cannot attest resolved acceptance criteria. The false-block cost is a delayed closeout; restore API reach or publish a fresh exact record to trigger re-evaluation.",
+	},
+	{
+		dependency: "ac-closeout-check-publication",
+		failureShape:
+			"the exact-head check run cannot be created/concluded or newest-created supersession is tied, pending, neutral, absent, or unreadable",
+		posture: "closed",
+		justification:
+			"An old green cannot vouch after a newer evaluation. The newest unambiguous completed-success run alone passes; repair check transport and trigger a fresh record event.",
+	},
+	{
+		dependency: "ac-closeout-event-delivery",
+		failureShape:
+			"an Issue/linkage change has not yet delivered, created, concluded, and selected its replacement check run, or Development-panel linkage emits no admitted event",
+		posture: "closed",
+		justification:
+			"The event-driven platform has no synchronous invalidation primitive. The race is measured rather than inferred; delete and republish the bound closeout record to force re-evaluation before landing.",
+	},
+	{
 		dependency: "landing-policy-presence",
 		failureShape: "the committed landing-policy carrier is absent, duplicated, or unreadable",
 		posture: "closed",

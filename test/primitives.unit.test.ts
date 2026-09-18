@@ -1422,6 +1422,10 @@ describe("fail-posture inventory (§3.9)", () => {
 		assert.deepEqual(
 			POSTURES.map((row) => `${row.dependency} → ${row.posture}`).sort(),
 			[
+				"ac-closeout-check-publication → closed",
+				"ac-closeout-criterion-owner → closed",
+				"ac-closeout-event-delivery → closed",
+				"ac-closeout-platform-population → closed",
 				"adopter-acquisition-identity → closed",
 				"adopter-delivery-egress → closed",
 				"adopter-delivery-platform → closed",

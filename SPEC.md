@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 422 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 429 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 437 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 542 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 546 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 550 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 562 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 578 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 602 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 616 |
-| &nbsp;&nbsp;§3.11 | Gate design | 630 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 652 |
-| §4 | Substrate and install contract | 662 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 666 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 678 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 686 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 692 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 696 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 700 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 712 |
-| &nbsp;&nbsp;§4.8 | The command layer | 722 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 779 |
-| §5 | Cross-cutting contracts | 898 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 902 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 908 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 912 |
-| &nbsp;&nbsp;§5.4 | Work language | 916 |
-| &nbsp;&nbsp;§5.5 | State boundary | 920 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 928 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 940 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 950 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 958 |
-| §6 | Self-governance milestone | 970 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 981 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 544 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 548 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 564 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 604 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 618 |
+| &nbsp;&nbsp;§3.11 | Gate design | 632 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 654 |
+| §4 | Substrate and install contract | 664 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 668 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 680 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 688 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 694 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 698 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 702 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 714 |
+| &nbsp;&nbsp;§4.8 | The command layer | 724 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 781 |
+| §5 | Cross-cutting contracts | 900 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 904 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 910 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 914 |
+| &nbsp;&nbsp;§5.4 | Work language | 918 |
+| &nbsp;&nbsp;§5.5 | State boundary | 922 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 930 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 942 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 952 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 960 |
+| §6 | Self-governance milestone | 972 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 983 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -460,12 +460,14 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 | suite | a regression landing that reds the test suite | `home:` tier 3 (`suite`) · `backstop:` same · `earlier:` — | `supplies:` platform (source and test text at the PR head) / `infers:` session |
 | core-governance | landing while any doorless governance fact is absent or stale | `home:` tier 3 (`core-governance` ruleset, Phase 4) · `backstop:` same · `earlier:` Phase-2 predicate library and Phase-3 guarded landing consumer | `supplies:` platform + required contexts (the exhaustive §3.8 core set) / `infers:` session |
 | human-approval | ordinary landing without the current eligible-human quorum | `home:` tier 3 (`human-approval` ruleset, Phase 4) · `backstop:` same · `earlier:` Phase-2 predicate library and Phase-3 guarded landing consumer | `supplies:` platform (current native reviews and ruleset-configured positive quorum) / `infers:` authored identity or a default |
-| ac-closeout | merging a PR whose closing issue has unresolved AC | `home:` tier 3 (procedural today, §2.2) · `backstop:` deferred (§3.11 amortized) · `earlier:` tier 1 echo planned | `supplies:` platform (issue AC + merge event) / `infers:` session |
+| ac-closeout | merging a PR whose closing issue has unresolved AC | `home:` tier 3 (`ac-closeout` reporting check live; required-context mutation deferred to #261 Phase 4; §2.2) · `backstop:` deferred (§3.11 amortized, re-adjudicated here) · `earlier:` tier 1 `/ship` caller-supplied echo and `/land` newest-check consumer live | `supplies:` platform (current closing-Issue bodies and comments, comment author/timestamps, PR body/head/base, check-run population and integration identity) / `infers:` none |
 | change-reach | retired SSOT vocabulary surviving the declared-set completion check | `home:` tier 3 (procedural today, §2.6) · `backstop:` none (reversible) · `earlier:` — | `supplies:` git (trailers) + platform (push history) / `infers:` session |
 | approval-evidence | activation, Directive completion, or ready transition firing without its required evidence artifact | `home:` tier 3 (procedural today, §3.7) · `backstop:` none (each named act is reversible before landing) · `earlier:` tier 1 echo planned | `supplies:` platform (evidence artifact + terminal act) / `infers:` session |
 | egress | publishing repo-derived text that carries a secret to a public, unretractable surface | `home:` tier 1 (publish call site; the runtime's publish tool `gitjig_publish`, `.pi/extensions/gitjig/publish/`) · `backstop:` none (structurally unavailable, §3.11) · `earlier:` — | `supplies:` session (bytes at the publish call) / `infers:` platform |
 
 **Two families fall out of the rule.** A class whose deciding parts are all exact at the platform — the ref a push will land on, a pull request's file set, a merge event and the artifacts hanging off it — homes at tier 3, because the platform holds the last-needed part and the act guarded is the publication itself. A class whose deciding object exists in git before anything is published, and has no platform representation at the moment its guarded act fires, homes at tier 2 — the platform may read what was eventually pushed, but it cannot read the object the decision is taken over. The families are stated as shapes, never as memberships: each row's home follows from its own deciding information, so a class that acquires a platform representation of its deciding object re-homes without this paragraph changing. Neither family is a partition: a class whose deciding object never leaves the session falls outside both and homes at tier 1 alone (§3.4), and the arms of a class that guards more than one act may fall in different families.
+
+The `ac-closeout` home is one handed-over predicate and an event-driven reporting check named exactly `ac-closeout`. The check binds one unedited, author-equal closeout record per non-empty closing-Issue criterion population to the current PR head/base; zero closing Issues, zero criteria, unresolved PR-body checklist items, copied/malformed/duplicate/stale records, incomplete pagination, unknown identity, and lookup failure refuse. Closeout identity strips exactly one leading unchecked/checked Issue checkbox while §1.9's review manifest keeps its existing full item and EMPTY semantics. Event delivery through newest-check selection is not synchronous, and Development-panel linkage may emit no admitted event; these are measured platform races recovered by a fresh record event, not inferred passes. Before #261 Phase 4 this check reports but is not a configured required context. Its first empirical run is transferred to the immediately next governed PR and expires with that PR; its first enforced firing remains owned by #261 Phase 4 and expires on the first PR governed by the activated split topology.
 
 **What the rule moves, and what it merely assigns.** Some rows the rule relocates; others it places for the first time — a row that recorded no tier before is assigned a home rather than moved, and the change claims no more reach than that. `protected-branch` guards two acts and places per arm; `force-push` and `protected-branch`'s landing arm home at tier 3 because git and the platform each hold the deciding fact exactly, so exactness discriminates nothing and the irreversible moment — publication — selects the platform. Both homes are live at the ruleset (§3.2), and the ruleset's default-branch condition is the scope residual each row records in place. `protected-branch`'s commit arm decides on which branch `HEAD` sits when the commit is made: git holds that natively and the platform has no representation of it at that moment, nothing having been published, so that arm's decision is **taken** at tier 2. It is not a pre-image of the landing arm's gate either: §3.11 fixes a pre-image by local and remote not diverging over one act, which is not evaluable for an act the remote gate never sees. The two arms guard different acts, and a local commit is reversible until the landing the other arm gates. What this tree carries at tier 2 is the call-site shape and, on the push surface, the check itself: `.githooks/pre-commit` and `.githooks/pre-push` are committed and call the class's own predicate — the first on the branch `HEAD` is on, the second on each target ref — and the helper they delegate that predicate to, `.githooks/helpers/branch_guard.sh`, is shipped here; the commit arm is live, the adapter's require chain being complete now that `.githooks/helpers/secret_scan.sh` ships in this tree beside it. Tier 1, which can only lex a command string for a fact §3.11 binds to what a ref *is*, is confined to an echo on either arm. `force-push` has no tier-2 call site of its own: its earlier tier-2 entry read *by subsumption*, which is a coverage claim and not an ownership one — §3.11 binds ownership to the predicate, and the adapter shows the local tier evaluates no sharedness predicate at all: `.githooks/pre-push` tests only `is_protected_branch` on the target, and reads the remote oid it is handed as a positional filler explicitly marked unused. What tier 2 blocks there it blocks under the neighbouring class's predicate, so no call site of this row's own predicate sits beneath its home and the `earlier:` slot is empty. `secret` homes at tier 2 not because git is its only layer — the platform can read a pushed commit's content — but because its guarded act is the **commit**, whose deciding object is the index, and the index has no platform representation at that moment. `change-reach` homes at tier 3 on a part worth naming: the declared set arrives as commit trailers, exact in git, but §2.6's pairwise monotonicity is judged over the pull request's push history, which only the platform holds. `approval-evidence` covers only the reversible activation, completion, and ready arms; landing authorization is owned separately by `core-governance` and `human-approval`. And `egress`'s backstop is structurally unavailable rather than deferred: the bytes exist only at the composing publish call, and the platform's first sight of them is the publication the gate exists to precede.
 

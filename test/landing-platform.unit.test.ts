@@ -7,6 +7,7 @@ import {
 	activeRulesetApplies,
 	landingPermission,
 	loadPlatformLanding,
+	newestCheckConclusions,
 	normalizeReviewActorType,
 	platformLandingEffects,
 	selectCurrentConsumption,
@@ -14,8 +15,46 @@ import {
 import { gitBlobOid } from "../.pi/extensions/gitjig/landing/provenance.ts";
 
 const repoRoot = join(import.meta.dirname, "..");
+const actionCheck = { app: { slug: "github-actions" } };
 
 describe("#278 platform snapshot normalization", () => {
+	it("selects only the newest-created check and refuses malformed or tied populations", () => {
+		assert.deepEqual(
+			newestCheckConclusions([
+				{ ...actionCheck, id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
+				{ ...actionCheck, id: 1, name: "ac-closeout", status: "completed", conclusion: "success" },
+			]),
+			new Map([["ac-closeout", { status: "completed", conclusion: "failure" }]]),
+		);
+		assert.equal(
+			newestCheckConclusions([
+				{ ...actionCheck, id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
+				{ ...actionCheck, id: 2, name: "ac-closeout", status: "completed", conclusion: "success" },
+			]),
+			undefined,
+		);
+		assert.equal(
+			newestCheckConclusions([
+				{ ...actionCheck, id: 3, name: "suite", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 2, name: "old", status: "completed", conclusion: "success" },
+				{ ...actionCheck, id: 2, name: "older-duplicate", status: "completed", conclusion: "success" },
+			]),
+			undefined,
+		);
+		assert.equal(newestCheckConclusions([{ ...actionCheck, name: "ac-closeout", status: "completed" }]), undefined);
+		assert.deepEqual(
+			newestCheckConclusions([
+				{ id: 99, name: "ac-closeout", status: "completed", conclusion: "success", app: { slug: "other" } },
+			]),
+			new Map(),
+		);
+		assert.equal(
+			newestCheckConclusions([{ id: 100, name: "ac-closeout", status: "completed", conclusion: "success", app: null }]),
+			undefined,
+		);
+		assert.equal(newestCheckConclusions([null]), undefined);
+	});
+
 	it("never upgrades absent or unknown actor types to User", () => {
 		assert.equal(normalizeReviewActorType("User"), "User");
 		assert.equal(normalizeReviewActorType("Bot"), "Bot");
@@ -192,6 +231,23 @@ describe("#278 platform snapshot normalization", () => {
 		assert.equal(loaded.snapshot?.topologyActive, false);
 		assert.equal(loaded.snapshot?.core.baseFresh, true);
 		assert.equal(loaded.snapshot?.escape, undefined);
+
+		const ambiguous = await loadPlatformLanding(
+			"github.com",
+			"o/r",
+			7,
+			repoRoot,
+			"2026-01-01T00:00:00Z",
+			async (argv) => {
+				const endpoint = argv.find((part) => part.startsWith("repos/o/r")) ?? "";
+				return JSON.stringify(
+					endpoint.includes("check-runs")
+						? { total_count: 1, check_runs: [{ id: 1, name: "ac-closeout", status: "completed", app: null }] }
+						: response(argv),
+				);
+			},
+		);
+		assert.equal(ambiguous.arm, "check-rollup-ambiguous");
 	});
 
 	it("executes comment, label, merge and parent verification through an injected platform seam", async () => {
