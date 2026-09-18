@@ -151,6 +151,13 @@ describe("handed-over ac-closeout predicate", () => {
 			"writer-unattested",
 		],
 		[
+			"copied record",
+			(value: typeof subject) => {
+				value.pullRequestId = "OTHER_PR";
+			},
+			"evidence-copied",
+		],
+		[
 			"stale head",
 			(value: typeof subject) => {
 				value.headSha = "c".repeat(40);

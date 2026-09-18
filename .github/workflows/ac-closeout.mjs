@@ -213,10 +213,10 @@ export function evaluateAcCloseout(input) {
 			record.issueId !== issue.id ||
 			record.issueNumber !== issue.number ||
 			record.pullRequestId !== input.pullRequestId ||
-			record.pullRequestNumber !== input.pullRequestNumber ||
-			record.headSha !== input.headSha ||
-			record.baseSha !== input.baseSha
+			record.pullRequestNumber !== input.pullRequestNumber
 		)
+			return { ok: false, arm: "evidence-copied" };
+		if (record.headSha !== input.headSha || record.baseSha !== input.baseSha)
 			return { ok: false, arm: "evidence-stale-subject" };
 		if (
 			JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==

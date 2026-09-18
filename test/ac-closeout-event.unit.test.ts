@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AC_CLOSEOUT_MARKER } from "../.github/workflows/ac-closeout.mjs";
-import { evaluatePull, runAcCloseoutEvent } from "../.github/workflows/ac-closeout-event.mjs";
+import {
+	evaluatePull,
+	readClosingIssues,
+	readPaginated,
+	runAcCloseoutEvent,
+} from "../.github/workflows/ac-closeout-event.mjs";
 
 const head = "a".repeat(40);
 const base = "b".repeat(40);
@@ -26,8 +31,9 @@ interface CheckRun {
 	app: { slug: string };
 }
 
-function seams(runs: CheckRun[] | "unavailable", changeSubject = false) {
+function seams(runs: CheckRun[] | "unavailable" | "incomplete", changeSubject = false) {
 	const writes: { path: string; body: { conclusion?: string } }[] = [];
+	const creates: { head_sha?: string; external_id?: string }[] = [];
 	let pullReads = 0;
 	const pull = {
 		number: 1,
@@ -42,7 +48,10 @@ function seams(runs: CheckRun[] | "unavailable", changeSubject = false) {
 			pullReads += 1;
 			return changeSubject && pullReads >= 3 ? { ...pull, base: { ...pull.base, sha: "c".repeat(40) } } : pull;
 		}
-		if (path === "/check-runs" && init.method === "POST") return { id: 10 };
+		if (path === "/check-runs" && init.method === "POST") {
+			creates.push(JSON.parse(String(init.body)) as { head_sha?: string; external_id?: string });
+			return { id: 10 };
+		}
 		if (path === "/issues/282") return { node_id: "ISSUE", body: "## Acceptance criteria\n- [ ] done" };
 		if (path.startsWith("/issues/282/comments?"))
 			return [
@@ -55,6 +64,7 @@ function seams(runs: CheckRun[] | "unavailable", changeSubject = false) {
 			];
 		if (path === `/commits/${head}/check-runs?per_page=100`) {
 			if (runs === "unavailable") throw new Error("unavailable");
+			if (runs === "incomplete") return { total_count: 2, check_runs: [] };
 			return { total_count: runs.length, check_runs: runs };
 		}
 		if (path.startsWith("/check-runs/") && init.method === "PATCH") {
@@ -73,10 +83,82 @@ function seams(runs: CheckRun[] | "unavailable", changeSubject = false) {
 			},
 		},
 	});
-	return { api, graphql, writes };
+	return { api, graphql, writes, creates };
 }
 
 describe("ac-closeout check-run supersession", () => {
+	it("reads every REST and GraphQL page and refuses malformed pagination", async () => {
+		const restPages: string[] = [];
+		const values = await readPaginated(async (path) => {
+			restPages.push(path);
+			return restPages.length === 1 ? Array.from({ length: 100 }, (_, id) => id) : [100];
+		}, "/issues/282/comments");
+		assert.equal(values.length, 101);
+		assert.equal(restPages.length, 2);
+		await assert.rejects(
+			readPaginated(async () => ({}), "/issues/282/comments"),
+			/population malformed/,
+		);
+
+		let graphPage = 0;
+		const issues = await readClosingIssues(
+			async (_query, variables) => {
+				graphPage += 1;
+				assert.equal(variables.cursor, graphPage === 1 ? null : "next");
+				return {
+					repository: {
+						pullRequest: {
+							closingIssuesReferences: {
+								nodes: [{ id: `I${graphPage}`, number: graphPage, body: "" }],
+								pageInfo: { hasNextPage: graphPage === 1, endCursor: graphPage === 1 ? "next" : null },
+							},
+						},
+					},
+				};
+			},
+			"o",
+			"r",
+			1,
+		);
+		assert.deepEqual(
+			issues.map((issue) => issue.id),
+			["I1", "I2"],
+		);
+		await assert.rejects(
+			readClosingIssues(
+				async () => ({
+					repository: {
+						pullRequest: { closingIssuesReferences: { nodes: [], pageInfo: { hasNextPage: true, endCursor: null } } },
+					},
+				}),
+				"o",
+				"r",
+				1,
+			),
+			/pagination unavailable/,
+		);
+	});
+
+	it("refuses a fork before creating any check", async () => {
+		let created = false;
+		await assert.rejects(
+			evaluatePull({
+				api: async (path, init = {}) => {
+					if (path === "/pulls/1")
+						return { base: { repo: { full_name: "o/r" } }, head: { repo: { full_name: "fork/r" } } };
+					if (path === "/check-runs" && init.method === "POST") created = true;
+				},
+				graphql: async () => ({}),
+				owner: "o",
+				name: "r",
+				repository: "o/r",
+				number: 1,
+			}),
+			/same-repository pull request required/,
+		);
+		assert.equal(created, false);
+	});
+
 	it("isolates Issue-event fan-out so one failing PR cannot suppress its siblings", async () => {
 		const evaluated: number[] = [];
 		await assert.rejects(
@@ -143,6 +225,18 @@ describe("ac-closeout check-run supersession", () => {
 		);
 	});
 
+	it("concludes its own run as failed on incomplete check pagination", async () => {
+		const seam = seams("incomplete");
+		assert.deepEqual(
+			await evaluatePull({ api: seam.api, graphql: seam.graphql, owner: "o", name: "r", repository: "o/r", number: 1 }),
+			{ ok: false, arm: "lookup-unavailable" },
+		);
+		assert.deepEqual(
+			seam.writes.map((write) => write.body.conclusion),
+			["failure"],
+		);
+	});
+
 	it("refuses when the subject changes before conclusion", async () => {
 		const seam = seams([], true);
 		assert.deepEqual(
@@ -179,6 +273,10 @@ describe("ac-closeout check-run supersession", () => {
 				["/check-runs/9", "neutral"],
 				["/check-runs/10", "success"],
 			],
+		);
+		assert.deepEqual(
+			seam.creates.map(({ head_sha, external_id }) => ({ head_sha, external_id })),
+			[{ head_sha: head, external_id: `ac-closeout:PR:${head}` }],
 		);
 	});
 });

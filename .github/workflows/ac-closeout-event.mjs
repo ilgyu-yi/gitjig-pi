@@ -6,7 +6,7 @@ import { evaluateAcCloseout } from "./ac-closeout.mjs";
 /** @typedef {(query:string, variables:Record<string,unknown>)=>Promise<any>} Graphql */
 
 /** @param {Api} api @param {string} path */
-async function paged(api, path) {
+export async function readPaginated(api, path) {
 	const all = [];
 	for (let page = 1; ; page += 1) {
 		const separator = path.includes("?") ? "&" : "?";
@@ -18,7 +18,7 @@ async function paged(api, path) {
 }
 
 /** @param {Graphql} graphql @param {string} owner @param {string} name @param {number} number */
-async function closingIssues(graphql, owner, name, number) {
+export async function readClosingIssues(graphql, owner, name, number) {
 	const all = [];
 	let cursor = null;
 	for (;;) {
@@ -40,7 +40,7 @@ async function closingIssues(graphql, owner, name, number) {
 
 /** @param {Api} api @param {string} repository */
 async function openPullNumbers(api, repository) {
-	return (await paged(api, "/pulls?state=open"))
+	return (await readPaginated(api, "/pulls?state=open"))
 		.filter((pull) => pull?.base?.repo?.full_name === repository && pull?.head?.repo?.full_name === repository)
 		.map((pull) => pull?.number)
 		.filter(Number.isSafeInteger);
@@ -53,8 +53,14 @@ async function affectedPullNumbers(event, api, graphql, owner, name, repository)
 	if (!issue || event.issue?.pull_request || typeof issue.node_id !== "string") return [];
 	const result = [];
 	for (const number of await openPullNumbers(api, repository)) {
-		if ((await closingIssues(graphql, owner, name, number)).some((candidate) => candidate.id === issue.node_id))
+		try {
+			if ((await readClosingIssues(graphql, owner, name, number)).some((candidate) => candidate.id === issue.node_id))
+				result.push(number);
+		} catch {
+			// An unreadable reverse edge may hide the addressed Issue. Evaluate
+			// that PR too, so its prior green is replaced by a closed result.
 			result.push(number);
+		}
 	}
 	return result;
 }
@@ -64,12 +70,12 @@ async function snapshot(api, graphql, owner, name, repository, number) {
 	const pull = await api(`/pulls/${number}`);
 	if (pull?.base?.repo?.full_name !== repository || pull?.head?.repo?.full_name !== repository)
 		throw new Error("ac-closeout: same-repository pull request required");
-	const issues = await closingIssues(graphql, owner, name, number);
+	const issues = await readClosingIssues(graphql, owner, name, number);
 	const populated = [];
 	for (const issue of issues) {
 		const fresh = await api(`/issues/${issue.number}`);
 		if (fresh?.node_id !== issue.id) throw new Error("ac-closeout: Issue identity changed");
-		const comments = await paged(api, `/issues/${issue.number}/comments`);
+		const comments = await readPaginated(api, `/issues/${issue.number}/comments`);
 		populated.push({
 			id: issue.id,
 			number: issue.number,
@@ -102,8 +108,17 @@ async function checkRuns(api, sha) {
 		response.total_count !== response.check_runs.length
 	)
 		throw new Error("ac-closeout: check population incomplete");
+	for (const run of response.check_runs) {
+		if (
+			!Number.isSafeInteger(run?.id) ||
+			typeof run?.name !== "string" ||
+			typeof run?.status !== "string" ||
+			typeof run?.app?.slug !== "string"
+		)
+			throw new Error("ac-closeout: check population malformed");
+	}
 	return response.check_runs.filter(
-		/** @param {any} run */ (run) => run?.name === "ac-closeout" && run?.app?.slug === "github-actions",
+		/** @param {any} run */ (run) => run.name === "ac-closeout" && run.app.slug === "github-actions",
 	);
 }
 
