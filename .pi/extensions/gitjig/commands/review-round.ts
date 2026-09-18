@@ -99,16 +99,12 @@ export function terminalText(outcome: CommandDisposition): string {
 	}
 }
 
-type ReviewDispatchOutcome =
-	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
-	| { disposition: "refused"; cause: string };
-
 export type ReviewRoundSeams = {
 	fetchSubject: (repoRoot: string, pr: number) => Promise<ReviewSubject | undefined>;
 	refetchSubject: (repoRoot: string, subject: ReviewSubject) => Promise<ReviewSubject | undefined>;
 	readComments: (repoRoot: string, subject: ReviewSubject) => Promise<AttestedCommentPopulation>;
 	recordsFromComments: (population: AttestedCommentPopulation, writerId: string) => ReviewRecord[] | undefined;
-	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<ReviewDispatchOutcome>;
+	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
 	resolveHead: (repoRoot: string, headRef: string) => string | undefined;
@@ -258,14 +254,14 @@ export async function driveReviewRound(
 		): Promise<TerminalSeed | undefined> => {
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			const admitted = admitDiagnosis(
-				(await dispatch(
+				await dispatch(
 					composeDiagnosisBrief(history, {
 						changeDescription: spec.changeDescription,
 						withheldHead: head,
 						timing: briefTiming,
 					}),
 					head,
-				)) as DispatchOutcome,
+				),
 			);
 			if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
 			const diagnosis = admitted.diagnosis;
@@ -299,7 +295,7 @@ export async function driveReviewRound(
 			fences: spec.fences,
 			changeDescription: spec.changeDescription,
 			timing: briefTiming,
-			dispatch: dispatch as (brief: string, expectedHead: string) => Promise<DispatchOutcome>,
+			dispatch,
 		});
 		if (!(await currentSubject()))
 			return finish(state, { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" });

@@ -554,18 +554,26 @@ function internalSurfaceResult(
 	return result(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic });
 }
 
+export function dispatchSurfaceBreaches(
+	value: DispatchToolResult,
+	admitted: boolean,
+): { outcome: boolean; content: boolean; details: boolean } {
+	const outcomeLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedOutcome : DISPATCH_SURFACE_LIMITS.refusedOutcome;
+	const contentLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedContent : DISPATCH_SURFACE_LIMITS.refusedContent;
+	return {
+		outcome: surfaceBytes(value) > outcomeLimit,
+		content: surfaceBytes(value.content[0]?.text ?? "") > contentLimit,
+		details: surfaceBytes(value.details) > DISPATCH_SURFACE_LIMITS.details,
+	};
+}
+
 export function boundToolResult(
 	value: DispatchToolResult,
 	admitted: boolean,
 	diagnostic: DispatcherDiagnostic,
 ): DispatchToolResult {
-	const outcomeLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedOutcome : DISPATCH_SURFACE_LIMITS.refusedOutcome;
-	const contentLimit = admitted ? DISPATCH_SURFACE_LIMITS.admittedContent : DISPATCH_SURFACE_LIMITS.refusedContent;
-	if (
-		surfaceBytes(value) > outcomeLimit ||
-		surfaceBytes(value.content[0]?.text ?? "") > contentLimit ||
-		surfaceBytes(value.details) > DISPATCH_SURFACE_LIMITS.details
-	) {
+	const breaches = dispatchSurfaceBreaches(value, admitted);
+	if (breaches.outcome || breaches.content || breaches.details) {
 		return internalSurfaceResult(diagnostic);
 	}
 	return value;

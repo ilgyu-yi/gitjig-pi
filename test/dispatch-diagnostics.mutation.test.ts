@@ -95,5 +95,30 @@ describe("#267 isolated diagnostic mutants", () => {
 				'import {DISPATCH_SURFACE_LIMITS} from "./gitjig/dispatch/index.ts";',
 			);
 		}
+		const measurementImport = 'import {dispatchSurfaceBreaches} from "./gitjig/dispatch/index.ts";';
+		kill(
+			"outcome-measurement",
+			"outcome: surfaceBytes(value) > outcomeLimit",
+			"outcome: false",
+			'const b=dispatchSurfaceBreaches({content:[{type:"text",text:"x".repeat(500)}],details:{padding:"x".repeat(1600)}},false); assert.deepEqual(b,{outcome:true,content:false,details:false});',
+			"index.ts",
+			measurementImport,
+		);
+		kill(
+			"content-measurement",
+			'surfaceBytes(value.content[0]?.text ?? "") > contentLimit',
+			"false",
+			'const b=dispatchSurfaceBreaches({content:[{type:"text",text:"x".repeat(2049)}],details:{}},false); assert.equal(b.content,true);',
+			"index.ts",
+			measurementImport,
+		);
+		kill(
+			"details-measurement",
+			"surfaceBytes(value.details) > DISPATCH_SURFACE_LIMITS.details",
+			"false",
+			'const b=dispatchSurfaceBreaches({content:[{type:"text",text:"x"}],details:{padding:"x".repeat(4097)}},true); assert.deepEqual(b,{outcome:false,content:false,details:true});',
+			"index.ts",
+			measurementImport,
+		);
 	});
 });

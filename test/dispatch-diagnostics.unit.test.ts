@@ -25,6 +25,10 @@ interface DiagnosticsModule {
 
 interface IndexModule {
 	DISPATCH_SURFACE_LIMITS: Readonly<Record<string, number>>;
+	dispatchSurfaceBreaches(
+		value: { content: Array<{ type: "text"; text: string }>; details: Record<string, unknown> },
+		admitted: boolean,
+	): { outcome: boolean; content: boolean; details: boolean };
 	boundToolResult(
 		value: { content: Array<{ type: "text"; text: string }>; details: Record<string, unknown> },
 		admitted: boolean,
@@ -228,18 +232,41 @@ describe("#267 closed dispatcher diagnostics", () => {
 			code: "ADMITTED",
 		});
 		const cases = [
-			{ admitted: false, content: "x".repeat(2_049), details: {} },
-			{ admitted: true, content: "x".repeat(524_289), details: {} },
-			{ admitted: false, content: "x", details: { padding: "x".repeat(4_097) } },
-			{ admitted: false, content: "x".repeat(500), details: { padding: "x".repeat(1_600) } },
-			{ admitted: true, content: "x".repeat(521_000), details: { padding: "x".repeat(3_900) } },
+			{
+				admitted: false,
+				content: "x".repeat(2_049),
+				details: {},
+				breaches: { outcome: true, content: true, details: false },
+			},
+			{
+				admitted: true,
+				content: "x".repeat(524_289),
+				details: {},
+				breaches: { outcome: true, content: true, details: false },
+			},
+			{
+				admitted: true,
+				content: "x",
+				details: { padding: "x".repeat(4_097) },
+				breaches: { outcome: false, content: false, details: true },
+			},
+			{
+				admitted: false,
+				content: "x".repeat(500),
+				details: { padding: "x".repeat(1_600) },
+				breaches: { outcome: true, content: false, details: false },
+			},
+			{
+				admitted: true,
+				content: "x".repeat(521_000),
+				details: { padding: "x".repeat(3_900) },
+				breaches: { outcome: true, content: false, details: false },
+			},
 		] as const;
 		for (const item of cases) {
-			const bounded = index.boundToolResult(
-				{ content: [{ type: "text", text: item.content }], details: item.details },
-				item.admitted,
-				diagnostic,
-			);
+			const value = { content: [{ type: "text" as const, text: item.content }], details: item.details };
+			assert.deepEqual(index.dispatchSurfaceBreaches(value, item.admitted), item.breaches);
+			const bounded = index.boundToolResult(value, item.admitted, diagnostic);
 			const internal = bounded.details.diagnostic as { code?: string; phase?: string };
 			assert.deepEqual(
 				[bounded.details.disposition, internal.code, internal.phase],
