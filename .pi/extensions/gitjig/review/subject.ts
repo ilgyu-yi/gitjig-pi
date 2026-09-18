@@ -195,33 +195,32 @@ export interface PlatformCommentSnapshot {
 	body: string;
 }
 
-const CRITERIA_HEADING = /^#{1,6}[ \t]+acceptance criteria[ \t]*$/i;
-const ANY_HEADING = /^#{1,6}[ \t]/;
-const LIST_ITEM = /^(?:[-*+]|\d{1,3}[.)])[ \t]+(\S.*?)[ \t]*$/;
+type CriterionOwner = {
+	criteriaFromClosingIssues(issues: readonly PlatformIssueSnapshot[]): string[];
+};
 
-/**
- * The committed derivation rule: within each closing issue, the list items
- * under an "Acceptance criteria" heading, in platform order, each carried
- * with the issue it came from. A subject with no closing issue, or none
- * carrying criteria, yields the EMPTY set — §1.9's empty manifest, never
- * its absent one.
- */
-export function criteriaFromClosingIssues(issues: readonly PlatformIssueSnapshot[]): string[] {
-	const criteria: string[] = [];
-	for (const entry of issues) {
-		let inside = false;
-		for (const line of entry.body.split("\n")) {
-			const text = line.endsWith("\r") ? line.slice(0, -1) : line;
-			if (ANY_HEADING.test(text)) {
-				inside = CRITERIA_HEADING.test(text);
-				continue;
-			}
-			if (!inside) continue;
-			const item = LIST_ITEM.exec(text);
-			if (item !== null) criteria.push(["#", String(entry.number), ": ", item[1]].join(""));
-		}
+export class CriterionOwnerUnavailableError extends Error {
+	readonly code = "criterion-owner-unavailable";
+
+	constructor() {
+		super("criterion owner unavailable");
+		this.name = "CriterionOwnerUnavailableError";
 	}
-	return criteria;
+}
+
+async function loadCriterionOwner(): Promise<CriterionOwner | undefined> {
+	try {
+		return (await import("../../../../.github/workflows/ac-closeout.mjs")) as CriterionOwner;
+	} catch {
+		return undefined;
+	}
+}
+
+/** §1.9's handed-over derivation; unavailable is ABSENT, never EMPTY. */
+export async function criteriaFromClosingIssues(issues: readonly PlatformIssueSnapshot[]): Promise<string[]> {
+	const owner = await loadCriterionOwner();
+	if (owner === undefined) throw new CriterionOwnerUnavailableError();
+	return owner.criteriaFromClosingIssues(issues);
 }
 
 const ACTIVATION_MARKER = "gitjig-activation-criteria";
@@ -280,7 +279,7 @@ export function criterionUnion(activation: readonly string[], current: readonly 
  * context's closing issues, so a caller cannot widen or narrow the
  * criteria the adjudication will be read against.
  */
-export function admitReviewSubject(value: unknown): ReviewSubject | undefined {
+export async function admitReviewSubject(value: unknown): Promise<ReviewSubject | undefined> {
 	if (!object(value, ["context", "writerId", "activation", "criteria"])) return undefined;
 	const context = admitPlatformReviewContext(value.context);
 	if (context === undefined || !text(value.writerId) || !Array.isArray(value.activation)) return undefined;
@@ -319,7 +318,8 @@ export function admitReviewSubject(value: unknown): ReviewSubject | undefined {
 		activation.push({ issueId: issue.id, verdict: admitted[0], snapshot: admitted[1] });
 		activationCriteria.push(...criteria);
 	}
-	const derived = criterionUnion(activationCriteria, criteriaFromClosingIssues(context.pullRequest.closingIssues));
+	const currentCriteria = await criteriaFromClosingIssues(context.pullRequest.closingIssues);
+	const derived = criterionUnion(activationCriteria, currentCriteria);
 	if (JSON.stringify(value.criteria) !== JSON.stringify(derived)) return undefined;
 	return { context, writerId: value.writerId, activation, criteria: derived };
 }
@@ -577,11 +577,12 @@ export async function fetchReviewSubject(
 		activation.push({ issueId: issue.id, verdict: comments[index - 1], snapshot: comments[index] });
 		activationCriteria.push(...criteria);
 	}
+	const currentCriteria = await criteriaFromClosingIssues(context.pullRequest.closingIssues);
 	return admitReviewSubject({
 		context,
 		writerId,
 		activation,
-		criteria: criterionUnion(activationCriteria, criteriaFromClosingIssues(context.pullRequest.closingIssues)),
+		criteria: criterionUnion(activationCriteria, currentCriteria),
 	});
 }
 
@@ -591,7 +592,7 @@ export async function refetchReviewSubject(
 	expected: ReviewSubject,
 	read: PlatformRead = runPlatformRead,
 ): Promise<ReviewSubject | undefined> {
-	const subject = admitReviewSubject(expected);
+	const subject = await admitReviewSubject(expected);
 	if (subject === undefined) return undefined;
 	const current = await fetchReviewSubject(repoRoot, subject.context.pullRequest.number, read);
 	return current !== undefined && JSON.stringify(current) === JSON.stringify(subject) ? current : undefined;

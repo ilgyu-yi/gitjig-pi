@@ -129,8 +129,11 @@ function identityResponses(locators: readonly ClosingIssueLocator[], reads: read
 }
 
 describe("review subject criterion union", () => {
-	it("derives current criteria only from the named section", () => {
-		assert.deepEqual(criteriaFromClosingIssues([issue]), ["#212: retained criterion", "#212: current-only criterion"]);
+	it("derives current criteria only from the named section", async () => {
+		assert.deepEqual(await criteriaFromClosingIssues([issue]), [
+			"#212: retained criterion",
+			"#212: current-only criterion",
+		]);
 	});
 
 	it("admits exactly one writer-attributed activation snapshot", () => {
@@ -243,11 +246,11 @@ describe("review subject criterion union", () => {
 			"--slurp",
 			"repos/owner/repo/issues/212/comments",
 		]);
-		assert.deepEqual(admitReviewSubject(subject), subject);
+		assert.deepEqual(await admitReviewSubject(subject), subject);
 		if (subject === undefined) assert.fail("subject should be admitted");
-		assert.equal(admitReviewSubject({ ...subject, criteria: ["#212: current-only criterion"] }), undefined);
+		assert.equal(await admitReviewSubject({ ...subject, criteria: ["#212: current-only criterion"] }), undefined);
 		assert.equal(
-			admitReviewSubject({
+			await admitReviewSubject({
 				...subject,
 				activation: [{ ...subject.activation[0], snapshot: { ...subject.activation[0].snapshot, body: "changed" } }],
 			}),

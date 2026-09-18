@@ -83,6 +83,28 @@ function array(value: unknown): unknown[] {
 
 export type PlatformRunner = (argv: string[], repoRoot: string) => Promise<string | undefined>;
 
+/** Select only the unambiguous newest-created check run for each name. */
+export function newestCheckConclusions(
+	checks: readonly unknown[],
+): Map<string, { status: string; conclusion: string }> | undefined {
+	const newest = new Map<string, { id: number; status: string; conclusion: string }>();
+	for (const value of checks) {
+		const check = record(value);
+		if (!check || typeof check.name !== "string" || !Number.isSafeInteger(check.id) || typeof check.status !== "string")
+			return undefined;
+		const id = Number(check.id);
+		const prior = newest.get(check.name);
+		if (prior?.id === id) return undefined;
+		if (prior === undefined || id > prior.id)
+			newest.set(check.name, {
+				id,
+				status: check.status,
+				conclusion: typeof check.conclusion === "string" ? check.conclusion : "",
+			});
+	}
+	return new Map([...newest].map(([name, value]) => [name, { status: value.status, conclusion: value.conclusion }]));
+}
+
 async function api(
 	host: string,
 	repository: string,
@@ -318,11 +340,12 @@ export async function loadPlatformLanding(
 	const standingChangesRequested = [...latestReviews.values()].some(
 		(review) => review.dismissed !== true && review.state === "CHANGES_REQUESTED",
 	);
-	const checkRuns = array(record(checksRaw)?.check_runs).map(record);
+	const latestChecks = newestCheckConclusions(array(record(checksRaw)?.check_runs));
+	if (latestChecks === undefined) return { arm: "check-rollup-ambiguous" };
 	const successful = new Set(
-		checkRuns
-			.filter((check) => check?.status === "completed" && check.conclusion === "success")
-			.map((check) => String(check?.name)),
+		[...latestChecks]
+			.filter(([, check]) => check.status === "completed" && check.conclusion === "success")
+			.map(([name]) => name),
 	);
 	const requiredContexts =
 		REQUIRED_CONTEXTS.every((context) => configuredContexts.includes(context)) &&

@@ -70,6 +70,18 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/workflows/ac-closeout-event.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/ac-closeout.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/ac-closeout.yml",
+			"disposition": "handed-over"
+		},
+		{
 			"path": ".github/workflows/auto-status-proposed.yml",
 			"disposition": "handed-over"
 		},
@@ -507,6 +519,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/279.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/282.md",
 			"disposition": "instance-state"
 		},
 		{

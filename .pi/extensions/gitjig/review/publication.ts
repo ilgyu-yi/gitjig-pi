@@ -13,12 +13,23 @@ import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./c
 import {
 	admitPlatformReviewContext,
 	admitReviewSubject,
+	CriterionOwnerUnavailableError,
 	type PlatformReviewContext,
 	type ReviewSubject,
 } from "./subject.ts";
 
 type Publish = typeof performPublish;
 type FetchComments = typeof fetchAttestedReviewComments;
+
+async function admitPublicationSubject(
+	source: ReviewSubject,
+): Promise<ReviewSubject | "criterion-owner-unavailable" | undefined> {
+	try {
+		return await admitReviewSubject(source);
+	} catch (error) {
+		return error instanceof CriterionOwnerUnavailableError ? "criterion-owner-unavailable" : undefined;
+	}
+}
 
 export interface ReviewPublicationReceipt {
 	repositoryId: string;
@@ -51,7 +62,9 @@ export async function publishResolverRepairHandoff(
 		read: runPlatformRead,
 	},
 ): Promise<ReviewPublicationOutcome> {
-	const subject = admitReviewSubject(source);
+	const subject = await admitPublicationSubject(source);
+	if (subject === "criterion-owner-unavailable")
+		return { ok: false, cause: "the handed-over criterion owner was unavailable" };
 	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
 	const pull = subject.context.pullRequest;
 	let engine: typeof import("../../../../.github/workflows/gitjig-lifecycle.mjs");
@@ -271,7 +284,9 @@ export async function publishAndRefetchReviewRecord(
 	publish: Publish = performPublish,
 	fetchComments: FetchComments = fetchAttestedReviewComments,
 ): Promise<ReviewPublicationOutcome> {
-	const subject = admitReviewSubject(source);
+	const subject = await admitPublicationSubject(source);
+	if (subject === "criterion-owner-unavailable")
+		return { ok: false, cause: "the handed-over criterion owner was unavailable" };
 	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
 	const context = subject.context;
 	const published = await publishReviewRecord(body, context, repoRoot, stateRoot, publish);

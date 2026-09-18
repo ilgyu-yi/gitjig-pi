@@ -34,6 +34,7 @@ import type { ReviewPublicationOutcome, ReviewPublicationReceipt } from "../revi
 import { publishAndRefetchReviewRecord, publishResolverRepairHandoff } from "../review/publication.ts";
 import type { ReviewRecord } from "../review/record.ts";
 import {
+	CriterionOwnerUnavailableError,
 	fetchReviewSubject,
 	type ReviewSubject,
 	refetchReviewSubject,
@@ -45,6 +46,7 @@ import { readRepositoryInput } from "./review-round-input.ts";
 const REFUSE_SPEC =
 	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
 const HANDOFF_SUBJECT = "review-round handed off: the platform-attested review subject could not be established";
+const HANDOFF_CRITERION_OWNER = "review-round handed off: the handed-over criterion owner was unavailable";
 const HANDOFF_HEAD = "review-round handed off: the attested head is not the head this clone resolves";
 const HANDOFF_DRIFT = "review-round handed off: the review subject changed while the round ran";
 const HANDOFF_HISTORY = "review-round handed off: installed review history could not be read";
@@ -318,8 +320,12 @@ export async function driveReviewRound(
 			return finish(state, { disposition: "posted", review: round.review });
 		const stop = await diagnose(after.history, publication.receipt);
 		return finish(state, stop ?? { disposition: "posted", review: round.review });
-	} catch {
-		return finish(state, { disposition: "hand-off", cause: HANDOFF_ROUND, reentry: "none" });
+	} catch (error) {
+		return finish(state, {
+			disposition: "hand-off",
+			cause: error instanceof CriterionOwnerUnavailableError ? HANDOFF_CRITERION_OWNER : HANDOFF_ROUND,
+			reentry: "none",
+		});
 	}
 }
 

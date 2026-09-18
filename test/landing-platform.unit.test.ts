@@ -7,6 +7,7 @@ import {
 	activeRulesetApplies,
 	landingPermission,
 	loadPlatformLanding,
+	newestCheckConclusions,
 	normalizeReviewActorType,
 	platformLandingEffects,
 	selectCurrentConsumption,
@@ -16,6 +17,24 @@ import { gitBlobOid } from "../.pi/extensions/gitjig/landing/provenance.ts";
 const repoRoot = join(import.meta.dirname, "..");
 
 describe("#278 platform snapshot normalization", () => {
+	it("selects only the newest-created check and refuses malformed or tied populations", () => {
+		assert.deepEqual(
+			newestCheckConclusions([
+				{ id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
+				{ id: 1, name: "ac-closeout", status: "completed", conclusion: "success" },
+			]),
+			new Map([["ac-closeout", { status: "completed", conclusion: "failure" }]]),
+		);
+		assert.equal(
+			newestCheckConclusions([
+				{ id: 2, name: "ac-closeout", status: "completed", conclusion: "failure" },
+				{ id: 2, name: "ac-closeout", status: "completed", conclusion: "success" },
+			]),
+			undefined,
+		);
+		assert.equal(newestCheckConclusions([{ name: "ac-closeout", status: "completed" }]), undefined);
+	});
+
 	it("never upgrades absent or unknown actor types to User", () => {
 		assert.equal(normalizeReviewActorType("User"), "User");
 		assert.equal(normalizeReviewActorType("Bot"), "Bot");
