@@ -151,14 +151,21 @@ export function admitCloseoutRecord(value) {
 /** @param {unknown} body */
 export function prChecklistTerminal(body) {
 	if (typeof body !== "string") return false;
+	let fence;
 	for (const line of body.split("\n")) {
+		const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+		if (marker && (fence === undefined || (marker[0] === fence[0] && marker.length >= fence.length))) {
+			fence = fence === undefined ? marker : undefined;
+			continue;
+		}
+		if (fence !== undefined || /^ {0,3}>/.test(line)) continue;
 		const match = /^\s*(?:[-*+]|\d{1,3}[.)])\s+\[([^\]]*)\](.*)$/.exec(line);
 		if (!match) continue;
 		if (/^[xX]$/.test(match[1])) continue;
 		if (match[1] === "~" && match[2].startsWith(" N/A — ") && text(match[2].slice(" N/A — ".length))) continue;
 		return false;
 	}
-	return true;
+	return fence === undefined;
 }
 
 /** Evaluate one fully attested PR/Issue/comment snapshot. */

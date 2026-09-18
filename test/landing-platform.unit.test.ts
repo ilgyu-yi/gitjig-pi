@@ -32,6 +32,14 @@ describe("#278 platform snapshot normalization", () => {
 			]),
 			undefined,
 		);
+		assert.equal(
+			newestCheckConclusions([
+				{ id: 3, name: "suite", status: "completed", conclusion: "success" },
+				{ id: 2, name: "old", status: "completed", conclusion: "success" },
+				{ id: 2, name: "older-duplicate", status: "completed", conclusion: "success" },
+			]),
+			undefined,
+		);
 		assert.equal(newestCheckConclusions([{ name: "ac-closeout", status: "completed" }]), undefined);
 	});
 

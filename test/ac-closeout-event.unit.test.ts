@@ -26,7 +26,7 @@ interface CheckRun {
 	app: { slug: string };
 }
 
-function seams(runs: CheckRun[]) {
+function seams(runs: CheckRun[] | "unavailable") {
 	const writes: { path: string; body: { conclusion?: string } }[] = [];
 	const pull = {
 		number: 1,
@@ -49,7 +49,10 @@ function seams(runs: CheckRun[]) {
 					updated_at: "2026-03-13T00:00:00Z",
 				},
 			];
-		if (path === `/commits/${head}/check-runs?per_page=100`) return { total_count: runs.length, check_runs: runs };
+		if (path === `/commits/${head}/check-runs?per_page=100`) {
+			if (runs === "unavailable") throw new Error("unavailable");
+			return { total_count: runs.length, check_runs: runs };
+		}
 		if (path.startsWith("/check-runs/") && init.method === "PATCH") {
 			writes.push({ path, body: JSON.parse(String(init.body)) as { conclusion?: string } });
 			return {};
@@ -86,6 +89,18 @@ describe("ac-closeout check-run supersession", () => {
 				},
 			},
 		]);
+	});
+
+	it("concludes its own run as failed when the check population is unavailable", async () => {
+		const seam = seams("unavailable");
+		assert.deepEqual(
+			await evaluatePull({ api: seam.api, graphql: seam.graphql, owner: "o", name: "r", repository: "o/r", number: 1 }),
+			{ ok: false, arm: "lookup-unavailable" },
+		);
+		assert.deepEqual(
+			seam.writes.map((write) => [write.path, write.body.conclusion]),
+			[["/check-runs/10", "failure"]],
+		);
 	});
 
 	it("neutralizes only older open runs before publishing its exact success", async () => {

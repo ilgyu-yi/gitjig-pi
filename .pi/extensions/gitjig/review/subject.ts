@@ -210,7 +210,8 @@ export class CriterionOwnerUnavailableError extends Error {
 
 async function loadCriterionOwner(): Promise<CriterionOwner | undefined> {
 	try {
-		return (await import("../../../../.github/workflows/ac-closeout.mjs")) as CriterionOwner;
+		const owner = (await import("../../../../.github/workflows/ac-closeout.mjs")) as Partial<CriterionOwner>;
+		return typeof owner.criteriaFromClosingIssues === "function" ? (owner as CriterionOwner) : undefined;
 	} catch {
 		return undefined;
 	}

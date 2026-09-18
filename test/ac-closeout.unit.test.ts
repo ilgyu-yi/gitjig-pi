@@ -76,6 +76,8 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.equal(prChecklistTerminal("- [x] done\n- [~] N/A — no editorial item"), true);
 		assert.equal(prChecklistTerminal("- [ ] open"), false);
 		assert.equal(prChecklistTerminal("- [~] N/A — "), false);
+		assert.equal(prChecklistTerminal("```md\n- [ ] example\n```\n> - [ ] quoted"), true);
+		assert.equal(prChecklistTerminal("```md\n- [ ] unterminated"), false);
 	});
 
 	it("passes the exact current author-attested record", () => {

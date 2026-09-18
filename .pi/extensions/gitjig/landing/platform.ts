@@ -88,13 +88,15 @@ export function newestCheckConclusions(
 	checks: readonly unknown[],
 ): Map<string, { status: string; conclusion: string }> | undefined {
 	const newest = new Map<string, { id: number; status: string; conclusion: string }>();
+	const seenIds = new Set<number>();
 	for (const value of checks) {
 		const check = record(value);
 		if (!check || typeof check.name !== "string" || !Number.isSafeInteger(check.id) || typeof check.status !== "string")
 			return undefined;
 		const id = Number(check.id);
+		if (seenIds.has(id)) return undefined;
+		seenIds.add(id);
 		const prior = newest.get(check.name);
-		if (prior?.id === id) return undefined;
 		if (prior === undefined || id > prior.id)
 			newest.set(check.name, {
 				id,

@@ -131,21 +131,10 @@ export async function evaluatePull({ api, graphql, owner, name, repository, numb
 	} catch {
 		result = { ok: false, arm: "lookup-unavailable" };
 	}
-	const runs = await checkRuns(api, initial.head.sha);
-	if (runs.some(/** @param {any} run */ (run) => Number(run.id) > created.id)) {
-		await api(`/check-runs/${created.id}`, {
-			method: "PATCH",
-			body: JSON.stringify({
-				status: "completed",
-				conclusion: "neutral",
-				output: { title: "Superseded", summary: "A newer ac-closeout evaluation owns this head." },
-			}),
-		});
-		return { ok: false, arm: "superseded" };
-	}
-	for (const run of runs) {
-		if (Number(run.id) < created.id && run.status !== "completed")
-			await api(`/check-runs/${run.id}`, {
+	try {
+		const runs = await checkRuns(api, initial.head.sha);
+		if (runs.some(/** @param {any} run */ (run) => Number(run.id) > created.id)) {
+			await api(`/check-runs/${created.id}`, {
 				method: "PATCH",
 				body: JSON.stringify({
 					status: "completed",
@@ -153,10 +142,25 @@ export async function evaluatePull({ api, graphql, owner, name, repository, numb
 					output: { title: "Superseded", summary: "A newer ac-closeout evaluation owns this head." },
 				}),
 			});
+			return { ok: false, arm: "superseded" };
+		}
+		for (const run of runs) {
+			if (Number(run.id) < created.id && run.status !== "completed")
+				await api(`/check-runs/${run.id}`, {
+					method: "PATCH",
+					body: JSON.stringify({
+						status: "completed",
+						conclusion: "neutral",
+						output: { title: "Superseded", summary: "A newer ac-closeout evaluation owns this head." },
+					}),
+				});
+		}
+		const finalPull = await api(`/pulls/${number}`);
+		if (finalPull?.head?.sha !== initial.head.sha || finalPull?.base?.sha !== initial.base.sha)
+			result = { ok: false, arm: "subject-changed" };
+	} catch {
+		result = { ok: false, arm: "lookup-unavailable" };
 	}
-	const finalPull = await api(`/pulls/${number}`);
-	if (finalPull?.head?.sha !== initial.head.sha || finalPull?.base?.sha !== initial.base.sha)
-		result = { ok: false, arm: "subject-changed" };
 	await api(`/check-runs/${created.id}`, {
 		method: "PATCH",
 		body: JSON.stringify({
