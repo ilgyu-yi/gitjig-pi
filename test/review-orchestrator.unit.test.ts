@@ -25,7 +25,7 @@ import { pathToFileURL } from "node:url";
 // that closes the one shape the behavioural laws cannot reach (issue
 // #208). Erased before this file runs, so it adds no runtime dependency
 // — which is also its limit: it reds `tsc`, never this suite.
-import { DIAGNOSTIC_MESSAGES } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
+import { DIAGNOSTIC_MESSAGES, type ReturnClass, type RunClass } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { Disposition as UpstreamDisposition } from "../.pi/extensions/gitjig/review/resolve.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
@@ -34,8 +34,8 @@ const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
 type Slot = { lens: string; surface: string };
 type BundleEntry = { finding: string; slot: Slot };
 type DispatchDiagnostic = {
-	run: { class: string; exitCode: number | null; signal: string | null };
-	return: { class: string };
+	run: { class: RunClass; exitCode: number | null; signal: string | null };
+	return: { class: ReturnClass };
 };
 type DispatchOutcome =
 	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
@@ -1365,13 +1365,32 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		cause: DIAGNOSTIC_MESSAGES.RETURN_MISSING,
 		diagnostic: { run: { class: "exited", exitCode, signal: null }, return: { class: "missing" } },
 	});
-	const refused = (runClass: string, returnClass: string): DispatchOutcome => ({
+	const refused = (runClass: RunClass, returnClass: ReturnClass): DispatchOutcome => ({
 		disposition: "refused",
 		cause: "fixed refusal",
 		diagnostic: {
 			run: { class: runClass, exitCode: runClass === "exited" ? 1 : null, signal: null },
 			return: { class: returnClass },
 		},
+	});
+	const unionKeys = <Member extends string>(members: Record<Member, true>): Member[] =>
+		Object.keys(members) as Member[];
+	const nonExitedRunClasses = unionKeys<Exclude<RunClass, "exited">>({
+		"not-started": true,
+		signaled: true,
+		"timed-out": true,
+		aborted: true,
+		"internal-failed": true,
+	});
+	const nonMissingReturnClasses = unionKeys<Exclude<ReturnClass, "missing">>({
+		"not-inspected": true,
+		"not-regular": true,
+		oversize: true,
+		unreadable: true,
+		"json-invalid": true,
+		"schema-invalid": true,
+		"operand-rejected": true,
+		admitted: true,
 	});
 
 	it("retries zero and nonzero numeric exits with a missing return exactly once and emits one event", async () => {
@@ -1420,13 +1439,8 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 
 	it("retries no excluded lifecycle, present return, admitted result, or rejected send", async () => {
 		for (const outcome of [
-			refused("signaled", "not-inspected"),
-			refused("timed-out", "not-inspected"),
-			refused("aborted", "not-inspected"),
-			refused("not-started", "not-inspected"),
-			...["not-regular", "oversize", "unreadable", "json-invalid", "schema-invalid", "operand-rejected"].map(
-				(returnClass) => refused("exited", returnClass),
-			),
+			...nonExitedRunClasses.map((runClass) => refused(runClass, "missing")),
+			...nonMissingReturnClasses.map((returnClass) => refused("exited", returnClass)),
 			{ disposition: "admitted" as const, ok: true, summary: "RESULT", compare: "invalid" as const },
 		]) {
 			const events: string[] = [];
