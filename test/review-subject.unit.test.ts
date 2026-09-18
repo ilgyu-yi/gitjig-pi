@@ -43,6 +43,40 @@ function verdict(authorId = "WRITER", id = 1) {
 	return comment("<!-- activation-verdict: pass -->\n\nActivation passed.", authorId, id);
 }
 
+interface ClosingIssueLocator {
+	id: string;
+	number: number;
+	url: string;
+	repository: { id: string; name: string; owner: { id: string; login: string } };
+}
+
+interface IssueRead {
+	id: string;
+	number: number;
+	url: string;
+	title: string;
+	body: string;
+}
+
+function platformComments(issueId = issue.id, issueNumber = issue.number): unknown {
+	return [
+		[
+			{
+				id: 90,
+				body: "<!-- activation-verdict: pass -->\n\nActivation passed.",
+				user: { node_id: "WRITER" },
+				author_association: "OWNER",
+			},
+			{
+				id: 91,
+				body: activationBody([], issueId, issueNumber),
+				user: { node_id: "WRITER" },
+				author_association: "OWNER",
+			},
+		],
+	];
+}
+
 function platformResponses(
 	comments: unknown,
 	currentIssue: PlatformIssueSnapshot = issue,
@@ -64,14 +98,33 @@ function platformResponses(
 				{
 					id: currentIssue.id,
 					number: currentIssue.number,
-					title: currentIssue.title,
-					body: currentIssue.body,
-					repository: { id: currentIssue.repositoryId },
+					url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
+					repository: { id: currentIssue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
 				},
 			],
 		}),
+		JSON.stringify({
+			id: currentIssue.id,
+			number: currentIssue.number,
+			url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
+			title: currentIssue.title,
+			body: currentIssue.body,
+		}),
 		JSON.stringify({ node_id: "WRITER" }),
 		JSON.stringify(comments),
+	];
+}
+
+function identityResponses(locators: readonly ClosingIssueLocator[], reads: readonly IssueRead[]): string[] {
+	const base = platformResponses([]);
+	const pull = JSON.parse(base[1]) as { closingIssuesReferences: ClosingIssueLocator[] };
+	pull.closingIssuesReferences = [...structuredClone(locators)];
+	return [
+		base[0],
+		JSON.stringify(pull),
+		...reads.map((entry) => JSON.stringify(entry)),
+		base[3],
+		...locators.map((entry) => JSON.stringify(platformComments(entry.id, entry.number))),
 	];
 }
 
@@ -172,7 +225,17 @@ describe("review subject criterion union", () => {
 			"#212: retained criterion",
 			"#212: current-only criterion",
 		]);
-		assert.deepEqual(calls[3], [
+		assert.equal(calls.length, 5);
+		assert.deepEqual(calls[2], [
+			"issue",
+			"view",
+			"212",
+			"--repo",
+			"github.com/owner/repo",
+			"--json",
+			"id,number,url,title,body",
+		]);
+		assert.deepEqual(calls[4], [
 			"api",
 			"--hostname",
 			"github.com",
@@ -190,6 +253,151 @@ describe("review subject criterion union", () => {
 			}),
 			undefined,
 		);
+	});
+
+	it("binds the closing-issue locator id, number, and URL to the explicit issue read and its repository id to the attested repository", async (t) => {
+		const issueUrl = "https://github.com/owner/repo/issues/212";
+		const validLocator: ClosingIssueLocator = {
+			id: issue.id,
+			number: issue.number,
+			url: issueUrl,
+			repository: { id: issue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
+		};
+		const validRead: IssueRead = {
+			id: issue.id,
+			number: issue.number,
+			url: issueUrl,
+			title: issue.title,
+			body: issue.body,
+		};
+		const fetch = async (locators: ClosingIssueLocator[], reads: IssueRead[]) => {
+			const responses = identityResponses(locators, reads);
+			return fetchReviewSubject("/repo", 223, async () => responses.shift());
+		};
+
+		assert.notEqual(await fetch([validLocator], [validRead]), undefined, "the bound positive control must admit");
+
+		const cases: { name: string; locators: ClosingIssueLocator[]; reads: IssueRead[] }[] = [
+			{
+				name: "foreign locator repository id",
+				locators: [
+					{
+						...validLocator,
+						repository: { ...validLocator.repository, id: "FOREIGN_REPO" },
+					},
+				],
+				reads: [validRead],
+			},
+			{
+				name: "locator URL moved from the attested repository path",
+				locators: [{ ...validLocator, url: "https://github.com/owner/repo/issues/999" }],
+				reads: [{ ...validRead, url: "https://github.com/owner/repo/issues/999" }],
+			},
+			{
+				name: "repeated locator id",
+				locators: [validLocator, { ...validLocator, number: 213, url: "https://github.com/owner/repo/issues/213" }],
+				reads: [validRead, { ...validRead, number: 213, url: "https://github.com/owner/repo/issues/213" }],
+			},
+			{
+				name: "repeated locator number",
+				locators: [validLocator, { ...validLocator, id: "ISSUE_213" }],
+				reads: [validRead, { ...validRead, id: "ISSUE_213" }],
+			},
+			{
+				name: "issue-read id disagreement",
+				locators: [validLocator],
+				reads: [{ ...validRead, id: "ISSUE_999" }],
+			},
+			{
+				name: "issue-read number disagreement",
+				locators: [validLocator],
+				reads: [{ ...validRead, number: 999 }],
+			},
+			{
+				name: "issue-read URL disagreement",
+				locators: [validLocator],
+				reads: [{ ...validRead, url: "https://github.com/owner/repo/issues/999" }],
+			},
+		];
+		for (const shape of cases) {
+			await t.test(shape.name, async () => {
+				assert.equal(await fetch(shape.locators, shape.reads), undefined);
+			});
+		}
+	});
+
+	it("refuses non-conforming locator and explicit-read shapes", async () => {
+		const locator: ClosingIssueLocator = {
+			id: issue.id,
+			number: issue.number,
+			url: "https://github.com/owner/repo/issues/212",
+			repository: { id: issue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
+		};
+		const read: IssueRead = {
+			id: issue.id,
+			number: issue.number,
+			url: locator.url,
+			title: issue.title,
+			body: issue.body,
+		};
+		const alterations: ((responses: string[]) => void)[] = [
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: Record<string, unknown>[] };
+				pull.closingIssuesReferences[0].extra = true;
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: Record<string, unknown> }[] };
+				pull.closingIssuesReferences[0].repository.extra = true;
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { id: string } }[] };
+				pull.closingIssuesReferences[0].repository.id = "";
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { name: string } }[] };
+				pull.closingIssuesReferences[0].repository.name = "";
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { owner: unknown } }[] };
+				pull.closingIssuesReferences[0].repository.owner = {};
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				value.extra = true;
+				responses[2] = JSON.stringify(value);
+			},
+			(responses) => {
+				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				value.title = 1;
+				responses[2] = JSON.stringify(value);
+			},
+			(responses) => {
+				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				value.body = null;
+				responses[2] = JSON.stringify(value);
+			},
+		];
+		for (const alter of alterations) {
+			const responses = identityResponses([locator], [read]);
+			alter(responses);
+			assert.equal(await fetchReviewSubject("/repo", 223, async () => responses.shift()), undefined);
+		}
+	});
+
+	it("keeps zero closing references as a present empty criterion manifest", async () => {
+		const responses = platformResponses([]);
+		const pull = JSON.parse(responses[1]) as { closingIssuesReferences: unknown[] };
+		pull.closingIssuesReferences = [];
+		responses[1] = JSON.stringify(pull);
+		responses.splice(2, 1);
+		const subject = await fetchReviewSubject("/repo", 223, async () => responses.shift());
+		assert.deepEqual(subject?.criteria, []);
+		assert.deepEqual(subject?.context.pullRequest.closingIssues, []);
 	});
 
 	it("admits a fork pull request while keeping the base and closing issues on the target repository", async () => {
