@@ -48,6 +48,11 @@ describe("#278 platform snapshot normalization", () => {
 			]),
 			new Map(),
 		);
+		assert.equal(
+			newestCheckConclusions([{ id: 100, name: "ac-closeout", status: "completed", conclusion: "success", app: null }]),
+			undefined,
+		);
+		assert.equal(newestCheckConclusions([null]), undefined);
 	});
 
 	it("never upgrades absent or unknown actor types to User", () => {
@@ -226,6 +231,23 @@ describe("#278 platform snapshot normalization", () => {
 		assert.equal(loaded.snapshot?.topologyActive, false);
 		assert.equal(loaded.snapshot?.core.baseFresh, true);
 		assert.equal(loaded.snapshot?.escape, undefined);
+
+		const ambiguous = await loadPlatformLanding(
+			"github.com",
+			"o/r",
+			7,
+			repoRoot,
+			"2026-01-01T00:00:00Z",
+			async (argv) => {
+				const endpoint = argv.find((part) => part.startsWith("repos/o/r")) ?? "";
+				return JSON.stringify(
+					endpoint.includes("check-runs")
+						? { total_count: 1, check_runs: [{ id: 1, name: "ac-closeout", status: "completed", app: null }] }
+						: response(argv),
+				);
+			},
+		);
+		assert.equal(ambiguous.arm, "check-rollup-ambiguous");
 	});
 
 	it("executes comment, label, merge and parent verification through an injected platform seam", async () => {

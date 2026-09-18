@@ -26,8 +26,9 @@ interface CheckRun {
 	app: { slug: string };
 }
 
-function seams(runs: CheckRun[] | "unavailable") {
+function seams(runs: CheckRun[] | "unavailable", changeSubject = false) {
 	const writes: { path: string; body: { conclusion?: string } }[] = [];
+	let pullReads = 0;
 	const pull = {
 		number: 1,
 		node_id: "PR",
@@ -37,7 +38,10 @@ function seams(runs: CheckRun[] | "unavailable") {
 		base: { sha: base, repo: { full_name: "o/r", node_id: "REPO" } },
 	};
 	const api = async (path: string, init: RequestInit = {}) => {
-		if (path === "/pulls/1") return pull;
+		if (path === "/pulls/1") {
+			pullReads += 1;
+			return changeSubject && pullReads >= 3 ? { ...pull, base: { ...pull.base, sha: "c".repeat(40) } } : pull;
+		}
 		if (path === "/check-runs" && init.method === "POST") return { id: 10 };
 		if (path === "/issues/282") return { node_id: "ISSUE", body: "## Acceptance criteria\n- [ ] done" };
 		if (path.startsWith("/issues/282/comments?"))
@@ -136,6 +140,18 @@ describe("ac-closeout check-run supersession", () => {
 		assert.deepEqual(
 			seam.writes.map((write) => [write.path, write.body.conclusion]),
 			[["/check-runs/10", "failure"]],
+		);
+	});
+
+	it("refuses when the subject changes before conclusion", async () => {
+		const seam = seams([], true);
+		assert.deepEqual(
+			await evaluatePull({ api: seam.api, graphql: seam.graphql, owner: "o", name: "r", repository: "o/r", number: 1 }),
+			{ ok: false, arm: "subject-changed" },
+		);
+		assert.deepEqual(
+			seam.writes.map((write) => write.body.conclusion),
+			["failure"],
 		);
 	});
 

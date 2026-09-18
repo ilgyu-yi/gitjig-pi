@@ -84,6 +84,29 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.deepEqual(evaluateAcCloseout(subject), { ok: true, arm: "pass" });
 	});
 
+	it("refuses every malformed subject, Issue, criterion and record shape", () => {
+		assert.equal(evaluateAcCloseout({}).arm, "subject-malformed");
+		assert.equal(closeoutCriteria({ id: "ISSUE", number: 0, body: "" }).arm, "issue-malformed");
+		assert.equal(
+			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- criterion without marker" }).arm,
+			"criterion-marker-absent",
+		);
+		assert.equal(
+			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- [ ] same\n- [x] same" }).arm,
+			"criteria-duplicate",
+		);
+		assert.equal(
+			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- [ ] valid then\u0001bad" }).arm,
+			"criterion-malformed",
+		);
+		const malformedPopulation = copy(subject) as unknown as { closingIssues: { comments: unknown }[] };
+		malformedPopulation.closingIssues[0].comments = null;
+		assert.equal(evaluateAcCloseout(malformedPopulation).arm, "issue-population-malformed");
+		const malformedRecord = copy(subject);
+		malformedRecord.closingIssues[0].comments[0].body = `${AC_CLOSEOUT_MARKER}\n{}`;
+		assert.equal(evaluateAcCloseout(malformedRecord).arm, "evidence-malformed");
+	});
+
 	for (const [name, mutate, arm] of [
 		[
 			"no closing Issue",

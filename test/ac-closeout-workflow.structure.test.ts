@@ -8,7 +8,7 @@ type Workflow = {
 	on?: Record<string, { types: string[] }>;
 	true?: Record<string, { types: string[] }>;
 	permissions: Record<string, string>;
-	jobs: { evaluate: { steps: { with?: Record<string, unknown>; run?: string }[] } };
+	jobs: { evaluate: { "timeout-minutes": number; steps: { with?: Record<string, unknown>; run?: string }[] } };
 };
 
 const root = join(import.meta.dirname, "..");
@@ -31,6 +31,7 @@ describe("trusted ac-closeout workflow", () => {
 			issues: "read",
 			checks: "write",
 		});
+		assert.equal(workflow.jobs.evaluate["timeout-minutes"], 10);
 		const steps = workflow.jobs.evaluate.steps;
 		assert.equal(steps[0].with?.ref, "${{ github.event.repository.default_branch }}");
 		assert.equal(steps[0].with?.["persist-credentials"], false);
