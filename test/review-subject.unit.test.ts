@@ -225,6 +225,7 @@ describe("review subject criterion union", () => {
 			"#212: retained criterion",
 			"#212: current-only criterion",
 		]);
+		assert.equal(calls.length, 5);
 		assert.deepEqual(calls[2], [
 			"issue",
 			"view",
@@ -322,6 +323,69 @@ describe("review subject criterion union", () => {
 			await t.test(shape.name, async () => {
 				assert.equal(await fetch(shape.locators, shape.reads), undefined);
 			});
+		}
+	});
+
+	it("refuses non-conforming locator and explicit-read shapes", async () => {
+		const locator: ClosingIssueLocator = {
+			id: issue.id,
+			number: issue.number,
+			url: "https://github.com/owner/repo/issues/212",
+			repository: { id: issue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
+		};
+		const read: IssueRead = {
+			id: issue.id,
+			number: issue.number,
+			url: locator.url,
+			title: issue.title,
+			body: issue.body,
+		};
+		const alterations: ((responses: string[]) => void)[] = [
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: Record<string, unknown>[] };
+				pull.closingIssuesReferences[0].extra = true;
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: Record<string, unknown> }[] };
+				pull.closingIssuesReferences[0].repository.extra = true;
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { id: string } }[] };
+				pull.closingIssuesReferences[0].repository.id = "";
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { name: string } }[] };
+				pull.closingIssuesReferences[0].repository.name = "";
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { owner: unknown } }[] };
+				pull.closingIssuesReferences[0].repository.owner = {};
+				responses[1] = JSON.stringify(pull);
+			},
+			(responses) => {
+				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				value.extra = true;
+				responses[2] = JSON.stringify(value);
+			},
+			(responses) => {
+				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				value.title = 1;
+				responses[2] = JSON.stringify(value);
+			},
+			(responses) => {
+				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				value.body = null;
+				responses[2] = JSON.stringify(value);
+			},
+		];
+		for (const alter of alterations) {
+			const responses = identityResponses([locator], [read]);
+			alter(responses);
+			assert.equal(await fetchReviewSubject("/repo", 223, async () => responses.shift()), undefined);
 		}
 	});
 
