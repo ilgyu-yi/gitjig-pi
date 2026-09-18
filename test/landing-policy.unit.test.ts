@@ -7,8 +7,8 @@ import {
 	gitBlobObjectId,
 	loadLandingPolicy,
 	parseLandingPolicy,
-	sourceProjectionAdmits,
 } from "../.github/workflows/landing-policy.mjs";
+import { sourceLandingPolicyAdmits } from "../.pi/extensions/gitjig/install/classifier.ts";
 
 const root = join(import.meta.dirname, "..");
 const bytes = readFileSync(join(root, ".github/landing-policy.json"));
@@ -21,7 +21,7 @@ const evidence = {
 describe("#279 null-only landing policy carrier", () => {
 	it("keeps production policy explicitly unavailable", () => {
 		assert.deepEqual(attestLandingPolicy(bytes, evidence), { ok: false, arm: "policy-unavailable" });
-		assert.equal(sourceProjectionAdmits(JSON.parse(bytes.toString("utf8"))), true);
+		assert.equal(sourceLandingPolicyAdmits(JSON.parse(bytes.toString("utf8"))), true);
 	});
 
 	it("admits only the exact configured fixture schema", () => {
@@ -78,9 +78,9 @@ describe("#279 null-only landing policy carrier", () => {
 
 	it("rejects populated source projection instead of exporting target identity", () => {
 		assert.equal(
-			sourceProjectionAdmits({ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I_node" } }),
+			sourceLandingPolicyAdmits({ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I_node" } }),
 			false,
 		);
-		assert.equal(sourceProjectionAdmits({ schemaVersion: 1, appProducer: null, extra: true }), false);
+		assert.equal(sourceLandingPolicyAdmits({ schemaVersion: 1, appProducer: null, extra: true }), false);
 	});
 });

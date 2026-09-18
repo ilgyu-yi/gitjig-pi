@@ -91,10 +91,3 @@ export function loadLandingPolicy(entries, evidence) {
 	if (matches.length !== 1) return { ok: false, arm: matches.length === 0 ? "policy-absent" : "policy-duplicate" };
 	return attestLandingPolicy(/** @type {Record<string, unknown>} */ (matches[0]).bytes, evidence);
 }
-
-/** @param {unknown} value */
-export function sourceProjectionAdmits(value) {
-	if (!exactObject(value, ["schemaVersion", "appProducer"])) return false;
-	const record = /** @type {Record<string, unknown>} */ (value);
-	return record.schemaVersion === 1 && record.appProducer === null;
-}
