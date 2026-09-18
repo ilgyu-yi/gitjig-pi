@@ -56,6 +56,32 @@ function assertConductAcceptedSet(source: string): void {
 	}
 }
 
+function assertCrossReviewHandoffContract(source: string): void {
+	const crossReview = section(source, "### 1.4 Cross-review repair", "### 1.5 Delegated work");
+	requireAll(crossReview, [
+		"Under `handoff` each value emits §2.2's idempotent handoff record and stops",
+		"One allowance exists per stable change lineage",
+		"platform-attested immutable identities",
+		"repository plus the sorted set of activated closing issues",
+		"repository plus the pull request where no issue exists",
+		"the caller never supplies or mints it",
+		"unavailable or ambiguous attested identity hands off",
+		"atomically changes the allowance from `available` to `claimed`",
+		"claim, crash, invalid return, or unavailable actor consumes it",
+		"no later event resets it for that lineage",
+		"allowance state `available | claimed | consumed`",
+		"terminal `continue | handoff`",
+		"`history-diagnosis` basis",
+		"`finding-escalation` basis",
+		"The acting author cannot write, clear, or satisfy this record",
+		"Missing, unknown, duplicate, or misaligned fields handoff",
+		"A second recovery request hands off.",
+		"only a fresh NONE returns to ordinary flow",
+		"every non-NONE, incomplete, invalid, or unavailable result hands off",
+		"another `measure-escalate` or any invalid/unavailable result hands off",
+	]);
+}
+
 const modes = section(spec, "### 5.6 Operating modes", "### 5.7 Run conduct");
 const context = section(spec, "### 5.8 Context lifecycle", "### 5.9 Session surfaces");
 const sessions = section(spec, "### 5.9 Session surfaces", "## 6. Self-governance milestone");
@@ -87,6 +113,16 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		const wrong = spec.replace("A hard blocker emits one handoff record", "A hard blocker parks");
 		assert.notEqual(wrong, spec, "handoff mutant anchor did not match");
 		assert.throws(() => assertConductAcceptedSet(wrong));
+	});
+
+	it("pins §1.4's lineage-scoped recovery and every handoff terminal", () => {
+		assertCrossReviewHandoffContract(spec);
+		const wrong = spec.replace("A second recovery request hands off.", "A second recovery request stops.");
+		assert.notEqual(wrong, spec, "§1.4 handoff mutant anchor did not match");
+		assert.throws(
+			() => assertCrossReviewHandoffContract(wrong),
+			/missing accepted-set member: A second recovery request hands off\./,
+		);
 	});
 
 	it("keeps context lifecycle bounded and repository-keyed", () => {

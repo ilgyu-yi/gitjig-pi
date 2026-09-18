@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { repoRoot } from "./harness/run-pi.ts";
@@ -19,10 +19,45 @@ function requires(subject: string, tokens: readonly string[]): void {
 	for (const token of tokens) assert.ok(subject.includes(token), `missing contract token: ${token}`);
 }
 
+function markdownFilesUnder(relative: string): string[] {
+	return readdirSync(join(root, relative), { withFileTypes: true }).flatMap((entry) => {
+		const path = join(relative, entry.name);
+		if (entry.isDirectory()) return markdownFilesUnder(path);
+		return entry.isFile() && entry.name.endsWith(".md") ? [path] : [];
+	});
+}
+
+const retiredVocabulary = [
+	/\bexecution[- ]mode\b/iu,
+	/\battended\b/iu,
+	/\bunattended\b/iu,
+	/\bpark(?:ed|ing|s)?\b/iu,
+	/merge-or-park/iu,
+	/merge-review/iu,
+	/review-gated/iu,
+	/status:blocked/iu,
+] as const;
+
+function assertRetiredVocabularyAbsent(documents: ReadonlyMap<string, string>): void {
+	for (const [path, body] of documents) {
+		for (const pattern of retiredVocabulary) {
+			assert.ok(!pattern.test(body), `retired actor/mode vocabulary survives in ${path}: ${pattern.source}`);
+		}
+	}
+}
+
+const migrationDocuments = new Map(
+	["SPEC.md", "MISSION.md", "README.md", ...markdownFilesUnder("changelog_unreleased")].map((path) => [
+		path,
+		read(path),
+	]),
+);
+
 const lifecycle = section("### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc");
 const tiers = section("### 3.2 The three tiers", "### 3.3 Gate classes");
 const gates = section("### 3.3 Gate classes", "### 3.4 Agent-agnosticism of the tiers");
 const calibration = section("### 3.6 Enforcement-face selection", "### 3.7 Approval-gate completeness");
+const approvals = section("### 3.7 Approval-gate completeness", "### 3.8 Escape architecture");
 const escapeSection = section("### 3.8 Escape architecture", "### 3.9 Fail policy");
 const design = section("### 3.11 Gate design", "### 3.12 Gate verification");
 const modes = section("### 5.6 Operating modes", "### 5.7 Run conduct");
@@ -101,6 +136,36 @@ describe("#273 actor-neutral landing settlement", () => {
 			"core governance plus either current eligible-human quorum or one valid consumed escape",
 			"non-pass verdicts, blocked transitions, handoff records, and escapes",
 			"delay when quorum alone is unavailable",
+			"Worked application — the egress boundary",
+			"reuses the commit-time secret gate's pattern source",
+			"neutralizes relayed mentions and actionable references",
+		]);
+	});
+
+	it("pins the restored ref identity and approval cross-reference targets", () => {
+		requires(gates, [
+			"`protected-branch` ref-identity semantics",
+			"one derived identity P",
+			"Stage 1 reads the local pointer",
+			"Stage 2, only where stage 1 fails",
+			"Byte-equal to P",
+			"ASCII-case-fold-equal to P but byte-unequal",
+			"identity established as **not P**",
+			"P underivable",
+		]);
+		requires(approvals, [
+			"(a) **Attribution, subject binding, and freshness**",
+			"(b) **No silent skip**",
+			"(c) **Fail-closed lookup**",
+			"(d) **Evidence provenance**",
+			"Nit carry-forward",
+			"(e) **Predicate integrity**",
+		]);
+		requires(escapeSection, [
+			"Total-coverage rule",
+			"Core governance takes the deliberate doorless disposition",
+			"Refusal-record rule",
+			"exactly one content-free terminal record naming the refusing arm",
 		]);
 	});
 
@@ -116,6 +181,11 @@ describe("#273 actor-neutral landing settlement", () => {
 			"`{condition,recovery,observedAt,subjectHead,baseHead}`",
 			"Clearing a blocker never activates proposed work",
 			"`{cause,recipient,reentry,observedAt,subjectHead,baseHead}`",
+			"explicit **completion review**",
+			"required evidence artifact is the platform comment",
+			"binds the current Directive body",
+			"Completion review is per-success-signal evidence sufficiency",
+			"archived as a write-once record",
 		]);
 	});
 
@@ -149,14 +219,43 @@ describe("#273 actor-neutral landing settlement", () => {
 		assert.ok(!read(".pi/extensions/gitjig/commands/ship.ts").includes("verdict-head"));
 	});
 
-	it("removes the contradictory any-actor clearer and old mode/park release claims", () => {
-		for (const path of [
-			".github/workflows/auto-clear-awaiting-author.yml",
-			"changelog_unreleased/added/15.md",
-			"changelog_unreleased/changed/143.md",
-		]) {
+	it("removes the contradictory any-actor clearer and superseded release claim", () => {
+		for (const path of [".github/workflows/auto-clear-awaiting-author.yml", "changelog_unreleased/changed/143.md"]) {
 			assert.equal(existsSync(join(root, path)), false, `retired path survives: ${path}`);
 		}
+	});
+
+	it("guards retired actor and mode vocabulary across every migrated durable document", () => {
+		assertRetiredVocabularyAbsent(migrationDocuments);
+		for (const [inserted, expected] of [
+			["An unattended run hands off at this boundary.", /\\bunattended\\b/],
+			["A run parks at this boundary.", /\\bpark\(\?:ed\|ing\|s\)\?\\b/],
+		] as const) {
+			const mutated = new Map(migrationDocuments);
+			mutated.set(
+				"SPEC.md",
+				spec.replace("### 3.7 Approval-gate completeness", `${inserted}\n\n### 3.7 Approval-gate completeness`),
+			);
+			assert.notEqual(mutated.get("SPEC.md"), spec, "full-SPEC retired-vocabulary mutant anchor did not match");
+			assert.throws(
+				() => assertRetiredVocabularyAbsent(mutated),
+				(error: unknown) =>
+					error instanceof Error &&
+					/retired actor\/mode vocabulary survives in SPEC\.md/.test(error.message) &&
+					expected.test(error.message),
+			);
+		}
+	});
+
+	it("keeps the surviving release claims while migrating retired ones", () => {
+		const modesFragment = read("changelog_unreleased/added/15.md");
+		requires(modesFragment, ["merge and decision operating modes", "clean/soft/hard", "handoff", "§3.8"]);
+		const findingFragment = read("changelog_unreleased/added/60.md");
+		requires(findingFragment, ["the Judge assigns", "Directive completion", "ready transition", "§3.7(d)"]);
+		assert.ok(!findingFragment.includes("merge head-pin"));
+		const commandFragment = read("changelog_unreleased/added/91.md");
+		requires(commandFragment, ["`ac-closeout`", "platform-held AC state", "landing decision"]);
+		assert.ok(!commandFragment.includes("merge-boundary"));
 	});
 
 	it("keeps mission and adopter-facing prose actor-neutral", () => {
