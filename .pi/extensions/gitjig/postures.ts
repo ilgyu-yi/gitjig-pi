@@ -586,6 +586,14 @@ export const POSTURES: readonly PostureRow[] = [
 			"Record-before-close and marker-keyed replay prevent an unrecorded or multiply reflected completion. A complete no-parent derivation owes no reflection; every other mismatch refuses for operator recovery.",
 	},
 	{
+		dependency: "empty-change-completion-derivation",
+		failureShape:
+			"the carried activation-criteria derivation or a handed-over criterion/parent asset this route names is absent or unloadable at the call site",
+		posture: "closed",
+		justification:
+			"An absent carried derivation would otherwise read as a null snapshot id or a complete no-parent result, and no copied fallback may become a rival predicate. Recovery is to restore the committed carried asset from the addressed repository and re-run the refused completion review.",
+	},
+	{
 		dependency: "ac-closeout-criterion-owner",
 		failureShape:
 			"the handed-over criterion owner is absent, unloadable, or inapplicable to the carried review subject",

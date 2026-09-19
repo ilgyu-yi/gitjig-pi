@@ -115,10 +115,14 @@ function assertRepairContract(source: string): void {
 		"closeoutCriteria",
 		"<!-- empty-change-completion-terminal: v1 -->",
 		"<!-- empty-change-upward-reflection: v1 -->",
+		"`{schemaVersion,repositoryId,issueId,issueNumber,issueType,observedState,parentDirectiveId,activationVerdictCommentId,activationCriteriaCommentId,activatedBodyHash,currentBodyHash,bodyUpdatedAt,emptyChangeBasis,governedRepositoryObservation,criteria,reviewerId,reviewerAssociation,reviewerPermission,reviewProvenanceCommentId,observedAt}`",
+		"`{schemaVersion,repositoryId,issueId,issueNumber,verdictCommentId,bodyHash,closedAt,state,stateReason,writerId}`",
+		"`{schemaVersion,repositoryId,childIssueId,parentDirectiveId,verdictCommentId,terminalCommentId,writerId,observedAt}`",
 		"resolve_parent_directive.sh",
+		"exactly one type label from `task`, `bug`, or `execution`",
 		"The order is pass record → exact re-read → close as COMPLETED",
 		"drift requires a new review, never record repair",
-		"complete no-parent derivation only where every hop's lookup succeeded",
+		"its emptiness is never by itself a no-parent derivation",
 		"non-empty, duplicate-free ordered exact equality",
 		"`subject-ineligible`",
 		"`evidence-absent`",
@@ -432,9 +436,9 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "The order is pass record → exact re-read → close as COMPLETED",
 			},
 			{
-				anchor: "complete no-parent derivation only where every hop's lookup succeeded",
-				replacement: "no-parent result still owes a reflection",
-				expected: "complete no-parent derivation only where every hop's lookup succeeded",
+				anchor: "its emptiness is never by itself a no-parent derivation",
+				replacement: "an empty result is always a no-parent derivation",
+				expected: "its emptiness is never by itself a no-parent derivation",
 			},
 			{
 				anchor:

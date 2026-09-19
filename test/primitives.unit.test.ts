@@ -1455,6 +1455,7 @@ describe("fail-posture inventory (§3.9)", () => {
 				"egress-publish-measurement → closed",
 				"egress-publish-outcome → closed",
 				"egress-publish-patterns → closed",
+				"empty-change-completion-derivation → closed",
 				"empty-change-completion-evidence → closed",
 				"empty-change-completion-terminal → closed",
 				"fragment-gate-draft-sleep → open",
