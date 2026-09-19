@@ -41,7 +41,7 @@ function assertContract(subject: string): void {
 		"<!-- topology-source-claim: v1 -->",
 		"<!-- topology-source-step: v1 -->",
 		"<!-- topology-source-terminal: v1 -->",
-		"authorization id is null only for `authorization-absent` or `authorization-ambiguous`",
+		"authorization id and `expiresAt` are both null exactly for `authorization-absent` or `authorization-ambiguous`",
 		"Comment publication is a platform write but not source topology mutation",
 		"does not arm the topology carrier, bootstrap, pilot or guarded landing",
 		"This settlement exports data vocabulary only",
@@ -66,7 +66,7 @@ test("#289 settles source-split application without deriving a writer", () => {
 	requires(vocabulary, [
 		"export interface TopologySourceClaimRecord",
 		"export interface TopologySourceStepRecord",
-		"export interface TopologySourceTerminalRecord",
+		"export type TopologySourceTerminalRecord",
 		"deliberately exports no parser, writer, executor, or production call site",
 	]);
 	assert.deepEqual(interfaceMembers("TopologySourceClaimRecord"), [
@@ -102,25 +102,45 @@ test("#289 settles source-split application without deriving a writer", () => {
 		"condition: string;",
 		"observedDigest: string | null;",
 	]);
-	assert.deepEqual(interfaceMembers("TopologySourceTerminalRecord"), [
+	assert.deepEqual(interfaceMembers("TopologySourceTerminalBase"), [
 		"schemaVersion: 1;",
 		"repositoryId: string;",
 		"issueId: string;",
-		"authorizationRecordId: string | null;",
-		"claimCommentId: string | null;",
-		'outcome: "refused" | "partial" | "success";',
 		"completedOrders: number[];",
 		"lastVerifiedStateDigest: string | null;",
 		"observedMismatch: TopologySourceMismatch | null;",
 		"remainingOrders: number[];",
-		"expiresAt: string;",
 		"writerId: string;",
 		"observedAt: string;",
+	]);
+	requires(vocabulary, [
+		"export type TopologySourceTerminalRecord = TopologySourceTerminalBase &",
+		"authorizationRecordId: null;",
+		"claimCommentId: null;",
+		'outcome: "refused";',
+		"expiresAt: null;",
+		"authorizationRecordId: string;",
+		"expiresAt: string;",
+		'outcome: "partial" | "success";',
 	]);
 	assert.doesNotMatch(
 		`${authorization}\n${vocabulary}`,
 		/export (?:async )?function (?:execute|apply|mutate)TopologySource/u,
 	);
+});
+
+test("#294 closes expiry nullability only for null-authorization refusals", () => {
+	requires(topology, [
+		"No candidate, plan, caller value, or current instant supplies a fabricated expiry",
+		"Every other refused terminal and every partial/success terminal carries the unique admitted authorization id",
+	]);
+	assert.equal(vocabulary.match(/expiresAt: null;/gu)?.length, 1);
+	assert.equal(vocabulary.match(/expiresAt: string;/gu)?.length, 2);
+	assert.match(
+		vocabulary,
+		/authorizationRecordId: null;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?expiresAt: null;/u,
+	);
+	assert.doesNotMatch(vocabulary, /authorizationRecordId: string \| null;[\s\S]*?expiresAt: string \| null;/u);
 });
 
 test("#289 contract mutants fail at their missing member", () => {
@@ -138,8 +158,9 @@ test("#289 contract mutants fail at their missing member", () => {
 			replacement: "exact target without matching records is success",
 		},
 		{
-			anchor: "authorization id is null only for `authorization-absent` or `authorization-ambiguous`",
-			replacement: "authorization id may be null on refusal",
+			anchor:
+				"authorization id and `expiresAt` are both null exactly for `authorization-absent` or `authorization-ambiguous`",
+			replacement: "authorization id and expiry may be null on refusal",
 		},
 		{
 			anchor: "does not arm the topology carrier, bootstrap, pilot or guarded landing",
