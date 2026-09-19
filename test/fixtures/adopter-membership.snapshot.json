@@ -142,6 +142,10 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/workflows/landing-topology.mjs",
+			"disposition": "handed-over"
+		},
+		{
 			"path": ".github/workflows/lifecycle-event.mjs",
 			"disposition": "handed-over"
 		},
@@ -274,6 +278,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/landing/bootstrap.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/landing/platform.ts",
 			"disposition": "carried"
 		},
@@ -283,6 +291,14 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/landing/service.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/landing/topology-plan.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/landing/topology-provenance.ts",
 			"disposition": "carried"
 		},
 		{
@@ -523,6 +539,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/282.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/284.md",
 			"disposition": "instance-state"
 		},
 		{

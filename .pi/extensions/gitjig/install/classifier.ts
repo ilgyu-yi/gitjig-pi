@@ -101,6 +101,7 @@ export function classifyCandidate(path: string, bytes: Buffer): Classification {
 	validateCandidatePath(path);
 	const marker = classifyMarker(bytes);
 	if (marker !== "absent") return marker;
+	if (path === ".github/landing-topology.json") return "source-only";
 	if (path === "changelog_unreleased/TEMPLATE.md") return "handed-over";
 	if (path.startsWith("changelog_unreleased/")) return "instance-state";
 	if (

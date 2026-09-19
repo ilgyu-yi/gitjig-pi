@@ -1498,6 +1498,10 @@ describe("fail-posture inventory (§3.9)", () => {
 				"secret-scan-toplevel → open",
 				"spec-absence → closed",
 				"spec-absence → open",
+				"topology-bootstrap-admission → closed",
+				"topology-bypass-semantics → closed",
+				"topology-planning-population → closed",
+				"topology-shared-auditor → closed",
 			].sort(),
 		);
 		// One component may carry several rows — one posture per failure

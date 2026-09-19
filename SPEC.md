@@ -40,32 +40,32 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
 | &nbsp;&nbsp;§3.7 | Approval-gate completeness | 564 |
 | &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 604 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 618 |
-| &nbsp;&nbsp;§3.11 | Gate design | 632 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 654 |
-| §4 | Substrate and install contract | 664 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 668 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 680 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 688 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 694 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 698 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 702 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 714 |
-| &nbsp;&nbsp;§4.8 | The command layer | 724 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 781 |
-| §5 | Cross-cutting contracts | 900 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 904 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 910 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 914 |
-| &nbsp;&nbsp;§5.4 | Work language | 918 |
-| &nbsp;&nbsp;§5.5 | State boundary | 922 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 930 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 942 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 952 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 960 |
-| §6 | Self-governance milestone | 972 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 983 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 608 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 622 |
+| &nbsp;&nbsp;§3.11 | Gate design | 636 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 658 |
+| §4 | Substrate and install contract | 668 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 672 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 684 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 692 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 698 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 702 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 706 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 718 |
+| &nbsp;&nbsp;§4.8 | The command layer | 728 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 785 |
+| §5 | Cross-cutting contracts | 904 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 908 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 914 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 918 |
+| &nbsp;&nbsp;§5.4 | Work language | 922 |
+| &nbsp;&nbsp;§5.5 | State boundary | 926 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 934 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 946 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 956 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 964 |
+| §6 | Self-governance milestone | 976 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 987 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -596,6 +596,10 @@ Core governance is exhaustive here: changelog, ssot-home, toc-freshness, source-
 A valid escape record is platform-attested and carries exactly `{schemaVersion,repositoryId,pullRequestId,headSha,baseRef,baseSha,producerKind,producerId,producerPermission,reason,appliedAt,expiresAt,consumedAt,consumerRunId,outcome}`. It binds the current repository, PR, head, base ref, and base head; identifies either `maintainer` or `app` producer under the predicates above; carries a non-empty reason; and has `expiresAt` exactly 24 hours after `appliedAt`. The label and record must both exist. Head or base movement, label removal, expiry, malformed or duplicate records, an unknown producer kind, failed attestation, or a previously consumed record invalidates the escape.
 
 The guarded landing consumer atomically claims one valid record before attempting the merge and consumes and removes the label on success or refusal. Its terminal record fixes `consumedAt`, `consumerRunId`, and outcome `landed | refused`; a crash after claim is refusal, never reusable authority. A content-free refusal names the failed class but never leaks a caller-held compare operand. Phase 3 owns this guarded consumer at the carried `/land` service under `.pi/extensions/gitjig/landing/`; it admits only default-branch-attested shared engine/policy bytes, reads quorum only from exactly one active applicable `human-approval` ruleset, and keeps escape disabled until a committed Phase-4 topology record matches both live split rulesets. Its append-only claims use the lowest admitted platform comment id as their total order, re-read exact head and base immediately before one merge request, and leave an unverifiable outcome non-reusable and un-retried for reconciliation. Phase 2 owns the shared predicates and record transition library; Phase 4 owns the split rulesets. Until Phase 4 lands, no discretionary landing is available.
+
+**Phase-4 topology and bootstrap.** The split is exact and independently composed: `core-governance` has no bypass and carries the doorless context, thread, method, freshness/history and protection facts; `human-approval` carries positive eligible-human quorum and the sole repository-admin-role pull-request bypass. Mandatory platform fields on the quorum rule are non-restricting fillers, never second owners. Repository settings permit merge commits and disable squash/rebase. `.github/workflows/landing-topology.mjs` is the one handed-over closed schema and instant canonicalizer; ruleset update and activation instants reject sub-millisecond precision and normalize equivalent UTC offsets. The carried loader executes only default-branch-verified auditor bytes. `.github/landing-topology.json`, when present, is source-only target-instance configuration and never adopter payload.
+
+Before server mutation, Phase 4A emits only an unauthorized GET-derived before/after/rollback plan. The exact repository-role bypass composition remains a planning-blocking assumption until Phase 4B proves on an explicitly authorized scratch repository that quorum bypass leaves the independent core ruleset enforced. The carrier trust knot has one narrow service: default-branch bytes may land a PR whose sole semantic constituent is the exact eight-field topology carrier, only after all core facts, live split/settings, a fresh operator authorization, measured-unmet quorum, valid own-behalf escape, lowest-id claim and exact head/base pass. A claimed ruleset-id/canonical-instant pair is never reusable; a genuinely updated pair requires a fresh plan, authorization and escape. This bootstrap never supplies a single-identity exception, ruleset mutation, direct push, caller-authored claim, or core bypass.
 
 **The local tier's door and equivalent folds.** Tier 2's sanctioned escape is `--no-verify`, with no sanctioned in-hook token in front of it. It is class-independent, unauditable from inside a hook it prevents from running, and bounded by the Tier-3 floor rather than confused with landing authorization. The operator's recovery from a local false block is to retry that local act through this door; no Tier-3 fact is waived.
 

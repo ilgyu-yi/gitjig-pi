@@ -675,6 +675,38 @@ export const POSTURES: readonly PostureRow[] = [
 			"Unmeasurable quorum is never unmet quorum and opens neither route. The false-block cost is all automated landing before Phase 4; install or repair the split ruleset, then retry.",
 	},
 	{
+		dependency: "topology-planning-population",
+		failureShape:
+			"repository identity/settings, actor admin role, Actions integration, complete ruleset summaries/details, update instants, or pagination is absent, stale, malformed, inherited, duplicated, or unreadable",
+		posture: "closed",
+		justification:
+			"A partial server picture cannot authorize a split. The planner emits no executable authorization; restore complete GET access and derive a fresh before/after/rollback artifact.",
+	},
+	{
+		dependency: "topology-bypass-semantics",
+		failureShape:
+			"the exact RepositoryRole-5 pull-request bypass has not been controlled-proven to exempt unmet quorum while independent core rules remain enforced",
+		posture: "closed",
+		justification:
+			"4A records this assumption as unverified. Phase 4B must discharge it on an explicitly authorized scratch repository before any source mutation; until then every plan is unauthorized.",
+	},
+	{
+		dependency: "topology-shared-auditor",
+		failureShape:
+			"the handed-over topology schema/canonicalizer is absent, unloadable, mismatched to the trusted default-branch blob, or receives a sub-millisecond/unknown shape",
+		posture: "closed",
+		justification:
+			"No carried fallback may reinterpret server freshness. Restore exact trusted bytes or canonical operands before planning or landing.",
+	},
+	{
+		dependency: "topology-bootstrap-admission",
+		failureShape:
+			"topology-only bytes, live split/settings, plan authorization, own-behalf identity, measured-unmet quorum, core facts, pair freshness, claim order, or exact merge outcome is absent or unverifiable",
+		posture: "closed",
+		justification:
+			"Bootstrap can waive only the quorum rule once per exact pair. Failure consumes any claimed escape and delays carrier landing until a fresh operator-reviewed pair; it never opens core.",
+	},
+	{
 		dependency: "landing-topology-activation",
 		failureShape:
 			"the committed Phase-4 topology record is absent, malformed, stale, or mismatched to the live split rulesets",
