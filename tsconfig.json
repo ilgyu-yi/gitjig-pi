@@ -37,6 +37,7 @@
 		".pi/**/*.ts",
 		".github/workflows/gitjig-lifecycle.mjs",
 		".github/workflows/landing-policy.mjs",
+		".github/workflows/landing-topology.mjs",
 		".github/workflows/ac-closeout.mjs",
 		".github/workflows/ac-closeout-event.mjs",
 		".github/workflows/lifecycle-event.mjs",

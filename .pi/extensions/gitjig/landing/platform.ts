@@ -248,24 +248,33 @@ export async function loadPlatformLanding(
 
 	const content = async (path: string): Promise<Record<string, unknown> | undefined> =>
 		record(await repositoryApi(`contents/${path}?ref=${encodeURIComponent(String(repo.default_branch))}`));
-	const [engineBlob, policyBlob, policyCarrierBlob, topologyBlob] = await Promise.all([
+	const [engineBlob, policyBlob, topologyEngineBlob, policyCarrierBlob, topologyBlob] = await Promise.all([
 		content(".github/workflows/gitjig-lifecycle.mjs"),
 		content(".github/workflows/landing-policy.mjs"),
+		content(".github/workflows/landing-topology.mjs"),
 		content(".github/landing-policy.json"),
 		content(".github/landing-topology.json"),
 	]);
 	const enginePath = join(repoRoot, ".github/workflows/gitjig-lifecycle.mjs");
 	const policyPath = join(repoRoot, ".github/workflows/landing-policy.mjs");
+	const topologyEnginePath = join(repoRoot, ".github/workflows/landing-topology.mjs");
 	const engineBytes = trustedDefaultBranchBytes(enginePath, engineBlob?.sha);
 	const policyBytes = trustedDefaultBranchBytes(policyPath, policyBlob?.sha);
-	if (!engineBytes || !policyBytes) return { arm: "trusted-engine-policy-mismatch" };
+	const topologyEngineBytes = trustedDefaultBranchBytes(topologyEnginePath, topologyEngineBlob?.sha);
+	if (!engineBytes || !policyBytes || !topologyEngineBytes) return { arm: "trusted-engine-policy-mismatch" };
 	let engine: LifecycleEngine;
+	let topologyEngine: {
+		attestLandingTopology(value: unknown, live: unknown): { ok: boolean };
+	};
 	let appPolicyConfigured = false;
 	try {
 		engine = (await import(`data:text/javascript;base64,${engineBytes.toString("base64")}`)) as LifecycleEngine;
 		const policyModule = (await import(`data:text/javascript;base64,${policyBytes.toString("base64")}`)) as {
 			parseLandingPolicy(value: unknown): { ok: boolean };
 		};
+		topologyEngine = (await import(
+			`data:text/javascript;base64,${topologyEngineBytes.toString("base64")}`
+		)) as typeof topologyEngine;
 		if (policyCarrierBlob?.encoding === "base64" && typeof policyCarrierBlob.content === "string") {
 			const policyValue: unknown = JSON.parse(
 				Buffer.from(policyCarrierBlob.content.replace(/\s/g, ""), "base64").toString("utf8"),
@@ -306,20 +315,23 @@ export async function loadPlatformLanding(
 	} catch {
 		topologyRecord = undefined;
 	}
+	const actionsIntegrationIds = new Set(
+		array(record(checksRaw)?.check_runs)
+			.map((check) => record(record(check)?.app))
+			.filter((app) => app?.slug === "github-actions" && Number.isSafeInteger(app.id))
+			.map((app) => Number(app?.id)),
+	);
+	const actionsIntegrationId = actionsIntegrationIds.size === 1 ? [...actionsIntegrationIds][0] : undefined;
 	const topologyActive =
 		topologyRecord !== undefined &&
-		Object.keys(topologyRecord).length === 8 &&
-		topologyRecord.schemaVersion === 1 &&
-		topologyRecord.phase === 4 &&
-		topologyRecord.repositoryId === repositoryId &&
-		topologyRecord.coreRulesetId === coreDetail?.id &&
-		topologyRecord.humanApprovalRulesetId === humanDetail?.id &&
-		topologyRecord.coreRulesetUpdatedAt === coreDetail?.updated_at &&
-		topologyRecord.humanApprovalRulesetUpdatedAt === humanDetail?.updated_at &&
-		typeof topologyRecord.activatedAt === "string" &&
-		Number.isFinite(Date.parse(topologyRecord.activatedAt)) &&
-		Date.parse(topologyRecord.activatedAt) >= Date.parse(String(coreDetail?.updated_at)) &&
-		Date.parse(topologyRecord.activatedAt) >= Date.parse(String(humanDetail?.updated_at));
+		coreDetail !== undefined &&
+		humanDetail !== undefined &&
+		topologyEngine.attestLandingTopology(topologyRecord, {
+			repositoryId,
+			core: coreDetail,
+			human: humanDetail,
+			actionsIntegrationId,
+		}).ok;
 	const corePull = coreApplies ? rule(coreDetail, "pull_request") : undefined;
 	const corePullParameters = record(corePull?.parameters);
 	const statusParameters = record((coreApplies ? rule(coreDetail, "required_status_checks") : undefined)?.parameters);

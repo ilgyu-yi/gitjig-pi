@@ -147,6 +147,7 @@ describe("#278 platform snapshot normalization", () => {
 		const base = "b".repeat(40);
 		const engineBytes = readFileSync(join(repoRoot, ".github/workflows/gitjig-lifecycle.mjs"));
 		const policyBytes = readFileSync(join(repoRoot, ".github/workflows/landing-policy.mjs"));
+		const topologyBytes = readFileSync(join(repoRoot, ".github/workflows/landing-topology.mjs"));
 		const carrier = readFileSync(join(repoRoot, ".github/landing-policy.json"));
 		const escapeRecord = engine.createEscapeRecord({
 			repositoryId: "R_repo",
@@ -217,6 +218,8 @@ describe("#278 platform snapshot normalization", () => {
 			if (endpoint.includes("branches/main")) return { commit: { sha: base } };
 			if (endpoint.includes("contents/.github/workflows/gitjig-lifecycle.mjs")) return { sha: gitBlobOid(engineBytes) };
 			if (endpoint.includes("contents/.github/workflows/landing-policy.mjs")) return { sha: gitBlobOid(policyBytes) };
+			if (endpoint.includes("contents/.github/workflows/landing-topology.mjs"))
+				return { sha: gitBlobOid(topologyBytes) };
 			if (endpoint.includes("contents/.github/landing-policy.json"))
 				return { encoding: "base64", content: carrier.toString("base64") };
 			if (endpoint.includes("contents/.github/landing-topology.json")) return null;
