@@ -164,6 +164,7 @@ function assertRepairContract(source: string): void {
 	]);
 	requires(sectionIn(source, "### 3.7 Approval-gate completeness", "### 3.8 Escape architecture"), [
 		"empty-change completion",
+		"Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance",
 		"The `approval-evidence` class is deliberately doorless for all four reversible acts",
 		"produce fresh canonical evidence",
 	]);
@@ -512,6 +513,11 @@ describe("#273 actor-neutral landing settlement", () => {
 				anchor: "pi-independent repository floor",
 				replacement: "Pi-independent repository floor",
 				expected: "pi-independent repository floor",
+			},
+			{
+				anchor: "Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance",
+				replacement: "Empty-change author-equality needs no independent provenance",
+				expected: "Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance",
 			},
 			{
 				anchor: "The `approval-evidence` class is deliberately doorless for all four reversible acts",
