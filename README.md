@@ -6,6 +6,8 @@ An agent-agnostic operating shell that enforces engineering work norms — the G
 
 Active development under the contract in [`SPEC.md`](SPEC.md).
 
+Issue completion is PR-bound except for the two routes SPEC §2.2 defines: Directive completion review, and — for an activated `task`, `bug`, or `execution` Issue whose governed-repository change surface is expressly empty — empty-change completion review on that section's terms. Neither route substitutes for a PR: Directives never branch into engineering PRs, and empty-change completion is unavailable wherever governed-repository implementation exists.
+
 ## Getting started
 
 The runtime has no build step — the tree ships TypeScript sources that run directly, and nothing is compiled before it executes. Two prerequisites, and neither is an `npm install` — nothing in this repository's manifest is needed to run the suite:

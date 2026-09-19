@@ -570,6 +570,30 @@ export const POSTURES: readonly PostureRow[] = [
 			"No copied fallback may become a rival predicate; recovery is to restore the committed handed-over asset from the addressed repository and replay the refused transition.",
 	},
 	{
+		dependency: "empty-change-completion-evidence",
+		failureShape:
+			"an empty-change completion subject, activation, exact body, criterion evidence, governed-repository attribution, reviewer provenance, or close-time re-read is absent, stale, edited, copied, ambiguous, or non-empty",
+		posture: "closed",
+		justification:
+			"The completion act is reversible but evidence-gated and doorless: no close occurs until the exact v1 pass record binds the current empty surface and every resolved criterion. Recovery is a fresh substantive review after repairing the named operand, never a fabricated PR identity or label-only close.",
+	},
+	{
+		dependency: "empty-change-completion-terminal",
+		failureShape:
+			"the durable pass cannot be re-read before close, or the completed close, terminal, replay key, handed-over parent derivation, or owed upward reflection disagrees",
+		posture: "closed",
+		justification:
+			"Record-before-close and marker-keyed replay prevent an unrecorded or multiply reflected completion. A complete no-parent derivation owes no reflection; every other mismatch refuses for operator recovery.",
+	},
+	{
+		dependency: "empty-change-completion-derivation",
+		failureShape:
+			"the carried activation-criteria derivation or a handed-over criterion/parent asset this route names is absent or unloadable at the call site",
+		posture: "closed",
+		justification:
+			"An absent carried derivation would otherwise read as a null snapshot id or a complete no-parent result, and no copied fallback may become a rival predicate. Recovery is to restore the committed carried asset from the addressed repository and re-run the refused completion review.",
+	},
+	{
 		dependency: "ac-closeout-criterion-owner",
 		failureShape:
 			"the handed-over criterion owner is absent, unloadable, or inapplicable to the carried review subject",
