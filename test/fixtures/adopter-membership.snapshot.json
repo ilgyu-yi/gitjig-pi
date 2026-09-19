@@ -294,6 +294,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/landing/topology-authorization.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/landing/topology-plan.ts",
 			"disposition": "carried"
 		},
@@ -779,6 +783,10 @@
 		},
 		{
 			"path": "changelog_unreleased/fixed/270.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/286.md",
 			"disposition": "instance-state"
 		},
 		{

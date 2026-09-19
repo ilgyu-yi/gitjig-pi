@@ -7,6 +7,12 @@ import {
 	type LandingSnapshot,
 	type LifecycleEngine,
 } from "./service.ts";
+import {
+	attestTopologyPlan,
+	planSplitTopology,
+	type TopologyPlan,
+	type TopologyPlanningSnapshot,
+} from "./topology-plan.ts";
 
 export interface BootstrapTopologyEngine {
 	attestLandingTopology(value: unknown, live: unknown): { ok: boolean; arm?: string };
@@ -23,15 +29,16 @@ export interface BootstrapEngine extends LifecycleEngine {
 }
 export interface BootstrapAuthorization {
 	schemaVersion: 1;
-	platformBacked: true;
 	recordId: string;
 	repositoryId: string;
+	stage: "source-split" | "carrier-bootstrap";
 	planHash: string;
 	pairKey: string;
 	actorId: string;
-	actorRole: string;
-	edited: false;
-	authorizedAt: string;
+	actorPermission: "admin";
+	correlationId: string;
+	issuedAt: string;
+	expiresAt: string;
 }
 export interface BootstrapInput {
 	snapshot: LandingSnapshot;
@@ -51,6 +58,8 @@ export interface BootstrapInput {
 		actionsIntegrationId: number;
 	};
 	repositorySettings: { allow_merge_commit: boolean; allow_squash_merge: boolean; allow_rebase_merge: boolean };
+	planningSnapshot: TopologyPlanningSnapshot;
+	planArtifact: TopologyPlan;
 	authorization: BootstrapAuthorization;
 	escapeProducerId: string;
 	beneficiaryIds: string[];
@@ -86,18 +95,50 @@ export function examineBootstrap(input: BootstrapInput): { ok: true; pairKey: st
 		return { ok: false, arm: "bootstrap-repository-settings" };
 	const pairKey = topologyPairKey(input.live, input.topologyEngine);
 	if (!pairKey) return { ok: false, arm: "bootstrap-pair" };
+	const freshPlan = planSplitTopology(input.planningSnapshot);
+	const snapshotCore = input.planningSnapshot.rulesets.find((rule) => rule.id === input.live.core.id);
+	const snapshotHuman = input.planningSnapshot.rulesets.find((rule) => rule.id === input.live.human.id);
+	if (
+		!freshPlan.ok ||
+		freshPlan.plan.artifactHash !== input.planArtifact.artifactHash ||
+		input.planningSnapshot.repositoryId !== input.live.repositoryId ||
+		input.planningSnapshot.actionsIntegrationId !== input.live.actionsIntegrationId ||
+		JSON.stringify(input.planningSnapshot.repositorySettings) !== JSON.stringify(input.repositorySettings) ||
+		!snapshotCore ||
+		!snapshotHuman ||
+		input.topologyEngine.canonicalInstant(snapshotCore.updated_at) !==
+			input.topologyEngine.canonicalInstant(input.live.core.updated_at) ||
+		input.topologyEngine.canonicalInstant(snapshotHuman.updated_at) !==
+			input.topologyEngine.canonicalInstant(input.live.human.updated_at)
+	)
+		return { ok: false, arm: "bootstrap-plan-stale" };
 	const authorization = input.authorization;
+	const { artifactHash } = input.planArtifact;
+	const issuedAt = input.topologyEngine.canonicalInstant(authorization.issuedAt);
+	const expiresAt = input.topologyEngine.canonicalInstant(authorization.expiresAt);
+	const now = input.topologyEngine.canonicalInstant(input.now);
 	if (
 		authorization.schemaVersion !== 1 ||
-		authorization.platformBacked !== true ||
 		!authorization.recordId ||
 		authorization.repositoryId !== input.live.repositoryId ||
+		authorization.stage !== "carrier-bootstrap" ||
+		input.planArtifact.stage !== "carrier-bootstrap" ||
+		authorization.stage !== input.planArtifact.stage ||
 		authorization.pairKey !== pairKey ||
-		!/^[0-9a-f]{64}$/.test(authorization.planHash) ||
-		!authorization.actorId ||
-		authorization.actorRole.toLowerCase() !== "admin" ||
-		authorization.edited !== false ||
-		!input.topologyEngine.canonicalInstant(authorization.authorizedAt)
+		!attestTopologyPlan(input.planArtifact) ||
+		!artifactHash ||
+		authorization.planHash !== artifactHash ||
+		input.planArtifact.repositoryId !== input.live.repositoryId ||
+		authorization.actorId !== input.planArtifact.actorId ||
+		authorization.actorPermission !== "admin" ||
+		input.planArtifact.actorPermission !== "admin" ||
+		authorization.correlationId !== input.planArtifact.correlationId ||
+		!issuedAt ||
+		!expiresAt ||
+		!now ||
+		Date.parse(issuedAt) > Date.parse(now) ||
+		Date.parse(expiresAt) <= Date.parse(now) ||
+		Date.parse(expiresAt) <= Date.parse(issuedAt)
 	)
 		return { ok: false, arm: "bootstrap-authorization" };
 	if (input.consumedPairKeys.includes(pairKey)) return { ok: false, arm: "bootstrap-pair-consumed" };

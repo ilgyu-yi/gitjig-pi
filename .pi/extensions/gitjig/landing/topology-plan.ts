@@ -1,6 +1,10 @@
 /** Warning-surface roster: EXEMPT — closed data plans only; no command is executed or rendered to the model. */
 import { createHash } from "node:crypto";
-import { auditCoreRuleset, canonicalInstant } from "../../../../.github/workflows/landing-topology.mjs";
+import {
+	auditCoreRuleset,
+	auditHumanApprovalRuleset,
+	canonicalInstant,
+} from "../../../../.github/workflows/landing-topology.mjs";
 import { runPlatformRead } from "../platform/read.ts";
 import { activeRulesetApplies } from "./platform.ts";
 
@@ -49,15 +53,17 @@ export interface TopologyPlan {
 	schemaVersion: 1;
 	authorized: false;
 	assumption: "bypass-exemption-unverified";
+	stage: "source-split" | "carrier-bootstrap";
 	repositoryId: string;
 	actorId: string;
-	actorRole: "admin";
+	actorPermission: "admin";
 	defaultBranch: string;
 	before: unknown;
 	optimisticRulesets: readonly { id: number; updatedAt: string }[];
 	beforeDigest: string;
 	desiredDigest: string;
-	authorizationNonce: string;
+	correlationId: string;
+	artifactHash: string;
 	steps: readonly {
 		order: number;
 		method: "PATCH" | "POST" | "DELETE";
@@ -80,6 +86,94 @@ function canonical(value: unknown): string {
 }
 function digest(value: unknown): string {
 	return createHash("sha256").update(canonical(value)).digest("hex");
+}
+export function topologyPlanArtifactHash(plan: Omit<TopologyPlan, "artifactHash">): string {
+	return digest(plan);
+}
+export function attestTopologyPlan(value: unknown): value is TopologyPlan {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+	const plan = value as Record<string, unknown>;
+	const keys = [
+		"schemaVersion",
+		"authorized",
+		"assumption",
+		"stage",
+		"repositoryId",
+		"actorId",
+		"actorPermission",
+		"defaultBranch",
+		"before",
+		"optimisticRulesets",
+		"beforeDigest",
+		"desiredDigest",
+		"correlationId",
+		"artifactHash",
+		"steps",
+		"postconditions",
+		"rollback",
+	];
+	if (Object.keys(plan).length !== keys.length || Object.keys(plan).some((key) => !keys.includes(key))) return false;
+	const hex = (item: unknown): item is string => typeof item === "string" && /^[0-9a-f]{64}$/u.test(item);
+	if (
+		plan.schemaVersion !== 1 ||
+		plan.authorized !== false ||
+		plan.assumption !== "bypass-exemption-unverified" ||
+		!["source-split", "carrier-bootstrap"].includes(String(plan.stage)) ||
+		![plan.repositoryId, plan.actorId, plan.defaultBranch].every(
+			(item) => typeof item === "string" && item.length > 0,
+		) ||
+		plan.actorPermission !== "admin" ||
+		!hex(plan.beforeDigest) ||
+		!hex(plan.desiredDigest) ||
+		!hex(plan.correlationId) ||
+		!hex(plan.artifactHash) ||
+		!Array.isArray(plan.optimisticRulesets) ||
+		!Array.isArray(plan.steps) ||
+		!Array.isArray(plan.rollback)
+	)
+		return false;
+	if (
+		plan.optimisticRulesets.some(
+			(item) =>
+				item === null ||
+				typeof item !== "object" ||
+				Array.isArray(item) ||
+				!Number.isSafeInteger((item as Record<string, unknown>).id) ||
+				!canonicalInstant((item as Record<string, unknown>).updatedAt),
+		) ||
+		plan.steps.some(
+			(item, index) =>
+				item === null ||
+				typeof item !== "object" ||
+				Array.isArray(item) ||
+				(item as Record<string, unknown>).order !== index + 1 ||
+				!["PATCH", "POST", "DELETE"].includes(String((item as Record<string, unknown>).method)) ||
+				typeof (item as Record<string, unknown>).path !== "string" ||
+				!("postRead" in item),
+		) ||
+		plan.rollback.some(
+			(item) =>
+				item === null ||
+				typeof item !== "object" ||
+				Array.isArray(item) ||
+				!["PATCH", "POST", "DELETE"].includes(String((item as Record<string, unknown>).method)) ||
+				typeof (item as Record<string, unknown>).path !== "string",
+		)
+	)
+		return false;
+	if (plan.beforeDigest !== digest(plan.before) || plan.desiredDigest !== digest(plan.postconditions)) return false;
+	if (
+		plan.correlationId !==
+		digest({
+			repositoryId: plan.repositoryId,
+			actorId: plan.actorId,
+			before: plan.beforeDigest,
+			desired: plan.desiredDigest,
+		})
+	)
+		return false;
+	const { artifactHash, ...artifact } = plan as unknown as TopologyPlan;
+	return artifactHash === topologyPlanArtifactHash(artifact);
 }
 function validName(value: string): boolean {
 	return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value);
@@ -314,54 +408,60 @@ export function planSplitTopology(
 	];
 	const desired = { core, human, repositorySettings };
 	const before = { repositorySettings: snapshot.repositorySettings, rulesets: observedRulesets };
-	return {
-		ok: true,
-		plan: {
-			schemaVersion: 1,
-			authorized: false,
-			assumption: "bypass-exemption-unverified",
+	const postSplit =
+		auditCoreRuleset(current[0], snapshot.actionsIntegrationId).ok &&
+		retainedHuman !== undefined &&
+		auditHumanApprovalRuleset(retainedHuman).ok &&
+		snapshot.repositorySettings.allow_merge_commit === true &&
+		snapshot.repositorySettings.allow_squash_merge === false &&
+		snapshot.repositorySettings.allow_rebase_merge === false;
+	const artifact: Omit<TopologyPlan, "artifactHash"> = {
+		schemaVersion: 1,
+		authorized: false,
+		assumption: "bypass-exemption-unverified",
+		stage: postSplit ? "carrier-bootstrap" : "source-split",
+		repositoryId: snapshot.repositoryId,
+		actorId: snapshot.actorId,
+		actorPermission: "admin",
+		defaultBranch: snapshot.defaultBranch,
+		before,
+		optimisticRulesets: observedRulesets.map((rule) => ({
+			id: Number(rule.id),
+			updatedAt: canonicalInstant(rule.updated_at) as string,
+		})),
+		beforeDigest: digest(before),
+		desiredDigest: digest(desired),
+		correlationId: digest({
 			repositoryId: snapshot.repositoryId,
 			actorId: snapshot.actorId,
-			actorRole: "admin",
-			defaultBranch: snapshot.defaultBranch,
-			before,
-			optimisticRulesets: observedRulesets.map((rule) => ({
-				id: Number(rule.id),
-				updatedAt: canonicalInstant(rule.updated_at) as string,
+			before: digest(before),
+			desired: digest(desired),
+		}),
+		steps,
+		postconditions: desired,
+		rollback: [
+			...duplicateIds.map((id) => ({
+				method: "POST" as const,
+				path: `/repos/${snapshot.repositoryName}/rulesets`,
+				body: writableRuleset(observedRulesets.find((rule) => Number(rule.id) === id) as Record<string, unknown>),
 			})),
-			beforeDigest: digest(before),
-			desiredDigest: digest(desired),
-			authorizationNonce: digest({
-				repositoryId: snapshot.repositoryId,
-				actorId: snapshot.actorId,
-				before: digest(before),
-				desired: digest(desired),
-			}),
-			steps,
-			postconditions: desired,
-			rollback: [
-				...duplicateIds.map((id) => ({
-					method: "POST" as const,
-					path: `/repos/${snapshot.repositoryName}/rulesets`,
-					body: writableRuleset(observedRulesets.find((rule) => Number(rule.id) === id) as Record<string, unknown>),
-				})),
-				{ method: "PATCH", path: `/repos/${snapshot.repositoryName}`, body: snapshot.repositorySettings },
-				retainedHuman
-					? {
-							method: "PATCH",
-							path: `/repos/${snapshot.repositoryName}/rulesets/${Number(retainedHuman.id)}`,
-							body: writableRuleset(retainedHuman),
-						}
-					: {
-							method: "DELETE",
-							path: `/repos/${snapshot.repositoryName}/rulesets/{step-2-response-id}`,
-						},
-				{
-					method: "PATCH",
-					path: `/repos/${snapshot.repositoryName}/rulesets/${coreId}`,
-					body: writableRuleset(current[0]),
-				},
-			],
-		},
+			{ method: "PATCH", path: `/repos/${snapshot.repositoryName}`, body: snapshot.repositorySettings },
+			retainedHuman
+				? {
+						method: "PATCH",
+						path: `/repos/${snapshot.repositoryName}/rulesets/${Number(retainedHuman.id)}`,
+						body: writableRuleset(retainedHuman),
+					}
+				: {
+						method: "DELETE",
+						path: `/repos/${snapshot.repositoryName}/rulesets/{step-2-response-id}`,
+					},
+			{
+				method: "PATCH",
+				path: `/repos/${snapshot.repositoryName}/rulesets/${coreId}`,
+				body: writableRuleset(current[0]),
+			},
+		],
 	};
+	return { ok: true, plan: { ...artifact, artifactHash: topologyPlanArtifactHash(artifact) } };
 }
