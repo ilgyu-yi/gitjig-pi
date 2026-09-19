@@ -56,6 +56,7 @@ test("#293 has one operator and closed source mutation path", () => {
 	assert.match(command, /loadTopologySourceApplication/u);
 	assert.match(platform, /executeTopologySourceSplit\(loaded\.input, loaded\.effects\)/u);
 	assert.match(platform, /const freshPlan = freshPlanned\.plan;/u);
+	assert.match(platform, /!final\.plan\.steps\.some\(\(step\) => step\.method === "DELETE"\)/u);
 	assert.match(platform, /step\.path\.replace/u);
 	assert.match(platform, /filter\(\(item\) => item\.name === "human-approval"\)\.length !== 1/u);
 	assert.match(platform, /"--method", step\.method/u);

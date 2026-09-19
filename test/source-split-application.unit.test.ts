@@ -675,7 +675,9 @@ function platformFixture(options: { topologyBlobSha?: string } = {}) {
 	};
 }
 
-function authorizedPlatformFixture(options: { extraHuman?: boolean; failTerminalOnce?: boolean } = {}) {
+function authorizedPlatformFixture(
+	options: { extraHuman?: boolean; failTerminalOnce?: boolean; finalDuplicate?: boolean } = {},
+) {
 	const actionsId = 15368;
 	let settings = { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true };
 	let rulesets: Array<Record<string, unknown>> = [
@@ -698,6 +700,7 @@ function authorizedPlatformFixture(options: { extraHuman?: boolean; failTerminal
 	let comments: Array<Record<string, unknown>> = [];
 	let nextComment = 100;
 	let terminalFailureRemaining = options.failTerminalOnce === true;
+	let postDeleteListSeen = false;
 	const sourceWrites: Array<{ method: string; endpoint: string; body?: unknown }> = [];
 	const read = async (argv: string[]) => {
 		const endpoint = argv.at(-1) ?? "";
@@ -706,7 +709,21 @@ function authorizedPlatformFixture(options: { extraHuman?: boolean; failTerminal
 		if (endpoint === "apps/github-actions") return JSON.stringify({ id: actionsId });
 		if (endpoint.includes("contents/.github/workflows/landing-topology.mjs?ref=main"))
 			return JSON.stringify({ sha: gitBlobOid(readFileSync(".github/workflows/landing-topology.mjs")) });
-		if (endpoint.includes("rulesets?")) return JSON.stringify([rulesets.map(({ id }) => ({ id }))]);
+		if (endpoint.includes("rulesets?")) {
+			if (options.finalDuplicate && sourceWrites.at(-1)?.method === "DELETE") {
+				if (postDeleteListSeen && !rulesets.some((item) => item.id === 24))
+					rulesets.push({
+						id: 24,
+						...desiredCoreRuleset(actionsId),
+						name: "late-duplicate",
+						source_type: "Repository",
+						source: "o/r",
+						updated_at: "2026-09-19T15:00:04.000Z",
+					});
+				postDeleteListSeen = true;
+			}
+			return JSON.stringify([rulesets.map(({ id }) => ({ id }))]);
+		}
 		const ruleset = /^repos\/o\/r\/rulesets\/(\d+)$/u.exec(endpoint);
 		if (ruleset) return JSON.stringify(rulesets.find((item) => item.id === Number(ruleset[1])));
 		if (endpoint.includes("collaborators/operator/permission")) return JSON.stringify({ role_name: "admin" });
@@ -945,6 +962,35 @@ describe("#293 source-split platform boundary", () => {
 		);
 		const recovered = await executePlatformTopologySource(loaded);
 		assert.equal(recovered.outcome, "success");
+		assert.equal(seam.sourceWrites.length, 4);
+	});
+	it("refuses final success when a late duplicate remains", async () => {
+		const seam = authorizedPlatformFixture({ finalDuplicate: true });
+		const preview = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			undefined,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		seam.authorize(preview.input?.plan as TopologyPlan);
+		const loaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			preview.input?.plan,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const result = await executePlatformTopologySource(loaded);
+		assert.equal(result.outcome === "partial" && result.arm, "audit-failed");
 		assert.equal(seam.sourceWrites.length, 4);
 	});
 	it("stops after a concurrent extra human ruleset appears in the post-read", async () => {

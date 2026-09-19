@@ -319,7 +319,11 @@ export async function loadTopologySourceApplication(
 			const live = await reloadSnapshot();
 			if (!live) return false;
 			const final = planSplitTopology(live);
-			return final.ok && final.plan.stage === "carrier-bootstrap";
+			return (
+				final.ok &&
+				final.plan.stage === "carrier-bootstrap" &&
+				!final.plan.steps.some((step) => step.method === "DELETE")
+			);
 		},
 	};
 	return {
