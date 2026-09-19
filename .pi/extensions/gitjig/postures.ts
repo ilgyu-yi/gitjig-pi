@@ -709,10 +709,10 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "topology-bypass-semantics",
 		failureShape:
-			"the exact RepositoryRole-5 pull-request bypass has not been controlled-proven to exempt unmet quorum while independent core rules remain enforced",
+			"a proposed topology departs from the controlled-proven composition by combining core and quorum ownership, adding a core bypass, or using a bypass other than RepositoryRole-5 pull-request mode",
 		posture: "closed",
 		justification:
-			"4A records this assumption as unverified. Phase 4B must discharge it on an explicitly authorized scratch repository before any source mutation; until then every plan is unauthorized.",
+			"The Phase-4 scratch proof supports only a quorum-only RepositoryRole-5 pull-request bypass beside an independently enforced doorless core. Any broader or differently composed topology requires new proof and authority; the completed proof itself grants no source mutation.",
 	},
 	{
 		dependency: "topology-shared-auditor",

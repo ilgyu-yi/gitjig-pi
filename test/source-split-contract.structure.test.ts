@@ -6,6 +6,7 @@ const spec = readFileSync("SPEC.md", "utf8");
 const authorization = readFileSync(".pi/extensions/gitjig/landing/topology-authorization.ts", "utf8");
 const vocabulary = readFileSync(".pi/extensions/gitjig/landing/source-split-contract.ts", "utf8");
 const readme = readFileSync("README.md", "utf8");
+const postures = readFileSync(".pi/extensions/gitjig/postures.ts", "utf8");
 
 const topology = spec.slice(
 	spec.indexOf("**Phase-4 topology and bootstrap.**"),
@@ -52,6 +53,10 @@ test("#289 settles source-split application without deriving a writer", () => {
 	requires(readme, [
 		"Source application is record-first and stepwise",
 		"no source executor or production mutation call site",
+	]);
+	requires(postures, [
+		"The Phase-4 scratch proof supports only a quorum-only RepositoryRole-5 pull-request bypass",
+		"the completed proof itself grants no source mutation",
 	]);
 	requires(authorization, [
 		'TOPOLOGY_SOURCE_CLAIM_MARKER = "<!-- topology-source-claim: v1 -->"',
