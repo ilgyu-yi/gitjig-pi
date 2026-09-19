@@ -251,7 +251,7 @@ export async function loadTopologySourceApplication(
 	const freshSnapshot = await reloadSnapshot();
 	const freshPlanned = freshSnapshot ? planSplitTopology(freshSnapshot) : undefined;
 	if (!freshPlanned?.ok) return { arm: "population-incomplete" };
-	const freshPlan = freshPlanned.plan.stage === "source-split" ? freshPlanned.plan : applicationPlan;
+	const freshPlan = freshPlanned.plan;
 	const reloadComments = async (): Promise<readonly TopologySourceComment[] | undefined> => {
 		const pages = await get(`repos/${repository}/issues/${issueNumber}/comments?per_page=100`, true);
 		if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) return undefined;

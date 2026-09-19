@@ -343,6 +343,10 @@ describe("#293 source-split service", () => {
 		first.freshPlan = plan("V");
 		const refused = await executeTopologySourceSplit(first, fx.value);
 		assert.equal(refused.outcome === "refused" && refused.arm, "live-drift");
+		const refusalCount = fx.comments.length;
+		const repeated = { ...first, comments: fx.comments };
+		assert.equal((await executeTopologySourceSplit(repeated, fx.value)).outcome, "refused");
+		assert.equal(fx.comments.length, refusalCount);
 		const retry = admittedInput();
 		retry.comments = fx.comments;
 		assert.equal((await executeTopologySourceSplit(retry, fx.value)).outcome, "success");
@@ -780,6 +784,9 @@ function authorizedPlatformFixture(options: { extraHuman?: boolean; failTerminal
 		mutate,
 		mutateJson,
 		sourceWrites,
+		retainAuthorizationOnly: () => {
+			comments = comments.filter((item) => String(item.body).includes(TOPOLOGY_AUTHORIZATION_MARKER));
+		},
 		authorize: (artifact: TopologyPlan) => {
 			const value = {
 				schemaVersion: 1,
@@ -879,6 +886,22 @@ describe("#293 source-split platform boundary", () => {
 		);
 		const replay = await executePlatformTopologySource(replayLoaded);
 		assert.equal(replay.outcome === "success" && replay.replay, true);
+		assert.equal(seam.sourceWrites.length, 4);
+
+		seam.retainAuthorizationOnly();
+		const unclaimedCarrier = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			preview.input?.plan,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const refused = await executePlatformTopologySource(unclaimedCarrier);
+		assert.equal(refused.outcome === "refused" && refused.arm, "live-drift");
 		assert.equal(seam.sourceWrites.length, 4);
 	});
 	it("recovers a fully recorded platform run whose terminal publication failed", async () => {

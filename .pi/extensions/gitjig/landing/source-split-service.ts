@@ -184,6 +184,20 @@ export async function executeTopologySourceSplit(
 		observedDigest: string | null,
 	): Promise<TopologySourceResult> => {
 		const partial = claimId !== null;
+		if (!partial) {
+			const prior = admittedTerminals(input, effects.canonicalInstant).filter((record) => {
+				const mismatch = record.observedMismatch;
+				return (
+					record.outcome === "refused" &&
+					record.authorizationRecordId === authorizationId &&
+					mismatch !== null &&
+					mismatch.arm === arm &&
+					(authorizationId !== null || mismatch.observedDigest === observedDigest)
+				);
+			});
+			if (prior.length === 1) return { outcome: "refused", arm, terminal: prior[0] };
+			if (prior.length > 1) return { outcome: "refused", arm: "claim-conflict" };
+		}
 		const terminal = {
 			schemaVersion: 1,
 			repositoryId: input.repositoryId,
