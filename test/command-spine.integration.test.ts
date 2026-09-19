@@ -122,6 +122,7 @@ const EXPECTED_GOVERNED_ROWS = [
 	"review-round|extension",
 	"review|extension",
 	"ship|extension",
+	"source-split|extension",
 	"work-on|prompt",
 ];
 
@@ -587,6 +588,11 @@ describe("registration on the governed home, from the substrate's own report (is
 			`ship-registration: ship's row reports source=${row.source}, not extension — §4.8's rung 1 returns ` +
 				`on the merge-boundary acts; the rung-2 yes is a recorded residual, never a second surface`,
 		);
+	});
+
+	it("source-split registers as the one explicit application command", () => {
+		const row = requireGovernedRow("source-split-registration", "source-split", "the source application command");
+		assert.equal(row.source, "extension");
 	});
 });
 

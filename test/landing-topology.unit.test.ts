@@ -174,6 +174,8 @@ describe("Phase-4 topology owner and read-only plan", () => {
 		assert.equal(planSplitTopology({ ...snapshot, rulesets: [{ ...current, unknown: true }] }).ok, false);
 		assert.equal(planSplitTopology({ ...snapshot, rulesets: [current, { ...current, id: 21 }] }).ok, false);
 		assert.equal(planSplitTopology({ ...snapshot, rulesets: [{ ...current, source_type: "Organization" }] }).ok, false);
+		assert.equal(planSplitTopology({ ...snapshot, rulesets: [{ ...current, source_type: "Enterprise" }] }).ok, false);
+		assert.equal(planSplitTopology({ ...snapshot, rulesets: [{ ...current, source: "other/repository" }] }).ok, false);
 		assert.equal(planSplitTopology({ ...snapshot, rulesets: [{ ...current, enforcement: "evaluate" }] }).ok, false);
 		const partial = planSplitTopology({ ...snapshot, rulesets: [core, human, { ...current, id: 22 }] });
 		assert.equal(partial.ok, true);
