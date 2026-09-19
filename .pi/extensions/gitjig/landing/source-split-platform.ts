@@ -212,6 +212,33 @@ export async function loadTopologySourceApplication(
 	if (!planned.ok) return { arm: "plan-invalid" };
 	const applicationPlan = authorizedPlan === undefined ? planned.plan : authorizedPlan;
 	if (!attestTopologyPlan(applicationPlan) || applicationPlan.stage !== "source-split") return { arm: "plan-invalid" };
+	const applicationBefore = record(applicationPlan.before);
+	const originalRulesets = applicationBefore?.rulesets;
+	const originalSettingsValue = record(applicationBefore?.repositorySettings);
+	if (
+		!Array.isArray(originalRulesets) ||
+		!originalSettingsValue ||
+		![
+			originalSettingsValue.allow_merge_commit,
+			originalSettingsValue.allow_squash_merge,
+			originalSettingsValue.allow_rebase_merge,
+		].every((value) => typeof value === "boolean")
+	)
+		return { arm: "plan-invalid" };
+	const originalSettings = {
+		allow_merge_commit: originalSettingsValue.allow_merge_commit as boolean,
+		allow_squash_merge: originalSettingsValue.allow_squash_merge as boolean,
+		allow_rebase_merge: originalSettingsValue.allow_rebase_merge as boolean,
+	};
+	const reconstructed = planSplitTopology({
+		...snapshot,
+		defaultBranch: applicationPlan.defaultBranch,
+		actorId: applicationPlan.actorId,
+		repositorySettings: originalSettings,
+		rulesets: originalRulesets as Record<string, unknown>[],
+	});
+	if (!reconstructed.ok || reconstructed.plan.artifactHash !== applicationPlan.artifactHash)
+		return { arm: "plan-invalid" };
 	if (authorizedPlan === undefined && planned.plan.stage !== "source-split") return { arm: "plan-invalid" };
 	const loadedAuthorization = await loadTopologyAuthorization(
 		host,

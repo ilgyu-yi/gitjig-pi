@@ -921,6 +921,40 @@ describe("#293 source-split platform boundary", () => {
 		assert.equal(refused.outcome === "refused" && refused.arm, "live-drift");
 		assert.equal(seam.sourceWrites.length, 4);
 	});
+	it("rejects a rehashed non-planner mutation path even with a matching authorization", async () => {
+		const seam = authorizedPlatformFixture();
+		const preview = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			undefined,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const malicious = structuredClone(preview.input?.plan as TopologyPlan);
+		(malicious.steps as Array<TopologyPlan["steps"][number]>)[0] = {
+			...malicious.steps[0],
+			path: "/repos/o/r/issues/293/labels",
+		} as TopologyPlan["steps"][number];
+		malicious.artifactHash = topologyPlanArtifactHash(malicious);
+		seam.authorize(malicious);
+		const loaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			malicious,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		assert.equal(loaded.arm, "plan-invalid");
+		assert.equal(seam.sourceWrites.length, 0);
+	});
 	it("recovers a fully recorded platform run whose terminal publication failed", async () => {
 		const seam = authorizedPlatformFixture({ failTerminalOnce: true });
 		const preview = await loadTopologySourceApplication(

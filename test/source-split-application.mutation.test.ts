@@ -55,6 +55,7 @@ test("#293 has one operator and closed source mutation path", () => {
 	assert.match(command, /registerCommand\("source-split"/u);
 	assert.match(command, /loadTopologySourceApplication/u);
 	assert.match(platform, /executeTopologySourceSplit\(loaded\.input, loaded\.effects\)/u);
+	assert.match(platform, /reconstructed\.plan\.artifactHash !== applicationPlan\.artifactHash/u);
 	assert.match(platform, /const freshPlan = freshPlanned\.plan;/u);
 	assert.match(platform, /!final\.plan\.steps\.some\(\(step\) => step\.method === "DELETE"\)/u);
 	assert.match(platform, /step\.path\.replace/u);
