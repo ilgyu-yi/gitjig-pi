@@ -16,10 +16,20 @@ function requires(subject: string, tokens: readonly string[]): void {
 	for (const token of tokens) assert.ok(subject.includes(token), `missing source-split contract token: ${token}`);
 }
 
+function interfaceMembers(name: string): string[] {
+	const match = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(vocabulary);
+	assert.ok(match, `missing interface: ${name}`);
+	return match[1]
+		.trim()
+		.split("\n")
+		.map((line) => line.trim());
+}
+
 function assertContract(subject: string): void {
 	requires(subject, [
 		"**Source-split application contract.**",
 		"core PATCH, quorum-only `human-approval` POST/PATCH",
+		"GitHub Actions integration, complete rulesets, and the application Issue/comments",
 		"immediate GET-before-write is the recorded optimistic-emulation residual",
 		"Mismatch never continues or rolls back automatically",
 		"`{schemaVersion,repositoryId,issueId,issueNumber,stage,planHash,pairKey,correlationId,issuedAt,expiresAt}`",
@@ -53,6 +63,54 @@ test("#289 settles source-split application without deriving a writer", () => {
 		"export interface TopologySourceStepRecord",
 		"export interface TopologySourceTerminalRecord",
 		"deliberately exports no parser, writer, executor, or production call site",
+	]);
+	assert.deepEqual(interfaceMembers("TopologySourceClaimRecord"), [
+		"schemaVersion: 1;",
+		"repositoryId: string;",
+		"issueId: string;",
+		"authorizationRecordId: string;",
+		"planHash: string;",
+		"pairKey: string;",
+		"correlationId: string;",
+		"writerId: string;",
+		"claimedAt: string;",
+	]);
+	assert.deepEqual(interfaceMembers("TopologySourceStepRecord"), [
+		"schemaVersion: 1;",
+		"repositoryId: string;",
+		"issueId: string;",
+		"claimCommentId: string;",
+		"authorizationRecordId: string;",
+		"planHash: string;",
+		"pairKey: string;",
+		"order: number;",
+		'method: "PATCH" | "POST" | "DELETE";',
+		"path: string;",
+		"requestBodyDigest: string | null;",
+		"beforeStateDigest: string;",
+		"afterStateDigest: string;",
+		"observedAt: string;",
+		"writerId: string;",
+	]);
+	assert.deepEqual(interfaceMembers("TopologySourceMismatch"), [
+		"arm: string;",
+		"condition: string;",
+		"observedDigest: string | null;",
+	]);
+	assert.deepEqual(interfaceMembers("TopologySourceTerminalRecord"), [
+		"schemaVersion: 1;",
+		"repositoryId: string;",
+		"issueId: string;",
+		"authorizationRecordId: string | null;",
+		"claimCommentId: string | null;",
+		'outcome: "refused" | "partial" | "success";',
+		"completedOrders: number[];",
+		"lastVerifiedStateDigest: string | null;",
+		"observedMismatch: TopologySourceMismatch | null;",
+		"remainingOrders: number[];",
+		"expiresAt: string;",
+		"writerId: string;",
+		"observedAt: string;",
 	]);
 	assert.doesNotMatch(
 		`${authorization}\n${vocabulary}`,
