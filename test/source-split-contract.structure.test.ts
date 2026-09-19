@@ -41,7 +41,7 @@ function assertContract(subject: string): void {
 		"<!-- topology-source-claim: v1 -->",
 		"<!-- topology-source-step: v1 -->",
 		"<!-- topology-source-terminal: v1 -->",
-		"authorization id and `expiresAt` are both null exactly for `authorization-absent` or `authorization-ambiguous`",
+		"Authorization id is null exactly for zero or multiple marked authorization candidates",
 		"Comment publication is a platform write but not source topology mutation",
 		"does not arm the topology carrier, bootstrap, pilot or guarded landing",
 		"This settlement exports data vocabulary only",
@@ -129,16 +129,22 @@ test("#289 settles source-split application without deriving a writer", () => {
 	);
 });
 
-test("#294 closes expiry nullability only for null-authorization refusals", () => {
+test("#296 closes expiry evidence for unique unattested candidates", () => {
 	requires(topology, [
-		"No candidate, plan, caller value, or current instant supplies a fabricated expiry",
-		"Every other refused terminal and every partial/success terminal carries the unique admitted authorization id",
+		"a unique marked candidate uses its platform GraphQL comment node id even when its payload is unattested",
+		"It may be null only on a pre-claim refused/no-source-write",
+		"Null expiry is forbidden for `authorization-stale`, `stage-mismatch`, `pair-mismatch`",
+		"No candidate-selected invalid field, plan, caller value, or current instant supplies a fabricated expiry",
 	]);
-	assert.equal(vocabulary.match(/expiresAt: null;/gu)?.length, 1);
+	assert.equal(vocabulary.match(/expiresAt: null;/gu)?.length, 2);
 	assert.equal(vocabulary.match(/expiresAt: string;/gu)?.length, 2);
 	assert.match(
 		vocabulary,
-		/authorizationRecordId: null;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?expiresAt: null;/u,
+		/authorizationRecordId: null;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?completedOrders: \[\];[\s\S]*?lastVerifiedStateDigest: null;[\s\S]*?arm: "authorization-absent" \| "authorization-ambiguous";[\s\S]*?observedDigest: string;[\s\S]*?expiresAt: null;/u,
+	);
+	assert.match(
+		vocabulary,
+		/authorizationRecordId: string;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?completedOrders: \[\];[\s\S]*?lastVerifiedStateDigest: null;[\s\S]*?arm: "authorization-unattested";[\s\S]*?observedDigest: string;[\s\S]*?expiresAt: null;/u,
 	);
 	assert.doesNotMatch(vocabulary, /authorizationRecordId: string \| null;[\s\S]*?expiresAt: string \| null;/u);
 });
@@ -158,9 +164,8 @@ test("#289 contract mutants fail at their missing member", () => {
 			replacement: "exact target without matching records is success",
 		},
 		{
-			anchor:
-				"authorization id and `expiresAt` are both null exactly for `authorization-absent` or `authorization-ambiguous`",
-			replacement: "authorization id and expiry may be null on refusal",
+			anchor: "Authorization id is null exactly for zero or multiple marked authorization candidates",
+			replacement: "Authorization id may be null for any refusal",
 		},
 		{
 			anchor: "does not arm the topology carrier, bootstrap, pilot or guarded landing",
