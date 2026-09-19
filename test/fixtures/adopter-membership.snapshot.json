@@ -214,6 +214,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/commands/source-split.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/dispatch/admit.ts",
 			"disposition": "carried"
 		},
@@ -295,6 +299,14 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/landing/source-split-contract.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/landing/source-split-platform.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/landing/source-split-service.ts",
 			"disposition": "carried"
 		},
 		{
@@ -551,6 +563,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/284.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/293.md",
 			"disposition": "instance-state"
 		},
 		{

@@ -48,11 +48,11 @@ function assertContract(subject: string): void {
 	]);
 }
 
-test("#289 settles source-split application without deriving a writer", () => {
+test("#289 vocabulary remains the #293 application's closed record grammar", () => {
 	assertContract(topology);
 	requires(readme, [
 		"Source application is record-first and stepwise",
-		"no source executor or production mutation call site",
+		"without a unique admitted marker it may append a refusal terminal but performs no ruleset or repository-setting write",
 	]);
 	requires(postures, [
 		"The Phase-4 scratch proof supports only a quorum-only RepositoryRole-5 pull-request bypass",
@@ -67,7 +67,7 @@ test("#289 settles source-split application without deriving a writer", () => {
 		"export interface TopologySourceClaimRecord",
 		"export interface TopologySourceStepRecord",
 		"export type TopologySourceTerminalRecord",
-		"deliberately exports no parser, writer, executor, or production call site",
+		"export const parseTopologySourceClaim",
 	]);
 	assert.deepEqual(interfaceMembers("TopologySourceClaimRecord"), [
 		"schemaVersion: 1;",
@@ -98,7 +98,7 @@ test("#289 settles source-split application without deriving a writer", () => {
 		"writerId: string;",
 	]);
 	assert.deepEqual(interfaceMembers("TopologySourceMismatch"), [
-		"arm: string;",
+		"arm: TopologySourceRefusalArm;",
 		"condition: string;",
 		"observedDigest: string | null;",
 	]);
