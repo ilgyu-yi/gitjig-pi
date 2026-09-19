@@ -148,6 +148,13 @@ describe("Phase-4 topology owner and read-only plan", () => {
 		assert.equal(result.plan.stage, "source-split");
 		assert.equal(attestTopologyPlan(result.plan), true);
 		assert.equal(attestTopologyPlan({ ...result.plan, beforeDigest: "0".repeat(64) }), false);
+		for (const collection of ["optimisticRulesets", "steps", "rollback"] as const) {
+			const changed = structuredClone(result.plan) as unknown as Record<string, unknown>;
+			((changed[collection] as Array<Record<string, unknown>>)[0] as Record<string, unknown>).extra = true;
+			const { artifactHash: _artifactHash, ...artifactWithExtra } = changed;
+			changed.artifactHash = topologyPlanArtifactHash(artifactWithExtra as never);
+			assert.equal(attestTopologyPlan(changed), false, `${collection} entries must reject extra keys`);
+		}
 		assert.equal(result.plan.rollback.length, 3);
 		assert.equal(result.plan.rollback[1].method, "DELETE");
 		assert.equal(planSplitTopology({ ...result.plan, complete: false } as never).ok, false);

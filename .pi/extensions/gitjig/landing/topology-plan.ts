@@ -90,6 +90,13 @@ function digest(value: unknown): string {
 export function topologyPlanArtifactHash(plan: Omit<TopologyPlan, "artifactHash">): string {
 	return digest(plan);
 }
+function exactKeys(value: unknown, required: readonly string[], optional: readonly string[] = []): boolean {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+	const keys = Object.keys(value);
+	return (
+		required.every((key) => keys.includes(key)) && keys.every((key) => required.includes(key) || optional.includes(key))
+	);
+}
 export function attestTopologyPlan(value: unknown): value is TopologyPlan {
 	if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
 	const plan = value as Record<string, unknown>;
@@ -135,27 +142,20 @@ export function attestTopologyPlan(value: unknown): value is TopologyPlan {
 	if (
 		plan.optimisticRulesets.some(
 			(item) =>
-				item === null ||
-				typeof item !== "object" ||
-				Array.isArray(item) ||
+				!exactKeys(item, ["id", "updatedAt"]) ||
 				!Number.isSafeInteger((item as Record<string, unknown>).id) ||
 				!canonicalInstant((item as Record<string, unknown>).updatedAt),
 		) ||
 		plan.steps.some(
 			(item, index) =>
-				item === null ||
-				typeof item !== "object" ||
-				Array.isArray(item) ||
+				!exactKeys(item, ["order", "method", "path", "postRead"], ["body"]) ||
 				(item as Record<string, unknown>).order !== index + 1 ||
 				!["PATCH", "POST", "DELETE"].includes(String((item as Record<string, unknown>).method)) ||
-				typeof (item as Record<string, unknown>).path !== "string" ||
-				!("postRead" in item),
+				typeof (item as Record<string, unknown>).path !== "string",
 		) ||
 		plan.rollback.some(
 			(item) =>
-				item === null ||
-				typeof item !== "object" ||
-				Array.isArray(item) ||
+				!exactKeys(item, ["method", "path"], ["body"]) ||
 				!["PATCH", "POST", "DELETE"].includes(String((item as Record<string, unknown>).method)) ||
 				typeof (item as Record<string, unknown>).path !== "string",
 		)
