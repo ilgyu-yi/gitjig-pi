@@ -33,6 +33,7 @@ import {
 import {
 	attestTopologyPlan,
 	desiredCoreRuleset,
+	desiredHumanApprovalRuleset,
 	topologyPlanArtifactHash,
 	type TopologyPlan,
 } from "../.pi/extensions/gitjig/landing/topology-plan.ts";
@@ -460,6 +461,42 @@ describe("#293 source-split service", () => {
 		assert.equal(result.outcome === "success" && result.replay, true);
 		assert.equal(fx.calls.filter((call) => call.startsWith("write:")).length, writes);
 	});
+	it("recovers a valid recorded prefix without rewriting it and stops if its live state differs", async () => {
+		const seed = effects();
+		assert.equal((await executeTopologySourceSplit(admittedInput(), seed.value)).outcome, "success");
+		const prefix = seed.comments.filter(
+			(comment) =>
+				comment.body.includes(TOPOLOGY_SOURCE_CLAIM_MARKER) ||
+				(comment.body.includes(TOPOLOGY_SOURCE_STEP_MARKER) && comment.body.includes('"order":1')),
+		);
+		const continuation = effects();
+		const result = await executeTopologySourceSplit({ ...admittedInput(), comments: prefix }, continuation.value);
+		assert.equal(result.outcome, "success");
+		assert.deepEqual(
+			continuation.calls.filter((call) => call.startsWith("write:")),
+			["write:2"],
+		);
+
+		const mismatch = effects({ drift: true });
+		const refused = await executeTopologySourceSplit({ ...admittedInput(), comments: prefix }, mismatch.value);
+		assert.equal(refused.outcome === "partial" && refused.arm, "partial-consumed");
+		assert.equal(
+			mismatch.calls.some((call) => call.startsWith("write:")),
+			false,
+		);
+	});
+	it("never accepts a success terminal without its winning claim and full steps", async () => {
+		const seed = effects();
+		assert.equal((await executeTopologySourceSplit(admittedInput(), seed.value)).outcome, "success");
+		const terminalOnly = seed.comments.filter((comment) => comment.body.includes("topology-source-terminal"));
+		const replay = effects();
+		const result = await executeTopologySourceSplit({ ...admittedInput(), comments: terminalOnly }, replay.value);
+		assert.equal(result.outcome === "partial" && result.arm, "partial-consumed");
+		assert.equal(
+			replay.calls.some((call) => call.startsWith("write:")),
+			false,
+		);
+	});
 	it("loses a competing append-only claim to the lowest REST id", async () => {
 		const fx = effects();
 		const originalRead = fx.value.readComments;
@@ -624,6 +661,134 @@ function platformFixture(options: { topologyBlobSha?: string } = {}) {
 	};
 }
 
+function authorizedPlatformFixture(options: { extraHuman?: boolean } = {}) {
+	const actionsId = 15368;
+	let settings = { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true };
+	let rulesets: Array<Record<string, unknown>> = [
+		{
+			id: 20,
+			...desiredCoreRuleset(actionsId),
+			source_type: "Repository",
+			source: "o/r",
+			updated_at: "2026-09-19T14:00:00.000Z",
+		},
+		{
+			id: 21,
+			...desiredCoreRuleset(actionsId),
+			name: "legacy-duplicate",
+			source_type: "Repository",
+			source: "o/r",
+			updated_at: "2026-09-19T14:00:00.000Z",
+		},
+	];
+	let comments: Array<Record<string, unknown>> = [];
+	let nextComment = 100;
+	const sourceWrites: Array<{ method: string; endpoint: string; body?: unknown }> = [];
+	const read = async (argv: string[]) => {
+		const endpoint = argv.at(-1) ?? "";
+		if (endpoint === "repos/o/r") return JSON.stringify({ node_id: "R", default_branch: "main", ...settings });
+		if (endpoint === "user") return JSON.stringify({ node_id: "U", login: "operator" });
+		if (endpoint === "apps/github-actions") return JSON.stringify({ id: actionsId });
+		if (endpoint.includes("contents/.github/workflows/landing-topology.mjs?ref=main"))
+			return JSON.stringify({ sha: gitBlobOid(readFileSync(".github/workflows/landing-topology.mjs")) });
+		if (endpoint.includes("rulesets?")) return JSON.stringify([rulesets.map(({ id }) => ({ id }))]);
+		const ruleset = /^repos\/o\/r\/rulesets\/(\d+)$/u.exec(endpoint);
+		if (ruleset) return JSON.stringify(rulesets.find((item) => item.id === Number(ruleset[1])));
+		if (endpoint.includes("collaborators/operator/permission")) return JSON.stringify({ role_name: "admin" });
+		if (endpoint === "repos/o/r/issues/293") return JSON.stringify({ node_id: "I", number: 293, state: "open" });
+		if (endpoint.includes("issues/293/comments?")) return JSON.stringify([comments]);
+		const commentId = /issues\/comments\/(\d+)$/u.exec(endpoint);
+		if (commentId) return JSON.stringify(comments.find((item) => item.id === Number(commentId[1])));
+		return undefined;
+	};
+	const append = (body: string) => {
+		const item = {
+			node_id: `C${nextComment}`,
+			id: nextComment,
+			created_at: now,
+			updated_at: now,
+			body,
+			user: { node_id: "U", login: "operator", type: "User" },
+		};
+		nextComment += 1;
+		comments.push(item);
+		return item;
+	};
+	const mutateJson = async (argv: string[], body: unknown) => {
+		const method = argv[argv.indexOf("--method") + 1] ?? "";
+		const endpoint = argv.find((part) => part.startsWith("repos/")) ?? "";
+		if (endpoint.endsWith("issues/293/comments")) return JSON.stringify(append((body as { body: string }).body));
+		sourceWrites.push({ method, endpoint, body });
+		if (method === "PATCH" && endpoint === "repos/o/r/rulesets/20")
+			rulesets = rulesets.map((item) =>
+				item.id === 20
+					? {
+							id: 20,
+							...(body as object),
+							source_type: "Repository",
+							source: "o/r",
+							updated_at: "2026-09-19T15:00:01.000Z",
+						}
+					: item,
+			);
+		else if (method === "POST" && endpoint === "repos/o/r/rulesets") {
+			rulesets.push({
+				id: 22,
+				...(body as object),
+				source_type: "Repository",
+				source: "o/r",
+				updated_at: "2026-09-19T15:00:02.000Z",
+			});
+			if (options.extraHuman)
+				rulesets.push({
+					id: 23,
+					...desiredHumanApprovalRuleset(),
+					source_type: "Repository",
+					source: "o/r",
+					updated_at: "2026-09-19T15:00:03.000Z",
+				});
+		} else if (method === "PATCH" && endpoint === "repos/o/r") settings = body as typeof settings;
+		return "{}";
+	};
+	const mutate = async (argv: string[]) => {
+		const method = argv[argv.indexOf("--method") + 1] ?? "";
+		const endpoint = argv.find((part) => part.startsWith("repos/")) ?? "";
+		sourceWrites.push({ method, endpoint });
+		if (method === "DELETE") rulesets = rulesets.filter((item) => item.id !== Number(endpoint.split("/").at(-1)));
+		return "";
+	};
+	return {
+		read,
+		mutate,
+		mutateJson,
+		sourceWrites,
+		authorize: (artifact: TopologyPlan) => {
+			const value = {
+				schemaVersion: 1,
+				repositoryId: "R",
+				issueId: "I",
+				issueNumber: 293,
+				stage: "source-split",
+				planHash: artifact.artifactHash,
+				pairKey: topologySourcePairKey(artifact),
+				correlationId: artifact.correlationId,
+				issuedAt: "2026-09-19T14:59:00.000Z",
+				expiresAt: "2026-09-19T16:00:00.000Z",
+			};
+			comments = [
+				{
+					node_id: "AUTH",
+					id: 7,
+					created_at: value.issuedAt,
+					updated_at: value.issuedAt,
+					body: `${TOPOLOGY_AUTHORIZATION_MARKER}\n${JSON.stringify(value)}`,
+					user: { node_id: "U", login: "operator", type: "User" },
+				},
+			];
+		},
+	};
+}
+
 describe("#293 source-split platform boundary", () => {
 	it("refuses before loading the planner when default-branch engine bytes differ", async () => {
 		const seam = platformFixture({ topologyBlobSha: "0".repeat(40) });
@@ -639,6 +804,77 @@ describe("#293 source-split platform boundary", () => {
 		);
 		assert.equal(loaded.arm, "population-incomplete");
 		assert.equal(seam.mutations.length, 0);
+	});
+	it("executes the exact authorized PATCH/POST/PATCH/DELETE platform sequence", async () => {
+		const seam = authorizedPlatformFixture();
+		const preview = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		assert.ok(preview.input);
+		seam.authorize(preview.input?.plan as TopologyPlan);
+		const loaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const result = await executePlatformTopologySource(loaded);
+		assert.equal(result.outcome, "success");
+		assert.deepEqual(
+			seam.sourceWrites.map(({ method, endpoint }) => [method, endpoint]),
+			[
+				["PATCH", "repos/o/r/rulesets/20"],
+				["POST", "repos/o/r/rulesets"],
+				["PATCH", "repos/o/r"],
+				["DELETE", "repos/o/r/rulesets/21"],
+			],
+		);
+		assert.deepEqual(seam.sourceWrites[2]?.body, {
+			allow_merge_commit: true,
+			allow_squash_merge: false,
+			allow_rebase_merge: false,
+		});
+	});
+	it("stops after a concurrent extra human ruleset appears in the post-read", async () => {
+		const seam = authorizedPlatformFixture({ extraHuman: true });
+		const preview = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		seam.authorize(preview.input?.plan as TopologyPlan);
+		const loaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const result = await executePlatformTopologySource(loaded);
+		assert.equal(result.outcome === "partial" && result.arm, "postread-mismatch");
+		assert.deepEqual(
+			seam.sourceWrites.map(({ method }) => method),
+			["PATCH", "POST"],
+		);
 	});
 	it("derives authorization absence through GETs and writes only its refusal comment", async () => {
 		const seam = platformFixture();

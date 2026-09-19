@@ -12,6 +12,9 @@ const tokens = [
 	"claims[0]?.comment.nodeId !== written.nodeId",
 	"recordedOrders.some((order, index) => order !== index + 1)",
 	"item.record.beforeStateDigest !== topologySourceDigest(expectedBefore)",
+	"terminal.claimCommentId !== claimId",
+	"terminal.lastVerifiedStateDigest !== input.plan.desiredDigest",
+	"existing.length !== input.plan.steps.length",
 	"const before = await effects.readState(expectedBefore)",
 	"const mutation = await effects.mutate(step)",
 	"const after = await effects.readState(step.postRead)",
@@ -53,6 +56,7 @@ test("#293 has one operator and closed source mutation path", () => {
 	assert.match(command, /loadTopologySourceApplication/u);
 	assert.match(platform, /executeTopologySourceSplit\(loaded\.input, loaded\.effects\)/u);
 	assert.match(platform, /step\.path\.replace/u);
+	assert.match(platform, /filter\(\(item\) => item\.name === "human-approval"\)\.length !== 1/u);
 	assert.match(platform, /"--method", step\.method/u);
 	assert.doesNotMatch(platform, /plan\.rollback|\.rollback\)/u);
 });

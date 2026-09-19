@@ -109,18 +109,23 @@ function observedShape(
 		} else if (topologySourceDigest(liveById.get(id)) !== topologySourceDigest(item)) return undefined;
 	}
 	const allowedIds = new Set(original.map((item) => Number((item as Record<string, unknown>).id)));
-	for (const item of snapshot.rulesets) {
-		if (!allowedIds.has(Number(item.id)) && !("human" in shape && item.name === "human-approval")) return undefined;
-	}
+	const added = snapshot.rulesets.filter((item) => !allowedIds.has(Number(item.id)));
+	if (!("human" in shape) && added.length !== 0) return { unexpectedRulesetPopulation: true };
+	if ("human" in shape && retainedHumanId !== undefined && added.length !== 0)
+		return { unexpectedRulesetPopulation: true };
+	if ("human" in shape && retainedHumanId === undefined && (added.length !== 1 || added[0]?.name !== "human-approval"))
+		return { unexpectedRulesetPopulation: true };
 	const result: Record<string, unknown> = {};
 	if ("core" in shape) {
-		const core = snapshot.rulesets.find((item) => item.name === "core-governance");
-		if (!core) return undefined;
+		const core = liveById.get(coreId);
+		if (!core || core.name !== "core-governance") return undefined;
 		result.core = writableRuleset(core);
 	}
 	if ("human" in shape) {
-		const human = snapshot.rulesets.find((item) => item.name === "human-approval");
-		if (!human) return undefined;
+		const human = retainedHumanId === undefined ? added[0] : liveById.get(retainedHumanId);
+		if (!human || human.name !== "human-approval") return undefined;
+		if (snapshot.rulesets.filter((item) => item.name === "human-approval").length !== 1)
+			return { unexpectedRulesetPopulation: true };
 		result.human = writableRuleset(human);
 	}
 	if ("repositorySettings" in shape) result.repositorySettings = snapshot.repositorySettings;

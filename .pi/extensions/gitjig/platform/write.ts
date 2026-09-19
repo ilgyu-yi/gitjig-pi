@@ -56,7 +56,16 @@ export function runPlatformJsonMutation(argv: string[], body: unknown, repoRoot:
 					child.kill("SIGTERM");
 				}
 			}
-			grace = setTimeout(() => finish(undefined), GRACE_MS);
+			grace = setTimeout(() => {
+				if (typeof child.pid === "number") {
+					try {
+						process.kill(-child.pid, "SIGKILL");
+					} catch {
+						child.kill("SIGKILL");
+					}
+				}
+				finish(undefined);
+			}, GRACE_MS);
 			grace.unref();
 		};
 		const timer = setTimeout(terminate, TIMEOUT_MS);

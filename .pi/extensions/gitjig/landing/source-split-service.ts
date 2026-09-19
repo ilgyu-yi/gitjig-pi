@@ -267,11 +267,20 @@ export async function executeTopologySourceSplit(
 		(record) => record.authorizationRecordId === authorization.recordId,
 	);
 	if (priorTerminal.length > 1) return publishTerminal("claim-conflict", "terminal-population", null);
-	if (priorTerminal[0]?.outcome === "success") return { outcome: "success", terminal: priorTerminal[0], replay: true };
-	if (priorTerminal.length === 1) return { outcome: "partial", arm: "partial-consumed", terminal: priorTerminal[0] };
 
 	let claims = admittedClaims(liveInput, authorization.recordId, effects.canonicalInstant);
+	if (
+		claims.some(
+			({ record }) =>
+				record.planHash !== input.plan.artifactHash ||
+				record.pairKey !== authorization.pairKey ||
+				record.correlationId !== authorization.correlationId,
+		)
+	)
+		return publishTerminal("claim-conflict", "claim-binding", null);
 	if (claims.length >= 1) claimId = claims[0]?.comment.nodeId ?? null;
+	else if (priorTerminal.length === 1)
+		return { outcome: "partial", arm: "partial-consumed", terminal: priorTerminal[0] };
 	else {
 		const claim: TopologySourceClaimRecord = {
 			schemaVersion: 1,
@@ -325,21 +334,33 @@ export async function executeTopologySourceSplit(
 		)
 			return publishTerminal("partial-consumed", "recorded-step-binding", null);
 	}
+	if (existing.length > 0) {
+		const latest = existing.reduce((left, right) => (left.record.order > right.record.order ? left : right));
+		const planned = input.plan.steps[latest.record.order - 1];
+		const replayState = planned ? await effects.readState(planned.postRead) : undefined;
+		const replayDigest = replayState === undefined ? null : topologySourceDigest(replayState);
+		if (!planned || replayDigest !== latest.record.afterStateDigest)
+			return publishTerminal("partial-consumed", "recorded-prefix", replayDigest);
+		completed = recordedOrders;
+		lastDigest = replayDigest;
+	}
+	if (priorTerminal[0]?.outcome === "success") {
+		const terminal = priorTerminal[0];
+		if (
+			terminal.claimCommentId !== claimId ||
+			existing.length !== input.plan.steps.length ||
+			terminal.completedOrders.length !== orders.length ||
+			terminal.completedOrders.some((order, index) => order !== orders[index]) ||
+			terminal.remainingOrders.length !== 0 ||
+			terminal.lastVerifiedStateDigest !== input.plan.desiredDigest ||
+			!(await effects.auditFinal())
+		)
+			return { outcome: "partial", arm: "partial-consumed", terminal };
+		return { outcome: "success", terminal, replay: true };
+	}
+	if (priorTerminal.length === 1) return { outcome: "partial", arm: "partial-consumed", terminal: priorTerminal[0] };
 	for (const step of input.plan.steps) {
-		const duplicate = existing.filter((item) => item.record.order === step.order);
-		if (duplicate.length > 1) return publishTerminal("claim-conflict", "step-population", null);
-		if (duplicate.length === 1) {
-			const replayState = await effects.readState(step.postRead);
-			const replayDigest = replayState === undefined ? null : topologySourceDigest(replayState);
-			if (
-				replayDigest !== topologySourceDigest(step.postRead) ||
-				duplicate[0]?.record.afterStateDigest !== replayDigest
-			)
-				return publishTerminal("partial-consumed", "recorded-step", replayDigest);
-			completed = [...completed, step.order];
-			lastDigest = replayDigest;
-			continue;
-		}
+		if (recordedOrders.includes(step.order)) continue;
 		const expectedBefore = step.order === 1 ? input.plan.before : input.plan.steps[step.order - 2]?.postRead;
 		const before = await effects.readState(expectedBefore);
 		if (before === undefined) return publishTerminal("population-incomplete", "pre-read", null);
@@ -383,6 +404,7 @@ export async function executeTopologySourceSplit(
 		lastDigest = afterDigest;
 	}
 	if (!(await effects.auditFinal())) return publishTerminal("audit-failed", "final-audit", lastDigest);
+	lastDigest = input.plan.desiredDigest;
 	const terminal: TopologySourceTerminalRecord = {
 		schemaVersion: 1,
 		repositoryId: input.repositoryId,

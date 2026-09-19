@@ -364,7 +364,8 @@ export function planSplitTopology(
 	)
 		return { ok: false, arm: "ruleset-condition-unmeasurable" };
 	const applicable = observedRulesets.filter((rule) => applies(rule, snapshot.defaultBranch));
-	if (applicable.some((rule) => rule.source_type === "Organization")) return { ok: false, arm: "inherited-ruleset" };
+	if (applicable.some((rule) => rule.source_type !== "Repository" || rule.source !== snapshot.repositoryName))
+		return { ok: false, arm: "inherited-ruleset" };
 	const exactCore = applicable.filter((rule) => auditCoreRuleset(rule, snapshot.actionsIntegrationId).ok);
 	const nonHuman = applicable.filter((rule) => rule.name !== "human-approval");
 	const current = exactCore.length === 1 ? exactCore : nonHuman.length === 1 ? nonHuman : [];
