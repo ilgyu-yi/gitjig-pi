@@ -36,18 +36,35 @@ export interface TopologySourceMismatch {
 	condition: string;
 	observedDigest: string | null;
 }
-export interface TopologySourceTerminalRecord {
+export interface TopologySourceTerminalBase {
 	schemaVersion: 1;
 	repositoryId: string;
 	issueId: string;
-	authorizationRecordId: string | null;
-	claimCommentId: string | null;
-	outcome: "refused" | "partial" | "success";
 	completedOrders: number[];
 	lastVerifiedStateDigest: string | null;
 	observedMismatch: TopologySourceMismatch | null;
 	remainingOrders: number[];
-	expiresAt: string;
 	writerId: string;
 	observedAt: string;
 }
+export type TopologySourceTerminalRecord = TopologySourceTerminalBase &
+	(
+		| {
+				authorizationRecordId: null;
+				claimCommentId: null;
+				outcome: "refused";
+				expiresAt: null;
+		  }
+		| {
+				authorizationRecordId: string;
+				claimCommentId: null;
+				outcome: "refused";
+				expiresAt: string;
+		  }
+		| {
+				authorizationRecordId: string;
+				claimCommentId: string;
+				outcome: "partial" | "success";
+				expiresAt: string;
+		  }
+	);
