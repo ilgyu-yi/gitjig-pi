@@ -6,6 +6,8 @@ An agent-agnostic operating shell that enforces engineering work norms — the G
 
 Active development under the contract in [`SPEC.md`](SPEC.md).
 
+Issue completion normally remains PR-bound. The narrow exception is an activated, evidence-only non-Directive Issue whose governed-repository change surface is explicitly empty: SPEC §2.2 requires an independently reviewed, body-bound empty-change verdict before completed close, followed by its terminal record and, when parented, Directive reflection. It never substitutes for a PR where repository implementation exists.
+
 ## Getting started
 
 The runtime has no build step — the tree ships TypeScript sources that run directly, and nothing is compiled before it executes. Two prerequisites, and neither is an `npm install` — nothing in this repository's manifest is needed to run the suite:

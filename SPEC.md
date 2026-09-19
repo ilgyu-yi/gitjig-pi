@@ -25,47 +25,47 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | §2 | Artifact hierarchy and lifecycle | 288 |
 | &nbsp;&nbsp;§2.1 | Issue types | 292 |
 | &nbsp;&nbsp;§2.2 | Lifecycle states | 305 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 322 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 326 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 343 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 382 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 396 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 406 |
-| §3 | Enforcement-layer architecture | 418 |
-| &nbsp;&nbsp;§3.1 | The constraint | 422 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 429 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 437 |
-| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 544 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 548 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 564 |
-| &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 610 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 624 |
-| &nbsp;&nbsp;§3.11 | Gate design | 638 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 660 |
-| §4 | Substrate and install contract | 670 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 674 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 686 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 694 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 700 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 704 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 708 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 720 |
-| &nbsp;&nbsp;§4.8 | The command layer | 730 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 787 |
-| §5 | Cross-cutting contracts | 906 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 910 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 916 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 920 |
-| &nbsp;&nbsp;§5.4 | Work language | 924 |
-| &nbsp;&nbsp;§5.5 | State boundary | 928 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 936 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 948 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 958 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 966 |
-| §6 | Self-governance milestone | 978 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 989 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 332 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 336 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 353 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 392 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 406 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 416 |
+| §3 | Enforcement-layer architecture | 428 |
+| &nbsp;&nbsp;§3.1 | The constraint | 432 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 439 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 447 |
+| &nbsp;&nbsp;§3.4 | Agent-agnosticism of the tiers | 554 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 558 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 562 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 574 |
+| &nbsp;&nbsp;§3.8 | Escape architecture | 590 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 620 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 634 |
+| &nbsp;&nbsp;§3.11 | Gate design | 648 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 670 |
+| §4 | Substrate and install contract | 680 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 684 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 696 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 704 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 710 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 714 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 718 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 730 |
+| &nbsp;&nbsp;§4.8 | The command layer | 740 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 797 |
+| §5 | Cross-cutting contracts | 916 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 920 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 926 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 930 |
+| &nbsp;&nbsp;§5.4 | Work language | 934 |
+| &nbsp;&nbsp;§5.5 | State boundary | 938 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 946 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 958 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 968 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 976 |
+| §6 | Self-governance milestone | 988 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 999 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -192,7 +192,7 @@ A reviewer judges from the artifact alone: it is assumed to know nothing of the 
 
 **Answering a review invalidates it.** Landing the repairs a review demanded advances the head, so no result carries forward to the head that contains them — the generative form of §2.4's reviewed-head rule, pointed at, not restated. One named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone.
 
-**Result grammar.** A **panel reviewer's** result — this grammar's subject is the artifact review §1.7 dispatches, not every gate in this document that consumes a verdict artifact, and §2.2's activation verdict keeps its own committed marker — is a fixed machine-readable token at a defined output position, and the set is exactly two: **APPROVED** — the reviewer discovered no finding — and **FINDINGS** — it discovered at least one, carried as raw findings. A reviewer reports what it found and nothing about what should follow it: it does not rule a finding valid, does not classify severity, does not state a cost direction, does not direct the workflow, and mints no third token for a case it judges the two not to cover. Every consequence is derived downstream of the reviewer — the bundle mechanically (§1.7), the semantics once at the Judge, the workflow deterministically at the Resolver (§1.9). The general rule this two-token set instantiates binds **every** verdict artifact this document names, gated or not — §2.2's activation verdict, §1.8's plan-contest verdict, and any successor's: a fixed machine-readable token at a defined output position, and a new adjudication mechanism collapses into an existing grammar rather than minting tokens of its own. Named residual: §1.8 states its verdict in prose and fixes no token or position for it today, so the rule reaches that verdict as an obligation its deferred instruments discharge, not as a grammar this document already supplies. A reviewer result holds no gate of its own, which is why nothing in this grammar survives the Judge's refutation of the findings under it (§1.9).
+**Result grammar.** A **panel reviewer's** result — this grammar's subject is the artifact review §1.7 dispatches, not every gate in this document that consumes a verdict artifact, and §2.2's activation verdict keeps its own committed marker — is a fixed machine-readable token at a defined output position, and the set is exactly two: **APPROVED** — the reviewer discovered no finding — and **FINDINGS** — it discovered at least one, carried as raw findings. A reviewer reports what it found and nothing about what should follow it: it does not rule a finding valid, does not classify severity, does not state a cost direction, does not direct the workflow, and mints no third token for a case it judges the two not to cover. Every consequence is derived downstream of the reviewer — the bundle mechanically (§1.7), the semantics once at the Judge, the workflow deterministically at the Resolver (§1.9). The general rule this two-token set instantiates binds **every** verdict artifact this document names, gated or not — §2.2's activation verdict, §1.8's plan-contest verdict, and any successor's: a fixed machine-readable token at a defined output position, and a new adjudication mechanism collapses into an existing grammar rather than minting tokens of its own. Section 2.2's empty-change completion `v1 pass`/`v1 reject` pair is one such two-token grammar, not a third semantic result. Named residual: §1.8 states its verdict in prose and fixes no token or position for it today, so the rule reaches that verdict as an obligation its deferred instruments discharge, not as a grammar this document already supplies. A reviewer result holds no gate of its own, which is why nothing in this grammar survives the Judge's refutation of the findings under it (§1.9).
 
 **Validity is the caller's fact.** Whether a reviewer's result counts at all — the blind compare above, completion, well-formedness, and whether the surface reviewed is the one the slot was required for — is decided by the caller and never reported by the reviewer, which cannot attest to its own integrity. An invalid result is not a rejection and not an approval: it is **no result**, and what an absent result does to the panel is §1.7's.
 
@@ -313,9 +313,19 @@ Four canonical actor-neutral states and records govern interruption and landing 
 
 Exactly two Issue workflow states govern whether work may begin: **Proposed** (`status:proposed`, auto-stamped at filing) and **Active** (no status label). Every new Issue enters Proposed. Work begins only after a trusted maintainer account has performed a substantive review of the Issue's content and the repository's committed activation rule has accepted that review's passing verdict marker. The marker grammar is closed and occupies the comment's first line: exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`. The first is the only passing token; the second records rejection and leaves the Issue Proposed with findings. The substantive review adjudicates the body's claimed authorization case (§1.2): it rules whether the change's contract is normative, checks the precedence rule, confirms a pre-satisfying citation where one is claimed, and, for a new normative contract, confirms the reach-derived settlement mode and records the adjudicated reach in the verdict; any deviation's ground is recorded there too. A new adjudication mechanism collapses into the marker grammar rather than minting a third token (§1.6). The automation account is fixed by repository configuration, cannot be the Issue author for that activation, and no label event, project-field edit, or untrusted comment substitutes for the verdict. Activation may be performed through the repository's operator tooling, but the tooling is only the call site; the predicate remains actor and evidence based.
 
-An Active Issue closes as `completed` only through the flow: a merge closes through `Closes #N`, or a Directive closes through the explicit completion review below; `not planned` is the disposition otherwise. Before a merge closes an Issue, every acceptance criterion is explicitly resolved against evidence in an AC-closeout comment: checked, or marked N/A with a one-line reason. This AC-closeout is a procedural landing gate today (§3.3).
+An Active Issue closes as `completed` only through the flow: a merge closes through `Closes #N`; a Directive closes through the explicit completion review below; or an **empty-change completion review** closes an eligible non-Directive Issue whose activated scope expressly forbids implementation in the governed repository. `not planned` is the disposition otherwise. Before a merge closes an Issue, every acceptance criterion is explicitly resolved against evidence in an AC-closeout comment: checked, or marked N/A with a one-line reason. This PR-bound AC-closeout is a procedural landing gate today (§3.3).
 
-**Upward closure.** The hierarchy closes upward: a merged change's outcome is reflected back onto the tier that scoped it, with a completeness floor that fires regardless of who performed the merge, and with an idempotency key the writer controls — a content marker, never an incidental shared attribute.
+The empty-change route is narrower, never a PR substitute. Eligibility requires an OPEN Active Issue with exactly one non-Directive type, no proposed or unterminated blocked/awaiting-author state, a current body governed by its latest valid activation PASS, exact uniquely matching body spans that declare evidence-only completion and forbid governed-repository implementation, and pagination-complete absence of implementation attribution. Attribution is closed over canonical Issue branch/commit grammar, closing references, and timeline cross-references whose referent claims implementation; a bare mention, evidence/reflection record, unrelated revert, or explicitly authorized external-scratch act is not governed-repository implementation. Ambiguity refuses. Current criterion identities come, in order, only from the handed-over `closeoutCriteria`; each is `checked` with same-Issue unedited evidence, or `na` with a one-line reason and unedited evidence of inapplicability. This record replaces PR-bound AC-closeout only on that empty surface and carries no invented PR identity.
+
+A substantive reviewer is platform-attested as OWNER, MEMBER, or COLLABORATOR with freshly measured MAINTAIN or ADMIN permission. Reviewer and Issue author may coincide only where a fresh isolated compare-confirmed dispatch supplies independently re-resolved provenance; session independence remains a procedural obligation, never a trusted boolean. The fixed first-line grammar is exactly `<!-- empty-change-completion-verdict: v1 pass -->` or `<!-- empty-change-completion-verdict: v1 reject -->`. Reject leaves the Issue open. A pass is unique for the current body and is superseded by a later body edit or completion verdict.
+
+The passing fenced JSON object has exactly `{schemaVersion,repositoryId,issueId,issueNumber,issueType,observedState,parentDirectiveId,activationVerdictCommentId,activationCriteriaCommentId,activatedBodyHash,currentBodyHash,bodyUpdatedAt,emptyChangeBasis,governedRepositoryObservation,criteria,reviewerId,reviewerAssociation,reviewerPermission,reviewProvenanceCommentId,observedAt}`. Version is 1; state is ACTIVE; times are canonical UTC; body hashes are lowercase SHA-256 over exact raw UTF-8 platform bytes without normalization and equal one another; the activation verdict is the latest PASS governing the body; the criteria id names the sole snapshot admitted by `activationCriteriaFromComments`, or is null only where no candidate exists. An existing but unadmitted snapshot population refuses. `emptyChangeBasis` contains exact once-matching body spans. The governed observation binds repository and instant plus pagination-complete empty `closingPullRequestIds`, `implementationPullRequestIds`, and `implementationCommitOids`. Criteria are ordered exact equality with `closeoutCriteria`; evidence comments are positive-id, unique, same-repository, same-Issue, unedited, and older than the verdict. Reviewer fields equal platform reads and provenance names the unedited compare-confirmed result.
+
+Immediately before close, every subject, label, body/update, activation, evidence, attribution, reviewer, and parent operand is re-read exactly; drift requires a new review, never record repair. The order is pass record → exact re-read → close as COMPLETED → `<!-- empty-change-completion-terminal: v1 -->` →, when a Directive ancestor exists, `<!-- empty-change-upward-reflection: v1 -->`. The terminal payload is exactly `{schemaVersion,repositoryId,issueId,issueNumber,verdictCommentId,bodyHash,closedAt,state,stateReason,writerId}` and is keyed by marker plus verdict id. Parent identity comes only from the handed-over `resolve_parent_directive.sh` climb (first Directive ancestor, two-hop cap, cycle guard); a complete no-parent result owes no reflection. An owed reflection immediately follows the terminal with exactly `{schemaVersion,repositoryId,childIssueId,parentDirectiveId,verdictCommentId,terminalCommentId,writerId,observedAt}`, keyed by marker plus child/parent ids. It is not a `reflect-stub`/`reflect-enriched` record and `/reflect` does not enrich it. Replay writes nothing only when unique records, unchanged verdict/body, and CLOSED/COMPLETED live state match.
+
+The closed empty-change refusal arms are `subject-ineligible`, `evidence-absent`, `evidence-ambiguous`, `evidence-edited`, `evidence-copied`, `evidence-stale-subject`, `evidence-stale-criteria`, `writer-unattested`, `reviewer-untrusted`, `surface-nonempty`, `criterion-unresolved`, `close-before-record`, `terminal-mismatch`, and `reflection-mismatch`: respectively wrong state/type/interruption; missing required artifacts; duplicate/invalid candidates or ambiguous attribution; edited comments; identity mismatch; post-verdict subject drift; criterion derivation mismatch; author/payload mismatch; untrusted association/permission/provenance; attributed implementation; insufficient checked/N/A evidence; close preceding pass; terminal disagreement; and owed-reflection disagreement. No-parent reflection sleeps cleanly (§5.3). The procedural closer owns terminal and upward publication until a separately activated instrument derives.
+
+**Upward closure.** The hierarchy closes upward: a merged change's outcome or eligible empty-change terminal is reflected back onto the Directive that scoped it, with a completeness floor that fires regardless of who performed the terminal act, and with an idempotency key the writer controls — a content marker, never an incidental shared attribute.
 
 An Active Directive not closed by a merge completes only through an explicit **completion review**. Its required evidence artifact is the platform comment from that substantive review: it binds the current Directive body, resolves every stated success signal against platform-resolvable evidence, identifies the reviewing actor through platform-attested identity, and carries the completion verdict at the committed rule's canonical position. Only a passing completion verdict permits the completed close; a rejection leaves the Directive Active with findings. Completion review is per-success-signal evidence sufficiency, never an overall impression. Revising a Directive supersedes its body (§2.5): the prior body is archived as a write-once record in the same act, and the revised body re-enters the same gate as the original activation; no transient lifecycle state is minted for a transition the archive-plus-log already witnesses. These lifecycle rules are procedural today, enforced at review (§2.3); their instruments derive later per §1.2's macro-phase clause.
 
@@ -462,12 +472,12 @@ The gate classes the enforcement layer commits to are recorded in the table belo
 | human-approval | ordinary landing without the current eligible-human quorum | `home:` tier 3 (`human-approval` ruleset, Phase 4) · `backstop:` same · `earlier:` Phase-2 predicate library and Phase-3 guarded landing consumer | `supplies:` platform (current native reviews and ruleset-configured positive quorum) / `infers:` authored identity or a default |
 | ac-closeout | merging a PR whose closing issue has unresolved AC | `home:` tier 3 (`ac-closeout` reporting check live; required-context mutation deferred to #261 Phase 4; §2.2) · `backstop:` deferred (§3.11 amortized, re-adjudicated here) · `earlier:` tier 1 `/ship` caller-supplied echo and `/land` newest-check consumer live | `supplies:` platform (current closing-Issue bodies and comments, comment author/timestamps, PR body/head/base, check-run population and integration identity) / `infers:` none |
 | change-reach | retired SSOT vocabulary surviving the declared-set completion check | `home:` tier 3 (procedural today, §2.6) · `backstop:` none (reversible) · `earlier:` — | `supplies:` git (trailers) + platform (push history) / `infers:` session |
-| approval-evidence | activation, Directive completion, or ready transition firing without its required evidence artifact | `home:` tier 3 (procedural today, §3.7) · `backstop:` none (each named act is reversible before landing) · `earlier:` tier 1 echo planned | `supplies:` platform (evidence artifact + terminal act) / `infers:` session |
+| approval-evidence | activation, Directive completion, empty-change completion, or ready transition firing without its required evidence artifact | `home:` tier 3 (procedural today, §3.7) · `backstop:` none (each named act is reversible before landing) · `earlier:` tier 1 echo planned | `supplies:` platform (evidence artifact + terminal act) / `infers:` session provenance only for independently dispatched empty-change review |
 | egress | publishing repo-derived text that carries a secret to a public, unretractable surface | `home:` tier 1 (publish call site; the runtime's publish tool `gitjig_publish`, `.pi/extensions/gitjig/publish/`) · `backstop:` none (structurally unavailable, §3.11) · `earlier:` — | `supplies:` session (bytes at the publish call) / `infers:` platform |
 
 **Two families fall out of the rule.** A class whose deciding parts are all exact at the platform — the ref a push will land on, a pull request's file set, a merge event and the artifacts hanging off it — homes at tier 3, because the platform holds the last-needed part and the act guarded is the publication itself. A class whose deciding object exists in git before anything is published, and has no platform representation at the moment its guarded act fires, homes at tier 2 — the platform may read what was eventually pushed, but it cannot read the object the decision is taken over. The families are stated as shapes, never as memberships: each row's home follows from its own deciding information, so a class that acquires a platform representation of its deciding object re-homes without this paragraph changing. Neither family is a partition: a class whose deciding object never leaves the session falls outside both and homes at tier 1 alone (§3.4), and the arms of a class that guards more than one act may fall in different families.
 
-The `ac-closeout` home is one handed-over predicate and an event-driven reporting check named exactly `ac-closeout`. The check binds one unedited, author-equal closeout record per non-empty closing-Issue criterion population to the current PR head/base; zero closing Issues, zero criteria, unresolved PR-body checklist items, copied/malformed/duplicate/stale records, incomplete pagination, unknown identity, and lookup failure refuse. Closeout identity strips exactly one leading unchecked/checked Issue checkbox while §1.9's review manifest keeps its existing full item and EMPTY semantics. Event delivery through newest-check selection is not synchronous, and Development-panel linkage may emit no admitted event; these are measured platform races recovered by a fresh record event, not inferred passes. Before #261 Phase 4 this check reports but is not a configured required context. Its first empirical run is transferred to the immediately next governed PR and expires with that PR; its first enforced firing remains owned by #261 Phase 4 and expires on the first PR governed by the activated split topology.
+The `ac-closeout` home is one handed-over predicate and an event-driven reporting check named exactly `ac-closeout`. The check binds one unedited, author-equal closeout record per non-empty closing-Issue criterion population to the current PR head/base; zero closing Issues, zero criteria, unresolved PR-body checklist items, copied/malformed/duplicate/stale records, incomplete pagination, unknown identity, and lookup failure refuse. Closeout identity strips exactly one leading unchecked/checked Issue checkbox while §1.9's review manifest keeps its existing full item and EMPTY semantics. Eligible empty-change completion reuses that exported identity derivation but replaces this PR-bound record with §2.2's no-PR verdict; the two routes never fabricate or exchange subject identity. Event delivery through newest-check selection is not synchronous, and Development-panel linkage may emit no admitted event; these are measured platform races recovered by a fresh record event, not inferred passes. Before #261 Phase 4 this check reports but is not a configured required context. Its first empirical run is transferred to the immediately next governed PR and expires with that PR; its first enforced firing remains owned by #261 Phase 4 and expires on the first PR governed by the activated split topology.
 
 **What the rule moves, and what it merely assigns.** Some rows the rule relocates; others it places for the first time — a row that recorded no tier before is assigned a home rather than moved, and the change claims no more reach than that. `protected-branch` guards two acts and places per arm; `force-push` and `protected-branch`'s landing arm home at tier 3 because git and the platform each hold the deciding fact exactly, so exactness discriminates nothing and the irreversible moment — publication — selects the platform. Both homes are live at the ruleset (§3.2), and the ruleset's default-branch condition is the scope residual each row records in place. `protected-branch`'s commit arm decides on which branch `HEAD` sits when the commit is made: git holds that natively and the platform has no representation of it at that moment, nothing having been published, so that arm's decision is **taken** at tier 2. It is not a pre-image of the landing arm's gate either: §3.11 fixes a pre-image by local and remote not diverging over one act, which is not evaluable for an act the remote gate never sees. The two arms guard different acts, and a local commit is reversible until the landing the other arm gates. What this tree carries at tier 2 is the call-site shape and, on the push surface, the check itself: `.githooks/pre-commit` and `.githooks/pre-push` are committed and call the class's own predicate — the first on the branch `HEAD` is on, the second on each target ref — and the helper they delegate that predicate to, `.githooks/helpers/branch_guard.sh`, is shipped here; the commit arm is live, the adapter's require chain being complete now that `.githooks/helpers/secret_scan.sh` ships in this tree beside it. Tier 1, which can only lex a command string for a fact §3.11 binds to what a ref *is*, is confined to an echo on either arm. `force-push` has no tier-2 call site of its own: its earlier tier-2 entry read *by subsumption*, which is a coverage claim and not an ownership one — §3.11 binds ownership to the predicate, and the adapter shows the local tier evaluates no sharedness predicate at all: `.githooks/pre-push` tests only `is_protected_branch` on the target, and reads the remote oid it is handed as a positional filler explicitly marked unused. What tier 2 blocks there it blocks under the neighbouring class's predicate, so no call site of this row's own predicate sits beneath its home and the `earlier:` slot is empty. `secret` homes at tier 2 not because git is its only layer — the platform can read a pushed commit's content — but because its guarded act is the **commit**, whose deciding object is the index, and the index has no platform representation at that moment. `change-reach` homes at tier 3 on a part worth naming: the declared set arrives as commit trailers, exact in git, but §2.6's pairwise monotonicity is judged over the pull request's push history, which only the platform holds. `approval-evidence` covers only the reversible activation, completion, and ready arms; landing authorization is owned separately by `core-governance` and `human-approval`. And `egress`'s backstop is structurally unavailable rather than deferred: the bytes exist only at the composing publish call, and the platform's first sight of them is the publication the gate exists to precede.
 
@@ -563,19 +573,19 @@ The norm is procedural today, enforced at review (§2.3); measuring and enforcem
 
 ### 3.7 Approval-gate completeness
 
-For approval steps that remain evidence-gated — activation, Directive completion, and the ready transition — all five properties are mandatory:
+For approval steps that remain evidence-gated — activation, Directive completion, empty-change completion, and the ready transition — all five properties are mandatory:
 
 - (a) **Attribution, subject binding, and freshness** — the approving actor is identified from platform-attested identity, never authored prose; evidence names the exact subject and postdates its last relevant change.
 - (b) **No silent skip** — every skip is blocked or an explicit audited escape.
 - (c) **Fail-closed lookup** — a present gate that cannot read its evidence does not approve.
-- (d) **Evidence provenance** — every passing artifact comes only from a real run of its producing actor: activation and Directive-completion verdicts from their substantive reviews, panel results from real reviewer runs, and any adjudication carried in ready evidence from a real Judge run. Passing evidence is never hand-authored, with one named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone.
+- (d) **Evidence provenance** — every passing artifact comes only from a real run of its producing actor: activation, Directive-completion, and empty-change-completion verdicts from their substantive reviews, panel results from real reviewer runs, and any adjudication carried in ready evidence from a real Judge run. Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance. Passing evidence is never hand-authored, with one named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone.
 - (e) **Predicate integrity** — evidence binds at its canonical position and shape; relayed marker text, a hand-authored facsimile, or a marker embedded in another artifact cannot satisfy the gate.
 
 Ordinary human landing uses native current platform review through the `human-approval` class, not an approval-evidence artifact. The discretionary path uses §3.8's closed authorization record, not approval evidence. A panel verdict remains ready-transition evidence and never substitutes for eligible-human quorum.
 
-**Escape disposition.** The `approval-evidence` class is deliberately doorless for all three reversible acts. A sanctioned skip would make the act occur without the attribution, subject, freshness, provenance, or integrity this section requires. A false block is recovered before the act: produce fresh canonical evidence, repair its binding or shape, or retry a failed platform lookup, then re-evaluate the same act. No label, actor, mode, hand-authored facsimile, human quorum, or landing escape substitutes for that evidence. This is the class's explicit §3.8 total-coverage disposition.
+**Escape disposition.** The `approval-evidence` class is deliberately doorless for all four reversible acts. A sanctioned skip would make the act occur without the attribution, subject, freshness, provenance, or integrity this section requires. A false block is recovered before the act: produce fresh canonical evidence, repair its binding or shape, or retry a failed platform lookup, then re-evaluate the same act. No label, actor, mode, hand-authored facsimile, human quorum, or landing escape substitutes for that evidence. This is the class's explicit §3.8 total-coverage disposition.
 
-The norm is homed as the re-roled `approval-evidence` row in §3.3 for its three named arms. Landing authorization is homed separately by the `core-governance` and `human-approval` rows.
+The norm is homed as the re-roled `approval-evidence` row in §3.3 for its four named arms. Landing authorization is homed separately by the `core-governance` and `human-approval` rows.
 
 ### 3.8 Escape architecture
 

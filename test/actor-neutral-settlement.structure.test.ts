@@ -102,9 +102,17 @@ function assertRepairContract(source: string): void {
 		"confirms a pre-satisfying citation where one is claimed",
 		"confirms the reach-derived settlement mode and records the adjudicated reach in the verdict",
 		"closes as `completed` only through the flow",
+		"**empty-change completion review**",
+		"<!-- empty-change-completion-verdict: v1 pass -->",
+		"activationCriteriaFromComments",
+		"closeoutCriteria",
+		"<!-- empty-change-completion-terminal: v1 -->",
+		"<!-- empty-change-upward-reflection: v1 -->",
+		"resolve_parent_directive.sh",
+		"`surface-nonempty`",
 		"`not planned` is the disposition otherwise",
 		"**Upward closure.** The hierarchy closes upward",
-		"completeness floor that fires regardless of who performed the merge",
+		"completeness floor that fires regardless of who performed the terminal act",
 		"idempotency key the writer controls",
 	]);
 	requires(sectionIn(source, "### 2.6 SSOT change-reach protocol", "### 2.7 Canonical naming"), [
@@ -125,7 +133,8 @@ function assertRepairContract(source: string): void {
 		"pi-independent repository floor",
 	]);
 	requires(sectionIn(source, "### 3.7 Approval-gate completeness", "### 3.8 Escape architecture"), [
-		"The `approval-evidence` class is deliberately doorless",
+		"empty-change completion",
+		"The `approval-evidence` class is deliberately doorless for all four reversible acts",
 		"produce fresh canonical evidence",
 	]);
 	requires(sectionIn(source, "### 3.8 Escape architecture", "### 3.9 Fail policy"), [
@@ -385,6 +394,21 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "`not planned` is the disposition otherwise",
 			},
 			{
+				anchor: "<!-- empty-change-completion-verdict: v1 pass -->",
+				replacement: "<!-- empty-change-completion-verdict: pass -->",
+				expected: "<!-- empty-change-completion-verdict: v1 pass -->",
+			},
+			{
+				anchor: "`<!-- empty-change-completion-terminal: v1 -->`",
+				replacement: "`<!-- empty-change-completion-terminal -->`",
+				expected: "<!-- empty-change-completion-terminal: v1 -->",
+			},
+			{
+				anchor: "`surface-nonempty`",
+				replacement: "`surface-empty`",
+				expected: "`surface-nonempty`",
+			},
+			{
 				anchor: "**Upward closure.** The hierarchy closes upward",
 				replacement: "**Closure.** The hierarchy may be synchronized upward",
 				expected: "**Upward closure.** The hierarchy closes upward",
@@ -415,9 +439,9 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "pi-independent repository floor",
 			},
 			{
-				anchor: "The `approval-evidence` class is deliberately doorless",
-				replacement: "The `approval-evidence` class remains procedural",
-				expected: "The `approval-evidence` class is deliberately doorless",
+				anchor: "The `approval-evidence` class is deliberately doorless for all four reversible acts",
+				replacement: "The `approval-evidence` class is deliberately doorless for all three reversible acts",
+				expected: "The `approval-evidence` class is deliberately doorless for all four reversible acts",
 			},
 			{
 				anchor: "Each channel was measured on a fresh armed clone",
