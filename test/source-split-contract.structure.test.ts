@@ -140,11 +140,11 @@ test("#296 closes expiry evidence for unique unattested candidates", () => {
 	assert.equal(vocabulary.match(/expiresAt: string;/gu)?.length, 2);
 	assert.match(
 		vocabulary,
-		/authorizationRecordId: null;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?expiresAt: null;/u,
+		/authorizationRecordId: null;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?completedOrders: \[\];[\s\S]*?lastVerifiedStateDigest: null;[\s\S]*?arm: "authorization-absent" \| "authorization-ambiguous";[\s\S]*?observedDigest: string;[\s\S]*?expiresAt: null;/u,
 	);
 	assert.match(
 		vocabulary,
-		/authorizationRecordId: string;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?expiresAt: null;/u,
+		/authorizationRecordId: string;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?completedOrders: \[\];[\s\S]*?lastVerifiedStateDigest: null;[\s\S]*?arm: "authorization-unattested";[\s\S]*?observedDigest: string;[\s\S]*?expiresAt: null;/u,
 	);
 	assert.doesNotMatch(vocabulary, /authorizationRecordId: string \| null;[\s\S]*?expiresAt: string \| null;/u);
 });

@@ -53,12 +53,24 @@ export type TopologySourceTerminalRecord = TopologySourceTerminalBase &
 				authorizationRecordId: null;
 				claimCommentId: null;
 				outcome: "refused";
+				completedOrders: [];
+				lastVerifiedStateDigest: null;
+				observedMismatch: TopologySourceMismatch & {
+					arm: "authorization-absent" | "authorization-ambiguous";
+					observedDigest: string;
+				};
 				expiresAt: null;
 		  }
 		| {
 				authorizationRecordId: string;
 				claimCommentId: null;
 				outcome: "refused";
+				completedOrders: [];
+				lastVerifiedStateDigest: null;
+				observedMismatch: TopologySourceMismatch & {
+					arm: "authorization-unattested";
+					observedDigest: string;
+				};
 				expiresAt: null;
 		  }
 		| {
