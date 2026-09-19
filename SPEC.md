@@ -40,32 +40,32 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.6 | Enforcement-face selection | 562 |
 | &nbsp;&nbsp;§3.7 | Approval-gate completeness | 574 |
 | &nbsp;&nbsp;§3.8 | Escape architecture | 590 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 620 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 634 |
-| &nbsp;&nbsp;§3.11 | Gate design | 648 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 670 |
-| §4 | Substrate and install contract | 680 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 684 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 696 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 704 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 710 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 714 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 718 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 730 |
-| &nbsp;&nbsp;§4.8 | The command layer | 740 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 797 |
-| §5 | Cross-cutting contracts | 916 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 920 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 926 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 930 |
-| &nbsp;&nbsp;§5.4 | Work language | 934 |
-| &nbsp;&nbsp;§5.5 | State boundary | 938 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 946 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 958 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 968 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 976 |
-| §6 | Self-governance milestone | 988 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 999 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 636 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 650 |
+| &nbsp;&nbsp;§3.11 | Gate design | 664 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 686 |
+| §4 | Substrate and install contract | 696 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 700 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 712 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 720 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 726 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 730 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 734 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 746 |
+| &nbsp;&nbsp;§4.8 | The command layer | 756 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 813 |
+| §5 | Cross-cutting contracts | 932 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 936 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 942 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 946 |
+| &nbsp;&nbsp;§5.4 | Work language | 950 |
+| &nbsp;&nbsp;§5.5 | State boundary | 954 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 962 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 974 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 984 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 992 |
+| §6 | Self-governance milestone | 1004 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1015 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -611,7 +611,23 @@ The guarded landing consumer atomically claims one valid record before attemptin
 
 Before server mutation, Phase 4A emits only an unauthorized GET-derived before/after/rollback plan. Its versioned whole-artifact hash is owned by the planner, excludes itself, and binds every canonical repository, actor-permission, before, desired, optimistic, ordered-step, post-read, assumption and rollback operand; the deterministic correlation id is not a nonce or an independent freshness claim. Authorization is never a caller boolean: one completely paginated GET-only reader derives one unedited append-only record, repository and author identities, the authenticated actor's fresh collaborator permission, exact stage-specific plan hash/live pair/correlation, issued instant and explicit expiry from platform facts. Any absent, duplicate, edited, copied, stale, expired, future or mismatched fact refuses. A pre-split source-plan authorization and a separately regenerated post-split carrier authorization are non-interchangeable. The read-only binding prerequisite creates neither record nor executor.
 
-The exact repository-role bypass composition remains a planning-blocking assumption until Phase 4B proves on an explicitly authorized scratch repository that quorum bypass leaves the independent core ruleset enforced. The carrier trust knot has one narrow service: default-branch bytes may land a PR whose sole semantic constituent is the exact eight-field topology carrier, only after all core facts, live split/settings, a fresh operator authorization, measured-unmet quorum, valid own-behalf escape, lowest-id claim and exact head/base pass. A claimed ruleset-id/canonical-instant pair is never reusable; a genuinely updated pair requires a fresh plan, authorization and escape. This bootstrap never supplies a single-identity exception, ruleset mutation, direct push, caller-authored claim, or core bypass.
+Phase 4B's authorized scratch proof discharged the repository-role composition assumption: RepositoryRole-5 pull-request bypass can exempt the unmet quorum-only ruleset while an independently composed doorless core remains enforced. Source mutation still requires a later separately activated application and fresh authority; evidence of the composition is not mutation authority.
+
+**Source-split application contract.** A source application consumes only a fresh `source-split` `TopologyPlan` admitted by the carried `attestTopologyPlan` over complete GET-derived inputs. The plan's exact ordered method/path/body/post-read values are the only writable operands. Its exclusive order is core PATCH, quorum-only `human-approval` POST/PATCH, repository PATCH of exactly merge-commit enabled plus squash/rebase disabled, then DELETE of only enumerated duplicates. Before each source write the application re-reads repository/default branch/settings, actor/admin, complete rulesets, ordered ruleset ids and handed-over-canonical update instants and compares them with the authorized plan and prior post-read. GitHub supplies no conditional ruleset-write primitive; this immediate GET-before-write is the recorded optimistic-emulation residual. Drift, ambiguity, expiry, inherited/unknown ownership, or an unreadable operand stops before that write. Every write is followed by a complete exact post-read matching the step before the next comparison. Mismatch never continues or rolls back automatically; `plan.rollback` is operator information, not executable authority.
+
+The human authorization retains §3.8's exact ten-field comment payload `{schemaVersion,repositoryId,issueId,issueNumber,stage,planHash,pairKey,correlationId,issuedAt,expiresAt}` and #286's platform-derived `recordId`, author id, and current admin permission. For `source-split`, `pairKey` is lowercase SHA-256 over the existing canonical JSON encoding of `{repositoryId,defaultBranch,beforeDigest,optimisticRulesets}`; `planHash` equals `artifactHash`, and stage, actor, correlation, repository and expiry match fresh reads. The marker is an unedited human `User` act outside the executor session; an executor, reviewer, child Issue, bot, App, caller boolean or copied prose cannot author or substitute it. Source and `carrier-bootstrap` stages, hashes, pair keys, claims and terminals are non-interchangeable.
+
+The application state machine is preflight → claim →, for every order, compare → write → post-read → record → final handed-over audit → terminal. Before the first ruleset/setting write it appends and re-reads one `<!-- topology-source-claim: v1 -->` payload exactly `{schemaVersion,repositoryId,issueId,authorizationRecordId,planHash,pairKey,correlationId,writerId,claimedAt}`; the lowest valid append-only claim REST database id wins, while payload references use GraphQL node ids. A valid claim consumes that authorization record and source pair before any source write. Refusal before claim consumes nothing; after claim, partial and success remain consumed. Replay under the winner writes nothing for a uniquely recorded step whose exact live post-read still agrees, but re-runs every later comparison; exact target without matching records is not success.
+
+Each completed order appends `<!-- topology-source-step: v1 -->` with exactly `{schemaVersion,repositoryId,issueId,claimCommentId,authorizationRecordId,planHash,pairKey,order,method,path,requestBodyDigest,beforeStateDigest,afterStateDigest,observedAt,writerId}`. The terminal marker `<!-- topology-source-terminal: v1 -->` has exactly `{schemaVersion,repositoryId,issueId,authorizationRecordId,claimCommentId,outcome,completedOrders,lastVerifiedStateDigest,observedMismatch,remainingOrders,expiresAt,writerId,observedAt}` and precedes any lifecycle transition. Version is integer 1; node-id fields are non-empty NFC GraphQL ids; order arrays are unique ascending exact prefix/suffix partitions of positive safe step integers; instants use the handed-over canonicalizer; digests are 64 lowercase hex. Request-body digest is null only when the plan step has no body. `observedMismatch` is null only on success, otherwise exactly `{arm,condition,observedDigest}` with a closed refusal arm, non-empty sanitized condition, and digest null only where state was unreadable.
+
+Terminal outcomes are closed. `refused` has no claim, no completed orders, no last-state digest, all orders remaining, and proves no source write; authorization id is null only for `authorization-absent` or `authorization-ambiguous`, whose complete marked-comment population supplies the non-null mismatch digest and idempotency key. `partial` has a claim, possibly empty completed prefix, non-null last-state digest, remaining suffix and mismatch. `success` has the claim, every order, no remaining order, final audited target digest and no mismatch. A non-null-authorization terminal is keyed by marker plus authorization id; the two null-id refusals are keyed by marker plus Issue id, arm and population digest. Duplicate, edited, copied, stale, stage-wrong, competing-claim, consumed, unrecorded-target, continuation-after-mismatch, hidden-rollback and carrier-interchange shapes refuse.
+
+Claim, step and terminal are append-only platform comments, not local/session evidence. Comment publication is a platform write but not source topology mutation. Publication failure or ambiguous source-write outcome stops all further source writes and hands off visibly; it never becomes success. Refused/partial terminals are the sanitized recovery artifact: completed prefix, last verified digest, exact mismatch, remaining suffix and original expiry. Recovery is operator-owned under the same still-fresh winning claim and exact state only; a changed desired state requires a new activated Issue, fresh plan and fresh human authorization. Missing carried predicates, handed-over canonicalizer/auditor, complete reads or evidence publication is fail-closed under §3.9. The closed refusal arms are `subject-invalid`, `population-incomplete`, `plan-invalid`, `authorization-absent`, `authorization-ambiguous`, `authorization-unattested`, `authorization-stale`, `stage-mismatch`, `pair-mismatch`, `claim-conflict`, `live-drift`, `ownership-mismatch`, `write-unverified`, `postread-mismatch`, `record-failed`, `partial-consumed`, and `audit-failed`.
+
+This settlement exports data vocabulary only. A separately activated source-application Issue owns any parser, writer, executor or production call site and remains blocked on its later human marker. Source success does not arm the topology carrier, bootstrap, pilot or guarded landing and does not populate source App identity or policy.
+
+The carrier trust knot has one narrow service: default-branch bytes may land a PR whose sole semantic constituent is the exact eight-field topology carrier, only after all core facts, live split/settings, a fresh operator authorization, measured-unmet quorum, valid own-behalf escape, lowest-id claim and exact head/base pass. A claimed ruleset-id/canonical-instant pair is never reusable; a genuinely updated pair requires a fresh plan, authorization and escape. This bootstrap never supplies a single-identity exception, ruleset mutation, direct push, caller-authored claim, or core bypass.
 
 **The local tier's door and equivalent folds.** Tier 2's sanctioned escape is `--no-verify`, with no sanctioned in-hook token in front of it. It is class-independent, unauditable from inside a hook it prevents from running, and bounded by the Tier-3 floor rather than confused with landing authorization. The operator's recovery from a local false block is to retry that local act through this door; no Tier-3 fact is waived.
 

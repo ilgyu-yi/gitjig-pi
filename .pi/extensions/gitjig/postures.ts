@@ -739,6 +739,14 @@ export const POSTURES: readonly PostureRow[] = [
 			"An authorization for another plan or consumption stage never transfers. Regenerate the stage-specific plan and obtain a new explicit operator record; no hash default or role assertion fills the gap.",
 	},
 	{
+		dependency: "topology-source-application",
+		failureShape:
+			"the carried plan/authorization predicate, handed-over canonicalizer/auditor, complete optimistic live read, record publication, exact post-read, or source-write outcome is absent, ambiguous, stale, or unverifiable",
+		posture: "closed",
+		justification:
+			"An unverified source mutation can weaken doorless governance. Stop before the next source write, preserve any winning claim as consumed, and hand the exact recorded state to the operator; no copied predicate, automatic rollback, or carrier authorization fills the gap.",
+	},
+	{
 		dependency: "topology-bootstrap-admission",
 		failureShape:
 			"topology-only bytes, live split/settings, plan authorization, own-behalf identity, measured-unmet quorum, core facts, pair freshness, claim order, or exact merge outcome is absent or unverifiable",

@@ -294,6 +294,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/landing/source-split-contract.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/landing/topology-authorization.ts",
 			"disposition": "carried"
 		},
@@ -719,6 +723,10 @@
 		},
 		{
 			"path": "changelog_unreleased/changed/273.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/289.md",
 			"disposition": "instance-state"
 		},
 		{

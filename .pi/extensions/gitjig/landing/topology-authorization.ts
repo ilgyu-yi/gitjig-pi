@@ -3,6 +3,10 @@ import { runPlatformRead } from "../platform/read.ts";
 import type { BootstrapAuthorization, BootstrapTopologyEngine } from "./bootstrap.ts";
 
 export const TOPOLOGY_AUTHORIZATION_MARKER = "<!-- topology-plan-authorization: v1 -->";
+export const TOPOLOGY_SOURCE_CLAIM_MARKER = "<!-- topology-source-claim: v1 -->";
+export const TOPOLOGY_SOURCE_STEP_MARKER = "<!-- topology-source-step: v1 -->";
+export const TOPOLOGY_SOURCE_TERMINAL_MARKER = "<!-- topology-source-terminal: v1 -->";
+
 export type TopologyAuthorizationRead = (argv: string[], repoRoot: string) => Promise<string | undefined>;
 
 function record(value: unknown): Record<string, unknown> | undefined {

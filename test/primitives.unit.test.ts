@@ -1507,6 +1507,7 @@ describe("fail-posture inventory (§3.9)", () => {
 				"topology-plan-binding → closed",
 				"topology-planning-population → closed",
 				"topology-shared-auditor → closed",
+				"topology-source-application → closed",
 			].sort(),
 		);
 		// One component may carry several rows — one posture per failure
