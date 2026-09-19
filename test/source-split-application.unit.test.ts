@@ -2,19 +2,19 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { canonicalInstant } from "../.github/workflows/landing-topology.mjs";
+import { gitBlobOid } from "../.pi/extensions/gitjig/landing/provenance.ts";
 import {
 	admitTopologySourceClaim,
 	admitTopologySourceStep,
 	admitTopologySourceTerminal,
 	encodeTopologySourceRecord,
 	TOPOLOGY_SOURCE_REFUSAL_ARMS,
-	topologySourceDigest,
-	topologySourcePairKey,
 	type TopologySourceClaimRecord,
 	type TopologySourceStepRecord,
+	topologySourceDigest,
+	topologySourcePairKey,
 } from "../.pi/extensions/gitjig/landing/source-split-contract.ts";
-import { canonicalInstant } from "../.github/workflows/landing-topology.mjs";
-import { gitBlobOid } from "../.pi/extensions/gitjig/landing/provenance.ts";
 import {
 	executePlatformTopologySource,
 	loadTopologySourceApplication,
@@ -34,8 +34,8 @@ import {
 	attestTopologyPlan,
 	desiredCoreRuleset,
 	desiredHumanApprovalRuleset,
-	topologyPlanArtifactHash,
 	type TopologyPlan,
+	topologyPlanArtifactHash,
 } from "../.pi/extensions/gitjig/landing/topology-plan.ts";
 
 const now = "2026-09-19T15:00:00.000Z";
@@ -336,6 +336,16 @@ describe("#293 source-split service", () => {
 		assert.equal(fx.comments.length, records);
 		const authorized = { ...admittedInput(), comments: fx.comments };
 		assert.equal((await executeTopologySourceSplit(authorized, fx.value)).outcome, "success");
+	});
+	it("does not consume authorization on a refusal before claim", async () => {
+		const fx = effects();
+		const first = admittedInput();
+		first.freshPlan = plan("V");
+		const refused = await executeTopologySourceSplit(first, fx.value);
+		assert.equal(refused.outcome === "refused" && refused.arm, "live-drift");
+		const retry = admittedInput();
+		retry.comments = fx.comments;
+		assert.equal((await executeTopologySourceSplit(retry, fx.value)).outcome, "success");
 	});
 	it("claims before ordered compare/write/post-read/record and succeeds", async () => {
 		const fx = effects();
@@ -661,7 +671,7 @@ function platformFixture(options: { topologyBlobSha?: string } = {}) {
 	};
 }
 
-function authorizedPlatformFixture(options: { extraHuman?: boolean } = {}) {
+function authorizedPlatformFixture(options: { extraHuman?: boolean; failTerminalOnce?: boolean } = {}) {
 	const actionsId = 15368;
 	let settings = { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true };
 	let rulesets: Array<Record<string, unknown>> = [
@@ -683,6 +693,7 @@ function authorizedPlatformFixture(options: { extraHuman?: boolean } = {}) {
 	];
 	let comments: Array<Record<string, unknown>> = [];
 	let nextComment = 100;
+	let terminalFailureRemaining = options.failTerminalOnce === true;
 	const sourceWrites: Array<{ method: string; endpoint: string; body?: unknown }> = [];
 	const read = async (argv: string[]) => {
 		const endpoint = argv.at(-1) ?? "";
@@ -717,7 +728,14 @@ function authorizedPlatformFixture(options: { extraHuman?: boolean } = {}) {
 	const mutateJson = async (argv: string[], body: unknown) => {
 		const method = argv[argv.indexOf("--method") + 1] ?? "";
 		const endpoint = argv.find((part) => part.startsWith("repos/")) ?? "";
-		if (endpoint.endsWith("issues/293/comments")) return JSON.stringify(append((body as { body: string }).body));
+		if (endpoint.endsWith("issues/293/comments")) {
+			const commentBody = (body as { body: string }).body;
+			if (terminalFailureRemaining && commentBody.includes("topology-source-terminal")) {
+				terminalFailureRemaining = false;
+				return undefined;
+			}
+			return JSON.stringify(append(commentBody));
+		}
 		sourceWrites.push({ method, endpoint, body });
 		if (method === "PATCH" && endpoint === "repos/o/r/rulesets/20")
 			rulesets = rulesets.map((item) =>
@@ -798,6 +816,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			undefined,
 			seam.read,
 			seam.mutate,
 			seam.mutateJson,
@@ -813,6 +832,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			undefined,
 			seam.read,
 			seam.mutate,
 			seam.mutateJson,
@@ -825,6 +845,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			preview.input?.plan,
 			seam.read,
 			seam.mutate,
 			seam.mutateJson,
@@ -845,6 +866,63 @@ describe("#293 source-split platform boundary", () => {
 			allow_squash_merge: false,
 			allow_rebase_merge: false,
 		});
+		const replayLoaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			preview.input?.plan,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const replay = await executePlatformTopologySource(replayLoaded);
+		assert.equal(replay.outcome === "success" && replay.replay, true);
+		assert.equal(seam.sourceWrites.length, 4);
+	});
+	it("recovers a fully recorded platform run whose terminal publication failed", async () => {
+		const seam = authorizedPlatformFixture({ failTerminalOnce: true });
+		const preview = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			undefined,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		seam.authorize(preview.input?.plan as TopologyPlan);
+		let loaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			preview.input?.plan,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const first = await executePlatformTopologySource(loaded);
+		assert.equal(first.outcome === "partial" && first.arm, "record-failed");
+		assert.equal(seam.sourceWrites.length, 4);
+		loaded = await loadTopologySourceApplication(
+			"github.com",
+			"o/r",
+			293,
+			now,
+			process.cwd(),
+			preview.input?.plan,
+			seam.read,
+			seam.mutate,
+			seam.mutateJson,
+		);
+		const recovered = await executePlatformTopologySource(loaded);
+		assert.equal(recovered.outcome, "success");
+		assert.equal(seam.sourceWrites.length, 4);
 	});
 	it("stops after a concurrent extra human ruleset appears in the post-read", async () => {
 		const seam = authorizedPlatformFixture({ extraHuman: true });
@@ -854,6 +932,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			undefined,
 			seam.read,
 			seam.mutate,
 			seam.mutateJson,
@@ -865,6 +944,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			preview.input?.plan,
 			seam.read,
 			seam.mutate,
 			seam.mutateJson,
@@ -884,6 +964,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			undefined,
 			seam.read,
 			seam.mutate,
 			seam.mutateJson,
@@ -905,6 +986,7 @@ describe("#293 source-split platform boundary", () => {
 			293,
 			now,
 			process.cwd(),
+			undefined,
 			base.read,
 			base.mutate,
 			base.mutateJson,
@@ -946,6 +1028,7 @@ describe("#293 source-split platform boundary", () => {
 				293,
 				now,
 				process.cwd(),
+				undefined,
 				seam.read,
 				seam.mutate,
 				seam.mutateJson,

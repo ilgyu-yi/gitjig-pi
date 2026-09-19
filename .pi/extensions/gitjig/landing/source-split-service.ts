@@ -1,9 +1,5 @@
 /** Warning-surface roster: EXEMPT — the service returns fixed arms and persists only closed records. */
-import {
-	TOPOLOGY_SOURCE_CLAIM_MARKER,
-	TOPOLOGY_SOURCE_STEP_MARKER,
-	TOPOLOGY_SOURCE_TERMINAL_MARKER,
-} from "./topology-authorization.ts";
+
 import type { BootstrapAuthorization } from "./bootstrap.ts";
 import {
 	admitTopologySourceClaim,
@@ -13,14 +9,19 @@ import {
 	parseTopologySourceClaim,
 	parseTopologySourceStep,
 	parseTopologySourceTerminal,
-	topologySourceDigest,
-	topologySourcePairKey,
 	type TopologyCanonicalInstant,
 	type TopologySourceClaimRecord,
 	type TopologySourceRefusalArm,
 	type TopologySourceStepRecord,
 	type TopologySourceTerminalRecord,
+	topologySourceDigest,
+	topologySourcePairKey,
 } from "./source-split-contract.ts";
+import {
+	TOPOLOGY_SOURCE_CLAIM_MARKER,
+	TOPOLOGY_SOURCE_STEP_MARKER,
+	TOPOLOGY_SOURCE_TERMINAL_MARKER,
+} from "./topology-authorization.ts";
 import type { TopologyPlan } from "./topology-plan.ts";
 
 export interface TopologySourceComment {
@@ -258,13 +259,11 @@ export async function executeTopologySourceSplit(
 		return publishTerminal("authorization-stale", "expiry", null);
 	if (authorization.pairKey !== topologySourcePairKey(input.plan))
 		return publishTerminal("pair-mismatch", "pair", null);
-	if (!effects.attestPlan(input.freshPlan) || input.freshPlan.artifactHash !== input.plan.artifactHash)
-		return publishTerminal("live-drift", "fresh-plan", input.freshPlan.beforeDigest);
 	const populationArm = sourcePopulationArm(input, authorization.recordId, effects.canonicalInstant);
 	if (populationArm) return publishTerminal(populationArm, "source-record-population", null);
 
 	const priorTerminal = admittedTerminals(input, effects.canonicalInstant).filter(
-		(record) => record.authorizationRecordId === authorization.recordId,
+		(record) => record.authorizationRecordId === authorization.recordId && record.outcome !== "refused",
 	);
 	if (priorTerminal.length > 1) return publishTerminal("claim-conflict", "terminal-population", null);
 
@@ -278,6 +277,11 @@ export async function executeTopologySourceSplit(
 		)
 	)
 		return publishTerminal("claim-conflict", "claim-binding", null);
+	if (
+		claims.length === 0 &&
+		(!effects.attestPlan(input.freshPlan) || input.freshPlan.artifactHash !== input.plan.artifactHash)
+	)
+		return publishTerminal("live-drift", "fresh-plan", input.freshPlan.beforeDigest);
 	if (claims.length >= 1) claimId = claims[0]?.comment.nodeId ?? null;
 	else if (priorTerminal.length === 1)
 		return { outcome: "partial", arm: "partial-consumed", terminal: priorTerminal[0] };

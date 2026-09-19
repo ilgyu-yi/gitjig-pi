@@ -1,12 +1,7 @@
 /** Warning-surface roster: EXEMPT — platform values are consumed by closed records and fixed result arms. */
 import { runPlatformRead } from "../platform/read.ts";
 import { runPlatformJsonMutation, runPlatformMutation } from "../platform/write.ts";
-import {
-	loadTopologyAuthorization,
-	parseTopologyAuthorization,
-	TOPOLOGY_AUTHORIZATION_MARKER,
-} from "./topology-authorization.ts";
-import { topologySourceDigest, type TopologySourceRefusalArm } from "./source-split-contract.ts";
+import { type TopologySourceRefusalArm, topologySourceDigest } from "./source-split-contract.ts";
 import {
 	executeTopologySourceSplit,
 	type TopologySourceAuthorization,
@@ -15,6 +10,11 @@ import {
 	type TopologySourceInput,
 	type TopologySourceResult,
 } from "./source-split-service.ts";
+import {
+	loadTopologyAuthorization,
+	parseTopologyAuthorization,
+	TOPOLOGY_AUTHORIZATION_MARKER,
+} from "./topology-authorization.ts";
 import type { TopologyPlan, TopologyPlanningSnapshot } from "./topology-plan.ts";
 import { loadTrustedTopologyEngine } from "./topology-provenance.ts";
 
@@ -156,6 +156,7 @@ export async function loadTopologySourceApplication(
 	issueNumber: number,
 	now: string,
 	repoRoot: string,
+	authorizedPlan: unknown = undefined,
 	read: SourcePlatformRead = runPlatformRead,
 	mutate: SourcePlatformMutation = runPlatformMutation,
 	mutateJson: SourcePlatformJsonMutation = runPlatformJsonMutation,
@@ -208,7 +209,10 @@ export async function loadTopologySourceApplication(
 	const comments = commentPages.flat().map(comment);
 	if (comments.some((item) => item === undefined)) return { arm: "population-incomplete" };
 	const planned = planSplitTopology(snapshot);
-	if (!planned.ok || planned.plan.stage !== "source-split") return { arm: "plan-invalid" };
+	if (!planned.ok) return { arm: "plan-invalid" };
+	const applicationPlan = authorizedPlan === undefined ? planned.plan : authorizedPlan;
+	if (!attestTopologyPlan(applicationPlan) || applicationPlan.stage !== "source-split") return { arm: "plan-invalid" };
+	if (authorizedPlan === undefined && planned.plan.stage !== "source-split") return { arm: "plan-invalid" };
 	const loadedAuthorization = await loadTopologyAuthorization(
 		host,
 		repository,
@@ -246,7 +250,8 @@ export async function loadTopologySourceApplication(
 		loadTopologyPlanningSnapshot(host, repository, repoRoot, read);
 	const freshSnapshot = await reloadSnapshot();
 	const freshPlanned = freshSnapshot ? planSplitTopology(freshSnapshot) : undefined;
-	if (!freshPlanned?.ok || freshPlanned.plan.stage !== "source-split") return { arm: "population-incomplete" };
+	if (!freshPlanned?.ok) return { arm: "population-incomplete" };
+	const freshPlan = freshPlanned.plan.stage === "source-split" ? freshPlanned.plan : applicationPlan;
 	const reloadComments = async (): Promise<readonly TopologySourceComment[] | undefined> => {
 		const pages = await get(`repos/${repository}/issues/${issueNumber}/comments?per_page=100`, true);
 		if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) return undefined;
@@ -293,7 +298,7 @@ export async function loadTopologySourceApplication(
 			});
 			if (!mutationPending && lastVerifiedSnapshotDigest && liveDigest !== lastVerifiedSnapshotDigest)
 				return { drift: true };
-			const observed = observedShape(live, planned.plan, expected, planSplitTopology);
+			const observed = observedShape(live, applicationPlan, expected, planSplitTopology);
 			if (observed !== undefined && topologySourceDigest(observed) === topologySourceDigest(expected))
 				lastVerifiedSnapshotDigest = liveDigest;
 			mutationPending = false;
@@ -325,8 +330,8 @@ export async function loadTopologySourceApplication(
 			writerId: viewer.node_id,
 			now,
 			complete: snapshot.complete,
-			plan: planned.plan,
-			freshPlan: freshPlanned.plan,
+			plan: applicationPlan,
+			freshPlan,
 			authorization,
 			comments: comments as TopologySourceComment[],
 		},
