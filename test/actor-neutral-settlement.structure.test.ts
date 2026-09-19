@@ -94,6 +94,9 @@ function assertRepairContract(source: string): void {
 	requires(sectionIn(source, "### 1.4 Cross-review repair", "### 1.5 Delegated work"), [
 		"only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling",
 	]);
+	requires(sectionIn(source, "### 1.6 Review integrity", "### 1.7 The reviewer panel"), [
+		"empty-change completion `v1 pass`/`v1 reject` pair is one such two-token grammar, not a third semantic result",
+	]);
 	requires(sectionIn(source, "### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc"), [
 		"issues are the SSOT and any project-board mirror is derived, never authoritative",
 		"**Proposed** (`status:proposed`, auto-stamped at filing)",
@@ -103,13 +106,34 @@ function assertRepairContract(source: string): void {
 		"confirms the reach-derived settlement mode and records the adjudicated reach in the verdict",
 		"closes as `completed` only through the flow",
 		"**empty-change completion review**",
-		"<!-- empty-change-completion-verdict: v1 pass -->",
+		"exactly `<!-- empty-change-completion-verdict: v1 pass -->` or `<!-- empty-change-completion-verdict: v1 reject -->`",
+		"Reject leaves the Issue open",
+		"never a PR substitute",
+		"platform-attested as OWNER, MEMBER, or COLLABORATOR with freshly measured MAINTAIN or ADMIN permission",
+		"session independence remains a procedural obligation, never a trusted boolean",
 		"activationCriteriaFromComments",
 		"closeoutCriteria",
 		"<!-- empty-change-completion-terminal: v1 -->",
 		"<!-- empty-change-upward-reflection: v1 -->",
 		"resolve_parent_directive.sh",
+		"The order is pass record → exact re-read → close as COMPLETED",
+		"drift requires a new review, never record repair",
+		"complete no-parent derivation only where every hop's lookup succeeded",
+		"non-empty, duplicate-free ordered exact equality",
+		"`subject-ineligible`",
+		"`evidence-absent`",
+		"`evidence-ambiguous`",
+		"`evidence-edited`",
+		"`evidence-copied`",
+		"`evidence-stale-subject`",
+		"`evidence-stale-criteria`",
+		"`writer-unattested`",
+		"`reviewer-untrusted`",
 		"`surface-nonempty`",
+		"`criterion-unresolved`",
+		"`close-before-record`",
+		"`terminal-mismatch`",
+		"`reflection-mismatch`",
 		"`not planned` is the disposition otherwise",
 		"**Upward closure.** The hierarchy closes upward",
 		"completeness floor that fires regardless of who performed the terminal act",
@@ -126,6 +150,7 @@ function assertRepairContract(source: string): void {
 	requires(sectionIn(source, "### 3.3 Gate classes", "### 3.4 Agent-agnosticism of the tiers"), [
 		"A misplaced row is a reversible document defect",
 		"separately recorded §3.11 backstop obligation",
+		"activation, Directive completion, empty-change completion, or ready transition firing without its required evidence artifact",
 	]);
 	requires(sectionIn(source, "### 3.4 Agent-agnosticism of the tiers", "### 3.5 Gate conduct"), [
 		"No enforced norm depends on a specific agent or model",
@@ -394,9 +419,54 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "`not planned` is the disposition otherwise",
 			},
 			{
-				anchor: "<!-- empty-change-completion-verdict: v1 pass -->",
-				replacement: "<!-- empty-change-completion-verdict: pass -->",
-				expected: "<!-- empty-change-completion-verdict: v1 pass -->",
+				anchor:
+					"exactly `<!-- empty-change-completion-verdict: v1 pass -->` or `<!-- empty-change-completion-verdict: v1 reject -->`",
+				replacement:
+					"exactly `<!-- empty-change-completion-verdict: v1 pass -->` or `<!-- empty-change-completion-verdict: reject -->`",
+				expected:
+					"exactly `<!-- empty-change-completion-verdict: v1 pass -->` or `<!-- empty-change-completion-verdict: v1 reject -->`",
+			},
+			{
+				anchor: "The order is pass record → exact re-read → close as COMPLETED",
+				replacement: "The order is close as COMPLETED → pass record",
+				expected: "The order is pass record → exact re-read → close as COMPLETED",
+			},
+			{
+				anchor: "complete no-parent derivation only where every hop's lookup succeeded",
+				replacement: "no-parent result still owes a reflection",
+				expected: "complete no-parent derivation only where every hop's lookup succeeded",
+			},
+			{
+				anchor:
+					"platform-attested as OWNER, MEMBER, or COLLABORATOR with freshly measured MAINTAIN or ADMIN permission",
+				replacement: "identified by any commenting account",
+				expected:
+					"platform-attested as OWNER, MEMBER, or COLLABORATOR with freshly measured MAINTAIN or ADMIN permission",
+			},
+			{
+				anchor: "non-empty, duplicate-free ordered exact equality",
+				replacement: "ordered equality",
+				expected: "non-empty, duplicate-free ordered exact equality",
+			},
+			{
+				anchor: ", and `reflection-mismatch`:",
+				replacement: ":",
+				expected: "`reflection-mismatch`",
+			},
+			{
+				anchor:
+					"empty-change completion `v1 pass`/`v1 reject` pair is one such two-token grammar, not a third semantic result",
+				replacement: "empty-change completion is a third completion result token",
+				expected:
+					"empty-change completion `v1 pass`/`v1 reject` pair is one such two-token grammar, not a third semantic result",
+			},
+			{
+				anchor:
+					"activation, Directive completion, empty-change completion, or ready transition firing without its required evidence artifact",
+				replacement:
+					"activation, Directive completion, or ready transition firing without its required evidence artifact",
+				expected:
+					"activation, Directive completion, empty-change completion, or ready transition firing without its required evidence artifact",
 			},
 			{
 				anchor: "`<!-- empty-change-completion-terminal: v1 -->`",

@@ -6,7 +6,7 @@ An agent-agnostic operating shell that enforces engineering work norms — the G
 
 Active development under the contract in [`SPEC.md`](SPEC.md).
 
-Issue completion normally remains PR-bound. The narrow exception is an activated, evidence-only non-Directive Issue whose governed-repository change surface is explicitly empty: SPEC §2.2 requires an independently reviewed, body-bound empty-change verdict before completed close, followed by its terminal record and, when parented, Directive reflection. It never substitutes for a PR where repository implementation exists.
+Issue completion is PR-bound except for the two routes SPEC §2.2 defines: Directive completion review, and — for an activated non-Directive Issue whose governed-repository change surface is expressly empty — empty-change completion review on that section's terms. Neither substitutes for a PR where repository implementation exists.
 
 ## Getting started
 
