@@ -112,6 +112,7 @@ function assertRepairContract(source: string): void {
 		"platform-attested as OWNER, MEMBER, or COLLABORATOR with freshly measured MAINTAIN or ADMIN permission",
 		"session independence remains a procedural obligation, never a trusted boolean",
 		"activationCriteriaFromComments",
+		"carried derivation is absent and the route refuses `evidence-absent`",
 		"closeoutCriteria",
 		"<!-- empty-change-completion-terminal: v1 -->",
 		"<!-- empty-change-upward-reflection: v1 -->",
