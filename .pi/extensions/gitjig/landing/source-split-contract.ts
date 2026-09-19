@@ -59,6 +59,12 @@ export type TopologySourceTerminalRecord = TopologySourceTerminalBase &
 				authorizationRecordId: string;
 				claimCommentId: null;
 				outcome: "refused";
+				expiresAt: null;
+		  }
+		| {
+				authorizationRecordId: string;
+				claimCommentId: null;
+				outcome: "refused";
 				expiresAt: string;
 		  }
 		| {
