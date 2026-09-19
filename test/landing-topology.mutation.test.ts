@@ -22,12 +22,16 @@ function kill(name: string, path: string, from: string, to: string): void {
 	writeFileSync(target, source.replace(from, to));
 	const env = { ...process.env };
 	delete env.NODE_TEST_CONTEXT;
-	const result = spawnSync(process.execPath, ["--test", "test/landing-topology.unit.test.ts"], {
-		cwd: box,
-		encoding: "utf8",
-		timeout: 20_000,
-		env,
-	});
+	const result = spawnSync(
+		process.execPath,
+		["--test", "test/landing-topology.unit.test.ts", "test/topology-authorization.unit.test.ts"],
+		{
+			cwd: box,
+			encoding: "utf8",
+			timeout: 20_000,
+			env,
+		},
+	);
 	assert.notEqual(result.status, 0, `${name}: mutant survived\n${result.stdout}\n${result.stderr}`);
 }
 
@@ -80,6 +84,12 @@ describe("#284 isolated topology guard mutants", () => {
 
 	it("kills planner authority and bootstrap own-behalf/replay mutants", () => {
 		kill(
+			"artifact-whole-hash",
+			".pi/extensions/gitjig/landing/topology-plan.ts",
+			"return digest(plan);",
+			"return digest({ schemaVersion: plan.schemaVersion });",
+		);
+		kill(
 			"operator-admin",
 			".pi/extensions/gitjig/landing/topology-plan.ts",
 			'snapshot.actorRole.toLowerCase() !== "admin"',
@@ -114,6 +124,42 @@ describe("#284 isolated topology guard mutants", () => {
 			".pi/extensions/gitjig/landing/bootstrap.ts",
 			"input.repositorySettings.allow_rebase_merge !== false",
 			"input.repositorySettings.allow_rebase_merge === false",
+		);
+		kill(
+			"authorization-stage",
+			".pi/extensions/gitjig/landing/bootstrap.ts",
+			'authorization.stage !== "carrier-bootstrap"',
+			'authorization.stage === "carrier-bootstrap"',
+		);
+		kill(
+			"plan-hash-binding",
+			".pi/extensions/gitjig/landing/bootstrap.ts",
+			"authorization.planHash !== artifactHash",
+			"authorization.planHash === artifactHash",
+		);
+		kill(
+			"authorization-expiry",
+			".pi/extensions/gitjig/landing/bootstrap.ts",
+			"Date.parse(expiresAt) <= Date.parse(now)",
+			"Date.parse(expiresAt) < Date.parse(now)",
+		);
+		kill(
+			"authorization-edited",
+			".pi/extensions/gitjig/landing/topology-authorization.ts",
+			"comment.created_at !== comment.updated_at",
+			"comment.created_at === comment.updated_at",
+		);
+		kill(
+			"authorization-actor",
+			".pi/extensions/gitjig/landing/topology-authorization.ts",
+			"author.node_id !== viewer.node_id",
+			"author.node_id === viewer.node_id",
+		);
+		kill(
+			"authorization-permission",
+			".pi/extensions/gitjig/landing/topology-authorization.ts",
+			'permission?.role_name !== "admin"',
+			'permission?.role_name === "admin"',
 		);
 		kill(
 			"pair-replay",

@@ -699,6 +699,22 @@ export const POSTURES: readonly PostureRow[] = [
 			"No carried fallback may reinterpret server freshness. Restore exact trusted bytes or canonical operands before planning or landing.",
 	},
 	{
+		dependency: "topology-authorization-population",
+		failureShape:
+			"the paginated authorization population or its sole platform comment, author, repository, current collaborator permission, unedited timestamps, issued instant, or expiry is absent, duplicated, malformed, copied, stale, or unreadable",
+		posture: "closed",
+		justification:
+			"Caller-authored trust literals authorize nothing. Restore one unedited operator record and complete fresh GET access; this read-only prerequisite creates no record or mutation path.",
+	},
+	{
+		dependency: "topology-plan-binding",
+		failureShape:
+			"the normalized authorization differs from the planner-attested repository, actor, live pair, complete canonical artifact hash, derived correlation id, issued instant, or unexpired bound",
+		posture: "closed",
+		justification:
+			"An authorization for another plan or consumption stage never transfers. Regenerate the stage-specific plan and obtain a new explicit operator record; no hash default or role assertion fills the gap.",
+	},
+	{
 		dependency: "topology-bootstrap-admission",
 		failureShape:
 			"topology-only bytes, live split/settings, plan authorization, own-behalf identity, measured-unmet quorum, core facts, pair freshness, claim order, or exact merge outcome is absent or unverifiable",

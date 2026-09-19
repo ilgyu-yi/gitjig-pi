@@ -40,32 +40,32 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.6 | Enforcement-face selection | 552 |
 | &nbsp;&nbsp;§3.7 | Approval-gate completeness | 564 |
 | &nbsp;&nbsp;§3.8 | Escape architecture | 580 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 608 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 622 |
-| &nbsp;&nbsp;§3.11 | Gate design | 636 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 658 |
-| §4 | Substrate and install contract | 668 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 672 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 684 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 692 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 698 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 702 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 706 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 718 |
-| &nbsp;&nbsp;§4.8 | The command layer | 728 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 785 |
-| §5 | Cross-cutting contracts | 904 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 908 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 914 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 918 |
-| &nbsp;&nbsp;§5.4 | Work language | 922 |
-| &nbsp;&nbsp;§5.5 | State boundary | 926 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 934 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 946 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 956 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 964 |
-| §6 | Self-governance milestone | 976 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 987 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 610 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 624 |
+| &nbsp;&nbsp;§3.11 | Gate design | 638 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 660 |
+| §4 | Substrate and install contract | 670 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 674 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 686 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 694 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 700 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 704 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 708 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 720 |
+| &nbsp;&nbsp;§4.8 | The command layer | 730 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 787 |
+| §5 | Cross-cutting contracts | 906 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 910 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 916 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 920 |
+| &nbsp;&nbsp;§5.4 | Work language | 924 |
+| &nbsp;&nbsp;§5.5 | State boundary | 928 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 936 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 948 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 958 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 966 |
+| §6 | Self-governance milestone | 978 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 989 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -599,7 +599,9 @@ The guarded landing consumer atomically claims one valid record before attemptin
 
 **Phase-4 topology and bootstrap.** The split is exact and independently composed: `core-governance` has no bypass and carries the doorless context, thread, method, freshness/history and protection facts; `human-approval` carries positive eligible-human quorum and the sole repository-admin-role pull-request bypass. Mandatory platform fields on the quorum rule are non-restricting fillers, never second owners. Repository settings permit merge commits and disable squash/rebase. `.github/workflows/landing-topology.mjs` is the one handed-over closed schema and instant canonicalizer; ruleset update and activation instants reject sub-millisecond precision and normalize equivalent UTC offsets. The carried loader executes only default-branch-verified auditor bytes. `.github/landing-topology.json`, when present, is source-only target-instance configuration and never adopter payload.
 
-Before server mutation, Phase 4A emits only an unauthorized GET-derived before/after/rollback plan. The exact repository-role bypass composition remains a planning-blocking assumption until Phase 4B proves on an explicitly authorized scratch repository that quorum bypass leaves the independent core ruleset enforced. The carrier trust knot has one narrow service: default-branch bytes may land a PR whose sole semantic constituent is the exact eight-field topology carrier, only after all core facts, live split/settings, a fresh operator authorization, measured-unmet quorum, valid own-behalf escape, lowest-id claim and exact head/base pass. A claimed ruleset-id/canonical-instant pair is never reusable; a genuinely updated pair requires a fresh plan, authorization and escape. This bootstrap never supplies a single-identity exception, ruleset mutation, direct push, caller-authored claim, or core bypass.
+Before server mutation, Phase 4A emits only an unauthorized GET-derived before/after/rollback plan. Its versioned whole-artifact hash is owned by the planner, excludes itself, and binds every canonical repository, actor-permission, before, desired, optimistic, ordered-step, post-read, assumption and rollback operand; the deterministic correlation id is not a nonce or an independent freshness claim. Authorization is never a caller boolean: one completely paginated GET-only reader derives one unedited append-only record, repository and author identities, the authenticated actor's fresh collaborator permission, exact stage-specific plan hash/live pair/correlation, issued instant and explicit expiry from platform facts. Any absent, duplicate, edited, copied, stale, expired, future or mismatched fact refuses. A pre-split source-plan authorization and a separately regenerated post-split carrier authorization are non-interchangeable. The read-only binding prerequisite creates neither record nor executor.
+
+The exact repository-role bypass composition remains a planning-blocking assumption until Phase 4B proves on an explicitly authorized scratch repository that quorum bypass leaves the independent core ruleset enforced. The carrier trust knot has one narrow service: default-branch bytes may land a PR whose sole semantic constituent is the exact eight-field topology carrier, only after all core facts, live split/settings, a fresh operator authorization, measured-unmet quorum, valid own-behalf escape, lowest-id claim and exact head/base pass. A claimed ruleset-id/canonical-instant pair is never reusable; a genuinely updated pair requires a fresh plan, authorization and escape. This bootstrap never supplies a single-identity exception, ruleset mutation, direct push, caller-authored claim, or core bypass.
 
 **The local tier's door and equivalent folds.** Tier 2's sanctioned escape is `--no-verify`, with no sanctioned in-hook token in front of it. It is class-independent, unauditable from inside a hook it prevents from running, and bounded by the Tier-3 floor rather than confused with landing authorization. The operator's recovery from a local false block is to retry that local act through this door; no Tier-3 fact is waived.
 

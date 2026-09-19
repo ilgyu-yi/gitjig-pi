@@ -13,10 +13,12 @@ import {
 import { examineBootstrap, topologyPairKey } from "../.pi/extensions/gitjig/landing/bootstrap.ts";
 import { CORE_GUARDS } from "../.pi/extensions/gitjig/landing/service.ts";
 import {
+	attestTopologyPlan,
 	desiredCoreRuleset,
 	desiredHumanApprovalRuleset,
 	loadTopologyPlanningSnapshot,
 	planSplitTopology,
+	topologyPlanArtifactHash,
 } from "../.pi/extensions/gitjig/landing/topology-plan.ts";
 
 const updated = "2026-09-09T10:52:11.922Z";
@@ -134,7 +136,18 @@ describe("Phase-4 topology owner and read-only plan", () => {
 				[3, "PATCH", "/repos/o/r"],
 			],
 		);
-		assert.match(result.plan.authorizationNonce, /^[0-9a-f]{64}$/);
+		assert.match(result.plan.correlationId, /^[0-9a-f]{64}$/);
+		assert.match(result.plan.artifactHash, /^[0-9a-f]{64}$/);
+		const { artifactHash, ...artifact } = result.plan;
+		for (const key of Object.keys(artifact) as Array<keyof typeof artifact>) {
+			const changed = structuredClone(artifact) as Record<string, unknown>;
+			changed[key] = key === "steps" ? [] : `${String(changed[key])}-changed`;
+			assert.notEqual(topologyPlanArtifactHash(changed as never), artifactHash, `hash must bind ${key}`);
+		}
+		assert.equal(topologyPlanArtifactHash(artifact), artifactHash);
+		assert.equal(result.plan.stage, "source-split");
+		assert.equal(attestTopologyPlan(result.plan), true);
+		assert.equal(attestTopologyPlan({ ...result.plan, beforeDigest: "0".repeat(64) }), false);
 		assert.equal(result.plan.rollback.length, 3);
 		assert.equal(result.plan.rollback[1].method, "DELETE");
 		assert.equal(planSplitTopology({ ...result.plan, complete: false } as never).ok, false);
@@ -207,6 +220,31 @@ describe("one-shot bootstrap admission", () => {
 	const live = { repositoryId: "R", core, human, actionsIntegrationId: actionsId };
 	const topologyEngine = { attestLandingTopology, canonicalInstant, encodeLandingTopology };
 	const pairKey = topologyPairKey(live, topologyEngine) ?? "";
+	const planningSnapshot = {
+		repositoryId: "R",
+		repositoryName: "o/r",
+		defaultBranch: "main",
+		actorId: "ADMIN",
+		actorRole: "admin",
+		actionsIntegrationId: actionsId,
+		repositorySettings: { allow_merge_commit: true, allow_squash_merge: false, allow_rebase_merge: false },
+		rulesets: [core, human],
+		complete: true,
+		bypassSemantics: "verified" as const,
+	};
+	const planned = planSplitTopology(planningSnapshot);
+	if (!planned.ok) throw new Error(planned.arm);
+	assert.equal(planned.plan.stage, "carrier-bootstrap");
+	const sourceSnapshot = {
+		...planningSnapshot,
+		repositorySettings: { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true },
+		rulesets: [{ ...core, name: "legacy-landing" }],
+	};
+	const sourcePlanned = planSplitTopology(sourceSnapshot);
+	if (!sourcePlanned.ok) throw new Error(sourcePlanned.arm);
+	assert.equal(sourcePlanned.plan.stage, "source-split");
+	assert.notEqual(sourcePlanned.plan.artifactHash, planned.plan.artifactHash);
+	assert.notEqual(sourcePlanned.plan.correlationId, planned.plan.correlationId);
 	const allCore = Object.fromEntries(CORE_GUARDS.map((guard) => [guard, true])) as Record<
 		(typeof CORE_GUARDS)[number],
 		boolean
@@ -235,17 +273,20 @@ describe("one-shot bootstrap admission", () => {
 		candidateBytes,
 		live,
 		repositorySettings: { allow_merge_commit: true, allow_squash_merge: false, allow_rebase_merge: false },
+		planningSnapshot,
+		planArtifact: planned.plan,
 		authorization: {
 			schemaVersion: 1 as const,
-			platformBacked: true as const,
 			recordId: "issuecomment-1",
 			repositoryId: "R",
-			planHash: "c".repeat(64),
+			stage: "carrier-bootstrap" as const,
+			planHash: planned.plan.artifactHash,
 			pairKey,
 			actorId: "ADMIN",
-			actorRole: "admin",
-			edited: false as const,
-			authorizedAt: "2026-09-09T10:52:30Z",
+			actorPermission: "admin" as const,
+			correlationId: planned.plan.correlationId,
+			issuedAt: "2026-09-09T10:52:30Z",
+			expiresAt: "2026-09-09T11:52:30Z",
 		},
 		escapeProducerId: "PRODUCER",
 		beneficiaryIds: [],
@@ -279,9 +320,41 @@ describe("one-shot bootstrap admission", () => {
 			arm(examineBootstrap({ ...base, candidateBytes: `${candidateBytes} ` } as never)),
 			"bootstrap-topology-bytes",
 		);
+		for (const authorization of [
+			{ ...base.authorization, actorPermission: "write" },
+			{ ...base.authorization, planHash: "c".repeat(64) },
+			{ ...base.authorization, actorId: "OTHER" },
+			{ ...base.authorization, pairKey: "d".repeat(64) },
+			{ ...base.authorization, correlationId: "e".repeat(64) },
+			{ ...base.authorization, expiresAt: base.now },
+			{ ...base.authorization, issuedAt: "2026-09-09T10:54:00Z" },
+		])
+			assert.equal(arm(examineBootstrap({ ...base, authorization } as never)), "bootstrap-authorization");
 		assert.equal(
-			arm(examineBootstrap({ ...base, authorization: { ...base.authorization, actorRole: "write" } } as never)),
+			arm(
+				examineBootstrap({
+					...base,
+					planArtifact: { ...base.planArtifact, desiredDigest: "f".repeat(64) },
+				} as never),
+			),
 			"bootstrap-authorization",
+		);
+		assert.equal(
+			arm(
+				examineBootstrap({
+					...base,
+					planningSnapshot: sourceSnapshot,
+					planArtifact: sourcePlanned.plan,
+					authorization: {
+						...base.authorization,
+						stage: "source-split",
+						planHash: sourcePlanned.plan.artifactHash,
+						correlationId: sourcePlanned.plan.correlationId,
+						pairKey: "d".repeat(64),
+					},
+				} as never),
+			),
+			"bootstrap-plan-stale",
 		);
 		assert.equal(arm(examineBootstrap({ ...base, consumedPairKeys: [pairKey] } as never)), "bootstrap-pair-consumed");
 		assert.equal(
