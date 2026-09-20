@@ -692,7 +692,7 @@ Apply order is complete-read → validate config → exact plan/hash → confirm
 
 The settlement records these exact implementation dispositions for later phases:
 
-- retire `.github/landing-policy.json` and `.github/workflows/landing-policy.mjs`;
+- `.github/landing-policy.json` and `.github/workflows/landing-policy.mjs` were retired before Phase 6, and their absence remains guarded;
 - the fixed `.github/workflows/landing-topology.mjs` parser and `.github/landing-topology.json` expectation were replaced by `.github/gitjig-governance.json` and the shared engine, then removed in Phase 6;
 - `.pi/extensions/gitjig/landing/service.ts`, `platform.ts` and the `/land` call site were migrated to label-only default and operator-directed paths;
 - Phase 6 removed `bootstrap.ts`, `provenance.ts`, `topology-authorization.ts`, `topology-plan.ts`, `topology-provenance.ts`, `source-split-contract.ts`, `source-split-platform.ts`, `source-split-service.ts`, and `/source-split` after preserving supersession evidence in ADR/changelog;

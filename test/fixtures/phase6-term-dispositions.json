@@ -5,7 +5,7 @@
 		"lineBase64": "VGhlIHByZXZpb3VzbHkgZG9jdW1lbnRlZCBmaXhlZCBzcGxpdC10b3BvbG9neS9zb3VyY2Utc3BsaXQgcGxhbiBpcyBzdXBlcnNlZGVkIGFuZCBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBQaGFzZSA2IHJlbW92ZWQgaXRzIHJldGFpbmVkIHJ1bnRpbWUgYW5kIGNvbXBsZXRlZCB0aGUgZGVjbGFyZWQtdGVybSBtaWdyYXRpb24uIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGUgIzMwMSBjb250cmFjdCBzZXR0bGVtZW50OyBQaGFzZSA3IHN0aWxsIHJlcXVpcmVzIGZyZXNoIHNlcGFyYXRlIGF1dGhvcml6YXRpb24u",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current README completed-migration and separate-application statement"
+		"reason": "current README completed migration and separate-application boundary"
 	},
 	{
 		"pathBase64": "UkVBRE1FLm1k",
@@ -13,7 +13,7 @@
 		"lineBase64": "VGhlIHByZXZpb3VzbHkgZG9jdW1lbnRlZCBmaXhlZCBzcGxpdC10b3BvbG9neS9zb3VyY2Utc3BsaXQgcGxhbiBpcyBzdXBlcnNlZGVkIGFuZCBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBQaGFzZSA2IHJlbW92ZWQgaXRzIHJldGFpbmVkIHJ1bnRpbWUgYW5kIGNvbXBsZXRlZCB0aGUgZGVjbGFyZWQtdGVybSBtaWdyYXRpb24uIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGUgIzMwMSBjb250cmFjdCBzZXR0bGVtZW50OyBQaGFzZSA3IHN0aWxsIHJlcXVpcmVzIGZyZXNoIHNlcGFyYXRlIGF1dGhvcml6YXRpb24u",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current README completed-migration and separate-application statement"
+		"reason": "current README completed migration and separate-application boundary"
 	},
 	{
 		"pathBase64": "UkVBRE1FLm1k",
@@ -21,7 +21,7 @@
 		"lineBase64": "VGhlIHByZXZpb3VzbHkgZG9jdW1lbnRlZCBmaXhlZCBzcGxpdC10b3BvbG9neS9zb3VyY2Utc3BsaXQgcGxhbiBpcyBzdXBlcnNlZGVkIGFuZCBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBQaGFzZSA2IHJlbW92ZWQgaXRzIHJldGFpbmVkIHJ1bnRpbWUgYW5kIGNvbXBsZXRlZCB0aGUgZGVjbGFyZWQtdGVybSBtaWdyYXRpb24uIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGUgIzMwMSBjb250cmFjdCBzZXR0bGVtZW50OyBQaGFzZSA3IHN0aWxsIHJlcXVpcmVzIGZyZXNoIHNlcGFyYXRlIGF1dGhvcml6YXRpb24u",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current README completed-migration and separate-application statement"
+		"reason": "current README completed migration and separate-application boundary"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -29,7 +29,7 @@
 		"lineBase64": "KipTZXR0bGVtZW50LioqIEEgbmV3IG5vcm1hdGl2ZSBjb250cmFjdCBpcyBzZXR0bGVkIGJlZm9yZSBpbXBsZW1lbnRhdGlvbiBkZXJpdmVzIGZyb20gaXQsIGFuZCB0aGUganVkZ2Ugb2YgYSBjaGFuZ2UncyBjbGFpbWVkIGF1dGhvcml6YXRpb24gY2FzZSDigJQgaW5jbHVkaW5nIHdoZXRoZXIgYSBjb250cmFjdCBpcyBub3JtYXRpdmUsIGFuZCBpbmNsdWRpbmcgdGhlIHByZWNlZGVuY2UgcnVsZSBhYm92ZSDigJQgaXMgdGhlIGFjdGl2YXRpb24gZ2F0ZSAowqcyLjIpLCBuZXZlciB0aGUgZXhlY3V0b3IgKMKnNS43KS4gVGhlIHNldHRsZW1lbnQgbW9kZSBkZXJpdmVzIGZyb20gdGhlIGNvbnRyYWN0J3MgcmVhY2gg4oCUIGEgZGVjbGFyYXRpb24gdGhlIGlzc3VlIGJvZHkgaXRzZWxmIG93ZXMgZm9yIGFueSBzZXR0bGVtZW50IGNsYWltLCBhZGp1ZGljYXRlZCBhdCBhY3RpdmF0aW9uOyBhIHNldHRsZW1lbnQgY2xhaW0gd2l0aCBubyBkZWNsYXJlZCByZWFjaCBpcyBub3QgYWN0aW9uYWJsZSBhbmQgZG9lcyBub3QgYWN0aXZhdGUg4oCUIG5ldmVyIGZyb20gYW4gZXhwZWN0YXRpb24gb2YgZGlmZmljdWx0eSwgd2hpY2ggaXMgdGhlIHNhbWUgZ3Vlc3MgwqcyLjYgZXhpc3RzIHRvIHJlcGxhY2UuIEEgY29udHJhY3QgdGhhdCBhbWVuZHMgYSBzZXR0bGVkIHNlY3Rpb24sIG9yIHJldGlyZXMgb3IgcmUtcm9sZXMgZXhpc3RpbmcgU1NPVCB2b2NhYnVsYXJ5IChhIG5vbi1lbXB0eSBkZWNsYXJlZCBzZXQsIMKnMi42KSwgbGFuZHMgYXMgaXRzIG93biBjaGFuZ2U6IGFkanVkaWNhdGVkIGF0IGFjdGl2YXRpb24sIG1lcmdlZCBiZWZvcmUgYW55IGltcGxlbWVudGF0aW9uIGRlcml2ZXMgZnJvbSBpdCDigJQgdGhlIHNldHRsaW5nIGNoYW5nZSBpdHNlbGYgY2FycmllcyDCpzIuNShjKSdzIGNvbXBlbGxlZCBtaWdyYXRpb24gb2YgdGhlIHJldGlyZWQgdm9jYWJ1bGFyeSdzIGNhbGwgc2l0ZXMsIHJ1bGVkIGluIGEgZml4ZWQgb3JkZXI6IHdvcmsgdGhlIGNvbnRyYWN0IG5ld2x5IG93ZXMgaXMgZGVyaXZhdGlvbiBhbmQgbGFuZHMgb25seSBhZnRlciB0aGUgbWVyZ2U7IGEgY2hhbmdlIHRvIHdoYXQgYW55IGNoZWNrIGFjY2VwdHMsIG1hZGUgaW4gdGhlIGNvdXJzZSBvZiB0aGF0IG1pZ3JhdGlvbiwgaXMgdGhlIHNldHRsaW5nIGNoYW5nZSdzIG93biBFdmlkZW5jZSBvYmxpZ2F0aW9uOyBhbmQgd2hhdCByZW1haW5zIOKAlCByZS1wb2ludGluZyByZWZlcmVuY2VzIHRvIHRoZSByZXRpcmVkIHZvY2FidWxhcnksIG5vdGhpbmcgZWxzZSDigJQgaXMgbWlncmF0aW9uLiBBIHJlLXBpbiBjcml0ZXJpb24ga2V5ZWQgb24gYSBjaGVjaydzIGFjY2VwdGVkIHNldCBub3Qgc2hyaW5raW5nIGVtcHRpZXMgaW4gYm90aCBkaXJlY3Rpb25zIOKAlCByZS1wb2ludGluZyBhIHJldGlyZWQgdG9rZW4gYWx3YXlzIHNocmlua3MgdGhlIHNldCB0aGUgY2hlY2sgYWNjZXB0ZWQsIHNvIHJlYWwgbWlncmF0aW9uIHJlYWRzIGFzIG5ldyBldmlkZW5jZSwgd2hpbGUgYSBsb29zZW5pbmcgbmV2ZXIgc2hyaW5rcyB0aGF0IHNldCwgc28gYSB3ZWFrZW5lZCBnYXRlIHJlYWRzIGFzIG1lcmUgbWlncmF0aW9uIGFuZCBlc2NhcGVzIEV2aWRlbmNlIOKAlCB3aGljaCBpcyB3aHkgbWlncmF0aW9uIGlzIGRlZmluZWQgcG9zaXRpdmVseSBpbnN0ZWFkOyByZWNvcmRlZCBoZXJlIHNvIGl0IGlzIG5vdCByZS1wcm9wb3NlZC4gQSBib3VuZGVkIGNvcnJlY3RpdmUgdHJhbnNpdGlvbiBtYXkgZXhjZXB0aW9uYWxseSBmbGlwIG5vcm1hdGl2ZSBhdXRob3JpdHkgYmVmb3JlIG1lY2hhbmljYWxseSBkZWxldGluZyBhbiBhbHJlYWR5LWxhbmRlZCBpbXBsZW1lbnRhdGlvbiBvbmx5IHdoZW4gdGhlIHNldHRsZW1lbnQgbmFtZXMgZXZlcnkgcmV0YWluZWQgc3VyZmFjZSwgcHJvdmVzIHRoZSBsaXZlIHN1YmplY3QgdW5hcm1lZCwgZXhwbGljaXRseSBwcm9oaWJpdHMgdGhlIG9sZCBvcGVyYXRpb24sIGFkbWl0cyBubyBuZXcgY2FsbGVyLCBhc3NpZ25zIGVhY2ggc3Vydml2b3Igb25lIHJlbW92YWwvbWlncmF0aW9uIG93bmVyLCBhbmQgbWFrZXMgdGhhdCBjbGVhbnVwIGEgaGFyZCBwcmVyZXF1aXNpdGUgb2YgcmVwbGFjZW1lbnQgYXBwbGljYXRpb24gb3IgcGlsb3QuIFRoaXMgaXMgbm90IGNvbXBhdGliaWxpdHkgYXV0aG9yaXR5LiBUaGUgb25lIMKnMy44IGluc3RhbmNlIGNvbXBsZXRlZCBpdHMgYm91bmRlZCBjbGVhbnVwIGluIFBoYXNlIDY6IGV2ZXJ5IG5hbWVkIHJldGFpbmVkIHN1cmZhY2Ugd2FzIHJlbW92ZWQsIGFuZCBubyBjdXJyZW50IHN1cGVyc2VkZWQtZG9ybWFudCBpbnB1dCByZW1haW5zLiDCpzMuOCByZWNvcmRzIHRoYXQgY29tcGxldGVkIGluc3RhbmNlIGFuZCBwcmVzZXJ2ZXMgdGhlIHNlcGFyYXRlLWF1dGhvcml6YXRpb24gYm91bmRhcnkgZm9yIHJlcGxhY2VtZW50IGFwcGxpY2F0aW9uLiBBIHB1cmVseSBhZGRpdGl2ZSBjb250cmFjdCB3aG9zZSByZWFjaCBzdGF5cyB3aXRoaW4gaXRzIG93biBuZXcgY2xhdXNlIHNldHRsZXMgYXQgYWN0aXZhdGlvbiBhbG9uZTogdGhlIGlzc3VlIGJvZHkgY2FycmllcyB0aGUgY29udHJhY3QsIHRoZSBhY3RpdmF0aW9uIHJldmlldyBhZGp1ZGljYXRlcyBpdCwgYW5kIHRoZSBpbXBsZW1lbnRpbmcgUFIgbGFuZHMgdGhlIFNTT1QgYW1lbmRtZW50IGJlc2lkZSBpdHMgdGVzdHMgYW5kIGNvZGUsIHJldmlld2VkIGFuZCBjbG9zZWQgb3V0IGFnYWluc3QgdGhlIGFjdGl2YXRlZCBjb250cmFjdCBhcyB5YXJkc3RpY2sgKMKnMi4yJ3MgQUMtY2xvc2VvdXQpIOKAlCBzbyB0aGUgaW1wbGVtZW50YXRpb24gY2Fubm90IGJlY29tZSB0aGUgc291cmNlIG9mIHRydXRoLiBUaGUgYWN0aXZhdGlvbiByZXZpZXdlciBjb25maXJtcyB0aGUgZGVyaXZlZCBtb2RlIGFuZCBkZXZpYXRlcyBvbmx5IHdpdGggdGhlIGdyb3VuZCByZWNvcmRlZCBpbiB0aGUgYWN0aXZhdGlvbiB2ZXJkaWN0IOKAlCB0aGUgYWRqdWRpY2F0aW9uIGlzIHdoYXQga2VlcHMgdGhlIGRlcml2YXRpb24ncyBpbnB1dCBvdXQgb2YgdGhlIGF1dGhvcidzIGhhbmRzIGFsb25lLg==",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §1.2 completed bounded-transition cleanup"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -37,7 +37,7 @@
 		"lineBase64": "LSAoZCkgT25lIGJvdW5kZWQgdHJhbnNpdGlvbiBleGNlcHRpb246IMKnMS4yJ3MgY29ycmVjdGl2ZSBhdXRob3JpdHkgZmxpcCBtYXkgdGVtcG9yYXJpbHkgcmV0YWluIG9ubHkgZXhwbGljaXRseSBuYW1lZCBzdXBlcnNlZGVkLWRvcm1hbnQgc3VyZmFjZXMgdW5kZXIgb25lIG93bmVyIGFuZCBkZWFkbGluZTsgaXQgYXV0aG9yaXplcyBubyBjYWxsIG9yIGNvbXBhdGliaWxpdHkgdXNlLiBUaGUgc29sZSAjMzAxIGluc3RhbmNlIGNvbXBsZXRlZCB0aGF0IGRlYWRsaW5lIGluIFBoYXNlIDYgYW5kIHJldGFpbnMgbm8gc3VjaCBzdXJmYWNlLg==",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §2.5(d) completed exception cleanup"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -45,7 +45,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed removal of former authority exports"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -53,7 +53,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed removal of former authority exports"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -61,7 +61,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed removal of former authority exports"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -69,7 +69,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed removal of former authority exports"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -77,7 +77,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -85,7 +85,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -93,7 +93,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 1,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -101,7 +101,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 2,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -109,7 +109,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 3,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -117,7 +117,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -125,7 +125,7 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -133,23 +133,23 @@
 		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed runtime and command removal inventory"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
 		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
-		"lineBase64": "LSByZXRpcmUgYC5naXRodWIvbGFuZGluZy1wb2xpY3kuanNvbmAgYW5kIGAuZ2l0aHViL3dvcmtmbG93cy9sYW5kaW5nLXBvbGljeS5tanNgOw==",
+		"lineBase64": "LSBgLmdpdGh1Yi9sYW5kaW5nLXBvbGljeS5qc29uYCBhbmQgYC5naXRodWIvd29ya2Zsb3dzL2xhbmRpbmctcG9saWN5Lm1qc2Agd2VyZSByZXRpcmVkIGJlZm9yZSBQaGFzZSA2LCBhbmQgdGhlaXIgYWJzZW5jZSByZW1haW5zIGd1YXJkZWQ7",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed pre-Phase-6 policy retirement and absence guard"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
 		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
-		"lineBase64": "LSByZXRpcmUgYC5naXRodWIvbGFuZGluZy1wb2xpY3kuanNvbmAgYW5kIGAuZ2l0aHViL3dvcmtmbG93cy9sYW5kaW5nLXBvbGljeS5tanNgOw==",
+		"lineBase64": "LSBgLmdpdGh1Yi9sYW5kaW5nLXBvbGljeS5qc29uYCBhbmQgYC5naXRodWIvd29ya2Zsb3dzL2xhbmRpbmctcG9saWN5Lm1qc2Agd2VyZSByZXRpcmVkIGJlZm9yZSBQaGFzZSA2LCBhbmQgdGhlaXIgYWJzZW5jZSByZW1haW5zIGd1YXJkZWQ7",
 		"ordinal": 1,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed pre-Phase-6 policy retirement and absence guard"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -157,7 +157,7 @@
 		"lineBase64": "LSB0aGUgZml4ZWQgYC5naXRodWIvd29ya2Zsb3dzL2xhbmRpbmctdG9wb2xvZ3kubWpzYCBwYXJzZXIgYW5kIGAuZ2l0aHViL2xhbmRpbmctdG9wb2xvZ3kuanNvbmAgZXhwZWN0YXRpb24gd2VyZSByZXBsYWNlZCBieSBgLmdpdGh1Yi9naXRqaWctZ292ZXJuYW5jZS5qc29uYCBhbmQgdGhlIHNoYXJlZCBlbmdpbmUsIHRoZW4gcmVtb3ZlZCBpbiBQaGFzZSA2Ow==",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed fixed-parser and expectation removal"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -165,7 +165,7 @@
 		"lineBase64": "LSB0aGUgZml4ZWQgYC5naXRodWIvd29ya2Zsb3dzL2xhbmRpbmctdG9wb2xvZ3kubWpzYCBwYXJzZXIgYW5kIGAuZ2l0aHViL2xhbmRpbmctdG9wb2xvZ3kuanNvbmAgZXhwZWN0YXRpb24gd2VyZSByZXBsYWNlZCBieSBgLmdpdGh1Yi9naXRqaWctZ292ZXJuYW5jZS5qc29uYCBhbmQgdGhlIHNoYXJlZCBlbmdpbmUsIHRoZW4gcmVtb3ZlZCBpbiBQaGFzZSA2Ow==",
 		"ordinal": 1,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed fixed-parser and expectation removal"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -205,7 +205,7 @@
 		"lineBase64": "VGhlIG9sZCBsYW5kaW5nIGVzY2FwZSBhcmNoaXRlY3R1cmUsIHNwbGl0IGBjb3JlLWdvdmVybmFuY2VgL2BodW1hbi1hcHByb3ZhbGAgdG9wb2xvZ3ksIG93bi1iZWhhbGYgcHJvZHVjZXIgcmVzdHJpY3Rpb24sIEFwcCBwcm9kdWNlciwgMjQtaG91ciByZWNvcmQsIGNsYWltL2NvbnN1bWUgcHJvdG9jb2wsIHNvdXJjZS1zcGxpdCBhdXRob3JpdHksIGFuZCBuYXRpdmUtcmVxdWlyZWQgYGFjLWNsb3Nlb3V0YCBhcmUgc3VwZXJzZWRlZC4gUGhhc2UgNiByZW1vdmVkIGV2ZXJ5IG5hbWVkIHJldGFpbmVkIHJ1bnRpbWUgc3VyZmFjZTsgbm8gc3VwZXJzZWRlZC1kb3JtYW50IG1pZ3JhdGlvbiBpbnB1dCByZW1haW5zLiBUaGUgcmV0aXJlZCBkZXNpZ25zIGF1dGhvcml6ZSBubyBvcGVyYXRpb24gYW5kIGFkbWl0IG5vIG5ldyBjYWxsZXIuIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGlzIHNldHRsZW1lbnQuIFBoYXNlIDYgcmVtb3ZhbCBpcyBhIGhhcmQgcHJlcmVxdWlzaXRlIG9mIFBoYXNlIDcgYW5kIGlzIG5vdyBjb21wbGV0ZTsgUGhhc2UgNyBzdGlsbCByZXF1aXJlcyBmcmVzaCBzZXBhcmF0ZSBhdXRob3JpemF0aW9uLiBUaGlzIGJvdW5kZWQgYXV0aG9yaXR5IGZsaXAgd2FzIHBlcm1pdHRlZCBvbmx5IGJlY2F1c2UgZXZlcnkgcmV0YWluZWQgc3VyZmFjZSBhbmQgb3duZXIgd2FzIG5hbWVkLCB0aGUgb2xkIG9wZXJhdGlvbiB3YXMgcHJvaGliaXRlZCwgdGhlIGxpdmUgc3ViamVjdCB3YXMgdW5hcm1lZCwgbm8gbmV3IGNhbGxlciBjb3VsZCBkZXJpdmUsIGFuZCBtaWdyYXRpb24gY29tcGxldGVkIGJlZm9yZSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4=",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed authority migration and separate-application prohibition"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -213,7 +213,7 @@
 		"lineBase64": "VGhlIG9sZCBsYW5kaW5nIGVzY2FwZSBhcmNoaXRlY3R1cmUsIHNwbGl0IGBjb3JlLWdvdmVybmFuY2VgL2BodW1hbi1hcHByb3ZhbGAgdG9wb2xvZ3ksIG93bi1iZWhhbGYgcHJvZHVjZXIgcmVzdHJpY3Rpb24sIEFwcCBwcm9kdWNlciwgMjQtaG91ciByZWNvcmQsIGNsYWltL2NvbnN1bWUgcHJvdG9jb2wsIHNvdXJjZS1zcGxpdCBhdXRob3JpdHksIGFuZCBuYXRpdmUtcmVxdWlyZWQgYGFjLWNsb3Nlb3V0YCBhcmUgc3VwZXJzZWRlZC4gUGhhc2UgNiByZW1vdmVkIGV2ZXJ5IG5hbWVkIHJldGFpbmVkIHJ1bnRpbWUgc3VyZmFjZTsgbm8gc3VwZXJzZWRlZC1kb3JtYW50IG1pZ3JhdGlvbiBpbnB1dCByZW1haW5zLiBUaGUgcmV0aXJlZCBkZXNpZ25zIGF1dGhvcml6ZSBubyBvcGVyYXRpb24gYW5kIGFkbWl0IG5vIG5ldyBjYWxsZXIuIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGlzIHNldHRsZW1lbnQuIFBoYXNlIDYgcmVtb3ZhbCBpcyBhIGhhcmQgcHJlcmVxdWlzaXRlIG9mIFBoYXNlIDcgYW5kIGlzIG5vdyBjb21wbGV0ZTsgUGhhc2UgNyBzdGlsbCByZXF1aXJlcyBmcmVzaCBzZXBhcmF0ZSBhdXRob3JpemF0aW9uLiBUaGlzIGJvdW5kZWQgYXV0aG9yaXR5IGZsaXAgd2FzIHBlcm1pdHRlZCBvbmx5IGJlY2F1c2UgZXZlcnkgcmV0YWluZWQgc3VyZmFjZSBhbmQgb3duZXIgd2FzIG5hbWVkLCB0aGUgb2xkIG9wZXJhdGlvbiB3YXMgcHJvaGliaXRlZCwgdGhlIGxpdmUgc3ViamVjdCB3YXMgdW5hcm1lZCwgbm8gbmV3IGNhbGxlciBjb3VsZCBkZXJpdmUsIGFuZCBtaWdyYXRpb24gY29tcGxldGVkIGJlZm9yZSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4=",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed authority migration and separate-application prohibition"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -221,7 +221,7 @@
 		"lineBase64": "fCA2IHwgIzMxMiB8IFJldGlyZWQgb2xkIHNvdXJjZS1zcGxpdC90b3BvbG9neS9wb2xpY3kgYXNzZXRzIGFuZCBmaW5pc2hlZCBkZWNsYXJlZC10ZXJtIG1pZ3JhdGlvbiB8IENvbXBsZXRlOiBtaWdyYXRpb24gUFIgbGVhdmVzIHplcm8gdW5kZWNsYXJlZCBvciBzdXBlcnNlZGVkLWRvcm1hbnQgc3Vydml2b3JzIHw=",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed Phase-6 disposition row"
 	},
 	{
 		"pathBase64": "U1BFQy5tZA==",
@@ -229,7 +229,7 @@
 		"lineBase64": "fCA2IHwgIzMxMiB8IFJldGlyZWQgb2xkIHNvdXJjZS1zcGxpdC90b3BvbG9neS9wb2xpY3kgYXNzZXRzIGFuZCBmaW5pc2hlZCBkZWNsYXJlZC10ZXJtIG1pZ3JhdGlvbiB8IENvbXBsZXRlOiBtaWdyYXRpb24gUFIgbGVhdmVzIHplcm8gdW5kZWNsYXJlZCBvciBzdXBlcnNlZGVkLWRvcm1hbnQgc3Vydml2b3JzIHw=",
 		"ordinal": 0,
 		"disposition": "canonical",
-		"reason": "current SPEC completed-migration or retired-authority prohibition"
+		"reason": "current SPEC §3.8 completed Phase-6 disposition row"
 	},
 	{
 		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvYWRkZWQvMjc5Lm1k",
@@ -469,6 +469,6 @@
 		"lineBase64": "CQljb25zdCBsaW5lID0gc291cmNlLnNwbGl0KCJcbiIpLmZpbmQoKGNhbmRpZGF0ZSkgPT4gY2FuZGlkYXRlLmluY2x1ZGVzKCJnaXRob29rX2Jsb2NrIHNlY3JldCIpKTs=",
 		"ordinal": 0,
 		"disposition": "homonym",
-		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+		"reason": "ordinary hook-output parser uses JavaScript String.split; unrelated to governance authority"
 	}
 ]

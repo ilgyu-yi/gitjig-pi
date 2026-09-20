@@ -81,10 +81,19 @@ function trackedFiles(): string[] {
 		.sort();
 }
 
-export function observeOccurrences(): Occurrence[] {
+function compareOccurrences(left: Occurrence, right: Occurrence): number {
+	const leftKey = [left.path, left.line, left.token, left.ordinal].join("\0");
+	const rightKey = [right.path, right.line, right.token, right.ordinal].join("\0");
+	return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+export function observeOccurrences(
+	files: readonly string[] = trackedFiles(),
+	readText: (path: string) => string = (path) => readFileSync(path, "utf8"),
+): Occurrence[] {
 	const found: Occurrence[] = [];
-	for (const path of trackedFiles()) {
-		const lines = readFileSync(path, "utf8").split(/\r?\n/u);
+	for (const path of files) {
+		const lines = readText(path).split(/\r?\n/u);
 		for (const line of lines) {
 			for (const token of TOKENS) {
 				let at = 0;
@@ -99,11 +108,7 @@ export function observeOccurrences(): Occurrence[] {
 			}
 		}
 	}
-	return found.sort((left, right) => {
-		const leftKey = [left.path, left.line, left.token, left.ordinal].join("\0");
-		const rightKey = [right.path, right.line, right.token, right.ordinal].join("\0");
-		return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-	});
+	return found.sort(compareOccurrences);
 }
 
 function decode(row: EncodedDisposition): Occurrence {
@@ -188,13 +193,24 @@ describe("Phase-6 retired authority removal", () => {
 	});
 
 	it("detects restoration and population mutants", () => {
-		const expected = dispositions.map(decode);
-		const observed = observeOccurrences();
-		assert.deepEqual(observed, expected);
-		assert.notDeepEqual(observed.slice(1), expected);
-		assert.notDeepEqual(
-			[...observed, { path: "synthetic", token: "synthetic", line: "synthetic", ordinal: 0 }],
-			expected,
+		const callToken = join("attest", "Topology", "Plan");
+		const vocabularyToken = join("source", "-split");
+		const restoredPath = join(".pi/extensions/gitjig/landing/", "topology", "-plan.ts");
+		const renamedPath = ".pi/extensions/gitjig/landing/renamed-carrier.ts";
+		const restoredLine = `export const restored = "${callToken}"; // ${callToken}`;
+		const renamedLine = `export const renamed = "${vocabularyToken}";`;
+		assert.deepEqual(
+			observeOccurrences([restoredPath], () => restoredLine),
+			[
+				{ path: restoredPath, token: join("Topology", "Plan"), line: restoredLine, ordinal: 0 },
+				{ path: restoredPath, token: join("Topology", "Plan"), line: restoredLine, ordinal: 1 },
+				{ path: restoredPath, token: callToken, line: restoredLine, ordinal: 0 },
+				{ path: restoredPath, token: callToken, line: restoredLine, ordinal: 1 },
+			],
+		);
+		assert.deepEqual(
+			observeOccurrences([renamedPath], () => renamedLine),
+			[{ path: renamedPath, token: vocabularyToken, line: renamedLine, ordinal: 0 }],
 		);
 		assert.equal(
 			[...RETIRED, ...REMOVED_SUITES].some((path) => existsSync(path)),
