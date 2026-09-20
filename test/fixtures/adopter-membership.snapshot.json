@@ -66,6 +66,10 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/gitjig-governance.json",
+			"disposition": "target-owned-instance"
+		},
+		{
 			"path": ".github/workflows/ac-closeout-event.mjs",
 			"disposition": "handed-over"
 		},
@@ -119,6 +123,10 @@
 		},
 		{
 			"path": ".github/workflows/dir-mode-post-merge.yml",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/gitjig-governance.mjs",
 			"disposition": "handed-over"
 		},
 		{
@@ -583,6 +591,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/306.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/308.md",
 			"disposition": "instance-state"
 		},
 		{

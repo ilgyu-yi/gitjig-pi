@@ -533,6 +533,22 @@ export const POSTURES: readonly PostureRow[] = [
 			"Choosing among malformed or ambiguous records can erase the authoritative handoff. The false-block cost is a stuck lifecycle label; repair the marker-keyed comment history through the owning transition service, then replay.",
 	},
 	{
+		dependency: "governance-config",
+		failureShape:
+			"the target-owned governance config is absent, malformed, duplicated, contradictory, unsupported, incomplete, or bound to another repository",
+		posture: "closed",
+		justification:
+			"The pure engine never fills an omitted selection or retargets a config. Repair the target-owned file and produce a new plan; config presence alone performs and authorizes no write.",
+	},
+	{
+		dependency: "governance-measured-basis",
+		failureShape:
+			"the repository settings, intended repository-owned ruleset, bypass actors, rule parameters, check integrations, or population is incomplete, duplicate, inherited, unknown, or mismatched",
+		posture: "closed",
+		justification:
+			"A partial basis cannot prove preservation or drift. Restore a complete current read and plan again; unmanaged facts remain reported and produce no operation.",
+	},
+	{
 		dependency: "history-shape-graph",
 		failureShape:
 			"the live base/head commit, merge base, complete non-shallow graph, or exact topic-range merge population is absent, malformed, ambiguous, or unreadable",

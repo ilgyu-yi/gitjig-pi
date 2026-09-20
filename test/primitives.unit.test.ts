@@ -1459,6 +1459,8 @@ describe("fail-posture inventory (§3.9)", () => {
 				"empty-change-completion-evidence → closed",
 				"empty-change-completion-terminal → closed",
 				"fragment-gate-draft-sleep → open",
+				"governance-config → closed",
+				"governance-measured-basis → closed",
 				"history-shape-graph → closed",
 				"history-shape-trust → closed",
 				"landing-advisory-label → closed",
