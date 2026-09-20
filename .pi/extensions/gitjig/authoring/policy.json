@@ -14,7 +14,7 @@
 		},
 		{
 			"surface": "repository prose",
-			"prefixes": ["MISSION.md", "README.md", "changelog_unreleased/"],
+			"prefixes": ["MISSION.md", "README.md", "docs/", "changelog_unreleased/"],
 			"anchors": [
 				"### 1.2 Authorization, evidence, and synchronization",
 				"### 2.5 Authoring doctrine",

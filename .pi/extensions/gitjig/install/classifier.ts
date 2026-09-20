@@ -5,7 +5,13 @@ import { TextDecoder } from "node:util";
 import type { Occupant } from "./plan.ts";
 
 export const CANDIDATE_ROOTS = [".pi", ".github", ".githooks", "changelog_unreleased"] as const;
-export const DISPOSITIONS = ["source-only", "instance-state", "handed-over", "carried"] as const;
+export const DISPOSITIONS = [
+	"source-only",
+	"target-owned-instance",
+	"instance-state",
+	"handed-over",
+	"carried",
+] as const;
 export type Disposition = (typeof DISPOSITIONS)[number];
 export type Classification = Disposition | "refuse";
 export interface Membership {
@@ -101,6 +107,7 @@ export function classifyCandidate(path: string, bytes: Buffer): Classification {
 	validateCandidatePath(path);
 	const marker = classifyMarker(bytes);
 	if (marker !== "absent") return marker;
+	if (path === ".github/gitjig-governance.json") return "target-owned-instance";
 	if (path === ".github/landing-topology.json") return "source-only";
 	if (path === "changelog_unreleased/TEMPLATE.md") return "handed-over";
 	if (path.startsWith("changelog_unreleased/")) return "instance-state";

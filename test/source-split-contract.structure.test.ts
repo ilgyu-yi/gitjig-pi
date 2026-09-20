@@ -3,180 +3,43 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const spec = readFileSync("SPEC.md", "utf8");
-const authorization = readFileSync(".pi/extensions/gitjig/landing/topology-authorization.ts", "utf8");
-const vocabulary = readFileSync(".pi/extensions/gitjig/landing/source-split-contract.ts", "utf8");
 const readme = readFileSync("README.md", "utf8");
-const postures = readFileSync(".pi/extensions/gitjig/postures.ts", "utf8");
+const adr = readFileSync("docs/adr/0001-maintainer-terminal-governance.md", "utf8");
 
-const topology = spec.slice(
-	spec.indexOf("**Phase-4 topology and bootstrap.**"),
-	spec.indexOf("**The local tier's door"),
-);
-
-function requires(subject: string, tokens: readonly string[]): void {
-	for (const token of tokens) assert.ok(subject.includes(token), `missing source-split contract token: ${token}`);
+function settlement(text: string): void {
+	for (const token of [
+		"source-split authority",
+		"superseded-dormant migration inputs only",
+		"authorize no operation",
+		"admit no new caller",
+		"No live ruleset or repository-setting mutation is authorized",
+		"Source-split and configurable-plan artifacts are non-interchangeable",
+	])
+		assert.ok(text.includes(token), `missing supersession token: ${token}`);
 }
 
-function interfaceMembers(name: string): string[] {
-	const match = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(vocabulary);
-	assert.ok(match, `missing interface: ${name}`);
-	return match[1]
-		.trim()
-		.split("\n")
-		.map((line) => line.trim());
-}
-
-function assertContract(subject: string): void {
-	requires(subject, [
-		"**Source-split application contract.**",
-		"core PATCH, quorum-only `human-approval` POST/PATCH",
-		"GitHub Actions integration, complete rulesets, and the application Issue/comments",
-		"immediate GET-before-write is the recorded optimistic-emulation residual",
-		"Mismatch never continues or rolls back automatically",
-		"`{schemaVersion,repositoryId,issueId,issueNumber,stage,planHash,pairKey,correlationId,issuedAt,expiresAt}`",
-		"`{repositoryId,defaultBranch,beforeDigest,optimisticRulesets}`",
-		"preflight → claim →, for every order, compare → write → post-read → record → final handed-over audit → terminal",
-		"lowest valid append-only claim REST database id wins",
-		"exact target without matching records is not success",
-		"<!-- topology-source-claim: v1 -->",
-		"<!-- topology-source-step: v1 -->",
-		"<!-- topology-source-terminal: v1 -->",
-		"Authorization id is null exactly for zero or multiple marked authorization candidates",
-		"Comment publication is a platform write but not source topology mutation",
-		"does not arm the topology carrier, bootstrap, pilot or guarded landing",
-		"This settlement exports data vocabulary only",
-	]);
-}
-
-test("#289 vocabulary remains the #293 application's closed record grammar", () => {
-	assertContract(topology);
-	requires(readme, [
-		"Source application is record-first and stepwise",
-		"without a unique admitted marker it may append a refusal terminal but performs no ruleset or repository-setting write",
-	]);
-	requires(postures, [
-		"The Phase-4 scratch proof supports only a quorum-only RepositoryRole-5 pull-request bypass",
-		"the completed proof itself grants no source mutation",
-	]);
-	requires(authorization, [
-		'TOPOLOGY_SOURCE_CLAIM_MARKER = "<!-- topology-source-claim: v1 -->"',
-		'TOPOLOGY_SOURCE_STEP_MARKER = "<!-- topology-source-step: v1 -->"',
-		'TOPOLOGY_SOURCE_TERMINAL_MARKER = "<!-- topology-source-terminal: v1 -->"',
-	]);
-	requires(vocabulary, [
-		"export interface TopologySourceClaimRecord",
-		"export interface TopologySourceStepRecord",
-		"export type TopologySourceTerminalRecord",
-		"export const parseTopologySourceClaim",
-	]);
-	assert.deepEqual(interfaceMembers("TopologySourceClaimRecord"), [
-		"schemaVersion: 1;",
-		"repositoryId: string;",
-		"issueId: string;",
-		"authorizationRecordId: string;",
-		"planHash: string;",
-		"pairKey: string;",
-		"correlationId: string;",
-		"writerId: string;",
-		"claimedAt: string;",
-	]);
-	assert.deepEqual(interfaceMembers("TopologySourceStepRecord"), [
-		"schemaVersion: 1;",
-		"repositoryId: string;",
-		"issueId: string;",
-		"claimCommentId: string;",
-		"authorizationRecordId: string;",
-		"planHash: string;",
-		"pairKey: string;",
-		"order: number;",
-		'method: "PATCH" | "POST" | "DELETE";',
-		"path: string;",
-		"requestBodyDigest: string | null;",
-		"beforeStateDigest: string;",
-		"afterStateDigest: string;",
-		"observedAt: string;",
-		"writerId: string;",
-	]);
-	assert.deepEqual(interfaceMembers("TopologySourceMismatch"), [
-		"arm: TopologySourceRefusalArm;",
-		"condition: string;",
-		"observedDigest: string | null;",
-	]);
-	assert.deepEqual(interfaceMembers("TopologySourceTerminalBase"), [
-		"schemaVersion: 1;",
-		"repositoryId: string;",
-		"issueId: string;",
-		"completedOrders: number[];",
-		"lastVerifiedStateDigest: string | null;",
-		"observedMismatch: TopologySourceMismatch | null;",
-		"remainingOrders: number[];",
-		"writerId: string;",
-		"observedAt: string;",
-	]);
-	requires(vocabulary, [
-		"export type TopologySourceTerminalRecord = TopologySourceTerminalBase &",
-		"authorizationRecordId: null;",
-		"claimCommentId: null;",
-		'outcome: "refused";',
-		"expiresAt: null;",
-		"authorizationRecordId: string;",
-		"expiresAt: string;",
-		'outcome: "partial" | "success";',
-	]);
-	assert.doesNotMatch(
-		`${authorization}\n${vocabulary}`,
-		/export (?:async )?function (?:execute|apply|mutate)TopologySource/u,
-	);
+test("#293 source-split authority is superseded rather than silently reused", () => {
+	settlement(spec);
+	assert.ok(readme.includes("must not be authorized or executed"));
+	assert.ok(adr.includes("#293 source-split plan and marker must not be authorized or executed"));
 });
 
-test("#296 closes expiry evidence for unique unattested candidates", () => {
-	requires(topology, [
-		"a unique marked candidate uses its platform GraphQL comment node id even when its payload is unattested",
-		"It may be null only on a pre-claim refused/no-source-write",
-		"Null expiry is forbidden for `authorization-stale`, `stage-mismatch`, `pair-mismatch`",
-		"No candidate-selected invalid field, plan, caller value, or current instant supplies a fabricated expiry",
-	]);
-	assert.equal(vocabulary.match(/expiresAt: null;/gu)?.length, 2);
-	assert.equal(vocabulary.match(/expiresAt: string;/gu)?.length, 2);
-	assert.match(
-		vocabulary,
-		/authorizationRecordId: null;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?completedOrders: \[\];[\s\S]*?lastVerifiedStateDigest: null;[\s\S]*?arm: "authorization-absent" \| "authorization-ambiguous";[\s\S]*?observedDigest: string;[\s\S]*?expiresAt: null;/u,
-	);
-	assert.match(
-		vocabulary,
-		/authorizationRecordId: string;[\s\S]*?claimCommentId: null;[\s\S]*?outcome: "refused";[\s\S]*?completedOrders: \[\];[\s\S]*?lastVerifiedStateDigest: null;[\s\S]*?arm: "authorization-unattested";[\s\S]*?observedDigest: string;[\s\S]*?expiresAt: null;/u,
-	);
-	assert.doesNotMatch(vocabulary, /authorizationRecordId: string \| null;[\s\S]*?expiresAt: string \| null;/u);
+test("retained runtime receives one bounded removal owner", () => {
+	for (const token of [
+		"retire `bootstrap.ts`, `provenance.ts`, `topology-authorization.ts`",
+		"retire `attestTopologyPlan` and `loadTopologyAuthorization`",
+		"| 6 | new Execution | Retire remaining old source-split/topology/policy assets",
+		"hard prerequisite of Phase 7",
+	])
+		assert.ok(spec.includes(token), `missing migration token: ${token}`);
 });
 
-test("#289 contract mutants fail at their missing member", () => {
-	for (const { anchor, replacement } of [
-		{
-			anchor: "immediate GET-before-write is the recorded optimistic-emulation residual",
-			replacement: "the plan is a sufficient optimistic comparison",
-		},
-		{
-			anchor: "Mismatch never continues or rolls back automatically",
-			replacement: "Mismatch may continue or roll back automatically",
-		},
-		{
-			anchor: "exact target without matching records is not success",
-			replacement: "exact target without matching records is success",
-		},
-		{
-			anchor: "Authorization id is null exactly for zero or multiple marked authorization candidates",
-			replacement: "Authorization id may be null for any refusal",
-		},
-		{
-			anchor: "does not arm the topology carrier, bootstrap, pilot or guarded landing",
-			replacement: "arms the topology carrier and guarded landing",
-		},
-	] as const) {
-		const mutated = topology.replace(anchor, replacement);
-		assert.notEqual(mutated, topology, `mutant anchor did not match: ${anchor}`);
-		assert.throws(
-			() => assertContract(mutated),
-			(error: unknown) => error instanceof Error && error.message === `missing source-split contract token: ${anchor}`,
-		);
-	}
+test("the replacement apply contract does not inherit marker/claim machinery", () => {
+	for (const token of [
+		"supersedes #286/#289's source-split marker",
+		"no Issue marker, escape record or claim population is required",
+		"--confirm-plan-hash <hash>",
+		"Partial or ambiguous writes stop",
+	])
+		assert.ok(spec.includes(token), `missing replacement token: ${token}`);
 });

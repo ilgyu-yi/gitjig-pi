@@ -149,182 +149,173 @@ function assertRepairContract(source: string): void {
 		"correct or widen the cumulative trailers or the surviving artifact",
 	]);
 	requires(sectionIn(source, "### 3.2 The three tiers", "### 3.3 Gate classes"), [
-		"protected-branch landing and deletion protection",
-		"merge-commit-only method, non-fast-forward history, deletion protection, and review-thread resolution",
+		"one native `repository-governance` ruleset",
+		"broad administrator bypass",
+		"does not require `ac-closeout`",
 	]);
-	requires(sectionIn(source, "### 3.3 Gate classes", "### 3.4 Agent-agnosticism of the tiers"), [
+	requires(sectionIn(source, "### 3.3 Gate classes", "### 3.4 Human-value precedence and agent-agnostic tiers"), [
 		"A misplaced row is a reversible document defect",
 		"separately recorded §3.11 backstop obligation",
 		"activation, Directive completion, empty-change completion, or ready transition firing without its required evidence artifact",
 	]);
-	requires(sectionIn(source, "### 3.4 Agent-agnosticism of the tiers", "### 3.5 Gate conduct"), [
+	requires(sectionIn(source, "### 3.4 Human-value precedence and agent-agnostic tiers", "### 3.5 Gate conduct"), [
 		"No enforced norm depends on a specific agent or model",
-		'MISSION § "Success looks like > Agent-agnosticism"',
-		"pi-independent repository floor",
+		"Human-value filter",
+		"§4.8 records the optional Tier-1 operator surface",
 	]);
-	requires(sectionIn(source, "### 3.7 Approval-gate completeness", "### 3.8 Escape architecture"), [
-		"empty-change completion",
-		"Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance",
-		"The `approval-evidence` class is deliberately doorless for all four reversible acts",
+	requires(
+		sectionIn(
+			source,
+			"### 3.7 Approval-gate completeness",
+			"### 3.8 Landing authority, administration, and configurable governance",
+		),
+		[
+			"empty-change completion",
+			"Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance",
+			"The `approval-evidence` class is deliberately doorless for all four reversible acts",
+			"produce fresh canonical evidence",
+		],
+	);
+	requires(
+		sectionIn(source, "### 3.8 Landing authority, administration, and configurable governance", "### 3.9 Fail policy"),
+		[
+			"`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` family",
+			"Each channel was measured on a fresh armed clone",
+			"outside **§5.9's disarm bar**",
+			"work tree selected on the command line or through `core.worktree` keeps the separate §3.2 disposition",
+		],
+	);
+}
+
+const gates = section("### 3.3 Gate classes", "### 3.4 Human-value precedence and agent-agnostic tiers");
+const escapeSection = section(
+	"### 3.8 Landing authority, administration, and configurable governance",
+	"### 3.9 Fail policy",
+);
+
+function assertUnchangedSettlementContracts(source: string): void {
+	requires(sectionIn(source, "### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc"), [
+		"`awaiting-author` is an Issue/PR handoff",
+		"Resolver `repair`",
+		"eligible-human PR `CHANGES_REQUESTED`",
+		"Human review never contributes to §1.4's Resolver-repair count",
+		"PR synchronization to any new head clears",
+		"only an Issue body edit by that Issue's author clears",
+		"`{condition,recovery,observedAt,subjectHead,baseHead}`",
+		"Clearing a blocker never activates proposed work",
+		"explicit **completion review**",
+		"binds the current Directive body",
+		"Completion review is per-success-signal evidence sufficiency",
+	]);
+	requires(sectionIn(source, "### 3.3 Gate classes", "### 3.4 Human-value precedence and agent-agnostic tiers"), [
+		"`protected-branch` ref-identity semantics",
+		"one derived identity P",
+		"Stage 1 reads the local pointer",
+		"Stage 2, only where stage 1 fails",
+		"Byte-equal to P",
+		"ASCII-case-fold-equal to P but byte-unequal",
+		"identity established as **not P**",
+		"P underivable",
+	]);
+	requires(sectionIn(source, "### 3.6 Enforcement-face selection", "### 3.7 Approval-gate completeness"), [
+		"Worked application — the egress boundary",
+		"reuses the commit-time secret gate's pattern source",
+		"neutralizes relayed mentions and actionable references",
+	]);
+	requires(sectionIn(source, "### 3.7 Approval-gate completeness", "### 3.8 Landing authority"), [
+		"(a) **Attribution, subject binding, and freshness**",
+		"(b) **No silent skip**",
+		"(c) **Fail-closed lookup**",
+		"(d) **Evidence provenance**",
+		"Nit carry-forward",
+		"(e) **Predicate integrity**",
 		"produce fresh canonical evidence",
 	]);
-	requires(sectionIn(source, "### 3.8 Escape architecture", "### 3.9 Fail policy"), [
-		"protected-branch landing and deletion protection",
-		"`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` family",
-		"Each channel was measured on a fresh armed clone",
-		"outside **§5.9's disarm bar**",
-		"work tree selected on the command line or through `core.worktree` keeps the separate §3.2 disposition",
-	]);
 }
 
-const lifecycle = section("### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc");
-const tiers = section("### 3.2 The three tiers", "### 3.3 Gate classes");
-const gates = section("### 3.3 Gate classes", "### 3.4 Agent-agnosticism of the tiers");
-const calibration = section("### 3.6 Enforcement-face selection", "### 3.7 Approval-gate completeness");
-const approvals = section("### 3.7 Approval-gate completeness", "### 3.8 Escape architecture");
-const escapeSection = section("### 3.8 Escape architecture", "### 3.9 Fail policy");
-const design = section("### 3.11 Gate design", "### 3.12 Gate verification");
-const modes = section("### 5.6 Operating modes", "### 5.7 Run conduct");
-const conduct = section("### 5.7 Run conduct", "### 5.8 Context lifecycle");
-
-function actorContract(source: string): void {
-	requires(source, [
-		"platform actor type `User`",
-		"`OWNER`, `MEMBER`, or `COLLABORATOR`",
-		"actor id differs from the pull request author id",
-		"`Bot`, App, an absent or unknown actor type or association, author self-review, dismissed, pending, comment-only, and stale-head reviews do not count",
-		"positive integer configured only by the `human-approval` ruleset",
-		"code carries no second quorum default",
-		"`MAINTAIN` or `ADMIN`",
-		"explicitly addressed repository permission endpoint",
-		"own-behalf rule",
-		"attested installation and node identity appear in committed policy",
-	]);
-}
-
-function modeContract(source: string): void {
-	requires(source, [
-		"`merge-mode: off | on`",
-		"`decision-mode: handoff | autonomous`",
-		"`--merge-mode`",
-		"`GITJIG_MERGE_MODE`",
-		"`mergeMode`",
-		"default `off`",
-		"Unknown, conflicting, or unreadable",
-		"falls to `off`",
-		"`--decision-mode`",
-		"`GITJIG_DECISION_MODE`",
-		"`decisionMode`",
-		"default `handoff`",
-		"ordinary landing first",
-		"only when quorum alone blocks",
-		"Decision mode grants no landing authority",
-	]);
-}
-
-describe("#273 actor-neutral landing settlement", () => {
-	it("closes the canonical actor predicates and the one quorum owner", () => actorContract(escapeSection));
-
-	it("pins independent merge and decision settings with fail-safe resolution", () => modeContract(modes));
-
-	it("settles ordinary and discretionary landing without turning intent into approval", () => {
-		requires(escapeSection, [
-			"Ordinary landing requires",
-			"current eligible-human quorum",
-			"all core governance",
-			"Discretionary landing requires",
-			"`merge:bypass-permitted`",
-			"PR-only intent",
-			"never approval, readiness, evidence, capability, a check, or a command",
-			"exactly 24 hours",
-			"consumes and removes",
-			"on success or refusal",
-			"quorum alone",
-		]);
-	});
-
-	it("makes core governance doorless and the human quorum the sole Tier-3 door", () => {
-		requires(escapeSection, [
-			"core governance is doorless",
-			"only Tier-3 door",
-			"human quorum",
-			"changelog, ssot-home, toc-freshness, source-style, type-check, suite, ac-closeout",
-			"protected-branch landing and deletion protection, force-push, required contexts including never-reported contexts, review-thread resolution, merge method, head and base freshness, and history",
-		]);
-		assert.ok(tiers.includes("Before the split-ruleset phase activates, the quorum escape is disabled"));
-	});
-
-	it("makes unauthorized landing the wrong-allow class and closes calibration inputs", () => {
-		requires(calibration, [
-			"unauthorized landing",
-			"core governance plus either current eligible-human quorum or one valid consumed escape",
-			"non-pass verdicts, blocked transitions, handoff records, and escapes",
-			"delay when quorum alone is unavailable",
+describe("#301 maintainer-terminal settlement with retained #273 locks", () => {
+	it("retains unchanged lifecycle, ref-identity, egress, and approval contracts with killed mutants", () => {
+		assertUnchangedSettlementContracts(spec);
+		for (const token of [
+			"`awaiting-author` is an Issue/PR handoff",
+			"Human review never contributes to §1.4's Resolver-repair count",
+			"Clearing a blocker never activates proposed work",
+			"Completion review is per-success-signal evidence sufficiency",
+			"`protected-branch` ref-identity semantics",
+			"Stage 1 reads the local pointer",
+			"ASCII-case-fold-equal to P but byte-unequal",
+			"P underivable",
 			"Worked application — the egress boundary",
 			"reuses the commit-time secret gate's pattern source",
 			"neutralizes relayed mentions and actionable references",
-		]);
-	});
-
-	it("pins the restored ref identity and approval cross-reference targets", () => {
-		requires(gates, [
-			"`protected-branch` ref-identity semantics",
-			"one derived identity P",
-			"Stage 1 reads the local pointer",
-			"Stage 2, only where stage 1 fails",
-			"Byte-equal to P",
-			"ASCII-case-fold-equal to P but byte-unequal",
-			"identity established as **not P**",
-			"P underivable",
-		]);
-		requires(approvals, [
 			"(a) **Attribution, subject binding, and freshness**",
 			"(b) **No silent skip**",
 			"(c) **Fail-closed lookup**",
 			"(d) **Evidence provenance**",
-			"Nit carry-forward",
 			"(e) **Predicate integrity**",
+		]) {
+			const mutant = spec.replace(token, "MUTATED-UNCHANGED-CONTRACT");
+			assert.notEqual(mutant, spec, `unchanged mutant anchor missing: ${token}`);
+			assert.throws(() => assertUnchangedSettlementContracts(mutant), `surviving unchanged mutant: ${token}`);
+		}
+	});
+
+	it("pins human value before placement and calibration", () => {
+		requires(read("MISSION.md"), ["**Human operability**", "Tier 2 and Tier 3 are independently useful"]);
+		requires(section("### 3.4 Human-value precedence and agent-agnostic tiers", "### 3.5 Gate conduct"), [
+			"Human-value filter",
+			"Deciding-information placement",
+			"Cost calibration",
+			"§4.8",
 		]);
+	});
+
+	it("pins label-only and operator-directed landing without retiring general escape doctrine", () => {
 		requires(escapeSection, [
+			"Escape architecture",
 			"Total-coverage rule",
-			"Core governance takes the deliberate doorless disposition",
 			"Refusal-record rule",
-			"exactly one content-free terminal record naming the refusing arm",
+			"writer-supplied advisory",
+			"waives **exactly one predicate",
+			"no TTL, escape record, claim, consumption",
+			"gitjig-operator-directed-merge: v1",
+			"audit-publication-ambiguous",
+			"one attempt",
+		]);
+		for (const retired of [
+			"A valid escape record is",
+			"A policy producer is either",
+			"atomically claims one valid record",
+		])
+			assert.ok(!escapeSection.includes(retired), `retired landing authority survives: ${retired}`);
+	});
+
+	it("pins one configurable repository profile and history shape", () => {
+		requires(gates, ["| repository-governance |", "| history-shape |"]);
+		requires(escapeSection, [
+			".github/workflows/history-shape.mjs",
+			"git rev-list --min-parents=2 M..<head-sha>",
+			"GitHub `required_linear_history` is false",
+			"native-required `ac-closeout`: false",
+			".github/gitjig-governance.json",
+			".github/workflows/gitjig-governance.mjs",
+			".github/bin/gitjig-governance.mjs",
+			"--confirm-plan-hash <hash>",
 		]);
 	});
 
-	it("settles lifecycle records, transitions, and the Resolver-only repair count", () => {
-		requires(lifecycle, [
-			"`awaiting-author` is an Issue/PR handoff",
-			"Resolver `repair`",
-			"eligible-human PR `CHANGES_REQUESTED`",
-			"Human review never contributes to §1.4's Resolver-repair count",
-			"PR synchronization to any new head clears",
-			"only an Issue body edit by that Issue's author clears",
-			"`blocked`",
-			"`{condition,recovery,observedAt,subjectHead,baseHead}`",
-			"Clearing a blocker never activates proposed work",
-			"`{cause,recipient,reentry,observedAt,subjectHead,baseHead}`",
-			"explicit **completion review**",
-			"required evidence artifact is the platform comment",
-			"binds the current Directive body",
-			"Completion review is per-success-signal evidence sufficiency",
-			"archived as a write-once record",
+	it("pins bounded supersession and no live mutation", () => {
+		requires(escapeSection, [
+			"superseded-dormant migration inputs only",
+			"No live ruleset or repository-setting mutation",
+			"| 1R | new reconciliation Execution under #261 |",
+			"hard prerequisite of Phase 7",
 		]);
-	});
-
-	it("authorizes merged state rather than equating it with panel review", () => {
-		requires(design, [
-			"merged state is authorized landing state",
-			"current eligible-human quorum plus all core facts",
-			"consumed escape record plus all core facts",
+		requires(read("docs/adr/0001-maintainer-terminal-governance.md"), [
+			"Supersedes",
+			"Rejected alternatives",
+			"Residual risks",
 		]);
-	});
-
-	it("keeps the phase-1 boundary explicit", () => {
-		requires(conduct, ["Phase 2 owns", "transition writers and clearers"]);
-		requires(gates, ["Phase 2", "Phase 3", "Phase 4"]);
-		assert.ok(spec.includes("Phase 5"));
 	});
 
 	it("removes every retired merge-review runtime, workflow, posture, and pending claim", () => {
@@ -495,9 +486,9 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "The `change-reach` class is deliberately doorless",
 			},
 			{
-				anchor: "protected-branch landing and deletion protection",
-				replacement: "protected-branch landing",
-				expected: "protected-branch landing and deletion protection",
+				anchor: "one native `repository-governance` ruleset",
+				replacement: "two native governance rulesets",
+				expected: "one native `repository-governance` ruleset",
 			},
 			{
 				anchor: "A misplaced row is a reversible document defect",
@@ -510,9 +501,9 @@ describe("#273 actor-neutral landing settlement", () => {
 				expected: "No enforced norm depends on a specific agent or model",
 			},
 			{
-				anchor: "pi-independent repository floor",
-				replacement: "Pi-independent repository floor",
-				expected: "pi-independent repository floor",
+				anchor: "§4.8 records the optional Tier-1 operator surface",
+				replacement: "the operator surface is unspecified",
+				expected: "§4.8 records the optional Tier-1 operator surface",
 			},
 			{
 				anchor: "Empty-change author-equality additionally owes §2.2's fresh isolated compare-confirmed provenance",
@@ -596,7 +587,7 @@ describe("#273 actor-neutral landing settlement", () => {
 	it("keeps mission and adopter-facing prose actor-neutral", () => {
 		for (const path of ["MISSION.md", "README.md"]) {
 			const body = read(path);
-			assert.ok(body.includes("authorized landing"), `${path} lacks authorized-landing wording`);
+			assert.ok(body.includes("landing"), `${path} lacks landing wording`);
 			assert.ok(body.includes("human"), `${path} omits human operation`);
 			for (const retired of ["review-gated merge", "attended", "unattended", "merge-review"]) {
 				assert.ok(!body.includes(retired), `${path} retains ${retired}`);
