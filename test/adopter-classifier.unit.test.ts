@@ -69,6 +69,7 @@ describe("#250 exact source-only marker and ordered classifier", () => {
 		assert.equal(classifyCandidate(".pi/prompts/x.md", Buffer.from("x\n")), "carried");
 		assert.equal(classifyCandidate(".pi/unknown.txt", Buffer.from("x\n")), "refuse");
 		assert.equal(classifyCandidate(".github/workflows/x.yml", Buffer.from("x\n")), "handed-over");
+		assert.equal(classifyCandidate(".github/gitjig-governance.json", Buffer.from("{}\n")), "target-owned-instance");
 		assert.equal(classifyCandidate(".github/landing-topology.json", Buffer.from("{}\n")), "source-only");
 		assert.equal(classifyCandidate(".githooks/pre-commit", Buffer.from("x\n")), "handed-over");
 		assert.equal(classifyCandidate("changelog_unreleased/TEMPLATE.md", Buffer.from("x\n")), "handed-over");

@@ -25,11 +25,11 @@ const CONTRACT_CLAUSES = [
 	],
 	[
 		"ordered total classifier",
-		"Classification is ordered and total: valid marker → **source-only**; `changelog_unreleased/TEMPLATE.md` → **handed-over**; other `changelog_unreleased/**` → **instance-state**; `.pi/extensions/gitjig.ts`, `.pi/extensions/gitjig/**`, and `.pi/prompts/**` → **carried**; another `.pi/**` → refuse until settled; `.github/**` and `.githooks/**` → **handed-over**.",
+		"Classification is ordered and total: valid marker → **source-only**; `.github/gitjig-governance.json` → **target-owned-instance**; `changelog_unreleased/TEMPLATE.md` → **handed-over**; other `changelog_unreleased/**` → **instance-state**; `.pi/extensions/gitjig.ts`, `.pi/extensions/gitjig/**`, and `.pi/prompts/**` → **carried**; another `.pi/**` → refuse until settled; `.github/**` and `.githooks/**` → **handed-over**.",
 	],
 	[
-		"closed four-disposition membership snapshot",
-		"All four dispositions remain in the path-sorted committed snapshot `test/fixtures/adopter-membership.snapshot.json`. Its closed v1 JSON has exactly `schemaVersion: 1` and `members`; `members` contains every valid source candidate exactly once as `{path,disposition}`, ordered by unsigned UTF-8 path bytes, and `disposition` is exactly `source-only`, `instance-state`, `handed-over`, or `carried`.",
+		"closed five-disposition membership snapshot",
+		"All five dispositions remain in the path-sorted committed snapshot `test/fixtures/adopter-membership.snapshot.json`. Its closed v1 JSON has exactly `schemaVersion: 1` and `members`; `members` contains every valid source candidate exactly once as `{path,disposition}`, ordered by unsigned UTF-8 path bytes, and `disposition` is exactly `source-only`, `target-owned-instance`, `instance-state`, `handed-over`, or `carried`.",
 	],
 	[
 		"snapshot check ownership",

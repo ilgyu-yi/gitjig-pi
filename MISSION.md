@@ -2,23 +2,30 @@
 
 ## What this exists for
 
-An **agent-agnostic operating shell** that enforces engineering work norms — the GitHub-standard flow (issue → branch → draft PR → authorized landing) together with documentation, testing, and evidence discipline — for work performed by agents and their human operators, running on the [pi harness](https://github.com/earendil-works/pi). pi provides no built-in permission system; the shell therefore treats its enforcement layer as the only safety net — a commitment independent of any permissions the substrate may later grow. Without this shell, agentic work degrades to unauthorized, unevidenced change: nothing structural stands between an agent's mistake and the main branch.
+Gitjig exists to make governed software change legible, repeatable, and safe without making an agent a prerequisite. It supplies a disciplined path from intent through evidence, review, landing, and audit while preserving complete human-operated paths at every repository-governance layer.
+
+Pi is the optional Tier-1 shell. It adds agent-specific orchestration, review composition, credential-use discipline, and durable evidence. Git and GitHub remain independently useful for humans: Tier 2 is good local Git discipline, and Tier 3 is good repository governance whether or not Pi is installed or running.
 
 ## Success looks like
 
-- **Traceability** — every merged change is traceable through the standard flow (issue → branch → draft PR → authorized landing), observable in the repository history at any date.
-- **Enforcement** — norm violations are blocked or surfaced by the shell's enforcement layer (the gate classes the SPEC enumerates); because pi has no permission system of its own, nothing else stands behind that layer.
-- **Agent-agnosticism** — no enforced norm depends on a specific agent or model; a different agent harness can operate under the same norms.
-- **Evidence** — durable artifacts (issues, PR bodies, commits) carry their claims as pointers or pinned command output, never as unverifiable assertions.
+- **Traceability** — a reader can connect intent, evidence, review, decision, and landed change.
+- **Enforcement** — irreversible acts are guarded where the deciding facts exist, with explicit failure and bypass semantics.
+- **Agent-agnosticism** — repository governance does not depend on one model, agent, or harness.
+- **Evidence** — claims are backed by durable, intelligible artifacts rather than ceremony.
+- **Human operability** — humans can develop, review, merge, administer, install, and audit without Pi; Tier 2 and Tier 3 are independently useful and desirable human disciplines. Tier 1 earns its place by adding safety for agent operation, not by making ordinary human governance valid.
 
 ## Explicitly NOT goals
 
-- Being an agent or a harness itself — the shell governs work; it does not perform it.
-- Forking or wrapping any specific agent product.
-- Serving as a general-purpose permission system for pi — the enforcement layer guards the shell's own norms, not arbitrary substrate access.
+- Replacing native human review, merge, or repository administration with agent-only ceremony.
+- Treating an automation identity, a second person, or a platform identity split as mandatory for single-maintainer development.
+- Defending against a malicious repository administrator; administrators retain the platform's broad administrative authority and audit trail.
+- Making Tier-1-only evidence, including Review → Judge → Resolver or `ac-closeout`, a native repository requirement by default.
+- Mutating live repository settings merely because configuration changed or a plan was generated.
+- Requiring globally linear Git history. PRs are grouped by merge commits on the first-parent line while the complete DAG may remain intentionally non-linear.
+- Settling maintenance forward-port timing or exceptions here; that policy is owned by #300 and any later activated contract it promotes.
 
 ## Stakeholders
 
-Maintainer: ilgyu-yi (decision maker). Primary users: the agents and human operators working under the shell.
+Maintainer: ilgyu-yi (decision maker). Primary users: agents and human operators working under the shell, including humans operating Tier 2 and Tier 3 directly.
 
-## Last reviewed: 2026-08-28
+## Last reviewed: 2026-09-07

@@ -62,7 +62,7 @@ function recordedContexts(label: string, pattern: RegExp): string[] {
 
 const TIER3_CONTEXTS = recordedContexts(
 	"§3.2 tier-3 source-repository",
-	/current unsplit configuration requires the workflow contexts \(([^)]*)\)/,
+	/Current source required-check contexts equal the CI job names \(([^)]*)\)/,
 );
 const SHAPE_CONTEXTS = recordedContexts(
 	"§4.3 server-config shape",

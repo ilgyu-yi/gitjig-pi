@@ -33,7 +33,7 @@ function assertModeAcceptedSet(source: string): void {
 		"default `handoff`",
 		"falls to `handoff`",
 		"ordinary landing first",
-		"only when quorum alone blocks",
+		"default labeled native-approval waiver",
 		"Decision mode grants no landing authority",
 	]);
 	for (const retired of ["execution mode", "`attended`", "`unattended`", "merge-or-park"]) {
@@ -48,8 +48,8 @@ function assertConductAcceptedSet(source: string): void {
 		"A soft blocker earns exactly one self-repair attempt",
 		"A hard blocker emits one handoff record",
 		"`{cause,recipient,reentry,observedAt,subjectHead,baseHead}`",
-		"No actor satisfies a gate on its own behalf",
-		"Phase 2 owns the lifecycle transition writers and clearers",
+		"No universal own-behalf or independent-identity restriction applies",
+		"#276 owns lifecycle transition writers and clearers",
 	]);
 	for (const retired of ["parks", "Parking", "park instruments", "marker label"]) {
 		assert.ok(!conduct.includes(retired), `retired durable-stop member survives: ${retired}`);
@@ -92,7 +92,7 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		const widened = spec.replace("`merge-mode: off | on`", "`merge-mode: off | on | force`");
 		assert.notEqual(widened, spec, "merge-mode mutant anchor did not match");
 		assert.throws(() => assertModeAcceptedSet(widened));
-		const weakened = spec.replaceAll("only when quorum alone blocks", "whenever landing blocks");
+		const weakened = spec.replaceAll("default labeled native-approval waiver", "unbounded waiver");
 		assert.notEqual(weakened, spec, "escape-order mutant anchor did not match");
 		assert.throws(() => assertModeAcceptedSet(weakened));
 	});

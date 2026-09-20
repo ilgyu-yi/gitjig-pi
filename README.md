@@ -84,40 +84,21 @@ npm run typecheck
 
 `typecheck` runs `tsc --noEmit`: it checks the annotations node's type stripping erases, and emits nothing. No path in the run path depends on its output.
 
-## Inspecting the Phase-4 topology handoff
+## Human operation and landing
 
-Phase 4A is read-only. The topology planner reads the addressed repository, complete ruleset details, repository merge settings, the authenticated account's collaborator role, and the GitHub Actions integration. Its output is an **unauthorized** before/after/rollback artifact: do not copy its API calls into a shell until the separately activated Phase 4B records an operator authorization for the exact plan hash.
+Pi is optional. Humans can use Tier-2 Git discipline and Tier-3 GitHub governance directly, including native multi-person approval and ordinary merge, single-administrator own-PR landing, broad emergency administrator bypass, and governance installation/audit. Direct human administration relies on GitHub's audit surfaces and is outside Tier-1 guarantees.
 
-A human can inspect the same inputs without Pi:
+Tier 1 always tries ordinary landing first and requires current Review → Judge → final Resolver `clear` on its default paths. `merge:bypass-permitted` is a writer-supplied advisory, not approval or a capability. The default labeled Tier-1 path waives only missing native approval; every other Tier-1 predicate must pass. The label has no TTL, record, claim, consumption, App producer, or own-behalf restriction, and is invalidated only by head movement, live-base movement, or writer removal.
 
-```sh
-gh api repos/OWNER/REPO
-gh api --paginate --slurp 'repos/OWNER/REPO/rulesets?includes_parents=true&per_page=100'
-gh api repos/OWNER/REPO/rulesets/RULESET_ID
-gh api apps/github-actions
-gh api repos/OWNER/REPO/collaborators/LOGIN/permission
-```
+A current operator may instead direct Tier 1 to bypass named or all currently observed policy blockers. Tier 1 must enumerate blockers and risks, ensure the label, publish the exact durable `gitjig-operator-directed-merge` audit comment, re-read identity/head/base operands, and make one attempt. Publication failure or ambiguity stops before merge; retry requires fresh confirmation and a new comment. Such an instruction does not authorize settings mutation, direct/force push, deletion, credential changes, releases, or acts in another repository.
 
-A human can also render the closed artifact from a clean checkout (with Node TypeScript stripping) without invoking Pi:
+## Configurable repository governance
 
-```sh
-repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
-node --experimental-strip-types --input-type=module -e \
-  'import {loadTopologyPlanningSnapshot,planSplitTopology} from "./.pi/extensions/gitjig/landing/topology-plan.ts";
-   const snapshot=await loadTopologyPlanningSnapshot("github.com",process.argv[1],process.cwd());
-   if (!snapshot) process.exit(2);
-   const result=planSplitTopology(snapshot);
-   console.log(JSON.stringify(result,null,2));
-   if (!result.ok || result.plan.authorized !== false) process.exit(3)' "$repo" > topology-plan.json
-```
+The selectable default Tier-3 profile is one native ruleset with one approval, stale-approval dismissal, resolved threads, strict base freshness, checks `fragment-gate`, `ssot-home`, `toc-freshness`, `source-style`, `type-check`, `suite`, and `history-shape`, merge commits only, and broad administrator bypass. `ac-closeout` is Tier-1-only by default. `history-shape` rejects topic-side merge commits, including target backmerges; ordinary topics rebase, while the protected target receives a merge commit. The first-parent line therefore groups PRs linearly while the full DAG is intentionally non-linear; GitHub required-linear-history stays off.
 
-Inspect `before`, every ordered `steps[*].{method,path,body,postRead}`, optimistic ids/instants, `beforeDigest`, `desiredDigest`, the derived `correlationId`, the planner-owned whole `artifactHash`, and reverse-order `rollback` entries. Never translate those calls into an ad hoc shell loop. The one application surface is `/source-split repo=OWNER/REPO issue=N plan=topology-plan.json [host=github.com]`; it attests that bounded repository-owned artifact, re-derives live topology and authority, appends/re-reads the winning claim, and owns every compare/write/post-read/record transition. Keep that exact artifact for replay or partial recovery under its winning claim. Without Pi, a human may pass the same parsed artifact to the exported `loadTopologySourceApplication` then `executePlatformTopologySource` functions from `source-split-platform.ts` with Node TypeScript stripping; this is the same service and effect boundary, not a second executor. Drift or mismatch stops with the append-only terminal as the operator recovery artifact; rollback bodies are information, never executable authority, and recovery never improvises a direct push or broader bypass.
+Each repository's selections live at `.github/gitjig-governance.json`. The derived human CLI is `.github/bin/gitjig-governance.mjs` with `configure`, `plan`, `apply`, and `audit`; the shared engine is `.github/workflows/gitjig-governance.mjs`, and the Pi surface calls that same engine rather than reimplementing it. Interactive human, agent-assisted, and non-interactive operation share config and semantics. config changes never mutate server state: apply requires a complete GET-only plan, displayed exact repository and plan hash, explicit confirmation, per-write post-read, and final audit. Partial or ambiguous writes stop without invented success or automatic rollback.
 
-Expected end state is one default-branch `core-governance` ruleset with no bypass and one `human-approval` ruleset whose only bypass is repository role 5 in pull-request mode. Repository merge settings allow merge commits and disable squash/rebase. The authorized Phase-4 scratch proof established that this quorum-only bypass leaves an independently composed doorless core enforced; that evidence is not source mutation authority.
-
-The plan remains unauthorized data. A later authorization is valid only when one completely paginated GET-only read finds one unedited human platform comment, its author is the current authenticated actor with freshly read `admin` collaborator permission, and its explicit issued/expiry window, repository, source pair, correlation id and whole artifact hash all match. Source application is record-first and stepwise: claim the exact authorization, immediate GET/compare, execute only the plan's method/path/body, exact post-read, then append step evidence. Drift or mismatch stops without continuation or automatic rollback; replay requires the same winning claim and recorded exact live state. Pre-split source and post-split carrier plans have different keys, hashes, records and authorization stages; neither transfers. The application implementation exports closed parsers, one effect-injected service, and the one operator surface; without a unique admitted marker it may append a refusal terminal but performs no ruleset or repository-setting write.
-
-The dormant bootstrap service is not a general installer. It can consider only a PR whose sole semantic constituent is canonical `.github/landing-topology.json`, after a fresh exact plan authorization and a valid escape producer distinct under the existing own-behalf rule. Phase 4B therefore requires either a genuinely distinct authorized human producer or a separately configured source App identity; no single-maintainer exception exists. Phase 4A performs none of these server actions.
+The previously documented fixed split-topology/source-split plan is superseded and must not be authorized or executed. Its retained code is dormant migration input pending SPEC §3.8's ordered removal phases. No live ruleset or repository-setting mutation is authorized by the #301 contract settlement.
 
 ## Documentation
 
