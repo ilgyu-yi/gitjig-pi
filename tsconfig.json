@@ -41,6 +41,10 @@
 		".github/workflows/ac-closeout.mjs",
 		".github/workflows/ac-closeout-event.mjs",
 		".github/workflows/lifecycle-event.mjs",
+		".github/workflows/gitjig-governance.mjs",
+		".github/workflows/gitjig-governance-service.mjs",
+		".github/workflows/gitjig-governance-platform.mjs",
+		".github/bin/gitjig-governance.mjs",
 		"test/**/*.ts"
 	]
 }

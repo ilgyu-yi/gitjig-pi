@@ -66,6 +66,10 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/bin/gitjig-governance.mjs",
+			"disposition": "handed-over"
+		},
+		{
 			"path": ".github/gitjig-governance.json",
 			"disposition": "target-owned-instance"
 		},
@@ -123,6 +127,14 @@
 		},
 		{
 			"path": ".github/workflows/dir-mode-post-merge.yml",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/gitjig-governance-platform.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/gitjig-governance-service.mjs",
 			"disposition": "handed-over"
 		},
 		{
@@ -203,6 +215,10 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/commands/authoring-brief.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/commands/governance.ts",
 			"disposition": "carried"
 		},
 		{
@@ -595,6 +611,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/308.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/310.md",
 			"disposition": "instance-state"
 		},
 		{

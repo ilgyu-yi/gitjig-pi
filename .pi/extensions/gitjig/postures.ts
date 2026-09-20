@@ -533,6 +533,22 @@ export const POSTURES: readonly PostureRow[] = [
 			"Choosing among malformed or ambiguous records can erase the authoritative handoff. The false-block cost is a stuck lifecycle label; repair the marker-keyed comment history through the owning transition service, then replay.",
 	},
 	{
+		dependency: "governance-operator-input",
+		failureShape:
+			"a CLI or Pi subcommand, fixed config/plan path, interactive input, non-interactive flag, current-session confirmation, or exact repository/hash operand is missing, malformed, conflicting, stale, or replayed",
+		posture: "closed",
+		justification:
+			"No config or server write begins from inferred operator intent. Repair the exact input and start a fresh invocation; config presence and prior confirmation authorize nothing.",
+	},
+	{
+		dependency: "governance-platform-operation",
+		failureShape:
+			"a complete read, pagination terminal, compare operand, write acknowledgement, post-read, remaining suffix, or final shared-engine audit is absent, ambiguous, incomplete, or drifting",
+		posture: "closed",
+		justification:
+			"The executor stops without retry or rollback and reports its completed prefix/current state/remaining suffix. Remeasure and obtain a fresh plan and confirmation before another invocation.",
+	},
+	{
 		dependency: "governance-config",
 		failureShape:
 			"the target-owned governance config is absent, malformed, duplicated, contradictory, unsupported, incomplete, or bound to another repository",

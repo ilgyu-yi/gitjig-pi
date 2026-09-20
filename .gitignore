@@ -8,3 +8,6 @@
 # Dev-and-CI dependency tree. Never committed, never part of the substrate an
 # adopting repository receives.
 /node_modules/
+
+# Interrupted atomic governance-config candidates are never repository input.
+/.github/.gitjig-governance.*.tmp
