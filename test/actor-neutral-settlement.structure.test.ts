@@ -193,7 +193,73 @@ const escapeSection = section(
 	"### 3.9 Fail policy",
 );
 
+function assertUnchangedSettlementContracts(source: string): void {
+	requires(sectionIn(source, "### 2.2 Lifecycle states", "### 2.3 PR-as-living-doc"), [
+		"`awaiting-author` is an Issue/PR handoff",
+		"Resolver `repair`",
+		"eligible-human PR `CHANGES_REQUESTED`",
+		"Human review never contributes to §1.4's Resolver-repair count",
+		"PR synchronization to any new head clears",
+		"only an Issue body edit by that Issue's author clears",
+		"`{condition,recovery,observedAt,subjectHead,baseHead}`",
+		"Clearing a blocker never activates proposed work",
+		"explicit **completion review**",
+		"binds the current Directive body",
+		"Completion review is per-success-signal evidence sufficiency",
+	]);
+	requires(sectionIn(source, "### 3.3 Gate classes", "### 3.4 Human-value precedence and agent-agnostic tiers"), [
+		"`protected-branch` ref-identity semantics",
+		"one derived identity P",
+		"Stage 1 reads the local pointer",
+		"Stage 2, only where stage 1 fails",
+		"Byte-equal to P",
+		"ASCII-case-fold-equal to P but byte-unequal",
+		"identity established as **not P**",
+		"P underivable",
+	]);
+	requires(sectionIn(source, "### 3.6 Enforcement-face selection", "### 3.7 Approval-gate completeness"), [
+		"Worked application — the egress boundary",
+		"reuses the commit-time secret gate's pattern source",
+		"neutralizes relayed mentions and actionable references",
+	]);
+	requires(sectionIn(source, "### 3.7 Approval-gate completeness", "### 3.8 Landing authority"), [
+		"(a) **Attribution, subject binding, and freshness**",
+		"(b) **No silent skip**",
+		"(c) **Fail-closed lookup**",
+		"(d) **Evidence provenance**",
+		"Nit carry-forward",
+		"(e) **Predicate integrity**",
+		"produce fresh canonical evidence",
+	]);
+}
+
 describe("#301 maintainer-terminal settlement with retained #273 locks", () => {
+	it("retains unchanged lifecycle, ref-identity, egress, and approval contracts with killed mutants", () => {
+		assertUnchangedSettlementContracts(spec);
+		for (const token of [
+			"`awaiting-author` is an Issue/PR handoff",
+			"Human review never contributes to §1.4's Resolver-repair count",
+			"Clearing a blocker never activates proposed work",
+			"Completion review is per-success-signal evidence sufficiency",
+			"`protected-branch` ref-identity semantics",
+			"Stage 1 reads the local pointer",
+			"ASCII-case-fold-equal to P but byte-unequal",
+			"P underivable",
+			"Worked application — the egress boundary",
+			"reuses the commit-time secret gate's pattern source",
+			"neutralizes relayed mentions and actionable references",
+			"(a) **Attribution, subject binding, and freshness**",
+			"(b) **No silent skip**",
+			"(c) **Fail-closed lookup**",
+			"(d) **Evidence provenance**",
+			"(e) **Predicate integrity**",
+		]) {
+			const mutant = spec.replace(token, "MUTATED-UNCHANGED-CONTRACT");
+			assert.notEqual(mutant, spec, `unchanged mutant anchor missing: ${token}`);
+			assert.throws(() => assertUnchangedSettlementContracts(mutant), `surviving unchanged mutant: ${token}`);
+		}
+	});
+
 	it("pins human value before placement and calibration", () => {
 		requires(read("MISSION.md"), ["**Human operability**", "Tier 2 and Tier 3 are independently useful"]);
 		requires(section("### 3.4 Human-value precedence and agent-agnostic tiers", "### 3.5 Gate conduct"), [
