@@ -327,6 +327,8 @@ export async function loadPlatformLanding(
 		"require_code_owner_review",
 		"require_last_push_approval",
 		"required_review_thread_resolution",
+		"required_reviewers",
+		"require_extra_approval_for_unattributed_changes",
 		"allowed_merge_methods",
 	]);
 	if (
@@ -337,6 +339,8 @@ export async function loadPlatformLanding(
 			typeof pullParameters.require_code_owner_review !== "boolean" ||
 			typeof pullParameters.require_last_push_approval !== "boolean" ||
 			typeof pullParameters.required_review_thread_resolution !== "boolean" ||
+			!Array.isArray(pullParameters.required_reviewers) ||
+			typeof pullParameters.require_extra_approval_for_unattributed_changes !== "boolean" ||
 			!Array.isArray(pullParameters.allowed_merge_methods))
 	)
 		return { arm: "pull-request-rule-malformed" };
@@ -346,10 +350,14 @@ export async function loadPlatformLanding(
 		statusRule !== undefined &&
 		(!status ||
 			Object.keys(status).some(
-				(key) => key !== "required_status_checks" && key !== "strict_required_status_checks_policy",
+				(key) =>
+					key !== "required_status_checks" &&
+					key !== "strict_required_status_checks_policy" &&
+					key !== "do_not_enforce_on_create",
 			) ||
 			!Array.isArray(status.required_status_checks) ||
-			typeof status.strict_required_status_checks_policy !== "boolean")
+			typeof status.strict_required_status_checks_policy !== "boolean" ||
+			typeof status.do_not_enforce_on_create !== "boolean")
 	)
 		return { arm: "status-rule-malformed" };
 	const configuredChecks: { context: string; integrationId: number | null }[] = [];
@@ -381,7 +389,12 @@ export async function loadPlatformLanding(
 		)
 	)
 		return { arm: "pull-request-rule-malformed" };
-	if (pullParameters?.require_code_owner_review === true || pullParameters?.require_last_push_approval === true)
+	if (
+		pullParameters?.require_code_owner_review === true ||
+		pullParameters?.require_last_push_approval === true ||
+		array(pullParameters?.required_reviewers).length > 0 ||
+		pullParameters?.require_extra_approval_for_unattributed_changes === true
+	)
 		return { arm: "pull-request-rule-unsupported" };
 	const requiredApprovals = Number(pullParameters?.required_approving_review_count ?? 0);
 	if (!Number.isInteger(requiredApprovals) || requiredApprovals < 0) return { arm: "native-approval-unmeasurable" };

@@ -38,5 +38,8 @@ describe("interim current-platform predicates", () => {
 		assert.match(source, /integrationId/);
 		assert.match(source, /item\.appId === integrationId/);
 		assert.match(source, /source_type !== "Repository"/);
+		assert.match(source, /required_reviewers/);
+		assert.match(source, /require_extra_approval_for_unattributed_changes/);
+		assert.match(source, /do_not_enforce_on_create/);
 	});
 });
