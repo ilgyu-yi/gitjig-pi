@@ -533,6 +533,22 @@ export const POSTURES: readonly PostureRow[] = [
 			"Choosing among malformed or ambiguous records can erase the authoritative handoff. The false-block cost is a stuck lifecycle label; repair the marker-keyed comment history through the owning transition service, then replay.",
 	},
 	{
+		dependency: "history-shape-graph",
+		failureShape:
+			"the live base/head commit, merge base, complete non-shallow graph, or exact topic-range merge population is absent, malformed, ambiguous, or unreadable",
+		posture: "closed",
+		justification:
+			"An incomplete graph cannot vouch that the topic contains no merge. The false-block cost is a delayed PR; fetch complete history or repair the named operand and rerun the read-only check.",
+	},
+	{
+		dependency: "history-shape-trust",
+		failureShape:
+			"the repository/PR/base/head identity drifts, the live base predicate bytes are unavailable or unverifiable, or the contributor head cannot be fetched strictly as graph data",
+		posture: "closed",
+		justification:
+			"Contributor-controlled policy code or stale operands cannot decide the Tier-3 check. The false-block cost is a delayed PR; replay from the current trusted base revision after platform reads recover.",
+	},
+	{
 		dependency: "landing-label-hygiene",
 		failureShape:
 			"the landing-label-hygiene.yml invalidate job cannot completely enumerate or reread the synchronize/base-push population, or its exact label removal cannot be observed",

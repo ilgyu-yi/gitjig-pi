@@ -1,0 +1,45 @@
+name: history-shape
+
+on:
+  pull_request_target:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: history-shape-${{ github.repository_id }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  history-shape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted base revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          path: trusted
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Stage trusted predicate bytes
+        run: cp trusted/.github/workflows/history-shape.mjs "$RUNNER_TEMP/history-shape.mjs"
+      - name: Checkout contributor graph with complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: graph
+          persist-credentials: false
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Reject topic-side merge commits
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HISTORY_SHAPE_TRUSTED_CWD: ${{ github.workspace }}/trusted
+          HISTORY_SHAPE_GRAPH_CWD: ${{ github.workspace }}/graph
+        run: node "$RUNNER_TEMP/history-shape.mjs"
