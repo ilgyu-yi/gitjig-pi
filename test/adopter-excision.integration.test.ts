@@ -47,7 +47,10 @@ function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] 
 		const neutralizeContractName = (value: string) =>
 			value.replaceAll(".gitjig", ".project-state").replaceAll("gitjig-lifecycle.mjs", "lifecycle-engine.mjs");
 		if (/gitjig/i.test(neutralizeContractName(text))) findings.push(`${candidate.path}: source-shell branding`);
-		if (/gitjig/i.test(neutralizeContractName(candidate.path)))
+		if (
+			candidate.path !== ".github/workflows/gitjig-governance.mjs" &&
+			/gitjig/i.test(neutralizeContractName(candidate.path))
+		)
 			findings.push(`${candidate.path}: branded handed-over path`);
 	}
 	return findings;

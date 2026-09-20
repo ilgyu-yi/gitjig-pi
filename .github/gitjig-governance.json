@@ -1,0 +1,49 @@
+{
+	"schemaVersion": 1,
+	"repository": {
+		"id": "R_kgDOUGyFBQ",
+		"nameWithOwner": "ilgyu-yi/gitjig-pi",
+		"defaultBranch": "main"
+	},
+	"ruleset": {
+		"name": "repository-governance",
+		"target": "branch",
+		"include": ["~DEFAULT_BRANCH"],
+		"exclude": []
+	},
+	"capabilities": {
+		"mergeCommits": { "mode": "selected", "value": true },
+		"squashMerging": { "mode": "disabled" },
+		"rebaseMerging": { "mode": "disabled" },
+		"rulesetEnforcement": { "mode": "selected", "value": "active" },
+		"administratorBypass": {
+			"mode": "selected",
+			"value": [{ "actorId": 5, "actorType": "RepositoryRole", "bypassMode": "always" }]
+		},
+		"allowedMergeMethods": { "mode": "selected", "value": ["merge"] },
+		"requiredApprovingReviews": { "mode": "selected", "value": 1 },
+		"dismissStaleReviews": { "mode": "selected", "value": true },
+		"requiredReviewers": { "mode": "disabled" },
+		"codeOwnerReview": { "mode": "disabled" },
+		"lastPushApproval": { "mode": "disabled" },
+		"reviewThreadResolution": { "mode": "selected", "value": true },
+		"extraApprovalForUnattributedChanges": { "mode": "unmanaged" },
+		"strictRequiredStatusChecks": { "mode": "selected", "value": true },
+		"doNotEnforceOnCreate": { "mode": "disabled" },
+		"requiredStatusChecks": {
+			"mode": "selected",
+			"value": [
+				{ "context": "fragment-gate", "integrationId": 15368 },
+				{ "context": "ssot-home", "integrationId": 15368 },
+				{ "context": "toc-freshness", "integrationId": 15368 },
+				{ "context": "source-style", "integrationId": 15368 },
+				{ "context": "type-check", "integrationId": 15368 },
+				{ "context": "suite", "integrationId": 15368 },
+				{ "context": "history-shape", "integrationId": 15368 }
+			]
+		},
+		"deletionProtection": { "mode": "selected", "value": true },
+		"nonFastForwardProtection": { "mode": "selected", "value": true },
+		"requiredLinearHistory": { "mode": "disabled" }
+	}
+}
