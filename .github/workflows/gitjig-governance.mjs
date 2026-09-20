@@ -181,6 +181,19 @@ function validCheck(value) {
 	return closed(value, ["context", "integrationId"]) && scalarSequence(value.context) && positive(value.integrationId);
 }
 /** @param {any[]} value */
+function validReviewers(value) {
+	return (
+		Array.isArray(value) &&
+		uniqueCanonical(value) &&
+		value.every(
+			(reviewer) =>
+				closed(reviewer, ["actorId", "actorType"]) &&
+				positive(reviewer.actorId) &&
+				["RepositoryRole", "Team", "Integration"].includes(reviewer.actorType),
+		)
+	);
+}
+/** @param {any[]} value */
 function validChecks(value) {
 	return (
 		Array.isArray(value) &&
@@ -213,7 +226,7 @@ function validCapabilityValue(name, value) {
 		);
 	if (name === "requiredApprovingReviews")
 		return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 6;
-	if (name === "requiredReviewers") return Array.isArray(value) && value.length === 0;
+	if (name === "requiredReviewers") return validReviewers(value);
 	if (name === "requiredStatusChecks") return validChecks(value);
 	return false;
 }
@@ -229,7 +242,7 @@ function disabledValue(name) {
 
 /** @param {string} name @param {any} value */
 function validMeasuredValue(name, value) {
-	if (name === "administratorBypass") return validCapabilityValue(name, value);
+	if (name === "administratorBypass" || name === "requiredReviewers") return validCapabilityValue(name, value);
 	if (name === "allowedMergeMethods")
 		return (
 			Array.isArray(value) &&
@@ -389,7 +402,7 @@ export function parseMeasuredGovernance(input) {
 	}
 	const parsed = structuredClone(measured);
 	parsed.rulesets[0].ruleTypes.sort(compareRuleTypes);
-	for (const name of ["administratorBypass", "allowedMergeMethods", "requiredStatusChecks"])
+	for (const name of ["administratorBypass", "allowedMergeMethods", "requiredReviewers", "requiredStatusChecks"])
 		parsed.capabilities[name].sort(compareCanonical);
 	return parsed;
 }

@@ -135,13 +135,14 @@ describe("pure governance planner and auditor", () => {
 	it("plans selected and disabled drift only, in canonical capability order", () => {
 		const live = measured();
 		live.capabilities.requiredApprovingReviews = 0;
+		live.capabilities.requiredReviewers = [{ actorId: 17, actorType: "Team" }];
 		live.capabilities.requiredLinearHistory = true;
 		live.rulesets[0].ruleTypes.push("required_linear_history");
 		live.capabilities.extraApprovalForUnattributedChanges = false;
 		const plan = planGovernance(config, live);
 		assert.deepEqual(
 			plan.operations.map((operation) => operation.capability),
-			["requiredApprovingReviews", "requiredLinearHistory"],
+			["requiredApprovingReviews", "requiredReviewers", "requiredLinearHistory"],
 		);
 		assert.equal(auditGovernance(config, live).compliant, false);
 	});
