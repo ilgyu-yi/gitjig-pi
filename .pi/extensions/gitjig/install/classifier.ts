@@ -95,7 +95,6 @@ export function classifyCandidate(path: string, bytes: Buffer): Classification {
 	const marker = classifyMarker(bytes);
 	if (marker !== "absent") return marker;
 	if (path === ".github/gitjig-governance.json") return "target-owned-instance";
-	if (path === ".github/landing-topology.json") return "source-only";
 	if (path === "changelog_unreleased/TEMPLATE.md") return "handed-over";
 	if (path.startsWith("changelog_unreleased/")) return "instance-state";
 	if (

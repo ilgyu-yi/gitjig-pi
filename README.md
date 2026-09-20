@@ -98,7 +98,7 @@ The selectable default Tier-3 profile is one native ruleset with one approval, s
 
 Each repository's selections live at `.github/gitjig-governance.json`; every supported capability is explicitly selected, disabled, or unmanaged/preserve-only. The pure shared parser, validator, planner, hasher, and auditor is `.github/workflows/gitjig-governance.mjs`. Operator surfaces use that engine: the human CLI at `.github/bin/gitjig-governance.mjs` with `configure`, `plan`, `apply`, and `audit`, and the Pi `/governance` consultation wrapper without reimplementation. Interactive human, agent-assisted, and non-interactive operation share config and semantics. Config changes and pure plans never mutate or authorize server state: later apply requires a complete GET-only plan, displayed exact repository and plan hash, explicit confirmation, per-write post-read, and final audit. Partial or ambiguous writes stop without invented success or automatic rollback.
 
-The previously documented fixed split-topology/source-split plan is superseded and must not be authorized or executed. Its retained code is dormant migration input pending SPEC §3.8's ordered removal phases. No live ruleset or repository-setting mutation is authorized by the #301 contract settlement.
+The previously documented fixed split-topology/source-split plan is superseded and must not be authorized or executed. Phase 6 removed its retained runtime and completed the declared-term migration. No live ruleset or repository-setting mutation is authorized by the #301 contract settlement; Phase 7 still requires fresh separate authorization.
 
 ## Documentation
 

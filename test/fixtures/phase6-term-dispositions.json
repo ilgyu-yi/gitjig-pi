@@ -1,0 +1,474 @@
+[
+	{
+		"pathBase64": "UkVBRE1FLm1k",
+		"tokenBase64": "L3NvdXJjZS1zcGxpdA==",
+		"lineBase64": "VGhlIHByZXZpb3VzbHkgZG9jdW1lbnRlZCBmaXhlZCBzcGxpdC10b3BvbG9neS9zb3VyY2Utc3BsaXQgcGxhbiBpcyBzdXBlcnNlZGVkIGFuZCBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBQaGFzZSA2IHJlbW92ZWQgaXRzIHJldGFpbmVkIHJ1bnRpbWUgYW5kIGNvbXBsZXRlZCB0aGUgZGVjbGFyZWQtdGVybSBtaWdyYXRpb24uIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGUgIzMwMSBjb250cmFjdCBzZXR0bGVtZW50OyBQaGFzZSA3IHN0aWxsIHJlcXVpcmVzIGZyZXNoIHNlcGFyYXRlIGF1dGhvcml6YXRpb24u",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current README completed-migration and separate-application statement"
+	},
+	{
+		"pathBase64": "UkVBRE1FLm1k",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "VGhlIHByZXZpb3VzbHkgZG9jdW1lbnRlZCBmaXhlZCBzcGxpdC10b3BvbG9neS9zb3VyY2Utc3BsaXQgcGxhbiBpcyBzdXBlcnNlZGVkIGFuZCBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBQaGFzZSA2IHJlbW92ZWQgaXRzIHJldGFpbmVkIHJ1bnRpbWUgYW5kIGNvbXBsZXRlZCB0aGUgZGVjbGFyZWQtdGVybSBtaWdyYXRpb24uIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGUgIzMwMSBjb250cmFjdCBzZXR0bGVtZW50OyBQaGFzZSA3IHN0aWxsIHJlcXVpcmVzIGZyZXNoIHNlcGFyYXRlIGF1dGhvcml6YXRpb24u",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current README completed-migration and separate-application statement"
+	},
+	{
+		"pathBase64": "UkVBRE1FLm1k",
+		"tokenBase64": "c3BsaXQtdG9wb2xvZ3k=",
+		"lineBase64": "VGhlIHByZXZpb3VzbHkgZG9jdW1lbnRlZCBmaXhlZCBzcGxpdC10b3BvbG9neS9zb3VyY2Utc3BsaXQgcGxhbiBpcyBzdXBlcnNlZGVkIGFuZCBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBQaGFzZSA2IHJlbW92ZWQgaXRzIHJldGFpbmVkIHJ1bnRpbWUgYW5kIGNvbXBsZXRlZCB0aGUgZGVjbGFyZWQtdGVybSBtaWdyYXRpb24uIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGUgIzMwMSBjb250cmFjdCBzZXR0bGVtZW50OyBQaGFzZSA3IHN0aWxsIHJlcXVpcmVzIGZyZXNoIHNlcGFyYXRlIGF1dGhvcml6YXRpb24u",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current README completed-migration and separate-application statement"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c3VwZXJzZWRlZC1kb3JtYW50",
+		"lineBase64": "KipTZXR0bGVtZW50LioqIEEgbmV3IG5vcm1hdGl2ZSBjb250cmFjdCBpcyBzZXR0bGVkIGJlZm9yZSBpbXBsZW1lbnRhdGlvbiBkZXJpdmVzIGZyb20gaXQsIGFuZCB0aGUganVkZ2Ugb2YgYSBjaGFuZ2UncyBjbGFpbWVkIGF1dGhvcml6YXRpb24gY2FzZSDigJQgaW5jbHVkaW5nIHdoZXRoZXIgYSBjb250cmFjdCBpcyBub3JtYXRpdmUsIGFuZCBpbmNsdWRpbmcgdGhlIHByZWNlZGVuY2UgcnVsZSBhYm92ZSDigJQgaXMgdGhlIGFjdGl2YXRpb24gZ2F0ZSAowqcyLjIpLCBuZXZlciB0aGUgZXhlY3V0b3IgKMKnNS43KS4gVGhlIHNldHRsZW1lbnQgbW9kZSBkZXJpdmVzIGZyb20gdGhlIGNvbnRyYWN0J3MgcmVhY2gg4oCUIGEgZGVjbGFyYXRpb24gdGhlIGlzc3VlIGJvZHkgaXRzZWxmIG93ZXMgZm9yIGFueSBzZXR0bGVtZW50IGNsYWltLCBhZGp1ZGljYXRlZCBhdCBhY3RpdmF0aW9uOyBhIHNldHRsZW1lbnQgY2xhaW0gd2l0aCBubyBkZWNsYXJlZCByZWFjaCBpcyBub3QgYWN0aW9uYWJsZSBhbmQgZG9lcyBub3QgYWN0aXZhdGUg4oCUIG5ldmVyIGZyb20gYW4gZXhwZWN0YXRpb24gb2YgZGlmZmljdWx0eSwgd2hpY2ggaXMgdGhlIHNhbWUgZ3Vlc3MgwqcyLjYgZXhpc3RzIHRvIHJlcGxhY2UuIEEgY29udHJhY3QgdGhhdCBhbWVuZHMgYSBzZXR0bGVkIHNlY3Rpb24sIG9yIHJldGlyZXMgb3IgcmUtcm9sZXMgZXhpc3RpbmcgU1NPVCB2b2NhYnVsYXJ5IChhIG5vbi1lbXB0eSBkZWNsYXJlZCBzZXQsIMKnMi42KSwgbGFuZHMgYXMgaXRzIG93biBjaGFuZ2U6IGFkanVkaWNhdGVkIGF0IGFjdGl2YXRpb24sIG1lcmdlZCBiZWZvcmUgYW55IGltcGxlbWVudGF0aW9uIGRlcml2ZXMgZnJvbSBpdCDigJQgdGhlIHNldHRsaW5nIGNoYW5nZSBpdHNlbGYgY2FycmllcyDCpzIuNShjKSdzIGNvbXBlbGxlZCBtaWdyYXRpb24gb2YgdGhlIHJldGlyZWQgdm9jYWJ1bGFyeSdzIGNhbGwgc2l0ZXMsIHJ1bGVkIGluIGEgZml4ZWQgb3JkZXI6IHdvcmsgdGhlIGNvbnRyYWN0IG5ld2x5IG93ZXMgaXMgZGVyaXZhdGlvbiBhbmQgbGFuZHMgb25seSBhZnRlciB0aGUgbWVyZ2U7IGEgY2hhbmdlIHRvIHdoYXQgYW55IGNoZWNrIGFjY2VwdHMsIG1hZGUgaW4gdGhlIGNvdXJzZSBvZiB0aGF0IG1pZ3JhdGlvbiwgaXMgdGhlIHNldHRsaW5nIGNoYW5nZSdzIG93biBFdmlkZW5jZSBvYmxpZ2F0aW9uOyBhbmQgd2hhdCByZW1haW5zIOKAlCByZS1wb2ludGluZyByZWZlcmVuY2VzIHRvIHRoZSByZXRpcmVkIHZvY2FidWxhcnksIG5vdGhpbmcgZWxzZSDigJQgaXMgbWlncmF0aW9uLiBBIHJlLXBpbiBjcml0ZXJpb24ga2V5ZWQgb24gYSBjaGVjaydzIGFjY2VwdGVkIHNldCBub3Qgc2hyaW5raW5nIGVtcHRpZXMgaW4gYm90aCBkaXJlY3Rpb25zIOKAlCByZS1wb2ludGluZyBhIHJldGlyZWQgdG9rZW4gYWx3YXlzIHNocmlua3MgdGhlIHNldCB0aGUgY2hlY2sgYWNjZXB0ZWQsIHNvIHJlYWwgbWlncmF0aW9uIHJlYWRzIGFzIG5ldyBldmlkZW5jZSwgd2hpbGUgYSBsb29zZW5pbmcgbmV2ZXIgc2hyaW5rcyB0aGF0IHNldCwgc28gYSB3ZWFrZW5lZCBnYXRlIHJlYWRzIGFzIG1lcmUgbWlncmF0aW9uIGFuZCBlc2NhcGVzIEV2aWRlbmNlIOKAlCB3aGljaCBpcyB3aHkgbWlncmF0aW9uIGlzIGRlZmluZWQgcG9zaXRpdmVseSBpbnN0ZWFkOyByZWNvcmRlZCBoZXJlIHNvIGl0IGlzIG5vdCByZS1wcm9wb3NlZC4gQSBib3VuZGVkIGNvcnJlY3RpdmUgdHJhbnNpdGlvbiBtYXkgZXhjZXB0aW9uYWxseSBmbGlwIG5vcm1hdGl2ZSBhdXRob3JpdHkgYmVmb3JlIG1lY2hhbmljYWxseSBkZWxldGluZyBhbiBhbHJlYWR5LWxhbmRlZCBpbXBsZW1lbnRhdGlvbiBvbmx5IHdoZW4gdGhlIHNldHRsZW1lbnQgbmFtZXMgZXZlcnkgcmV0YWluZWQgc3VyZmFjZSwgcHJvdmVzIHRoZSBsaXZlIHN1YmplY3QgdW5hcm1lZCwgZXhwbGljaXRseSBwcm9oaWJpdHMgdGhlIG9sZCBvcGVyYXRpb24sIGFkbWl0cyBubyBuZXcgY2FsbGVyLCBhc3NpZ25zIGVhY2ggc3Vydml2b3Igb25lIHJlbW92YWwvbWlncmF0aW9uIG93bmVyLCBhbmQgbWFrZXMgdGhhdCBjbGVhbnVwIGEgaGFyZCBwcmVyZXF1aXNpdGUgb2YgcmVwbGFjZW1lbnQgYXBwbGljYXRpb24gb3IgcGlsb3QuIFRoaXMgaXMgbm90IGNvbXBhdGliaWxpdHkgYXV0aG9yaXR5LiBUaGUgb25lIMKnMy44IGluc3RhbmNlIGNvbXBsZXRlZCBpdHMgYm91bmRlZCBjbGVhbnVwIGluIFBoYXNlIDY6IGV2ZXJ5IG5hbWVkIHJldGFpbmVkIHN1cmZhY2Ugd2FzIHJlbW92ZWQsIGFuZCBubyBjdXJyZW50IHN1cGVyc2VkZWQtZG9ybWFudCBpbnB1dCByZW1haW5zLiDCpzMuOCByZWNvcmRzIHRoYXQgY29tcGxldGVkIGluc3RhbmNlIGFuZCBwcmVzZXJ2ZXMgdGhlIHNlcGFyYXRlLWF1dGhvcml6YXRpb24gYm91bmRhcnkgZm9yIHJlcGxhY2VtZW50IGFwcGxpY2F0aW9uLiBBIHB1cmVseSBhZGRpdGl2ZSBjb250cmFjdCB3aG9zZSByZWFjaCBzdGF5cyB3aXRoaW4gaXRzIG93biBuZXcgY2xhdXNlIHNldHRsZXMgYXQgYWN0aXZhdGlvbiBhbG9uZTogdGhlIGlzc3VlIGJvZHkgY2FycmllcyB0aGUgY29udHJhY3QsIHRoZSBhY3RpdmF0aW9uIHJldmlldyBhZGp1ZGljYXRlcyBpdCwgYW5kIHRoZSBpbXBsZW1lbnRpbmcgUFIgbGFuZHMgdGhlIFNTT1QgYW1lbmRtZW50IGJlc2lkZSBpdHMgdGVzdHMgYW5kIGNvZGUsIHJldmlld2VkIGFuZCBjbG9zZWQgb3V0IGFnYWluc3QgdGhlIGFjdGl2YXRlZCBjb250cmFjdCBhcyB5YXJkc3RpY2sgKMKnMi4yJ3MgQUMtY2xvc2VvdXQpIOKAlCBzbyB0aGUgaW1wbGVtZW50YXRpb24gY2Fubm90IGJlY29tZSB0aGUgc291cmNlIG9mIHRydXRoLiBUaGUgYWN0aXZhdGlvbiByZXZpZXdlciBjb25maXJtcyB0aGUgZGVyaXZlZCBtb2RlIGFuZCBkZXZpYXRlcyBvbmx5IHdpdGggdGhlIGdyb3VuZCByZWNvcmRlZCBpbiB0aGUgYWN0aXZhdGlvbiB2ZXJkaWN0IOKAlCB0aGUgYWRqdWRpY2F0aW9uIGlzIHdoYXQga2VlcHMgdGhlIGRlcml2YXRpb24ncyBpbnB1dCBvdXQgb2YgdGhlIGF1dGhvcidzIGhhbmRzIGFsb25lLg==",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c3VwZXJzZWRlZC1kb3JtYW50",
+		"lineBase64": "LSAoZCkgT25lIGJvdW5kZWQgdHJhbnNpdGlvbiBleGNlcHRpb246IMKnMS4yJ3MgY29ycmVjdGl2ZSBhdXRob3JpdHkgZmxpcCBtYXkgdGVtcG9yYXJpbHkgcmV0YWluIG9ubHkgZXhwbGljaXRseSBuYW1lZCBzdXBlcnNlZGVkLWRvcm1hbnQgc3VyZmFjZXMgdW5kZXIgb25lIG93bmVyIGFuZCBkZWFkbGluZTsgaXQgYXV0aG9yaXplcyBubyBjYWxsIG9yIGNvbXBhdGliaWxpdHkgdXNlLiBUaGUgc29sZSAjMzAxIGluc3RhbmNlIGNvbXBsZXRlZCB0aGF0IGRlYWRsaW5lIGluIFBoYXNlIDYgYW5kIHJldGFpbnMgbm8gc3VjaCBzdXJmYWNlLg==",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "VG9wb2xvZ3lBdXRob3JpemF0aW9u",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "VG9wb2xvZ3lQbGFu",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "YXR0ZXN0VG9wb2xvZ3lQbGFu",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "bG9hZFRvcG9sb2d5QXV0aG9yaXphdGlvbg==",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGF0dGVzdFRvcG9sb2d5UGxhbmAgYW5kIGBsb2FkVG9wb2xvZ3lBdXRob3JpemF0aW9uYCBhcyBhdXRob3JpdHkgc3VyZmFjZXM7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "L3NvdXJjZS1zcGxpdA==",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 1,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 2,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 3,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "dG9wb2xvZ3ktYXV0aG9yaXphdGlvbg==",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "dG9wb2xvZ3ktcGxhbg==",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "dG9wb2xvZ3ktcHJvdmVuYW5jZQ==",
+		"lineBase64": "LSBQaGFzZSA2IHJlbW92ZWQgYGJvb3RzdHJhcC50c2AsIGBwcm92ZW5hbmNlLnRzYCwgYHRvcG9sb2d5LWF1dGhvcml6YXRpb24udHNgLCBgdG9wb2xvZ3ktcGxhbi50c2AsIGB0b3BvbG9neS1wcm92ZW5hbmNlLnRzYCwgYHNvdXJjZS1zcGxpdC1jb250cmFjdC50c2AsIGBzb3VyY2Utc3BsaXQtcGxhdGZvcm0udHNgLCBgc291cmNlLXNwbGl0LXNlcnZpY2UudHNgLCBhbmQgYC9zb3VyY2Utc3BsaXRgIGFmdGVyIHByZXNlcnZpbmcgc3VwZXJzZXNzaW9uIGV2aWRlbmNlIGluIEFEUi9jaGFuZ2Vsb2c7",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
+		"lineBase64": "LSByZXRpcmUgYC5naXRodWIvbGFuZGluZy1wb2xpY3kuanNvbmAgYW5kIGAuZ2l0aHViL3dvcmtmbG93cy9sYW5kaW5nLXBvbGljeS5tanNgOw==",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
+		"lineBase64": "LSByZXRpcmUgYC5naXRodWIvbGFuZGluZy1wb2xpY3kuanNvbmAgYW5kIGAuZ2l0aHViL3dvcmtmbG93cy9sYW5kaW5nLXBvbGljeS5tanNgOw==",
+		"ordinal": 1,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "bGFuZGluZy10b3BvbG9neQ==",
+		"lineBase64": "LSB0aGUgZml4ZWQgYC5naXRodWIvd29ya2Zsb3dzL2xhbmRpbmctdG9wb2xvZ3kubWpzYCBwYXJzZXIgYW5kIGAuZ2l0aHViL2xhbmRpbmctdG9wb2xvZ3kuanNvbmAgZXhwZWN0YXRpb24gd2VyZSByZXBsYWNlZCBieSBgLmdpdGh1Yi9naXRqaWctZ292ZXJuYW5jZS5qc29uYCBhbmQgdGhlIHNoYXJlZCBlbmdpbmUsIHRoZW4gcmVtb3ZlZCBpbiBQaGFzZSA2Ow==",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "bGFuZGluZy10b3BvbG9neQ==",
+		"lineBase64": "LSB0aGUgZml4ZWQgYC5naXRodWIvd29ya2Zsb3dzL2xhbmRpbmctdG9wb2xvZ3kubWpzYCBwYXJzZXIgYW5kIGAuZ2l0aHViL2xhbmRpbmctdG9wb2xvZ3kuanNvbmAgZXhwZWN0YXRpb24gd2VyZSByZXBsYWNlZCBieSBgLmdpdGh1Yi9naXRqaWctZ292ZXJuYW5jZS5qc29uYCBhbmQgdGhlIHNoYXJlZCBlbmdpbmUsIHRoZW4gcmVtb3ZlZCBpbiBQaGFzZSA2Ow==",
+		"ordinal": 1,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "U291cmNlLXNwbGl0",
+		"lineBase64": "QXBwbHkgYXV0aG9yaXphdGlvbiBkZWxpYmVyYXRlbHkgc3VwZXJzZWRlcyAjMjg2LyMyODkncyBzb3VyY2Utc3BsaXQgbWFya2VyLCBzdGFnZSwgcGFpci1rZXkgYW5kIGNsYWltL3N0ZXAvdGVybWluYWwgYXV0aG9yaXR5LiBBIGRpcmVjdCBodW1hbiBpbnZvY2F0aW9uIGNvbmZpcm1zIHRoZSBkaXNwbGF5ZWQgZXhhY3QgcmVwb3NpdG9yeSBhbmQgcGxhbiBoYXNoIGF0IHRoZSBDTEkuIEFuIGFnZW50LWFzc2lzdGVkIGludm9jYXRpb24gcHJlc2VudHMgdGhlIHNhbWUgZXhhY3QgcmVwb3NpdG9yeSwgY29uZmlnLCBsaXZlIGRpZmYgYW5kIHBsYW4gaGFzaDsgYSBjdXJyZW50IG9wZXJhdG9yJ3MgZXhwbGljaXQgY29uZmlybWF0aW9uIGluIHRoYXQgc2Vzc2lvbiBhdXRob3JpemVzIG9uZSBpbnZvY2F0aW9uLiBBIG5vbi1pbnRlcmFjdGl2ZSBodW1hbiBpbnZvY2F0aW9uIHN1cHBsaWVzIGAtLWNvbmZpcm0tcGxhbi1oYXNoIDxoYXNoPmAuIENvbmZpcm1hdGlvbiBpcyBuZXZlciBpbmZlcnJlZCBmcm9tIGNvbmZpZyBwcmVzZW5jZSwgYSBwcmlvciBydW4sIFJlc29sdmVyIG91dHB1dCBvciBhIGdlbmVyaWMgcmVxdWVzdC4gSGVhZC9jb25maWcvbGl2ZS1zdGF0ZSBkcmlmdCByZXF1aXJlcyBhIG5ldyBwbGFuIGFuZCBjb25maXJtYXRpb24uIFNvdXJjZS1zcGxpdCBhbmQgY29uZmlndXJhYmxlLXBsYW4gYXJ0aWZhY3RzIGFyZSBub24taW50ZXJjaGFuZ2VhYmxlLg==",
+		"ordinal": 0,
+		"disposition": "retained",
+		"reason": "SPEC §3.8 configurable-installation supersession remains current and out of Phase-6 revision reach"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "cGFpci1rZXk=",
+		"lineBase64": "QXBwbHkgYXV0aG9yaXphdGlvbiBkZWxpYmVyYXRlbHkgc3VwZXJzZWRlcyAjMjg2LyMyODkncyBzb3VyY2Utc3BsaXQgbWFya2VyLCBzdGFnZSwgcGFpci1rZXkgYW5kIGNsYWltL3N0ZXAvdGVybWluYWwgYXV0aG9yaXR5LiBBIGRpcmVjdCBodW1hbiBpbnZvY2F0aW9uIGNvbmZpcm1zIHRoZSBkaXNwbGF5ZWQgZXhhY3QgcmVwb3NpdG9yeSBhbmQgcGxhbiBoYXNoIGF0IHRoZSBDTEkuIEFuIGFnZW50LWFzc2lzdGVkIGludm9jYXRpb24gcHJlc2VudHMgdGhlIHNhbWUgZXhhY3QgcmVwb3NpdG9yeSwgY29uZmlnLCBsaXZlIGRpZmYgYW5kIHBsYW4gaGFzaDsgYSBjdXJyZW50IG9wZXJhdG9yJ3MgZXhwbGljaXQgY29uZmlybWF0aW9uIGluIHRoYXQgc2Vzc2lvbiBhdXRob3JpemVzIG9uZSBpbnZvY2F0aW9uLiBBIG5vbi1pbnRlcmFjdGl2ZSBodW1hbiBpbnZvY2F0aW9uIHN1cHBsaWVzIGAtLWNvbmZpcm0tcGxhbi1oYXNoIDxoYXNoPmAuIENvbmZpcm1hdGlvbiBpcyBuZXZlciBpbmZlcnJlZCBmcm9tIGNvbmZpZyBwcmVzZW5jZSwgYSBwcmlvciBydW4sIFJlc29sdmVyIG91dHB1dCBvciBhIGdlbmVyaWMgcmVxdWVzdC4gSGVhZC9jb25maWcvbGl2ZS1zdGF0ZSBkcmlmdCByZXF1aXJlcyBhIG5ldyBwbGFuIGFuZCBjb25maXJtYXRpb24uIFNvdXJjZS1zcGxpdCBhbmQgY29uZmlndXJhYmxlLXBsYW4gYXJ0aWZhY3RzIGFyZSBub24taW50ZXJjaGFuZ2VhYmxlLg==",
+		"ordinal": 0,
+		"disposition": "retained",
+		"reason": "SPEC §3.8 configurable-installation supersession remains current and out of Phase-6 revision reach"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "QXBwbHkgYXV0aG9yaXphdGlvbiBkZWxpYmVyYXRlbHkgc3VwZXJzZWRlcyAjMjg2LyMyODkncyBzb3VyY2Utc3BsaXQgbWFya2VyLCBzdGFnZSwgcGFpci1rZXkgYW5kIGNsYWltL3N0ZXAvdGVybWluYWwgYXV0aG9yaXR5LiBBIGRpcmVjdCBodW1hbiBpbnZvY2F0aW9uIGNvbmZpcm1zIHRoZSBkaXNwbGF5ZWQgZXhhY3QgcmVwb3NpdG9yeSBhbmQgcGxhbiBoYXNoIGF0IHRoZSBDTEkuIEFuIGFnZW50LWFzc2lzdGVkIGludm9jYXRpb24gcHJlc2VudHMgdGhlIHNhbWUgZXhhY3QgcmVwb3NpdG9yeSwgY29uZmlnLCBsaXZlIGRpZmYgYW5kIHBsYW4gaGFzaDsgYSBjdXJyZW50IG9wZXJhdG9yJ3MgZXhwbGljaXQgY29uZmlybWF0aW9uIGluIHRoYXQgc2Vzc2lvbiBhdXRob3JpemVzIG9uZSBpbnZvY2F0aW9uLiBBIG5vbi1pbnRlcmFjdGl2ZSBodW1hbiBpbnZvY2F0aW9uIHN1cHBsaWVzIGAtLWNvbmZpcm0tcGxhbi1oYXNoIDxoYXNoPmAuIENvbmZpcm1hdGlvbiBpcyBuZXZlciBpbmZlcnJlZCBmcm9tIGNvbmZpZyBwcmVzZW5jZSwgYSBwcmlvciBydW4sIFJlc29sdmVyIG91dHB1dCBvciBhIGdlbmVyaWMgcmVxdWVzdC4gSGVhZC9jb25maWcvbGl2ZS1zdGF0ZSBkcmlmdCByZXF1aXJlcyBhIG5ldyBwbGFuIGFuZCBjb25maXJtYXRpb24uIFNvdXJjZS1zcGxpdCBhbmQgY29uZmlndXJhYmxlLXBsYW4gYXJ0aWZhY3RzIGFyZSBub24taW50ZXJjaGFuZ2VhYmxlLg==",
+		"ordinal": 0,
+		"disposition": "retained",
+		"reason": "SPEC §3.8 configurable-installation supersession remains current and out of Phase-6 revision reach"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c3BsaXQtdG9wb2xvZ3k=",
+		"lineBase64": "SXNzdWUgIzI2MSdzIGNvbXBsZXRlZCBoaXN0b3JpY2FsIHBoYXNlcyAx4oCTMyByZW1haW4gZXZpZGVuY2UsIG5vdCBjdXJyZW50IGF1dGhvcml0eS4gSXRzIG9sZCBzcGxpdC10b3BvbG9neSBQaGFzZSA0IGFuZCBwcm9maWxlIFBoYXNlIDUgcmV0aXJlLiBJbW1lZGlhdGVseSBhZnRlciB0aGlzIHNldHRsZW1lbnQgbWVyZ2VzLCBQaGFzZSAxUuKAlG5vdCBQaGFzZSA24oCUYXJjaGl2ZXMgIzI2MSdzIGFuZCAjMjgncyBwcmlvciBib2RpZXMsIHJldmlzZXMgYm90aCB0byB0aGUgY29ycmVjdGVkIG93bmVyc2hpcC9waGFzZSBjb250cmFjdHMgYW5kIHJlLWVudGVycyBlYWNoIGFjdGl2YXRpb24gZ2F0ZS4gUGhhc2VzIDLigJM3IGNhbm5vdCBkZXJpdmUgb3Igc3RhcnQgdW50aWwgUGhhc2UgMVIgcGFzc2VzLg==",
+		"ordinal": 0,
+		"disposition": "retained",
+		"reason": "SPEC §3.8 historical-phase disposition remains current and out of Phase-6 revision reach"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "VGhlIG9sZCBsYW5kaW5nIGVzY2FwZSBhcmNoaXRlY3R1cmUsIHNwbGl0IGBjb3JlLWdvdmVybmFuY2VgL2BodW1hbi1hcHByb3ZhbGAgdG9wb2xvZ3ksIG93bi1iZWhhbGYgcHJvZHVjZXIgcmVzdHJpY3Rpb24sIEFwcCBwcm9kdWNlciwgMjQtaG91ciByZWNvcmQsIGNsYWltL2NvbnN1bWUgcHJvdG9jb2wsIHNvdXJjZS1zcGxpdCBhdXRob3JpdHksIGFuZCBuYXRpdmUtcmVxdWlyZWQgYGFjLWNsb3Nlb3V0YCBhcmUgc3VwZXJzZWRlZC4gUGhhc2UgNiByZW1vdmVkIGV2ZXJ5IG5hbWVkIHJldGFpbmVkIHJ1bnRpbWUgc3VyZmFjZTsgbm8gc3VwZXJzZWRlZC1kb3JtYW50IG1pZ3JhdGlvbiBpbnB1dCByZW1haW5zLiBUaGUgcmV0aXJlZCBkZXNpZ25zIGF1dGhvcml6ZSBubyBvcGVyYXRpb24gYW5kIGFkbWl0IG5vIG5ldyBjYWxsZXIuIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGlzIHNldHRsZW1lbnQuIFBoYXNlIDYgcmVtb3ZhbCBpcyBhIGhhcmQgcHJlcmVxdWlzaXRlIG9mIFBoYXNlIDcgYW5kIGlzIG5vdyBjb21wbGV0ZTsgUGhhc2UgNyBzdGlsbCByZXF1aXJlcyBmcmVzaCBzZXBhcmF0ZSBhdXRob3JpemF0aW9uLiBUaGlzIGJvdW5kZWQgYXV0aG9yaXR5IGZsaXAgd2FzIHBlcm1pdHRlZCBvbmx5IGJlY2F1c2UgZXZlcnkgcmV0YWluZWQgc3VyZmFjZSBhbmQgb3duZXIgd2FzIG5hbWVkLCB0aGUgb2xkIG9wZXJhdGlvbiB3YXMgcHJvaGliaXRlZCwgdGhlIGxpdmUgc3ViamVjdCB3YXMgdW5hcm1lZCwgbm8gbmV3IGNhbGxlciBjb3VsZCBkZXJpdmUsIGFuZCBtaWdyYXRpb24gY29tcGxldGVkIGJlZm9yZSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4=",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c3VwZXJzZWRlZC1kb3JtYW50",
+		"lineBase64": "VGhlIG9sZCBsYW5kaW5nIGVzY2FwZSBhcmNoaXRlY3R1cmUsIHNwbGl0IGBjb3JlLWdvdmVybmFuY2VgL2BodW1hbi1hcHByb3ZhbGAgdG9wb2xvZ3ksIG93bi1iZWhhbGYgcHJvZHVjZXIgcmVzdHJpY3Rpb24sIEFwcCBwcm9kdWNlciwgMjQtaG91ciByZWNvcmQsIGNsYWltL2NvbnN1bWUgcHJvdG9jb2wsIHNvdXJjZS1zcGxpdCBhdXRob3JpdHksIGFuZCBuYXRpdmUtcmVxdWlyZWQgYGFjLWNsb3Nlb3V0YCBhcmUgc3VwZXJzZWRlZC4gUGhhc2UgNiByZW1vdmVkIGV2ZXJ5IG5hbWVkIHJldGFpbmVkIHJ1bnRpbWUgc3VyZmFjZTsgbm8gc3VwZXJzZWRlZC1kb3JtYW50IG1pZ3JhdGlvbiBpbnB1dCByZW1haW5zLiBUaGUgcmV0aXJlZCBkZXNpZ25zIGF1dGhvcml6ZSBubyBvcGVyYXRpb24gYW5kIGFkbWl0IG5vIG5ldyBjYWxsZXIuIE5vIGxpdmUgcnVsZXNldCBvciByZXBvc2l0b3J5LXNldHRpbmcgbXV0YXRpb24gaXMgYXV0aG9yaXplZCBieSB0aGlzIHNldHRsZW1lbnQuIFBoYXNlIDYgcmVtb3ZhbCBpcyBhIGhhcmQgcHJlcmVxdWlzaXRlIG9mIFBoYXNlIDcgYW5kIGlzIG5vdyBjb21wbGV0ZTsgUGhhc2UgNyBzdGlsbCByZXF1aXJlcyBmcmVzaCBzZXBhcmF0ZSBhdXRob3JpemF0aW9uLiBUaGlzIGJvdW5kZWQgYXV0aG9yaXR5IGZsaXAgd2FzIHBlcm1pdHRlZCBvbmx5IGJlY2F1c2UgZXZlcnkgcmV0YWluZWQgc3VyZmFjZSBhbmQgb3duZXIgd2FzIG5hbWVkLCB0aGUgb2xkIG9wZXJhdGlvbiB3YXMgcHJvaGliaXRlZCwgdGhlIGxpdmUgc3ViamVjdCB3YXMgdW5hcm1lZCwgbm8gbmV3IGNhbGxlciBjb3VsZCBkZXJpdmUsIGFuZCBtaWdyYXRpb24gY29tcGxldGVkIGJlZm9yZSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4=",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "fCA2IHwgIzMxMiB8IFJldGlyZWQgb2xkIHNvdXJjZS1zcGxpdC90b3BvbG9neS9wb2xpY3kgYXNzZXRzIGFuZCBmaW5pc2hlZCBkZWNsYXJlZC10ZXJtIG1pZ3JhdGlvbiB8IENvbXBsZXRlOiBtaWdyYXRpb24gUFIgbGVhdmVzIHplcm8gdW5kZWNsYXJlZCBvciBzdXBlcnNlZGVkLWRvcm1hbnQgc3Vydml2b3JzIHw=",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "U1BFQy5tZA==",
+		"tokenBase64": "c3VwZXJzZWRlZC1kb3JtYW50",
+		"lineBase64": "fCA2IHwgIzMxMiB8IFJldGlyZWQgb2xkIHNvdXJjZS1zcGxpdC90b3BvbG9neS9wb2xpY3kgYXNzZXRzIGFuZCBmaW5pc2hlZCBkZWNsYXJlZC10ZXJtIG1pZ3JhdGlvbiB8IENvbXBsZXRlOiBtaWdyYXRpb24gUFIgbGVhdmVzIHplcm8gdW5kZWNsYXJlZCBvciBzdXBlcnNlZGVkLWRvcm1hbnQgc3Vydml2b3JzIHw=",
+		"ordinal": 0,
+		"disposition": "canonical",
+		"reason": "current SPEC completed-migration or retired-authority prohibition"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvYWRkZWQvMjc5Lm1k",
+		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
+		"lineBase64": "LSBBZGQgdGhlIG51bGwtZGlzYWJsZWQgaGFuZGVkLW92ZXIgbGFuZGluZy1wb2xpY3kgc2NhZmZvbGQgYW5kIGl0cyBzdHJpY3Qgc2VsZi1zdGFuZGluZyBwYXJzZXIsIHByb3ZlbmFuY2UgYXR0ZXN0YXRpb24sIGFuZCBhZG9wdGVyLXNhZmUgcHJvamVjdGlvbiBib3VuZGFyeS4gKCMyNzkp",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #279 scaffold record; unchanged by Phase 6"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvYWRkZWQvMjg0Lm1k",
+		"tokenBase64": "c3BsaXQtdG9wb2xvZ3k=",
+		"lineBase64": "LSBBZGRlZCByZWFkLW9ubHkgc3BsaXQtdG9wb2xvZ3kgcGxhbm5pbmcvYXVkaXRpbmcgYW5kIGEgZG9ybWFudCBvbmUtc2hvdCwgb3duLWJlaGFsZi1zYWZlIHRvcG9sb2d5IGJvb3RzdHJhcCBzZXJ2aWNlOyBQaGFzZSA2IGxhdGVyIHJlbW92ZWQgdGhhdCBzdXBlcnNlZGVkIHJ1bnRpbWUuICgjMjg0KQ==",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #284 planner/bootstrap record with current removal annotation"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvYWRkZWQvMjg0Lm1k",
+		"tokenBase64": "dG9wb2xvZ3kgcGxhbg==",
+		"lineBase64": "LSBBZGRlZCByZWFkLW9ubHkgc3BsaXQtdG9wb2xvZ3kgcGxhbm5pbmcvYXVkaXRpbmcgYW5kIGEgZG9ybWFudCBvbmUtc2hvdCwgb3duLWJlaGFsZi1zYWZlIHRvcG9sb2d5IGJvb3RzdHJhcCBzZXJ2aWNlOyBQaGFzZSA2IGxhdGVyIHJlbW92ZWQgdGhhdCBzdXBlcnNlZGVkIHJ1bnRpbWUuICgjMjg0KQ==",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #284 planner/bootstrap record with current removal annotation"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvYWRkZWQvMjk4Lm1k",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBBZGQgdGhlIGZvcm1lcmx5IGF1dGhvcml6ZWQgc291cmNlLXNwbGl0IGFwcGxpY2F0aW9uIHNlcnZpY2UgYW5kIG9wZXJhdG9yIGNvbW1hbmQgd2l0aCBhcHBlbmQtb25seSBvd25lcnNoaXAsIG9wdGltaXN0aWMgY29tcGFyZS93cml0ZS9wb3N0LXJlYWQgcmVjb3JkcywgZmFpbC1jbG9zZWQgcmVjb3ZlcnksIGFuZCBhIG5vLW1hcmtlci9uby1zb3VyY2Utd3JpdGUgYm91bmRhcnk7IFBoYXNlIDYgbGF0ZXIgcmVtb3ZlZCBib3RoIHN1cGVyc2VkZWQgc3VyZmFjZXMuICgjMjk4KQ==",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #298 application record with current removal annotation"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvY2hhbmdlZC8yODkubWQ=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBTZXR0bGUgdGhlIGhpc3RvcmljYWwgcmVjb3JkLWZpcnN0LCBvcHRpbWlzdGljIHNvdXJjZS1zcGxpdCBhcHBsaWNhdGlvbiBjb250cmFjdCBhbmQgcmVjb3ZlcnkgZXZpZGVuY2Ugd2l0aG91dCBhZGRpbmcgYSBtdXRhdGlvbiBleGVjdXRvciBvciBzZXJ2ZXIgYXV0aG9yaXR5OyBQaGFzZSA2IGxhdGVyIHJlbW92ZWQgaXRzIHN1cGVyc2VkZWQgcnVudGltZS4gKCMyODkp",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #289 contract record with current removal annotation"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvY2hhbmdlZC8zMDEubWQ=",
+		"tokenBase64": "c3BsaXQtdG9wb2xvZ3k=",
+		"lineBase64": "LSBSZXN0b3JlIG1haW50YWluZXItdGVybWluYWwgbGFuZGluZyBhdXRob3JpdHkgYW5kIGh1bWFuLW9wZXJhYmxlLCBjb25maWd1cmFibGUgVGllci0zIGdvdmVybmFuY2U7IHN1cGVyc2VkZSB0aGUgdW5leGVjdXRlZCBzcGxpdC10b3BvbG9neSBhcHBsaWNhdGlvbiBtb2RlbC4gKCMzMDEp",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #301 supersession record; unchanged by Phase 6"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvY2hhbmdlZC8zMDQubWQ=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBNaWdyYXRlZCBUaWVyLTEgbGFuZGluZyB0byBvcmRpbmFyeS1maXJzdCBjdXJyZW50LXBsYXRmb3JtIGdvdmVybmFuY2UsIGFuIGFwcHJvdmFsLW9ubHkgYWR2aXNvcnkgbGFiZWwsIGV4cGxpY2l0IGF1ZGl0ZWQgb3BlcmF0b3ItZGlyZWN0ZWQgYXR0ZW1wdHMsIGFuZCBleGFjdCBoZWFkL2Jhc2UgbGFiZWwgaW52YWxpZGF0aW9uLiBSZXRpcmVkIGNhbGxhYmxlIHNvdXJjZS1zcGxpdCBhbmQgbGFuZGluZyBlc2NhcGUvQXBwL2NsYWltL293bi1iZWhhbGYgYXV0aG9yaXR5OyBQaGFzZSA2IGxhdGVyIHJlbW92ZWQgdGhlIHJldGFpbmVkIGRvcm1hbnQgbWlncmF0aW9uIGlucHV0cy4gKCMzMDQp",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "historical #304 migration record with current removal annotation"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvcmVtb3ZlZC8zMTIubWQ=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "LSBSZW1vdmUgdGhlIHN1cGVyc2VkZWQgZml4ZWQtdG9wb2xvZ3ksIHRvcG9sb2d5LWF1dGhvcml6YXRpb24sIGJvb3RzdHJhcCwgcHJvdmVuYW5jZSwgYW5kIHNvdXJjZS1zcGxpdCBydW50aW1lIGFuZCBmaW5pc2ggaXRzIGRlY2xhcmVkLXRlcm0gbWlncmF0aW9uLiAoIzMxMik=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "current Phase-6 removal record for the unreleased aggregate"
+	},
+	{
+		"pathBase64": "Y2hhbmdlbG9nX3VucmVsZWFzZWQvcmVtb3ZlZC8zMTIubWQ=",
+		"tokenBase64": "dG9wb2xvZ3ktYXV0aG9yaXphdGlvbg==",
+		"lineBase64": "LSBSZW1vdmUgdGhlIHN1cGVyc2VkZWQgZml4ZWQtdG9wb2xvZ3ksIHRvcG9sb2d5LWF1dGhvcml6YXRpb24sIGJvb3RzdHJhcCwgcHJvdmVuYW5jZSwgYW5kIHNvdXJjZS1zcGxpdCBydW50aW1lIGFuZCBmaW5pc2ggaXRzIGRlY2xhcmVkLXRlcm0gbWlncmF0aW9uLiAoIzMxMik=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "current Phase-6 removal record for the unreleased aggregate"
+	},
+	{
+		"pathBase64": "ZG9jcy9hZHIvMDAwMS1tYWludGFpbmVyLXRlcm1pbmFsLWdvdmVybmFuY2UubWQ=",
+		"tokenBase64": "bGFuZGluZy90b3BvbG9neQ==",
+		"lineBase64": "LSBTdXBlcnNlZGVzOiBpbmNvbXBhdGlibGUgbGFuZGluZy90b3BvbG9neSBkb2N0cmluZSBkZXJpdmVkIGJ5ICMyNjEgYW5kICMyOTM=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "record-purpose ADR history preserving the rejected design and separate-application boundary"
+	},
+	{
+		"pathBase64": "ZG9jcy9hZHIvMDAwMS1tYWludGFpbmVyLXRlcm1pbmFsLWdvdmVybmFuY2UubWQ=",
+		"tokenBase64": "L3NvdXJjZS1zcGxpdA==",
+		"lineBase64": "UGhhc2UgMVIgcmV2aXNlcyBhbmQgcmUtYWN0aXZhdGVzICMyNjEgYW5kICMyOCBhbmQgc2V0dGxlcyBhZmZlY3RlZCBJc3N1ZXMuIFBoYXNlIDIgbWlncmF0ZXMgVGllci0xIGxhbmRpbmcgYW5kIHJlbW92ZXMgZXNjYXBlL0FwcC9vd24tYmVoYWxmIGF1dGhvcml0eS4gUGhhc2UgMyBsYW5kcyBgaGlzdG9yeS1zaGFwZWAuIFBoYXNlIDQgbGFuZHMgdGFyZ2V0IGNvbmZpZyBhbmQgdGhlIHB1cmUgc2hhcmVkIGVuZ2luZS4gUGhhc2UgNSBsYW5kcyBodW1hbiwgUGksIGFuZCBoZWFkbGVzcyBzdXJmYWNlcy4gUGhhc2UgNiByZW1vdmVzIHJlbWFpbmluZyBvbGQgdG9wb2xvZ3kvcG9saWN5L3NvdXJjZS1zcGxpdCBhc3NldHMuIEEgc2VwYXJhdGVseSBhdXRob3JpemVkIFBoYXNlIDcgYWxvbmUgbWF5IHBsYW4sIGNvbmZpcm0sIGFwcGx5LCBhdWRpdCwgYW5kIHBpbG90IGxpdmUgZ292ZXJuYW5jZS4=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "record-purpose ADR history preserving the rejected design and separate-application boundary"
+	},
+	{
+		"pathBase64": "ZG9jcy9hZHIvMDAwMS1tYWludGFpbmVyLXRlcm1pbmFsLWdvdmVybmFuY2UubWQ=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "UGhhc2UgMVIgcmV2aXNlcyBhbmQgcmUtYWN0aXZhdGVzICMyNjEgYW5kICMyOCBhbmQgc2V0dGxlcyBhZmZlY3RlZCBJc3N1ZXMuIFBoYXNlIDIgbWlncmF0ZXMgVGllci0xIGxhbmRpbmcgYW5kIHJlbW92ZXMgZXNjYXBlL0FwcC9vd24tYmVoYWxmIGF1dGhvcml0eS4gUGhhc2UgMyBsYW5kcyBgaGlzdG9yeS1zaGFwZWAuIFBoYXNlIDQgbGFuZHMgdGFyZ2V0IGNvbmZpZyBhbmQgdGhlIHB1cmUgc2hhcmVkIGVuZ2luZS4gUGhhc2UgNSBsYW5kcyBodW1hbiwgUGksIGFuZCBoZWFkbGVzcyBzdXJmYWNlcy4gUGhhc2UgNiByZW1vdmVzIHJlbWFpbmluZyBvbGQgdG9wb2xvZ3kvcG9saWN5L3NvdXJjZS1zcGxpdCBhc3NldHMuIEEgc2VwYXJhdGVseSBhdXRob3JpemVkIFBoYXNlIDcgYWxvbmUgbWF5IHBsYW4sIGNvbmZpcm0sIGFwcGx5LCBhdWRpdCwgYW5kIHBpbG90IGxpdmUgZ292ZXJuYW5jZS4=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "record-purpose ADR history preserving the rejected design and separate-application boundary"
+	},
+	{
+		"pathBase64": "ZG9jcy9hZHIvMDAwMS1tYWludGFpbmVyLXRlcm1pbmFsLWdvdmVybmFuY2UubWQ=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "VGhlICMyOTMgc291cmNlLXNwbGl0IHBsYW4gYW5kIG1hcmtlciBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBFeGlzdGluZyBzcGxpdC10b3BvbG9neSwgZXNjYXBlL0FwcCwgYW5kIHNvdXJjZS1hcHBsaWNhdGlvbiBjb2RlIGlzIHN1cGVyc2VkZWQtZG9ybWFudCBhbmQgaGFzIG5vIGF1dGhvcml0eTsgU1BFQyDCpzMuOCBwaGFzZXMgcmVtb3ZlIG9yIG1pZ3JhdGUgaXQgYmVmb3JlIGFueSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4gIzI2MSBhbmQgIzI4IG11c3QgYmUgcmV2aXNlZCBhbmQgcmUtYWN0aXZhdGVkIGluIFBoYXNlIDFSLiBMaXZlIHNldHRpbmdzIG11dGF0aW9uIHJlcXVpcmVzIGEgbGF0ZXIgc2VwYXJhdGVseSBhY3RpdmF0ZWQgcGhhc2UgYW5kIGZyZXNoIGh1bWFuIGNvbmZpcm1hdGlvbi4=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "record-purpose ADR history preserving the rejected design and separate-application boundary"
+	},
+	{
+		"pathBase64": "ZG9jcy9hZHIvMDAwMS1tYWludGFpbmVyLXRlcm1pbmFsLWdvdmVybmFuY2UubWQ=",
+		"tokenBase64": "c3BsaXQtdG9wb2xvZ3k=",
+		"lineBase64": "VGhlICMyOTMgc291cmNlLXNwbGl0IHBsYW4gYW5kIG1hcmtlciBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBFeGlzdGluZyBzcGxpdC10b3BvbG9neSwgZXNjYXBlL0FwcCwgYW5kIHNvdXJjZS1hcHBsaWNhdGlvbiBjb2RlIGlzIHN1cGVyc2VkZWQtZG9ybWFudCBhbmQgaGFzIG5vIGF1dGhvcml0eTsgU1BFQyDCpzMuOCBwaGFzZXMgcmVtb3ZlIG9yIG1pZ3JhdGUgaXQgYmVmb3JlIGFueSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4gIzI2MSBhbmQgIzI4IG11c3QgYmUgcmV2aXNlZCBhbmQgcmUtYWN0aXZhdGVkIGluIFBoYXNlIDFSLiBMaXZlIHNldHRpbmdzIG11dGF0aW9uIHJlcXVpcmVzIGEgbGF0ZXIgc2VwYXJhdGVseSBhY3RpdmF0ZWQgcGhhc2UgYW5kIGZyZXNoIGh1bWFuIGNvbmZpcm1hdGlvbi4=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "record-purpose ADR history preserving the rejected design and separate-application boundary"
+	},
+	{
+		"pathBase64": "ZG9jcy9hZHIvMDAwMS1tYWludGFpbmVyLXRlcm1pbmFsLWdvdmVybmFuY2UubWQ=",
+		"tokenBase64": "c3VwZXJzZWRlZC1kb3JtYW50",
+		"lineBase64": "VGhlICMyOTMgc291cmNlLXNwbGl0IHBsYW4gYW5kIG1hcmtlciBtdXN0IG5vdCBiZSBhdXRob3JpemVkIG9yIGV4ZWN1dGVkLiBFeGlzdGluZyBzcGxpdC10b3BvbG9neSwgZXNjYXBlL0FwcCwgYW5kIHNvdXJjZS1hcHBsaWNhdGlvbiBjb2RlIGlzIHN1cGVyc2VkZWQtZG9ybWFudCBhbmQgaGFzIG5vIGF1dGhvcml0eTsgU1BFQyDCpzMuOCBwaGFzZXMgcmVtb3ZlIG9yIG1pZ3JhdGUgaXQgYmVmb3JlIGFueSByZXBsYWNlbWVudCBhcHBsaWNhdGlvbi4gIzI2MSBhbmQgIzI4IG11c3QgYmUgcmV2aXNlZCBhbmQgcmUtYWN0aXZhdGVkIGluIFBoYXNlIDFSLiBMaXZlIHNldHRpbmdzIG11dGF0aW9uIHJlcXVpcmVzIGEgbGF0ZXIgc2VwYXJhdGVseSBhY3RpdmF0ZWQgcGhhc2UgYW5kIGZyZXNoIGh1bWFuIGNvbmZpcm1hdGlvbi4=",
+		"ordinal": 0,
+		"disposition": "historical",
+		"reason": "record-purpose ADR history preserving the rejected design and separate-application boundary"
+	},
+	{
+		"pathBase64": "dGVzdC9hYy1jbG9zZW91dC5tdXRhdGlvbi50ZXN0LnRz",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CWFzc2VydC5lcXVhbChzb3VyY2Uuc3BsaXQoZnJvbSkubGVuZ3RoLCAyLCBgJHtuYW1lfTogbXV0YXRpb24gdGFyZ2V0IG11c3QgYmUgdW5pcXVlYCk7",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9hY3Rvci1uZXV0cmFsLXNldHRsZW1lbnQuc3RydWN0dXJlLnRlc3QudHM=",
+		"tokenBase64": "c3VwZXJzZWRlZC1kb3JtYW50",
+		"lineBase64": "CQkJIm5vIHN1cGVyc2VkZWQtZG9ybWFudCBtaWdyYXRpb24gaW5wdXQgcmVtYWlucyIs",
+		"ordinal": 0,
+		"disposition": "guard",
+		"reason": "SPEC completed-migration and separate-application assertion guard"
+	},
+	{
+		"pathBase64": "dGVzdC9hZG9wdGVyLWNvbXBvc2l0aW9uLm11dGF0aW9uLnRlc3QudHM=",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CWFzc2VydC5lcXVhbChzb3VyY2Uuc3BsaXQoZnJvbSkubGVuZ3RoLCAyLCBgJHtuYW1lfTogbXV0YW50IHRhcmdldCBpcyBub3QgdW5pcXVlYCk7",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9hZG9wdGVyLWRlbGl2ZXJ5Lm11dGF0aW9uLnRlc3QudHM=",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IG11dGF0aW9uIHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9hZG9wdGVyLXByb3Zpc2lvbi5tdXRhdGlvbi50ZXN0LnRz",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9jb21tYW5kLXNwaW5lLmludGVncmF0aW9uLnRlc3QudHM=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "CQkJZ292ZXJuZWRSb3dzKHJlZ2lzdHJhdGlvblJ1biwgcmVnaXN0cmF0aW9uRml4dHVyZSkuc29tZSgocm93KSA9PiByb3cubmFtZSA9PT0gInNvdXJjZS1zcGxpdCIpLA==",
+		"ordinal": 0,
+		"disposition": "guard",
+		"reason": "extension-command registration absence guard for the retired operator command"
+	},
+	{
+		"pathBase64": "dGVzdC9jb21tYW5kLXNwaW5lLmludGVncmF0aW9uLnRlc3QudHM=",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "CWl0KCJ0aGUgc3VwZXJzZWRlZCBzb3VyY2Utc3BsaXQgY29tbWFuZCBpcyBub3QgY2FsbGFibGUiLCAoKSA9PiB7",
+		"ordinal": 0,
+		"disposition": "guard",
+		"reason": "extension-command registration absence guard for the retired operator command"
+	},
+	{
+		"pathBase64": "dGVzdC9kZWxlZ2F0ZS1vYnNlcnZhYmlsaXR5Lm11dGF0aW9uLnRlc3QudHM=",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9kaXNwYXRjaC1kaWFnbm9zdGljcy5tdXRhdGlvbi50ZXN0LnRz",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IG11dGF0aW9uIHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9nb3Zlcm5hbmNlLXN1cmZhY2VzLnN0cnVjdHVyZS50ZXN0LnRz",
+		"tokenBase64": "c291cmNlLXNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZG9lc05vdE1hdGNoKGNsaSwgL2NvbW1hbmQgPT09ICIoPzppbnN0YWxsfGJvb3RzdHJhcHxzb3VyY2Utc3BsaXQpIi8pOw==",
+		"ordinal": 0,
+		"disposition": "guard",
+		"reason": "CLI subcommand absence guard for the retired operator command"
+	},
+	{
+		"pathBase64": "dGVzdC9sYW5kaW5nLXBvbGljeS51bml0LnRlc3QudHM=",
+		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoZXhpc3RzU3luYyhuZXcgVVJMKCIuLi8uZ2l0aHViL2xhbmRpbmctcG9saWN5Lmpzb24iLCBpbXBvcnQubWV0YS51cmwpKSwgZmFsc2UpOw==",
+		"ordinal": 0,
+		"disposition": "guard",
+		"reason": "carrier/runtime restoration guard for the retired App configuration"
+	},
+	{
+		"pathBase64": "dGVzdC9sYW5kaW5nLXBvbGljeS51bml0LnRlc3QudHM=",
+		"tokenBase64": "bGFuZGluZy1wb2xpY3k=",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoZXhpc3RzU3luYyhuZXcgVVJMKCIuLi8uZ2l0aHViL3dvcmtmbG93cy9sYW5kaW5nLXBvbGljeS5tanMiLCBpbXBvcnQubWV0YS51cmwpKSwgZmFsc2UpOw==",
+		"ordinal": 0,
+		"disposition": "guard",
+		"reason": "carrier/runtime restoration guard for the retired App configuration"
+	},
+	{
+		"pathBase64": "dGVzdC9vcGVyYXRvci1zdXJmYWNlcy5tdXRhdGlvbi50ZXN0LnRz",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IG11dGF0aW9uIHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9yZXZpZXctcmV0cnkubXV0YXRpb24udGVzdC50cw==",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IG11dGF0aW9uIHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	},
+	{
+		"pathBase64": "dGVzdC9zZWNyZXQtc2Nhbi5naXRob29rLnRlc3QudHM=",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CQljb25zdCBsaW5lID0gc291cmNlLnNwbGl0KCJcbiIpLmZpbmQoKGNhbmRpZGF0ZSkgPT4gY2FuZGlkYXRlLmluY2x1ZGVzKCJnaXRob29rX2Jsb2NrIHNlY3JldCIpKTs=",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
+	}
+]

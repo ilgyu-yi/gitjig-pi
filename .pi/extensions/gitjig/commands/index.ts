@@ -7,7 +7,7 @@
  * act runs inside a handler.
  *
  * Six command implementations register here (`authoring-brief`, `review`,
- * `review-round`, `ship`, `land`, `governance`). Superseded source-split assets remain dormant migration input.
+ * `review-round`, `ship`, `land`, `governance`). Phase 6 removed the superseded command and its runtime assets.
  * The `work-on` case answers no-no-yes and homes on the prompt-template
  * surface at `.pi/prompts/work-on.md`, registered by the substrate's own
  * discovery — no call for it belongs in any extension.
