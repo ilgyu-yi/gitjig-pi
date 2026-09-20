@@ -60,7 +60,7 @@ function effects(initial: LandingSnapshot, log: string[] = []): LandingEffects {
 		comment: async (body) => {
 			comment = body;
 			log.push("comment");
-			return "published";
+			return { status: "published", id: 10, authorId: "U" };
 		},
 		readComments: async () => [{ id: 10, authorId: "U", body: comment }],
 		reread: async () => current,
@@ -201,6 +201,18 @@ describe("operator-directed one attempt", () => {
 			await executeLanding({ mode: "on", snapshot: current, now: NOW, instruction: directed(current) }, seam),
 			{ outcome: "refused", arm: "audit-population-ambiguous", blockers },
 		);
+	});
+	it("a reused attempt UUID refuses before publication or merge", async () => {
+		const current = snapshot({ acCloseout: false, labels: ["merge:bypass-permitted"] });
+		const instruction = directed(current);
+		const body = operatorAuditComment(current, observedBlockers(current), instruction, NOW);
+		const seam = effects(current);
+		seam.readComments = async () => [{ id: 8, authorId: "U", body }];
+		assert.deepEqual(await executeLanding({ mode: "on", snapshot: current, now: NOW, instruction }, seam), {
+			outcome: "refused",
+			arm: "audit-population-ambiguous",
+			blockers: observedBlockers(current),
+		});
 	});
 	it("operand drift stops and retry needs a different UUID/comment", async () => {
 		const current = snapshot({ acCloseout: false, labels: ["merge:bypass-permitted"] });

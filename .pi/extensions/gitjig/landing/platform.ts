@@ -40,17 +40,32 @@ function refPatternMatches(pattern: unknown, subject: string): boolean | undefin
 		return undefined;
 	}
 }
-export function activeRulesetApplies(detail: unknown, baseRef: string, defaultBranch: string): boolean {
+function rulesetApplicability(detail: unknown, baseRef: string, defaultBranch: string): boolean | undefined {
 	const ruleset = record(detail);
-	if (!ruleset || ruleset.target !== "branch" || ruleset.enforcement !== "active") return false;
-	const names = record(record(ruleset.conditions)?.ref_name);
+	if (!ruleset || typeof ruleset.target !== "string" || typeof ruleset.enforcement !== "string") return undefined;
+	if (ruleset.target !== "branch" || ruleset.enforcement !== "active") return false;
+	const conditions = record(ruleset.conditions);
+	const names = record(conditions?.ref_name);
+	if (
+		!conditions ||
+		Object.keys(conditions).some((key) => key !== "ref_name") ||
+		!names ||
+		!Array.isArray(names.include) ||
+		!Array.isArray(names.exclude) ||
+		Object.keys(names).some((key) => key !== "include" && key !== "exclude")
+	)
+		return undefined;
 	const subject = `refs/heads/${baseRef}`;
 	const match = (pattern: unknown) =>
 		pattern === "~DEFAULT_BRANCH" ? baseRef === defaultBranch : refPatternMatches(pattern, subject);
-	const excluded = array(names?.exclude).map(match);
-	if (excluded.some((item) => item !== false)) return false;
-	const included = array(names?.include).map(match);
-	return included.length > 0 && included.every((item) => item !== undefined) && included.some(Boolean);
+	const excluded = names.exclude.map(match);
+	const included = names.include.map(match);
+	if ([...excluded, ...included].some((item) => item === undefined)) return undefined;
+	if (excluded.some(Boolean)) return false;
+	return included.length > 0 && included.some(Boolean);
+}
+export function activeRulesetApplies(detail: unknown, baseRef: string, defaultBranch: string): boolean {
+	return rulesetApplicability(detail, baseRef, defaultBranch) === true;
 }
 
 export function newestCheckConclusions(
@@ -268,9 +283,10 @@ export async function loadPlatformLanding(
 	if (summaries.some((item) => !item || !Number.isSafeInteger(item.id))) return { arm: "ruleset-population" };
 	const details = await Promise.all(summaries.map((item) => get(`rulesets/${String(item?.id)}`).then(record)));
 	if (details.some((item) => !item)) return { arm: "ruleset-population" };
+	const applicability = details.map((item) => rulesetApplicability(item, baseRef, String(repo.default_branch)));
+	if (applicability.some((item) => item === undefined)) return { arm: "predicate-ownership-unknown" };
 	const active = details.filter(
-		(item): item is Record<string, unknown> =>
-			item !== undefined && activeRulesetApplies(item, baseRef, String(repo.default_branch)),
+		(item, index): item is Record<string, unknown> => item !== undefined && applicability[index] === true,
 	);
 	if (active.length !== 1)
 		return { arm: active.length === 0 ? "predicate-ownership-unknown" : "predicate-ownership-multiple" };
@@ -282,18 +298,60 @@ export async function loadPlatformLanding(
 		typeof repo.allow_rebase_merge !== "boolean"
 	)
 		return { arm: "repository-settings-unmeasurable" };
-	const ownerRules = array(owner.rules).map(record);
+	if (!Array.isArray(owner.rules)) return { arm: "predicate-rule-malformed" };
+	const ownerRules = owner.rules.map(record);
 	const knownRuleTypes = new Set(["pull_request", "required_status_checks", "deletion", "non_fast_forward"]);
-	if (ownerRules.some((item) => !item || typeof item.type !== "string" || !knownRuleTypes.has(item.type)))
+	if (
+		ownerRules.some(
+			(item) =>
+				!item ||
+				typeof item.type !== "string" ||
+				!knownRuleTypes.has(item.type) ||
+				Object.keys(item).some((key) => key !== "type" && key !== "parameters"),
+		)
+	)
 		return { arm: "predicate-rule-unsupported" };
+	if (
+		ownerRules.some(
+			(item) => new Set(["deletion", "non_fast_forward"]).has(String(item?.type)) && item?.parameters !== undefined,
+		)
+	)
+		return { arm: "predicate-rule-malformed" };
 	const ruleTypes = ownerRules.map((item) => String(item?.type));
 	if (new Set(ruleTypes).size !== ruleTypes.length) return { arm: "predicate-rule-duplicate" };
 	const pull = rule(owner, "pull_request");
 	const pullParameters = pull === undefined ? undefined : record(pull.parameters);
-	if (pull !== undefined && !pullParameters) return { arm: "pull-request-rule-malformed" };
+	const pullKeys = new Set([
+		"required_approving_review_count",
+		"dismiss_stale_reviews_on_push",
+		"require_code_owner_review",
+		"require_last_push_approval",
+		"required_review_thread_resolution",
+		"allowed_merge_methods",
+	]);
+	if (
+		pull !== undefined &&
+		(!pullParameters ||
+			Object.keys(pullParameters).some((key) => !pullKeys.has(key)) ||
+			typeof pullParameters.dismiss_stale_reviews_on_push !== "boolean" ||
+			typeof pullParameters.require_code_owner_review !== "boolean" ||
+			typeof pullParameters.require_last_push_approval !== "boolean" ||
+			typeof pullParameters.required_review_thread_resolution !== "boolean" ||
+			!Array.isArray(pullParameters.allowed_merge_methods))
+	)
+		return { arm: "pull-request-rule-malformed" };
 	const statusRule = rule(owner, "required_status_checks");
 	const status = statusRule === undefined ? undefined : record(statusRule.parameters);
-	if (statusRule !== undefined && !status) return { arm: "status-rule-malformed" };
+	if (
+		statusRule !== undefined &&
+		(!status ||
+			Object.keys(status).some(
+				(key) => key !== "required_status_checks" && key !== "strict_required_status_checks_policy",
+			) ||
+			!Array.isArray(status.required_status_checks) ||
+			typeof status.strict_required_status_checks_policy !== "boolean")
+	)
+		return { arm: "status-rule-malformed" };
 	const configuredChecks: { context: string; integrationId: number | null }[] = [];
 	for (const value of array(status?.required_status_checks)) {
 		const item = record(value);
@@ -316,6 +374,13 @@ export async function loadPlatformLanding(
 		configuredChecks.length
 	)
 		return { arm: "status-rule-duplicate" };
+	if (
+		pullParameters &&
+		!array(pullParameters.allowed_merge_methods).every((item) =>
+			new Set(["merge", "squash", "rebase"]).has(String(item)),
+		)
+	)
+		return { arm: "pull-request-rule-malformed" };
 	if (pullParameters?.require_code_owner_review === true || pullParameters?.require_last_push_approval === true)
 		return { arm: "pull-request-rule-unsupported" };
 	const requiredApprovals = Number(pullParameters?.required_approving_review_count ?? 0);
@@ -432,9 +497,6 @@ export async function loadPlatformLanding(
 	};
 }
 
-function mutationOk(value: string | undefined): boolean {
-	return record(parse(value)) !== undefined;
-}
 export function platformLandingEffects(
 	host: string,
 	repository: string,
@@ -483,22 +545,26 @@ export function platformLandingEffects(
 			return labels.includes(BYPASS_LABEL) ? "applied" : "unknown";
 		},
 		async comment(body) {
-			return mutationOk(
-				await runPlatformMutation(
-					[
-						"api",
-						"--hostname",
-						host,
-						"--method",
-						"POST",
-						`repos/${repository}/issues/${pr}/comments`,
-						"-f",
-						`body=${body}`,
-					],
-					repoRoot,
+			const response = record(
+				parse(
+					await runPlatformMutation(
+						[
+							"api",
+							"--hostname",
+							host,
+							"--method",
+							"POST",
+							`repos/${repository}/issues/${pr}/comments`,
+							"-f",
+							`body=${body}`,
+						],
+						repoRoot,
+					),
 				),
-			)
-				? "published"
+			);
+			const authorId = record(response?.user)?.node_id;
+			return response && Number.isSafeInteger(response.id) && typeof authorId === "string"
+				? { status: "published", id: Number(response.id), authorId }
 				: "unknown";
 		},
 		async readComments() {

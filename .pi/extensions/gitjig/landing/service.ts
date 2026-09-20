@@ -68,7 +68,7 @@ export interface LandingEffects {
 		expectedHead: string,
 	): Promise<"merged" | "blocked" | "unknown">;
 	applyLabel(label: string): Promise<"applied" | "present" | "failed" | "unknown">;
-	comment(body: string): Promise<"published" | "failed" | "unknown">;
+	comment(body: string): Promise<{ status: "published"; id: number; authorId: string } | "failed" | "unknown">;
 	readComments(): Promise<readonly { id: number; authorId: string; body: string }[] | undefined>;
 	reread(): Promise<LandingSnapshot | undefined>;
 }
@@ -146,6 +146,38 @@ export function operatorAuditComment(
 		observedAt,
 	})}\n\`\`\``;
 }
+function auditRecord(body: string): Record<string, unknown> | undefined {
+	if (!body.startsWith(`${OPERATOR_AUDIT_MARKER}\n`)) return undefined;
+	const match = /\n```json\n([^\n]+)\n```$/.exec(body);
+	if (!match) return undefined;
+	try {
+		const value: unknown = JSON.parse(match[1] ?? "");
+		const keys = [
+			"schemaVersion",
+			"repositoryId",
+			"pullRequestId",
+			"pullRequestNumber",
+			"headSha",
+			"baseRef",
+			"baseSha",
+			"instructionScope",
+			"observedBlockers",
+			"operatorInstructionObservedAt",
+			"writerId",
+			"attemptId",
+			"observedAt",
+		];
+		return value !== null &&
+			typeof value === "object" &&
+			!Array.isArray(value) &&
+			Object.keys(value).length === keys.length &&
+			keys.every((key) => Object.hasOwn(value, key))
+			? (value as Record<string, unknown>)
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
 function sameOperands(a: LandingSnapshot, b: LandingSnapshot): boolean {
 	return (
 		a.repositoryId === b.repositoryId &&
@@ -217,19 +249,44 @@ export async function executeLanding(
 	if (!labeled.labels.includes(BYPASS_LABEL)) return { outcome: "refused", arm: "label-apply-failed", blockers };
 	if (!sameBlockers(blockers, observedBlockers(labeled)))
 		return { outcome: "refused", arm: "blocker-population-incomplete", blockers: observedBlockers(labeled) };
+	const priorComments = await effects.readComments();
+	if (!priorComments) return { outcome: "refused", arm: "audit-population-ambiguous", blockers };
+	if (
+		priorComments.some(
+			(comment) => comment.body.startsWith(OPERATOR_AUDIT_MARKER) && auditRecord(comment.body) === undefined,
+		)
+	)
+		return { outcome: "refused", arm: "audit-population-ambiguous", blockers };
+	if (
+		priorComments.some((comment) => {
+			const record = auditRecord(comment.body);
+			return (
+				record?.repositoryId === snapshot.repositoryId &&
+				record?.pullRequestId === snapshot.pullRequestId &&
+				record?.headSha === snapshot.headSha &&
+				record?.baseRef === snapshot.baseRef &&
+				record?.baseSha === snapshot.baseSha &&
+				record?.attemptId === instruction.attemptId
+			);
+		})
+	)
+		return { outcome: "refused", arm: "audit-population-ambiguous", blockers };
 	const comment = operatorAuditComment(snapshot, blockers, instruction, input.now);
 	const publication = await effects.comment(comment);
-	if (publication !== "published")
+	if (publication === "failed" || publication === "unknown")
 		return {
 			outcome: "refused",
 			arm: publication === "failed" ? "audit-publication-failed" : "audit-publication-ambiguous",
 			blockers,
 		};
+	if (!Number.isSafeInteger(publication.id) || publication.authorId !== snapshot.operatorId)
+		return { outcome: "refused", arm: "audit-publication-ambiguous", blockers };
 	const comments = await effects.readComments();
 	if (!comments) return { outcome: "refused", arm: "audit-publication-ambiguous", blockers };
-	const matching = comments.filter((value) => value.body === comment);
-	if (matching.length !== 1 || matching[0]?.authorId !== snapshot.operatorId || !Number.isSafeInteger(matching[0]?.id))
-		return { outcome: "refused", arm: "audit-population-ambiguous", blockers };
+	const matching = comments.filter(
+		(value) => value.id === publication.id && value.body === comment && value.authorId === snapshot.operatorId,
+	);
+	if (matching.length !== 1) return { outcome: "refused", arm: "audit-population-ambiguous", blockers };
 	const current = await effects.reread();
 	if (!current || !sameOperands(snapshot, current) || !current.labels.includes(BYPASS_LABEL))
 		return { outcome: "refused", arm: "operand-drift", blockers };
