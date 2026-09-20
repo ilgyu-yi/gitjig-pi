@@ -56,22 +56,4 @@ describe("#250 one composition owner", () => {
 		assert.match(result.membershipSnapshot, /instance-state/);
 		assert.match(result.membershipSnapshot, /source-only/);
 	});
-
-	it("refuses a populated source policy before a projection plan exists", () => {
-		put(
-			".github/landing-policy.json",
-			JSON.stringify({ schemaVersion: 1, appProducer: { installationId: 7, nodeId: "I_node" } }),
-		);
-		assert.throws(
-			() =>
-				composeAdopter({
-					sourceRoot: root,
-					source: { provider: "github", host: "github.com", owner: "o", repository: "r" },
-					revision: "a".repeat(40),
-					priorPinBytes: null,
-					occupants: new Map(),
-				}),
-			/source landing policy is not the null-disabled scaffold/,
-		);
-	});
 });

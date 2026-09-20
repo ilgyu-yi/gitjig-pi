@@ -533,12 +533,12 @@ export const POSTURES: readonly PostureRow[] = [
 			"Choosing among malformed or ambiguous records can erase the authoritative handoff. The false-block cost is a stuck lifecycle label; repair the marker-keyed comment history through the owning transition service, then replay.",
 	},
 	{
-		dependency: "lifecycle-clock-read",
+		dependency: "landing-label-hygiene",
 		failureShape:
-			"current time or a record time is absent, unparsable, stale, or cannot support exact expiry arithmetic",
+			"the landing-label-hygiene.yml invalidate job cannot completely enumerate or reread the synchronize/base-push population, or its exact label removal cannot be observed",
 		posture: "closed",
 		justification:
-			"Guessing time can honor an expired escape. The false-block cost is a delayed escape examination; restore a readable UTC clock and replay before the record's independently measured expiry.",
+			"Ambiguity never guesses which advisory to remove. The false-block cost is a stale advisory label; a writer removes it manually or replays hygiene after complete platform reads recover.",
 	},
 	{
 		dependency: "lifecycle-repository-binding",
@@ -626,42 +626,6 @@ export const POSTURES: readonly PostureRow[] = [
 			"The event-driven platform has no synchronous invalidation primitive. The race is measured rather than inferred; delete and republish the bound closeout record to force re-evaluation before landing.",
 	},
 	{
-		dependency: "landing-policy-presence",
-		failureShape: "the committed landing-policy carrier is absent, duplicated, or unreadable",
-		posture: "closed",
-		justification:
-			"Absent policy cannot attest an App. The false-block cost is a dormant optional App arm; restore the one null-safe handed-over carrier before retrying.",
-	},
-	{
-		dependency: "landing-policy-schema",
-		failureShape: "the landing-policy document has an unknown version, key, kind, or malformed identity field",
-		posture: "closed",
-		justification:
-			"Guessing policy shape could turn data into authority. The false-block cost is a dormant optional App arm; repair the closed versioned document and retry.",
-	},
-	{
-		dependency: "landing-policy-provenance",
-		failureShape:
-			"the default-branch policy blob identity is absent, stale, malformed, unreadable, or differs from the local bytes",
-		posture: "closed",
-		justification:
-			"Contributor-controlled or unmeasured bytes cannot attest an App. The false-block cost is a dormant optional App arm; refresh the addressed default-branch blob evidence and retry.",
-	},
-	{
-		dependency: "landing-policy-repository-binding",
-		failureShape: "the repository observed for policy evidence differs from the explicitly addressed repository",
-		posture: "closed",
-		justification:
-			"Cross-repository identity evidence could authorize the wrong installation. The false-block cost is a dormant optional App arm; address and re-read the intended repository.",
-	},
-	{
-		dependency: "landing-policy-app-producer",
-		failureShape: "the admitted committed policy carries the explicit null-disabled App producer",
-		posture: "closed",
-		justification:
-			"Null is an intentional absence of App authority, never a default identity. The false-block cost is none for ordinary human operation; a later target-owned activation must attest an App before retrying that optional arm.",
-	},
-	{
 		dependency: "mode-resolution-input",
 		failureShape: "a mode source is unreadable, duplicated, conflicting, or outside its closed value set",
 		posture: "closed",
@@ -684,97 +648,33 @@ export const POSTURES: readonly PostureRow[] = [
 			"A landing consumer never vouches from an incomplete platform snapshot. The false-block cost is delayed optional automation; refresh platform access or the malformed fact and retry while human Tier 3 remains available.",
 	},
 	{
-		dependency: "landing-trusted-engine",
+		dependency: "landing-current-predicates",
 		failureShape:
-			"the local lifecycle or policy module is absent, unloadable, or differs from the addressed default-branch blob",
+			"the current repository settings or the one active applicable ruleset, checks, threads, review record, identity, head, or base cannot be completely and unambiguously read",
 		posture: "closed",
 		justification:
-			"Contributor-head predicates cannot decide landing. The false-block cost is delayed optional automation; restore exact default-branch bytes and retry.",
+			"Tier 1 never invents an interim profile or treats unknown as passing. Restore complete platform reads and invoke landing again against a fresh snapshot.",
 	},
 	{
-		dependency: "landing-quorum-ruleset",
-		failureShape: "exactly one active applicable human-approval ruleset with a positive quorum cannot be measured",
+		dependency: "landing-advisory-label",
+		failureShape: "the approval-only advisory label cannot be applied or reread after the ordinary attempt is blocked",
 		posture: "closed",
 		justification:
-			"Unmeasurable quorum is never unmet quorum and opens neither route. The false-block cost is all automated landing before Phase 4; install or repair the split ruleset, then retry.",
+			"The label waives only positive unmet native approval and is not authority. A writer may apply it manually and retry after all other current predicates pass.",
 	},
 	{
-		dependency: "topology-planning-population",
+		dependency: "landing-operator-audit",
 		failureShape:
-			"repository identity/settings, actor admin role, Actions integration, complete ruleset summaries/details, update instants, or pagination is absent, stale, malformed, inherited, duplicated, or unreadable",
+			"the exact operator-directed blocker population, confirmation, v1 audit publication/reread, or identity/head/base reread is absent, stale, or ambiguous",
 		posture: "closed",
 		justification:
-			"A partial server picture cannot authorize a split. The planner emits no executable authorization; restore complete GET access and derive a fresh before/after/rollback artifact.",
-	},
-	{
-		dependency: "topology-bypass-semantics",
-		failureShape:
-			"a proposed topology departs from the controlled-proven composition by combining core and quorum ownership, adding a core bypass, or using a bypass other than RepositoryRole-5 pull-request mode",
-		posture: "closed",
-		justification:
-			"The Phase-4 scratch proof supports only a quorum-only RepositoryRole-5 pull-request bypass beside an independently enforced doorless core. Any broader or differently composed topology requires new proof and authority; the completed proof itself grants no source mutation.",
-	},
-	{
-		dependency: "topology-shared-auditor",
-		failureShape:
-			"the handed-over topology schema/canonicalizer is absent, unloadable, mismatched to the trusted default-branch blob, or receives a sub-millisecond/unknown shape",
-		posture: "closed",
-		justification:
-			"No carried fallback may reinterpret server freshness. Restore exact trusted bytes or canonical operands before planning or landing.",
-	},
-	{
-		dependency: "topology-authorization-population",
-		failureShape:
-			"the paginated authorization population or its sole platform comment, author, repository, current collaborator permission, unedited timestamps, issued instant, or expiry is absent, duplicated, malformed, copied, stale, or unreadable",
-		posture: "closed",
-		justification:
-			"Caller-authored trust literals authorize nothing. Restore one unedited operator record and complete fresh GET access; this read-only prerequisite creates no record or mutation path.",
-	},
-	{
-		dependency: "topology-plan-binding",
-		failureShape:
-			"the normalized authorization differs from the planner-attested repository, actor, live pair, complete canonical artifact hash, derived correlation id, issued instant, or unexpired bound",
-		posture: "closed",
-		justification:
-			"An authorization for another plan or consumption stage never transfers. Regenerate the stage-specific plan and obtain a new explicit operator record; no hash default or role assertion fills the gap.",
-	},
-	{
-		dependency: "topology-source-application",
-		failureShape:
-			"the carried plan/authorization predicate, handed-over canonicalizer/auditor, complete optimistic live read, record publication, exact post-read, or source-write outcome is absent, ambiguous, stale, or unverifiable",
-		posture: "closed",
-		justification:
-			"An unverified source mutation can weaken doorless governance. Stop before the next source write, preserve any winning claim as consumed, and hand the exact recorded state to the operator; no copied predicate, automatic rollback, or carrier authorization fills the gap.",
-	},
-	{
-		dependency: "topology-bootstrap-admission",
-		failureShape:
-			"topology-only bytes, live split/settings, plan authorization, own-behalf identity, measured-unmet quorum, core facts, pair freshness, claim order, or exact merge outcome is absent or unverifiable",
-		posture: "closed",
-		justification:
-			"Bootstrap can waive only the quorum rule once per exact pair. Failure consumes any claimed escape and delays carrier landing until a fresh operator-reviewed pair; it never opens core.",
-	},
-	{
-		dependency: "landing-topology-activation",
-		failureShape:
-			"the committed Phase-4 topology record is absent, malformed, stale, or mismatched to the live split rulesets",
-		posture: "closed",
-		justification:
-			"No discretionary route exists before independently attested split topology. The false-block cost is only the optional escape; Phase 4 owns creating or repairing the record.",
-	},
-	{
-		dependency: "landing-claim-write",
-		failureShape:
-			"a claim comment cannot be written or the complete author-attested claim population cannot be re-read",
-		posture: "closed",
-		justification:
-			"No run may merge without winning the append-only total order. The false-block cost is a permanently consumed escape after a durable claim; reconcile it as refused and create fresh authority.",
+			"No merge attempt occurs. Recovery requires fresh confirmation and a new exact audit comment after complete current reads.",
 	},
 	{
 		dependency: "landing-merge-outcome",
 		failureShape: "the exact-head merge response or required merge-parent verification is unavailable",
 		posture: "closed",
 		justification:
-			"An unknown platform result is never retried or guessed. The false-block cost is an unverified non-reusable claim; restore reads and reconcile the one attempted outcome.",
+			"An unknown platform result is never retried or guessed. Restore reads, reconcile the attempted outcome, and require fresh operator confirmation/comment before any directed retry.",
 	},
 ];

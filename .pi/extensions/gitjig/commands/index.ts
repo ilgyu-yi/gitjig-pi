@@ -6,8 +6,9 @@
  * seams rather than re-resolving them. Registration is load-legal — every
  * act runs inside a handler.
  *
- * Six command implementations register here (`authoring-brief`, `review`,
- * `review-round`, `ship`, `land`, `source-split`). The `work-on` case answers no-no-yes and homes on the prompt-template
+ * Five command implementations register here (`authoring-brief`, `review`,
+ * `review-round`, `ship`, `land`). Superseded source-split assets remain dormant migration input.
+ * The `work-on` case answers no-no-yes and homes on the prompt-template
  * surface at `.pi/prompts/work-on.md`, registered by the substrate's own
  * discovery — no call for it belongs in any extension.
  */
@@ -19,7 +20,6 @@ import { registerLandCommand } from "./land.ts";
 import { registerReviewCommand } from "./review.ts";
 import { registerReviewRoundCommand } from "./review-round.ts";
 import { registerShipCommand } from "./ship.ts";
-import { registerSourceSplitCommand } from "./source-split.ts";
 
 export function registerSpineCommands(
 	pi: ExtensionAPI,
@@ -33,5 +33,4 @@ export function registerSpineCommands(
 	registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface);
 	registerShipCommand(pi, repoRoot);
 	registerLandCommand(pi, repoRoot, modes);
-	registerSourceSplitCommand(pi, repoRoot);
 }

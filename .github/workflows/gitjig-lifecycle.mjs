@@ -5,42 +5,13 @@ export const RECORD_MARKERS = Object.freeze({
 	awaitingAuthor: "<!-- lifecycle-awaiting-author-record: v1 -->",
 	blocked: "<!-- lifecycle-blocked-record: v1 -->",
 	handoff: "<!-- lifecycle-handoff-record: v1 -->",
-	escape: "<!-- lifecycle-escape-record: v1 -->",
-	escapeRefusal: "<!-- lifecycle-escape-refusal: v1 -->",
 	awaitingAuthorTerminal: "<!-- lifecycle-awaiting-author-terminal: v1 -->",
 	blockedTerminal: "<!-- lifecycle-blocked-terminal: v1 -->",
 	handoffTerminal: "<!-- lifecycle-handoff-terminal: v1 -->",
-	escapeTerminal: "<!-- lifecycle-escape-terminal: v1 -->",
-	landingClaim: "<!-- lifecycle-landing-claim: v1 -->",
-	landingTerminal: "<!-- lifecycle-landing-terminal: v1 -->",
 });
 
 const OID = /^[0-9a-f]{40}$/;
 const ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-const TERMINAL_ESCAPE_OUTCOMES = new Set(["landed", "refused"]);
-const LANDING_CLAIM_KEYS = [
-	"schemaVersion",
-	"escapeCommentId",
-	"replayKey",
-	"consumerRunId",
-	"consumerId",
-	"repositoryId",
-	"pullRequestId",
-	"headSha",
-	"baseSha",
-	"claimedAt",
-];
-const LANDING_TERMINAL_KEYS = [
-	"schemaVersion",
-	"escapeCommentId",
-	"claimCommentId",
-	"consumerRunId",
-	"writerId",
-	"consumedAt",
-	"outcome",
-	"headSha",
-	"baseSha",
-];
 
 /** @param {any} value @param {string[]} keys */
 function exactObject(value, keys) {
@@ -99,7 +70,7 @@ export function latestEligibleHumanReviews(reviews, prAuthorId, headSha) {
 
 /** @param {any[]} reviews @param {string} prAuthorId @param {string} headSha @param {number} quorum */
 export function eligibleApprovalCount(reviews, prAuthorId, headSha, quorum) {
-	if (!Number.isSafeInteger(quorum) || quorum <= 0) return { ok: false, arm: "quorum-unmeasurable" };
+	if (!Number.isSafeInteger(quorum) || quorum < 0) return { ok: false, arm: "quorum-unmeasurable" };
 	const latest = latestEligibleHumanReviews(reviews, prAuthorId, headSha);
 	const count = [...latest.values()].filter((review) => !review.dismissed && review.state === "APPROVED").length;
 	return { ok: count >= quorum, arm: count >= quorum ? "quorum-satisfied" : "quorum-missing", count, quorum };
@@ -112,18 +83,14 @@ export function eligibleChangesRequested(review, prAuthorId, headSha) {
 	return admitted !== undefined && !admitted.dismissed && admitted.state === "CHANGES_REQUESTED";
 }
 
-/** @param {any} snapshot */
-export function authorizedMaintainer(snapshot) {
-	return (
-		exactObject(snapshot, ["actorId", "actorType", "repositoryId", "addressedRepositoryId", "permission"]) &&
-		snapshot.actorType === "User" &&
-		nonempty(snapshot.actorId) &&
-		snapshot.repositoryId === snapshot.addressedRepositoryId &&
-		(snapshot.permission === "MAINTAIN" || snapshot.permission === "ADMIN")
-	);
+/** The one pure predicate shared by synchronize and exact-base-push label hygiene. @param {any} value */
+export function invalidatesLandingAdvisory(value) {
+	if (!exactObject(value, ["kind", "before", "after", "eventRef", "baseRef"])) return false;
+	if (!OID.test(value.before ?? "") || !OID.test(value.after ?? "") || value.before === value.after) return false;
+	if (value.kind === "synchronize") return value.eventRef === null && nonempty(value.baseRef);
+	return value.kind === "base-push" && value.eventRef === `refs/heads/${value.baseRef}`;
 }
 
-/** Resolver records require a freshly addressed human collaborator role. */
 /** @param {any} snapshot */
 export function authorizedResolver(snapshot) {
 	return (
@@ -135,77 +102,11 @@ export function authorizedResolver(snapshot) {
 	);
 }
 
-/** @param {any} snapshot @param {any} policy */
-export function authorizedPolicyApp(snapshot, policy) {
-	return (
-		exactObject(snapshot, [
-			"actorId",
-			"actorType",
-			"installationId",
-			"nodeId",
-			"repositoryId",
-			"addressedRepositoryId",
-		]) &&
-		exactObject(policy, ["installationId", "nodeId"]) &&
-		snapshot.actorType === "App" &&
-		snapshot.repositoryId === snapshot.addressedRepositoryId &&
-		snapshot.installationId === policy.installationId &&
-		snapshot.nodeId === policy.nodeId &&
-		nonempty(snapshot.actorId)
-	);
-}
-
-/** App identity never substitutes for fresh, complete clear review evidence. */
-/** @param {any} snapshot @param {any} policy @param {any} evidence */
-export function authorizedPolicyProducer(snapshot, policy, evidence) {
-	return (
-		authorizedPolicyApp(snapshot, policy) &&
-		exactObject(evidence, ["complete", "outcome", "prHead", "baseHead", "currentPrHead", "currentBaseHead"]) &&
-		evidence.complete === true &&
-		evidence.outcome === "clear" &&
-		OID.test(evidence.prHead ?? "") &&
-		OID.test(evidence.baseHead ?? "") &&
-		evidence.prHead === evidence.currentPrHead &&
-		evidence.baseHead === evidence.currentBaseHead
-	);
-}
-
-/** @param {{producerId:string,prAuthorId:string,beneficiaryIds:string[],controlledIdentityIds:string[]}} input */
-export function ownBehalfRefusal({ producerId, prAuthorId, beneficiaryIds, controlledIdentityIds }) {
-	if (
-		!nonempty(producerId) ||
-		!nonempty(prAuthorId) ||
-		!Array.isArray(beneficiaryIds) ||
-		!beneficiaryIds.every(nonempty) ||
-		!Array.isArray(controlledIdentityIds) ||
-		!controlledIdentityIds.every(nonempty)
-	)
-		return true;
-	return producerId === prAuthorId || beneficiaryIds.includes(producerId) || controlledIdentityIds.includes(producerId);
-}
-
 const AWAITING_KEYS = ["producer", "producerKind", "observedAt", "subjectHead", "baseHead"];
 const BLOCKED_KEYS = ["condition", "recovery", "observedAt", "subjectHead", "baseHead"];
 const HANDOFF_KEYS = ["cause", "recipient", "reentry", "observedAt", "subjectHead", "baseHead"];
 const AWAITING_TERMINAL_KEYS = ["recordCommentId", "clearerId", "clearedAt", "cause", "subjectHead", "baseHead"];
 const TRANSITION_TERMINAL_KEYS = ["recordCommentId", "transition", "observedAt", "subjectHead", "baseHead"];
-export const ESCAPE_KEYS = [
-	"schemaVersion",
-	"repositoryId",
-	"pullRequestId",
-	"headSha",
-	"baseRef",
-	"baseSha",
-	"producerKind",
-	"producerId",
-	"producerPermission",
-	"reason",
-	"appliedAt",
-	"expiresAt",
-	"consumedAt",
-	"consumerRunId",
-	"outcome",
-];
 
 /** @param {any} value @param {"issue"|"pull"} subjectKind */
 export function admitAwaitingAuthorRecord(value, subjectKind) {
@@ -235,9 +136,7 @@ export function admitTransitionTerminal(value) {
 		exactObject(value, TRANSITION_TERMINAL_KEYS) &&
 		Number.isSafeInteger(value.recordCommentId) &&
 		value.recordCommentId > 0 &&
-		new Set(["blocked-clear", "handoff-reentry", "escape-revoke", "escape-invalidate", "escape-expire"]).has(
-			value.transition,
-		) &&
+		new Set(["blocked-clear", "handoff-reentry"]).has(value.transition) &&
 		instant(value.observedAt) &&
 		nullableOid(value.subjectHead) &&
 		nullableOid(value.baseHead)
@@ -267,43 +166,6 @@ export function admitHandoffRecord(value) {
 		nullableOid(value.subjectHead) &&
 		nullableOid(value.baseHead)
 	);
-}
-
-/** @param {any} value @param {any} context */
-export function validateEscapeRecord(value, context) {
-	if (!exactObject(value, ESCAPE_KEYS)) return { ok: false, arm: "record-shape" };
-	if (value.schemaVersion !== 1) return { ok: false, arm: "schema-version" };
-	if (value.producerKind !== "maintainer" && value.producerKind !== "app") return { ok: false, arm: "producer-kind" };
-	if (value.producerKind === "maintainer" && !new Set(["MAINTAIN", "ADMIN"]).has(value.producerPermission))
-		return { ok: false, arm: "producer-permission" };
-	if (value.producerKind === "app" && value.producerPermission !== null)
-		return { ok: false, arm: "producer-permission" };
-	if (!nonempty(value.producerId) || !nonempty(value.reason) || !nonempty(value.baseRef))
-		return { ok: false, arm: "record-value" };
-	if (value.producerId !== context.carryingCommentAuthorId) return { ok: false, arm: "producer-attestation" };
-	if (
-		(value.producerKind === "maintainer" && value.producerPermission !== context.livePermission) ||
-		(value.producerKind === "app" && context.appAttested !== true)
-	)
-		return { ok: false, arm: "producer-attestation" };
-	if (!OID.test(value.headSha ?? "") || !OID.test(value.baseSha ?? "")) return { ok: false, arm: "record-head" };
-	if (!instant(value.appliedAt) || !instant(value.expiresAt) || !instant(context.now))
-		return { ok: false, arm: "clock" };
-	if (Date.parse(value.expiresAt) - Date.parse(value.appliedAt) !== 24 * 60 * 60 * 1000)
-		return { ok: false, arm: "expiry-shape" };
-	if (Date.parse(context.now) >= Date.parse(value.expiresAt)) return { ok: false, arm: "expired" };
-	if (
-		value.repositoryId !== context.repositoryId ||
-		value.pullRequestId !== context.pullRequestId ||
-		value.headSha !== context.headSha ||
-		value.baseRef !== context.baseRef ||
-		value.baseSha !== context.baseSha
-	)
-		return { ok: false, arm: "subject-mismatch" };
-	if (!context.labelPresent) return { ok: false, arm: "label-removed" };
-	if (value.consumedAt !== null || value.consumerRunId !== null || value.outcome !== null)
-		return { ok: false, arm: "consumed" };
-	return { ok: true, arm: "valid" };
 }
 
 /** @param {string} marker @param {any} record */
@@ -410,43 +272,6 @@ export function handoffKey(record) {
 	return JSON.stringify([record.cause, record.recipient, record.reentry, record.subjectHead, record.baseHead]);
 }
 
-/** @param {string} arm @param {string} observedAt */
-export function escapeRefusalRecord(arm, observedAt) {
-	if (!/^[a-z][a-z0-9-]*$/.test(arm) || !instant(observedAt)) throw new Error("invalid escape refusal");
-	return { arm, observedAt };
-}
-
-/** @param {any} input */
-export function createEscapeRecord(input) {
-	const applied = Date.parse(input.appliedAt);
-	if (!Number.isFinite(applied)) return undefined;
-	const permission = input.producerKind === "app" ? null : input.producerPermission;
-	const record = {
-		schemaVersion: 1,
-		repositoryId: input.repositoryId,
-		pullRequestId: input.pullRequestId,
-		headSha: input.headSha,
-		baseRef: input.baseRef,
-		baseSha: input.baseSha,
-		producerKind: input.producerKind,
-		producerId: input.producerId,
-		producerPermission: permission,
-		reason: input.reason,
-		appliedAt: input.appliedAt,
-		expiresAt: new Date(applied + 24 * 60 * 60 * 1000).toISOString(),
-		consumedAt: null,
-		consumerRunId: null,
-		outcome: null,
-	};
-	return Object.keys(record).length === ESCAPE_KEYS.length ? record : undefined;
-}
-
-/** @param {any} value */
-export function validTerminalEscapeFields(value) {
-	return instant(value.consumedAt) && nonempty(value.consumerRunId) && TERMINAL_ESCAPE_OUTCOMES.has(value.outcome);
-}
-
-/** Platform-neutral blocked writer; adapters execute the returned closed plan. */
 /** @param {any} record */
 export function createBlockedTransition(record) {
 	if (!admitBlockedRecord(record)) return { ok: false, arm: "blocked-record" };
@@ -499,175 +324,6 @@ export function reenterHandoffTransition(input) {
 	return { ok: true, plan: [{ kind: "comment", body: encodeRecord(RECORD_MARKERS.handoffTerminal, terminal) }] };
 }
 
-/** Escape creation remains record-first; absence of App policy must be decided before this entry point. */
-/** @param {any} input */
-export function createEscapeTransition(input) {
-	const record = createEscapeRecord(input);
-	if (record === undefined) return { ok: false, arm: "escape-record" };
-	const authority =
-		record.producerKind === "maintainer"
-			? authorizedMaintainer(input.authoritySnapshot)
-			: authorizedPolicyProducer(input.authoritySnapshot, input.policy, input.evidence);
-	if (!authority || input.authoritySnapshot?.actorId !== record.producerId)
-		return { ok: false, arm: "producer-unauthorized" };
-	if (
-		ownBehalfRefusal({
-			producerId: record.producerId,
-			prAuthorId: input.prAuthorId,
-			beneficiaryIds: input.beneficiaryIds,
-			controlledIdentityIds: input.controlledIdentityIds,
-		})
-	)
-		return { ok: false, arm: "own-behalf" };
-	const subject = input.subjectSnapshot;
-	if (
-		!exactObject(subject, ["repositoryId", "pullRequestId", "headSha", "baseRef", "baseSha"]) ||
-		input.authoritySnapshot.repositoryId !== subject.repositoryId ||
-		input.authoritySnapshot.addressedRepositoryId !== subject.repositoryId
-	)
-		return { ok: false, arm: "authority-subject-mismatch" };
-	const creationValidity = validateEscapeRecord(record, {
-		carryingCommentAuthorId: input.authoritySnapshot.actorId,
-		livePermission: input.authoritySnapshot.permission,
-		appAttested: record.producerKind === "app",
-		now: input.currentTime,
-		repositoryId: subject?.repositoryId,
-		pullRequestId: subject?.pullRequestId,
-		headSha: subject?.headSha,
-		baseRef: subject?.baseRef,
-		baseSha: subject?.baseSha,
-		labelPresent: true,
-	});
-	if (!creationValidity.ok) return { ok: false, arm: creationValidity.arm };
-	if (input.currentTime !== record.appliedAt) return { ok: false, arm: "clock" };
-	return {
-		ok: true,
-		record,
-		plan: recordThenLabelPlan(encodeRecord(RECORD_MARKERS.escape, record), "merge:bypass-permitted"),
-	};
-}
-
-/** Every examined refusal has exactly one content-free terminal refusal write. */
-/** @param {any} record @param {any} context @param {string} observedAt */
-export function examineEscapeTransition(record, context, observedAt) {
-	const decision = validateEscapeRecord(record, context);
-	if (decision.ok) return { ok: true, arm: "valid", plan: [] };
-	const refusal = escapeRefusalRecord(decision.arm, observedAt);
-	return {
-		ok: false,
-		arm: decision.arm,
-		plan: [{ kind: "comment", body: encodeRecord(RECORD_MARKERS.escapeRefusal, refusal) }],
-	};
-}
-
-/** @param {any} input */
-export function terminateEscapeTransition(input) {
-	if (!new Set(["escape-revoke", "escape-invalidate", "escape-expire"]).has(input.transition))
-		return { ok: false, arm: "escape-transition" };
-	const terminal = {
-		recordCommentId: input.recordCommentId,
-		transition: input.transition,
-		observedAt: input.observedAt,
-		subjectHead: input.subjectHead,
-		baseHead: input.baseHead,
-	};
-	if (!admitTransitionTerminal(terminal)) return { ok: false, arm: "escape-terminal" };
-	return {
-		ok: true,
-		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.escapeTerminal, terminal), "merge:bypass-permitted"),
-	};
-}
-
-/** @param {any} value */
-export function admitLandingClaim(value) {
-	return (
-		exactObject(value, LANDING_CLAIM_KEYS) &&
-		value.schemaVersion === 1 &&
-		Number.isSafeInteger(value.escapeCommentId) &&
-		value.escapeCommentId > 0 &&
-		nonempty(value.replayKey) &&
-		nonempty(value.consumerRunId) &&
-		nonempty(value.consumerId) &&
-		nonempty(value.repositoryId) &&
-		nonempty(value.pullRequestId) &&
-		OID.test(value.headSha ?? "") &&
-		OID.test(value.baseSha ?? "") &&
-		instant(value.claimedAt)
-	);
-}
-
-/** @param {any} input */
-export function createLandingClaim(input) {
-	const claim = {
-		schemaVersion: 1,
-		escapeCommentId: input.escapeCommentId,
-		replayKey: input.replayKey,
-		consumerRunId: input.consumerRunId,
-		consumerId: input.consumerId,
-		repositoryId: input.repositoryId,
-		pullRequestId: input.pullRequestId,
-		headSha: input.headSha,
-		baseSha: input.baseSha,
-		claimedAt: input.claimedAt,
-	};
-	return admitLandingClaim(claim) ? claim : undefined;
-}
-
-/** Lowest platform comment id wins; unattested or unauthorized comments never claim. @param {any[]} comments @param {string} replayKey @param {string[]} authorizedConsumerIds */
-export function landingClaimWinner(comments, replayKey, authorizedConsumerIds) {
-	if (!Array.isArray(comments) || !nonempty(replayKey) || !Array.isArray(authorizedConsumerIds)) return undefined;
-	const admitted = comments.flatMap((comment) => {
-		if (!exactObject(comment, ["id", "authorId", "body"]) || !Number.isSafeInteger(comment.id) || comment.id <= 0)
-			return [];
-		const claim = parseMarkedRecord(comment.body, RECORD_MARKERS.landingClaim);
-		return admitLandingClaim(claim) &&
-			claim.replayKey === replayKey &&
-			claim.consumerId === comment.authorId &&
-			authorizedConsumerIds.includes(comment.authorId)
-			? [{ id: comment.id, claim }]
-			: [];
-	});
-	return admitted.sort((left, right) => left.id - right.id)[0];
-}
-
-/** @param {any} value */
-export function admitLandingTerminal(value) {
-	return (
-		exactObject(value, LANDING_TERMINAL_KEYS) &&
-		value.schemaVersion === 1 &&
-		Number.isSafeInteger(value.escapeCommentId) &&
-		value.escapeCommentId > 0 &&
-		(value.claimCommentId === null || (Number.isSafeInteger(value.claimCommentId) && value.claimCommentId > 0)) &&
-		nonempty(value.consumerRunId) &&
-		nonempty(value.writerId) &&
-		instant(value.consumedAt) &&
-		TERMINAL_ESCAPE_OUTCOMES.has(value.outcome) &&
-		OID.test(value.headSha ?? "") &&
-		OID.test(value.baseSha ?? "")
-	);
-}
-
-/** @param {any} input */
-export function createLandingTerminalPlan(input) {
-	const terminal = {
-		schemaVersion: 1,
-		escapeCommentId: input.escapeCommentId,
-		claimCommentId: input.claimCommentId,
-		consumerRunId: input.consumerRunId,
-		writerId: input.writerId,
-		consumedAt: input.consumedAt,
-		outcome: input.outcome,
-		headSha: input.headSha,
-		baseSha: input.baseSha,
-	};
-	if (!admitLandingTerminal(terminal)) return { ok: false, arm: "landing-terminal" };
-	return {
-		ok: true,
-		plan: terminalThenUnlabelPlan(encodeRecord(RECORD_MARKERS.landingTerminal, terminal), "merge:bypass-permitted"),
-	};
-}
-
-/** Execute one plan sequentially; a failed record write cannot reach a label operation. */
 /** @param {readonly any[]} plan @param {{comment:(body:string)=>Promise<void>,addLabel:(label:string)=>Promise<void>,removeLabel:(label:string)=>Promise<void>}} effects */
 export async function executeTransitionPlan(plan, effects) {
 	for (const operation of plan) {

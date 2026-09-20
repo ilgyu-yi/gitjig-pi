@@ -122,7 +122,6 @@ const EXPECTED_GOVERNED_ROWS = [
 	"review-round|extension",
 	"review|extension",
 	"ship|extension",
-	"source-split|extension",
 	"work-on|prompt",
 ];
 
@@ -590,9 +589,11 @@ describe("registration on the governed home, from the substrate's own report (is
 		);
 	});
 
-	it("source-split registers as the one explicit application command", () => {
-		const row = requireGovernedRow("source-split-registration", "source-split", "the source application command");
-		assert.equal(row.source, "extension");
+	it("the superseded source-split command is not callable", () => {
+		assert.equal(
+			governedRows(registrationRun, registrationFixture).some((row) => row.name === "source-split"),
+			false,
+		);
 	});
 });
 

@@ -66,10 +66,6 @@
 			"disposition": "handed-over"
 		},
 		{
-			"path": ".github/landing-policy.json",
-			"disposition": "handed-over"
-		},
-		{
 			"path": ".github/workflows/ac-closeout-event.mjs",
 			"disposition": "handed-over"
 		},
@@ -138,7 +134,11 @@
 			"disposition": "handed-over"
 		},
 		{
-			"path": ".github/workflows/landing-policy.mjs",
+			"path": ".github/workflows/landing-label-hygiene.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/landing-label-hygiene.yml",
 			"disposition": "handed-over"
 		},
 		{
@@ -751,6 +751,10 @@
 		},
 		{
 			"path": "changelog_unreleased/changed/301.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/changed/304.md",
 			"disposition": "instance-state"
 		},
 		{

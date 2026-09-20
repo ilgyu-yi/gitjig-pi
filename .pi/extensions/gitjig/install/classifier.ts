@@ -90,19 +90,6 @@ export function validateCandidatePath(path: string): void {
 		throw new ClassificationRefusal("path is outside the candidate universe");
 }
 
-/** Projection-only null invariant; the handed-over module owns configured App schema and attestation. */
-export function sourceLandingPolicyAdmits(value: unknown): boolean {
-	if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-	const record = value as Record<string, unknown>;
-	return (
-		Object.keys(record).length === 2 &&
-		Object.hasOwn(record, "schemaVersion") &&
-		Object.hasOwn(record, "appProducer") &&
-		record.schemaVersion === 1 &&
-		record.appProducer === null
-	);
-}
-
 export function classifyCandidate(path: string, bytes: Buffer): Classification {
 	validateCandidatePath(path);
 	const marker = classifyMarker(bytes);
