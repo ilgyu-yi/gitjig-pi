@@ -193,6 +193,14 @@ function validReviewers(value) {
 		)
 	);
 }
+/** @param {any} value */
+function validMeasuredCheck(value) {
+	return (
+		closed(value, ["context", "integrationId"]) &&
+		scalarSequence(value.context) &&
+		(value.integrationId === null || positive(value.integrationId))
+	);
+}
 /** @param {any[]} value */
 function validChecks(value) {
 	return (
@@ -243,6 +251,12 @@ function disabledValue(name) {
 /** @param {string} name @param {any} value */
 function validMeasuredValue(name, value) {
 	if (name === "administratorBypass" || name === "requiredReviewers") return validCapabilityValue(name, value);
+	if (name === "requiredStatusChecks")
+		return (
+			Array.isArray(value) &&
+			value.every(validMeasuredCheck) &&
+			new Set(value.map((entry) => entry.context)).size === value.length
+		);
 	if (name === "allowedMergeMethods")
 		return (
 			Array.isArray(value) &&

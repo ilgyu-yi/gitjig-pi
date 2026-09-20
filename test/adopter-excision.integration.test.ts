@@ -37,6 +37,12 @@ const forbiddenDependencies = [
 
 function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] {
 	const findings: string[] = [];
+	const governanceAssets = new Set([
+		".github/bin/gitjig-governance.mjs",
+		".github/workflows/gitjig-governance.mjs",
+		".github/workflows/gitjig-governance-platform.mjs",
+		".github/workflows/gitjig-governance-service.mjs",
+	]);
 	for (const candidate of candidates) {
 		const text = candidate.bytes.toString("utf8");
 		for (const rule of forbiddenDependencies) {
@@ -46,11 +52,11 @@ function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] 
 		// that exact name while continuing to reject every other shell-brand use.
 		const neutralizeContractName = (value: string) =>
 			value.replaceAll(".gitjig", ".project-state").replaceAll("gitjig-lifecycle.mjs", "lifecycle-engine.mjs");
-		if (/gitjig/i.test(neutralizeContractName(text))) findings.push(`${candidate.path}: source-shell branding`);
-		if (
-			candidate.path !== ".github/workflows/gitjig-governance.mjs" &&
-			/gitjig/i.test(neutralizeContractName(candidate.path))
-		)
+		const brandingSurface = governanceAssets.has(candidate.path)
+			? neutralizeContractName(text).replaceAll("gitjig-governance", "governance-contract")
+			: neutralizeContractName(text);
+		if (/gitjig/i.test(brandingSurface)) findings.push(`${candidate.path}: source-shell branding`);
+		if (!governanceAssets.has(candidate.path) && /gitjig/i.test(neutralizeContractName(candidate.path)))
 			findings.push(`${candidate.path}: branded handed-over path`);
 	}
 	return findings;

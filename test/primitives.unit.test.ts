@@ -1461,6 +1461,8 @@ describe("fail-posture inventory (§3.9)", () => {
 				"fragment-gate-draft-sleep → open",
 				"governance-config → closed",
 				"governance-measured-basis → closed",
+				"governance-operator-input → closed",
+				"governance-platform-operation → closed",
 				"history-shape-graph → closed",
 				"history-shape-trust → closed",
 				"landing-advisory-label → closed",
