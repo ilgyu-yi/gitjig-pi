@@ -1,286 +1,198 @@
-/** Warning-surface roster: EXEMPT — pure decisions return fixed arm tokens and never render actor operands. */
-import { randomUUID } from "node:crypto";
+/** Warning-surface roster: EXEMPT — pure decisions return closed outcome and blocker tokens. */
 import type { MergeMode } from "../modes.ts";
 
-export const CORE_GUARDS = [
-	"changelog",
-	"ssotHome",
-	"tocFreshness",
-	"sourceStyle",
-	"typeCheck",
-	"suite",
-	"acCloseout",
-	"protectedBranch",
-	"deletionProtection",
-	"forcePushProtection",
-	"requiredContexts",
-	"threadsResolved",
-	"mergeMethod",
-	"headFresh",
-	"baseFresh",
-	"history",
-	"open",
-	"nonDraft",
-	"mergeable",
-	"upToDate",
-] as const;
-export type CoreGuard = (typeof CORE_GUARDS)[number];
-export type CoreFacts = Readonly<Record<CoreGuard, boolean>>;
+export const BYPASS_LABEL = "merge:bypass-permitted";
+export const OPERATOR_AUDIT_MARKER = "<!-- gitjig-operator-directed-merge: v1 -->";
+
+export type Blocker =
+	| "review-missing"
+	| "judge-missing"
+	| "resolver-not-clear"
+	| "native-approval"
+	| "ac-closeout"
+	| "required-checks"
+	| "threads"
+	| "freshness"
+	| "merge-method"
+	| "force-push-protection"
+	| "deletion-protection"
+	| "pr-closed"
+	| "draft"
+	| "merge-conflict"
+	| "mergeability-unknown";
 
 export interface LandingSnapshot {
 	repositoryId: string;
 	pullRequestId: string;
+	pullRequestNumber: number;
+	operatorId: string;
 	headSha: string;
-	baseSha: string;
 	baseRef: string;
-	prAuthorId: string;
-	core: CoreFacts;
-	quorum: { measurable: boolean; required: number; approvals: number };
-	standingChangesRequested: boolean;
-	topologyActive: boolean;
-	escape?: {
-		commentId: number;
-		replayKey: string;
-		record: unknown;
-		context: unknown;
-		alreadyClaimed: boolean;
-		claim?: { commentId: number; consumerRunId: string; claimedAt: string };
-		terminalPresent?: boolean;
-	};
+	baseSha: string;
+	labels: readonly string[];
+	reviewHeadSha?: string;
+	reviewComplete: boolean;
+	judgeComplete: boolean;
+	resolver: "clear" | "blocked" | "missing";
+	acCloseout: boolean;
+	requiredApprovals: number;
+	approvals: number;
+	requiredChecks: "pass" | "fail" | "pending" | "unknown";
+	threadsResolved: boolean;
+	fresh: boolean;
+	mergeMethodAllowed: boolean;
+	forcePushProtected: boolean;
+	deletionProtected: boolean;
+	mergeability: "mergeable" | "conflicting" | "unknown";
+	open: boolean;
+	nonDraft: boolean;
+	predicateOwnership: "single" | "unknown" | "multiple" | "inherited-ambiguous";
 }
 
-export type LandingDecision =
-	| { kind: "ready"; arm: "merge-mode-off" }
-	| { kind: "refused"; arm: string }
-	| { kind: "land"; route: "ordinary" | "escape" };
-
-export interface LifecycleEngine {
-	RECORD_MARKERS: Readonly<Record<string, string>>;
-	encodeRecord(marker: string, value: unknown): string;
-	escapeRefusalRecord(arm: string, observedAt: string): unknown;
-	parseMarkedRecord(body: unknown, marker: string): unknown;
-	validateEscapeRecord(record: unknown, context: unknown): { ok: boolean; arm: string };
-	admitLandingClaim(value: unknown): boolean;
-	admitLandingTerminal(value: unknown): boolean;
-	admitTransitionTerminal(value: unknown): boolean;
-	examineEscapeTransition(
-		record: unknown,
-		context: unknown,
-		observedAt: string,
-	): { ok: boolean; arm: string; plan?: readonly { kind: string; body?: string }[] };
-	createLandingClaim(input: unknown): unknown;
-	landingClaimWinner(
-		comments: unknown[],
-		replayKey: string,
-		authorizedConsumerIds: string[],
-	): { id: number; claim: { consumerRunId: string } } | undefined;
-	eligibleApprovalCount(
-		reviews: unknown[],
-		prAuthorId: string,
-		headSha: string,
-		quorum: number,
-	): { ok: boolean; count?: number };
-	latestEligibleHumanReviews(
-		reviews: unknown[],
-		prAuthorId: string,
-		headSha: string,
-	): Map<string, { state?: unknown; dismissed?: unknown }>;
-	createLandingTerminalPlan(input: unknown): {
-		ok: boolean;
-		arm?: string;
-		plan?: readonly { kind: string; body?: string; label?: string }[];
-	};
+export interface OperatorInstruction {
+	scope: "all-observed" | readonly Blocker[];
+	attempt: string;
+	confirmation: string;
 }
 
-export function decideLanding(mode: MergeMode, snapshot: LandingSnapshot): LandingDecision {
-	if (mode === "off") return { kind: "ready", arm: "merge-mode-off" };
-	for (const guard of CORE_GUARDS) if (!snapshot.core[guard]) return { kind: "refused", arm: `core-${guard}` };
-	const { quorum } = snapshot;
-	if (!quorum.measurable || !Number.isSafeInteger(quorum.required) || quorum.required <= 0)
-		return { kind: "refused", arm: "quorum-unmeasurable" };
-	if (snapshot.standingChangesRequested) return { kind: "refused", arm: "standing-changes-requested" };
-	if (quorum.approvals >= quorum.required) return { kind: "land", route: "ordinary" };
-	if (!snapshot.topologyActive) return { kind: "refused", arm: "topology-disabled" };
-	if (snapshot.escape === undefined) return { kind: "refused", arm: "escape-absent" };
-	if (snapshot.escape.alreadyClaimed) return { kind: "refused", arm: "escape-consumed" };
-	return { kind: "land", route: "escape" };
-}
+export type LandingResult =
+	| { outcome: "merged"; route: "ordinary" | "approval-waiver" | "operator-directed" }
+	| { outcome: "presented"; blockers: readonly Blocker[]; confirmation: string }
+	| { outcome: "refused"; arm: string; blockers?: readonly Blocker[] };
 
 export interface LandingEffects {
-	comment(body: string): Promise<number>;
-	removeLabel(label: string): Promise<boolean>;
-	readClaims(): Promise<{ comments: unknown[]; authorizedConsumerIds: string[] } | undefined>;
-	rereadHeads(): Promise<{ headSha: string; baseSha: string } | undefined>;
-	merge(expectedHeadSha: string): Promise<"accepted" | "rejected" | "unknown">;
-	verifyMerge(headSha: string, baseSha: string): Promise<"landed" | "landed-base-changed" | "not-landed" | "unknown">;
+	merge(
+		route: "ordinary" | "approval-waiver" | "operator-directed",
+		expectedHead: string,
+	): Promise<"merged" | "blocked" | "unknown">;
+	applyLabel(label: string): Promise<"applied" | "present" | "failed" | "unknown">;
+	comment(body: string): Promise<"published" | "failed" | "unknown">;
+	readComments(): Promise<readonly string[] | undefined>;
+	reread(): Promise<LandingSnapshot | undefined>;
 }
 
-export interface LandingExecutionInput {
-	mode: MergeMode;
-	snapshot: LandingSnapshot;
-	consumerId: string;
-	consumerRunId?: string;
-	now: string;
-	engine: LifecycleEngine;
+function uniq<T>(values: readonly T[]): T[] {
+	return [...new Set(values)];
 }
 
-export interface LandingExecutionResult {
-	outcome: "ready" | "landed" | "refused" | "unverified-outcome";
-	arm: string;
-	consumerRunId?: string;
+export function observedBlockers(snapshot: LandingSnapshot): Blocker[] {
+	const result: Blocker[] = [];
+	if (!snapshot.reviewComplete || snapshot.reviewHeadSha !== snapshot.headSha) result.push("review-missing");
+	if (!snapshot.judgeComplete) result.push("judge-missing");
+	if (snapshot.resolver !== "clear") result.push("resolver-not-clear");
+	if (snapshot.requiredApprovals > 0 && snapshot.approvals < snapshot.requiredApprovals) result.push("native-approval");
+	if (!snapshot.acCloseout) result.push("ac-closeout");
+	if (snapshot.requiredChecks !== "pass") result.push("required-checks");
+	if (!snapshot.threadsResolved) result.push("threads");
+	if (!snapshot.fresh) result.push("freshness");
+	if (!snapshot.mergeMethodAllowed) result.push("merge-method");
+	if (!snapshot.forcePushProtected) result.push("force-push-protection");
+	if (!snapshot.deletionProtected) result.push("deletion-protection");
+	if (!snapshot.open) result.push("pr-closed");
+	if (!snapshot.nonDraft) result.push("draft");
+	if (snapshot.mergeability === "conflicting") result.push("merge-conflict");
+	if (snapshot.mergeability === "unknown") result.push("mergeability-unknown");
+	return result;
 }
 
-async function writeEscapeTerminal(
-	input: LandingExecutionInput,
+export function operatorConfirmation(snapshot: LandingSnapshot, blockers: readonly Blocker[]): string {
+	return `land ${snapshot.repositoryId}#${snapshot.pullRequestNumber} ${snapshot.headSha} onto ${snapshot.baseRef}@${snapshot.baseSha} despite ${[...blockers].sort().join(",")}`;
+}
+
+export function operatorAuditComment(
+	snapshot: LandingSnapshot,
+	blockers: readonly Blocker[],
+	confirmation = operatorConfirmation(snapshot, blockers),
+): string {
+	return `${OPERATOR_AUDIT_MARKER}\n\n\`\`\`json\n${JSON.stringify({
+		schemaVersion: 1,
+		repositoryId: snapshot.repositoryId,
+		pullRequestId: snapshot.pullRequestId,
+		pullRequestNumber: snapshot.pullRequestNumber,
+		operatorId: snapshot.operatorId,
+		headSha: snapshot.headSha,
+		baseRef: snapshot.baseRef,
+		baseSha: snapshot.baseSha,
+		blockers: [...blockers].sort(),
+		confirmation,
+	})}\n\`\`\``;
+}
+
+function sameOperands(a: LandingSnapshot, b: LandingSnapshot): boolean {
+	return (
+		a.repositoryId === b.repositoryId &&
+		a.pullRequestId === b.pullRequestId &&
+		a.operatorId === b.operatorId &&
+		a.headSha === b.headSha &&
+		a.baseRef === b.baseRef &&
+		a.baseSha === b.baseSha
+	);
+}
+
+export async function executeLanding(
+	input: { mode: MergeMode; snapshot: LandingSnapshot; instruction?: OperatorInstruction },
 	effects: LandingEffects,
-	claimCommentId: number | null,
-	outcome: "landed" | "refused",
-	arm?: string,
-): Promise<boolean> {
-	const escapeState = input.snapshot.escape;
-	if (!escapeState) return false;
-	if (arm) {
-		const refusal = input.engine.escapeRefusalRecord(arm, input.now);
-		const refusalId = await effects.comment(
-			input.engine.encodeRecord(input.engine.RECORD_MARKERS.escapeRefusal, refusal),
-		);
-		if (!Number.isSafeInteger(refusalId) || refusalId <= 0) return false;
-	}
-	const terminal = input.engine.createLandingTerminalPlan({
-		escapeCommentId: escapeState.commentId,
-		claimCommentId,
-		consumerRunId: input.consumerRunId,
-		writerId: input.consumerId,
-		consumedAt: input.now,
-		outcome,
-		headSha: input.snapshot.headSha,
-		baseSha: input.snapshot.baseSha,
-	});
-	if (!terminal.ok || terminal.plan === undefined) return false;
-	for (const operation of terminal.plan) {
-		if (operation.kind === "comment" && typeof operation.body === "string") {
-			const commentId = await effects.comment(operation.body);
-			if (!Number.isSafeInteger(commentId) || commentId <= 0) return false;
-		} else if (operation.kind === "remove-label" && typeof operation.label === "string") {
-			if (!(await effects.removeLabel(operation.label))) return false;
-		} else return false;
-	}
-	return true;
-}
+): Promise<LandingResult> {
+	if (input.mode !== "on") return { outcome: "refused", arm: "merge-mode-off" };
+	const snapshot = input.snapshot;
+	if (snapshot.predicateOwnership !== "single") return { outcome: "refused", arm: "predicate-ownership" };
+	if (!Number.isInteger(snapshot.requiredApprovals) || snapshot.requiredApprovals < 0)
+		return { outcome: "refused", arm: "predicate-population" };
+	const blockers = observedBlockers(snapshot);
 
-export async function executeGuardedLanding(
-	input: LandingExecutionInput,
-	effects: LandingEffects,
-): Promise<LandingExecutionResult> {
-	const consumerRunId = input.consumerRunId ?? randomUUID();
-	const executionInput = { ...input, consumerRunId };
-	const pendingClaim = input.snapshot.escape?.claim;
-	if (input.mode === "on" && pendingClaim && !input.snapshot.escape?.terminalPresent) {
-		const verified = await effects.verifyMerge(input.snapshot.headSha, input.snapshot.baseSha);
-		if (verified === "unknown")
-			return { outcome: "unverified-outcome", arm: "reconciliation-unverified", consumerRunId };
-		if (
-			verified === "not-landed" &&
-			Number.isFinite(Date.parse(pendingClaim.claimedAt)) &&
-			Date.parse(input.now) - Date.parse(pendingClaim.claimedAt) < 10 * 60 * 1000
-		)
-			return { outcome: "refused", arm: "claim-in-flight", consumerRunId: pendingClaim.consumerRunId };
-		const reconciliationInput = { ...input, consumerRunId: pendingClaim.consumerRunId };
-		const outcome = verified === "landed" || verified === "landed-base-changed" ? "landed" : "refused";
-		const recorded = await writeEscapeTerminal(
-			reconciliationInput,
-			effects,
-			pendingClaim.commentId,
-			outcome,
-			outcome === "refused" ? "claimed-run-not-landed" : undefined,
-		);
-		return {
-			outcome,
-			arm: recorded ? `reconciled-${outcome}` : "reconciliation-terminal-write",
-			consumerRunId: pendingClaim.consumerRunId,
-		};
-	}
-	const decision = decideLanding(input.mode, input.snapshot);
-	if (decision.kind === "ready") return { outcome: "ready", arm: decision.arm };
-	if (decision.kind === "refused") return { outcome: "refused", arm: decision.arm };
-
-	let claimCommentId: number | undefined;
-	if (decision.route === "escape") {
-		const escapeState = input.snapshot.escape;
-		if (!escapeState) return { outcome: "refused", arm: "escape-absent", consumerRunId };
-		const examination = input.engine.examineEscapeTransition(escapeState.record, escapeState.context, input.now);
-		if (!examination.ok) {
-			const refusalOperation = examination.plan?.[0];
-			if (refusalOperation?.kind !== "comment" || typeof refusalOperation.body !== "string")
-				return { outcome: "refused", arm: "escape-refusal-plan", consumerRunId };
-			const refusalId = await effects.comment(refusalOperation.body);
-			if (Number.isSafeInteger(refusalId) && refusalId > 0)
-				await writeEscapeTerminal(executionInput, effects, null, "refused");
-			return { outcome: "refused", arm: examination.arm, consumerRunId };
-		}
-		const claim = input.engine.createLandingClaim({
-			escapeCommentId: escapeState.commentId,
-			replayKey: escapeState.replayKey,
-			consumerRunId,
-			consumerId: input.consumerId,
-			repositoryId: input.snapshot.repositoryId,
-			pullRequestId: input.snapshot.pullRequestId,
-			headSha: input.snapshot.headSha,
-			baseSha: input.snapshot.baseSha,
-			claimedAt: input.now,
-		});
-		if (claim === undefined) {
-			await writeEscapeTerminal(executionInput, effects, null, "refused", "claim-invalid");
-			return { outcome: "refused", arm: "claim-invalid", consumerRunId };
-		}
-		claimCommentId = await effects.comment(input.engine.encodeRecord(input.engine.RECORD_MARKERS.landingClaim, claim));
-		if (!Number.isSafeInteger(claimCommentId) || claimCommentId <= 0)
-			return { outcome: "refused", arm: "claim-write", consumerRunId };
-		const population = await effects.readClaims();
-		const winner = population
-			? input.engine.landingClaimWinner(population.comments, escapeState.replayKey, population.authorizedConsumerIds)
-			: undefined;
-		if (winner?.id !== claimCommentId || winner.claim.consumerRunId !== consumerRunId) {
-			const refusal = input.engine.escapeRefusalRecord("concurrent-claim", input.now);
-			await effects.comment(input.engine.encodeRecord(input.engine.RECORD_MARKERS.escapeRefusal, refusal));
-			return { outcome: "refused", arm: "concurrent-claim", consumerRunId };
-		}
+	if (blockers.length === 0) {
+		const result = await effects.merge("ordinary", snapshot.headSha);
+		return result === "merged"
+			? { outcome: "merged", route: "ordinary" }
+			: { outcome: "refused", arm: result === "unknown" ? "merge-outcome-unknown" : "ordinary-refused" };
 	}
 
-	const heads = await effects.rereadHeads();
-	if (heads?.headSha !== input.snapshot.headSha || heads.baseSha !== input.snapshot.baseSha) {
-		if (claimCommentId !== undefined)
-			await writeEscapeTerminal(executionInput, effects, claimCommentId, "refused", "head-base-changed");
-		return { outcome: "refused", arm: "head-base-changed", consumerRunId };
+	const approvalOnly = blockers.length === 1 && blockers[0] === "native-approval";
+	if (approvalOnly && !input.instruction) {
+		// The ordinary endpoint is intentionally tried before advisory-label application.
+		const ordinary = await effects.merge("ordinary", snapshot.headSha);
+		if (ordinary === "merged") return { outcome: "merged", route: "ordinary" };
+		if (ordinary === "unknown") return { outcome: "refused", arm: "merge-outcome-unknown" };
+		const label = snapshot.labels.includes(BYPASS_LABEL) ? "present" : await effects.applyLabel(BYPASS_LABEL);
+		if (label === "failed" || label === "unknown") return { outcome: "refused", arm: "label-apply" };
+		const current = await effects.reread();
+		if (!current || !sameOperands(snapshot, current)) return { outcome: "refused", arm: "operand-drift" };
+		const currentBlockers = observedBlockers(current);
+		if (currentBlockers.length !== 1 || currentBlockers[0] !== "native-approval")
+			return { outcome: "refused", arm: "predicate-drift", blockers: currentBlockers };
+		const result = await effects.merge("approval-waiver", current.headSha);
+		return result === "merged"
+			? { outcome: "merged", route: "approval-waiver" }
+			: { outcome: "refused", arm: result === "unknown" ? "merge-outcome-unknown" : "policy-refusal" };
 	}
-	const attempted = await effects.merge(input.snapshot.headSha);
-	if (attempted === "rejected") {
-		if (claimCommentId !== undefined)
-			await writeEscapeTerminal(executionInput, effects, claimCommentId, "refused", "merge-rejected");
-		return { outcome: "refused", arm: "merge-rejected", consumerRunId };
-	}
-	const verified = await effects.verifyMerge(input.snapshot.headSha, input.snapshot.baseSha);
-	if (verified === "unknown") return { outcome: "unverified-outcome", arm: "merge-unverified", consumerRunId };
-	if (verified === "not-landed") {
-		if (claimCommentId !== undefined)
-			await writeEscapeTerminal(executionInput, effects, claimCommentId, "refused", "merge-not-landed");
-		return { outcome: "refused", arm: "merge-not-landed", consumerRunId };
-	}
-	if (claimCommentId !== undefined) {
-		const recorded = await writeEscapeTerminal(executionInput, effects, claimCommentId, "landed");
-		return {
-			outcome: "landed",
-			arm: recorded
-				? verified === "landed-base-changed"
-					? "landed-base-changed"
-					: decision.route
-				: "landed-terminal-write",
-			consumerRunId,
-		};
-	}
-	return {
-		outcome: "landed",
-		arm: verified === "landed-base-changed" ? "landed-base-changed" : decision.route,
-		consumerRunId,
-	};
+
+	const instruction = input.instruction;
+	const confirmation = operatorConfirmation(snapshot, blockers);
+	if (!instruction) return { outcome: "presented", blockers, confirmation: `${confirmation} attempt <fresh-nonce>` };
+	if (blockers.length === 0) return { outcome: "refused", arm: "blocker-population" };
+	const selected = instruction.scope === "all-observed" ? blockers : uniq(instruction.scope);
+	if (selected.length === 0 || selected.length !== blockers.length || selected.some((item) => !blockers.includes(item)))
+		return { outcome: "refused", arm: "blocker-scope", blockers };
+	if (
+		!/^[A-Za-z0-9_-]{8,128}$/.test(instruction.attempt) ||
+		instruction.confirmation !== `${confirmation} attempt ${instruction.attempt}`
+	)
+		return { outcome: "refused", arm: "instruction-confirmation", blockers };
+	const label = snapshot.labels.includes(BYPASS_LABEL) ? "present" : await effects.applyLabel(BYPASS_LABEL);
+	if (label === "failed" || label === "unknown") return { outcome: "refused", arm: "label-apply", blockers };
+	const comment = operatorAuditComment(snapshot, blockers, instruction.confirmation);
+	const publication = await effects.comment(comment);
+	if (publication !== "published") return { outcome: "refused", arm: "audit-publication", blockers };
+	const comments = await effects.readComments();
+	if (!comments || comments.filter((value) => value === comment).length !== 1)
+		return { outcome: "refused", arm: "audit-ambiguity", blockers };
+	const current = await effects.reread();
+	if (!current || !sameOperands(snapshot, current)) return { outcome: "refused", arm: "operand-drift", blockers };
+	const currentBlockers = observedBlockers(current);
+	if (currentBlockers.length !== blockers.length || blockers.some((item) => !currentBlockers.includes(item)))
+		return { outcome: "refused", arm: "blocker-population-drift", blockers: currentBlockers };
+	const result = await effects.merge("operator-directed", current.headSha);
+	return result === "merged"
+		? { outcome: "merged", route: "operator-directed" }
+		: { outcome: "refused", arm: result === "unknown" ? "merge-outcome-unknown" : "policy-refusal" };
 }
