@@ -1,7 +1,13 @@
 /** Warning-surface roster: EXEMPT — the command persists only closed landing outcome tokens. */
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadPlatformLanding, platformLandingEffects } from "../landing/platform.ts";
-import { type Blocker, executeLanding, type OperatorInstruction } from "../landing/service.ts";
+import {
+	type BlockerClass,
+	executeLanding,
+	type OperatorInstruction,
+	operatorConfirmation,
+} from "../landing/service.ts";
 import type { ResolvedModes } from "../modes.ts";
 
 function facts(args: string): Map<string, string> | undefined {
@@ -16,25 +22,28 @@ function facts(args: string): Map<string, string> | undefined {
 function instruction(input: Map<string, string>): OperatorInstruction | undefined {
 	const scope = input.get("scope");
 	const encoded = input.get("confirm");
-	const attempt = input.get("attempt");
-	if (!scope && !encoded && !attempt) return undefined;
-	if (!scope || !encoded || !attempt) return { scope: [], attempt: "", confirmation: "" };
+	const attemptId = input.get("attempt");
+	const operatorInstructionObservedAt = input.get("observed");
+	if (!scope && !encoded && !attemptId && !operatorInstructionObservedAt) return undefined;
+	if (!scope || !encoded || !attemptId || !operatorInstructionObservedAt)
+		return { scope: [], attemptId: "", operatorInstructionObservedAt: "", confirmation: "" };
 	let confirmation = "";
 	try {
 		confirmation = decodeURIComponent(encoded);
 	} catch {
-		return { scope: [], attempt: "", confirmation: "" };
+		return { scope: [], attemptId: "", operatorInstructionObservedAt: "", confirmation: "" };
 	}
 	return {
-		scope: scope === "all-observed" ? "all-observed" : (scope.split(",").filter(Boolean) as Blocker[]),
-		attempt,
+		scope: scope === "all-observed" ? "all-observed" : (scope.split(",").filter(Boolean) as BlockerClass[]),
+		attemptId,
+		operatorInstructionObservedAt,
 		confirmation,
 	};
 }
 export function registerLandCommand(pi: ExtensionAPI, repoRoot: string, modes: ResolvedModes): void {
 	pi.registerCommand("land", {
 		description:
-			"Ordinary-first exact-head landing; use scope=all-observed attempt=<fresh-nonce> confirm=<URL-encoded exact prompt> for one operator-directed attempt.",
+			"Ordinary-first exact-head landing; use scope=all-observed attempt=<fresh-uuid> observed=<presented-time> confirm=<URL-encoded exact prompt> for one operator-directed attempt.",
 		handler: async (args: string, ctx) => {
 			const input = facts(args);
 			const repository = input?.get("repo") ?? "";
@@ -44,17 +53,25 @@ export function registerLandCommand(pi: ExtensionAPI, repoRoot: string, modes: R
 				pi.appendEntry("gitjig-land", { outcome: "refused", arm: "argument-grammar", modes });
 				return;
 			}
+			const now = new Date().toISOString();
 			const reload = () => loadPlatformLanding(host, repository, pr, repoRoot, new Date().toISOString());
 			const loaded = await reload();
 			if (!loaded.snapshot) {
 				pi.appendEntry("gitjig-land", { outcome: "refused", arm: loaded.arm, modes });
 				return;
 			}
-			const result = await executeLanding(
-				{ mode: modes.mergeMode, snapshot: loaded.snapshot, instruction: instruction(input) },
+			let result = await executeLanding(
+				{ mode: modes.mergeMode, snapshot: loaded.snapshot, now, instruction: instruction(input) },
 				platformLandingEffects(host, repository, pr, repoRoot, reload),
 			);
-			pi.appendEntry("gitjig-land", { ...result, modes });
+			if (result.outcome === "presented") {
+				const attemptId = randomUUID();
+				result = {
+					...result,
+					confirmation: operatorConfirmation(loaded.snapshot, result.blockers, attemptId, now),
+				};
+				pi.appendEntry("gitjig-land", { ...result, attemptId, operatorInstructionObservedAt: now, modes });
+			} else pi.appendEntry("gitjig-land", { ...result, modes });
 			pi.sendMessage({ customType: "gitjig-spine-turn", content: [], display: false }, { triggerTurn: true });
 			await ctx.waitForIdle();
 		},

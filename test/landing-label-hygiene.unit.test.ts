@@ -7,9 +7,10 @@ const workflow = readFileSync(new URL("../.github/workflows/landing-label-hygien
 
 describe("landing advisory hygiene boundaries", () => {
 	it("owns exactly synchronize and base push delivery with bounded serial concurrency", () => {
-		assert.match(workflow, /pull_request:\n\s+types: \[synchronize\]/);
+		assert.match(workflow, /pull_request_target:\n\s+types: \[synchronize\]/);
 		assert.match(workflow, /push:\n\s+branches: \['\*\*'\]/);
 		assert.match(workflow, /cancel-in-progress: false/);
+		assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
 	});
 	it("paginates open exact-base PRs and rereads each before deletion", () => {
 		assert.match(adapter, /while \(page <= 100\)/);

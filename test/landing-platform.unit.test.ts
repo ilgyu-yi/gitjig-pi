@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { activeRulesetApplies, newestCheckConclusions } from "../.pi/extensions/gitjig/landing/platform.ts";
 
+const source = readFileSync(new URL("../.pi/extensions/gitjig/landing/platform.ts", import.meta.url), "utf8");
 describe("interim current-platform predicates", () => {
 	it("matches only an active branch ruleset addressing the exact default branch", () => {
 		const rule = {
@@ -28,5 +30,13 @@ describe("interim current-platform predicates", () => {
 			])?.get("suite")?.conclusion,
 			"success",
 		);
+	});
+	it("rejects unsupported/duplicate rule types and binds required checks to integration identity", () => {
+		assert.match(source, /knownRuleTypes/);
+		assert.match(source, /predicate-rule-unsupported/);
+		assert.match(source, /predicate-rule-duplicate/);
+		assert.match(source, /integrationId/);
+		assert.match(source, /item\.appId === integrationId/);
+		assert.match(source, /source_type !== "Repository"/);
 	});
 });

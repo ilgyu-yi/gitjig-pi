@@ -1,7 +1,7 @@
 name: landing-label-hygiene
 
 on:
-  pull_request:
+  pull_request_target:
     types: [synchronize]
   push:
     branches: ['**']

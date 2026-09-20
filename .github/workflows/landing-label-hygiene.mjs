@@ -28,7 +28,7 @@ async function remove(number) {
 	if (!current || current.labels.some((label) => label.name === LABEL))
 		throw new Error("label hygiene refused: write not observed");
 }
-if (process.env.GITHUB_EVENT_NAME === "pull_request") {
+if (process.env.GITHUB_EVENT_NAME === "pull_request_target") {
 	const number = event.pull_request?.number;
 	const current = Number.isSafeInteger(number) ? await api(`pulls/${number}`) : undefined;
 	if (!current) throw new Error("label hygiene refused: pull request unreadable");

@@ -76,6 +76,48 @@ export function newestCheckConclusions(
 	return new Map([...result].map(([name, item]) => [name, { status: item.status, conclusion: item.conclusion }]));
 }
 
+interface StrictCheck {
+	name: string;
+	appId: number;
+	appSlug: string;
+	status: string;
+	conclusion: string;
+}
+function strictCheckRollup(checks: readonly unknown[]): Map<string, StrictCheck> | undefined {
+	const result = new Map<string, StrictCheck & { id: number }>();
+	const ids = new Set<number>();
+	for (const value of checks) {
+		const item = record(value);
+		const app = record(item?.app);
+		if (
+			!item ||
+			typeof item.name !== "string" ||
+			item.name.length === 0 ||
+			!Number.isSafeInteger(item.id) ||
+			typeof item.status !== "string" ||
+			!app ||
+			!Number.isSafeInteger(app.id) ||
+			typeof app.slug !== "string"
+		)
+			return undefined;
+		const id = Number(item.id);
+		if (ids.has(id)) return undefined;
+		ids.add(id);
+		const key = JSON.stringify([item.name, Number(app.id)]);
+		const prior = result.get(key);
+		if (!prior || prior.id < id)
+			result.set(key, {
+				id,
+				name: item.name,
+				appId: Number(app.id),
+				appSlug: app.slug,
+				status: item.status,
+				conclusion: typeof item.conclusion === "string" ? item.conclusion : "",
+			});
+	}
+	return result;
+}
+
 async function api(
 	host: string,
 	repository: string,
@@ -233,15 +275,49 @@ export async function loadPlatformLanding(
 	if (active.length !== 1)
 		return { arm: active.length === 0 ? "predicate-ownership-unknown" : "predicate-ownership-multiple" };
 	const owner = active[0];
-	if (owner.source_type !== undefined && owner.source_type !== "Repository")
-		return { arm: "predicate-ownership-inherited" };
+	if (owner.source_type !== "Repository") return { arm: "predicate-ownership-inherited" };
+	if (
+		typeof repo.allow_merge_commit !== "boolean" ||
+		typeof repo.allow_squash_merge !== "boolean" ||
+		typeof repo.allow_rebase_merge !== "boolean"
+	)
+		return { arm: "repository-settings-unmeasurable" };
+	const ownerRules = array(owner.rules).map(record);
+	const knownRuleTypes = new Set(["pull_request", "required_status_checks", "deletion", "non_fast_forward"]);
+	if (ownerRules.some((item) => !item || typeof item.type !== "string" || !knownRuleTypes.has(item.type)))
+		return { arm: "predicate-rule-unsupported" };
+	const ruleTypes = ownerRules.map((item) => String(item?.type));
+	if (new Set(ruleTypes).size !== ruleTypes.length) return { arm: "predicate-rule-duplicate" };
 	const pull = rule(owner, "pull_request");
-	const pullParameters = record(pull?.parameters);
-	const status = record(rule(owner, "required_status_checks")?.parameters);
-	const contexts = array(status?.required_status_checks)
-		.map(record)
-		.map((item) => item?.context)
-		.filter((item): item is string => typeof item === "string");
+	const pullParameters = pull === undefined ? undefined : record(pull.parameters);
+	if (pull !== undefined && !pullParameters) return { arm: "pull-request-rule-malformed" };
+	const statusRule = rule(owner, "required_status_checks");
+	const status = statusRule === undefined ? undefined : record(statusRule.parameters);
+	if (statusRule !== undefined && !status) return { arm: "status-rule-malformed" };
+	const configuredChecks: { context: string; integrationId: number | null }[] = [];
+	for (const value of array(status?.required_status_checks)) {
+		const item = record(value);
+		const keys = item ? Object.keys(item) : [];
+		if (
+			!item ||
+			!keys.every((key) => key === "context" || key === "integration_id") ||
+			typeof item.context !== "string" ||
+			item.context.length === 0 ||
+			!(item.integration_id === undefined || item.integration_id === null || Number.isSafeInteger(item.integration_id))
+		)
+			return { arm: "status-rule-malformed" };
+		configuredChecks.push({
+			context: item.context,
+			integrationId: item.integration_id == null ? null : Number(item.integration_id),
+		});
+	}
+	if (
+		new Set(configuredChecks.map((item) => JSON.stringify([item.context, item.integrationId]))).size !==
+		configuredChecks.length
+	)
+		return { arm: "status-rule-duplicate" };
+	if (pullParameters?.require_code_owner_review === true || pullParameters?.require_last_push_approval === true)
+		return { arm: "pull-request-rule-unsupported" };
 	const requiredApprovals = Number(pullParameters?.required_approving_review_count ?? 0);
 	if (!Number.isInteger(requiredApprovals) || requiredApprovals < 0) return { arm: "native-approval-unmeasurable" };
 	const [reviews, comments, checkRuns, branchRaw, threads, permissionRaw] = await Promise.all([
@@ -257,17 +333,27 @@ export async function loadPlatformLanding(
 	if (!reviews || !comments || !checkRuns) return { arm: "platform-population-incomplete" };
 	if (!new Set(["write", "maintain", "admin"]).has(String(record(permissionRaw)?.role_name).toLowerCase()))
 		return { arm: "operator-permission" };
-	const checks = newestCheckConclusions(checkRuns);
+	const checks = strictCheckRollup(checkRuns);
 	if (!checks) return { arm: "check-rollup-ambiguous" };
-	const successful = (name: string) => {
-		const check = checks.get(name);
-		return check?.status === "completed" && check.conclusion === "success";
-	};
-	const requiredChecks = contexts.every(successful)
+	const matchingChecks = (context: string, integrationId: number | null) =>
+		[...checks.values()].filter(
+			(item) => item.name === context && (integrationId === null || item.appId === integrationId),
+		);
+	const requiredStates = configuredChecks.map((item) => matchingChecks(item.context, item.integrationId));
+	if (requiredStates.some((items) => items.length !== 1)) return { arm: "check-rollup-ambiguous" };
+	const requiredChecks = requiredStates.every(
+		(items) => items[0]?.status === "completed" && items[0]?.conclusion === "success",
+	)
 		? "pass"
-		: contexts.some((name) => checks.get(name)?.status !== "completed")
+		: requiredStates.some((items) => items[0]?.status !== "completed")
 			? "pending"
 			: "fail";
+	const acChecks = [...checks.values()].filter(
+		(item) => item.name === "ac-closeout" && item.appSlug === "github-actions",
+	);
+	if (acChecks.length > 1) return { arm: "ac-closeout-ambiguous" };
+	const acCloseout =
+		acChecks.length === 1 && acChecks[0]?.status === "completed" && acChecks[0]?.conclusion === "success";
 	const latestReview = new Map<string, Record<string, unknown>>();
 	for (const value of reviews) {
 		const item = record(value);
@@ -278,7 +364,11 @@ export async function loadPlatformLanding(
 		if (!prior || String(prior.submitted_at) < item.submitted_at) latestReview.set(user.node_id, item);
 	}
 	const approvals = [...latestReview.values()].filter(
-		(item) => item.state === "APPROVED" && item.commit_id === headSha && record(item.user)?.node_id !== author.node_id,
+		(item) =>
+			item.state === "APPROVED" &&
+			item.commit_id === headSha &&
+			record(item.user)?.node_id !== author.node_id &&
+			new Set(["OWNER", "MEMBER", "COLLABORATOR"]).has(String(item.author_association)),
 	).length;
 	const markedComments = comments.filter(
 		(item) =>
@@ -316,9 +406,11 @@ export async function loadPlatformLanding(
 			labels,
 			reviewHeadSha: reviewRecord?.head,
 			reviewComplete: reviewRecord !== undefined,
-			judgeComplete: reviewRecord?.adjudication !== null && reviewRecord?.adjudication !== undefined,
+			judgeComplete:
+				reviewRecord?.review.state === "approved" ||
+				(reviewRecord?.adjudication !== null && reviewRecord?.adjudication !== undefined),
 			resolver,
-			acCloseout: successful("ac-closeout"),
+			acCloseout,
 			requiredApprovals,
 			approvals,
 			requiredChecks,
@@ -385,7 +477,10 @@ export function platformLandingEffects(
 				],
 				repoRoot,
 			);
-			return mutationOk(value) || Array.isArray(parse(value)) ? "applied" : "unknown";
+			const labels = array(parse(value))
+				.map(record)
+				.map((item) => item?.name);
+			return labels.includes(BYPASS_LABEL) ? "applied" : "unknown";
 		},
 		async comment(body) {
 			return mutationOk(
@@ -408,7 +503,23 @@ export function platformLandingEffects(
 		},
 		async readComments() {
 			const value = await pages(host, repository, repoRoot, `issues/${pr}/comments`, runPlatformRead);
-			return value?.map((item) => String(record(item)?.body ?? ""));
+			if (!value) return undefined;
+			const comments = value.map(record);
+			if (
+				comments.some(
+					(item) =>
+						!item ||
+						!Number.isSafeInteger(item.id) ||
+						typeof item.body !== "string" ||
+						typeof record(item.user)?.node_id !== "string",
+				)
+			)
+				return undefined;
+			return comments.map((item) => ({
+				id: Number(item?.id),
+				authorId: String(record(item?.user)?.node_id),
+				body: String(item?.body),
+			}));
 		},
 		async reread() {
 			return (await reread()).snapshot;
