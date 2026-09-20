@@ -71,7 +71,7 @@ describe("#131 collapsed operator-visible acts", () => {
 			"success, failure, or refusal",
 			"Refusal never borrows success styling or wording",
 			"active-dispatch count",
-			"Phase-3 resolver feeds its resolved merge-mode value and source",
+			"#278's `.pi/extensions/gitjig/modes.ts` resolver feeds its resolved merge-mode value and source",
 			"Current issue or PR and workflow phase are excluded",
 			"A UI-less mode makes no status call",
 		])

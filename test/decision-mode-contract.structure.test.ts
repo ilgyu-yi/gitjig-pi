@@ -139,8 +139,8 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 
 	it("keeps session projection downstream of owning mode and lifecycle instruments", () => {
 		requireAll(sessions, [
-			"Phase-3 resolver feeds its resolved merge-mode value and source",
-			"lifecycle labels and handoff records now have their owning Phase-2 transition service",
+			"#278's `.pi/extensions/gitjig/modes.ts` resolver feeds its resolved merge-mode value and source",
+			"lifecycle labels and handoff records now have their owning #276 transition service",
 			"remain excluded from this projection until #133 derives the persistent actor-neutral view",
 			"UI-less mode makes no status call",
 		]);

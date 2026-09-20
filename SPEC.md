@@ -40,32 +40,32 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.6 | Enforcement-face selection | 569 |
 | &nbsp;&nbsp;§3.7 | Approval-gate completeness | 581 |
 | &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 597 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 723 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 737 |
-| &nbsp;&nbsp;§3.11 | Gate design | 751 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 773 |
-| §4 | Substrate and install contract | 783 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 787 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 799 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 807 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 813 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 817 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 821 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 833 |
-| &nbsp;&nbsp;§4.8 | The command layer | 843 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 900 |
-| §5 | Cross-cutting contracts | 1019 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1023 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1029 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1033 |
-| &nbsp;&nbsp;§5.4 | Work language | 1037 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1041 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1049 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1061 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1071 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1079 |
-| §6 | Self-governance milestone | 1091 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1102 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 727 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 741 |
+| &nbsp;&nbsp;§3.11 | Gate design | 755 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 777 |
+| §4 | Substrate and install contract | 787 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 791 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 803 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 811 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 817 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 821 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 825 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 837 |
+| &nbsp;&nbsp;§4.8 | The command layer | 847 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 904 |
+| §5 | Cross-cutting contracts | 1023 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1027 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1033 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1037 |
+| &nbsp;&nbsp;§5.4 | Work language | 1041 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1045 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1053 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1065 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1075 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1083 |
+| §6 | Self-governance milestone | 1095 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1106 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -384,7 +384,7 @@ The doctrine's change side is **subtraction-first**:
 - (b) No retention without a stated live function.
 - (c) No legacy surfaces: a rename migrates every call site and deletes the old path in the same change, atomically at the boundary its consumers resolve it from — the merge, where the trunk is the consumer (§1.1) — no alias period. The premise, restated: the rule holds where every consumer resolves the canonical source live; an installed copy is a version-pinned consumer, so a rename that crosses the install boundary owes the re-sync path (§4.5) as its migration story. The rule forbids retaining the old surface — never breaking pinned consumers silently.
 - (d) One bounded transition exception: §1.2's corrective authority flip may temporarily retain only explicitly named superseded-dormant surfaces under one owner and deadline; it authorizes no call or compatibility use.
-- (d) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design — an irreversible decision owes one; where the decision is not a normative contract, a late ADR is a documentation defect answered by supersession, not an irreversible wrong-allow, so §3.6's hardening-trigger requirement does not fire there — recorded here so it is not re-proposed — while a normative decision's late ADR is a late settlement, re-entering §1.2's gate on that clause's own terms — and an ADR is authored as the decision is taken and before anything derives from it — and where the decision is a normative contract, that authoring is its settlement (§1.2) — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
+- (e) Two definitional carve-outs: a bounded operator signal (stated removal trigger, named owner) and record-purpose artifacts (the changelog and its fragments, ADRs). An ADR sits on both sides by design — an irreversible decision owes one; where the decision is not a normative contract, a late ADR is a documentation defect answered by supersession, not an irreversible wrong-allow, so §3.6's hardening-trigger requirement does not fire there — recorded here so it is not re-proposed — while a normative decision's late ADR is a late settlement, re-entering §1.2's gate on that clause's own terms — and an ADR is authored as the decision is taken and before anything derives from it — and where the decision is a normative contract, that authoring is its settlement (§1.2) — the rendered-or-pointer rule's exemption — and is record-purpose thereafter, written once and superseded rather than repaired. A new exception is added to this carve-out list, never argued case-by-case.
 
 **An act brief delivers applicable norms before authoring.** Before a write-capable implementer edits repository bytes, the operator may invoke the on-demand `/authoring-brief` command with closed JSON containing the implementation plan, a failing-check description, the exact check command, and the repository-relative paths the act intends to write. The command routes each named path through the single repository-owned routing policy, resolves that route to exact heading anchors in this specification, and places the resulting specification bytes directly in the implementer's session working set. The rendered clauses are source bytes, not a summary or model-authored restatement; the brief also names the routed surface and any inherited default authoring act. The brief is complete only when every input field is present, every path is normalized and repository-relative, every path has at least one route, contributing rows have no conflicting default act, and every routed anchor exists exactly once in the canonical source. An unrouted or conflicting path, a missing field, or a missing or ambiguous anchor produces an explicit advisory incomplete result that does not claim readiness. There is no catch-all route: omission must remain visible. The command is on demand, not an always-on prompt, hook, or warning surface. Its named false-positive shapes are: declared paths can over-approximate the eventual edit; one file can contain several artifact kinds while path routing selects every owning clause; a broad path row can render a clause irrelevant to the particular lines edited; and a plan can leave implementation method open even when its governing clause is correctly rendered. These visible false positives are accepted in preference to silently omitting an applicable norm. The brief does not establish that its plan is correct, that the named paths are exhaustive, that a delivered clause was followed, or that an unmodeled policy applies. Those remain review obligations. A fixed selector that returns the same clauses for specification prose, tests, and production code violates the routing contract even when those clauses happen to be valid guidance.
 
@@ -719,6 +719,10 @@ Only #236's current blocked record mentions the old #261 Phase-5 chain; after se
 
 No implementation phase begins before Phase 1 merges and Phase 1R re-activates revised #261. #300 is not a dependency; only a future promoted contract may derive a maintenance-forward-port exception.
 
+
+**The local tier's door and equivalent folds.** Tier 2's sanctioned escape is `--no-verify`, with no sanctioned in-hook token in front of it. It is class-independent, unauditable from inside a hook it prevents from running, and bounded by the Tier-3 floor rather than confused with landing authorization. The operator's recovery from a local false block is to retry that local act through this door; no Tier-3 fact is waived.
+
+The door is also a declared observability deferral. The equivalent environment folds are `BASH_ENV`, whose file the hook interpreter sources before any adapter line; the `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` family, which can retarget `core.hooksPath` for one operation; and the environment spelling `GIT_WORK_TREE`, which can move the top against which the relative hooks path resolves. Each channel was measured on a fresh armed clone against a same-run control that refused the same staged key; each let that key reach the commit with zero bytes on either stream and no audit record. Thus every listed channel is enforcement-disabling, reachable by one command, and traceless on its recorded ground. This paragraph places each outside **§5.9's disarm bar** as an enumerated residual with that ground, rather than treating enumeration alone as discharge. The disposition reaches the measured environment spellings only: a work tree selected on the command line or through `core.worktree` keeps the separate §3.2 disposition. The local bypass remains a residual beneath each class's §3.3 backstop; it grants no landing authority and reopens no door in core governance.
 
 ### 3.9 Fail policy
 
