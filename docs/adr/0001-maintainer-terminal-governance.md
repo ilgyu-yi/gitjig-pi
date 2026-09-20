@@ -2,6 +2,7 @@
 
 - Status: accepted by #301 contract settlement
 - Supersedes: incompatible landing/topology doctrine derived by #261 and #293
+- Normative contract: `SPEC.md` §3.8
 
 ## Context
 
