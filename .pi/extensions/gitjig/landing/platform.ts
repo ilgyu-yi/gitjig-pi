@@ -360,6 +360,7 @@ export async function loadPlatformLanding(
 			typeof status.do_not_enforce_on_create !== "boolean")
 	)
 		return { arm: "status-rule-malformed" };
+	if (status?.do_not_enforce_on_create === true) return { arm: "status-rule-unsupported" };
 	const configuredChecks: { context: string; integrationId: number | null }[] = [];
 	for (const value of array(status?.required_status_checks)) {
 		const item = record(value);
