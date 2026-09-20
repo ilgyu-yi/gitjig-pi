@@ -23,7 +23,7 @@ jobs:
       - name: Checkout trusted base revision
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           path: trusted
           persist-credentials: false
           ref: ${{ github.event.pull_request.base.sha }}
@@ -42,4 +42,5 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           HISTORY_SHAPE_TRUSTED_CWD: ${{ github.workspace }}/trusted
           HISTORY_SHAPE_GRAPH_CWD: ${{ github.workspace }}/graph
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: ${{ github.workspace }}/trusted/.git/objects
         run: node "$RUNNER_TEMP/history-shape.mjs"

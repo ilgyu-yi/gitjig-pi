@@ -17,11 +17,12 @@ describe("history-shape trusted workflow", () => {
 	});
 
 	it("executes complete trusted base bytes and disables checkout credentials", () => {
-		assert.match(workflow, /fetch-depth: 0/);
+		assert.equal(workflow.match(/fetch-depth: 0/g)?.length, 2);
 		assert.equal(workflow.match(/persist-credentials: false/g)?.length, 2);
 		assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
 		assert.match(workflow, /cp trusted\/\.github\/workflows\/history-shape\.mjs "\$RUNNER_TEMP\/history-shape\.mjs"/);
 		assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
+		assert.match(workflow, /GIT_ALTERNATE_OBJECT_DIRECTORIES: \$\{\{ github\.workspace \}\}\/trusted\/\.git\/objects/);
 		assert.match(workflow, /node "\$RUNNER_TEMP\/history-shape\.mjs"/);
 	});
 

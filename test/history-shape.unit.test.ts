@@ -81,6 +81,29 @@ describe("history-shape graph predicate", () => {
 		assert.notEqual(root, base);
 	});
 
+	it("combines a fork graph with the trusted base object store", () => {
+		const upstream = repository();
+		const fork = mkdtempSync(join(tmpdir(), "history-shape-fork-"));
+		command(fork, "clone", upstream.cwd, ".");
+		command(fork, "config", "user.email", "test@example.invalid");
+		command(fork, "config", "user.name", "Test");
+		command(fork, "config", "commit.gpgsign", "false");
+		command(fork, "checkout", "-b", "topic");
+		const head = commit(fork, "topic");
+		const base = commit(upstream.cwd, "advanced-base");
+		assert.throws(() => evaluateHistoryShape({ baseSha: base, headSha: head, cwd: fork }), /unreadable/);
+		const trusted = mkdtempSync(join(tmpdir(), "history-shape-trusted-"));
+		command(trusted, "clone", upstream.cwd, ".");
+		const previous = process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES;
+		process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = join(trusted, ".git", "objects");
+		try {
+			assert.equal(evaluateHistoryShape({ baseSha: base, headSha: head, cwd: fork }).pass, true);
+		} finally {
+			if (previous === undefined) delete process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES;
+			else process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = previous;
+		}
+	});
+
 	it("refuses invalid operands and shallow history", () => {
 		const { cwd, root } = repository();
 		assert.throws(() => evaluateHistoryShape({ baseSha: "main", headSha: root, cwd }), HistoryShapeRefusal);
