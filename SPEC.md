@@ -78,7 +78,7 @@ The SPEC governs the operating shell this repository ships — the norms it enfo
 
 ### 0.2 Relation to MISSION
 
-`MISSION.md` is the direction document; this SPEC is the behavior document. The SPEC derives its requirements from the MISSION's success observables and NOT-goals, cites them by their keyed names (Traceability, Enforcement, Agent-agnosticism, Evidence — `MISSION.md` § "Success looks like"), and never restates their content normatively. A contradiction between the two is a SPEC defect: MISSION wins on direction, and the SPEC must be amended through the standard flow (§1.1).
+`MISSION.md` is the direction document; this SPEC is the behavior document. The SPEC derives its requirements from the MISSION's success observables and NOT-goals, cites them by their keyed names (Traceability, Enforcement, Agent-agnosticism, Evidence, Human operability — `MISSION.md` § "Success looks like"), and never restates their content normatively. A contradiction between the two is a SPEC defect: MISSION wins on direction, and the SPEC must be amended through the standard flow (§1.1).
 
 ### 0.3 Reading and amendment conventions
 
