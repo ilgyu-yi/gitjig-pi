@@ -11,6 +11,7 @@ describe("landing advisory hygiene boundaries", () => {
 		assert.match(workflow, /push:\n\s+branches: \['\*\*'\]/);
 		assert.match(workflow, /cancel-in-progress: false/);
 		assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+		assert.match(workflow, /trusted adapter unavailable/);
 	});
 	it("paginates open exact-base PRs and rereads each before deletion", () => {
 		assert.match(adapter, /while \(page <= 100\)/);

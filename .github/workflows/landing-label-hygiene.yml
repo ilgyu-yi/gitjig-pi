@@ -27,4 +27,9 @@ jobs:
       - name: Invalidate stale landing advisory
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/workflows/landing-label-hygiene.mjs
+        run: |
+          if [[ ! -f .github/workflows/landing-label-hygiene.mjs ]]; then
+            printf '%s\n' 'landing label hygiene refused: trusted adapter unavailable'
+            exit 0
+          fi
+          node .github/workflows/landing-label-hygiene.mjs
