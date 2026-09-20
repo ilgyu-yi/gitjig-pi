@@ -40,32 +40,32 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.6 | Enforcement-face selection | 569 |
 | &nbsp;&nbsp;§3.7 | Approval-gate completeness | 581 |
 | &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 597 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 727 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 741 |
-| &nbsp;&nbsp;§3.11 | Gate design | 755 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 777 |
-| §4 | Substrate and install contract | 787 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 791 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 803 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 811 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 817 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 821 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 825 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 837 |
-| &nbsp;&nbsp;§4.8 | The command layer | 847 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 904 |
-| §5 | Cross-cutting contracts | 1023 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1027 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1033 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1037 |
-| &nbsp;&nbsp;§5.4 | Work language | 1041 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1045 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1053 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1065 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1075 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1083 |
-| §6 | Self-governance milestone | 1095 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1106 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 733 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 747 |
+| &nbsp;&nbsp;§3.11 | Gate design | 761 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 783 |
+| §4 | Substrate and install contract | 793 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 797 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 809 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 817 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 823 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 827 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 831 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 843 |
+| &nbsp;&nbsp;§4.8 | The command layer | 853 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 910 |
+| §5 | Cross-cutting contracts | 1029 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1033 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1039 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1043 |
+| &nbsp;&nbsp;§5.4 | Work language | 1047 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1051 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1059 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1071 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1081 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1089 |
+| §6 | Self-governance milestone | 1101 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1112 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -410,7 +410,7 @@ A durable artifact names every referent by its canonical identifier — SPEC §-
 
 Identifiers this SPEC or `MISSION.md` already establishes are canonical, and short block-local identifiers in code are outside the rule's scope — definitions, not exceptions. Exceptions live on a defined list here, never argued case-by-case in a PR; the list is currently empty.
 
-**Retirement discipline.** A retired identifier is never reused; its responsibilities are named at their new homes; historical records keep the old identifier as history (record-purpose, §2.5(d)).
+**Retirement discipline.** A retired identifier is never reused; its responsibilities are named at their new homes; historical records keep the old identifier as history (record-purpose, §2.5(e)).
 
 The rule is **explicitly advisory** (§3.1 rule 1): the identifier-vs-alias test is heuristic, so no gate class can home a decidable check for it today; it is enforced at review (§2.3).
 
@@ -596,17 +596,23 @@ The norm is homed as the re-roled `approval-evidence` row in §3.3 for its four 
 
 ### 3.8 Landing authority, administration, and configurable governance
 
+**Escape architecture.** A sanctioned escape is narrower than the gate it qualifies, default-off, accountable, observable, subject-bound, and explicit about any freshness or reuse bound its guarded act needs. It never silently weakens a predicate. A gate may instead be deliberately doorless. These general design terms do not turn the landing advisory label into an escape and impose no universal own-behalf or independent-identity rule.
+
+**Total-coverage rule.** Escape coverage is total as an accounting obligation, not a promise that every gate has a door. Every blocking gate class records either a sanctioned audited escape on §3.5's terms, or an explicit doorless decision with false-block recovery and, where temporary, a declared deferral with trigger and owner. Ordinary native users satisfy selected repository governance; administrators retain native broad bypass; Tier 1 uses only the exact default-labeled and operator-directed paths below. Tier 2 and egress retain their separately recorded dispositions. No accidental absence or silent bypass counts as coverage.
+
+**Refusal-record rule — strict on honor, loud on refusal.** Where a gate examines an escape or other guarded exception record, its full conjunction decides honor; an unknown, missing, duplicate, stale, or malformed field leaves it unhonored. Every refusal that examined one leaves exactly one content-free terminal record naming the refusing arm; where none was examined, no exception-refusal record is written. A failed record write never converts refusal into honor, and the record never carries guarded content. This rule remains general gate doctrine even though landing escape records retire below.
+
 The old landing escape architecture, split `core-governance`/`human-approval` topology, own-behalf producer restriction, App producer, 24-hour record, claim/consume protocol, source-split authority, and native-required `ac-closeout` are superseded. Retained runtime surfaces are superseded-dormant migration inputs only: they authorize no operation, admit no new caller, and must be removed by the ordered phases below before replacement application or pilot. No live ruleset or repository-setting mutation is authorized by this settlement. Phase 6 removal is a hard prerequisite of Phase 7. This bounded authority flip is permitted only because every retained surface and owner is named, the old operation is prohibited, the live subject is unarmed, no new caller may derive, and migration completes before replacement application.
 
-###### Exact landing authority model
+#### Exact landing authority model
 
-####### Human and ordinary paths
+##### Human and ordinary paths
 
 Humans may use GitHub and Tier 2/Tier 3 without Pi. The repository administrator has the same broad final capability as an administrator in an ordinary repository; malicious-administrator defense is a non-goal. Direct human administration is outside Tier-1 guarantees and relies on native platform audit.
 
 Tier 1 requires `merge-mode: on` before any merge attempt and always tries ordinary landing first. Every default Tier-1 landing path, including ordinary landing, requires the complete current-head review → Judge → final Resolver `clear`; `repair` and `measure-escalate` never land at that head. Ordinary landing then uses current native approval and every configured Tier-1 predicate. If ordinary approval is available, Tier 1 uses ordinary merge even when the advisory label is present. The explicit operator-directed path below may waive an observed missing/non-clear review result only when the operator confirms that blocker; direct human administration requires no Tier-1 review artifact. This exact rule settles #193.
 
-####### Default labeled Tier-1 path
+##### Default labeled Tier-1 path
 
 `merge:bypass-permitted` is a writer-supplied advisory, not approval, an ACL, a cryptographic capability, readiness, a status check, or a separate authority record. Its applier identity and permission are not re-attested. A writer may apply it manually; Tier 1 may apply it after the repository-carried review → Judge → Resolver pipeline produces final `clear`. Both produce the same label semantics.
 
@@ -616,7 +622,7 @@ Only a final Resolver `clear` over a complete current-head review/Judge artifact
 
 The label has no TTL, escape record, claim, consumption, refusal consumption, one-shot authority or producer schema. It remains after pending/failed checks, transient API failure, unknown mergeability, or Tier-1 refusal. It is removed only when the PR head SHA changes, the live base SHA changes, or a writer removes it. Head synchronization and base-branch push hygiene perform the first two removals. The asynchronous observation/removal/merge race is an accepted advisory-model residual.
 
-####### §3.8 disposition
+##### §3.8 disposition
 
 The advisory label is no longer a §3.8 escape. The time-bounded, one-shot, non-beneficiary escape definition and landing escape record retire. Tier-3 rules are good default governance, not a malicious-admin security boundary: an administrator may broadly bypass them. Total coverage records three dispositions instead of calling core doorless:
 
@@ -626,7 +632,7 @@ The advisory label is no longer a §3.8 escape. The time-bounded, one-shot, non-
 
 Tier 2's `--no-verify` disposition remains unchanged. No producer-at-least-as-strict-as-consumer comparison applies to the advisory label because it is not evidence or authority. Universal own-behalf prohibitions in §3.8 and §5.7 retire; no Tier-2/Tier-3 platform identity split replaces them.
 
-###### Explicit operator-directed Tier-1 path
+#### Explicit operator-directed Tier-1 path
 
 A current operator may explicitly direct Tier 1 to waive named currently observed policy blockers or all currently observed policy blockers. A general direction is admitted only after Tier 1 presents the actual current blocker population and consequences. The label and Resolver `clear` alone never imply this direction.
 
@@ -644,7 +650,7 @@ Before one merge attempt, Tier 1 publishes exactly one comment beginning `<!-- g
 
 Closed pre-merge refusals are `instruction-absent`, `blocker-population-incomplete`, `instruction-scope-mismatch`, `label-apply-failed`, `audit-publication-failed`, `audit-publication-ambiguous`, `audit-population-ambiguous`, `operand-drift`, and `merge-outcome-unknown`. Publication failure or ambiguity stops before merge. The comment binds one attempt; any retry requires fresh operator confirmation, a fresh attempt id and a new comment. The label itself remains until an ordinary invalidator occurs.
 
-###### Default Tier-3 profile and history shape
+#### Default Tier-3 profile and history shape
 
 The shipped default is selectable rather than universal:
 
@@ -666,9 +672,9 @@ For an ordinary PR, let `M = git merge-base <live-base-sha> <head-sha>`. The pre
 
 Incomplete history or unknown base/head refuses. False-block recovery is to rebase the topic branch onto the target and rerun. The new gate owes failing-first fixtures for a target backmerge and an internal topic merge, passing controls for a rebased topic and the eventual target merge commit, one killed predicate-negation mutant per arm, and §5.3's first-post-landing empirical firing. `.pi/extensions/gitjig/postures.ts` records the complete-history dependency and recovery.
 
-#300 owns discussion and must close either no-action or promoted under §2.1. A promoted concrete contract Issue—not #300 itself—owns maintenance forward-port timing, propagation and any future narrow accepted-set change. Until that promoted Issue is separately activated, settled and implemented, `history-shape` admits no forward-port exception. The promoted Issue's landed contract is the decidable trigger and its derived gate Execution is the owner.
+Issue #300 owns discussion and must close either no-action or promoted under §2.1. A promoted concrete contract Issue—not #300 itself—owns maintenance forward-port timing, propagation and any future narrow accepted-set change. Until that promoted Issue is separately activated, settled and implemented, `history-shape` admits no forward-port exception. The promoted Issue's landed contract is the decidable trigger and its derived gate Execution is the owner.
 
-###### Configurable Tier-3 installation contract
+#### Configurable Tier-3 installation contract
 
 The fixed target-owned declared path is `.github/gitjig-governance.json`. This settlement adds that exact path as a new `target-owned-instance` arm in §4.1's ordered total classification before the generic `.github/**` handed-over arm and amends §4.2 accordingly. It is neither source-only nor handed-over/projected from the source repository: each governed repository owns its own instance, and the installer creates or revises it from that repository's choices. It may carry target-specific values because it is not carried bytes. The classifier snapshot admits exactly this path under the new arm; install composition excludes it from carried actions; handed-over excision proves no carried asset depends on source-instance bytes. `SPEC.md` owns meanings; the JSON owns only the addressed repository's selected values. Changing it never mutates server state.
 
@@ -682,7 +688,7 @@ Apply authorization deliberately supersedes #286/#289's source-split marker, sta
 
 Apply order is complete-read → validate config → exact plan/hash → confirmation → per-step compare/write/post-read → final audit/result. Partial or ambiguous writes stop, report completed prefix/current measured state/remaining suffix, and never invent success or automatically roll back. Platform audit plus the exact local/agent result is sufficient; no Issue marker, escape record or claim population is required.
 
-###### Asset and Issue disposition
+#### Asset and Issue disposition
 
 The settlement records these exact implementation dispositions for later phases:
 
@@ -702,9 +708,9 @@ After settlement merge, proposed #228 closes not planned with an exact pointer t
 
 Only #236's current blocked record mentions the old #261 Phase-5 chain; after settlement it is replaced with condition `#301-derived correction and #261 reconciliation are incomplete` and recovery `complete Phase 1R, then remeasure #236`. #238's existing recovery on #236 and #240's existing recovery on #236 plus #238 remain unchanged because they are presently true and do not cite #261.
 
-#261's completed historical phases 1–3 remain evidence, not current authority. Its old split-topology Phase 4 and profile Phase 5 retire. Immediately after this settlement merges, Phase 1R—not Phase 6—archives #261's and #28's prior bodies, revises both to the corrected ownership/phase contracts and re-enters each activation gate. Phases 2–7 cannot derive or start until Phase 1R passes.
+Issue #261's completed historical phases 1–3 remain evidence, not current authority. Its old split-topology Phase 4 and profile Phase 5 retire. Immediately after this settlement merges, Phase 1R—not Phase 6—archives #261's and #28's prior bodies, revises both to the corrected ownership/phase contracts and re-enters each activation gate. Phases 2–7 cannot derive or start until Phase 1R passes.
 
-###### Ordered derived phases and ownership
+#### Ordered derived phases and ownership
 
 | Phase | Owner derived after prior phase | Scope | Completion signal |
 |---|---|---|---|
