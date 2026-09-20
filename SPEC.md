@@ -98,7 +98,7 @@ Every change to a governed repository rides one backbone: **issue → branch →
 - **Draft PR early.** The PR opens as a draft with its first real commit — never an empty seed commit — and its body is maintained as a living document (§2.3).
 - **Linkage.** The PR body's first line carries `Closes #N` when merging to the default branch closes the issue, `Refs #N` for intermediate work.
 - **Merge shape.** The shipped selectable default in `.github/gitjig-governance.json` uses merge commits and disables squash/rebase merging. This preserves typed commits and first-parent PR grouping without requiring globally linear history. A target may select a different validated profile; its config, not a universal rule, records that choice.
-- **Integration direction.** Integration is one-way: a feature branch rebases onto its advancing base, and merging the base into the branch is not done — it muddies the per-change commit graph the merge shape exists to preserve. A collision on a branch two parties share escalates rather than auto-resolves. The `history-shape` gate and its Phase-3 owner are specified in §3.8; until that phase lands, this direction remains procedural and review-enforced (§2.3).
+- **Integration direction.** Integration is one-way: a feature branch rebases onto its advancing base, and merging the base into the branch is not done — it muddies the per-change commit graph the merge shape exists to preserve. A collision on a branch two parties share escalates rather than auto-resolves. The `history-shape` gate and its Phase-3 owner are specified in §3.8; its handed-over check enforces this direction without changing live required-check configuration.
 
 ### 1.2 Authorization, evidence, and synchronization
 

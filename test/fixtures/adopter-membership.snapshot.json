@@ -126,6 +126,14 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/workflows/history-shape.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/history-shape.yml",
+			"disposition": "handed-over"
+		},
+		{
 			"path": ".github/workflows/initiative-feedback-label.yml",
 			"disposition": "handed-over"
 		},
@@ -571,6 +579,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/3.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/306.md",
 			"disposition": "instance-state"
 		},
 		{
