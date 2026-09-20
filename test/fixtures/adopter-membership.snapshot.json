@@ -170,10 +170,6 @@
 			"disposition": "handed-over"
 		},
 		{
-			"path": ".github/workflows/landing-topology.mjs",
-			"disposition": "handed-over"
-		},
-		{
 			"path": ".github/workflows/lifecycle-event.mjs",
 			"disposition": "handed-over"
 		},
@@ -246,10 +242,6 @@
 			"disposition": "carried"
 		},
 		{
-			"path": ".pi/extensions/gitjig/commands/source-split.ts",
-			"disposition": "carried"
-		},
-		{
 			"path": ".pi/extensions/gitjig/dispatch/admit.ts",
 			"disposition": "carried"
 		},
@@ -314,43 +306,11 @@
 			"disposition": "carried"
 		},
 		{
-			"path": ".pi/extensions/gitjig/landing/bootstrap.ts",
-			"disposition": "carried"
-		},
-		{
 			"path": ".pi/extensions/gitjig/landing/platform.ts",
 			"disposition": "carried"
 		},
 		{
-			"path": ".pi/extensions/gitjig/landing/provenance.ts",
-			"disposition": "carried"
-		},
-		{
 			"path": ".pi/extensions/gitjig/landing/service.ts",
-			"disposition": "carried"
-		},
-		{
-			"path": ".pi/extensions/gitjig/landing/source-split-contract.ts",
-			"disposition": "carried"
-		},
-		{
-			"path": ".pi/extensions/gitjig/landing/source-split-platform.ts",
-			"disposition": "carried"
-		},
-		{
-			"path": ".pi/extensions/gitjig/landing/source-split-service.ts",
-			"disposition": "carried"
-		},
-		{
-			"path": ".pi/extensions/gitjig/landing/topology-authorization.ts",
-			"disposition": "carried"
-		},
-		{
-			"path": ".pi/extensions/gitjig/landing/topology-plan.ts",
-			"disposition": "carried"
-		},
-		{
-			"path": ".pi/extensions/gitjig/landing/topology-provenance.ts",
 			"disposition": "carried"
 		},
 		{
@@ -935,6 +895,10 @@
 		},
 		{
 			"path": "changelog_unreleased/removed/231.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/removed/312.md",
 			"disposition": "instance-state"
 		},
 		{

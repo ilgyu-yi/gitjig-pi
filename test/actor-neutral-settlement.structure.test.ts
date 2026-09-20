@@ -306,7 +306,7 @@ describe("#301 maintainer-terminal settlement with retained #273 locks", () => {
 
 	it("pins bounded supersession and no live mutation", () => {
 		requires(escapeSection, [
-			"superseded-dormant migration inputs only",
+			"no superseded-dormant migration input remains",
 			"No live ruleset or repository-setting mutation",
 			"| 1R | new reconciliation Execution under #261 |",
 			"hard prerequisite of Phase 7",
