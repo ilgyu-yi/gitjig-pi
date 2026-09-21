@@ -261,7 +261,7 @@ export const ghCommentArgv = ghPublishArgv;
 
 /** Resolve and pin the repository before the irreversible machine-record send. */
 export function resolvePublishRepository(repoRoot: string): PublishRepository | undefined {
-	const run = spawnSync("git", ["config", "--get", "remote.origin.url"], {
+	const run = spawnSync("git", ["config", "--local", "--get", "remote.origin.url"], {
 		cwd: repoRoot,
 		encoding: "utf8",
 		timeout: CHILD_TIMEOUT_MS,

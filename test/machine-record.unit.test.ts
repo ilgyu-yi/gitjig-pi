@@ -100,6 +100,7 @@ describe("machine publication transport", () => {
 		const source = await readFile(new URL("../.pi/extensions/gitjig/publish/executor.ts", import.meta.url), "utf8");
 		assert.match(source, /child\.on\("spawn", \(\) => \{\s*didSpawn = true;/);
 		assert.match(source, /settle\(\{ spawned: didSpawn, code: null, signal: null/);
+		assert.match(source, /spawnSync\("git", \["config", "--local", "--get", "remote\.origin\.url"\]/);
 	});
 
 	it("verifies all six destinations with one send and one GET, and invalid locators with zero GETs", async () => {
