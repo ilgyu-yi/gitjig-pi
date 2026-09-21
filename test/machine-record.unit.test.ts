@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { isPublishRepository } from "../.pi/extensions/gitjig/publish/executor.ts";
+import { isPublishRepository, runMachinePublish } from "../.pi/extensions/gitjig/publish/executor.ts";
 import {
 	admitMachineRecord,
 	canonicalJson,
@@ -124,7 +124,7 @@ if(args[0]==="api"){
  const m=JSON.parse(fs.readFileSync(process.env.META,"utf8")),body=process.env.MISMATCH?"wrong":fs.readFileSync(process.env.BODY,"utf8");
  const p={id:process.env.TYPE_ID?"8":process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body:process.env.TYPE_BODY?7:body};if(!process.env.OMIT_NUMBER)p.number=process.env.TYPE_NUMBER?"7":process.env.WRONG_NUMBER?99:m.number;
  if(m.comment)p.issue_url=process.env.TYPE_PARENT?7:process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
- else if(m.noun==="pr")p.base={repo:{full_name:process.env.TYPE_REPO?7:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url=process.env.TYPE_REPO?7:"https://api.github.com/repos/o/r";
+ else if(m.noun==="pr")p.base={repo:{full_name:process.env.TYPE_REPO?7:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url=process.env.TYPE_REPO?7:process.env.WRONG_REPO?"https://api.github.com/repos/x/y":"https://api.github.com/repos/o/r";
  if(m.verb==="create")p.title=process.env.TYPE_TITLE?7:process.env.WRONG_TITLE?"wrong":m.title;if(process.env.PULL_SHAPE)p.pull_request={url:"x"};
  process.stdout.write(JSON.stringify(p));if(process.env.GET_FAIL)process.exitCode=1;
 }else{
@@ -153,6 +153,7 @@ if(args[0]==="api"){
 			WRONG_BASE: process.env.WRONG_BASE,
 			WRONG_TITLE: process.env.WRONG_TITLE,
 			WRONG_NUMBER: process.env.WRONG_NUMBER,
+			WRONG_REPO: process.env.WRONG_REPO,
 			PULL_SHAPE: process.env.PULL_SHAPE,
 			GET_FAIL: process.env.GET_FAIL,
 			GET_RAW: process.env.GET_RAW,
@@ -264,6 +265,19 @@ if(args[0]==="api"){
 			);
 			assert.equal(oneView.details.disposition, "published", "semantic strings receive exactly one decode view");
 
+			await writeFile(callsFile, "");
+			const decodedMismatch = await runMachinePublish(
+				{ kind: "issue-comment", number: 7 },
+				`${MARKER}\nnull`,
+				MARKER,
+				false,
+				undefined,
+				root,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			assert.equal(decodedMismatch.outcome, "outcome-unverified", "decoded value is independently compared");
+			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+
 			const mutableDestination = { kind: "issue-comment", number: 7 };
 			const mutationProof = performPublish(
 				{ machineRecord: { marker: MARKER, value: null }, destination: mutableDestination },
@@ -369,6 +383,7 @@ if(args[0]==="api"){
 				["WRONG_BASE", { kind: "pr-body", number: 7 }],
 				["WRONG_TITLE", { kind: "pr-create", title: "Machine title" }],
 				["WRONG_NUMBER", { kind: "issue-body", number: 7 }],
+				["WRONG_REPO", { kind: "issue-body", number: 7 }],
 				["PULL_SHAPE", { kind: "issue-body", number: 7 }],
 			] as const) {
 				await writeFile(callsFile, "");
