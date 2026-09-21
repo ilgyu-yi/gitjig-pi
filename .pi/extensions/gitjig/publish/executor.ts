@@ -70,8 +70,10 @@
  *     larger decision than this bound. Named so the reach this change added
  *     is not read as strictly more containment than before.
  */
-import { spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
+import { TextDecoder, types } from "node:util";
 import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
+import { canonicalJson, decodeWireBody, type JsonValue } from "./machine-record.ts";
 
 /** A comment's own url — the shape only the comment verbs print. */
 const COMMENT_URL_SHAPE = /^https:\/\/[^\s]+#issuecomment-\d+$/;
@@ -177,18 +179,20 @@ export interface PublishRepository {
 }
 
 export function isPublishRepository(value: unknown): value is PublishRepository {
+	if (typeof value !== "object" || value === null || Array.isArray(value) || types.isProxy(value)) return false;
+	if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return false;
+	if (Object.getOwnPropertySymbols(value).length !== 0) return false;
+	const keys = Object.getOwnPropertyNames(value);
+	if (keys.length !== 2 || !keys.includes("host") || !keys.includes("nameWithOwner")) return false;
+	const host = Object.getOwnPropertyDescriptor(value, "host");
+	const name = Object.getOwnPropertyDescriptor(value, "nameWithOwner");
+	if (!host || !("value" in host)) return false;
+	if (!name || !("value" in name)) return false;
 	return (
-		typeof value === "object" &&
-		value !== null &&
-		!Array.isArray(value) &&
-		Object.keys(value).length === 2 &&
-		Object.keys(value).every((key) => key === "host" || key === "nameWithOwner") &&
-		typeof (value as { host?: unknown }).host === "string" &&
-		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
-			(value as { host: string }).host,
-		) &&
-		typeof (value as { nameWithOwner?: unknown }).nameWithOwner === "string" &&
-		/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test((value as { nameWithOwner: string }).nameWithOwner)
+		typeof host.value === "string" &&
+		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(host.value) &&
+		typeof name.value === "string" &&
+		/^(?!\.{1,2}\/)(?![^/]+\/\.{1,2}$)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(name.value)
 	);
 }
 
@@ -254,6 +258,22 @@ export function ghPublishArgv(destination: PublishDestination, repository?: Publ
 
 /** @deprecated Retained call-site spelling; `ghPublishArgv` is the one predicate. */
 export const ghCommentArgv = ghPublishArgv;
+
+/** Resolve and pin the repository before the irreversible machine-record send. */
+export function resolvePublishRepository(repoRoot: string): PublishRepository | undefined {
+	const run = spawnSync("git", ["config", "--local", "--get", "remote.origin.url"], {
+		cwd: repoRoot,
+		encoding: "utf8",
+		timeout: CHILD_TIMEOUT_MS,
+		env: withoutPlatformRetargetingEnv(process.env),
+	});
+	if (run.status !== 0 || typeof run.stdout !== "string") return undefined;
+	const remote = run.stdout.trim();
+	const match = /^(?:https:\/\/([^/]+)\/|git@([^:]+):)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(remote);
+	if (!match) return undefined;
+	const repository = { host: match[1] ?? match[2], nameWithOwner: match[3].replace(/\.git$/, "") };
+	return isPublishRepository(repository) ? repository : undefined;
+}
 
 /** The child's bound — well under any caller's own backstop (§3.3). */
 export const CHILD_TIMEOUT_MS = 10_000;
@@ -424,4 +444,247 @@ export function runPublishChild(
 		});
 		child.on("close", (code, signal) => decide(code, signal));
 	});
+}
+
+interface RawChildResult {
+	spawned: boolean;
+	code: number | null;
+	signal: string | null;
+	timedOut: boolean;
+	stdout: Buffer;
+}
+
+/** One bounded child, retaining only bounded stdout for strict protocol admission. */
+function runRawChild(
+	argv: string[],
+	stdin: string | undefined,
+	repoRoot: string,
+	maxStdoutBytes = 4096,
+	abortSignal?: AbortSignal,
+): Promise<RawChildResult> {
+	return new Promise((resolve) => {
+		let settled = false;
+		let didSpawn = false;
+		let timedOut = false;
+		let overflow = false;
+		const chunks: Buffer[] = [];
+		let bytes = 0;
+		let child: ChildProcessWithoutNullStreams;
+		try {
+			child = spawn("gh", argv, {
+				cwd: repoRoot,
+				detached: true,
+				env: withoutPlatformRetargetingEnv(process.env),
+				stdio: ["pipe", "pipe", "pipe"],
+			});
+		} catch {
+			resolve({ spawned: false, code: null, signal: null, timedOut: false, stdout: Buffer.alloc(0) });
+			return;
+		}
+		const killGroup = (): void => {
+			if (typeof child.pid === "number") {
+				try {
+					process.kill(-child.pid, "SIGKILL");
+				} catch {
+					child.kill("SIGKILL");
+				}
+			} else child.kill("SIGKILL");
+		};
+		const onAbort = (): void => {
+			killGroup();
+		};
+		const settle = (result: RawChildResult): void => {
+			if (settled) return;
+			settled = true;
+			abortSignal?.removeEventListener("abort", onAbort);
+			clearTimeout(timer);
+			child.stdin.destroy();
+			child.stdout.destroy();
+			child.stderr.destroy();
+			child.unref();
+			resolve({ ...result, stdout: overflow ? Buffer.alloc(0) : Buffer.concat(chunks) });
+		};
+		const timer = setTimeout(() => {
+			timedOut = true;
+			killGroup();
+			setTimeout(
+				() => settle({ spawned: true, code: null, signal: "SIGKILL", timedOut: true, stdout: Buffer.alloc(0) }),
+				STREAM_GRACE_MS,
+			);
+		}, CHILD_TIMEOUT_MS);
+		abortSignal?.addEventListener("abort", onAbort, { once: true });
+		if (abortSignal?.aborted) onAbort();
+		child.on("spawn", () => {
+			didSpawn = true;
+		});
+		child.on("error", () =>
+			settle({ spawned: didSpawn, code: null, signal: null, timedOut: false, stdout: Buffer.alloc(0) }),
+		);
+		child.stdout.on("data", (chunk: Buffer) => {
+			bytes += chunk.length;
+			if (bytes > maxStdoutBytes) overflow = true;
+			else chunks.push(chunk);
+		});
+		child.stderr.resume();
+		child.stdin.on("error", () => {});
+		if (stdin === undefined) child.stdin.end();
+		else child.stdin.end(stdin);
+		child.on("close", (code, signal) => settle({ spawned: true, code, signal, timedOut, stdout: Buffer.alloc(0) }));
+	});
+}
+
+function strictLocator(bytes: Buffer): string | undefined {
+	if (
+		bytes.length === 0 ||
+		bytes.length > 4096 ||
+		bytes[bytes.length - 1] !== 0x0a ||
+		(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+	)
+		return undefined;
+	let text: string;
+	try {
+		text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+	} catch {
+		return undefined;
+	}
+	const locator = text.slice(0, -1);
+	return locator.length > 0 &&
+		!Array.from(locator).some((character) => {
+			const code = character.codePointAt(0) as number;
+			return code <= 0x1f || code === 0x7f;
+		})
+		? locator
+		: undefined;
+}
+
+interface Locator {
+	url: string;
+	number: number;
+	commentId?: number;
+	apiPath: string;
+}
+
+function parseMachineLocator(
+	url: string,
+	destination: PublishDestination,
+	repository: PublishRepository,
+): Locator | undefined {
+	const [owner, name] = repository.nameWithOwner.split("/");
+	const escaped = (part: string): string => {
+		let result = part;
+		for (const token of ["\\", ".", "*", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]"])
+			result = result.replaceAll(token, ["\\", token].join(""));
+		return result;
+	};
+	const stem = `https://${escaped(repository.host)}/${escaped(owner)}/${escaped(name)}`;
+	if (destination.kind.endsWith("comment")) {
+		const surface = destination.kind === "issue-comment" ? "issues" : "pull";
+		const match = new RegExp(`^${stem}/${surface}/([1-9][0-9]*)#issuecomment-([1-9][0-9]*)$`).exec(url);
+		if (!match) return undefined;
+		const number = Number(match[1]);
+		const commentId = Number(match[2]);
+		if (!Number.isSafeInteger(number) || !Number.isSafeInteger(commentId) || number !== destination.number)
+			return undefined;
+		return { url, number, commentId, apiPath: `/repos/${repository.nameWithOwner}/issues/comments/${commentId}` };
+	}
+	const surface = destination.kind.startsWith("issue") ? "issues" : "pull";
+	const match = new RegExp(`^${stem}/${surface}/([1-9][0-9]*)$`).exec(url);
+	if (!match) return undefined;
+	const number = Number(match[1]);
+	if (!Number.isSafeInteger(number) || (destination.number !== undefined && number !== destination.number))
+		return undefined;
+	return {
+		url,
+		number,
+		apiPath: `/repos/${repository.nameWithOwner}/${surface === "issues" ? "issues" : "pulls"}/${number}`,
+	};
+}
+
+function exactString(value: unknown, key: string): string | undefined {
+	return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>)[key] === "string"
+		? (value as Record<string, string>)[key]
+		: undefined;
+}
+
+function exactNumber(value: unknown, key: string): number | undefined {
+	return typeof value === "object" && value !== null && Number.isSafeInteger((value as Record<string, unknown>)[key])
+		? (value as Record<string, number>)[key]
+		: undefined;
+}
+
+function verifyMachineRead(
+	payload: unknown,
+	locator: Locator,
+	destination: PublishDestination,
+	repository: PublishRepository,
+	wireBody: string,
+	marker: string,
+	value: JsonValue,
+	sentTitle: string | undefined,
+): boolean {
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return false;
+	if (exactNumber(payload, "id") === undefined && destination.kind.endsWith("comment")) return false;
+	if (locator.commentId !== undefined && exactNumber(payload, "id") !== locator.commentId) return false;
+	if (!destination.kind.endsWith("comment") && exactNumber(payload, "number") !== locator.number) return false;
+	if (exactString(payload, "html_url") !== locator.url || exactString(payload, "body") !== wireBody) return false;
+	const apiRoot = repository.host === "github.com" ? "https://api.github.com" : `https://${repository.host}/api/v3`;
+	if (
+		destination.kind.endsWith("comment") &&
+		exactString(payload, "issue_url") !== `${apiRoot}/repos/${repository.nameWithOwner}/issues/${locator.number}`
+	)
+		return false;
+	if (destination.kind.startsWith("issue") && !destination.kind.endsWith("comment")) {
+		if (Object.hasOwn(payload, "pull_request")) return false;
+		if (exactString(payload, "repository_url") !== `${apiRoot}/repos/${repository.nameWithOwner}`) return false;
+	}
+	if (destination.kind.startsWith("pr") && !destination.kind.endsWith("comment")) {
+		const base = (payload as { base?: unknown }).base;
+		const repo = typeof base === "object" && base !== null ? (base as { repo?: unknown }).repo : undefined;
+		if (exactString(repo, "full_name") !== repository.nameWithOwner) return false;
+	}
+	if (destination.kind.endsWith("create") && exactString(payload, "title") !== sentTitle) return false;
+	const decoded = decodeWireBody(wireBody, marker);
+	return decoded !== undefined && canonicalJson(decoded) === canonicalJson(value);
+}
+
+export type MachinePublishOutcome =
+	| { outcome: "published"; url: string; verified: true }
+	| { outcome: "outcome-unverified" }
+	| { outcome: "refused"; cause: string };
+
+/** One machine-record send followed by zero or one locator-bound GET; never retries. */
+export async function runMachinePublish(
+	destination: PublishDestination,
+	wireBody: string,
+	marker: string,
+	value: JsonValue,
+	sentTitle: string | undefined,
+	repoRoot: string,
+	repository: PublishRepository,
+	abortSignal?: AbortSignal,
+): Promise<MachinePublishOutcome> {
+	if (abortSignal?.aborted)
+		return { outcome: "refused", cause: "the request was aborted before the publishing child could start" };
+	const send = await runRawChild(ghPublishArgv(destination, repository), wireBody, repoRoot, 4096, abortSignal);
+	if (!send.spawned)
+		return {
+			outcome: "refused",
+			cause: "the publish delegate could not be run from this session's environment; the send never started",
+		};
+	const locatorText = strictLocator(send.stdout);
+	if (locatorText === undefined) return { outcome: "outcome-unverified" };
+	const locator = parseMachineLocator(locatorText, destination, repository);
+	if (locator === undefined) return { outcome: "outcome-unverified" };
+	const read = await runRawChild(["api", "--hostname", repository.host, locator.apiPath], undefined, repoRoot, 262_144);
+	if (!read.spawned || read.code !== 0 || read.timedOut || read.stdout.length === 0)
+		return { outcome: "outcome-unverified" };
+	let payload: unknown;
+	try {
+		payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(read.stdout));
+	} catch {
+		return { outcome: "outcome-unverified" };
+	}
+	return verifyMachineRead(payload, locator, destination, repository, wireBody, marker, value, sentTitle)
+		? { outcome: "published", url: locator.url, verified: true }
+		: { outcome: "outcome-unverified" };
 }

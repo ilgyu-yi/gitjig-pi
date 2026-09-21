@@ -50,24 +50,54 @@ import { performPublish } from "./service.ts";
 /** The tool name §3.3's egress row records, verbatim. */
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
 
-const PublishParams = Type.Object({
-	body: Type.String({ description: "The exact text to publish; scanned and neutralized before any send." }),
-	destination: Type.Object({
-		kind: Type.Union(PUBLISH_DESTINATION_KINDS.map((kind) => Type.Literal(kind))),
-		number: Type.Optional(
-			Type.Number({
-				description: "The issue or pull request number acted on. Required for the comment and body kinds.",
-			}),
-		),
-		title: Type.Optional(
-			Type.String({
-				description:
-					"The title of the issue or pull request being created. Required for the create kinds, and " +
-					"scanned as published text in its own right.",
-			}),
-		),
-	}),
-});
+const DestinationParams = Type.Union(
+	PUBLISH_DESTINATION_KINDS.map((kind) =>
+		kind.endsWith("create")
+			? Type.Object(
+					{
+						kind: Type.Literal(kind),
+						title: Type.String({ minLength: 1, pattern: "^(?!-)(?=.*\\S)[^\\r\\n\\u0000]+$" }),
+					},
+					{ additionalProperties: false },
+				)
+			: Type.Object(
+					{ kind: Type.Literal(kind), number: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) },
+					{ additionalProperties: false },
+				),
+	),
+);
+// Recursive JSON Schema validators commonly consume the JavaScript call stack
+// before the codec's iterative depth/byte admission can run. Keep this one
+// semantic boundary open at pre-validation; admitMachineRecord is the closed,
+// stack-safe authority for value shape, scalar domain, depth, and body bytes.
+const JsonValueParams = Type.Unknown();
+const PublishParams = Type.Union([
+	Type.Object(
+		{
+			body: Type.String({ description: "Ordinary prose, scanned and neutralized before one send." }),
+			destination: DestinationParams,
+		},
+		{ additionalProperties: false },
+	),
+	Type.Object(
+		{
+			machineRecord: Type.Object(
+				{
+					marker: Type.String({
+						maxLength: 256,
+						pattern:
+							"^<!-- [a-z][a-z0-9]*(?:-[a-z0-9]+)*: v(?:[1-9][0-9]{0,8})(?: [a-z][a-zA-Z0-9]*=[A-Za-z0-9][A-Za-z0-9._:-]{0,127})* -->$",
+						description: "The admitted ASCII machine-record marker.",
+					}),
+					value: JsonValueParams,
+				},
+				{ additionalProperties: false },
+			),
+			destination: DestinationParams,
+		},
+		{ additionalProperties: false },
+	),
+]);
 
 export function publishTarget(args: unknown): string {
 	const destination =
@@ -115,12 +145,12 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 		label: "Publish",
 		description:
 			"Publish repository-derived text to the platform: comment on an issue or PR, edit an issue or " +
-			"PR body, or create an issue or PR. The body — and, for the create kinds, the title — is scanned " +
-			"against the committed secret patterns and refused on a match; relayed mentions and actionable " +
-			"references are neutralized to inert spellings before the send.",
+			"PR body, or create an issue or PR. Ordinary body text is scanned and neutralized; machineRecord " +
+			"publishes closed JSON through a reversible inert codec and claims success only after an exact reread. " +
+			"Create titles are scanned and neutralized in both modes.",
 		parameters: PublishParams,
-		async execute(_toolCallId, params) {
-			return performPublish({ body: params.body, destination: params.destination }, repoRoot, stateRoot);
+		async execute(_toolCallId, params, signal) {
+			return performPublish(params, repoRoot, stateRoot, undefined, signal);
 		},
 		renderCall(args, theme) {
 			return renderActCall("Publish", publishTarget(args), theme);

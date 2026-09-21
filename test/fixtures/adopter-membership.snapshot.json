@@ -342,6 +342,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/publish/machine-record.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/publish/neutralize.ts",
 			"disposition": "carried"
 		},
@@ -583,6 +587,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/32.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/327.md",
 			"disposition": "instance-state"
 		},
 		{

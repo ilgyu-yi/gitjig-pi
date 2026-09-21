@@ -782,9 +782,11 @@ describe("the linkage exemption never reaches a title (issue #129; SPEC §3.3)",
 
 interface PublishToolSpec {
 	name: string;
+	parameters: unknown;
 	execute(
 		toolCallId: string,
 		params: Record<string, unknown>,
+		signal?: AbortSignal,
 	): Promise<{ content: Array<{ type: string; text?: string }>; details: Record<string, unknown> }>;
 }
 
@@ -895,62 +897,62 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 			"/nonexistent-state-root",
 		);
 		assert.ok(registered !== undefined, "registerPublishTool registered no tool — the arm is vacuous");
-		const properties = (registered.parameters as { properties?: Record<string, unknown> } | undefined)?.properties;
-		const destination = properties?.destination as { properties?: Record<string, unknown> } | undefined;
-		const kind = destination?.properties?.kind as { anyOf?: Array<{ const?: unknown }> } | undefined;
-		assert.ok(
-			Array.isArray(kind?.anyOf),
-			"the declared schema no longer exposes the kind union as an alternation, so this arm cannot read the population it exists to bind — red rather than pass silently",
-		);
-		assert.ok(
-			publishDestinationKinds !== undefined,
-			"publish/executor.ts does not export PUBLISH_DESTINATION_KINDS, so this arm would be comparing the declared schema against nothing",
-		);
-		const declared = kind.anyOf.map((member) => member.const).sort();
-		assert.deepEqual(
-			declared,
-			[...publishDestinationKinds].sort(),
-			"the kinds the tool DECLARES are not the kinds the instrument publishes to. The declared union is the list's only production consumer, so a kind dropped between them disappears from the tool's interface while every enumeration of kinds still names it",
-		);
-		assert.ok(
-			declared.length > 0,
-			"the declared union is empty, which would refuse every destination while reading as agreement",
-		);
-		// MEMBERSHIP is not the whole contract. Everything above reads
-		// `properties`, and `properties` is untouched by making an operand
-		// optional — so wrapping either the kind or the destination itself in an
-		// optional marker left the union identical and the whole suite green,
-		// while the tool declared that a publish call need name no destination at
-		// all. The required set is a second axis of the same claim and is read
-		// here rather than assumed.
-		//
-		// Fail-closed in effect — the admission check refuses a missing kind or a
-		// missing destination content-free — so the harm is a declared interface
-		// that no longer matches the instrument: a composer told an operand is
-		// optional omits it and gets a refusal it was invited into.
-		const destinationRequired = (destination as { required?: unknown }).required;
-		assert.ok(
-			Array.isArray(destinationRequired) && destinationRequired.includes("kind"),
-			`the destination's kind is not DECLARED required, so the tool invites a call that names no kind and the admission check refuses it. Declared required set was: ${JSON.stringify(destinationRequired)}`,
-		);
-		const topRequired = (registered.parameters as { required?: unknown }).required;
-		assert.ok(
-			Array.isArray(topRequired) && topRequired.includes("destination") && topRequired.includes("body"),
-			`the tool does not DECLARE both published operands required. Every send has a body and a destination; an interface saying otherwise invites a call the instrument then refuses. Declared required set was: ${JSON.stringify(topRequired)}`,
-		);
-		// Membership and required-ness are two axes; the PROPERTY SET is a third.
-		// A property added to the declared destination that the instrument never
-		// reads survives everything above — the union is unchanged and the
-		// required set is unchanged — so the tool can advertise an operand the
-		// boundary silently ignores. The harm is a misleading interface rather
-		// than an unscanned publish: the child is cwd-pinned to the runtime's own
-		// repository, so a caller who believed a declared field had retargeted
-		// their publish would still publish here.
-		assert.deepEqual(
-			Object.keys(destination?.properties ?? {}).sort(),
-			["kind", "number", "title"],
-			"the tool DECLARES a destination field set the instrument does not consume. Every declared operand must be one the boundary actually reads, or the interface invites a call whose extra field is silently dropped",
-		);
+		const top = registered.parameters as { anyOf?: Array<Record<string, unknown>>; additionalProperties?: unknown };
+		assert.equal(top.additionalProperties, undefined);
+		assert.equal(top.anyOf?.length, 2, "the request schema must declare exactly two exclusive content arms");
+		const declared = new Set<unknown>();
+		for (const arm of top.anyOf ?? []) {
+			assert.equal(arm.additionalProperties, false, "top-level request arms must be closed");
+			const properties = arm.properties as Record<string, unknown>;
+			const required = arm.required as unknown[];
+			assert.deepEqual(required?.slice().sort(), Object.keys(properties).sort());
+			assert.ok(required.includes("destination"));
+			assert.equal(required.includes("body"), !required.includes("machineRecord"));
+			const destination = properties.destination as { anyOf?: Array<Record<string, unknown>> };
+			assert.equal(destination.anyOf?.length, publishDestinationKinds?.length);
+			for (const variant of destination.anyOf ?? []) {
+				assert.equal(variant.additionalProperties, false, "destination variants must be closed");
+				const fields = variant.properties as Record<string, { const?: unknown }>;
+				const kind = fields.kind?.const;
+				declared.add(kind);
+				const expectedTarget = typeof kind === "string" && kind.endsWith("create") ? "title" : "number";
+				assert.deepEqual(Object.keys(fields).sort(), ["kind", expectedTarget].sort());
+				assert.deepEqual((variant.required as unknown[])?.slice().sort(), ["kind", expectedTarget].sort());
+			}
+		}
+		assert.deepEqual([...declared].sort(), [...(publishDestinationKinds ?? [])].sort());
+	});
+
+	it("the registered schema delegates deep value semantics to stack-safe runtime admission", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(`publish/index.ts is not loadable in-process here: ${publishModuleFailure}`);
+			return;
+		}
+		const { Check } = await import("typebox/value");
+		const { tool, fixture } = await publishToolAgainstShim("deep registered machine value");
+		try {
+			let deep: unknown = null;
+			for (let depth = 0; depth < 12_000; depth += 1) deep = [deep];
+			const params = {
+				machineRecord: { marker: "<!-- machine-record: v1 -->", value: deep },
+				destination: { kind: "issue-comment", number: 5 },
+			};
+			assert.equal(Check(tool.parameters as never, params), true, "pre-validation must not recurse through value");
+			const controller = new AbortController();
+			controller.abort();
+			const admitted = await tool.execute("deep", params, controller.signal);
+			assert.equal(admitted.details.disposition, "refuse-repository", "bounded deep JSON must reach runtime admission");
+
+			const invalid = {
+				machineRecord: { marker: "<!-- machine-record: v1 -->", value: undefined },
+				destination: { kind: "issue-comment", number: 5 },
+			};
+			assert.equal(Check(tool.parameters as never, invalid), true, "value shape belongs to runtime admission");
+			const refused = await tool.execute("invalid", invalid);
+			assert.equal(refused.details.disposition, "refuse-machine-record");
+		} finally {
+			removeFixture(fixture);
+		}
 	});
 });
 

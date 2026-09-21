@@ -270,6 +270,14 @@ export const POSTURES: readonly PostureRow[] = [
 			"where that tier's is advisory (SPEC §3.3).",
 	},
 	{
+		dependency: "egress-publish-repository-resolution",
+		failureShape:
+			"the bounded pre-send repository identity resolution is unavailable, times out, fails, or returns a malformed/unadmitted remote identity for machine-record publication",
+		posture: "closed",
+		justification:
+			"Machine verification must bind the send and reread to one repository before the irreversible child starts (SPEC §3.3). Refusing before spawn preserves zero-send cardinality; guessing from an ambient or malformed identity would make exact locator and parent checks meaningless.",
+	},
+	{
 		dependency: "egress-publish-executor",
 		failureShape:
 			"the bounded publish child unusable by outcome — any of §3.10's five classes: the delegate absent, a " +

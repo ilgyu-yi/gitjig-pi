@@ -354,18 +354,12 @@ export function inCommonSubset(ere: string): boolean {
  * The boundary's measurement, total in the three dispositions above.
  * Throws `PatternSourceError` exactly when the rule source is unusable.
  */
-export function scanBody(body: string): ScanOutcome {
-	const stripped = body.replace(/\p{Cf}/gu, "");
-	const semantic = stripped.replace(/\\u([0-9a-fA-F]{4})/g, (_whole, hex: string) =>
-		String.fromCharCode(Number.parseInt(hex, 16)),
-	);
-	if (stripped.includes("\u0000") || semantic.includes("\u0000")) {
-		return { disposition: "refuse-out-of-domain" };
-	}
+function scanViews(views: string[]): ScanOutcome {
+	if (views.some((view) => view.includes("\u0000"))) return { disposition: "refuse-out-of-domain" };
 	const patterns = loadCommittedPatterns();
 	const patternIds: string[] = [];
 	const lines: number[] = [];
-	for (const view of [stripped, semantic]) {
+	for (const view of views) {
 		view.split("\n").forEach((line, index) => {
 			// One byte, one code unit: the UTF-8 bytes of each line re-read as
 			// latin1, so a multibyte codepoint interrupts a counted class run
@@ -385,4 +379,17 @@ export function scanBody(body: string): ScanOutcome {
 		return { disposition: "refuse-match", patternIds, lines: lines.sort((left, right) => left - right) };
 	}
 	return { disposition: "clean" };
+}
+
+export function scanBody(body: string): ScanOutcome {
+	const stripped = body.replace(/\p{Cf}/gu, "");
+	const semantic = stripped.replace(/\\u([0-9a-fA-F]{4})/g, (_whole, hex: string) =>
+		String.fromCharCode(Number.parseInt(hex, 16)),
+	);
+	return scanViews([stripped, semantic]);
+}
+
+/** Exact single-view scan for the machine codec, which owns its one bounded decode view. */
+export function scanExactBody(body: string): ScanOutcome {
+	return scanViews([body]);
 }
