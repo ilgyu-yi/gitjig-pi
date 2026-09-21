@@ -1,4 +1,11 @@
-import { CAPABILITIES, canonicalJson, parseGovernanceConfig, parseMeasuredGovernance } from "./gitjig-governance.mjs";
+import {
+	CAPABILITIES,
+	canonicalJson,
+	GovernanceRefusal,
+	parseGovernanceConfig,
+	parseMeasuredGovernance,
+	transitionMeasuredGovernance,
+} from "./gitjig-governance.mjs";
 
 export class GovernancePlatformRefusal extends Error {
 	/** @param {string} arm */
@@ -22,7 +29,7 @@ async function pages(request, path) {
 	for (let page = 1; page <= 100; page++) {
 		const separator = path.includes("?") ? "&" : "?";
 		const value = await request("GET", `${path}${separator}per_page=100&page=${page}`);
-		if (!Array.isArray(value)) throw new GovernancePlatformRefusal("pagination-shape");
+		if (!Array.isArray(value) || value.length > 100) throw new GovernancePlatformRefusal("pagination-shape");
 		out.push(...value);
 		if (value.length < 100) return out;
 	}
@@ -165,7 +172,19 @@ function normalizeRuleset(detail) {
 export function createGovernancePlatform(configInput, request) {
 	const config = parseGovernanceConfig(configInput);
 	const repositoryPath = `repos/${config.repository.nameWithOwner}`;
+	const headPath = `${repositoryPath}/git/ref/heads/${encodeURIComponent(config.repository.defaultBranch)}`;
+	const readHead = async () => {
+		const value = await request("GET", headPath);
+		if (
+			value?.ref !== `refs/heads/${config.repository.defaultBranch}` ||
+			value?.object?.type !== "commit" ||
+			!/^[0-9a-f]{40}$/.test(value?.object?.sha ?? "")
+		)
+			throw new GovernancePlatformRefusal("default-head-shape");
+		return value.object.sha;
+	};
 	const readMeasured = async () => {
+		const beforeHead = await readHead();
 		const repository = await request("GET", repositoryPath);
 		if (
 			repository?.node_id !== config.repository.id ||
@@ -187,15 +206,17 @@ export function createGovernancePlatform(configInput, request) {
 			)
 		)
 			throw new GovernancePlatformRefusal("ruleset-summary-shape");
-		if (!unique(summaries, (summary) => summary.id)) throw new GovernancePlatformRefusal("ruleset-duplicate");
+		if (!unique(summaries, (summary) => summary.id) || !unique(summaries, (summary) => summary.name))
+			throw new GovernancePlatformRefusal("ruleset-duplicate");
 		if (summaries.some((summary) => summary.source_type !== "Repository"))
 			throw new GovernancePlatformRefusal("ruleset-inherited");
-		if (summaries.length !== 1 || summaries[0].name !== config.ruleset.name)
-			throw new GovernancePlatformRefusal("ruleset-population");
+		if (summaries.length !== 1) throw new GovernancePlatformRefusal("ruleset-population");
 		const detail = await request("GET", `${repositoryPath}/rulesets/${summaries[0].id}`);
 		if (detail?.id !== summaries[0].id || detail?.name !== summaries[0].name)
 			throw new GovernancePlatformRefusal("ruleset-detail-identity");
 		const normalized = normalizeRuleset(detail);
+		if (normalized.meta.sourceType !== "Repository" || normalized.meta.source !== config.repository.nameWithOwner)
+			throw new GovernancePlatformRefusal("ruleset-source");
 		const capabilities = {
 			mergeCommits: repository.allow_merge_commit,
 			squashMerging: repository.allow_squash_merge,
@@ -204,39 +225,60 @@ export function createGovernancePlatform(configInput, request) {
 		};
 		if (Object.keys(capabilities).length !== CAPABILITIES.length)
 			throw new GovernancePlatformRefusal("capability-population");
+		const afterHead = await readHead();
+		if (beforeHead !== afterHead) throw new GovernancePlatformRefusal("default-head-drift");
 		return parseMeasuredGovernance({
-			schemaVersion: 1,
+			schemaVersion: 2,
 			repository: {
 				id: repository.node_id,
 				nameWithOwner: repository.full_name,
 				defaultBranch: repository.default_branch,
+				defaultBranchSha: beforeHead,
 			},
 			rulesets: [normalized.meta],
 			capabilities,
 		});
 	};
-	const writeOperation = async (/** @type {any} */ operation) => {
-		if (
-			!operation ||
-			typeof operation !== "object" ||
-			Array.isArray(operation) ||
-			!CAPABILITIES.includes(operation.capability)
-		)
-			throw new GovernancePlatformRefusal("operation-shape");
-		const current = await readMeasured();
-		if (canonicalJson(current.capabilities[operation.capability]) !== canonicalJson(operation.before))
-			throw new GovernancePlatformRefusal("operation-compare");
+	const writeOperation = async (/** @type {any} */ operation, /** @type {unknown} */ expectedInput) => {
+		let current;
+		try {
+			current = await readMeasured();
+		} catch (error) {
+			return {
+				outcome: /** @type {const} */ ("refused"),
+				arm:
+					error instanceof GovernancePlatformRefusal || error instanceof GovernanceRefusal
+						? "compare-read-invalid"
+						: "compare-read-unavailable",
+				current: null,
+			};
+		}
+		let expected;
+		let expectedAfter;
+		try {
+			expected = parseMeasuredGovernance(expectedInput);
+			expectedAfter = transitionMeasuredGovernance(expected, operation);
+		} catch {
+			return { outcome: /** @type {const} */ ("refused"), arm: "payload-refused", current };
+		}
+		if (canonicalJson(current) !== canonicalJson(expected))
+			return { outcome: /** @type {const} */ ("refused"), arm: "operand-drift", current };
+
 		const setting = /** @type {Record<string,string>} */ ({
 			mergeCommits: "allow_merge_commit",
 			squashMerging: "allow_squash_merge",
 			rebaseMerging: "allow_rebase_merge",
 		})[operation.capability];
 		if (setting) {
-			await request("PATCH", repositoryPath, { [setting]: operation.after });
-			return /** @type {const} */ ("acknowledged");
+			try {
+				await request("PATCH", repositoryPath, { [setting]: operation.after });
+				return { outcome: /** @type {const} */ ("acknowledged") };
+			} catch {
+				return { outcome: /** @type {const} */ ("unknown") };
+			}
 		}
-		const next = structuredClone(current.capabilities);
-		next[operation.capability] = structuredClone(operation.after);
+
+		const next = expectedAfter.capabilities;
 		const rules = [];
 		if (
 			next.allowedMergeMethods.length > 0 ||
@@ -273,19 +315,20 @@ export function createGovernancePlatform(configInput, request) {
 					strict_required_status_checks_policy: next.strictRequiredStatusChecks,
 					do_not_enforce_on_create: next.doNotEnforceOnCreate,
 					required_status_checks: next.requiredStatusChecks.map(
-						/** @param {any} check */ (check) => ({
-							context: check.context,
-							integration_id: check.integrationId,
-						}),
+						/** @param {any} check */ (check) =>
+							check.integrationId === null
+								? { context: check.context }
+								: { context: check.context, integration_id: check.integrationId },
 					),
 				},
 			});
 		if (next.deletionProtection) rules.push({ type: "deletion" });
 		if (next.nonFastForwardProtection) rules.push({ type: "non_fast_forward" });
 		if (next.requiredLinearHistory) rules.push({ type: "required_linear_history" });
-		await request("PUT", `${repositoryPath}/rulesets/${current.rulesets[0].id}`, {
-			name: config.ruleset.name,
-			target: config.ruleset.target,
+		const metadata = expectedAfter.rulesets[0];
+		const payload = {
+			name: metadata.name,
+			target: metadata.target,
 			enforcement: next.rulesetEnforcement,
 			bypass_actors: next.administratorBypass.map(
 				/** @param {any} actor */ (actor) => ({
@@ -294,10 +337,15 @@ export function createGovernancePlatform(configInput, request) {
 					bypass_mode: actor.bypassMode,
 				}),
 			),
-			conditions: { ref_name: { include: config.ruleset.include, exclude: config.ruleset.exclude } },
+			conditions: { ref_name: { include: metadata.include, exclude: metadata.exclude } },
 			rules,
-		});
-		return /** @type {const} */ ("acknowledged");
+		};
+		try {
+			await request("PUT", `${repositoryPath}/rulesets/${metadata.id}`, payload);
+			return { outcome: /** @type {const} */ ("acknowledged") };
+		} catch {
+			return { outcome: /** @type {const} */ ("unknown") };
+		}
 	};
 	return Object.freeze({ readMeasured, writeOperation, request, repositoryPath });
 }

@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
 	auditGovernance,
 	CAPABILITIES,
+	canonicalJson,
 	GovernanceRefusal,
 	parseGovernanceConfig,
+	parseGovernancePlan,
 	parseMeasuredGovernance,
 	planGovernance,
+	transitionMeasuredGovernance,
 	validateGovernanceConfig,
 } from "../.github/workflows/gitjig-governance.mjs";
 
@@ -29,8 +33,8 @@ function measured() {
 	const capabilities = Object.fromEntries(CAPABILITIES.map((name) => [name, desiredValue(name)]));
 	capabilities.extraApprovalForUnattributedChanges = true;
 	return {
-		schemaVersion: 1,
-		repository: structuredClone(repository),
+		schemaVersion: 2,
+		repository: { ...structuredClone(repository), defaultBranchSha: "a".repeat(40) },
 		rulesets: [
 			{
 				id: 1,
@@ -147,6 +151,25 @@ describe("pure governance planner and auditor", () => {
 		assert.equal(auditGovernance(config, live).compliant, false);
 	});
 
+	it("admits only closed canonically hashed v2 plans", () => {
+		const plan = planGovernance(config, measured());
+		assert.deepEqual(parseGovernancePlan(plan), plan);
+		const unknown = structuredClone(plan) as Record<string, unknown>;
+		unknown.surprise = true;
+		assert.throws(() => parseGovernancePlan(unknown), /plan-schema/);
+		const malformedHash = structuredClone(plan);
+		malformedHash.planHash = `-${plan.planHash.slice(1)}`;
+		assert.throws(() => parseGovernancePlan(malformedHash), /plan-schema/);
+		const dishonestHash = structuredClone(plan);
+		dishonestHash.measured.repository.defaultBranchSha = "b".repeat(40);
+		assert.throws(() => parseGovernancePlan(dishonestHash), /plan-hash/);
+		const foreign = structuredClone(plan);
+		foreign.measured.rulesets[0].source = "foreign/repository";
+		const { planHash: _hash, authorized: _authorized, ...basis } = foreign;
+		foreign.planHash = createHash("sha256").update(canonicalJson(basis)).digest("hex");
+		assert.throws(() => parseGovernancePlan(foreign), /plan-schema/);
+	});
+
 	it("is byte-deterministic and binds config, repository and complete live basis", () => {
 		const live = measured();
 		const first = planGovernance(config, live);
@@ -189,10 +212,134 @@ describe("pure governance planner and auditor", () => {
 		assert.throws(() => parseMeasuredGovernance(inconsistent), /measured-rule-parameter-mismatch/);
 	});
 
-	it("refuses ruleset and repository basis drift instead of retargeting", () => {
+	it("plans, audits, and transitions exact ruleset identity drift", () => {
 		const wrongName = measured();
 		wrongName.rulesets[0].name = "other";
-		assert.throws(() => planGovernance(config, wrongName), /measured-ruleset-mismatch/);
+		wrongName.capabilities.requiredApprovingReviews = 0;
+		const plan = planGovernance(config, wrongName);
+		assert.deepEqual(
+			plan.operations.map((operation) => operation.kind ?? operation.capability),
+			["ruleset-identity", "requiredApprovingReviews"],
+		);
+		assert.deepEqual(plan.operations[0], {
+			kind: "ruleset-identity",
+			stable: { id: 1, sourceType: "Repository", source: repository.nameWithOwner },
+			before: { name: "other", target: "branch", include: ["~DEFAULT_BRANCH"], exclude: [] },
+			after: { name: config.ruleset.name, target: "branch", include: ["~DEFAULT_BRANCH"], exclude: [] },
+		});
+		const transitioned = transitionMeasuredGovernance(wrongName, plan.operations[0]);
+		const expected = structuredClone(wrongName);
+		expected.rulesets[0].name = config.ruleset.name;
+		assert.deepEqual(transitioned, expected);
+		const audit = auditGovernance(config, wrongName);
+		assert.deepEqual(audit.identity, {
+			stable: { id: 1, sourceType: "Repository", source: repository.nameWithOwner },
+			desired: {
+				name: config.ruleset.name,
+				target: "branch",
+				include: ["~DEFAULT_BRANCH"],
+				exclude: [],
+			},
+			observed: { name: "other", target: "branch", include: ["~DEFAULT_BRANCH"], exclude: [] },
+			compliant: false,
+		});
+		const malformed = structuredClone(plan.operations[0]) as Record<string, unknown>;
+		malformed.surprise = true;
+		assert.throws(() => transitionMeasuredGovernance(wrongName, malformed), /operation-schema/);
+		for (const stable of [
+			{ id: 2, sourceType: "Repository", source: repository.nameWithOwner },
+			{ id: 1, sourceType: "Repository", source: "foreign/repository" },
+		]) {
+			const replaced = structuredClone(plan.operations[0]);
+			replaced.stable = stable;
+			assert.throws(() => transitionMeasuredGovernance(wrongName, replaced), /operation-before/);
+		}
+	});
+
+	it("binds head movement and derives rule-type companion transitions", () => {
+		const first = measured();
+		const moved = measured();
+		moved.repository.defaultBranchSha = "b".repeat(40);
+		assert.notEqual(planGovernance(config, moved).planHash, planGovernance(config, first).planHash);
+
+		first.capabilities.requiredLinearHistory = false;
+		const withLinear = transitionMeasuredGovernance(first, {
+			capability: "requiredLinearHistory",
+			before: false,
+			after: true,
+		});
+		assert.ok(withLinear.rulesets[0].ruleTypes.includes("required_linear_history"));
+		const withoutLinear = transitionMeasuredGovernance(withLinear, {
+			capability: "requiredLinearHistory",
+			before: true,
+			after: false,
+		});
+		assert.ok(!withoutLinear.rulesets[0].ruleTypes.includes("required_linear_history"));
+		for (const [capability, type] of [
+			["deletionProtection", "deletion"],
+			["nonFastForwardProtection", "non_fast_forward"],
+		] as const) {
+			const removed = transitionMeasuredGovernance(measured(), {
+				capability,
+				before: true,
+				after: false,
+			});
+			assert.ok(!removed.rulesets[0].ruleTypes.includes(type));
+			const restored = transitionMeasuredGovernance(removed, {
+				capability,
+				before: false,
+				after: true,
+			});
+			assert.ok(restored.rulesets[0].ruleTypes.includes(type));
+		}
+
+		const noPull = measured();
+		Object.assign(noPull.capabilities, {
+			allowedMergeMethods: [],
+			requiredApprovingReviews: 0,
+			dismissStaleReviews: false,
+			requiredReviewers: [],
+			codeOwnerReview: false,
+			lastPushApproval: false,
+			reviewThreadResolution: false,
+			extraApprovalForUnattributedChanges: false,
+		});
+		noPull.rulesets[0].ruleTypes = noPull.rulesets[0].ruleTypes.filter((type) => type !== "pull_request");
+		const withPull = transitionMeasuredGovernance(noPull, {
+			capability: "requiredApprovingReviews",
+			before: 0,
+			after: 1,
+		});
+		assert.ok(withPull.rulesets[0].ruleTypes.includes("pull_request"));
+		const pullRemoved = transitionMeasuredGovernance(withPull, {
+			capability: "requiredApprovingReviews",
+			before: 1,
+			after: 0,
+		});
+		assert.ok(!pullRemoved.rulesets[0].ruleTypes.includes("pull_request"));
+
+		const noStatus = measured();
+		Object.assign(noStatus.capabilities, {
+			strictRequiredStatusChecks: false,
+			doNotEnforceOnCreate: false,
+			requiredStatusChecks: [],
+		});
+		noStatus.rulesets[0].ruleTypes = noStatus.rulesets[0].ruleTypes.filter((type) => type !== "required_status_checks");
+		const withStatus = transitionMeasuredGovernance(noStatus, {
+			capability: "strictRequiredStatusChecks",
+			before: false,
+			after: true,
+		});
+		assert.ok(withStatus.rulesets[0].ruleTypes.includes("required_status_checks"));
+		const statusRemoved = transitionMeasuredGovernance(withStatus, {
+			capability: "strictRequiredStatusChecks",
+			before: true,
+			after: false,
+		});
+		assert.ok(!statusRemoved.rulesets[0].ruleTypes.includes("required_status_checks"));
+	});
+
+	it("refuses repository retargeting", () => {
 		const wrongRepository = measured();
 		wrongRepository.repository.id = "foreign";
 		assert.throws(() => auditGovernance(config, wrongRepository), /measured-repository-mismatch/);

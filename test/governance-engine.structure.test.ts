@@ -17,8 +17,11 @@ describe("Phase-4 pure engine boundary", () => {
 			"parseGovernanceConfig",
 			"validateGovernanceConfig",
 			"parseMeasuredGovernance",
+			"parseGovernancePlan",
 			"planGovernance",
 			"auditGovernance",
+			"transitionMeasuredGovernance",
+			"ruleTypesForCapabilities",
 		])
 			assert.match(source, new RegExp(`export function ${name}\\b`));
 		assert.match(source, /authorized: false/);
@@ -31,6 +34,11 @@ describe("Phase-4 pure engine boundary", () => {
 			'configDigest: createHash("sha256").update(canonicalJson(parsedConfig)).digest("hex")',
 			"measured: parsedMeasured",
 			"operations,",
+			"defaultBranchSha",
+			'kind: "ruleset-identity"',
+			"ruleTypesForCapabilities(measured.capabilities)",
+			"transitionMeasuredGovernance",
+			"identity.compliant &&",
 		])
 			assert.match(source, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 	});

@@ -2,8 +2,10 @@ import {
 	auditGovernance,
 	canonicalJson,
 	parseGovernanceConfig,
+	parseGovernancePlan,
 	parseMeasuredGovernance,
 	planGovernance,
+	transitionMeasuredGovernance,
 } from "./gitjig-governance.mjs";
 
 export class GovernanceServiceRefusal extends Error {
@@ -20,19 +22,14 @@ function equal(left, right) {
 }
 /** @param {unknown} plan @returns {Record<string,any>} */
 function admittedPlan(plan) {
-	if (
-		!plan ||
-		typeof plan !== "object" ||
-		Array.isArray(plan) ||
-		!/^[-0-9a-f]{64}$/.test(/** @type {any} */ (plan).planHash ?? "") ||
-		/** @type {any} */ (plan).authorized !== false ||
-		!Array.isArray(/** @type {any} */ (plan).operations)
-	)
+	try {
+		return parseGovernancePlan(plan);
+	} catch {
 		throw new GovernanceServiceRefusal("plan-schema");
-	return /** @type {Record<string,any>} */ (structuredClone(plan));
+	}
 }
 
-/** @typedef {{readMeasured:()=>Promise<unknown>,writeOperation:(operation:unknown)=>Promise<'acknowledged'|'unknown'>}} GovernanceEffects */
+/** @typedef {{readMeasured:()=>Promise<unknown>,writeOperation:(operation:unknown,expected:unknown)=>Promise<{outcome:'acknowledged'|'unknown'}|{outcome:'refused',arm:string,current:unknown}>}} GovernanceEffects */
 
 /** One service instance owns one-invocation confirmation consumption. */
 export function createGovernanceService() {
@@ -75,6 +72,7 @@ export function createGovernanceService() {
 			const initial = planGovernance(config, parseMeasuredGovernance(await effects.readMeasured()));
 			if (!equal(initial, supplied)) throw new GovernanceServiceRefusal("plan-stale");
 			const completed = [];
+			let expected = structuredClone(supplied.measured);
 			for (let index = 0; index < supplied.operations.length; index++) {
 				const remaining = supplied.operations.slice(index);
 				let current;
@@ -83,16 +81,19 @@ export function createGovernanceService() {
 				} catch {
 					return { outcome: "stopped", arm: "compare-read-unavailable", completed, current: null, remaining };
 				}
-				if (!equal(current.operations, remaining))
+				if (!equal(current.measured, expected) || !equal(current.operations, remaining))
 					return { outcome: "stopped", arm: "operand-drift", completed, current: current.measured, remaining };
 				const operation = supplied.operations[index];
-				let outcome;
+				const expectedAfter = transitionMeasuredGovernance(expected, operation);
+				let result;
 				try {
-					outcome = await effects.writeOperation(structuredClone(operation));
+					result = await effects.writeOperation(structuredClone(operation), structuredClone(expected));
 				} catch {
-					outcome = "unknown";
+					result = { outcome: "unknown" };
 				}
-				if (outcome !== "acknowledged") {
+				if (result.outcome === "refused")
+					return { outcome: "stopped", arm: result.arm, completed, current: result.current, remaining };
+				if (result.outcome !== "acknowledged") {
 					let measured = null;
 					try {
 						measured = parseMeasuredGovernance(await effects.readMeasured());
@@ -107,7 +108,7 @@ export function createGovernanceService() {
 				} catch {
 					return { outcome: "stopped", arm: "post-read-unavailable", completed, current: null, remaining };
 				}
-				if (!equal(after.operations, supplied.operations.slice(index + 1)))
+				if (!equal(after.measured, expectedAfter) || !equal(after.operations, supplied.operations.slice(index + 1)))
 					return {
 						outcome: "stopped",
 						arm: "post-read-mismatch",
@@ -115,6 +116,7 @@ export function createGovernanceService() {
 						current: after.measured,
 						remaining,
 					};
+				expected = expectedAfter;
 				completed.push(structuredClone(operation));
 			}
 			let finalMeasured;
@@ -123,6 +125,8 @@ export function createGovernanceService() {
 			} catch {
 				return { outcome: "stopped", arm: "final-read-unavailable", completed, current: null, remaining: [] };
 			}
+			if (!equal(finalMeasured, expected))
+				return { outcome: "stopped", arm: "final-state-drift", completed, current: finalMeasured, remaining: [] };
 			const audit = auditGovernance(config, finalMeasured);
 			if (!audit.compliant)
 				return { outcome: "stopped", arm: "final-audit", completed, current: finalMeasured, remaining: [] };
@@ -134,6 +138,7 @@ export function createGovernanceService() {
 /** @param {string} repository @param {unknown} plan */
 export function confirmationPresentation(repository, plan) {
 	const candidate = admittedPlan(plan);
+	if (repository !== candidate.repository.nameWithOwner) throw new GovernanceServiceRefusal("confirmation-mismatch");
 	return {
 		repository,
 		configDigest: candidate.configDigest,
