@@ -17,6 +17,7 @@ import {
 	admitConfirmation,
 	confirmationPresentation,
 	createGovernanceService,
+	parseGovernanceApplyResult,
 } from "../.github/workflows/gitjig-governance-service.mjs";
 import { governanceRefusalArm } from "../.pi/extensions/gitjig/commands/governance.ts";
 
@@ -112,6 +113,7 @@ describe("shared governance apply service", () => {
 			},
 		);
 		assert.equal(result.outcome, "applied");
+		assert.deepEqual(parseGovernanceApplyResult(result), result);
 		assert.equal(writes, 1);
 		await assert.rejects(
 			service.apply(
@@ -238,6 +240,20 @@ describe("shared governance apply service", () => {
 		assert.deepEqual({ arm: result.arm, writes }, { arm: "operand-drift", writes: 0 });
 	});
 
+	it("refuses unknown apply-result arms", () => {
+		assert.throws(
+			() =>
+				parseGovernanceApplyResult({
+					outcome: "stopped",
+					arm: "surprise",
+					completed: [],
+					current: null,
+					remaining: [],
+				}),
+			/result-schema/,
+		);
+	});
+
 	it("preserves proven executor pre-write refusal evidence", async () => {
 		const live = measured();
 		live.capabilities.requiredApprovingReviews = 0;
@@ -298,6 +314,7 @@ describe("shared governance apply service", () => {
 		);
 		assert.deepEqual(result.completed, []);
 		assert.deepEqual(result.remaining, plan.operations);
+		assert.deepEqual(parseGovernanceApplyResult(result), result);
 	});
 
 	it("gates success on exact distinct final-state equality before shared audit", async () => {

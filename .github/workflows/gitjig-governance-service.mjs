@@ -1,7 +1,11 @@
 import {
 	auditGovernance,
+	canonicalByteLength,
 	canonicalJson,
+	GOVERNANCE_BOUNDS,
+	parseGovernanceAudit,
 	parseGovernanceConfig,
+	parseGovernanceOperation,
 	parseGovernancePlan,
 	parseMeasuredGovernance,
 	planGovernance,
@@ -27,6 +31,73 @@ function admittedPlan(plan) {
 	} catch {
 		throw new GovernanceServiceRefusal("plan-schema");
 	}
+}
+
+const EFFECT_REFUSAL_ARMS = new Set([
+	"compare-read-unavailable",
+	"compare-read-invalid",
+	"operand-drift",
+	"payload-refused",
+]);
+const STOP_ARMS = new Set([
+	"compare-read-unavailable",
+	"compare-read-invalid",
+	"operand-drift",
+	"payload-refused",
+	"write-unknown",
+	"post-read-unavailable",
+	"post-read-mismatch",
+	"final-read-unavailable",
+	"final-state-drift",
+	"final-audit",
+]);
+/** @param {unknown} value @param {readonly string[]} keys */
+function closed(value, keys) {
+	return (
+		value !== null &&
+		typeof value === "object" &&
+		!Array.isArray(value) &&
+		Object.keys(value).length === keys.length &&
+		Object.keys(value).every((key) => keys.includes(key))
+	);
+}
+/** @param {unknown} input */
+export function parseGovernanceApplyResult(input) {
+	if (!input || typeof input !== "object" || Array.isArray(input)) throw new GovernanceServiceRefusal("result-schema");
+	const value = /** @type {Record<string,any>} */ (structuredClone(input));
+	if (value.outcome === "applied") {
+		if (!closed(value, ["outcome", "completed", "current", "remaining", "audit"]))
+			throw new GovernanceServiceRefusal("result-schema");
+		value.current = parseMeasuredGovernance(value.current);
+		value.audit = parseGovernanceAudit(value.audit);
+		if (!Array.isArray(value.remaining) || value.remaining.length !== 0)
+			throw new GovernanceServiceRefusal("result-schema");
+	} else if (value.outcome === "stopped") {
+		if (!closed(value, ["outcome", "arm", "completed", "current", "remaining"]) || !STOP_ARMS.has(value.arm))
+			throw new GovernanceServiceRefusal("result-schema");
+		if (value.current !== null) value.current = parseMeasuredGovernance(value.current);
+	} else throw new GovernanceServiceRefusal("result-schema");
+	for (const name of ["completed", "remaining"]) {
+		if (!Array.isArray(value[name])) throw new GovernanceServiceRefusal("result-schema");
+		value[name] = value[name].map(parseGovernanceOperation);
+	}
+	if (canonicalByteLength(value) > GOVERNANCE_BOUNDS.applyResult) throw new GovernanceServiceRefusal("result-bound");
+	return structuredClone(value);
+}
+
+/** @param {unknown} input @returns {Record<string,any>} */
+function parseEffectResult(input) {
+	if (closed(input, ["outcome"]) && ["acknowledged", "unknown"].includes(/** @type {any} */ (input).outcome))
+		return /** @type {Record<string,any>} */ (structuredClone(input));
+	if (
+		!closed(input, ["outcome", "arm", "current"]) ||
+		/** @type {any} */ (input).outcome !== "refused" ||
+		!EFFECT_REFUSAL_ARMS.has(/** @type {any} */ (input).arm)
+	)
+		throw new GovernanceServiceRefusal("effect-result");
+	const result = /** @type {Record<string,any>} */ (structuredClone(input));
+	if (result.current !== null) result.current = parseMeasuredGovernance(result.current);
+	return result;
 }
 
 /** @typedef {{readMeasured:()=>Promise<unknown>,writeOperation:(operation:unknown,expected:unknown)=>Promise<{outcome:'acknowledged'|'unknown'}|{outcome:'refused',arm:string,current:unknown}>}} GovernanceEffects */
@@ -87,7 +158,9 @@ export function createGovernanceService() {
 				const expectedAfter = transitionMeasuredGovernance(expected, operation);
 				let result;
 				try {
-					result = await effects.writeOperation(structuredClone(operation), structuredClone(expected));
+					result = parseEffectResult(
+						await effects.writeOperation(structuredClone(operation), structuredClone(expected)),
+					);
 				} catch {
 					result = { outcome: "unknown" };
 				}
