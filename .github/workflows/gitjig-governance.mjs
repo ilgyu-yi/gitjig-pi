@@ -82,6 +82,10 @@ function uniqueCanonical(values) {
 	const rendered = values.map(canonicalJson);
 	return new Set(rendered).size === rendered.length;
 }
+/** @param {unknown} value */
+function validStrings(value) {
+	return Array.isArray(value) && uniqueCanonical(value) && value.every(scalarSequence);
+}
 /** @param {unknown} left @param {unknown} right */
 function compareCanonical(left, right) {
 	const a = canonicalJson(left);
@@ -354,12 +358,13 @@ export function parseMeasuredGovernance(input) {
 	if (!closed(input, ["schemaVersion", "repository", "rulesets", "capabilities"]))
 		throw new GovernanceRefusal("measured-schema");
 	const measured = /** @type {Record<string,any>} */ (input);
-	if (measured.schemaVersion !== 1) throw new GovernanceRefusal("measured-version");
+	if (measured.schemaVersion !== 2) throw new GovernanceRefusal("measured-version");
 	if (
-		!closed(measured.repository, ["id", "nameWithOwner", "defaultBranch"]) ||
+		!closed(measured.repository, ["id", "nameWithOwner", "defaultBranch", "defaultBranchSha"]) ||
 		!scalarSequence(measured.repository.id) ||
 		!scalarSequence(measured.repository.nameWithOwner) ||
-		!scalarSequence(measured.repository.defaultBranch)
+		!scalarSequence(measured.repository.defaultBranch) ||
+		!/^[0-9a-f]{40}$/.test(measured.repository.defaultBranchSha ?? "")
 	)
 		throw new GovernanceRefusal("measured-repository");
 	if (!Array.isArray(measured.rulesets) || measured.rulesets.length !== 1)
@@ -372,8 +377,8 @@ export function parseMeasuredGovernance(input) {
 		ruleset.target !== "branch" ||
 		ruleset.sourceType !== "Repository" ||
 		!scalarSequence(ruleset.source) ||
-		!Array.isArray(ruleset.include) ||
-		!Array.isArray(ruleset.exclude) ||
+		!validStrings(ruleset.include) ||
+		!validStrings(ruleset.exclude) ||
 		!Array.isArray(ruleset.ruleTypes) ||
 		!uniqueCanonical(ruleset.ruleTypes) ||
 		!ruleset.ruleTypes.every(/** @param {any} type */ (type) => RULE_TYPES.includes(type))
@@ -383,59 +388,116 @@ export function parseMeasuredGovernance(input) {
 	for (const name of CAPABILITIES) {
 		if (!validMeasuredValue(name, measured.capabilities[name])) throw new GovernanceRefusal("measured-capability");
 	}
-	const types = new Set(ruleset.ruleTypes);
-	const pullNames = [
-		"allowedMergeMethods",
-		"requiredApprovingReviews",
-		"dismissStaleReviews",
-		"requiredReviewers",
-		"codeOwnerReview",
-		"lastPushApproval",
-		"reviewThreadResolution",
-		"extraApprovalForUnattributedChanges",
-	];
-	if (
-		!types.has("pull_request") &&
-		pullNames.some((name) => canonicalJson(measured.capabilities[name]) !== canonicalJson(disabledValue(name)))
-	)
-		throw new GovernanceRefusal("measured-rule-parameter-mismatch");
-	if (
-		!types.has("required_status_checks") &&
-		["strictRequiredStatusChecks", "doNotEnforceOnCreate", "requiredStatusChecks"].some(
-			(name) => canonicalJson(measured.capabilities[name]) !== canonicalJson(disabledValue(name)),
-		)
-	)
-		throw new GovernanceRefusal("measured-rule-parameter-mismatch");
-	for (const [type, capability] of [
-		["deletion", "deletionProtection"],
-		["non_fast_forward", "nonFastForwardProtection"],
-		["required_linear_history", "requiredLinearHistory"],
-	]) {
-		if (types.has(type) !== measured.capabilities[capability])
-			throw new GovernanceRefusal("measured-rule-parameter-mismatch");
-	}
 	const parsed = structuredClone(measured);
 	parsed.rulesets[0].ruleTypes.sort(compareRuleTypes);
+	if (canonicalJson(parsed.rulesets[0].ruleTypes) !== canonicalJson(ruleTypesForCapabilities(parsed.capabilities)))
+		throw new GovernanceRefusal("measured-rule-parameter-mismatch");
 	for (const name of ["administratorBypass", "allowedMergeMethods", "requiredReviewers", "requiredStatusChecks"])
 		parsed.capabilities[name].sort(compareCanonical);
 	return parsed;
 }
 
+const PULL_CAPABILITIES = Object.freeze([
+	"allowedMergeMethods",
+	"requiredApprovingReviews",
+	"dismissStaleReviews",
+	"requiredReviewers",
+	"codeOwnerReview",
+	"lastPushApproval",
+	"reviewThreadResolution",
+	"extraApprovalForUnattributedChanges",
+]);
+const STATUS_CAPABILITIES = Object.freeze([
+	"strictRequiredStatusChecks",
+	"doNotEnforceOnCreate",
+	"requiredStatusChecks",
+]);
+
+/** @param {Record<string,any>} capabilities */
+export function ruleTypesForCapabilities(capabilities) {
+	const enabled = (/** @type {string} */ name) =>
+		canonicalJson(capabilities[name]) !== canonicalJson(disabledValue(name));
+	const types = [];
+	if (PULL_CAPABILITIES.some(enabled)) types.push("pull_request");
+	if (STATUS_CAPABILITIES.some(enabled)) types.push("required_status_checks");
+	if (capabilities.deletionProtection) types.push("deletion");
+	if (capabilities.nonFastForwardProtection) types.push("non_fast_forward");
+	if (capabilities.requiredLinearHistory) types.push("required_linear_history");
+	return types;
+}
+
+/** @param {Record<string,any>} ruleset */
+function identityMetadata(ruleset) {
+	return { name: ruleset.name, target: ruleset.target, include: ruleset.include, exclude: ruleset.exclude };
+}
+/** @param {Record<string,any>} ruleset */
+function stableIdentity(ruleset) {
+	return { id: ruleset.id, sourceType: ruleset.sourceType, source: ruleset.source };
+}
 /** @param {Record<string,any>} config @param {Record<string,any>} measured */
 function admitBasis(config, measured) {
 	const parsed = parseMeasuredGovernance(measured);
-	if (canonicalJson(config.repository) !== canonicalJson(parsed.repository))
+	const { defaultBranchSha: _sha, ...measuredRepository } = parsed.repository;
+	if (canonicalJson(config.repository) !== canonicalJson(measuredRepository))
 		throw new GovernanceRefusal("measured-repository-mismatch");
 	const ruleset = parsed.rulesets[0];
-	if (
-		ruleset.name !== config.ruleset.name ||
-		ruleset.source !== config.repository.nameWithOwner ||
-		ruleset.target !== config.ruleset.target ||
-		canonicalJson(ruleset.include) !== canonicalJson(config.ruleset.include) ||
-		canonicalJson(ruleset.exclude) !== canonicalJson(config.ruleset.exclude)
-	)
+	if (ruleset.source !== config.repository.nameWithOwner || ruleset.sourceType !== "Repository")
 		throw new GovernanceRefusal("measured-ruleset-mismatch");
 	return parsed;
+}
+
+/** @param {unknown} operation */
+function parseOperation(operation) {
+	if (!operation || typeof operation !== "object" || Array.isArray(operation))
+		throw new GovernanceRefusal("operation-schema");
+	const value = /** @type {Record<string,any>} */ (operation);
+	if (Object.hasOwn(value, "kind")) {
+		if (
+			!closed(value, ["kind", "stable", "before", "after"]) ||
+			value.kind !== "ruleset-identity" ||
+			!closed(value.stable, ["id", "sourceType", "source"]) ||
+			!positive(value.stable.id) ||
+			value.stable.sourceType !== "Repository" ||
+			!scalarSequence(value.stable.source)
+		)
+			throw new GovernanceRefusal("operation-schema");
+		for (const metadata of [value.before, value.after])
+			if (
+				!closed(metadata, ["name", "target", "include", "exclude"]) ||
+				!scalarSequence(metadata.name) ||
+				metadata.target !== "branch" ||
+				!validStrings(metadata.include) ||
+				!validStrings(metadata.exclude)
+			)
+				throw new GovernanceRefusal("operation-schema");
+		return structuredClone(value);
+	}
+	if (!closed(value, ["capability", "before", "after"]) || !CAPABILITIES.includes(value.capability))
+		throw new GovernanceRefusal("operation-schema");
+	if (!validMeasuredValue(value.capability, value.before) || !validMeasuredValue(value.capability, value.after))
+		throw new GovernanceRefusal("operation-schema");
+	return structuredClone(value);
+}
+
+/** @param {unknown} expected @param {unknown} operation */
+export function transitionMeasuredGovernance(expected, operation) {
+	const measured = parseMeasuredGovernance(expected);
+	const admitted = parseOperation(operation);
+	const ruleset = measured.rulesets[0];
+	if (admitted.kind === "ruleset-identity") {
+		if (
+			canonicalJson(stableIdentity(ruleset)) !== canonicalJson(admitted.stable) ||
+			canonicalJson(identityMetadata(ruleset)) !== canonicalJson(admitted.before)
+		)
+			throw new GovernanceRefusal("operation-before");
+		Object.assign(ruleset, structuredClone(admitted.after));
+	} else {
+		if (canonicalJson(measured.capabilities[admitted.capability]) !== canonicalJson(admitted.before))
+			throw new GovernanceRefusal("operation-before");
+		measured.capabilities[admitted.capability] = structuredClone(admitted.after);
+		ruleset.ruleTypes = ruleTypesForCapabilities(measured.capabilities);
+	}
+	return parseMeasuredGovernance(measured);
 }
 
 /** @param {unknown} config @param {unknown} measured */
@@ -443,6 +505,21 @@ export function planGovernance(config, measured) {
 	const parsedConfig = parseGovernanceConfig(config);
 	const parsedMeasured = admitBasis(parsedConfig, /** @type {Record<string,any>} */ (measured));
 	const operations = [];
+	const ruleset = parsedMeasured.rulesets[0];
+	const desiredIdentity = {
+		name: parsedConfig.ruleset.name,
+		target: parsedConfig.ruleset.target,
+		include: parsedConfig.ruleset.include,
+		exclude: parsedConfig.ruleset.exclude,
+	};
+	const observedIdentity = identityMetadata(ruleset);
+	if (canonicalJson(observedIdentity) !== canonicalJson(desiredIdentity))
+		operations.push({
+			kind: "ruleset-identity",
+			stable: stableIdentity(ruleset),
+			before: observedIdentity,
+			after: desiredIdentity,
+		});
 	for (const name of CAPABILITIES) {
 		const selection = parsedConfig.capabilities[name];
 		if (selection.mode === "unmanaged") continue;
@@ -451,7 +528,7 @@ export function planGovernance(config, measured) {
 		if (canonicalJson(before) !== canonicalJson(after)) operations.push({ capability: name, before, after });
 	}
 	const basis = {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		repository: parsedConfig.repository,
 		configDigest: createHash("sha256").update(canonicalJson(parsedConfig)).digest("hex"),
 		measured: parsedMeasured,
@@ -468,6 +545,20 @@ export function planGovernance(config, measured) {
 export function auditGovernance(config, measured) {
 	const parsedConfig = parseGovernanceConfig(config);
 	const parsedMeasured = admitBasis(parsedConfig, /** @type {Record<string,any>} */ (measured));
+	const ruleset = parsedMeasured.rulesets[0];
+	const desiredIdentity = {
+		name: parsedConfig.ruleset.name,
+		target: parsedConfig.ruleset.target,
+		include: parsedConfig.ruleset.include,
+		exclude: parsedConfig.ruleset.exclude,
+	};
+	const observedIdentity = identityMetadata(ruleset);
+	const identity = {
+		stable: stableIdentity(ruleset),
+		desired: desiredIdentity,
+		observed: observedIdentity,
+		compliant: canonicalJson(desiredIdentity) === canonicalJson(observedIdentity),
+	};
 	const capabilities = CAPABILITIES.map((name) => {
 		const selection = parsedConfig.capabilities[name];
 		const observed = parsedMeasured.capabilities[name];
@@ -482,9 +573,11 @@ export function auditGovernance(config, measured) {
 		};
 	});
 	return {
-		schemaVersion: 1,
-		repository: parsedConfig.repository,
+		schemaVersion: 2,
+		repository: parsedMeasured.repository,
+		identity,
 		capabilities,
-		compliant: capabilities.every((entry) => entry.classification === "unmanaged" || entry.compliant),
+		compliant:
+			identity.compliant && capabilities.every((entry) => entry.classification === "unmanaged" || entry.compliant),
 	};
 }

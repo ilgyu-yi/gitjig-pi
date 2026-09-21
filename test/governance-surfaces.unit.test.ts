@@ -33,8 +33,8 @@ function desired(name: string): unknown {
 }
 function measured() {
 	return {
-		schemaVersion: 1,
-		repository: structuredClone(config.repository),
+		schemaVersion: 2,
+		repository: { ...structuredClone(config.repository), defaultBranchSha: "a".repeat(40) },
 		rulesets: [
 			{
 				id: 7,
@@ -106,7 +106,7 @@ describe("shared governance apply service", () => {
 					writes++;
 					const admitted = operation as { capability: string; after: unknown };
 					live.capabilities[admitted.capability] = structuredClone(admitted.after);
-					return "acknowledged";
+					return { outcome: "acknowledged" as const };
 				},
 			},
 		);
@@ -124,7 +124,7 @@ describe("shared governance apply service", () => {
 						invocationId: "one",
 					},
 				},
-				{ readMeasured: async () => live, writeOperation: async () => "acknowledged" },
+				{ readMeasured: async () => live, writeOperation: async () => ({ outcome: "acknowledged" as const }) },
 			),
 			/confirmation-replayed/,
 		);
@@ -136,12 +136,41 @@ describe("shared governance apply service", () => {
 			readMeasured: async () => measured(),
 			writeOperation: async () => {
 				writes++;
-				return "acknowledged" as const;
+				return { outcome: "acknowledged" as const };
 			},
 		};
 		const service = createGovernanceService();
 		await service.plan(config, effects);
 		await service.audit(config, effects);
+		assert.equal(writes, 0);
+	});
+
+	it("refuses saved v1 plans before a write", async () => {
+		const plan = planGovernance(config, measured());
+		plan.schemaVersion = 1;
+		let writes = 0;
+		await assert.rejects(
+			createGovernanceService().apply(
+				{
+					config,
+					plan,
+					confirmation: {
+						kind: "interactive",
+						repository: config.repository.nameWithOwner,
+						planHash: plan.planHash,
+						invocationId: "old-plan",
+					},
+				},
+				{
+					readMeasured: async () => measured(),
+					writeOperation: async () => {
+						writes++;
+						return { outcome: "acknowledged" as const };
+					},
+				},
+			),
+			/plan-schema/,
+		);
 		assert.equal(writes, 0);
 	});
 
@@ -166,13 +195,76 @@ describe("shared governance apply service", () => {
 					readMeasured: async () => measured(),
 					writeOperation: async () => {
 						writes++;
-						return "acknowledged";
+						return { outcome: "acknowledged" as const };
 					},
 				},
 			),
 			/plan-stale/,
 		);
 		assert.equal(writes, 0);
+	});
+
+	it("stops full-basis unmanaged drift before the next write", async () => {
+		const live = measured();
+		live.capabilities.requiredApprovingReviews = 0;
+		const plan = planGovernance(config, live);
+		let reads = 0;
+		let writes = 0;
+		const result = await createGovernanceService().apply(
+			{
+				config,
+				plan,
+				confirmation: {
+					kind: "pi",
+					repository: config.repository.nameWithOwner,
+					planHash: plan.planHash,
+					invocationId: "unmanaged-drift",
+				},
+			},
+			{
+				readMeasured: async () => {
+					reads++;
+					const snapshot = structuredClone(live);
+					if (reads > 1) snapshot.capabilities.extraApprovalForUnattributedChanges = true;
+					return snapshot;
+				},
+				writeOperation: async () => {
+					writes++;
+					return { outcome: "acknowledged" as const };
+				},
+			},
+		);
+		assert.deepEqual({ arm: result.arm, writes }, { arm: "operand-drift", writes: 0 });
+	});
+
+	it("preserves proven executor pre-write refusal evidence", async () => {
+		const live = measured();
+		live.capabilities.requiredApprovingReviews = 0;
+		const plan = planGovernance(config, live);
+		const result = await createGovernanceService().apply(
+			{
+				config,
+				plan,
+				confirmation: {
+					kind: "pi",
+					repository: config.repository.nameWithOwner,
+					planHash: plan.planHash,
+					invocationId: "pre-write-refusal",
+				},
+			},
+			{
+				readMeasured: async () => structuredClone(live),
+				writeOperation: async () => ({
+					outcome: "refused" as const,
+					arm: "compare-read-unavailable",
+					current: null,
+				}),
+			},
+		);
+		assert.deepEqual(
+			{ outcome: result.outcome, arm: result.arm, current: result.current },
+			{ outcome: "stopped", arm: "compare-read-unavailable", current: null },
+		);
 	});
 
 	it("stops an unknown write once with exact remaining evidence and no rollback", async () => {
@@ -195,7 +287,7 @@ describe("shared governance apply service", () => {
 				readMeasured: async () => live,
 				writeOperation: async () => {
 					writes++;
-					return "unknown";
+					return { outcome: "unknown" as const };
 				},
 			},
 		);
@@ -207,7 +299,7 @@ describe("shared governance apply service", () => {
 		assert.deepEqual(result.remaining, plan.operations);
 	});
 
-	it("gates success on a distinct final reread and shared audit", async () => {
+	it("gates success on exact distinct final-state equality before shared audit", async () => {
 		const live = measured();
 		live.capabilities.requiredApprovingReviews = 0;
 		const plan = planGovernance(config, live);
@@ -233,11 +325,11 @@ describe("shared governance apply service", () => {
 				writeOperation: async (operation: unknown) => {
 					const admitted = operation as { capability: string; after: unknown };
 					live.capabilities[admitted.capability] = structuredClone(admitted.after);
-					return "acknowledged";
+					return { outcome: "acknowledged" as const };
 				},
 			},
 		);
-		assert.equal(result.arm, "final-audit");
+		assert.equal(result.arm, "final-state-drift");
 		assert.equal(result.completed.length, 1);
 	});
 });
@@ -311,10 +403,13 @@ describe("local configure and complete platform reads", () => {
 		);
 	});
 
-	it("preserves unbound check integration identity", async () => {
+	it("admits current-name drift and preserves unbound check integration identity", async () => {
 		const calls: string[] = [];
+		const liveName = "ghjig-tier3";
 		const request = async (method: string, path: string) => {
 			calls.push(`${method} ${path}`);
+			if (path.includes("/git/ref/heads/"))
+				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "b".repeat(40) } };
 			if (path === `repos/${config.repository.nameWithOwner}`)
 				return {
 					node_id: config.repository.id,
@@ -324,12 +419,11 @@ describe("local configure and complete platform reads", () => {
 					allow_squash_merge: false,
 					allow_rebase_merge: false,
 				};
-			if (path.endsWith("per_page=100&page=1"))
-				return [{ id: 7, name: config.ruleset.name, source_type: "Repository" }];
+			if (path.endsWith("per_page=100&page=1")) return [{ id: 7, name: liveName, source_type: "Repository" }];
 			if (path.endsWith("/rulesets/7"))
 				return {
 					id: 7,
-					name: config.ruleset.name,
+					name: liveName,
 					target: "branch",
 					source_type: "Repository",
 					source: config.repository.nameWithOwner,
@@ -365,14 +459,161 @@ describe("local configure and complete platform reads", () => {
 			throw new Error(`unexpected ${path}`);
 		};
 		const live = await createGovernancePlatform(config, request).readMeasured();
+		assert.equal(live.rulesets[0].name, liveName);
 		assert.equal(live.capabilities.requiredStatusChecks[0].integrationId, null);
 		assert.equal(calls.filter((call) => call.includes("per_page=100")).length, 1);
+	});
+
+	it("writes an explicit identity operation with a complete unmanaged-preserving payload", async () => {
+		const liveName = "ghjig-tier3";
+		type PutBody = {
+			name: string;
+			rules: Array<{
+				type: string;
+				parameters?: { require_extra_approval_for_unattributed_changes?: boolean };
+			}>;
+		};
+		let put: { path: string; body: PutBody } | undefined;
+		const detail = () => ({
+			id: 7,
+			name: liveName,
+			target: "branch",
+			source_type: "Repository",
+			source: config.repository.nameWithOwner,
+			enforcement: "active",
+			bypass_actors: [],
+			conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+			rules: [
+				{
+					type: "pull_request",
+					parameters: {
+						allowed_merge_methods: ["merge"],
+						required_approving_review_count: 0,
+						dismiss_stale_reviews_on_push: true,
+						required_reviewers: [],
+						require_code_owner_review: false,
+						require_last_push_approval: false,
+						required_review_thread_resolution: true,
+						require_extra_approval_for_unattributed_changes: true,
+					},
+				},
+				{ type: "deletion" },
+				{ type: "non_fast_forward" },
+			],
+		});
+		const request = async (method: string, path: string, body?: unknown) => {
+			if (path.includes("/git/ref/heads/"))
+				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "c".repeat(40) } };
+			if (path === `repos/${config.repository.nameWithOwner}`)
+				return {
+					node_id: config.repository.id,
+					full_name: config.repository.nameWithOwner,
+					default_branch: config.repository.defaultBranch,
+					allow_merge_commit: true,
+					allow_squash_merge: false,
+					allow_rebase_merge: false,
+				};
+			if (path.endsWith("per_page=100&page=1")) return [{ id: 7, name: liveName, source_type: "Repository" }];
+			if (method === "GET" && path.endsWith("/rulesets/7")) return detail();
+			if (method === "PUT" && path.endsWith("/rulesets/7")) {
+				put = { path, body: body as PutBody };
+				return { id: 7 };
+			}
+			throw new Error(`unexpected ${method} ${path}`);
+		};
+		const platform = createGovernancePlatform(config, request);
+		const live = await platform.readMeasured();
+		const operation = planGovernance(config, live).operations[0];
+		assert.equal(operation.kind, "ruleset-identity");
+		assert.deepEqual(await platform.writeOperation(operation, live), { outcome: "acknowledged" });
+		assert.equal(put?.body.name, config.ruleset.name);
+		assert.equal(put?.body.rules[0].parameters?.require_extra_approval_for_unattributed_changes, true);
+		assert.equal(
+			put?.body.rules.some((rule: { type: string }) => rule.type === "deletion"),
+			true,
+		);
+	});
+
+	it("maps an executor GET failure to proven pre-write refusal, not unknown", async () => {
+		const platform = createGovernancePlatform(config, async () => {
+			throw new Error("offline");
+		});
+		const result = await platform.writeOperation(
+			{ capability: "mergeCommits", before: true, after: false },
+			measured(),
+		);
+		assert.deepEqual(result, { outcome: "refused", arm: "compare-read-unavailable", current: null });
+	});
+
+	it("refuses unequal head brackets and full pagination at the exact cap", async () => {
+		let heads = 0;
+		const driftRequest = async (_method: string, path: string) => {
+			if (path.includes("/git/ref/heads/")) {
+				heads++;
+				return {
+					ref: `refs/heads/${config.repository.defaultBranch}`,
+					object: { sha: (heads === 1 ? "d" : "e").repeat(40) },
+				};
+			}
+			if (path === `repos/${config.repository.nameWithOwner}`)
+				return {
+					node_id: config.repository.id,
+					full_name: config.repository.nameWithOwner,
+					default_branch: config.repository.defaultBranch,
+					allow_merge_commit: true,
+					allow_squash_merge: false,
+					allow_rebase_merge: false,
+				};
+			if (path.includes("per_page=100")) return [{ id: 7, name: config.ruleset.name, source_type: "Repository" }];
+			if (path.endsWith("/rulesets/7"))
+				return {
+					id: 7,
+					name: config.ruleset.name,
+					target: "branch",
+					source_type: "Repository",
+					source: config.repository.nameWithOwner,
+					enforcement: "active",
+					bypass_actors: [],
+					conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+					rules: [],
+				};
+			throw new Error(`unexpected ${path}`);
+		};
+		await assert.rejects(createGovernancePlatform(config, driftRequest).readMeasured(), /default-head-drift/);
+
+		let pages = 0;
+		const capRequest = async (_method: string, path: string) => {
+			if (path.includes("/git/ref/heads/"))
+				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "f".repeat(40) } };
+			if (path === `repos/${config.repository.nameWithOwner}`)
+				return {
+					node_id: config.repository.id,
+					full_name: config.repository.nameWithOwner,
+					default_branch: config.repository.defaultBranch,
+					allow_merge_commit: true,
+					allow_squash_merge: false,
+					allow_rebase_merge: false,
+				};
+			if (path.includes("per_page=100")) {
+				pages++;
+				return Array.from({ length: 100 }, (_, index) => ({
+					id: pages * 100 + index,
+					name: `rule-${pages}-${index}`,
+					source_type: "Repository",
+				}));
+			}
+			throw new Error(`unexpected ${path}`);
+		};
+		await assert.rejects(createGovernancePlatform(config, capRequest).readMeasured(), /pagination-bound/);
+		assert.equal(pages, 100);
 	});
 
 	it("reads through the pagination terminal before refusing an unsupported ruleset population", async () => {
 		const calls: string[] = [];
 		const request = async (_method: string, path: string) => {
 			calls.push(path);
+			if (path.includes("/git/ref/heads/"))
+				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "b".repeat(40) } };
 			if (path === `repos/${config.repository.nameWithOwner}`)
 				return {
 					node_id: config.repository.id,
