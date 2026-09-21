@@ -13,9 +13,16 @@ import {
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
-import { neutralizeForDestination, neutralizeOperand } from "./neutralize.ts";
 import { admitMachineRecord, decodeEscapeView, isClosedDataRecord } from "./machine-record.ts";
-import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody, type ScanOutcome } from "./scan.ts";
+import { neutralizeForDestination, neutralizeOperand } from "./neutralize.ts";
+import {
+	type MergedScan,
+	mergeScanOutcomes,
+	PatternSourceError,
+	type ScanOutcome,
+	scanBody,
+	scanExactBody,
+} from "./scan.ts";
 
 export interface PublishResult {
 	content: Array<{ type: "text"; text: string }>;
@@ -44,6 +51,13 @@ export async function performPublish(
 		record("refuse-repository", text);
 		return result(text, { disposition: "refuse-repository" });
 	}
+	const explicitRepository =
+		repository === undefined
+			? undefined
+			: {
+					host: Object.getOwnPropertyDescriptor(repository, "host")?.value as string,
+					nameWithOwner: Object.getOwnPropertyDescriptor(repository, "nameWithOwner")?.value as string,
+				};
 	const requestKeys =
 		typeof params === "object" && params !== null && !types.isProxy(params) ? Object.getOwnPropertyNames(params) : [];
 	const machine = requestKeys.includes("machineRecord");
@@ -73,36 +87,65 @@ export async function performPublish(
 			return result(text, { disposition: "refuse-machine-record" });
 		}
 		const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
-		let titleScan: ScanOutcome | undefined;
 		try {
-			const scans: ScanOutcome[] = [scanBody(admission.record.wireBody)];
+			type LocatedScan = {
+				operandClass: "wire" | "key" | "string" | "title";
+				index: number;
+				view: "wire" | "raw" | "decoded" | "title";
+				scan: ScanOutcome;
+			};
+			const scans: LocatedScan[] = [
+				{ operandClass: "wire", index: 0, view: "wire", scan: scanExactBody(admission.record.wireBody) },
+			];
 			for (const semantic of admission.record.semanticStrings) {
-				scans.push(scanBody(semantic));
-				const decoded = decodeEscapeView(semantic);
+				scans.push({ ...semantic, view: "raw", scan: scanExactBody(semantic.value) });
+				const decoded = decodeEscapeView(semantic.value);
 				if (!decoded.ok) {
 					const text = "publish refused: machine semantic escape view is not measurable";
 					record("refuse-out-of-domain", text);
-					return result(text, { disposition: "refuse-out-of-domain" });
+					return result(text, {
+						disposition: "refuse-out-of-domain",
+						operandClass: semantic.operandClass,
+						index: semantic.index,
+					});
 				}
-				scans.push(scanBody(decoded.value));
+				scans.push({ ...semantic, view: "decoded", scan: scanExactBody(decoded.value) });
 			}
-			titleScan = publishedTitle === undefined ? undefined : scanBody(publishedTitle);
-			const dirty = scans.find((scan) => scan.disposition !== "clean") ?? titleScan;
-			if (dirty?.disposition === "refuse-out-of-domain") {
+			if (publishedTitle !== undefined)
+				scans.push({ operandClass: "title", index: 0, view: "title", scan: scanBody(publishedTitle) });
+			const dirty = scans.find((entry) => entry.scan.disposition === "refuse-out-of-domain");
+			if (dirty !== undefined) {
 				const text = "publish refused: machine publication contains an unmeasurable operand";
 				record("refuse-out-of-domain", text);
-				return result(text, { disposition: "refuse-out-of-domain" });
+				return result(text, {
+					disposition: "refuse-out-of-domain",
+					operandClass: dirty.operandClass,
+					index: dirty.index,
+				});
 			}
-			const matches = scans.filter(
-				(scan): scan is Extract<ScanOutcome, { disposition: "refuse-match" }> => scan.disposition === "refuse-match",
+			const matches = scans.flatMap((entry) =>
+				entry.scan.disposition === "refuse-match"
+					? [
+							{
+								operandClass: entry.operandClass,
+								index: entry.index,
+								view: entry.view,
+								patternIds: entry.scan.patternIds,
+								lines: entry.scan.lines,
+							},
+						]
+					: [],
 			);
-			if (titleScan?.disposition === "refuse-match") matches.push(titleScan);
 			if (matches.length > 0) {
-				const patternIds = [...new Set(matches.flatMap((scan) => scan.patternIds))];
-				const lines = [...new Set(matches.flatMap((scan) => scan.lines))];
-				const text = `publish refused: disposition refuse-match; machine operands patterns ${patternIds.join(", ")} lines ${lines.join(", ")}`;
+				const located = matches
+					.map(
+						(match) =>
+							`${match.operandClass}[${match.index}]/${match.view} patterns ${match.patternIds.join(", ")} lines ${match.lines.join(", ")}`,
+					)
+					.join("; ");
+				const text = `publish refused: disposition refuse-match; ${located}`;
 				record("refuse-match", text);
-				return result(text, { disposition: "refuse-match", patternIds, lines });
+				return result(text, { disposition: "refuse-match", matches });
 			}
 		} catch (error) {
 			const cause = error instanceof PatternSourceError ? error.message : "the scan machinery failed before a verdict";
@@ -117,7 +160,7 @@ export async function performPublish(
 			return result(text, { disposition: "refuse-machine-neutralization" });
 		}
 		const neutralizedTitle = publishedTitle === undefined ? undefined : neutralizeOperand(publishedTitle);
-		const pinned = repository ?? resolvePublishRepository(repoRoot);
+		const pinned = explicitRepository ?? resolvePublishRepository(repoRoot);
 		if (pinned === undefined) {
 			const text = "publish refused: the repository could not be resolved and pinned before the send";
 			record("refuse-repository", text);
@@ -247,7 +290,7 @@ export async function performPublish(
 		return result(text, { disposition: "refuse-destination" });
 	}
 	const outcome = await runPublishChild(
-		ghPublishArgv(sendDestination, repository),
+		ghPublishArgv(sendDestination, explicitRepository),
 		neutralizedBody.text,
 		repoRoot,
 		spec.successShape,

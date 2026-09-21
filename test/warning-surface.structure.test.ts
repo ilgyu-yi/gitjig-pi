@@ -423,7 +423,6 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"stem",
 			"repository.nameWithOwner",
 			"commentId",
-			'surface[1] === "issues" ? "issues" : "pulls"',
 			"number",
 			"repository.host",
 			"apiRoot",
@@ -447,8 +446,13 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// Machine admission causes are a closed set of fixed literals; pattern
 			// IDs are format-checked tokens and line locators are numbers.
 			"admission.cause",
-			'patternIds.join(", ")',
-			'lines.join(", ")',
+			// Machine-match attribution: closed operand/view unions, numeric index
+			// and lines, and format-checked pattern identifiers only.
+			"match.operandClass",
+			"match.index",
+			"match.view",
+			'match.patternIds.join(", ")',
+			'match.lines.join(", ")',
 			// `outcome.url` is NOT here either. The comment-URL shape closes
 			// the LINE-FORGING half of this class — anchored at both ends,
 			// body class excluding whitespace — and leaves the rest: `[^\s]`

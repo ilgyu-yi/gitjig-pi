@@ -71,7 +71,7 @@
  *     is not read as strictly more containment than before.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { TextDecoder } from "node:util";
+import { TextDecoder, types } from "node:util";
 import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 import { canonicalJson, decodeWireBody, type JsonValue } from "./machine-record.ts";
 
@@ -179,18 +179,20 @@ export interface PublishRepository {
 }
 
 export function isPublishRepository(value: unknown): value is PublishRepository {
+	if (typeof value !== "object" || value === null || Array.isArray(value) || types.isProxy(value)) return false;
+	if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return false;
+	if (Object.getOwnPropertySymbols(value).length !== 0) return false;
+	const keys = Object.getOwnPropertyNames(value);
+	if (keys.length !== 2 || !keys.includes("host") || !keys.includes("nameWithOwner")) return false;
+	const host = Object.getOwnPropertyDescriptor(value, "host");
+	const name = Object.getOwnPropertyDescriptor(value, "nameWithOwner");
+	if (!host || !("value" in host) || !host.enumerable || !host.configurable || !host.writable) return false;
+	if (!name || !("value" in name) || !name.enumerable || !name.configurable || !name.writable) return false;
 	return (
-		typeof value === "object" &&
-		value !== null &&
-		!Array.isArray(value) &&
-		Object.keys(value).length === 2 &&
-		Object.keys(value).every((key) => key === "host" || key === "nameWithOwner") &&
-		typeof (value as { host?: unknown }).host === "string" &&
-		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
-			(value as { host: string }).host,
-		) &&
-		typeof (value as { nameWithOwner?: unknown }).nameWithOwner === "string" &&
-		/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test((value as { nameWithOwner: string }).nameWithOwner)
+		typeof host.value === "string" &&
+		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(host.value) &&
+		typeof name.value === "string" &&
+		/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(name.value)
 	);
 }
 
@@ -645,6 +647,8 @@ export async function runMachinePublish(
 	repository: PublishRepository,
 	abortSignal?: AbortSignal,
 ): Promise<MachinePublishOutcome> {
+	if (abortSignal?.aborted)
+		return { outcome: "refused", cause: "the request was aborted before the publishing child could start" };
 	const send = await runRawChild(ghPublishArgv(destination, repository), wireBody, repoRoot, 4096, abortSignal);
 	if (!send.spawned)
 		return {
@@ -655,13 +659,7 @@ export async function runMachinePublish(
 	if (locatorText === undefined) return { outcome: "outcome-unverified" };
 	const locator = parseMachineLocator(locatorText, destination, repository);
 	if (locator === undefined) return { outcome: "outcome-unverified" };
-	const read = await runRawChild(
-		["api", "--hostname", repository.host, locator.apiPath],
-		undefined,
-		repoRoot,
-		262_144,
-		abortSignal,
-	);
+	const read = await runRawChild(["api", "--hostname", repository.host, locator.apiPath], undefined, repoRoot, 262_144);
 	if (!read.spawned || read.code !== 0 || read.timedOut || read.stdout.length === 0)
 		return { outcome: "outcome-unverified" };
 	let payload: unknown;

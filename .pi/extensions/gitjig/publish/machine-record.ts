@@ -24,7 +24,7 @@ export interface AdmittedMachineRecord {
 	canonicalJson: string;
 	semanticBody: string;
 	wireBody: string;
-	semanticStrings: string[];
+	semanticStrings: Array<{ operandClass: "key" | "string"; index: number; value: string }>;
 }
 export type MachineAdmission = { ok: true; record: AdmittedMachineRecord } | { ok: false; cause: string };
 
@@ -88,7 +88,7 @@ function quote(value: string, wire: boolean): string {
 		else if (wire && code === 0x2d) out += "\\u002d";
 		else if (wire && code === 0x3a) out += "\\u003a";
 		else if (wire && code === 0x2f) out += "\\u002f";
-		else if (code <= 0x1f) out += `\\u${code.toString(16).padStart(4, "0")}`;
+		else if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) out += `\\u${code.toString(16).padStart(4, "0")}`;
 		else out += char;
 	}
 	return `${out}"`;
@@ -139,7 +139,10 @@ type CopyFrame = {
 	index: number;
 };
 
-function copyJson(value: unknown, strings: string[]): { ok: true; value: JsonValue } | { ok: false } {
+function copyJson(
+	value: unknown,
+	strings: Array<{ operandClass: "key" | "string"; index: number; value: string }>,
+): { ok: true; value: JsonValue } | { ok: false } {
 	const seen = new WeakSet<object>();
 	const inspect = (input: unknown): { ok: true; value: JsonValue; frame?: CopyFrame } | { ok: false } => {
 		if (input === null || typeof input === "boolean") return { ok: true, value: input };
@@ -147,7 +150,7 @@ function copyJson(value: unknown, strings: string[]): { ok: true; value: JsonVal
 			return Number.isSafeInteger(input) && !Object.is(input, -0) ? { ok: true, value: input } : { ok: false };
 		if (typeof input === "string") {
 			if (!scalarString(input)) return { ok: false };
-			strings.push(input);
+			strings.push({ operandClass: "string", index: strings.length, value: input });
 			return { ok: true, value: input };
 		}
 		if (typeof input !== "object" || types.isProxy(input) || seen.has(input)) return { ok: false };
@@ -211,7 +214,7 @@ function copyJson(value: unknown, strings: string[]): { ok: true; value: JsonVal
 			continue;
 		}
 		const entry = frame.entries[frame.index++];
-		if (!entry.array) strings.push(entry.key);
+		if (!entry.array) strings.push({ operandClass: "key", index: strings.length, value: entry.key });
 		const child = inspect(entry.value);
 		if (!child.ok) return child;
 		if (entry.array) (frame.output as JsonValue[]).push(child.value);
@@ -237,7 +240,7 @@ export function admitMachineRecord(value: unknown): MachineAdmission {
 	const marker = Object.getOwnPropertyDescriptor(value, "marker")?.value;
 	const raw = Object.getOwnPropertyDescriptor(value, "value")?.value;
 	if (!validMarker(marker)) return { ok: false, cause: "machine record marker is not admissible" };
-	const strings: string[] = [];
+	const strings: Array<{ operandClass: "key" | "string"; index: number; value: string }> = [];
 	const copied = copyJson(raw, strings);
 	if (!copied.ok) return { ok: false, cause: "machine record value is not admissible" };
 	const canonicalText = serialize(copied.value, false);
