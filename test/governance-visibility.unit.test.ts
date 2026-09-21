@@ -223,6 +223,14 @@ describe("Pi governance visibility transport", () => {
 		assert.equal(fallbackEnvelope.sha256, createHash("sha256").update(fallbackCanonical).digest("hex"));
 		assert.equal(waits, 1);
 		assert.equal(sendAttempts, 1);
+		await command?.("action=apply plan=unused", {
+			mode: "tui",
+			sessionManager: { isPersisted: () => false },
+			waitForIdle: async () => {
+				waits++;
+			},
+		});
+		assert.deepEqual(sent.at(-1)?.message.details, { outcome: "refused", arm: "pi-mode" });
 		throwSend = true;
 		await command?.("not-grammar", {
 			mode: "tui",
@@ -231,7 +239,7 @@ describe("Pi governance visibility transport", () => {
 				waits++;
 			},
 		});
-		assert.equal(sendAttempts, 2, "a synchronous send failure must not retry");
+		assert.equal(sendAttempts, 3, "a synchronous send failure must not retry");
 		throwSend = false;
 		const restored = JSON.parse(JSON.stringify(sent[0].message)) as Message;
 		const component = renderer?.(restored, { outputPad: 0 }, {});
@@ -337,17 +345,19 @@ describe("Pi governance visibility transport", () => {
 			};
 			await command?.("action=plan", context);
 			await command?.("action=audit", context);
+			context.mode = "rpc";
+			await command?.("action=plan", context);
+			await command?.("action=audit", context);
 			context.mode = "tui";
 			context.sessionManager = { isPersisted: () => true };
 			await command?.(`action=apply plan=${planPath}`, context);
 			const presentation = sent.at(-1)?.details;
-			await command?.(
-				`action=apply plan=${planPath} attempt=${presentation?.attemptId} confirm=${encodeURIComponent(String(presentation?.confirmation))}`,
-				context,
-			);
+			const confirmationCall = `action=apply plan=${planPath} attempt=${presentation?.attemptId} confirm=${encodeURIComponent(String(presentation?.confirmation))}`;
+			await command?.(confirmationCall, context);
+			await command?.(confirmationCall, context);
 			assert.deepEqual(
 				sent.map((message) => message.details.outcome),
-				["planned", "audited", "presented", "applied"],
+				["planned", "audited", "planned", "audited", "presented", "applied", "refused"],
 			);
 			assert.deepEqual(JSON.parse(JSON.stringify(sent)), sent);
 		} finally {
