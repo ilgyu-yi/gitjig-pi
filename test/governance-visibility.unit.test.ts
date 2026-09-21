@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
 	CAPABILITIES,
 	canonicalJson,
@@ -120,6 +120,57 @@ describe("Pi governance visibility transport", () => {
 		const display = asciiGovernanceJson(record);
 		assert.match(display, /^[\x20-\x7e]+$/);
 		assert.deepEqual(JSON.parse(display), record);
+	});
+
+	it("round-trips the exact custom message through the installed Pi session manager", () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-real-pi-session-"));
+		try {
+			const manager = SessionManager.create(root, root);
+			const record = { outcome: "refused", arm: "pi-mode" };
+			const message = governanceMessage(record, canonicalJson);
+			manager.appendCustomMessageEntry(message.customType, message.content, message.display, message.details);
+			manager.appendMessage({
+				role: "assistant",
+				content: [],
+				api: "test",
+				provider: "test",
+				model: "test",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "stop",
+				timestamp: Date.now(),
+			});
+			const file = manager.getSessionFile();
+			assert.ok(file);
+			const restored = SessionManager.open(file, root, root);
+			const context = restored.buildSessionContext();
+			const entry = restored.getEntries().find((candidate) => candidate.type === "custom_message") as {
+				type: string;
+				customType: string;
+				content: string;
+				display: boolean;
+				details: unknown;
+			};
+			assert.equal(entry.type, "custom_message");
+			assert.deepEqual(
+				{ customType: entry.customType, content: entry.content, display: entry.display, details: entry.details },
+				message,
+			);
+			assert.ok(
+				context.messages.some(
+					(candidate) =>
+						candidate.role === "custom" && JSON.stringify(candidate.content).includes("GITJIG GOVERNANCE DATA"),
+				),
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("registers one renderer/message path and emits a visible refusal in print mode", async () => {
