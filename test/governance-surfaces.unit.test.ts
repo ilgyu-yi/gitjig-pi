@@ -81,6 +81,7 @@ describe("shared governance apply service", () => {
 				"headless",
 			),
 		);
+		assert.throws(() => confirmationPresentation("foreign/repository", plan), /confirmation-mismatch/);
 	});
 
 	it("binds confirmation and performs compare/write/post-read/final audit", async () => {
@@ -574,6 +575,13 @@ describe("local configure and complete platform reads", () => {
 		});
 
 		put = undefined;
+		assert.deepEqual(
+			await platform.writeOperation({ capability: "requiredApprovingReviews", before: 0, after: 1 }, live),
+			{ outcome: "acknowledged" },
+		);
+		assert.equal((put as { body: PutBody } | undefined)?.body.name, liveName);
+
+		put = undefined;
 		const stale = structuredClone(live);
 		stale.repository.defaultBranchSha = "d".repeat(40);
 		assert.deepEqual(await platform.writeOperation(operation, stale), {
@@ -648,6 +656,35 @@ describe("local configure and complete platform reads", () => {
 			throw new Error(`unexpected ${path}`);
 		};
 		await assert.rejects(createGovernancePlatform(config, driftRequest).readMeasured(), /default-head-drift/);
+
+		let overlongPages = 0;
+		const overlongRequest = async (_method: string, path: string) => {
+			if (path.includes("/git/ref/heads/"))
+				return {
+					ref: `refs/heads/${config.repository.defaultBranch}`,
+					object: { type: "commit", sha: "f".repeat(40) },
+				};
+			if (path === `repos/${config.repository.nameWithOwner}`)
+				return {
+					node_id: config.repository.id,
+					full_name: config.repository.nameWithOwner,
+					default_branch: config.repository.defaultBranch,
+					allow_merge_commit: true,
+					allow_squash_merge: false,
+					allow_rebase_merge: false,
+				};
+			if (path.includes("per_page=100")) {
+				overlongPages++;
+				return Array.from({ length: 101 }, (_, index) => ({
+					id: index + 1,
+					name: `overlong-${index}`,
+					source_type: "Repository",
+				}));
+			}
+			throw new Error(`unexpected ${path}`);
+		};
+		await assert.rejects(createGovernancePlatform(config, overlongRequest).readMeasured(), /pagination-shape/);
+		assert.equal(overlongPages, 1);
 
 		let pages = 0;
 		const capRequest = async (_method: string, path: string) => {
@@ -743,6 +780,14 @@ describe("local configure and complete platform reads", () => {
 				source: "foreign/repository",
 			}).readMeasured(),
 			/ruleset-source/,
+		);
+		const parserInvalid = platformFor([{ id: 7, name: "live", source_type: "Repository" }], {
+			...baseDetail,
+			conditions: { ref_name: { include: ["duplicate", "duplicate"], exclude: [] } },
+		});
+		assert.deepEqual(
+			await parserInvalid.writeOperation({ capability: "mergeCommits", before: true, after: false }, measured()),
+			{ outcome: "refused", arm: "compare-read-invalid", current: null },
 		);
 	});
 

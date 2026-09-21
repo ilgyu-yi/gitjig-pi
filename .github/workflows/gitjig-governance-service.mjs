@@ -138,6 +138,7 @@ export function createGovernanceService() {
 /** @param {string} repository @param {unknown} plan */
 export function confirmationPresentation(repository, plan) {
 	const candidate = admittedPlan(plan);
+	if (repository !== candidate.repository.nameWithOwner) throw new GovernanceServiceRefusal("confirmation-mismatch");
 	return {
 		repository,
 		configDigest: candidate.configDigest,

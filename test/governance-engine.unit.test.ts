@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
 	auditGovernance,
 	CAPABILITIES,
+	canonicalJson,
 	GovernanceRefusal,
 	parseGovernanceConfig,
 	parseGovernancePlan,
@@ -161,6 +163,11 @@ describe("pure governance planner and auditor", () => {
 		const dishonestHash = structuredClone(plan);
 		dishonestHash.measured.repository.defaultBranchSha = "b".repeat(40);
 		assert.throws(() => parseGovernancePlan(dishonestHash), /plan-hash/);
+		const foreign = structuredClone(plan);
+		foreign.measured.rulesets[0].source = "foreign/repository";
+		const { planHash: _hash, authorized: _authorized, ...basis } = foreign;
+		foreign.planHash = createHash("sha256").update(canonicalJson(basis)).digest("hex");
+		assert.throws(() => parseGovernancePlan(foreign), /plan-schema/);
 	});
 
 	it("is byte-deterministic and binds config, repository and complete live basis", () => {
@@ -221,18 +228,32 @@ describe("pure governance planner and auditor", () => {
 			after: { name: config.ruleset.name, target: "branch", include: ["~DEFAULT_BRANCH"], exclude: [] },
 		});
 		const transitioned = transitionMeasuredGovernance(wrongName, plan.operations[0]);
-		assert.equal(transitioned.rulesets[0].name, config.ruleset.name);
-		assert.equal(transitioned.capabilities.extraApprovalForUnattributedChanges, true);
+		const expected = structuredClone(wrongName);
+		expected.rulesets[0].name = config.ruleset.name;
+		assert.deepEqual(transitioned, expected);
 		const audit = auditGovernance(config, wrongName);
-		assert.deepEqual(audit.identity.stable, {
-			id: 1,
-			sourceType: "Repository",
-			source: repository.nameWithOwner,
+		assert.deepEqual(audit.identity, {
+			stable: { id: 1, sourceType: "Repository", source: repository.nameWithOwner },
+			desired: {
+				name: config.ruleset.name,
+				target: "branch",
+				include: ["~DEFAULT_BRANCH"],
+				exclude: [],
+			},
+			observed: { name: "other", target: "branch", include: ["~DEFAULT_BRANCH"], exclude: [] },
+			compliant: false,
 		});
-		assert.equal(audit.identity.compliant, false);
 		const malformed = structuredClone(plan.operations[0]) as Record<string, unknown>;
 		malformed.surprise = true;
 		assert.throws(() => transitionMeasuredGovernance(wrongName, malformed), /operation-schema/);
+		for (const stable of [
+			{ id: 2, sourceType: "Repository", source: repository.nameWithOwner },
+			{ id: 1, sourceType: "Repository", source: "foreign/repository" },
+		]) {
+			const replaced = structuredClone(plan.operations[0]);
+			replaced.stable = stable;
+			assert.throws(() => transitionMeasuredGovernance(wrongName, replaced), /operation-before/);
+		}
 	});
 
 	it("binds head movement and derives rule-type companion transitions", () => {

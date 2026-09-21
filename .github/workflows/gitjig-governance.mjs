@@ -521,7 +521,12 @@ export function parseGovernancePlan(input) {
 		throw new GovernanceRefusal("plan-schema");
 	const measured = parseMeasuredGovernance(plan.measured);
 	const { defaultBranchSha: _sha, ...measuredRepository } = measured.repository;
-	if (canonicalJson(measuredRepository) !== canonicalJson(plan.repository)) throw new GovernanceRefusal("plan-schema");
+	if (
+		canonicalJson(measuredRepository) !== canonicalJson(plan.repository) ||
+		measured.rulesets[0].sourceType !== "Repository" ||
+		measured.rulesets[0].source !== plan.repository.nameWithOwner
+	)
+		throw new GovernanceRefusal("plan-schema");
 	const operations = plan.operations.map(parseOperation);
 	let expected = measured;
 	for (const operation of operations) expected = transitionMeasuredGovernance(expected, operation);

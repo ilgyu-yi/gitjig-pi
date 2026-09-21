@@ -1,6 +1,7 @@
 import {
 	CAPABILITIES,
 	canonicalJson,
+	GovernanceRefusal,
 	parseGovernanceConfig,
 	parseMeasuredGovernance,
 	transitionMeasuredGovernance,
@@ -28,7 +29,7 @@ async function pages(request, path) {
 	for (let page = 1; page <= 100; page++) {
 		const separator = path.includes("?") ? "&" : "?";
 		const value = await request("GET", `${path}${separator}per_page=100&page=${page}`);
-		if (!Array.isArray(value)) throw new GovernancePlatformRefusal("pagination-shape");
+		if (!Array.isArray(value) || value.length > 100) throw new GovernancePlatformRefusal("pagination-shape");
 		out.push(...value);
 		if (value.length < 100) return out;
 	}
@@ -245,7 +246,10 @@ export function createGovernancePlatform(configInput, request) {
 		} catch (error) {
 			return {
 				outcome: /** @type {const} */ ("refused"),
-				arm: error instanceof GovernancePlatformRefusal ? "compare-read-invalid" : "compare-read-unavailable",
+				arm:
+					error instanceof GovernancePlatformRefusal || error instanceof GovernanceRefusal
+						? "compare-read-invalid"
+						: "compare-read-unavailable",
 				current: null,
 			};
 		}
