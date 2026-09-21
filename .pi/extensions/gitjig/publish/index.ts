@@ -50,32 +50,46 @@ import { performPublish } from "./service.ts";
 /** The tool name §3.3's egress row records, verbatim. */
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
 
-const PublishParams = Type.Object({
-	body: Type.Optional(
-		Type.String({ description: "Ordinary prose to publish; exactly one of body or machineRecord is required." }),
+const DestinationParams = Type.Union(
+	PUBLISH_DESTINATION_KINDS.map((kind) =>
+		kind.endsWith("create")
+			? Type.Object({ kind: Type.Literal(kind), title: Type.String({ minLength: 1 }) }, { additionalProperties: false })
+			: Type.Object(
+					{ kind: Type.Literal(kind), number: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) },
+					{ additionalProperties: false },
+				),
 	),
-	machineRecord: Type.Optional(
-		Type.Object({
-			marker: Type.String({ description: "The admitted ASCII machine-record marker." }),
-			value: Type.Unknown({ description: "A value in the closed recursive JSON domain." }),
-		}),
+);
+const JsonValueParams = Type.Union([
+	Type.Null(),
+	Type.Boolean(),
+	Type.Integer({ minimum: Number.MIN_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER }),
+	Type.String(),
+	Type.Array(Type.Unknown()),
+	Type.Record(Type.String(), Type.Unknown()),
+]);
+const PublishParams = Type.Union([
+	Type.Object(
+		{
+			body: Type.String({ description: "Ordinary prose, scanned and neutralized before one send." }),
+			destination: DestinationParams,
+		},
+		{ additionalProperties: false },
 	),
-	destination: Type.Object({
-		kind: Type.Union(PUBLISH_DESTINATION_KINDS.map((kind) => Type.Literal(kind))),
-		number: Type.Optional(
-			Type.Number({
-				description: "The issue or pull request number acted on. Required for the comment and body kinds.",
-			}),
-		),
-		title: Type.Optional(
-			Type.String({
-				description:
-					"The title of the issue or pull request being created. Required for the create kinds, and " +
-					"scanned as published text in its own right.",
-			}),
-		),
-	}),
-});
+	Type.Object(
+		{
+			machineRecord: Type.Object(
+				{
+					marker: Type.String({ maxLength: 256, description: "The admitted ASCII machine-record marker." }),
+					value: JsonValueParams,
+				},
+				{ additionalProperties: false },
+			),
+			destination: DestinationParams,
+		},
+		{ additionalProperties: false },
+	),
+]);
 
 export function publishTarget(args: unknown): string {
 	const destination =

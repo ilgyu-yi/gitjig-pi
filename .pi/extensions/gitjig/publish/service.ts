@@ -7,6 +7,7 @@ import {
 	isPublishDestination,
 	isPublishRepository,
 	kindCarriesTitle,
+	type PublishDestination,
 	type PublishRepository,
 	resolvePublishRepository,
 	runMachinePublish,
@@ -79,6 +80,9 @@ export async function performPublish(
 		record("refuse-destination", text);
 		return result(text, { disposition: "refuse-destination" });
 	}
+	const pinnedDestination: PublishDestination = kindCarriesTitle(destination.kind)
+		? { kind: destination.kind, title: Object.getOwnPropertyDescriptor(destination, "title")?.value as string }
+		: { kind: destination.kind, number: Object.getOwnPropertyDescriptor(destination, "number")?.value as number };
 	if (machine) {
 		const admission = admitMachineRecord(Object.getOwnPropertyDescriptor(params, "machineRecord")?.value);
 		if (!admission.ok) {
@@ -86,7 +90,7 @@ export async function performPublish(
 			record("refuse-machine-record", text);
 			return result(text, { disposition: "refuse-machine-record" });
 		}
-		const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
+		const publishedTitle = kindCarriesTitle(pinnedDestination.kind) ? pinnedDestination.title : undefined;
 		try {
 			type LocatedScan = {
 				operandClass: "wire" | "key" | "string" | "title";
@@ -167,7 +171,7 @@ export async function performPublish(
 			return result(text, { disposition: "refuse-repository" });
 		}
 		const sendDestination =
-			neutralizedTitle === undefined ? destination : { ...destination, title: neutralizedTitle.text };
+			neutralizedTitle === undefined ? pinnedDestination : { ...pinnedDestination, title: neutralizedTitle.text };
 		const outcome = await runMachinePublish(
 			sendDestination,
 			admission.record.wireBody,
@@ -208,7 +212,7 @@ export async function performPublish(
 	// whatever the caller happened to pass: a title on a comment kind is
 	// dropped by the argv builder and never publishes, so scanning it
 	// would refuse a send over text that was never going anywhere.
-	const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
+	const publishedTitle = kindCarriesTitle(pinnedDestination.kind) ? pinnedDestination.title : undefined;
 
 	let merged: MergedScan;
 	try {
@@ -275,15 +279,15 @@ export async function performPublish(
 	// the unexempted face, because §1.1 fixes a grammar for a
 	// description's first line and for no other field (§3.3, issue #129).
 	const neutralizedTitle = publishedTitle === undefined ? undefined : neutralizeOperand(publishedTitle);
-	const neutralizedBody = neutralizeForDestination(body, destination.kind);
+	const neutralizedBody = neutralizeForDestination(body, pinnedDestination.kind);
 	const sendDestination =
-		neutralizedTitle !== undefined ? { ...destination, title: neutralizedTitle.text } : destination;
+		neutralizedTitle !== undefined ? { ...pinnedDestination, title: neutralizedTitle.text } : pinnedDestination;
 	// The success shape is this kind's own: only the comment verbs print
 	// a comment url, so validating every kind against that shape made a
 	// successful create or body edit report outcome-unverified — which
 	// invites a retry, and a retried create mints a SECOND public
 	// surface (§3.10's output-validity rule, §5.6's direction).
-	const spec = specForKind(destination.kind);
+	const spec = specForKind(pinnedDestination.kind);
 	if (spec === undefined) {
 		const text = "publish refused: the destination is not an admissible structured target";
 		record("refuse-destination", text);

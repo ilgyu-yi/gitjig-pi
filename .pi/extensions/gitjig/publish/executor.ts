@@ -464,6 +464,7 @@ function runRawChild(
 ): Promise<RawChildResult> {
 	return new Promise((resolve) => {
 		let settled = false;
+		let didSpawn = false;
 		let timedOut = false;
 		let overflow = false;
 		const chunks: Buffer[] = [];
@@ -507,8 +508,11 @@ function runRawChild(
 		}, CHILD_TIMEOUT_MS);
 		abortSignal?.addEventListener("abort", onAbort, { once: true });
 		if (abortSignal?.aborted) onAbort();
+		child.on("spawn", () => {
+			didSpawn = true;
+		});
 		child.on("error", () =>
-			settle({ spawned: false, code: null, signal: null, timedOut: false, stdout: Buffer.alloc(0) }),
+			settle({ spawned: didSpawn, code: null, signal: null, timedOut: false, stdout: Buffer.alloc(0) }),
 		);
 		child.stdout.on("data", (chunk: Buffer) => {
 			bytes += chunk.length;

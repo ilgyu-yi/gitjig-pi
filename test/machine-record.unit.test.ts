@@ -102,6 +102,7 @@ describe("machine publication transport", () => {
 		const bodyFile = join(root, "body");
 		const callsFile = join(root, "calls");
 		const metaFile = join(root, "meta");
+		const apiArgsFile = join(root, "api-args");
 		const shim = join(bin, "gh");
 		await writeFile(
 			shim,
@@ -109,11 +110,12 @@ describe("machine publication transport", () => {
 const fs=require("fs"),args=process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS,(args[0]==="api"?"get":"send")+"\\n");
 if(args[0]==="api"){
+ fs.writeFileSync(process.env.APIARGS,args.join(" "));
  const m=JSON.parse(fs.readFileSync(process.env.META,"utf8")),body=process.env.MISMATCH?"wrong":fs.readFileSync(process.env.BODY,"utf8");
- const p={id:m.comment?8:99,html_url:m.url,body};if(!process.env.OMIT_NUMBER)p.number=m.number;
- if(m.comment)p.issue_url="https://api.github.com/repos/o/r/issues/"+m.number;
- else if(m.noun==="pr")p.base={repo:{full_name:"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url="https://api.github.com/repos/o/r";
- if(m.verb==="create")p.title=m.title;
+ const p={id:process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body};if(!process.env.OMIT_NUMBER)p.number=m.number;
+ if(m.comment)p.issue_url=process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
+ else if(m.noun==="pr")p.base={repo:{full_name:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url="https://api.github.com/repos/o/r";
+ if(m.verb==="create")p.title=process.env.WRONG_TITLE?"wrong":m.title;
  process.stdout.write(JSON.stringify(p));
 }else{
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
@@ -132,6 +134,12 @@ if(args[0]==="api"){
 			BAD: process.env.BAD,
 			FAIL: process.env.FAIL,
 			MISMATCH: process.env.MISMATCH,
+			APIARGS: process.env.APIARGS,
+			WRONG_ID: process.env.WRONG_ID,
+			WRONG_HTML: process.env.WRONG_HTML,
+			WRONG_PARENT: process.env.WRONG_PARENT,
+			WRONG_BASE: process.env.WRONG_BASE,
+			WRONG_TITLE: process.env.WRONG_TITLE,
 			LOCATOR: process.env.LOCATOR,
 			OMIT_NUMBER: process.env.OMIT_NUMBER,
 			OMIT_REPO: process.env.OMIT_REPO,
@@ -139,7 +147,13 @@ if(args[0]==="api"){
 			HOLD: process.env.HOLD,
 			NO_LF: process.env.NO_LF,
 		};
-		Object.assign(process.env, { PATH: `${bin}:${prior.PATH}`, BODY: bodyFile, CALLS: callsFile, META: metaFile });
+		Object.assign(process.env, {
+			PATH: `${bin}:${prior.PATH}`,
+			BODY: bodyFile,
+			CALLS: callsFile,
+			META: metaFile,
+			APIARGS: apiArgsFile,
+		});
 		try {
 			await writeFile(callsFile, "");
 			for (const malformed of [
@@ -202,6 +216,20 @@ if(args[0]==="api"){
 			);
 			assert.equal(oneView.details.disposition, "published", "semantic strings receive exactly one decode view");
 
+			const mutableDestination = { kind: "issue-comment", number: 7 };
+			const mutationProof = performPublish(
+				{ machineRecord: { marker: MARKER, value: null }, destination: mutableDestination },
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			mutableDestination.number = 99;
+			assert.equal(
+				(await mutationProof).details.disposition,
+				"published",
+				"destination identity is snapshotted before spawn",
+			);
+
 			const destinations = [
 				{ kind: "issue-comment", number: 7 },
 				{ kind: "pr-comment", number: 7 },
@@ -223,6 +251,12 @@ if(args[0]==="api"){
 				assert.equal(result.details.disposition, "published", destination.kind);
 				assert.equal(result.details.verified, true, destination.kind);
 				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+				const expectedPath = destination.kind.endsWith("comment")
+					? "/repos/o/r/issues/comments/8"
+					: destination.kind.startsWith("issue")
+						? "/repos/o/r/issues/7"
+						: "/repos/o/r/pulls/7";
+				assert.equal(await readFile(apiArgsFile, "utf8"), `api --hostname github.com ${expectedPath}`);
 			}
 			const wire = await readFile(bodyFile, "utf8");
 			assert.doesNotMatch(wire, /https:\/\//);
@@ -280,6 +314,26 @@ if(args[0]==="api"){
 				delete process.env[variable];
 			}
 
+			for (const [variable, destination] of [
+				["WRONG_ID", { kind: "issue-comment", number: 7 }],
+				["WRONG_HTML", { kind: "issue-body", number: 7 }],
+				["WRONG_PARENT", { kind: "pr-comment", number: 7 }],
+				["WRONG_BASE", { kind: "pr-body", number: 7 }],
+				["WRONG_TITLE", { kind: "pr-create", title: "Machine title" }],
+			] as const) {
+				await writeFile(callsFile, "");
+				process.env[variable] = "1";
+				const mismatch = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(mismatch.details.disposition, "outcome-unverified", variable);
+				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+				delete process.env[variable];
+			}
+
 			for (const locator of [
 				"https://github.com:443/o/r/issues/7#issuecomment-8",
 				"https://github.com/o/r/x/../issues/7#issuecomment-8",
@@ -325,6 +379,23 @@ if(args[0]==="api"){
 			assert.equal(stopped.details.disposition, "refuse-delegated");
 			assert.equal(await readFile(callsFile, "utf8"), "");
 
+			process.env.DELAY = "1";
+			const noLocatorController = new AbortController();
+			const noLocatorPending = performPublish(
+				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+				noLocatorController.signal,
+			);
+			for (let attempt = 0; attempt < 100 && !(await readFile(callsFile, "utf8")).includes("send"); attempt += 1)
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			noLocatorController.abort();
+			assert.equal((await noLocatorPending).details.disposition, "outcome-unverified");
+			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
+			delete process.env.DELAY;
+
+			await writeFile(callsFile, "");
 			process.env.HOLD = "1";
 			const controller = new AbortController();
 			const pending = performPublish(
