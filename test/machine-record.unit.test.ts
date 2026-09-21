@@ -130,7 +130,7 @@ if(args[0]==="api"){
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
  const title=verb==="create"?args[args.indexOf("--title")+1]:undefined;
  const path=noun==="issue"?"issues":"pull",url="https://github.com/o/r/"+path+"/"+number+(comment?"#issuecomment-8":"");
- const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
+ const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
 }
 `,
 		);
@@ -158,6 +158,7 @@ if(args[0]==="api"){
 			DELAY: process.env.DELAY,
 			HOLD: process.env.HOLD,
 			NO_LF: process.env.NO_LF,
+			BOM: process.env.BOM,
 		};
 		Object.assign(process.env, {
 			PATH: `${bin}:${prior.PATH}`,
@@ -399,6 +400,18 @@ if(args[0]==="api"){
 			assert.equal(noLf.details.disposition, "outcome-unverified");
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
 			delete process.env.NO_LF;
+
+			await writeFile(callsFile, "");
+			process.env.BOM = "1";
+			const bom = await performPublish(
+				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			assert.equal(bom.details.disposition, "outcome-unverified");
+			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
+			delete process.env.BOM;
 
 			await writeFile(callsFile, "");
 			process.env.GET_FAIL = "1";

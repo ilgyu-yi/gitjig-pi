@@ -528,7 +528,13 @@ function runRawChild(
 }
 
 function strictLocator(bytes: Buffer): string | undefined {
-	if (bytes.length === 0 || bytes.length > 4096 || bytes[bytes.length - 1] !== 0x0a) return undefined;
+	if (
+		bytes.length === 0 ||
+		bytes.length > 4096 ||
+		bytes[bytes.length - 1] !== 0x0a ||
+		(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+	)
+		return undefined;
 	let text: string;
 	try {
 		text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
