@@ -1,4 +1,5 @@
 /** Shared egress-publish predicate used by the registered tool and review-round. */
+import { types } from "node:util";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import {
@@ -33,16 +34,18 @@ export async function performPublish(
 	repoRoot: string,
 	stateRoot: string,
 	repository?: PublishRepository,
+	abortSignal?: AbortSignal,
 ): Promise<PublishResult> {
 	const record = (action: string, text: string): void => {
 		appendAuditRecord(stateRoot, { category: "egress", action, text });
 	};
-	if (repository !== undefined && !isPublishRepository(repository)) {
+	if (repository !== undefined && (types.isProxy(repository) || !isPublishRepository(repository))) {
 		const text = "publish refused: the explicit repository is not admissible";
 		record("refuse-repository", text);
 		return result(text, { disposition: "refuse-repository" });
 	}
-	const requestKeys = typeof params === "object" && params !== null ? Object.getOwnPropertyNames(params) : [];
+	const requestKeys =
+		typeof params === "object" && params !== null && !types.isProxy(params) ? Object.getOwnPropertyNames(params) : [];
 	const machine = requestKeys.includes("machineRecord");
 	const expectedKeys = machine ? ["machineRecord", "destination"] : ["body", "destination"];
 	if (!isClosedDataRecord(params, expectedKeys)) {
@@ -52,7 +55,7 @@ export async function performPublish(
 	}
 	const destination: unknown = Object.getOwnPropertyDescriptor(params, "destination")?.value;
 	const destinationKind =
-		typeof destination === "object" && destination !== null
+		typeof destination === "object" && destination !== null && !types.isProxy(destination)
 			? Object.getOwnPropertyDescriptor(destination, "kind")?.value
 			: undefined;
 	const destinationKeys =
@@ -130,6 +133,7 @@ export async function performPublish(
 			neutralizedTitle?.text,
 			repoRoot,
 			pinned,
+			abortSignal,
 		);
 		if (outcome.outcome === "published") {
 			const neutralized = neutralizedTitle?.neutralized ?? 0;

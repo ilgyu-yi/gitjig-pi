@@ -417,6 +417,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// warning text; escaping them would corrupt the protocol identity.
 			"escaped(owner)",
 			"escaped(name)",
+			"escaped(repository.host)",
+			"surface",
+			'surface === "issues" ? "issues" : "pulls"',
 			"stem",
 			"repository.nameWithOwner",
 			"commentId",

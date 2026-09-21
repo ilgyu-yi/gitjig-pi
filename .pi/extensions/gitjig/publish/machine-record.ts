@@ -3,6 +3,7 @@
  * Warning-surface roster: EXEMPT — this module returns protocol bytes and fixed admission causes; it emits no operator warning or diagnostic surface.
  */
 import { Buffer } from "node:buffer";
+import { types } from "node:util";
 
 const MAX_BODY_BYTES = 65_536;
 const MAX_MARKER_BYTES = 256;
@@ -28,7 +29,7 @@ export interface AdmittedMachineRecord {
 export type MachineAdmission = { ok: true; record: AdmittedMachineRecord } | { ok: false; cause: string };
 
 function ownDataRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	if (typeof value !== "object" || value === null || Array.isArray(value) || types.isProxy(value)) return false;
 	const proto = Object.getPrototypeOf(value);
 	if (proto !== Object.prototype && proto !== null) return false;
 	if (Object.getOwnPropertySymbols(value).length !== 0) return false;
@@ -48,7 +49,11 @@ function ownDataRecord(value: unknown, keys: readonly string[]): value is Record
 }
 
 export function isClosedDataRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-	return ownDataRecord(value, keys);
+	try {
+		return ownDataRecord(value, keys);
+	} catch {
+		return false;
+	}
 }
 
 function scalarString(value: string): boolean {
@@ -90,53 +95,99 @@ function quote(value: string, wire: boolean): string {
 }
 
 function serialize(value: JsonValue, wire: boolean): string {
-	if (value === null) return "null";
-	if (typeof value === "boolean") return value ? "true" : "false";
-	if (typeof value === "number") return String(value);
-	if (typeof value === "string") return quote(value, wire);
-	if (Array.isArray(value)) return `[${value.map((item) => serialize(item, wire)).join(",")}]`;
-	const keys = Object.keys(value).sort(compareScalars);
-	return `{${keys.map((key) => `${quote(key, wire)}:${serialize(value[key], wire)}`).join(",")}}`;
+	type Token = { kind: "value"; value: JsonValue } | { kind: "text"; text: string };
+	const output: string[] = [];
+	const stack: Token[] = [{ kind: "value", value }];
+	while (stack.length > 0) {
+		const token = stack.pop() as Token;
+		if (token.kind === "text") {
+			output.push(token.text);
+			continue;
+		}
+		const current = token.value;
+		if (current === null) output.push("null");
+		else if (typeof current === "boolean") output.push(current ? "true" : "false");
+		else if (typeof current === "number") output.push(String(current));
+		else if (typeof current === "string") output.push(quote(current, wire));
+		else if (Array.isArray(current)) {
+			output.push("[");
+			stack.push({ kind: "text", text: "]" });
+			for (let index = current.length - 1; index >= 0; index -= 1) {
+				stack.push({ kind: "value", value: current[index] });
+				if (index > 0) stack.push({ kind: "text", text: "," });
+			}
+		} else {
+			output.push("{");
+			stack.push({ kind: "text", text: "}" });
+			const keys = Object.keys(current).sort(compareScalars);
+			for (let index = keys.length - 1; index >= 0; index -= 1) {
+				const key = keys[index];
+				stack.push({ kind: "value", value: current[key] });
+				stack.push({ kind: "text", text: ":" });
+				stack.push({ kind: "text", text: quote(key, wire) });
+				if (index > 0) stack.push({ kind: "text", text: "," });
+			}
+		}
+	}
+	return output.join("");
 }
 
-function copyJson(
-	value: unknown,
-	seen: WeakSet<object>,
-	strings: string[],
-): { ok: true; value: JsonValue } | { ok: false } {
-	if (value === null || typeof value === "boolean") return { ok: true, value };
-	if (typeof value === "number") {
-		return Number.isSafeInteger(value) && !Object.is(value, -0) ? { ok: true, value } : { ok: false };
-	}
-	if (typeof value === "string") {
-		if (!scalarString(value)) return { ok: false };
-		strings.push(value);
-		return { ok: true, value };
-	}
-	if (typeof value !== "object") return { ok: false };
-	if (seen.has(value)) return { ok: false };
-	seen.add(value);
-	if (Array.isArray(value)) {
-		if (Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertySymbols(value).length !== 0)
+type CopyFrame = {
+	input: object;
+	output: JsonValue[] | Record<string, JsonValue>;
+	entries: Array<{ key: string; value: unknown; array: boolean }>;
+	index: number;
+};
+
+function copyJson(value: unknown, strings: string[]): { ok: true; value: JsonValue } | { ok: false } {
+	const seen = new WeakSet<object>();
+	const inspect = (input: unknown): { ok: true; value: JsonValue; frame?: CopyFrame } | { ok: false } => {
+		if (input === null || typeof input === "boolean") return { ok: true, value: input };
+		if (typeof input === "number")
+			return Number.isSafeInteger(input) && !Object.is(input, -0) ? { ok: true, value: input } : { ok: false };
+		if (typeof input === "string") {
+			if (!scalarString(input)) return { ok: false };
+			strings.push(input);
+			return { ok: true, value: input };
+		}
+		if (typeof input !== "object" || types.isProxy(input) || seen.has(input)) return { ok: false };
+		seen.add(input);
+		if (Array.isArray(input)) {
+			if (Object.getPrototypeOf(input) !== Array.prototype || Object.getOwnPropertySymbols(input).length !== 0)
+				return { ok: false };
+			for (const key in input) if (!Object.hasOwn(input, key)) return { ok: false };
+			const length = Object.getOwnPropertyDescriptor(input, "length");
+			if (!length || !("value" in length) || length.enumerable || length.configurable || !length.writable)
+				return { ok: false };
+			const names = Object.getOwnPropertyNames(input);
+			if (names.length !== input.length + 1 || !names.includes("length")) return { ok: false };
+			const entries: CopyFrame["entries"] = [];
+			for (let index = 0; index < input.length; index += 1) {
+				const key = String(index),
+					descriptor = Object.getOwnPropertyDescriptor(input, key);
+				if (
+					!INDEX.test(key) ||
+					!descriptor ||
+					!("value" in descriptor) ||
+					!descriptor.enumerable ||
+					!descriptor.configurable ||
+					!descriptor.writable
+				)
+					return { ok: false };
+				entries.push({ key, value: descriptor.value, array: true });
+			}
+			const output: JsonValue[] = [];
+			return { ok: true, value: output, frame: { input, output, entries, index: 0 } };
+		}
+		const proto = Object.getPrototypeOf(input);
+		if ((proto !== Object.prototype && proto !== null) || Object.getOwnPropertySymbols(input).length !== 0)
 			return { ok: false };
-		for (const key in value) if (!Object.hasOwn(value, key)) return { ok: false };
-		const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
-		if (
-			!lengthDescriptor ||
-			!("value" in lengthDescriptor) ||
-			lengthDescriptor.enumerable ||
-			lengthDescriptor.configurable ||
-			lengthDescriptor.writable !== true
-		)
-			return { ok: false };
-		const names = Object.getOwnPropertyNames(value);
-		if (names.length !== value.length + 1 || !names.includes("length")) return { ok: false };
-		const result: JsonValue[] = [];
-		for (let index = 0; index < value.length; index += 1) {
-			const name = String(index);
-			if (!INDEX.test(name) || !Object.hasOwn(value, name)) return { ok: false };
-			const descriptor = Object.getOwnPropertyDescriptor(value, name);
+		for (const key in input) if (!Object.hasOwn(input, key)) return { ok: false };
+		const entries: CopyFrame["entries"] = [];
+		for (const key of Object.getOwnPropertyNames(input).sort(compareScalars)) {
+			const descriptor = Object.getOwnPropertyDescriptor(input, key);
 			if (
+				!scalarString(key) ||
 				!descriptor ||
 				!("value" in descriptor) ||
 				!descriptor.enumerable ||
@@ -144,35 +195,30 @@ function copyJson(
 				!descriptor.writable
 			)
 				return { ok: false };
-			const child = copyJson(descriptor.value, seen, strings);
-			if (!child.ok) return child;
-			result.push(child.value);
+			entries.push({ key, value: descriptor.value, array: false });
 		}
-		return { ok: true, value: result };
-	}
-	const proto = Object.getPrototypeOf(value);
-	if ((proto !== Object.prototype && proto !== null) || Object.getOwnPropertySymbols(value).length !== 0)
-		return { ok: false };
-	for (const key in value) if (!Object.hasOwn(value, key)) return { ok: false };
-	const names = Object.getOwnPropertyNames(value).sort(compareScalars);
-	const result: Record<string, JsonValue> = Object.create(null);
-	for (const name of names) {
-		if (!scalarString(name)) return { ok: false };
-		const descriptor = Object.getOwnPropertyDescriptor(value, name);
-		if (
-			!descriptor ||
-			!("value" in descriptor) ||
-			!descriptor.enumerable ||
-			!descriptor.configurable ||
-			!descriptor.writable
-		)
-			return { ok: false };
-		strings.push(name);
-		const child = copyJson(descriptor.value, seen, strings);
+		const output: Record<string, JsonValue> = Object.create(null);
+		return { ok: true, value: output, frame: { input, output, entries, index: 0 } };
+	};
+	const root = inspect(value);
+	if (!root.ok) return root;
+	if (!root.frame) return { ok: true, value: root.value };
+	const stack: CopyFrame[] = [root.frame];
+	while (stack.length > 0) {
+		const frame = stack[stack.length - 1];
+		if (frame.index >= frame.entries.length) {
+			stack.pop();
+			continue;
+		}
+		const entry = frame.entries[frame.index++];
+		if (!entry.array) strings.push(entry.key);
+		const child = inspect(entry.value);
 		if (!child.ok) return child;
-		result[name] = child.value;
+		if (entry.array) (frame.output as JsonValue[]).push(child.value);
+		else (frame.output as Record<string, JsonValue>)[entry.key] = child.value;
+		if (child.frame) stack.push(child.frame);
 	}
-	return { ok: true, value: result };
+	return { ok: true, value: root.value };
 }
 
 function validMarker(marker: unknown): marker is string {
@@ -186,16 +232,17 @@ function validMarker(marker: unknown): marker is string {
 }
 
 export function admitMachineRecord(value: unknown): MachineAdmission {
-	if (!ownDataRecord(value, ["marker", "value"])) return { ok: false, cause: "machine record shape is not admissible" };
+	if (!isClosedDataRecord(value, ["marker", "value"]))
+		return { ok: false, cause: "machine record shape is not admissible" };
 	const marker = Object.getOwnPropertyDescriptor(value, "marker")?.value;
 	const raw = Object.getOwnPropertyDescriptor(value, "value")?.value;
 	if (!validMarker(marker)) return { ok: false, cause: "machine record marker is not admissible" };
 	const strings: string[] = [];
-	const copied = copyJson(raw, new WeakSet(), strings);
+	const copied = copyJson(raw, strings);
 	if (!copied.ok) return { ok: false, cause: "machine record value is not admissible" };
-	const canonicalJson = serialize(copied.value, false);
+	const canonicalText = serialize(copied.value, false);
 	const wireJson = serialize(copied.value, true);
-	const semanticBody = `${marker}\n${canonicalJson}`;
+	const semanticBody = `${marker}\n${canonicalText}`;
 	const wireBody = `${marker}\n${wireJson}`;
 	if (
 		Buffer.byteLength(semanticBody, "utf8") > MAX_BODY_BYTES ||
@@ -204,14 +251,21 @@ export function admitMachineRecord(value: unknown): MachineAdmission {
 		return { ok: false, cause: "machine record body exceeds its byte bound" };
 	}
 	try {
-		if (JSON.stringify(JSON.parse(wireJson)) !== JSON.stringify(copied.value))
+		if (canonicalJson(JSON.parse(wireJson) as JsonValue) !== canonicalJson(copied.value))
 			return { ok: false, cause: "machine record codec failed" };
 	} catch {
 		return { ok: false, cause: "machine record codec failed" };
 	}
 	return {
 		ok: true,
-		record: { marker, value: copied.value, canonicalJson, semanticBody, wireBody, semanticStrings: strings },
+		record: {
+			marker,
+			value: copied.value,
+			canonicalJson: canonicalText,
+			semanticBody,
+			wireBody,
+			semanticStrings: strings,
+		},
 	};
 }
 

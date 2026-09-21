@@ -127,12 +127,8 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 			"publishes closed JSON through a reversible inert codec and claims success only after an exact reread. " +
 			"Create titles are scanned and neutralized in both modes.",
 		parameters: PublishParams,
-		async execute(_toolCallId, params) {
-			const request =
-				params.machineRecord === undefined
-					? { body: params.body, destination: params.destination }
-					: { machineRecord: params.machineRecord, destination: params.destination };
-			return performPublish(request, repoRoot, stateRoot);
+		async execute(_toolCallId, params, signal) {
+			return performPublish(params, repoRoot, stateRoot, undefined, signal);
 		},
 		renderCall(args, theme) {
 			return renderActCall("Publish", publishTarget(args), theme);

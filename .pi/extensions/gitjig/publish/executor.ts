@@ -262,6 +262,7 @@ export function resolvePublishRepository(repoRoot: string): PublishRepository | 
 	const run = spawnSync("git", ["config", "--get", "remote.origin.url"], {
 		cwd: repoRoot,
 		encoding: "utf8",
+		timeout: CHILD_TIMEOUT_MS,
 		env: withoutPlatformRetargetingEnv(process.env),
 	});
 	if (run.status !== 0 || typeof run.stdout !== "string") return undefined;
@@ -457,6 +458,7 @@ function runRawChild(
 	stdin: string | undefined,
 	repoRoot: string,
 	maxStdoutBytes = 4096,
+	abortSignal?: AbortSignal,
 ): Promise<RawChildResult> {
 	return new Promise((resolve) => {
 		let settled = false;
@@ -470,9 +472,22 @@ function runRawChild(
 			env: withoutPlatformRetargetingEnv(process.env),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
+		const killGroup = (): void => {
+			if (typeof child.pid === "number") {
+				try {
+					process.kill(-child.pid, "SIGKILL");
+				} catch {
+					child.kill("SIGKILL");
+				}
+			} else child.kill("SIGKILL");
+		};
+		const onAbort = (): void => {
+			killGroup();
+		};
 		const settle = (result: RawChildResult): void => {
 			if (settled) return;
 			settled = true;
+			abortSignal?.removeEventListener("abort", onAbort);
 			clearTimeout(timer);
 			child.stdin.destroy();
 			child.stdout.destroy();
@@ -482,18 +497,14 @@ function runRawChild(
 		};
 		const timer = setTimeout(() => {
 			timedOut = true;
-			if (typeof child.pid === "number") {
-				try {
-					process.kill(-child.pid, "SIGKILL");
-				} catch {
-					child.kill("SIGKILL");
-				}
-			} else child.kill("SIGKILL");
+			killGroup();
 			setTimeout(
 				() => settle({ spawned: true, code: null, signal: "SIGKILL", timedOut: true, stdout: Buffer.alloc(0) }),
 				STREAM_GRACE_MS,
 			);
 		}, CHILD_TIMEOUT_MS);
+		abortSignal?.addEventListener("abort", onAbort, { once: true });
+		if (abortSignal?.aborted) onAbort();
 		child.on("error", () =>
 			settle({ spawned: false, code: null, signal: null, timedOut: false, stdout: Buffer.alloc(0) }),
 		);
@@ -519,7 +530,13 @@ function strictLocator(bytes: Buffer): string | undefined {
 		return undefined;
 	}
 	const locator = text.slice(0, -1);
-	return locator.length > 0 && !/[\u0000-\u001f\u007f]/.test(locator) ? locator : undefined;
+	return locator.length > 0 &&
+		!Array.from(locator).some((character) => {
+			const code = character.codePointAt(0) as number;
+			return code <= 0x1f || code === 0x7f;
+		})
+		? locator
+		: undefined;
 }
 
 interface Locator {
@@ -534,50 +551,34 @@ function parseMachineLocator(
 	destination: PublishDestination,
 	repository: PublishRepository,
 ): Locator | undefined {
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch {
-		return undefined;
-	}
-	if (
-		parsed.protocol !== "https:" ||
-		parsed.hostname !== repository.host ||
-		parsed.port ||
-		parsed.username ||
-		parsed.password ||
-		parsed.search
-	)
-		return undefined;
 	const [owner, name] = repository.nameWithOwner.split("/");
 	const escaped = (part: string): string => {
 		let result = part;
 		for (const token of ["\\", ".", "*", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]"])
-			result = result.replaceAll(token, "\\" + token);
+			result = result.replaceAll(token, ["\\", token].join(""));
 		return result;
 	};
-	const stem = `/${escaped(owner)}/${escaped(name)}`;
-	const comment = new RegExp(`^${stem}/(issues|pull)/([1-9][0-9]*)$`).exec(parsed.pathname);
-	const fragment = /^#issuecomment-([1-9][0-9]*)$/.exec(parsed.hash);
+	const stem = `https://${escaped(repository.host)}/${escaped(owner)}/${escaped(name)}`;
 	if (destination.kind.endsWith("comment")) {
-		if (!comment || !fragment || comment[1] !== (destination.kind === "issue-comment" ? "issues" : "pull"))
-			return undefined;
-		const number = Number(comment[2]);
-		const commentId = Number(fragment[1]);
+		const surface = destination.kind === "issue-comment" ? "issues" : "pull";
+		const match = new RegExp(`^${stem}/${surface}/([1-9][0-9]*)#issuecomment-([1-9][0-9]*)$`).exec(url);
+		if (!match) return undefined;
+		const number = Number(match[1]);
+		const commentId = Number(match[2]);
 		if (!Number.isSafeInteger(number) || !Number.isSafeInteger(commentId) || number !== destination.number)
 			return undefined;
 		return { url, number, commentId, apiPath: `/repos/${repository.nameWithOwner}/issues/comments/${commentId}` };
 	}
-	if (parsed.hash) return undefined;
-	const surface = new RegExp(`^${stem}/(issues|pull)/([1-9][0-9]*)$`).exec(parsed.pathname);
-	if (!surface || surface[1] !== (destination.kind.startsWith("issue") ? "issues" : "pull")) return undefined;
-	const number = Number(surface[2]);
+	const surface = destination.kind.startsWith("issue") ? "issues" : "pull";
+	const match = new RegExp(`^${stem}/${surface}/([1-9][0-9]*)$`).exec(url);
+	if (!match) return undefined;
+	const number = Number(match[1]);
 	if (!Number.isSafeInteger(number) || (destination.number !== undefined && number !== destination.number))
 		return undefined;
 	return {
 		url,
 		number,
-		apiPath: `/repos/${repository.nameWithOwner}/${surface[1] === "issues" ? "issues" : "pulls"}/${number}`,
+		apiPath: `/repos/${repository.nameWithOwner}/${surface === "issues" ? "issues" : "pulls"}/${number}`,
 	};
 }
 
@@ -606,7 +607,7 @@ function verifyMachineRead(
 	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return false;
 	if (exactNumber(payload, "id") === undefined && destination.kind.endsWith("comment")) return false;
 	if (locator.commentId !== undefined && exactNumber(payload, "id") !== locator.commentId) return false;
-	if (exactNumber(payload, "number") !== undefined && exactNumber(payload, "number") !== locator.number) return false;
+	if (!destination.kind.endsWith("comment") && exactNumber(payload, "number") !== locator.number) return false;
 	if (exactString(payload, "html_url") !== locator.url || exactString(payload, "body") !== wireBody) return false;
 	const apiRoot = repository.host === "github.com" ? "https://api.github.com" : `https://${repository.host}/api/v3`;
 	if (
@@ -614,12 +615,10 @@ function verifyMachineRead(
 		exactString(payload, "issue_url") !== `${apiRoot}/repos/${repository.nameWithOwner}/issues/${locator.number}`
 	)
 		return false;
-	if (
-		destination.kind.startsWith("issue") &&
-		!destination.kind.endsWith("comment") &&
-		Object.hasOwn(payload, "pull_request")
-	)
-		return false;
+	if (destination.kind.startsWith("issue") && !destination.kind.endsWith("comment")) {
+		if (Object.hasOwn(payload, "pull_request")) return false;
+		if (exactString(payload, "repository_url") !== `${apiRoot}/repos/${repository.nameWithOwner}`) return false;
+	}
 	if (destination.kind.startsWith("pr") && !destination.kind.endsWith("comment")) {
 		const base = (payload as { base?: unknown }).base;
 		const repo = typeof base === "object" && base !== null ? (base as { repo?: unknown }).repo : undefined;
@@ -644,8 +643,9 @@ export async function runMachinePublish(
 	sentTitle: string | undefined,
 	repoRoot: string,
 	repository: PublishRepository,
+	abortSignal?: AbortSignal,
 ): Promise<MachinePublishOutcome> {
-	const send = await runRawChild(ghPublishArgv(destination, repository), wireBody, repoRoot);
+	const send = await runRawChild(ghPublishArgv(destination, repository), wireBody, repoRoot, 4096, abortSignal);
 	if (!send.spawned)
 		return {
 			outcome: "refused",
@@ -655,7 +655,13 @@ export async function runMachinePublish(
 	if (locatorText === undefined) return { outcome: "outcome-unverified" };
 	const locator = parseMachineLocator(locatorText, destination, repository);
 	if (locator === undefined) return { outcome: "outcome-unverified" };
-	const read = await runRawChild(["api", "--hostname", repository.host, locator.apiPath], undefined, repoRoot, 262_144);
+	const read = await runRawChild(
+		["api", "--hostname", repository.host, locator.apiPath],
+		undefined,
+		repoRoot,
+		262_144,
+		abortSignal,
+	);
 	if (!read.spawned || read.code !== 0 || read.timedOut || read.stdout.length === 0)
 		return { outcome: "outcome-unverified" };
 	let payload: unknown;

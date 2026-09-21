@@ -26,7 +26,9 @@ describe("closed machine-record codec", () => {
 		assert.equal(outcome.record.canonicalJson, '{"z":"@#-:/","":1,"😀":2}');
 		assert.match(outcome.record.wireBody, /\\u0040\\u0023\\u002d\\u003a\\u002f/);
 		assert.deepEqual(decodeWireBody(outcome.record.wireBody, MARKER), value);
-		assert.equal(canonicalJson(decodeWireBody(outcome.record.wireBody, MARKER)!), outcome.record.canonicalJson);
+		const decoded = decodeWireBody(outcome.record.wireBody, MARKER);
+		assert.ok(decoded !== undefined);
+		assert.equal(canonicalJson(decoded), outcome.record.canonicalJson);
 	});
 
 	it("refuses non-data descriptors, aliases, holes, unsafe numbers, forbidden scalars, and bad markers", () => {
@@ -40,7 +42,7 @@ describe("closed machine-record codec", () => {
 		assert.equal(admitMachineRecord({ marker: "<!-- closes: v1 -->", value: null }).ok, false);
 	});
 
-	it("reads no getter on the request or recursive value", () => {
+	it("reads no getter or proxy trap and handles deeply nested bounded JSON iteratively", () => {
 		let reads = 0;
 		const record = {
 			marker: MARKER,
@@ -50,7 +52,20 @@ describe("closed machine-record codec", () => {
 			},
 		};
 		assert.equal(admitMachineRecord(record).ok, false);
+		const proxy = new Proxy(
+			{},
+			{
+				ownKeys: () => {
+					reads += 1;
+					return [];
+				},
+			},
+		);
+		assert.equal(admitMachineRecord({ marker: MARKER, value: proxy }).ok, false);
 		assert.equal(reads, 0);
+		let deep: unknown = null;
+		for (let index = 0; index < 12_000; index += 1) deep = [deep];
+		assert.equal(admitMachineRecord({ marker: MARKER, value: deep }).ok, true);
 	});
 
 	it("admits one bounded lowercase-u escape view and refuses malformed or unsafe views", () => {
@@ -80,16 +95,16 @@ const fs=require("fs"),args=process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS,(args[0]==="api"?"get":"send")+"\\n");
 if(args[0]==="api"){
  const m=JSON.parse(fs.readFileSync(process.env.META,"utf8")),body=process.env.MISMATCH?"wrong":fs.readFileSync(process.env.BODY,"utf8");
- const p={id:m.comment?8:99,number:m.number,html_url:m.url,body};
+ const p={id:m.comment?8:99,html_url:m.url,body};if(!process.env.OMIT_NUMBER)p.number=m.number;
  if(m.comment)p.issue_url="https://api.github.com/repos/o/r/issues/"+m.number;
- else if(m.noun==="pr")p.base={repo:{full_name:"o/r"}};
+ else if(m.noun==="pr")p.base={repo:{full_name:"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url="https://api.github.com/repos/o/r";
  if(m.verb==="create")p.title=m.title;
  process.stdout.write(JSON.stringify(p));
 }else{
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
  const title=verb==="create"?args[args.indexOf("--title")+1]:undefined;
  const path=noun==="issue"?"issues":"pull",url="https://github.com/o/r/"+path+"/"+number+(comment?"#issuecomment-8":"");
- const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));process.stdout.write(process.env.BAD?"https://evil.example/o/r/issues/7#issuecomment-8\\n":url+"\\n");if(process.env.FAIL)process.exitCode=1;});
+ const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{process.stdout.write((process.env.LOCATOR||url)+"\\n");if(process.env.FAIL)process.exitCode=1;};process.env.DELAY?setTimeout(done,5000):done();});
 }
 `,
 		);
@@ -102,10 +117,29 @@ if(args[0]==="api"){
 			BAD: process.env.BAD,
 			FAIL: process.env.FAIL,
 			MISMATCH: process.env.MISMATCH,
+			LOCATOR: process.env.LOCATOR,
+			OMIT_NUMBER: process.env.OMIT_NUMBER,
+			OMIT_REPO: process.env.OMIT_REPO,
+			DELAY: process.env.DELAY,
 		};
 		Object.assign(process.env, { PATH: `${bin}:${prior.PATH}`, BODY: bodyFile, CALLS: callsFile, META: metaFile });
 		try {
 			await writeFile(callsFile, "");
+			for (const malformed of [
+				{
+					body: "prose",
+					machineRecord: { marker: MARKER, value: null },
+					destination: { kind: "issue-comment", number: 7 },
+				},
+				{
+					machineRecord: { marker: MARKER, value: null },
+					destination: { kind: "issue-comment", number: 7 },
+					extra: true,
+				},
+			]) {
+				const refused = await performPublish(malformed, root, state, { host: "github.com", nameWithOwner: "o/r" });
+				assert.equal(refused.details.disposition, "refuse-request");
+			}
 			for (const secret of [
 				"-----" + "BEGIN PRIVATE KEY" + "-----",
 				"\\u002d\\u002d\\u002d\\u002d\\u002dBEGIN PRIVATE KEY\\u002d\\u002d\\u002d\\u002d\\u002d",
@@ -171,19 +205,60 @@ if(args[0]==="api"){
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
 			delete process.env.MISMATCH;
 
+			for (const variable of ["OMIT_NUMBER", "OMIT_REPO"] as const) {
+				await writeFile(callsFile, "");
+				process.env[variable] = "1";
+				const destination =
+					variable === "OMIT_REPO" ? { kind: "issue-body", number: 7 } : { kind: "pr-body", number: 7 };
+				const missing = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(missing.details.disposition, "outcome-unverified", variable);
+				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+				delete process.env[variable];
+			}
+
+			for (const locator of [
+				"https://github.com:443/o/r/issues/7#issuecomment-8",
+				"https://github.com/o/r/x/../issues/7#issuecomment-8",
+				"https://github.com/o/r/%2e%2e/issues/7#issuecomment-8",
+				"https://github.com/o/r/issues/7?#issuecomment-8",
+			]) {
+				await writeFile(callsFile, "");
+				process.env.LOCATOR = locator;
+				const invalid = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(invalid.details.disposition, "outcome-unverified", locator);
+				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
+				delete process.env.LOCATOR;
+			}
+
 			await writeFile(callsFile, "");
-			process.env.BAD = "1";
-			const refused = await performPublish(
+			process.env.DELAY = "1";
+			const controller = new AbortController();
+			setTimeout(() => controller.abort(), 30);
+			const aborted = await performPublish(
 				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
 				root,
 				state,
 				{ host: "github.com", nameWithOwner: "o/r" },
+				controller.signal,
 			);
-			assert.equal(refused.details.disposition, "outcome-unverified");
+			assert.equal(aborted.details.disposition, "outcome-unverified");
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
+			delete process.env.DELAY;
 		} finally {
-			for (const [key, value] of Object.entries(prior))
-				value === undefined ? delete process.env[key] : (process.env[key] = value);
+			for (const [key, value] of Object.entries(prior)) {
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
 		}
 	});
 });
