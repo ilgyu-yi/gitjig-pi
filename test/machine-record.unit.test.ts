@@ -122,16 +122,18 @@ fs.appendFileSync(process.env.CALLS,(args[0]==="api"?"get":"send")+"\\n");
 if(args[0]==="api"){
  fs.writeFileSync(process.env.APIARGS,args.join(" "));if(process.env.GET_RAW){process.stdout.write(process.env.GET_RAW);process.exit(0);}
  const m=JSON.parse(fs.readFileSync(process.env.META,"utf8")),body=process.env.MISMATCH?"wrong":fs.readFileSync(process.env.BODY,"utf8");
- const p={id:process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body};if(!process.env.OMIT_NUMBER)p.number=process.env.WRONG_NUMBER?99:m.number;
- if(m.comment)p.issue_url=process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
- else if(m.noun==="pr")p.base={repo:{full_name:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url="https://api.github.com/repos/o/r";
- if(m.verb==="create")p.title=process.env.WRONG_TITLE?"wrong":m.title;if(process.env.PULL_SHAPE)p.pull_request={url:"x"};
+ const p={id:process.env.TYPE_ID?"8":process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body:process.env.TYPE_BODY?7:body};if(!process.env.OMIT_NUMBER)p.number=process.env.TYPE_NUMBER?"7":process.env.WRONG_NUMBER?99:m.number;
+ if(m.comment)p.issue_url=process.env.TYPE_PARENT?7:process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
+ else if(m.noun==="pr")p.base={repo:{full_name:process.env.TYPE_REPO?7:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url=process.env.TYPE_REPO?7:"https://api.github.com/repos/o/r";
+ if(m.verb==="create")p.title=process.env.TYPE_TITLE?7:process.env.WRONG_TITLE?"wrong":m.title;if(process.env.PULL_SHAPE)p.pull_request={url:"x"};
  process.stdout.write(JSON.stringify(p));if(process.env.GET_FAIL)process.exitCode=1;
 }else{
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
  const title=verb==="create"?args[args.indexOf("--title")+1]:undefined;
  const path=noun==="issue"?"issues":"pull",url="https://github.com/o/r/"+path+"/"+number+(comment?"#issuecomment-8":"");
- const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.INVALID_UTF8){process.stdout.write(Buffer.from([0xff,0x0a]));return;}if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.TIMEOUT_LOC){done();setInterval(()=>{},60000);}else if(process.env.TIMEOUT_NO_LOC)setInterval(()=>{},60000);else if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
+ if(process.env.SIGNAL_NO_LOC)process.kill(process.pid,"SIGTERM");if(process.env.SIGNAL_LOC){process.stdout.write(url+"\\n");process.kill(process.pid,"SIGTERM");}
+ if(process.env.STDIN_NO_LOC){process.stdin.destroy();setTimeout(()=>process.exit(0),50);}if(process.env.STDIN_LOC){fs.writeFileSync(process.env.BODY,process.env.EXPECTED_BODY);fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));process.stdout.write(url+"\\n");process.stdin.destroy();setTimeout(()=>process.exit(0),50);}
+ const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.INVALID_UTF8){process.stdout.write(Buffer.from([0xff,0x0a]));return;}if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));if(process.env.FAIL_NO_LOC){process.exitCode=1;return;}process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.TIMEOUT_LOC){done();setInterval(()=>{},60000);}else if(process.env.TIMEOUT_NO_LOC)setInterval(()=>{},60000);else if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
 }
 `,
 		);
@@ -164,6 +166,18 @@ if(args[0]==="api"){
 			HOLD: process.env.HOLD,
 			NO_LF: process.env.NO_LF,
 			BOM: process.env.BOM,
+			EXPECTED_BODY: process.env.EXPECTED_BODY,
+			FAIL_NO_LOC: process.env.FAIL_NO_LOC,
+			SIGNAL_LOC: process.env.SIGNAL_LOC,
+			SIGNAL_NO_LOC: process.env.SIGNAL_NO_LOC,
+			STDIN_LOC: process.env.STDIN_LOC,
+			STDIN_NO_LOC: process.env.STDIN_NO_LOC,
+			TYPE_ID: process.env.TYPE_ID,
+			TYPE_BODY: process.env.TYPE_BODY,
+			TYPE_NUMBER: process.env.TYPE_NUMBER,
+			TYPE_PARENT: process.env.TYPE_PARENT,
+			TYPE_REPO: process.env.TYPE_REPO,
+			TYPE_TITLE: process.env.TYPE_TITLE,
 		};
 		Object.assign(process.env, {
 			PATH: `${bin}:${prior.PATH}`,
@@ -171,6 +185,7 @@ if(args[0]==="api"){
 			CALLS: callsFile,
 			META: metaFile,
 			APIARGS: apiArgsFile,
+			EXPECTED_BODY: `${MARKER}\nnull`,
 		});
 		try {
 			await writeFile(callsFile, "");
@@ -369,6 +384,27 @@ if(args[0]==="api"){
 				delete process.env[variable];
 			}
 
+			for (const [variable, destination] of [
+				["TYPE_ID", { kind: "issue-comment", number: 7 }],
+				["TYPE_BODY", { kind: "issue-comment", number: 7 }],
+				["TYPE_NUMBER", { kind: "issue-create", title: "Machine title" }],
+				["TYPE_PARENT", { kind: "issue-comment", number: 7 }],
+				["TYPE_REPO", { kind: "pr-create", title: "Machine title" }],
+				["TYPE_TITLE", { kind: "issue-create", title: "Machine title" }],
+			] as const) {
+				await writeFile(callsFile, "");
+				process.env[variable] = "1";
+				const mismatch = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(mismatch.details.disposition, "outcome-unverified", variable);
+				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+				delete process.env[variable];
+			}
+
 			for (const [locator, destination] of [
 				["https://github.com/o/r/issues/8#issuecomment-8", { kind: "issue-comment", number: 7 }],
 				["https://github.com/o/r/pull/8", { kind: "pr-body", number: 7 }],
@@ -485,6 +521,27 @@ if(args[0]==="api"){
 				delete process.env[variable];
 			}
 
+			for (const prefix of ["FAIL", "SIGNAL", "STDIN"] as const) {
+				for (const suffix of ["NO_LOC", "LOC"] as const) {
+					await writeFile(callsFile, "");
+					const variable = `${prefix}_${suffix}`;
+					process.env[variable] = "1";
+					const terminal = await performPublish(
+						{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+						root,
+						state,
+						{ host: "github.com", nameWithOwner: "o/r" },
+					);
+					assert.equal(terminal.details.disposition, suffix === "LOC" ? "published" : "outcome-unverified", variable);
+					assert.deepEqual(
+						(await readFile(callsFile, "utf8")).trim().split("\n"),
+						suffix === "LOC" ? ["send", "get"] : ["send"],
+						variable,
+					);
+					delete process.env[variable];
+				}
+			}
+
 			await writeFile(callsFile, "");
 			const preAborted = new AbortController();
 			preAborted.abort();
@@ -532,6 +589,19 @@ if(args[0]==="api"){
 			assert.equal(aborted.details.disposition, "published", "a captured strict locator compels one GET after abort");
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
 			delete process.env.HOLD;
+
+			await writeFile(callsFile, "");
+			const oversizedTitle = await performPublish(
+				{
+					machineRecord: { marker: MARKER, value: null },
+					destination: { kind: "issue-create", title: "x".repeat(2 ** 21) },
+				},
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			assert.equal(oversizedTitle.details.disposition, "refuse-delegated");
+			assert.equal(await readFile(callsFile, "utf8"), "");
 		} finally {
 			for (const [key, value] of Object.entries(prior)) {
 				if (value === undefined) delete process.env[key];

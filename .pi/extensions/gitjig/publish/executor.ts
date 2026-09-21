@@ -70,7 +70,7 @@
  *     larger decision than this bound. Named so the reach this change added
  *     is not read as strictly more containment than before.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
 import { TextDecoder, types } from "node:util";
 import { withoutPlatformRetargetingEnv } from "../dispatch/provision.ts";
 import { canonicalJson, decodeWireBody, type JsonValue } from "./machine-record.ts";
@@ -469,12 +469,18 @@ function runRawChild(
 		let overflow = false;
 		const chunks: Buffer[] = [];
 		let bytes = 0;
-		const child = spawn("gh", argv, {
-			cwd: repoRoot,
-			detached: true,
-			env: withoutPlatformRetargetingEnv(process.env),
-			stdio: ["pipe", "pipe", "pipe"],
-		});
+		let child: ChildProcessWithoutNullStreams;
+		try {
+			child = spawn("gh", argv, {
+				cwd: repoRoot,
+				detached: true,
+				env: withoutPlatformRetargetingEnv(process.env),
+				stdio: ["pipe", "pipe", "pipe"],
+			});
+		} catch {
+			resolve({ spawned: false, code: null, signal: null, timedOut: false, stdout: Buffer.alloc(0) });
+			return;
+		}
 		const killGroup = (): void => {
 			if (typeof child.pid === "number") {
 				try {
