@@ -120,7 +120,7 @@ describe("machine publication transport", () => {
 const fs=require("fs"),args=process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS,(args[0]==="api"?"get":"send")+"\\n");
 if(args[0]==="api"){
- fs.writeFileSync(process.env.APIARGS,args.join(" "));
+ fs.writeFileSync(process.env.APIARGS,args.join(" "));if(process.env.GET_RAW){process.stdout.write(process.env.GET_RAW);process.exit(0);}
  const m=JSON.parse(fs.readFileSync(process.env.META,"utf8")),body=process.env.MISMATCH?"wrong":fs.readFileSync(process.env.BODY,"utf8");
  const p={id:process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body};if(!process.env.OMIT_NUMBER)p.number=process.env.WRONG_NUMBER?99:m.number;
  if(m.comment)p.issue_url=process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
@@ -131,7 +131,7 @@ if(args[0]==="api"){
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
  const title=verb==="create"?args[args.indexOf("--title")+1]:undefined;
  const path=noun==="issue"?"issues":"pull",url="https://github.com/o/r/"+path+"/"+number+(comment?"#issuecomment-8":"");
- const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
+ const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.INVALID_UTF8){process.stdout.write(Buffer.from([0xff,0x0a]));return;}if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.TIMEOUT_LOC){done();setInterval(()=>{},60000);}else if(process.env.TIMEOUT_NO_LOC)setInterval(()=>{},60000);else if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
 }
 `,
 		);
@@ -153,6 +153,10 @@ if(args[0]==="api"){
 			WRONG_NUMBER: process.env.WRONG_NUMBER,
 			PULL_SHAPE: process.env.PULL_SHAPE,
 			GET_FAIL: process.env.GET_FAIL,
+			GET_RAW: process.env.GET_RAW,
+			INVALID_UTF8: process.env.INVALID_UTF8,
+			TIMEOUT_LOC: process.env.TIMEOUT_LOC,
+			TIMEOUT_NO_LOC: process.env.TIMEOUT_NO_LOC,
 			LOCATOR: process.env.LOCATOR,
 			OMIT_NUMBER: process.env.OMIT_NUMBER,
 			OMIT_REPO: process.env.OMIT_REPO,
@@ -170,6 +174,18 @@ if(args[0]==="api"){
 		});
 		try {
 			await writeFile(callsFile, "");
+			const workingPath = process.env.PATH;
+			process.env.PATH = join(root, "missing-bin");
+			const spawnFailure = await performPublish(
+				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			assert.equal(spawnFailure.details.disposition, "refuse-delegated");
+			assert.equal(await readFile(callsFile, "utf8"), "");
+			process.env.PATH = workingPath;
+
 			for (const malformed of [
 				{
 					body: "prose",
@@ -415,6 +431,18 @@ if(args[0]==="api"){
 			delete process.env.BOM;
 
 			await writeFile(callsFile, "");
+			process.env.INVALID_UTF8 = "1";
+			const invalidUtf8 = await performPublish(
+				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			assert.equal(invalidUtf8.details.disposition, "outcome-unverified");
+			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
+			delete process.env.INVALID_UTF8;
+
+			await writeFile(callsFile, "");
 			process.env.GET_FAIL = "1";
 			const failedGet = await performPublish(
 				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
@@ -425,6 +453,37 @@ if(args[0]==="api"){
 			assert.equal(failedGet.details.disposition, "outcome-unverified");
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
 			delete process.env.GET_FAIL;
+
+			for (const raw of ["null", "[]", "{"]) {
+				await writeFile(callsFile, "");
+				process.env.GET_RAW = raw;
+				const malformedRead = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(malformedRead.details.disposition, "outcome-unverified", raw);
+				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+				delete process.env.GET_RAW;
+			}
+
+			for (const variable of ["TIMEOUT_NO_LOC", "TIMEOUT_LOC"] as const) {
+				await writeFile(callsFile, "");
+				process.env[variable] = "1";
+				const timed = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(timed.details.disposition, variable === "TIMEOUT_LOC" ? "published" : "outcome-unverified");
+				assert.deepEqual(
+					(await readFile(callsFile, "utf8")).trim().split("\n"),
+					variable === "TIMEOUT_LOC" ? ["send", "get"] : ["send"],
+				);
+				delete process.env[variable];
+			}
 
 			await writeFile(callsFile, "");
 			const preAborted = new AbortController();
