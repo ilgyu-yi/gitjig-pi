@@ -95,7 +95,8 @@ function run(name: string, mutation?: (typeof mutations)[number]) {
 		const [path, from, to] = mutation;
 		const target = join(box, path);
 		const source = readFileSync(target, "utf8");
-		assert.equal(source.split(from).length, 2, `mutation operand must be unique: ${from}`);
+		assert.equal(source.indexOf(from), source.lastIndexOf(from), `mutation operand must be unique: ${from}`);
+		assert.notEqual(source.indexOf(from), -1, `mutation operand must exist: ${from}`);
 		writeFileSync(target, source.replace(from, to));
 	}
 	writeFileSync(join(box, "probe.mjs"), probe);
