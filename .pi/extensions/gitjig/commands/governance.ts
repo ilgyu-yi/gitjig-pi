@@ -213,7 +213,8 @@ export function governanceMessage(record: Record<string, unknown>, canonicalJson
 
 function fixedRefusalMessage(arm: string) {
 	const admitted = Object.freeze({ outcome: "refused", arm });
-	return envelopeMessage(admitted, JSON.stringify);
+	const canonical = `{"arm":${JSON.stringify(arm)},"outcome":"refused"}`;
+	return envelopeMessage(admitted, () => canonical);
 }
 
 interface GovernanceService {
