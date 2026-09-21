@@ -500,6 +500,43 @@ export function transitionMeasuredGovernance(expected, operation) {
 	return parseMeasuredGovernance(measured);
 }
 
+/** @param {unknown} input */
+export function parseGovernancePlan(input) {
+	if (
+		!closed(input, ["schemaVersion", "repository", "configDigest", "measured", "operations", "planHash", "authorized"])
+	)
+		throw new GovernanceRefusal("plan-schema");
+	const plan = /** @type {Record<string,any>} */ (input);
+	if (
+		plan.schemaVersion !== 2 ||
+		!closed(plan.repository, ["id", "nameWithOwner", "defaultBranch"]) ||
+		!scalarSequence(plan.repository.id) ||
+		!scalarSequence(plan.repository.nameWithOwner) ||
+		!scalarSequence(plan.repository.defaultBranch) ||
+		!/^[0-9a-f]{64}$/.test(plan.configDigest ?? "") ||
+		!/^[0-9a-f]{64}$/.test(plan.planHash ?? "") ||
+		plan.authorized !== false ||
+		!Array.isArray(plan.operations)
+	)
+		throw new GovernanceRefusal("plan-schema");
+	const measured = parseMeasuredGovernance(plan.measured);
+	const { defaultBranchSha: _sha, ...measuredRepository } = measured.repository;
+	if (canonicalJson(measuredRepository) !== canonicalJson(plan.repository)) throw new GovernanceRefusal("plan-schema");
+	const operations = plan.operations.map(parseOperation);
+	let expected = measured;
+	for (const operation of operations) expected = transitionMeasuredGovernance(expected, operation);
+	const basis = {
+		schemaVersion: 2,
+		repository: structuredClone(plan.repository),
+		configDigest: plan.configDigest,
+		measured,
+		operations,
+	};
+	const planHash = createHash("sha256").update(canonicalJson(basis)).digest("hex");
+	if (planHash !== plan.planHash) throw new GovernanceRefusal("plan-hash");
+	return { ...basis, planHash, authorized: false };
+}
+
 /** @param {unknown} config @param {unknown} measured */
 export function planGovernance(config, measured) {
 	const parsedConfig = parseGovernanceConfig(config);

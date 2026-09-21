@@ -6,6 +6,7 @@ import {
 	CAPABILITIES,
 	GovernanceRefusal,
 	parseGovernanceConfig,
+	parseGovernancePlan,
 	parseMeasuredGovernance,
 	planGovernance,
 	transitionMeasuredGovernance,
@@ -148,6 +149,20 @@ describe("pure governance planner and auditor", () => {
 		assert.equal(auditGovernance(config, live).compliant, false);
 	});
 
+	it("admits only closed canonically hashed v2 plans", () => {
+		const plan = planGovernance(config, measured());
+		assert.deepEqual(parseGovernancePlan(plan), plan);
+		const unknown = structuredClone(plan) as Record<string, unknown>;
+		unknown.surprise = true;
+		assert.throws(() => parseGovernancePlan(unknown), /plan-schema/);
+		const malformedHash = structuredClone(plan);
+		malformedHash.planHash = `-${plan.planHash.slice(1)}`;
+		assert.throws(() => parseGovernancePlan(malformedHash), /plan-schema/);
+		const dishonestHash = structuredClone(plan);
+		dishonestHash.measured.repository.defaultBranchSha = "b".repeat(40);
+		assert.throws(() => parseGovernancePlan(dishonestHash), /plan-hash/);
+	});
+
 	it("is byte-deterministic and binds config, repository and complete live basis", () => {
 		const live = measured();
 		const first = planGovernance(config, live);
@@ -193,7 +208,12 @@ describe("pure governance planner and auditor", () => {
 	it("plans, audits, and transitions exact ruleset identity drift", () => {
 		const wrongName = measured();
 		wrongName.rulesets[0].name = "other";
+		wrongName.capabilities.requiredApprovingReviews = 0;
 		const plan = planGovernance(config, wrongName);
+		assert.deepEqual(
+			plan.operations.map((operation) => operation.kind ?? operation.capability),
+			["ruleset-identity", "requiredApprovingReviews"],
+		);
 		assert.deepEqual(plan.operations[0], {
 			kind: "ruleset-identity",
 			stable: { id: 1, sourceType: "Repository", source: repository.nameWithOwner },
@@ -234,6 +254,23 @@ describe("pure governance planner and auditor", () => {
 			after: false,
 		});
 		assert.ok(!withoutLinear.rulesets[0].ruleTypes.includes("required_linear_history"));
+		for (const [capability, type] of [
+			["deletionProtection", "deletion"],
+			["nonFastForwardProtection", "non_fast_forward"],
+		] as const) {
+			const removed = transitionMeasuredGovernance(measured(), {
+				capability,
+				before: true,
+				after: false,
+			});
+			assert.ok(!removed.rulesets[0].ruleTypes.includes(type));
+			const restored = transitionMeasuredGovernance(removed, {
+				capability,
+				before: false,
+				after: true,
+			});
+			assert.ok(restored.rulesets[0].ruleTypes.includes(type));
+		}
 
 		const noPull = measured();
 		Object.assign(noPull.capabilities, {
@@ -273,6 +310,12 @@ describe("pure governance planner and auditor", () => {
 			after: true,
 		});
 		assert.ok(withStatus.rulesets[0].ruleTypes.includes("required_status_checks"));
+		const statusRemoved = transitionMeasuredGovernance(withStatus, {
+			capability: "strictRequiredStatusChecks",
+			before: true,
+			after: false,
+		});
+		assert.ok(!statusRemoved.rulesets[0].ruleTypes.includes("required_status_checks"));
 	});
 
 	it("refuses repository retargeting", () => {

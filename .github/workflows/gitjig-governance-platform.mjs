@@ -176,6 +176,7 @@ export function createGovernancePlatform(configInput, request) {
 		const value = await request("GET", headPath);
 		if (
 			value?.ref !== `refs/heads/${config.repository.defaultBranch}` ||
+			value?.object?.type !== "commit" ||
 			!/^[0-9a-f]{40}$/.test(value?.object?.sha ?? "")
 		)
 			throw new GovernancePlatformRefusal("default-head-shape");
@@ -310,10 +311,10 @@ export function createGovernancePlatform(configInput, request) {
 					strict_required_status_checks_policy: next.strictRequiredStatusChecks,
 					do_not_enforce_on_create: next.doNotEnforceOnCreate,
 					required_status_checks: next.requiredStatusChecks.map(
-						/** @param {any} check */ (check) => ({
-							context: check.context,
-							integration_id: check.integrationId,
-						}),
+						/** @param {any} check */ (check) =>
+							check.integrationId === null
+								? { context: check.context }
+								: { context: check.context, integration_id: check.integrationId },
 					),
 				},
 			});

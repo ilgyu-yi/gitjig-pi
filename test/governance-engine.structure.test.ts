@@ -17,6 +17,7 @@ describe("Phase-4 pure engine boundary", () => {
 			"parseGovernanceConfig",
 			"validateGovernanceConfig",
 			"parseMeasuredGovernance",
+			"parseGovernancePlan",
 			"planGovernance",
 			"auditGovernance",
 			"transitionMeasuredGovernance",

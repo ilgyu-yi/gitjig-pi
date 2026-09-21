@@ -409,7 +409,10 @@ describe("local configure and complete platform reads", () => {
 		const request = async (method: string, path: string) => {
 			calls.push(`${method} ${path}`);
 			if (path.includes("/git/ref/heads/"))
-				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "b".repeat(40) } };
+				return {
+					ref: `refs/heads/${config.repository.defaultBranch}`,
+					object: { type: "commit", sha: "b".repeat(40) },
+				};
 			if (path === `repos/${config.repository.nameWithOwner}`)
 				return {
 					node_id: config.repository.id,
@@ -470,7 +473,7 @@ describe("local configure and complete platform reads", () => {
 			name: string;
 			rules: Array<{
 				type: string;
-				parameters?: { require_extra_approval_for_unattributed_changes?: boolean };
+				parameters?: Record<string, unknown>;
 			}>;
 		};
 		let put: { path: string; body: PutBody } | undefined;
@@ -497,13 +500,24 @@ describe("local configure and complete platform reads", () => {
 						require_extra_approval_for_unattributed_changes: true,
 					},
 				},
+				{
+					type: "required_status_checks",
+					parameters: {
+						strict_required_status_checks_policy: true,
+						do_not_enforce_on_create: false,
+						required_status_checks: [{ context: "suite" }],
+					},
+				},
 				{ type: "deletion" },
 				{ type: "non_fast_forward" },
 			],
 		});
 		const request = async (method: string, path: string, body?: unknown) => {
 			if (path.includes("/git/ref/heads/"))
-				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "c".repeat(40) } };
+				return {
+					ref: `refs/heads/${config.repository.defaultBranch}`,
+					object: { type: "commit", sha: "c".repeat(40) },
+				};
 			if (path === `repos/${config.repository.nameWithOwner}`)
 				return {
 					node_id: config.repository.id,
@@ -526,12 +540,55 @@ describe("local configure and complete platform reads", () => {
 		const operation = planGovernance(config, live).operations[0];
 		assert.equal(operation.kind, "ruleset-identity");
 		assert.deepEqual(await platform.writeOperation(operation, live), { outcome: "acknowledged" });
-		assert.equal(put?.body.name, config.ruleset.name);
-		assert.equal(put?.body.rules[0].parameters?.require_extra_approval_for_unattributed_changes, true);
-		assert.equal(
-			put?.body.rules.some((rule: { type: string }) => rule.type === "deletion"),
-			true,
-		);
+		assert.deepEqual(put?.body, {
+			name: config.ruleset.name,
+			target: "branch",
+			enforcement: "active",
+			bypass_actors: [],
+			conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+			rules: [
+				{
+					type: "pull_request",
+					parameters: {
+						allowed_merge_methods: ["merge"],
+						required_approving_review_count: 0,
+						dismiss_stale_reviews_on_push: true,
+						required_reviewers: [],
+						require_code_owner_review: false,
+						require_last_push_approval: false,
+						required_review_thread_resolution: true,
+						require_extra_approval_for_unattributed_changes: true,
+					},
+				},
+				{
+					type: "required_status_checks",
+					parameters: {
+						strict_required_status_checks_policy: true,
+						do_not_enforce_on_create: false,
+						required_status_checks: [{ context: "suite" }],
+					},
+				},
+				{ type: "deletion" },
+				{ type: "non_fast_forward" },
+			],
+		});
+
+		put = undefined;
+		const stale = structuredClone(live);
+		stale.repository.defaultBranchSha = "d".repeat(40);
+		assert.deepEqual(await platform.writeOperation(operation, stale), {
+			outcome: "refused",
+			arm: "operand-drift",
+			current: live,
+		});
+		assert.equal(put, undefined);
+		const malformedOperation = { ...operation, surprise: true };
+		assert.deepEqual(await platform.writeOperation(malformedOperation, live), {
+			outcome: "refused",
+			arm: "payload-refused",
+			current: live,
+		});
+		assert.equal(put, undefined);
 	});
 
 	it("maps an executor GET failure to proven pre-write refusal, not unknown", async () => {
@@ -545,14 +602,25 @@ describe("local configure and complete platform reads", () => {
 		assert.deepEqual(result, { outcome: "refused", arm: "compare-read-unavailable", current: null });
 	});
 
-	it("refuses unequal head brackets and full pagination at the exact cap", async () => {
+	it("refuses malformed/unequal head brackets and full pagination at the exact cap", async () => {
+		const malformedHead = createGovernancePlatform(config, async (_method: string, path: string) => {
+			if (path.includes("/git/ref/heads/"))
+				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "d".repeat(40) } };
+			throw new Error("must stop at malformed head");
+		});
+		await assert.rejects(malformedHead.readMeasured(), /default-head-shape/);
+		assert.deepEqual(
+			await malformedHead.writeOperation({ capability: "mergeCommits", before: true, after: false }, measured()),
+			{ outcome: "refused", arm: "compare-read-invalid", current: null },
+		);
+
 		let heads = 0;
 		const driftRequest = async (_method: string, path: string) => {
 			if (path.includes("/git/ref/heads/")) {
 				heads++;
 				return {
 					ref: `refs/heads/${config.repository.defaultBranch}`,
-					object: { sha: (heads === 1 ? "d" : "e").repeat(40) },
+					object: { type: "commit", sha: (heads === 1 ? "d" : "e").repeat(40) },
 				};
 			}
 			if (path === `repos/${config.repository.nameWithOwner}`)
@@ -584,7 +652,10 @@ describe("local configure and complete platform reads", () => {
 		let pages = 0;
 		const capRequest = async (_method: string, path: string) => {
 			if (path.includes("/git/ref/heads/"))
-				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "f".repeat(40) } };
+				return {
+					ref: `refs/heads/${config.repository.defaultBranch}`,
+					object: { type: "commit", sha: "f".repeat(40) },
+				};
 			if (path === `repos/${config.repository.nameWithOwner}`)
 				return {
 					node_id: config.repository.id,
@@ -608,12 +679,82 @@ describe("local configure and complete platform reads", () => {
 		assert.equal(pages, 100);
 	});
 
+	it("refuses zero, inherited, duplicate, mismatched, and foreign ruleset populations", async () => {
+		const repository = {
+			node_id: config.repository.id,
+			full_name: config.repository.nameWithOwner,
+			default_branch: config.repository.defaultBranch,
+			allow_merge_commit: true,
+			allow_squash_merge: false,
+			allow_rebase_merge: false,
+		};
+		const baseDetail = {
+			id: 7,
+			name: "live",
+			target: "branch",
+			source_type: "Repository",
+			source: config.repository.nameWithOwner,
+			enforcement: "active",
+			bypass_actors: [],
+			conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+			rules: [],
+		};
+		const platformFor = (summaries: unknown[], detail: unknown = baseDetail) =>
+			createGovernancePlatform(config, async (_method: string, path: string) => {
+				if (path.includes("/git/ref/heads/"))
+					return {
+						ref: `refs/heads/${config.repository.defaultBranch}`,
+						object: { type: "commit", sha: "1".repeat(40) },
+					};
+				if (path === `repos/${config.repository.nameWithOwner}`) return repository;
+				if (path.includes("per_page=100")) return summaries;
+				if (path.endsWith("/rulesets/7")) return detail;
+				throw new Error(`unexpected ${path}`);
+			});
+		await assert.rejects(platformFor([]).readMeasured(), /ruleset-population/);
+		await assert.rejects(
+			platformFor([{ id: 7, name: "live", source_type: "Organization" }]).readMeasured(),
+			/ruleset-inherited/,
+		);
+		await assert.rejects(
+			platformFor([
+				{ id: 7, name: "live", source_type: "Repository" },
+				{ id: 7, name: "other", source_type: "Repository" },
+			]).readMeasured(),
+			/ruleset-duplicate/,
+		);
+		await assert.rejects(
+			platformFor([
+				{ id: 7, name: "live", source_type: "Repository" },
+				{ id: 8, name: "live", source_type: "Repository" },
+			]).readMeasured(),
+			/ruleset-duplicate/,
+		);
+		await assert.rejects(
+			platformFor([{ id: 7, name: "live", source_type: "Repository" }], {
+				...baseDetail,
+				name: "other",
+			}).readMeasured(),
+			/ruleset-detail-identity/,
+		);
+		await assert.rejects(
+			platformFor([{ id: 7, name: "live", source_type: "Repository" }], {
+				...baseDetail,
+				source: "foreign/repository",
+			}).readMeasured(),
+			/ruleset-source/,
+		);
+	});
+
 	it("reads through the pagination terminal before refusing an unsupported ruleset population", async () => {
 		const calls: string[] = [];
 		const request = async (_method: string, path: string) => {
 			calls.push(path);
 			if (path.includes("/git/ref/heads/"))
-				return { ref: `refs/heads/${config.repository.defaultBranch}`, object: { sha: "b".repeat(40) } };
+				return {
+					ref: `refs/heads/${config.repository.defaultBranch}`,
+					object: { type: "commit", sha: "b".repeat(40) },
+				};
 			if (path === `repos/${config.repository.nameWithOwner}`)
 				return {
 					node_id: config.repository.id,

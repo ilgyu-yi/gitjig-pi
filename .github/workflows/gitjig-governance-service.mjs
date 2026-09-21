@@ -2,6 +2,7 @@ import {
 	auditGovernance,
 	canonicalJson,
 	parseGovernanceConfig,
+	parseGovernancePlan,
 	parseMeasuredGovernance,
 	planGovernance,
 	transitionMeasuredGovernance,
@@ -21,17 +22,11 @@ function equal(left, right) {
 }
 /** @param {unknown} plan @returns {Record<string,any>} */
 function admittedPlan(plan) {
-	if (
-		!plan ||
-		typeof plan !== "object" ||
-		Array.isArray(plan) ||
-		/** @type {any} */ (plan).schemaVersion !== 2 ||
-		!/^[-0-9a-f]{64}$/.test(/** @type {any} */ (plan).planHash ?? "") ||
-		/** @type {any} */ (plan).authorized !== false ||
-		!Array.isArray(/** @type {any} */ (plan).operations)
-	)
+	try {
+		return parseGovernancePlan(plan);
+	} catch {
 		throw new GovernanceServiceRefusal("plan-schema");
-	return /** @type {Record<string,any>} */ (structuredClone(plan));
+	}
 }
 
 /** @typedef {{readMeasured:()=>Promise<unknown>,writeOperation:(operation:unknown,expected:unknown)=>Promise<{outcome:'acknowledged'|'unknown'}|{outcome:'refused',arm:string,current:unknown}>}} GovernanceEffects */
