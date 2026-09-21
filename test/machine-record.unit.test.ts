@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { isPublishRepository } from "../.pi/extensions/gitjig/publish/executor.ts";
 import {
 	admitMachineRecord,
 	canonicalJson,
@@ -124,7 +125,7 @@ if(args[0]==="api"){
  if(m.comment)p.issue_url=process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
  else if(m.noun==="pr")p.base={repo:{full_name:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url="https://api.github.com/repos/o/r";
  if(m.verb==="create")p.title=process.env.WRONG_TITLE?"wrong":m.title;if(process.env.PULL_SHAPE)p.pull_request={url:"x"};
- process.stdout.write(JSON.stringify(p));
+ process.stdout.write(JSON.stringify(p));if(process.env.GET_FAIL)process.exitCode=1;
 }else{
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
  const title=verb==="create"?args[args.indexOf("--title")+1]:undefined;
@@ -150,6 +151,7 @@ if(args[0]==="api"){
 			WRONG_TITLE: process.env.WRONG_TITLE,
 			WRONG_NUMBER: process.env.WRONG_NUMBER,
 			PULL_SHAPE: process.env.PULL_SHAPE,
+			GET_FAIL: process.env.GET_FAIL,
 			LOCATOR: process.env.LOCATOR,
 			OMIT_NUMBER: process.env.OMIT_NUMBER,
 			OMIT_REPO: process.env.OMIT_REPO,
@@ -197,6 +199,9 @@ if(args[0]==="api"){
 			);
 			assert.equal(repositoryRefusal.details.disposition, "refuse-repository");
 			assert.equal(repositoryReads, 0);
+			assert.equal(isPublishRepository(Object.freeze({ host: "github.com", nameWithOwner: "o/r" })), true);
+			for (const nameWithOwner of ["o/..", "../r", "./."])
+				assert.equal(isPublishRepository({ host: "github.com", nameWithOwner }), false);
 
 			for (const secret of [
 				"-----" + "BEGIN PRIVATE KEY" + "-----",
@@ -346,6 +351,23 @@ if(args[0]==="api"){
 				delete process.env[variable];
 			}
 
+			for (const [locator, destination] of [
+				["https://github.com/o/r/issues/8#issuecomment-8", { kind: "issue-comment", number: 7 }],
+				["https://github.com/o/r/pull/8", { kind: "pr-body", number: 7 }],
+			] as const) {
+				await writeFile(callsFile, "");
+				process.env.LOCATOR = locator;
+				const wrongTarget = await performPublish(
+					{ machineRecord: { marker: MARKER, value: null }, destination },
+					root,
+					state,
+					{ host: "github.com", nameWithOwner: "o/r" },
+				);
+				assert.equal(wrongTarget.details.disposition, "outcome-unverified");
+				assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
+				delete process.env.LOCATOR;
+			}
+
 			for (const locator of [
 				"https://github.com:443/o/r/issues/7#issuecomment-8",
 				"https://github.com/o/r/x/../issues/7#issuecomment-8",
@@ -377,6 +399,18 @@ if(args[0]==="api"){
 			assert.equal(noLf.details.disposition, "outcome-unverified");
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send"]);
 			delete process.env.NO_LF;
+
+			await writeFile(callsFile, "");
+			process.env.GET_FAIL = "1";
+			const failedGet = await performPublish(
+				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
+				root,
+				state,
+				{ host: "github.com", nameWithOwner: "o/r" },
+			);
+			assert.equal(failedGet.details.disposition, "outcome-unverified");
+			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
+			delete process.env.GET_FAIL;
 
 			await writeFile(callsFile, "");
 			const preAborted = new AbortController();

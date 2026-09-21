@@ -186,13 +186,13 @@ export function isPublishRepository(value: unknown): value is PublishRepository 
 	if (keys.length !== 2 || !keys.includes("host") || !keys.includes("nameWithOwner")) return false;
 	const host = Object.getOwnPropertyDescriptor(value, "host");
 	const name = Object.getOwnPropertyDescriptor(value, "nameWithOwner");
-	if (!host || !("value" in host) || !host.enumerable || !host.configurable || !host.writable) return false;
-	if (!name || !("value" in name) || !name.enumerable || !name.configurable || !name.writable) return false;
+	if (!host || !("value" in host)) return false;
+	if (!name || !("value" in name)) return false;
 	return (
 		typeof host.value === "string" &&
 		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(host.value) &&
 		typeof name.value === "string" &&
-		/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(name.value)
+		/^(?!\.{1,2}\/)(?![^/]+\/\.{1,2}$)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(name.value)
 	);
 }
 
