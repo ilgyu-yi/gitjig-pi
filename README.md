@@ -73,9 +73,9 @@ The required fields are `plan`, `failingCheck.description`, `failingCheck.comman
 
 ## Publishing machine records
 
-Use ordinary `body` publication for prose. Until the separately derived implementation lands, do not publish a new machine-consumed closed record through plain `body`: egress neutralization deliberately rewrites actionable spellings, so that route has no parsed-value fidelity guarantee. After landing, new first-party fidelity-dependent records must use `machineRecord`. Existing review-round and lifecycle awaiting-author records are the two exact legacy call-site exceptions and retain their byte-identical formats and parsers.
+Use ordinary `body` publication for prose. New first-party machine-consumed records whose consumers require parsed-value fidelity use `machineRecord:{marker,value}`; plain `body` deliberately neutralizes actionable spellings and does not provide that guarantee. Existing review-round and lifecycle awaiting-author records are the two exact legacy call-site exceptions and retain their byte-identical formats and parsers.
 
-The machine mode is fail-closed: it admits a bounded structured JSON domain and marker, deterministically emits inert JSON strings, scans both semantic values and wire bytes with the existing secret patterns, requires zero machine-body neutralizer rewrites, sends once, and verifies an exact destination-bound reread before claiming publication. Any post-spawn ambiguity is `outcome-unverified`, with no automatic resend. This section documents the contract settled for the later implementation; it does not claim the current runtime already accepts `machineRecord`. Full contract in SPEC §3.3.
+The machine mode is fail-closed: it admits a bounded structured JSON domain and marker, deterministically emits inert JSON strings, scans both semantic values and wire bytes with the existing secret patterns, requires zero machine-body neutralizer rewrites, sends once, and verifies an exact destination-bound reread before claiming publication. Any post-spawn ambiguity is `outcome-unverified`, with no automatic resend. Full contract in SPEC §3.3.
 
 ## The development toolchain
 
