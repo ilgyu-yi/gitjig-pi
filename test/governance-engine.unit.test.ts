@@ -5,8 +5,12 @@ import { describe, it } from "node:test";
 import {
 	auditGovernance,
 	CAPABILITIES,
+	canonicalByteLength,
 	canonicalJson,
+	GOVERNANCE_BOUNDS,
+	GOVERNANCE_OVERHEADS,
 	GovernanceRefusal,
+	parseGovernanceAudit,
 	parseGovernanceConfig,
 	parseGovernancePlan,
 	parseMeasuredGovernance,
@@ -87,6 +91,16 @@ describe("Phase-4 target governance config", () => {
 		assert.notDeepEqual(minimal, checksOnly);
 	});
 
+	it("enforces the closed canonical config bound", () => {
+		const huge = structuredClone(config);
+		huge.capabilities.requiredStatusChecks.value = Array.from({ length: 600 }, (_, index) => ({
+			context: `bound-${index}-${"x".repeat(64)}`,
+			integrationId: 1,
+		}));
+		assert.throws(() => parseGovernanceConfig(huge), /config-bound/);
+		assert.ok(canonicalByteLength(config) <= GOVERNANCE_BOUNDS.config);
+	});
+
 	it("refuses unknown, omitted, contradictory and unsupported positive config", () => {
 		const unknown = structuredClone(config) as Record<string, unknown>;
 		unknown.surprise = true;
@@ -118,13 +132,21 @@ describe("Phase-4 target governance config", () => {
 });
 
 describe("pure governance planner and auditor", () => {
-	it("produces an explicit unauthorized empty plan while preserving unmanaged live state", () => {
+	it("produces bounded explicit plan/audit artifacts while preserving unmanaged live state", () => {
 		const live = measured();
 		const plan = planGovernance(config, live);
 		assert.deepEqual(plan.operations, []);
 		assert.equal(plan.authorized, false);
 		assert.match(plan.planHash, /^[0-9a-f]{64}$/);
 		const audit = auditGovernance(config, live);
+		assert.deepEqual(parseGovernanceAudit(audit), audit);
+		assert.ok(canonicalByteLength(live) <= GOVERNANCE_BOUNDS.measured);
+		assert.ok(canonicalByteLength(plan) <= GOVERNANCE_BOUNDS.plan);
+		assert.ok(canonicalByteLength(audit) <= GOVERNANCE_BOUNDS.audit);
+		assert.ok(
+			canonicalByteLength(audit) <=
+				canonicalByteLength(config) + canonicalByteLength(live) + GOVERNANCE_OVERHEADS.audit,
+		);
 		assert.equal(audit.compliant, true);
 		assert.deepEqual(
 			audit.capabilities.find((entry) => entry.capability === "extraApprovalForUnattributedChanges"),
@@ -210,6 +232,12 @@ describe("pure governance planner and auditor", () => {
 		const inconsistent = measured();
 		inconsistent.rulesets[0].ruleTypes = inconsistent.rulesets[0].ruleTypes.filter((type) => type !== "deletion");
 		assert.throws(() => parseMeasuredGovernance(inconsistent), /measured-rule-parameter-mismatch/);
+		const huge = measured();
+		huge.capabilities.requiredStatusChecks = Array.from({ length: 1_000 }, (_, index) => ({
+			context: `measured-${index}-${"x".repeat(64)}`,
+			integrationId: null,
+		}));
+		assert.throws(() => parseMeasuredGovernance(huge), /measured-bound/);
 	});
 
 	it("plans, audits, and transitions exact ruleset identity drift", () => {

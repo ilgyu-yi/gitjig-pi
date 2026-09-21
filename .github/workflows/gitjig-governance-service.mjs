@@ -1,7 +1,12 @@
 import {
 	auditGovernance,
+	canonicalByteLength,
 	canonicalJson,
+	GOVERNANCE_BOUNDS,
+	GOVERNANCE_OVERHEADS,
+	parseGovernanceAudit,
 	parseGovernanceConfig,
+	parseGovernanceOperation,
 	parseGovernancePlan,
 	parseMeasuredGovernance,
 	planGovernance,
@@ -27,6 +32,75 @@ function admittedPlan(plan) {
 	} catch {
 		throw new GovernanceServiceRefusal("plan-schema");
 	}
+}
+
+const EFFECT_REFUSAL_ARMS = new Set([
+	"compare-read-unavailable",
+	"compare-read-invalid",
+	"operand-drift",
+	"payload-refused",
+]);
+const GOVERNANCE_STOP_ARMS = Object.freeze([
+	"compare-read-unavailable",
+	"compare-read-invalid",
+	"operand-drift",
+	"payload-refused",
+	"write-unknown",
+	"post-read-unavailable",
+	"post-read-mismatch",
+	"final-read-unavailable",
+	"final-state-drift",
+	"final-audit",
+]);
+const STOP_ARMS = new Set(GOVERNANCE_STOP_ARMS);
+/** @param {unknown} value @param {readonly string[]} keys */
+function closed(value, keys) {
+	return (
+		value !== null &&
+		typeof value === "object" &&
+		!Array.isArray(value) &&
+		Object.keys(value).length === keys.length &&
+		Object.keys(value).every((key) => keys.includes(key))
+	);
+}
+/** @param {unknown} input */
+export function parseGovernanceApplyResult(input) {
+	if (!input || typeof input !== "object" || Array.isArray(input)) throw new GovernanceServiceRefusal("result-schema");
+	const value = /** @type {Record<string,any>} */ (structuredClone(input));
+	if (value.outcome === "applied") {
+		if (!closed(value, ["outcome", "completed", "current", "remaining", "audit"]))
+			throw new GovernanceServiceRefusal("result-schema");
+		value.current = parseMeasuredGovernance(value.current);
+		value.audit = parseGovernanceAudit(value.audit);
+		if (!Array.isArray(value.remaining) || value.remaining.length !== 0)
+			throw new GovernanceServiceRefusal("result-schema");
+	} else if (value.outcome === "stopped") {
+		if (!closed(value, ["outcome", "arm", "completed", "current", "remaining"]) || !STOP_ARMS.has(value.arm))
+			throw new GovernanceServiceRefusal("result-schema");
+		if (value.current !== null) value.current = parseMeasuredGovernance(value.current);
+	} else throw new GovernanceServiceRefusal("result-schema");
+	for (const name of ["completed", "remaining"]) {
+		if (!Array.isArray(value[name])) throw new GovernanceServiceRefusal("result-schema");
+		value[name] = value[name].map(parseGovernanceOperation);
+	}
+	const maximum = value.outcome === "applied" ? GOVERNANCE_BOUNDS.applyResult : 352 * 1024;
+	if (canonicalByteLength(value) > maximum) throw new GovernanceServiceRefusal("result-bound");
+	return structuredClone(value);
+}
+
+/** @param {unknown} input @returns {Record<string,any>} */
+function parseEffectResult(input) {
+	if (closed(input, ["outcome"]) && ["acknowledged", "unknown"].includes(/** @type {any} */ (input).outcome))
+		return /** @type {Record<string,any>} */ (structuredClone(input));
+	if (
+		!closed(input, ["outcome", "arm", "current"]) ||
+		/** @type {any} */ (input).outcome !== "refused" ||
+		!EFFECT_REFUSAL_ARMS.has(/** @type {any} */ (input).arm)
+	)
+		throw new GovernanceServiceRefusal("effect-result");
+	const result = /** @type {Record<string,any>} */ (structuredClone(input));
+	if (result.current !== null) result.current = parseMeasuredGovernance(result.current);
+	return result;
 }
 
 /** @typedef {{readMeasured:()=>Promise<unknown>,writeOperation:(operation:unknown,expected:unknown)=>Promise<{outcome:'acknowledged'|'unknown'}|{outcome:'refused',arm:string,current:unknown}>}} GovernanceEffects */
@@ -72,6 +146,22 @@ export function createGovernanceService() {
 			const initial = planGovernance(config, parseMeasuredGovernance(await effects.readMeasured()));
 			if (!equal(initial, supplied)) throw new GovernanceServiceRefusal("plan-stale");
 			const completed = [];
+			const finish = (/** @type {unknown} */ value) => {
+				const result = parseGovernanceApplyResult(value);
+				if (
+					canonicalByteLength(result.completed) + canonicalByteLength(result.remaining) >
+					canonicalByteLength(supplied.operations) + 2
+				)
+					throw new GovernanceServiceRefusal("result-bound");
+				const currentBytes = result.current === null ? 4 : canonicalByteLength(result.current);
+				const auditBytes = result.outcome === "applied" ? canonicalByteLength(result.audit) : 0;
+				if (
+					canonicalByteLength(result) >
+					canonicalByteLength(supplied) + currentBytes + auditBytes + GOVERNANCE_OVERHEADS.result
+				)
+					throw new GovernanceServiceRefusal("result-bound");
+				return result;
+			};
 			let expected = structuredClone(supplied.measured);
 			for (let index = 0; index < supplied.operations.length; index++) {
 				const remaining = supplied.operations.slice(index);
@@ -79,20 +169,22 @@ export function createGovernanceService() {
 				try {
 					current = planGovernance(config, parseMeasuredGovernance(await effects.readMeasured()));
 				} catch {
-					return { outcome: "stopped", arm: "compare-read-unavailable", completed, current: null, remaining };
+					return finish({ outcome: "stopped", arm: "compare-read-unavailable", completed, current: null, remaining });
 				}
 				if (!equal(current.measured, expected) || !equal(current.operations, remaining))
-					return { outcome: "stopped", arm: "operand-drift", completed, current: current.measured, remaining };
+					return finish({ outcome: "stopped", arm: "operand-drift", completed, current: current.measured, remaining });
 				const operation = supplied.operations[index];
 				const expectedAfter = transitionMeasuredGovernance(expected, operation);
 				let result;
 				try {
-					result = await effects.writeOperation(structuredClone(operation), structuredClone(expected));
+					result = parseEffectResult(
+						await effects.writeOperation(structuredClone(operation), structuredClone(expected)),
+					);
 				} catch {
 					result = { outcome: "unknown" };
 				}
 				if (result.outcome === "refused")
-					return { outcome: "stopped", arm: result.arm, completed, current: result.current, remaining };
+					return finish({ outcome: "stopped", arm: result.arm, completed, current: result.current, remaining });
 				if (result.outcome !== "acknowledged") {
 					let measured = null;
 					try {
@@ -100,22 +192,22 @@ export function createGovernanceService() {
 					} catch {
 						// Unknown means exactly that; absence of a reread must not invent the pre-write state as current.
 					}
-					return { outcome: "stopped", arm: "write-unknown", completed, current: measured, remaining };
+					return finish({ outcome: "stopped", arm: "write-unknown", completed, current: measured, remaining });
 				}
 				let after;
 				try {
 					after = planGovernance(config, parseMeasuredGovernance(await effects.readMeasured()));
 				} catch {
-					return { outcome: "stopped", arm: "post-read-unavailable", completed, current: null, remaining };
+					return finish({ outcome: "stopped", arm: "post-read-unavailable", completed, current: null, remaining });
 				}
 				if (!equal(after.measured, expectedAfter) || !equal(after.operations, supplied.operations.slice(index + 1)))
-					return {
+					return finish({
 						outcome: "stopped",
 						arm: "post-read-mismatch",
 						completed,
 						current: after.measured,
 						remaining,
-					};
+					});
 				expected = expectedAfter;
 				completed.push(structuredClone(operation));
 			}
@@ -123,14 +215,20 @@ export function createGovernanceService() {
 			try {
 				finalMeasured = parseMeasuredGovernance(await effects.readMeasured());
 			} catch {
-				return { outcome: "stopped", arm: "final-read-unavailable", completed, current: null, remaining: [] };
+				return finish({ outcome: "stopped", arm: "final-read-unavailable", completed, current: null, remaining: [] });
 			}
 			if (!equal(finalMeasured, expected))
-				return { outcome: "stopped", arm: "final-state-drift", completed, current: finalMeasured, remaining: [] };
+				return finish({
+					outcome: "stopped",
+					arm: "final-state-drift",
+					completed,
+					current: finalMeasured,
+					remaining: [],
+				});
 			const audit = auditGovernance(config, finalMeasured);
 			if (!audit.compliant)
-				return { outcome: "stopped", arm: "final-audit", completed, current: finalMeasured, remaining: [] };
-			return { outcome: "applied", completed, current: finalMeasured, remaining: [], audit };
+				return finish({ outcome: "stopped", arm: "final-audit", completed, current: finalMeasured, remaining: [] });
+			return finish({ outcome: "applied", completed, current: finalMeasured, remaining: [], audit });
 		},
 	});
 }
@@ -139,7 +237,7 @@ export function createGovernanceService() {
 export function confirmationPresentation(repository, plan) {
 	const candidate = admittedPlan(plan);
 	if (repository !== candidate.repository.nameWithOwner) throw new GovernanceServiceRefusal("confirmation-mismatch");
-	return {
+	const presentation = {
 		repository,
 		configDigest: candidate.configDigest,
 		measuredBasis: candidate.measured,
@@ -148,6 +246,13 @@ export function confirmationPresentation(repository, plan) {
 		risks: ["writes repository governance", "stops without retry or rollback on uncertainty"],
 		confirmation: `${repository} ${candidate.planHash}`,
 	};
+	if (
+		canonicalByteLength(presentation) > GOVERNANCE_BOUNDS.presentation ||
+		canonicalByteLength(presentation) >
+			canonicalByteLength(candidate) + GOVERNANCE_BOUNDS.config + GOVERNANCE_OVERHEADS.presentation
+	)
+		throw new GovernanceServiceRefusal("presentation-bound");
+	return presentation;
 }
 
 /** @param {string} repository @param {unknown} plan */
