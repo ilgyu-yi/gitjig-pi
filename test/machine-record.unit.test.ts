@@ -39,7 +39,9 @@ describe("closed machine-record codec", () => {
 		Object.defineProperty(getter, "x", { enumerable: true, configurable: true, get: () => 1 });
 		const shared = { x: 1 };
 		const hole = Array(1);
-		for (const value of [getter, [shared, shared], hole, -0, 1.5, "\u200b", "\ud800"]) {
+		const symbolObject = { nested: { value: 1 } };
+		Object.defineProperty(symbolObject.nested, Symbol("extra"), { value: true });
+		for (const value of [getter, [shared, shared], hole, symbolObject, -0, 1.5, "\u200b", "\ud800"]) {
 			assert.equal(admit(value).ok, false);
 		}
 		assert.equal(admitMachineRecord({ marker: "<!-- closes: v1 -->", value: null }).ok, false);
@@ -93,6 +95,12 @@ describe("closed machine-record codec", () => {
 });
 
 describe("machine publication transport", () => {
+	it("binds post-spawn error classification to the observed spawn event", async () => {
+		const source = await readFile(new URL("../.pi/extensions/gitjig/publish/executor.ts", import.meta.url), "utf8");
+		assert.match(source, /child\.on\("spawn", \(\) => \{\s*didSpawn = true;/);
+		assert.match(source, /settle\(\{ spawned: didSpawn, code: null, signal: null/);
+	});
+
 	it("verifies all six destinations with one send and one GET, and invalid locators with zero GETs", async () => {
 		const root = await mkdtemp(join(tmpdir(), "gitjig-machine-"));
 		const bin = join(root, "bin");
@@ -112,10 +120,10 @@ fs.appendFileSync(process.env.CALLS,(args[0]==="api"?"get":"send")+"\\n");
 if(args[0]==="api"){
  fs.writeFileSync(process.env.APIARGS,args.join(" "));
  const m=JSON.parse(fs.readFileSync(process.env.META,"utf8")),body=process.env.MISMATCH?"wrong":fs.readFileSync(process.env.BODY,"utf8");
- const p={id:process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body};if(!process.env.OMIT_NUMBER)p.number=m.number;
+ const p={id:process.env.WRONG_ID?9:(m.comment?8:99),html_url:process.env.WRONG_HTML?m.url+"/wrong":m.url,body};if(!process.env.OMIT_NUMBER)p.number=process.env.WRONG_NUMBER?99:m.number;
  if(m.comment)p.issue_url=process.env.WRONG_PARENT?"https://api.github.com/repos/o/r/issues/99":"https://api.github.com/repos/o/r/issues/"+m.number;
  else if(m.noun==="pr")p.base={repo:{full_name:process.env.WRONG_BASE?"x/y":"o/r"}};else if(!process.env.OMIT_REPO)p.repository_url="https://api.github.com/repos/o/r";
- if(m.verb==="create")p.title=process.env.WRONG_TITLE?"wrong":m.title;
+ if(m.verb==="create")p.title=process.env.WRONG_TITLE?"wrong":m.title;if(process.env.PULL_SHAPE)p.pull_request={url:"x"};
  process.stdout.write(JSON.stringify(p));
 }else{
  const noun=args[0],verb=args[1],comment=verb==="comment",number=verb==="create"?7:Number(args[2]);
@@ -140,6 +148,8 @@ if(args[0]==="api"){
 			WRONG_PARENT: process.env.WRONG_PARENT,
 			WRONG_BASE: process.env.WRONG_BASE,
 			WRONG_TITLE: process.env.WRONG_TITLE,
+			WRONG_NUMBER: process.env.WRONG_NUMBER,
+			PULL_SHAPE: process.env.PULL_SHAPE,
 			LOCATOR: process.env.LOCATOR,
 			OMIT_NUMBER: process.env.OMIT_NUMBER,
 			OMIT_REPO: process.env.OMIT_REPO,
@@ -320,6 +330,8 @@ if(args[0]==="api"){
 				["WRONG_PARENT", { kind: "pr-comment", number: 7 }],
 				["WRONG_BASE", { kind: "pr-body", number: 7 }],
 				["WRONG_TITLE", { kind: "pr-create", title: "Machine title" }],
+				["WRONG_NUMBER", { kind: "issue-body", number: 7 }],
+				["PULL_SHAPE", { kind: "issue-body", number: 7 }],
 			] as const) {
 				await writeFile(callsFile, "");
 				process.env[variable] = "1";

@@ -53,21 +53,30 @@ export const PUBLISH_TOOL_NAME = "gitjig_publish";
 const DestinationParams = Type.Union(
 	PUBLISH_DESTINATION_KINDS.map((kind) =>
 		kind.endsWith("create")
-			? Type.Object({ kind: Type.Literal(kind), title: Type.String({ minLength: 1 }) }, { additionalProperties: false })
+			? Type.Object(
+					{
+						kind: Type.Literal(kind),
+						title: Type.String({ minLength: 1, pattern: "^(?!-)(?=.*\\S)[^\\r\\n\\u0000]+$" }),
+					},
+					{ additionalProperties: false },
+				)
 			: Type.Object(
 					{ kind: Type.Literal(kind), number: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) },
 					{ additionalProperties: false },
 				),
 	),
 );
-const JsonValueParams = Type.Union([
-	Type.Null(),
-	Type.Boolean(),
-	Type.Integer({ minimum: Number.MIN_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER }),
-	Type.String(),
-	Type.Array(Type.Unknown()),
-	Type.Record(Type.String(), Type.Unknown()),
-]);
+const JsonModule = Type.Module({
+	JsonValue: Type.Union([
+		Type.Null(),
+		Type.Boolean(),
+		Type.Integer({ minimum: Number.MIN_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER }),
+		Type.String(),
+		Type.Array(Type.Ref("JsonValue")),
+		Type.Record(Type.String(), Type.Ref("JsonValue")),
+	]),
+});
+const JsonValueParams = JsonModule.JsonValue;
 const PublishParams = Type.Union([
 	Type.Object(
 		{
@@ -80,7 +89,12 @@ const PublishParams = Type.Union([
 		{
 			machineRecord: Type.Object(
 				{
-					marker: Type.String({ maxLength: 256, description: "The admitted ASCII machine-record marker." }),
+					marker: Type.String({
+						maxLength: 256,
+						pattern:
+							"^<!-- [a-z][a-z0-9]*(?:-[a-z0-9]+)*: v(?:[1-9][0-9]{0,8})(?: [a-z][a-zA-Z0-9]*=[A-Za-z0-9][A-Za-z0-9._:-]{0,127})* -->$",
+						description: "The admitted ASCII machine-record marker.",
+					}),
 					value: JsonValueParams,
 				},
 				{ additionalProperties: false },
