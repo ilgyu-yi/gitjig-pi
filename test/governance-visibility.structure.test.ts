@@ -11,6 +11,7 @@ describe("governance session visibility structure", () => {
 		assert.match(source, /display: true/);
 		assert.match(source, /await ctx\.waitForIdle\(\)/);
 		assert.doesNotMatch(source, /appendEntry\("gitjig-governance"/);
+		assert.doesNotMatch(source, /^import .*\.github/m);
 		assert.doesNotMatch(source, /content: \[\], display: false/);
 	});
 

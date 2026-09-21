@@ -6,6 +6,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 
 const RECORD_BOUND = 512 * 1024;
+const PLAN_BOUND = 256 * 1024;
+const AUDIT_BOUND = 128 * 1024;
+const PRESENTATION_BOUND = 320 * 1024;
+const APPLY_RESULT_BOUND = 480 * 1024;
+const WRAPPER_OVERHEAD = 1024;
 const RECORD_KEYS = Object.freeze({
 	planned: ["outcome", "plan"],
 	audited: ["outcome", "audit"],
@@ -104,7 +109,15 @@ function admitPlain(value: unknown, active = new Set<object>()): void {
 			)
 				throw new Error("pi-record-invalid");
 			const length = Object.getOwnPropertyDescriptor(value, "length");
-			if (!length || length.enumerable || length.configurable || length.get || length.set)
+			if (
+				!length ||
+				length.value !== value.length ||
+				length.writable !== true ||
+				length.enumerable ||
+				length.configurable ||
+				length.get ||
+				length.set
+			)
 				throw new Error("pi-record-invalid");
 			for (const key of expected) {
 				const descriptor = Object.getOwnPropertyDescriptor(value, key);
@@ -147,7 +160,18 @@ export function admitGovernanceSessionRecord(
 	)
 		throw new Error("pi-record-invalid");
 	const canonical = canonicalJson(value);
-	if (Buffer.byteLength(canonical, "utf8") > RECORD_BOUND) throw new Error("pi-record-oversize");
+	const bytes = Buffer.byteLength(canonical, "utf8");
+	const artifact = outcome === "planned" ? record.plan : outcome === "audited" ? record.audit : undefined;
+	const artifactBytes = artifact === undefined ? 0 : Buffer.byteLength(canonicalJson(artifact), "utf8");
+	if (
+		bytes > RECORD_BOUND ||
+		(outcome === "planned" && (artifactBytes > PLAN_BOUND || bytes > artifactBytes + WRAPPER_OVERHEAD)) ||
+		(outcome === "audited" && (artifactBytes > AUDIT_BOUND || bytes > artifactBytes + WRAPPER_OVERHEAD)) ||
+		(outcome === "refused" && bytes > WRAPPER_OVERHEAD) ||
+		(outcome === "presented" && bytes > PRESENTATION_BOUND) ||
+		(["applied", "stopped"].includes(outcome) && bytes > APPLY_RESULT_BOUND)
+	)
+		throw new Error("pi-record-oversize");
 	const parsed = JSON.parse(canonical) as Record<string, unknown>;
 	admitPlain(parsed);
 	return parsed;
@@ -166,8 +190,7 @@ export function asciiGovernanceJson(value: unknown): string {
 	);
 }
 
-export function governanceMessage(record: Record<string, unknown>, canonicalJson: (value: unknown) => string) {
-	const admitted = admitGovernanceSessionRecord(record, canonicalJson);
+function envelopeMessage(admitted: Record<string, unknown>, canonicalJson: (value: unknown) => string) {
 	const bytes = Buffer.from(canonicalJson(admitted), "utf8");
 	const envelope = {
 		type: "gitjig-governance-data",
@@ -182,6 +205,15 @@ export function governanceMessage(record: Record<string, unknown>, canonicalJson
 		display: true,
 		details: admitted,
 	};
+}
+
+export function governanceMessage(record: Record<string, unknown>, canonicalJson: (value: unknown) => string) {
+	return envelopeMessage(admitGovernanceSessionRecord(record, canonicalJson), canonicalJson);
+}
+
+function fixedRefusalMessage(arm: string) {
+	const admitted = Object.freeze({ outcome: "refused", arm });
+	return envelopeMessage(admitted, JSON.stringify);
 }
 
 interface GovernanceService {
@@ -292,10 +324,10 @@ export function registerGovernanceCommand(pi: ExtensionAPI, repoRoot: string): v
 			} catch (error) {
 				if (insertedAttempt) presented.delete(insertedAttempt);
 				if (!crossedService && !sent) {
-					const arm = governanceRefusalArm(error);
-					const fallback = arm === "pi-record-oversize" ? "pi-record-oversize" : arm;
 					try {
-						send({ outcome: "refused", arm: fallback });
+						const fallback = fixedRefusalMessage(governanceRefusalArm(error));
+						sent = true;
+						pi.sendMessage(fallback, { triggerTurn: true });
 					} catch {
 						// One synchronous API attempt only; no recursive fallback or invented durability.
 					}

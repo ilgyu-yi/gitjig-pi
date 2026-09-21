@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { canonicalJson } from "../.github/workflows/gitjig-governance.mjs";
@@ -27,6 +28,12 @@ describe("Pi governance visibility transport", () => {
 			() => admitGovernanceSessionRecord({ outcome: "planned", plan: sparse }, canonicalJson),
 			/pi-record-invalid/,
 		);
+		const frozenLength = ["x"];
+		Object.defineProperty(frozenLength, "length", { writable: false });
+		assert.throws(
+			() => admitGovernanceSessionRecord({ outcome: "planned", plan: frozenLength }, canonicalJson),
+			/pi-record-invalid/,
+		);
 		const accessor = { outcome: "refused", arm: "x" };
 		Object.defineProperty(accessor, "extra", { enumerable: true, get: () => "surprise" });
 		assert.throws(() => admitGovernanceSessionRecord(accessor, canonicalJson), /pi-record-invalid/);
@@ -48,7 +55,12 @@ describe("Pi governance visibility transport", () => {
 		const envelope = JSON.parse(lines[1]);
 		assert.equal(Buffer.from(envelope.data, "base64").toString("utf8"), canonicalJson(record));
 		assert.equal(envelope.bytes, Buffer.byteLength(canonicalJson(record)));
+		assert.equal(envelope.sha256, createHash("sha256").update(canonicalJson(record)).digest("hex"));
+		assert.deepEqual(Object.keys(envelope), ["type", "encoding", "bytes", "sha256", "data"]);
+		assert.equal(envelope.type, "gitjig-governance-data");
+		assert.equal(message.content.endsWith("\n"), false);
 		assert.equal(Math.ceil(524_288 / 3) * 4, 699_052);
+		assert.equal(79 + 1 + 126 + 699_052 + 1 + 57, 699_316);
 		const display = asciiGovernanceJson(record);
 		assert.match(display, /^[\x20-\x7e]+$/);
 		assert.deepEqual(JSON.parse(display), record);
@@ -66,6 +78,8 @@ describe("Pi governance visibility transport", () => {
 		let renderer: ((message: Message, options: { outputPad: number }, theme: unknown) => Component) | undefined;
 		const events = new Map<string, () => void>();
 		const sent: Array<{ message: Message; options: { triggerTurn: boolean } }> = [];
+		let throwSend = false;
+		let sendAttempts = 0;
 		const fake = {
 			on: (name: string, handler: () => void) => events.set(name, handler),
 			registerMessageRenderer: (_name: string, value: typeof renderer) => {
@@ -74,7 +88,11 @@ describe("Pi governance visibility transport", () => {
 			registerCommand: (_name: string, value: { handler: typeof command }) => {
 				command = value.handler;
 			},
-			sendMessage: (message: Message, options: { triggerTurn: boolean }) => sent.push({ message, options }),
+			sendMessage: (message: Message, options: { triggerTurn: boolean }) => {
+				sendAttempts++;
+				if (throwSend) throw new Error("send-failed");
+				sent.push({ message, options });
+			},
 		} as unknown as ExtensionAPI;
 		registerGovernanceCommand(fake, process.cwd());
 		assert.ok(command);
@@ -92,8 +110,23 @@ describe("Pi governance visibility transport", () => {
 		assert.equal(sent[0].options.triggerTurn, true);
 		assert.deepEqual(sent[0].message.details, { outcome: "refused", arm: "pi-mode" });
 		assert.equal(waits, 1);
-		const component = renderer?.(sent[0].message, { outputPad: 0 }, {});
+		assert.equal(sendAttempts, 1);
+		throwSend = true;
+		await command?.("not-grammar", {
+			mode: "tui",
+			sessionManager: { isPersisted: () => true },
+			waitForIdle: async () => {
+				waits++;
+			},
+		});
+		assert.equal(sendAttempts, 2, "a synchronous send failure must not retry");
+		throwSend = false;
+		const restored = JSON.parse(JSON.stringify(sent[0].message)) as Message;
+		const component = renderer?.(restored, { outputPad: 0 }, {});
+		assert.ok(component.render(1).length > 0);
 		assert.ok(component.render(12).length > 0);
+		const tampered = renderer?.({ display: true, details: { outcome: "alien" } }, { outputPad: 0 }, {});
+		assert.match(tampered.render(80).join(""), /invalid gitjig governance record/);
 		events.get("session_compact")?.();
 		events.get("session_tree")?.();
 	});

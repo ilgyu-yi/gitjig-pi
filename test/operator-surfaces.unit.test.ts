@@ -367,6 +367,7 @@ describe("#131 persistent session surface", () => {
 			const pi = {
 				registerTool: (tool: unknown) => tools.push(tool as RegisteredTool),
 				registerCommand: () => {},
+				registerMessageRenderer: () => {},
 				on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
 					if (event === "session_start") sessionStart = handler;
 				},

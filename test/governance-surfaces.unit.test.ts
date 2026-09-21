@@ -8,6 +8,9 @@ import { describe, it } from "node:test";
 import { configureGovernance, readGovernancePlan } from "../.github/bin/gitjig-governance.mjs";
 import {
 	CAPABILITIES,
+	canonicalByteLength,
+	GOVERNANCE_BOUNDS,
+	GOVERNANCE_OVERHEADS,
 	GovernanceRefusal,
 	parseGovernanceConfig,
 	planGovernance,
@@ -62,6 +65,11 @@ describe("shared governance apply service", () => {
 	it("separately admits exact interactive, non-interactive, and Pi confirmation language", () => {
 		const plan = planGovernance(config, measured());
 		const presentation = confirmationPresentation(config.repository.nameWithOwner, plan);
+		assert.ok(canonicalByteLength(presentation) <= GOVERNANCE_BOUNDS.presentation);
+		assert.ok(
+			canonicalByteLength(presentation) <=
+				canonicalByteLength(plan) + GOVERNANCE_BOUNDS.config + GOVERNANCE_OVERHEADS.presentation,
+		);
 		for (const kind of ["interactive", "pi"] as const) {
 			assert.equal(
 				admitConfirmation(kind, presentation.confirmation, config.repository.nameWithOwner, plan, kind).kind,
@@ -114,6 +122,17 @@ describe("shared governance apply service", () => {
 		);
 		assert.equal(result.outcome, "applied");
 		assert.deepEqual(parseGovernanceApplyResult(result), result);
+		assert.ok(
+			canonicalByteLength(result) <=
+				canonicalByteLength(plan) +
+					canonicalByteLength(result.current) +
+					canonicalByteLength(result.audit) +
+					GOVERNANCE_OVERHEADS.result,
+		);
+		assert.ok(
+			canonicalByteLength(result.completed) + canonicalByteLength(result.remaining) <=
+				canonicalByteLength(plan.operations) + 2,
+		);
 		assert.equal(writes, 1);
 		await assert.rejects(
 			service.apply(
@@ -240,7 +259,24 @@ describe("shared governance apply service", () => {
 		assert.deepEqual({ arm: result.arm, writes }, { arm: "operand-drift", writes: 0 });
 	});
 
-	it("refuses unknown apply-result arms", () => {
+	it("admits every finite stopped arm with null or parsed current and refuses all others", () => {
+		for (const arm of [
+			"compare-read-unavailable",
+			"compare-read-invalid",
+			"operand-drift",
+			"payload-refused",
+			"write-unknown",
+			"post-read-unavailable",
+			"post-read-mismatch",
+			"final-read-unavailable",
+			"final-state-drift",
+			"final-audit",
+		]) {
+			for (const current of [null, measured()]) {
+				const result = { outcome: "stopped", arm, completed: [], current, remaining: [] };
+				assert.deepEqual(parseGovernanceApplyResult(result), result);
+			}
+		}
 		assert.throws(
 			() =>
 				parseGovernanceApplyResult({
