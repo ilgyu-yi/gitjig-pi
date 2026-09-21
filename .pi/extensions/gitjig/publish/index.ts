@@ -66,17 +66,11 @@ const DestinationParams = Type.Union(
 				),
 	),
 );
-const JsonModule = Type.Module({
-	JsonValue: Type.Union([
-		Type.Null(),
-		Type.Boolean(),
-		Type.Integer({ minimum: Number.MIN_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER }),
-		Type.String(),
-		Type.Array(Type.Ref("JsonValue")),
-		Type.Record(Type.String(), Type.Ref("JsonValue")),
-	]),
-});
-const JsonValueParams = JsonModule.JsonValue;
+// Recursive JSON Schema validators commonly consume the JavaScript call stack
+// before the codec's iterative depth/byte admission can run. Keep this one
+// semantic boundary open at pre-validation; admitMachineRecord is the closed,
+// stack-safe authority for value shape, scalar domain, depth, and body bytes.
+const JsonValueParams = Type.Unknown();
 const PublishParams = Type.Union([
 	Type.Object(
 		{

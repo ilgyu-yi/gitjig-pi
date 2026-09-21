@@ -782,9 +782,11 @@ describe("the linkage exemption never reaches a title (issue #129; SPEC §3.3)",
 
 interface PublishToolSpec {
 	name: string;
+	parameters: unknown;
 	execute(
 		toolCallId: string,
 		params: Record<string, unknown>,
+		signal?: AbortSignal,
 	): Promise<{ content: Array<{ type: string; text?: string }>; details: Record<string, unknown> }>;
 }
 
@@ -919,6 +921,38 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 			}
 		}
 		assert.deepEqual([...declared].sort(), [...(publishDestinationKinds ?? [])].sort());
+	});
+
+	it("the registered schema delegates deep value semantics to stack-safe runtime admission", async (t) => {
+		if (publishModule === undefined) {
+			t.skip(`publish/index.ts is not loadable in-process here: ${publishModuleFailure}`);
+			return;
+		}
+		const { Check } = await import("typebox/value");
+		const { tool, fixture } = await publishToolAgainstShim("deep registered machine value");
+		try {
+			let deep: unknown = null;
+			for (let depth = 0; depth < 12_000; depth += 1) deep = [deep];
+			const params = {
+				machineRecord: { marker: "<!-- machine-record: v1 -->", value: deep },
+				destination: { kind: "issue-comment", number: 5 },
+			};
+			assert.equal(Check(tool.parameters as never, params), true, "pre-validation must not recurse through value");
+			const controller = new AbortController();
+			controller.abort();
+			const admitted = await tool.execute("deep", params, controller.signal);
+			assert.equal(admitted.details.disposition, "refuse-repository", "bounded deep JSON must reach runtime admission");
+
+			const invalid = {
+				machineRecord: { marker: "<!-- machine-record: v1 -->", value: undefined },
+				destination: { kind: "issue-comment", number: 5 },
+			};
+			assert.equal(Check(tool.parameters as never, invalid), true, "value shape belongs to runtime admission");
+			const refused = await tool.execute("invalid", invalid);
+			assert.equal(refused.details.disposition, "refuse-machine-record");
+		} finally {
+			removeFixture(fixture);
+		}
 	});
 });
 
