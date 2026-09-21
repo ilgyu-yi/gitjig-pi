@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 433 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 440 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 448 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 555 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 565 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 569 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 581 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 597 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 733 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 747 |
-| &nbsp;&nbsp;§3.11 | Gate design | 761 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 783 |
-| §4 | Substrate and install contract | 793 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 797 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 809 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 817 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 823 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 827 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 831 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 843 |
-| &nbsp;&nbsp;§4.8 | The command layer | 853 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 910 |
-| §5 | Cross-cutting contracts | 1029 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1033 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1039 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1043 |
-| &nbsp;&nbsp;§5.4 | Work language | 1047 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1051 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1059 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1071 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1081 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1089 |
-| §6 | Self-governance milestone | 1101 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1112 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 569 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 579 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 583 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 595 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 611 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 747 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 761 |
+| &nbsp;&nbsp;§3.11 | Gate design | 775 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 797 |
+| §4 | Substrate and install contract | 807 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 811 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 823 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 831 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 837 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 841 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 845 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 857 |
+| &nbsp;&nbsp;§4.8 | The command layer | 867 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 924 |
+| §5 | Cross-cutting contracts | 1043 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1047 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1053 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1057 |
+| &nbsp;&nbsp;§5.4 | Work language | 1061 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1065 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1073 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1085 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1095 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1103 |
+| §6 | Self-governance milestone | 1115 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1126 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -537,6 +537,20 @@ The second is **§1.1's linkage line**: a body whose FIRST line is exactly that 
 *Reporting.* Neutralization is **never silent**. Where the instrument rewrites any span to an inert spelling, the published result says so — **how many spans it rewrote, across both published operands**, and never their text — so a caller whose reference was rewritten learns it from the outcome rather than by reading the surface afterwards. The number counts **transformations applied, never distinct references**, and the difference is a recorded decision rather than an artifact: a span that was already inert is transformed again, since telling it from a live one would need a second reader of the body, and any narrower pattern matching inside an already-wrapped span draws its own pass — so a single URL form carrying both a mention and a `GH-N` draws three. Both err toward reporting more rather than less, which is the safe direction for a number whose purpose is to make a rewrite visible. A send that reports success while having removed the effect the caller composed for is an unmeasured allow at this gate's own surface (§3.9), and the same obligation binds whatever disposition a later amendment takes on the exemption above.
 
 *Named false-block cost (§3.6).* A body legitimately carrying format characters inside a secret-shaped span is over-blocked by the Cf strip, which joins what its author meant as inert. The in-flow recovery is defuse-and-recall: respell the span inertly and call the tool again — no repair commit and no escape needed, because the refused body never left the session.
+
+*Machine-record amendment.* A first-party closed record whose consumer depends on parsed JSON values uses the publish tool's `machineRecord:{marker,value}` arm, not plain `body`; the existing review-round record is the sole procedural legacy exception and retains its byte-identical fenced/pretty composition, parser, publication and refetch. The request, machine record and destination are descriptor-read ordinary records (prototype exactly `Object.prototype` or null; own enumerable/configurable/writable data properties only; no unknown, inherited, symbolic or accessor properties). Exactly one content arm exists. Numbered destinations carry exactly `kind,number`; create destinations exactly `kind,title`. This tightens malformed inputs without changing valid plain-text acts.
+
+`value` is recursive JSON: null, booleans, scalar-only primitive strings, finite safe integers other than negative zero, dense arrays, and ordinary string-keyed objects. NUL, unpaired surrogates and category-Cf code points refuse. Arrays admit only `Array.prototype`, their canonical non-enumerable/non-configurable own `length` data descriptor, and enumerable/configurable/writable own indexes `0..length-1`; holes, extras, symbols, accessors, cycles and repeated container aliases refuse. Descriptor traversal invokes no getter. A dedicated serializer orders object keys lexicographically by Unicode scalar sequence (shorter exact prefix first, including numeric-looking keys), renders null/booleans canonically and integers as shortest base-10, quotes quote/reverse-solidus, renders controls as lowercase `\u00xx`, and otherwise emits admitted scalar UTF-8.
+
+The ASCII marker is at most 256 bytes and matches `^<!-- [a-z][a-z0-9]*(?:-[a-z0-9]+)*: v(?:[1-9][0-9]{0,8})(?: [a-z][a-zA-Z0-9]*=[A-Za-z0-9][A-Za-z0-9._:-]{0,127})* -->$`: single literal spaces, unique scalar-sorted fields, and no maximal ASCII-letter component (split on nonletters) case-fold-equal to `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` or `resolved`. In every JSON key/string token the machine serializer maps mention sigil to `\u0040`, issue sigil to `\u0023`, hyphen to `\u002d`, colon to `\u003a`, and slash to `\u002f`. `semanticBody` and `wireBody` are respectively marker + LF + canonical or encoded compact JSON, no trailing LF, each independently bounded to 65,536 UTF-8 bytes. Parsing the encoded form restores the admitted value. Only this five-character codec migrates under the publish owner; review composition bytes do not.
+
+The machine arm scans the exact wire body and, in deterministic depth-first order (scalar-sorted object key before value; array index ascending), every original key/string both raw and through one bounded escape view. That view recognizes only lowercase `u` plus four hex digits after reverse-solidus, refuses malformed prefixes, composes adjacent high/low surrogate escapes, refuses lone/reversed surrogates and decoded NUL/Cf, never recursively decodes, and is bounded to 65,536 UTF-8 bytes. It uses the same committed secret patterns. Diagnostics carry only fixed operand classes/indexes, pattern IDs and numeric lines. The wire body then crosses the unexempted neutralizer and must remain byte-identical with body count zero; there is no linkage exemption or fallback. Title scanning remains unchanged, so the published total may correctly be body-zero/title-nonzero and verification compares the exact sent title.
+
+Host and repository are resolved, admitted, pinned and passed explicitly before spawn. Validation or inability to spawn any child refuses. Spawn is the irreversible boundary and there is at most one publishing child/send. Stdout is valid only as UTF-8 `locator + LF`, exactly one line and at most 4,096 bytes; overflow, controls, missing LF, extra whitespace/text or invalid encoding yields no locator. After every terminal class—including nonzero, signal, timeout, abort and stdin/write failure—the bounded stdout is examined: no strict locator means zero GETs and `outcome-unverified`; a strict locator means exactly one authenticated verification GET regardless of terminal class. The GET is not a publishing child. Exact reread alone yields `published`; all other post-spawn states are `outcome-unverified`, with zero automatic retry, resend or fallback and manual inspection before a new request.
+
+The locator is HTTPS on the pinned host/repository with positive no-leading-zero IDs and no query, userinfo, alternate port, encoded separator or extra path. Issue/PR comments use exact `/issues/N#issuecomment-C` or `/pull/N#issuecomment-C`, then GET `/repos/O/R/issues/comments/C` and bind numeric id, exact parent `issue_url`, exact `html_url` and wire body. Issue bodies/creates use exact `/issues/N` plus GET `/repos/O/R/issues/N`, binding requested/returned number, exact repository/html identity, absence of `pull_request`, body and—on create—sent title. PR bodies/creates use exact `/pull/N` plus GET `/repos/O/R/pulls/N`, binding number, `base.repo.full_name`, html identity, body and create title. The reread marker and body bytes match, and parsed encoded JSON equals the admitted value. Only then may the result expose the validated locator, total neutralization count and `verified:true`.
+
+The derived implementation proves both/neither/unknown arms; descriptor/prototype/getter/symbol/container/alias attacks; key order, number and marker boundaries; all escapes and semantic-scan views; both body bounds; body/title counts; exact stdout framing/overflow; every pre/post-spawn terminal arm with and without a locator; every destination identity/type/parent/body/title mismatch; one-send, valid-locator-one-GET, invalid-locator-zero-GET and no-retry mutants; and byte-identical legacy review records. This amendment grants no governance-application authority: #314 remains blocked until that separate implementation lands and is independently verified.
 
 *Enumerated residuals, in place (§3.11).* A refused body persists in the run's session file as the tool call's own arguments — local state under §5.5's boundary, not a publication surface, enumerated rather than instrumented. Adversarially *encoded* payloads pass unrecognized: this tier is in-session mistake prevention, not a security boundary (§3.2). A span split across lines survives the per-line matching wherever a rendering boundary rejoins it. And the commit-time scan's own Cf allowance is that reader's residual, #39's to close, not this block's. **Not a residual, and named as unmet: this gate's own read of the shared pattern file.** It is a worktree read, so an edit leaving the set valid and still compiling while matching less makes this gate run, match nothing, and publish — no refusal, no record, no line — and it is a STATE by §5.9's test: one clone has the edit and another does not. §3.3's tier-2 block grounds the same file's read on the advice tier's door granting that actor more; that ground does not reach here, because no such door stands beneath this boundary and the arm above says the two readers' fail directions diverge by face rather than by rule. No other ground has been found that does not also excuse every gate guarding its own operator, which §3.10 forbids with an empty exemption set. So this state is enumerated here but **not excused**, which §5.9 names as its own third status rather than as a discharge. It is recorded as a declared deferral under §3.6's terms: the hardening trigger is the first instrument that can attest the pattern set this gate actually used, and the owner is the issue that lands it.
 

@@ -71,6 +71,12 @@ Before editing, invoke the advisory command with one closed JSON argument:
 
 The required fields are `plan`, `failingCheck.description`, `failingCheck.command`, and a non-empty list of normalized repository-relative `paths`; unknown or missing fields, unrouted or conflicting paths, and unavailable canonical anchors produce an explicit **incomplete** result, not readiness. The command uses the paths only to select exact `SPEC.md` sections through the committed policy, then injects the brief into the current session. It does not execute the supplied command or infer authority from plan text. Plan/check text is repository- or operator-provided untrusted context that is shown to the model verbatim; the committed policy and symlink-safe `SPEC.md` read, not that text, select the governing clauses. Full contract in SPEC §2.5.
 
+## Publishing machine records
+
+Use ordinary `body` publication for prose. A new first-party closed record whose consumer relies on parsed JSON values must use the settled `machineRecord` arm once its separately derived implementation lands; raw machine JSON sent as plain text has no parsed-value fidelity guarantee because egress neutralization deliberately rewrites actionable spellings. Existing review-round records are the sole legacy exception and retain their byte-identical fenced format.
+
+The machine mode is fail-closed: it admits a bounded structured JSON domain and marker, deterministically emits inert JSON strings, scans both semantic values and wire bytes with the existing secret patterns, requires zero machine-body neutralizer rewrites, sends once, and verifies an exact destination-bound reread before claiming publication. Any post-spawn ambiguity is `outcome-unverified`, with no automatic resend. This section documents the contract settled for the later implementation; it does not claim the current runtime already accepts `machineRecord`. Full contract in SPEC §3.3.
+
 ## The development toolchain
 
 Formatting, linting and type checking run from a root `package.json` and are **development and CI only**. They are not part of what an adopting repository receives, and they are not a precondition for the suite above — the command runs unchanged in a clone that never installs. Contract in SPEC §3.3 (`source-style`, `type-check`).
