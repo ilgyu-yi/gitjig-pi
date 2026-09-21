@@ -935,8 +935,13 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 		);
 		const topRequired = (registered.parameters as { required?: unknown }).required;
 		assert.ok(
-			Array.isArray(topRequired) && topRequired.includes("destination") && topRequired.includes("body"),
-			`the tool does not DECLARE both published operands required. Every send has a body and a destination; an interface saying otherwise invites a call the instrument then refuses. Declared required set was: ${JSON.stringify(topRequired)}`,
+			Array.isArray(topRequired) && topRequired.includes("destination"),
+			`the tool does not DECLARE its destination required. Declared required set was: ${JSON.stringify(topRequired)}`,
+		);
+		assert.deepEqual(
+			Object.keys(properties ?? {}).sort(),
+			["body", "destination", "machineRecord"],
+			"the declared request must expose exactly the two exclusive content arms and destination; service admission enforces exactly one arm",
 		);
 		// Membership and required-ness are two axes; the PROPERTY SET is a third.
 		// A property added to the declared destination that the instrument never

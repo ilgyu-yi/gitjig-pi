@@ -410,6 +410,21 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			'code !== null ? `exit status ${code}` : `signal ${signal ?? "unknown"}`',
 			"code",
 			'signal ?? "unknown"',
+			// Machine-record locator and API protocol components. Repository owner,
+			// name and host have passed isPublishRepository's closed ASCII grammar;
+			// the remaining carriers are positive safe integers or fixed choices.
+			// These strings are child operands / exact identity expectations, never
+			// warning text; escaping them would corrupt the protocol identity.
+			"escaped(owner)",
+			"escaped(name)",
+			"stem",
+			"repository.nameWithOwner",
+			"commentId",
+			'surface[1] === "issues" ? "issues" : "pulls"',
+			"number",
+			"repository.host",
+			"apiRoot",
+			"locator.number",
 		],
 	},
 	{
@@ -426,6 +441,11 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// Carriers of this module's own fixed causes.
 			"cause",
 			"outcome.cause",
+			// Machine admission causes are a closed set of fixed literals; pattern
+			// IDs are format-checked tokens and line locators are numbers.
+			"admission.cause",
+			'patternIds.join(", ")',
+			'lines.join(", ")',
 			// `outcome.url` is NOT here either. The comment-URL shape closes
 			// the LINE-FORGING half of this class — anchored at both ends,
 			// body class excluding whitespace — and leaves the rest: `[^\s]`

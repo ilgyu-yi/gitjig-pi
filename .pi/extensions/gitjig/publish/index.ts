@@ -51,7 +51,15 @@ import { performPublish } from "./service.ts";
 export const PUBLISH_TOOL_NAME = "gitjig_publish";
 
 const PublishParams = Type.Object({
-	body: Type.String({ description: "The exact text to publish; scanned and neutralized before any send." }),
+	body: Type.Optional(
+		Type.String({ description: "Ordinary prose to publish; exactly one of body or machineRecord is required." }),
+	),
+	machineRecord: Type.Optional(
+		Type.Object({
+			marker: Type.String({ description: "The admitted ASCII machine-record marker." }),
+			value: Type.Unknown({ description: "A value in the closed recursive JSON domain." }),
+		}),
+	),
 	destination: Type.Object({
 		kind: Type.Union(PUBLISH_DESTINATION_KINDS.map((kind) => Type.Literal(kind))),
 		number: Type.Optional(
@@ -115,12 +123,16 @@ export function registerPublishTool(pi: ExtensionAPI, repoRoot: string, stateRoo
 		label: "Publish",
 		description:
 			"Publish repository-derived text to the platform: comment on an issue or PR, edit an issue or " +
-			"PR body, or create an issue or PR. The body — and, for the create kinds, the title — is scanned " +
-			"against the committed secret patterns and refused on a match; relayed mentions and actionable " +
-			"references are neutralized to inert spellings before the send.",
+			"PR body, or create an issue or PR. Ordinary body text is scanned and neutralized; machineRecord " +
+			"publishes closed JSON through a reversible inert codec and claims success only after an exact reread. " +
+			"Create titles are scanned and neutralized in both modes.",
 		parameters: PublishParams,
 		async execute(_toolCallId, params) {
-			return performPublish({ body: params.body, destination: params.destination }, repoRoot, stateRoot);
+			const request =
+				params.machineRecord === undefined
+					? { body: params.body, destination: params.destination }
+					: { machineRecord: params.machineRecord, destination: params.destination };
+			return performPublish(request, repoRoot, stateRoot);
 		},
 		renderCall(args, theme) {
 			return renderActCall("Publish", publishTarget(args), theme);

@@ -7,11 +7,14 @@ import {
 	isPublishRepository,
 	kindCarriesTitle,
 	type PublishRepository,
+	resolvePublishRepository,
+	runMachinePublish,
 	runPublishChild,
 	specForKind,
 } from "./executor.ts";
 import { neutralizeForDestination, neutralizeOperand } from "./neutralize.ts";
-import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody } from "./scan.ts";
+import { admitMachineRecord, decodeEscapeView, isClosedDataRecord } from "./machine-record.ts";
+import { type MergedScan, mergeScanOutcomes, PatternSourceError, scanBody, type ScanOutcome } from "./scan.ts";
 
 export interface PublishResult {
 	content: Array<{ type: "text"; text: string }>;
@@ -22,11 +25,11 @@ function result(text: string, details: Record<string, unknown>): PublishResult {
 	return { content: [{ type: "text", text }], details };
 }
 
-export type PublishRequest = { body: string; destination: unknown };
+export type PublishRequest = { body: string; destination: unknown } | { machineRecord: unknown; destination: unknown };
 
 /** The one egress-publish predicate and act, shared by every caller. */
 export async function performPublish(
-	params: PublishRequest,
+	params: unknown,
 	repoRoot: string,
 	stateRoot: string,
 	repository?: PublishRepository,
@@ -39,13 +42,119 @@ export async function performPublish(
 		record("refuse-repository", text);
 		return result(text, { disposition: "refuse-repository" });
 	}
-	// The destination is the actor's explicit structured target; an
-	// inadmissible one refuses content-free, never publishes (§3.3).
-	const destination: unknown = params.destination;
-	if (!isPublishDestination(destination)) {
+	const requestKeys = typeof params === "object" && params !== null ? Object.getOwnPropertyNames(params) : [];
+	const machine = requestKeys.includes("machineRecord");
+	const expectedKeys = machine ? ["machineRecord", "destination"] : ["body", "destination"];
+	if (!isClosedDataRecord(params, expectedKeys)) {
+		const text = "publish refused: the request is not an admissible closed record";
+		record("refuse-request", text);
+		return result(text, { disposition: "refuse-request" });
+	}
+	const destination: unknown = Object.getOwnPropertyDescriptor(params, "destination")?.value;
+	const destinationKind =
+		typeof destination === "object" && destination !== null
+			? Object.getOwnPropertyDescriptor(destination, "kind")?.value
+			: undefined;
+	const destinationKeys =
+		typeof destinationKind === "string" && kindCarriesTitle(destinationKind) ? ["kind", "title"] : ["kind", "number"];
+	if (!isClosedDataRecord(destination, destinationKeys) || !isPublishDestination(destination)) {
 		const text = "publish refused: the destination is not an admissible structured target";
 		record("refuse-destination", text);
 		return result(text, { disposition: "refuse-destination" });
+	}
+	if (machine) {
+		const admission = admitMachineRecord(Object.getOwnPropertyDescriptor(params, "machineRecord")?.value);
+		if (!admission.ok) {
+			const text = `publish refused: ${admission.cause}`;
+			record("refuse-machine-record", text);
+			return result(text, { disposition: "refuse-machine-record" });
+		}
+		const publishedTitle = kindCarriesTitle(destination.kind) ? destination.title : undefined;
+		let titleScan: ScanOutcome | undefined;
+		try {
+			const scans: ScanOutcome[] = [scanBody(admission.record.wireBody)];
+			for (const semantic of admission.record.semanticStrings) {
+				scans.push(scanBody(semantic));
+				const decoded = decodeEscapeView(semantic);
+				if (!decoded.ok) {
+					const text = "publish refused: machine semantic escape view is not measurable";
+					record("refuse-out-of-domain", text);
+					return result(text, { disposition: "refuse-out-of-domain" });
+				}
+				scans.push(scanBody(decoded.value));
+			}
+			titleScan = publishedTitle === undefined ? undefined : scanBody(publishedTitle);
+			const dirty = scans.find((scan) => scan.disposition !== "clean") ?? titleScan;
+			if (dirty?.disposition === "refuse-out-of-domain") {
+				const text = "publish refused: machine publication contains an unmeasurable operand";
+				record("refuse-out-of-domain", text);
+				return result(text, { disposition: "refuse-out-of-domain" });
+			}
+			const matches = scans.filter(
+				(scan): scan is Extract<ScanOutcome, { disposition: "refuse-match" }> => scan.disposition === "refuse-match",
+			);
+			if (titleScan?.disposition === "refuse-match") matches.push(titleScan);
+			if (matches.length > 0) {
+				const patternIds = [...new Set(matches.flatMap((scan) => scan.patternIds))];
+				const lines = [...new Set(matches.flatMap((scan) => scan.lines))];
+				const text = `publish refused: disposition refuse-match; machine operands patterns ${patternIds.join(", ")} lines ${lines.join(", ")}`;
+				record("refuse-match", text);
+				return result(text, { disposition: "refuse-match", patternIds, lines });
+			}
+		} catch (error) {
+			const cause = error instanceof PatternSourceError ? error.message : "the scan machinery failed before a verdict";
+			const text = `publish refused (fail closed): ${cause}`;
+			record("refuse-machinery", text);
+			return result(text, { disposition: "refuse-machinery" });
+		}
+		const neutralizedBody = neutralizeOperand(admission.record.wireBody);
+		if (neutralizedBody.neutralized !== 0 || neutralizedBody.text !== admission.record.wireBody) {
+			const text = "publish refused: machine wire body required neutralization";
+			record("refuse-machine-neutralization", text);
+			return result(text, { disposition: "refuse-machine-neutralization" });
+		}
+		const neutralizedTitle = publishedTitle === undefined ? undefined : neutralizeOperand(publishedTitle);
+		const pinned = repository ?? resolvePublishRepository(repoRoot);
+		if (pinned === undefined) {
+			const text = "publish refused: the repository could not be resolved and pinned before the send";
+			record("refuse-repository", text);
+			return result(text, { disposition: "refuse-repository" });
+		}
+		const sendDestination =
+			neutralizedTitle === undefined ? destination : { ...destination, title: neutralizedTitle.text };
+		const outcome = await runMachinePublish(
+			sendDestination,
+			admission.record.wireBody,
+			admission.record.marker,
+			admission.record.value,
+			neutralizedTitle?.text,
+			repoRoot,
+			pinned,
+		);
+		if (outcome.outcome === "published") {
+			const neutralized = neutralizedTitle?.neutralized ?? 0;
+			return result(`published and verified: ${quoted(outcome.url)}`, {
+				disposition: "published",
+				url: outcome.url,
+				neutralized,
+				verified: true,
+			});
+		}
+		if (outcome.outcome === "outcome-unverified") {
+			const text =
+				"outcome-unverified: the machine send left the process without an exact verified reread; no retry was attempted";
+			record("outcome-unverified", text);
+			return result(text, { disposition: "outcome-unverified" });
+		}
+		const text = `publish refused: ${outcome.cause}`;
+		record("refuse-delegated", text);
+		return result(text, { disposition: "refuse-delegated" });
+	}
+	const body = Object.getOwnPropertyDescriptor(params, "body")?.value;
+	if (typeof body !== "string") {
+		const text = "publish refused: the request is not an admissible closed record";
+		record("refuse-request", text);
+		return result(text, { disposition: "refuse-request" });
 	}
 
 	// The scanned domain is this KIND's own published operands, never
@@ -63,10 +172,7 @@ export async function performPublish(
 		// implementation, not a second call), and combined by the one
 		// exported merge rule rather than by logic living here — a rule
 		// inside this closure is a rule no arm can bind to.
-		merged = mergeScanOutcomes(
-			scanBody(params.body),
-			publishedTitle === undefined ? undefined : scanBody(publishedTitle),
-		);
+		merged = mergeScanOutcomes(scanBody(body), publishedTitle === undefined ? undefined : scanBody(publishedTitle));
 	} catch (error) {
 		// Fail closed on scan machinery (§3.9 egress-publish-patterns):
 		// PatternSourceError messages are fixed content-free literals;
@@ -122,7 +228,7 @@ export async function performPublish(
 	// the unexempted face, because §1.1 fixes a grammar for a
 	// description's first line and for no other field (§3.3, issue #129).
 	const neutralizedTitle = publishedTitle === undefined ? undefined : neutralizeOperand(publishedTitle);
-	const neutralizedBody = neutralizeForDestination(params.body, destination.kind);
+	const neutralizedBody = neutralizeForDestination(body, destination.kind);
 	const sendDestination =
 		neutralizedTitle !== undefined ? { ...destination, title: neutralizedTitle.text } : destination;
 	// The success shape is this kind's own: only the comment verbs print
