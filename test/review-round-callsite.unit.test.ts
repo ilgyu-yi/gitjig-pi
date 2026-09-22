@@ -1143,6 +1143,65 @@ describe("review-round production call site", () => {
 		assert.equal(refreshed, 2);
 	});
 
+	it("stops at the planning gate for a pre-round measurement continue", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let rounds = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				makeDispatch: diagnosisDispatch({ value: "OSCILLATION", invalidation: "nothing", evidence: "trigger" }),
+				runRound: async () => {
+					rounds += 1;
+					throw new Error("planning must suppress the round");
+				},
+				coordinateRecovery: async () => ({
+					terminal: "continue",
+					route: "oscillation",
+					reentry: "plan",
+					nextGate: "planning",
+					measurement: {
+						spec: {
+							kind: "measurement",
+							question: "q",
+							method: "m",
+							expectedDiscriminator: "d",
+							evidence: "s",
+							nonMutating: true,
+							notPreviouslyPresent: true,
+						},
+						specDigest: "1".repeat(64),
+						result: "r",
+						evidence: "e",
+						resultDigest: "2".repeat(64),
+						evidenceDigest: "3".repeat(64),
+					},
+					freshRuling: {
+						diagnosis: { value: "NONE", invalidation: "plan", evidence: "fresh" },
+						diagnosisDigest: "4".repeat(64),
+						evidenceDigest: "5".repeat(64),
+					},
+					recordRef: {
+						repoHash: "6".repeat(64),
+						keyHash: "7".repeat(64),
+						claimId: "00000000-0000-4000-8000-000000000000",
+					},
+				}),
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") assert.equal(outcome.result.nextGate, "planning");
+		assert.equal(rounds, 0);
+	});
+
 	it("routes a newly triggered post-publication diagnosis through the same autonomous coordinator", async () => {
 		const fixture = repo();
 		let publishedBody: string | undefined;
@@ -1186,6 +1245,72 @@ describe("review-round production call site", () => {
 		);
 		assert.equal(outcome.disposition, "hand-off");
 		assert.equal(coordinated, 1);
+	});
+
+	it("stops at the planning gate for a post-publication measurement continue", async () => {
+		const fixture = repo();
+		let publishedBody: string | undefined;
+		let rounds = 0;
+		const current = subject(fixture.base, fixture.head);
+		const record = repairRecord(fixture.head);
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => current,
+				refetchSubject: async () => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population([composeReviewRecord(repairRecord(fixture.base))], publishedBody),
+				runRound: async () => {
+					rounds += 1;
+					return { review: record.review, record, recordBody: composeReviewRecord(record) };
+				},
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+				makeDispatch: diagnosisDispatch({ value: "OSCILLATION", invalidation: "nothing", evidence: "post trigger" }),
+				coordinateRecovery: async () => ({
+					terminal: "continue",
+					route: "indeterminate",
+					reentry: "plan",
+					nextGate: "planning",
+					measurement: {
+						spec: {
+							kind: "measurement",
+							question: "q",
+							method: "m",
+							expectedDiscriminator: "d",
+							evidence: "s",
+							nonMutating: true,
+							notPreviouslyPresent: true,
+						},
+						specDigest: "1".repeat(64),
+						result: "r",
+						evidence: "e",
+						resultDigest: "2".repeat(64),
+						evidenceDigest: "3".repeat(64),
+					},
+					freshRuling: {
+						diagnosis: { value: "NONE", invalidation: "plan", evidence: "fresh" },
+						diagnosisDigest: "4".repeat(64),
+						evidenceDigest: "5".repeat(64),
+					},
+					recordRef: {
+						repoHash: "6".repeat(64),
+						keyHash: "7".repeat(64),
+						claimId: "00000000-0000-4000-8000-000000000000",
+					},
+				}),
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "on", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(rounds, 1);
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") assert.equal(outcome.result.nextGate, "planning");
 	});
 
 	it("refuses every linked path component, including one later cancelled by dot-dot", () => {

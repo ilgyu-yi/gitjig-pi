@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { deriveAllowancePathEncoding } from "../.pi/extensions/gitjig/recovery/lineage.ts";
 import { claimAllowance, finalizeAllowance } from "../.pi/extensions/gitjig/recovery/store.ts";
-import type { ClaimedRecordV3, ConsumedRecordV3 } from "../.pi/extensions/gitjig/recovery/types.ts";
+import { type ClaimedRecordV3, type ConsumedRecordV3, canonicalJson } from "../.pi/extensions/gitjig/recovery/types.ts";
 import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
 let stateRoot = "";
@@ -128,6 +129,48 @@ describe("state-domain allowance store", () => {
 		assert.equal(finalizeAllowance(first.claim, consumed(claimed)).status, "consumed-unverified");
 	});
 
+	it("admits exactly one winner across synchronized competing processes", async () => {
+		const gate = join(stateRoot, "go");
+		const storeUrl = new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url).href;
+		const script = [
+			`import {claimAllowance} from ${JSON.stringify(storeUrl)};`,
+			"import {randomUUID} from 'node:crypto'; import {existsSync} from 'node:fs';",
+			`while(!existsSync(${JSON.stringify(gate)})) await new Promise(r=>setTimeout(r,1));`,
+			`const subject=${JSON.stringify(subject("PR_CONCURRENT"))};`,
+			"const now=new Date().toISOString(); const e=(await import(" +
+				JSON.stringify(new URL("../.pi/extensions/gitjig/recovery/lineage.ts", import.meta.url).href) +
+				")).deriveAllowancePathEncoding(subject);",
+			"const record={schemaVersion:3,state:'claimed',repoHash:e.repoHash,keyHash:e.keyHash,claimId:randomUUID(),createdAt:now,updatedAt:now,profileSetDigest:'1'.repeat(64),subjectDigest:'2'.repeat(64),historyDigest:'3'.repeat(64),basisDigest:'4'.repeat(64),basis:{kind:'history-diagnosis',triggeringReviewState:{head:'a'.repeat(40),historyIndex:0,stateDigest:'5'.repeat(64)},taxonomy:'STAGNATION',invalidation:'nothing',diagnosisDigest:'6'.repeat(64)},modes:{mergeMode:'off',decisionMode:'autonomous',mergeSource:'default',decisionSource:'default'},route:'stagnation',attempts:[],completeness:null,sequenceAuthority:null,selectedIntervention:null,measurement:null,freshRuling:null,reentry:'nothing',nextGate:null,terminal:null,cause:null};",
+			"console.log(claimAllowance({subject,record}).status);",
+		].join("\n");
+		const children = Array.from({ length: 8 }, () =>
+			spawn(process.execPath, ["--input-type=module", "-e", script], {
+				env: { ...process.env, XDG_STATE_HOME: stateRoot },
+				stdio: ["ignore", "pipe", "pipe"],
+			}),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		writeFileSync(gate, "go");
+		const statuses = await Promise.all(
+			children.map(
+				(child) =>
+					new Promise<string>((resolve, reject) => {
+						let stdout = "";
+						let stderr = "";
+						child.stdout.on("data", (chunk) => {
+							stdout += chunk.toString();
+						});
+						child.stderr.on("data", (chunk) => {
+							stderr += chunk.toString();
+						});
+						child.on("close", (code) => (code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr))));
+					}),
+			),
+		);
+		assert.equal(statuses.filter((status) => status === "claimed").length, 1);
+		assert.ok(statuses.filter((status) => status === "consumed").length === 7);
+	});
+
 	it("binds terminalization to every immutable claimed field", () => {
 		const current = subject("PR_IMMUTABLE");
 		const claimed = record(current);
@@ -148,6 +191,48 @@ describe("state-domain allowance store", () => {
 		writeFileSync(path, "partial", { mode: 0o600 });
 		const result = claimAllowance({ subject: current, record: record(current) });
 		assert.deepEqual(result, { status: "consumed", cause: "existing" });
+	});
+
+	it("withholds recordRef from canonical bytes with cross-field provenance drift", () => {
+		const current = subject("PR_CROSS_FIELD");
+		const encoding = deriveAllowancePathEncoding(current);
+		assert.ok(encoding);
+		const malformed = consumed(record(current));
+		malformed.attempts = [
+			{
+				sequence: 1,
+				startedOffsetMs: 0,
+				finishedOffsetMs: 1,
+				diagnostic: {
+					schemaVersion: 1,
+					status: "admitted",
+					phase: "compare",
+					run: { class: "exited", exitCode: 0, signal: null },
+					return: { class: "admitted" },
+					compare: { class: "confirmed" },
+					durationMs: 1,
+					code: "ADMITTED",
+				},
+				outcomeDigest: "7".repeat(64),
+				slot: "stagnation-root",
+				profileId: "stagnation-root",
+				profileVersion: 1,
+				profileSetDigest: "9".repeat(64),
+				materializationDigest: "8".repeat(64),
+				expectedHead: "b".repeat(40),
+				admission: "retained",
+				resultDigest: "6".repeat(64),
+			},
+		];
+		malformed.completeness.admittedSlots = ["stagnation-root"];
+		malformed.sequenceAuthority.lastSequence = 1;
+		const directory = join(stateRoot, "gitjig", "recovery");
+		mkdirSync(directory, { recursive: true, mode: 0o700 });
+		writeFileSync(join(directory, encoding.leaf), canonicalJson(malformed), { mode: 0o600 });
+		assert.deepEqual(claimAllowance({ subject: current, record: record(current) }), {
+			status: "consumed",
+			cause: "existing",
+		});
 	});
 
 	it("keeps definite preclaim domain refusal unconsumed", () => {

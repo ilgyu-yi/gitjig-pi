@@ -155,8 +155,17 @@ export type RecoveryResult =
 			route: "oscillation" | "indeterminate";
 			measurement: RecoveryMeasurement;
 			freshRuling: FreshRuling;
-			reentry: "nothing" | "plan";
-			nextGate: "ordinary-flow" | "planning";
+			reentry: "nothing";
+			nextGate: "ordinary-flow";
+			recordRef: RecordRef;
+	  }
+	| {
+			terminal: "continue";
+			route: "oscillation" | "indeterminate";
+			measurement: RecoveryMeasurement;
+			freshRuling: FreshRuling;
+			reentry: "plan";
+			nextGate: "planning";
 			recordRef: RecordRef;
 	  }
 	| {

@@ -63,10 +63,15 @@ function repositoryExcluded(path: string): boolean {
 	}
 }
 
-function traverse(root: string, names: readonly { name: string; exact: boolean }[]): string | undefined {
+function traverse(
+	root: string,
+	rootExact: boolean,
+	names: readonly { name: string; exact: boolean }[],
+): string | undefined {
 	let current = root;
+	let currentExact = rootExact;
 	for (const component of names) {
-		const parent = safeDirectory(current, current.endsWith("/gitjig") || current.endsWith("/recovery"));
+		const parent = safeDirectory(current, currentExact);
 		if (parent === undefined) return undefined;
 		const child = join(current, component.name);
 		try {
@@ -99,6 +104,7 @@ function traverse(root: string, names: readonly { name: string; exact: boolean }
 				closeSync(opened.fd);
 			}
 			current = child;
+			currentExact = component.exact || missing;
 			if (repositoryExcluded(current)) return undefined;
 		} finally {
 			closeSync(parent.fd);
@@ -128,5 +134,5 @@ export function resolveRecoveryStateDomain(): string | undefined {
 				{ name: "gitjig", exact: true },
 				{ name: "recovery", exact: true },
 			];
-	return traverse(selected, components);
+	return traverse(selected, hasXdg, components);
 }

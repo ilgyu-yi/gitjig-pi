@@ -72,6 +72,7 @@
  * frame is what this closes; the claim inside the payload is the reader's
  * to weigh, and §4.9's injectable-context residual already carries it.
  */
+import { readFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { renderActCall, renderActTerminal } from "../act-render.ts";
@@ -311,13 +312,26 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		options.signal?.addEventListener("abort", relayAbort, { once: true });
 		if (options.signal?.aborted) relayAbort();
 		const checkpointTimers: ReturnType<typeof setTimeout>[] = [];
+		let finalCheckpointBytes: Buffer | undefined;
 		if (checkpointAbort !== undefined) {
-			for (const delay of [360_000, 540_000])
-				checkpointTimers.push(
-					setTimeout(() => {
-						if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
-					}, delay),
-				);
+			checkpointTimers.push(
+				setTimeout(() => {
+					if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
+				}, 360_000),
+			);
+			checkpointTimers.push(
+				setTimeout(() => {
+					if (!admitReturn(context.returnPath).admitted) {
+						checkpointAbort.abort();
+						return;
+					}
+					try {
+						finalCheckpointBytes = readFileSync(context.returnPath);
+					} catch {
+						checkpointAbort.abort();
+					}
+				}, 540_000),
+			);
 		}
 		let run: Awaited<ReturnType<typeof runDelegate>>;
 		try {
@@ -336,6 +350,14 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		} finally {
 			for (const timer of checkpointTimers) clearTimeout(timer);
 			options.signal?.removeEventListener("abort", relayAbort);
+		}
+		if (finalCheckpointBytes !== undefined) {
+			try {
+				if (!readFileSync(context.returnPath).equals(finalCheckpointBytes))
+					return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
+			} catch {
+				return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
+			}
 		}
 		const trace = terminalTrace ?? {
 			lifecycle: lifecycleOf(run),

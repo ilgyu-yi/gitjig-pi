@@ -46,6 +46,15 @@ describe("production recovery state-domain resolver", () => {
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: "relative", HOME: home }).stdout), null);
 	});
 
+	it("does not infer HOME policy from gitjig/recovery path spellings", () => {
+		for (const name of ["gitjig", "recovery"]) {
+			const parent = root();
+			const home = join(parent, name);
+			mkdirSync(home, { mode: 0o755 });
+			assert.equal(JSON.parse(resolveWith({ HOME: home }).stdout), join(home, ".local", "state", "gitjig", "recovery"));
+		}
+	});
+
 	it("rejects the production test-root variable even when empty", () => {
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: root(), GITJIG_TEST_STATE_ROOT: "" }).stdout), null);
 	});

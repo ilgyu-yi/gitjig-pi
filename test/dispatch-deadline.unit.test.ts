@@ -44,6 +44,61 @@ describe("recovery optional dispatch deadline", () => {
 		}
 	});
 
+	it("rejects a clock crossing observed only after cleanup", async () => {
+		const original = performance.now;
+		const first = repository();
+		let calls = 0;
+		try {
+			Object.defineProperty(performance, "now", {
+				configurable: true,
+				value: () => {
+					calls += 1;
+					return 0;
+				},
+			});
+			const calibration = await runDispatch({
+				callerRepoRoot: first,
+				stateRoot: join(first, "state"),
+				delegateArgv: [process.execPath, "-e", writer],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 10_000,
+				operationDeadline: 1_000,
+				enteredAt: 0,
+			});
+			assert.equal(calibration.disposition, "admitted");
+		} finally {
+			Object.defineProperty(performance, "now", { configurable: true, value: original });
+			rmSync(first, { recursive: true, force: true });
+		}
+		const second = repository();
+		let observed = 0;
+		try {
+			Object.defineProperty(performance, "now", {
+				configurable: true,
+				value: () => {
+					observed += 1;
+					return observed < calls ? 0 : 2_000;
+				},
+			});
+			const crossed = await runDispatch({
+				callerRepoRoot: second,
+				stateRoot: join(second, "state"),
+				delegateArgv: [process.execPath, "-e", writer],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 10_000,
+				operationDeadline: 1_000,
+				enteredAt: 0,
+			});
+			assert.equal(crossed.disposition, "refused");
+			assert.equal(crossed.diagnostic.code, "ABORTED");
+		} finally {
+			Object.defineProperty(performance, "now", { configurable: true, value: original });
+			rmSync(second, { recursive: true, force: true });
+		}
+	});
+
 	it("preserves the admitted path when the optional deadline is absent", async () => {
 		const repo = repository();
 		try {

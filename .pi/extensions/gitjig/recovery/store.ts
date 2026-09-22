@@ -16,7 +16,14 @@ import { makeDiagnostic } from "../dispatch/diagnostics.ts";
 import type { ReviewSubject } from "../review/subject.ts";
 import { deriveAllowancePathEncoding } from "./lineage.ts";
 import { resolveRecoveryStateDomain } from "./state-domain.ts";
-import { type ClaimedRecordV3, type ConsumedRecordV3, canonicalJson, type RecordRef } from "./types.ts";
+import {
+	type ClaimedRecordV3,
+	type ConsumedRecordV3,
+	canonicalJson,
+	contentDigest,
+	type RecordRef,
+	structuralDigest,
+} from "./types.ts";
 
 const RECORD_LIMIT = 256 * 1024;
 const FILE_MODE = 0o600;
@@ -182,7 +189,14 @@ function validSelected(value: unknown): boolean {
 		storedText(value.selectionEvidence) &&
 		Array.isArray(value.candidateDigests) &&
 		value.candidateDigests.length === 2 &&
-		value.candidateDigests.every((digest) => typeof digest === "string" && /^[0-9a-f]{64}$/.test(digest))
+		value.candidateDigests.every((digest) => typeof digest === "string" && /^[0-9a-f]{64}$/.test(digest)) &&
+		value.candidateDigests[value.slot === "root" ? 0 : 1] ===
+			structuralDigest("gitjig-recovery-candidate:v1", {
+				slot: value.slot,
+				outcome: "ALTERNATIVE",
+				method: value.method,
+				evidence: value.candidateEvidence,
+			})
 	);
 }
 
@@ -207,7 +221,16 @@ function validMeasurement(value: unknown): boolean {
 		) &&
 		[value.specDigest, value.resultDigest, value.evidenceDigest].every(
 			(digest) => typeof digest === "string" && /^[0-9a-f]{64}$/.test(digest),
-		)
+		) &&
+		value.specDigest === structuralDigest("gitjig-recovery-measurement-spec:v1", spec) &&
+		value.resultDigest ===
+			structuralDigest("gitjig-recovery-measurement-result:v1", {
+				kind: "measurement-result",
+				specDigest: value.specDigest,
+				result: value.result,
+				evidence: value.evidence,
+			}) &&
+		value.evidenceDigest === contentDigest(value.evidence as string)
 	);
 }
 
@@ -220,7 +243,9 @@ function validFreshRuling(value: unknown): boolean {
 		storedText(value.diagnosis.evidence) &&
 		[value.diagnosisDigest, value.evidenceDigest].every(
 			(digest) => typeof digest === "string" && /^[0-9a-f]{64}$/.test(digest),
-		)
+		) &&
+		value.diagnosisDigest === structuralDigest("gitjig-recovery-diagnosis:v1", value.diagnosis) &&
+		value.evidenceDigest === contentDigest(value.diagnosis.evidence as string)
 	);
 }
 
@@ -305,6 +330,7 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 			([slot, group]) =>
 				!required.includes(slot) ||
 				group.length > 2 ||
+				group.some((attempt) => attempt.profileSetDigest !== record.profileSetDigest) ||
 				group.some(
 					(attempt) =>
 						attempt.profileSetDigest !== group[0]?.profileSetDigest ||

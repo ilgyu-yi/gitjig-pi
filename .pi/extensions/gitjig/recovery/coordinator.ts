@@ -671,16 +671,12 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 				nextGate: "author-repair",
 				recordRef,
 			};
-		if (route !== "stagnation" && measurement !== null && freshRuling !== null)
-			return {
-				terminal: "continue",
-				route,
-				measurement,
-				freshRuling,
-				reentry,
-				nextGate: reentry === "plan" ? "planning" : "ordinary-flow",
-				recordRef,
-			};
+		if (route !== "stagnation" && measurement !== null && freshRuling !== null) {
+			if (reentry === "plan")
+				return { terminal: "continue", route, measurement, freshRuling, reentry, nextGate: "planning", recordRef };
+			if (reentry === "nothing")
+				return { terminal: "continue", route, measurement, freshRuling, reentry, nextGate: "ordinary-flow", recordRef };
+		}
 		return handoff("recovery-failed", reentry, recordRef, route);
 	} catch {
 		return finalizeHandoff();
