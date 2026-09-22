@@ -74,8 +74,14 @@ const stateNeedles = [
 	"file, directory, symlink, or other",
 	"conjunction of sibling entries `HEAD`, `objects`, and `refs`",
 	"each present by lstat regardless of type",
-	"closes bare Git repositories that carry no `.git` entry",
-	"unrelated ancestor that coincidentally carries that exact three-entry conjunction",
+	"excludes intrinsically discoverable ordinary and bare Git layouts",
+	"cannot detect an arbitrary directory designated as a work tree only by externally located metadata",
+	"`git --git-dir=… --work-tree=…` or external `core.worktree`",
+	"neither enumerates foreign metadata nor reads global Git configuration",
+	"explicit operator-placement residual, not a never-committable guarantee",
+	"must not select an XDG/HOME domain inside such an externally designated work tree",
+	"observing allowance state become committable through external metadata reopens #334 or its explicit successor",
+	"unrelated ancestor that coincidentally carries the bare-marker trio",
 	"relocate the XDG/HOME state domain outside that ancestor and begin a new invocation",
 	"because exclusion precedes exclusive leaf creation, the refusal consumes no allowance",
 	"regular, single-link exact-mode-`0600`",
@@ -136,7 +142,9 @@ function settlementHolds(
 		POSTURES.includes("Once creation may have succeeded") &&
 		POSTURES.includes("only future distinct leaves") &&
 		README.includes("a present-but-invalid value refuses with no fallback") &&
-		README.includes("Only when it is unset")
+		README.includes("Only when it is unset") &&
+		README.includes("marker-free work tree designated only by externally located Git metadata") &&
+		README.includes("operators must not select such a domain")
 	);
 }
 

@@ -79,7 +79,7 @@ The machine mode is fail-closed: it admits a bounded structured JSON domain and 
 
 ## Recovery state location
 
-The autonomous recovery allowance's durable tombstone is shared by every clone and process that resolves the same account-owned shell state domain. Production uses `${XDG_STATE_HOME}/gitjig/recovery/` when `XDG_STATE_HOME` is set and valid; a present-but-invalid value refuses with no fallback. Only when it is unset does production use `${HOME}/.local/state/gitjig/recovery/`. It never stores the allowance in a governed repository. Different resolved domains can each claim the same change key, including on one host. That bounded residual and its hardening trigger are normative in SPEC §§1.4 and 5.5. Recovery performs no public/server act to obtain exclusion.
+The autonomous recovery allowance's durable tombstone is shared by every clone and process that resolves the same account-owned shell state domain. Production uses `${XDG_STATE_HOME}/gitjig/recovery/` when `XDG_STATE_HOME` is set and valid; a present-but-invalid value refuses with no fallback. Only when it is unset does production use `${HOME}/.local/state/gitjig/recovery/`. It rejects state roots inside intrinsically discoverable ordinary or bare Git layouts. A marker-free work tree designated only by externally located Git metadata cannot be discovered from that root; operators must not select such a domain, as detailed in SPEC §5.5. Different resolved domains can each claim the same change key, including on one host. That bounded residual and its hardening trigger are normative in SPEC §§1.4 and 5.5. Recovery performs no public/server act to obtain exclusion.
 
 ## The development toolchain
 
