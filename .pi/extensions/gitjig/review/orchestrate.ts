@@ -26,6 +26,7 @@
  * serial loop would only make one round slower.
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import type { DispatchOutcome, RunDispatchOptions } from "../dispatch/index.ts";
 import { runDispatch } from "../dispatch/index.ts";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
@@ -77,6 +78,85 @@ export type RoundOptions = {
 
 export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBody: string };
 
+export type HostAttemptEvent = {
+	sequence: number;
+	attempt: 1 | 2;
+	startedOffsetMs: number;
+	finishedOffsetMs: number;
+	diagnostic: DispatchOutcome["diagnostic"];
+	outcomeDigest: string;
+};
+
+const LEDGER = Symbol("recovery-attempt-ledger");
+export class HostAttemptLedger {
+	readonly [LEDGER] = true;
+	readonly #routeT0: number;
+	#sequence = 0;
+
+	private constructor(routeT0: number) {
+		this.#routeT0 = routeT0;
+	}
+
+	static create(routeT0: number): HostAttemptLedger {
+		if (!Number.isFinite(routeT0) || routeT0 < 0) throw new TypeError("invalid recovery route epoch");
+		return new HostAttemptLedger(routeT0);
+	}
+
+	start(): number {
+		return Math.max(0, Math.trunc(performance.now() - this.#routeT0));
+	}
+
+	append(attempt: 1 | 2, startedOffsetMs: number, outcome: DispatchOutcome): HostAttemptEvent {
+		this.#sequence += 1;
+		return Object.freeze({
+			sequence: this.#sequence,
+			attempt,
+			startedOffsetMs,
+			finishedOffsetMs: Math.max(startedOffsetMs, Math.trunc(performance.now() - this.#routeT0)),
+			diagnostic: outcome.diagnostic,
+			outcomeDigest: digestOutcome(outcome),
+		});
+	}
+}
+
+export function createRecoveryAttemptLedger(routeT0: number): HostAttemptLedger {
+	return HostAttemptLedger.create(routeT0);
+}
+
+function canonical(value: unknown): string {
+	if (value === null || typeof value !== "object") return JSON.stringify(value);
+	// biome-ignore lint/style/useTemplate: avoids interpolation in a warning-adjacent module.
+	if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+	const record = value as Record<string, unknown>;
+	return (
+		"{" +
+		Object.keys(record)
+			.filter((key) => !(key === "message" && Object.hasOwn(record, "code")))
+			.sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)))
+			// biome-ignore lint/style/useTemplate: avoids interpolation in a warning-adjacent module.
+			.map((key) => JSON.stringify(key) + ":" + canonical(record[key]))
+			.join(",") +
+		"}"
+	);
+}
+
+function digestOutcome(outcome: DispatchOutcome): string {
+	return createHash("sha256")
+		.update("gitjig-recovery-dispatch-outcome:v1\n", "ascii")
+		.update(canonical(outcome), "utf8")
+		.digest("hex");
+}
+
+export type ObservedDispatchOutcome = {
+	outcome: DispatchOutcome;
+	attempts: readonly HostAttemptEvent[];
+	retryState: "available" | "spent";
+};
+
+type RecoveryAttemptPolicy = {
+	attemptPolicy: { beforeRetry: (diagnostic: DispatchOutcome["diagnostic"]) => boolean; ledger: HostAttemptLedger };
+};
+
 /**
  * Wire the round to the real dispatcher: one brief in, one outcome
  * back, everything else — provision, isolation, bounded return, blind
@@ -87,18 +167,30 @@ export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBod
  */
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
-	// The real dispatcher, injectable so a test can pin the wiring without
-	// running a delegate — a statically-imported runDispatch is a wiring an
-	// arm cannot observe (issue #184).
-	run: (options: RunDispatchOptions) => Promise<DispatchOutcome> = runDispatch,
+	run: (options: RunDispatchOptions) => Promise<DispatchOutcome>,
+	configuration: RecoveryAttemptPolicy,
+): (brief: string, expectedHead: string) => Promise<ObservedDispatchOutcome>;
+export function makeDispatcher(
+	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
+	run?: (options: RunDispatchOptions) => Promise<DispatchOutcome>,
 	onEvent?: (event: "retry-return-protocol") => void,
-): (brief: string, expectedHead: string) => Promise<DispatchOutcome> {
+): (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
+export function makeDispatcher(
+	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
+	run: (options: RunDispatchOptions) => Promise<DispatchOutcome> = runDispatch,
+	third?: ((event: "retry-return-protocol") => void) | RecoveryAttemptPolicy,
+): (brief: string, expectedHead: string) => Promise<DispatchOutcome | ObservedDispatchOutcome> {
 	return async (brief, expectedHead) => {
-		// The held operand is the round's resolved head, never a caller-fixed
-		// ref: provision resolves the expectedRef once per dispatch, so only a
-		// hash already resolved by the round makes every dispatch's pin the
-		// same pin (issue #184).
-		const send = (semanticBrief: string) => run({ ...options, brief: semanticBrief, expectedRef: expectedHead });
+		const policy = typeof third === "object" ? third.attemptPolicy : undefined;
+		const onEvent = typeof third === "function" ? third : undefined;
+		const attempts: HostAttemptEvent[] = [];
+		let attempt: 1 | 2 = 1;
+		const send = async (semanticBrief: string): Promise<DispatchOutcome> => {
+			const started = policy?.ledger.start();
+			const outcome = await run({ ...options, brief: semanticBrief, expectedRef: expectedHead });
+			if (policy !== undefined && started !== undefined) attempts.push(policy.ledger.append(attempt, started, outcome));
+			return outcome;
+		};
 		let retryAvailable = true;
 		let outcome = await send(brief);
 		while (
@@ -109,6 +201,16 @@ export function makeDispatcher(
 			retryAvailable
 		) {
 			retryAvailable = false;
+			if (policy !== undefined) {
+				let allowed = false;
+				try {
+					allowed = policy.beforeRetry(outcome.diagnostic);
+				} catch {
+					allowed = false;
+				}
+				if (!allowed) break;
+			}
+			attempt = 2;
 			try {
 				onEvent?.("retry-return-protocol");
 			} catch {
@@ -116,7 +218,8 @@ export function makeDispatcher(
 			}
 			outcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);
 		}
-		return outcome;
+		if (policy === undefined) return outcome;
+		return { outcome, attempts: Object.freeze(attempts.slice()), retryState: retryAvailable ? "available" : "spent" };
 	};
 }
 

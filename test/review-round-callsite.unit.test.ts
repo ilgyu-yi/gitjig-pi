@@ -1088,6 +1088,100 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
+	it("routes a pre-round autonomous STAGNATION through the shared coordinator after both freshness callbacks", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let coordinated = 0;
+		let refreshed = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "trigger" }),
+				coordinateRecovery: async (input) => {
+					coordinated += 1;
+					assert.ok(await input.refreshPreclaim());
+					refreshed += 1;
+					assert.ok(await input.refreshPrecontinue());
+					refreshed += 1;
+					return {
+						terminal: "continue",
+						route: "stagnation",
+						selectedIntervention: {
+							slot: "root",
+							method: "different method",
+							candidateEvidence: "candidate",
+							selectionEvidence: "selection",
+							candidateDigests: ["1".repeat(64), "2".repeat(64)],
+						},
+						reentry: "nothing",
+						nextGate: "author-repair",
+						recordRef: {
+							repoHash: "3".repeat(64),
+							keyHash: "4".repeat(64),
+							claimId: "00000000-0000-4000-8000-000000000000",
+						},
+					};
+				},
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(outcome.disposition, "recovery");
+		assert.equal(coordinated, 1);
+		assert.equal(refreshed, 2);
+	});
+
+	it("routes a newly triggered post-publication diagnosis through the same autonomous coordinator", async () => {
+		const fixture = repo();
+		let publishedBody: string | undefined;
+		let coordinated = 0;
+		const current = subject(fixture.base, fixture.head);
+		const record = repairRecord(fixture.head);
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => current,
+				refetchSubject: async () => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population([composeReviewRecord(repairRecord(fixture.base))], publishedBody),
+				runRound: async () => ({ review: record.review, record, recordBody: composeReviewRecord(record) }),
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+				makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "post trigger" }),
+				coordinateRecovery: async () => {
+					coordinated += 1;
+					return {
+						terminal: "handoff",
+						route: "stagnation",
+						cause: "recovery-failed",
+						reentry: "nothing",
+						nextGate: "park",
+						recordRef: {
+							repoHash: "3".repeat(64),
+							keyHash: "4".repeat(64),
+							claimId: "00000000-0000-4000-8000-000000000000",
+						},
+					};
+				},
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(coordinated, 1);
+	});
+
 	it("refuses every linked path component, including one later cancelled by dot-dot", () => {
 		const fixture = repo();
 		writeFileSync(join(fixture.root, "round.json"), "root");

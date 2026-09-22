@@ -77,11 +77,34 @@ function platformComments(issueId = issue.id, issueNumber = issue.number): unkno
 	];
 }
 
+function closingPages(locators: readonly ClosingIssueLocator[]): string {
+	return JSON.stringify([
+		{
+			data: {
+				repository: {
+					pullRequest: {
+						closingIssuesReferences: {
+							nodes: locators,
+							pageInfo: { hasNextPage: false, endCursor: null },
+						},
+					},
+				},
+			},
+		},
+	]);
+}
+
 function platformResponses(
 	comments: unknown,
 	currentIssue: PlatformIssueSnapshot = issue,
 	headRepositoryId = "REPO_1",
 ): string[] {
+	const locator: ClosingIssueLocator = {
+		id: currentIssue.id,
+		number: currentIssue.number,
+		url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
+		repository: { id: currentIssue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
+	};
 	return [
 		JSON.stringify({ id: "REPO_1", nameWithOwner: "owner/repo", url: "https://github.com/owner/repo" }),
 		JSON.stringify({
@@ -94,19 +117,12 @@ function platformResponses(
 			headRefName: "topic",
 			headRefOid: "b".repeat(40),
 			headRepository: { id: headRepositoryId },
-			closingIssuesReferences: [
-				{
-					id: currentIssue.id,
-					number: currentIssue.number,
-					url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
-					repository: { id: currentIssue.repositoryId, name: "repo", owner: { id: "OWNER", login: "owner" } },
-				},
-			],
 		}),
+		closingPages([locator]),
 		JSON.stringify({
 			id: currentIssue.id,
 			number: currentIssue.number,
-			url: `https://github.com/owner/repo/issues/${String(currentIssue.number)}`,
+			url: locator.url,
 			title: currentIssue.title,
 			body: currentIssue.body,
 		}),
@@ -117,13 +133,12 @@ function platformResponses(
 
 function identityResponses(locators: readonly ClosingIssueLocator[], reads: readonly IssueRead[]): string[] {
 	const base = platformResponses([]);
-	const pull = JSON.parse(base[1]) as { closingIssuesReferences: ClosingIssueLocator[] };
-	pull.closingIssuesReferences = [...structuredClone(locators)];
 	return [
 		base[0],
-		JSON.stringify(pull),
+		base[1],
+		closingPages(structuredClone(locators)),
 		...reads.map((entry) => JSON.stringify(entry)),
-		base[3],
+		base[4],
 		...locators.map((entry) => JSON.stringify(platformComments(entry.id, entry.number))),
 	];
 }
@@ -228,8 +243,8 @@ describe("review subject criterion union", () => {
 			"#212: retained criterion",
 			"#212: current-only criterion",
 		]);
-		assert.equal(calls.length, 5);
-		assert.deepEqual(calls[2], [
+		assert.equal(calls.length, 6);
+		assert.deepEqual(calls[3], [
 			"issue",
 			"view",
 			"212",
@@ -238,7 +253,7 @@ describe("review subject criterion union", () => {
 			"--json",
 			"id,number,url,title,body",
 		]);
-		assert.deepEqual(calls[4], [
+		assert.deepEqual(calls[5], [
 			"api",
 			"--hostname",
 			"github.com",
@@ -329,6 +344,58 @@ describe("review subject criterion union", () => {
 		}
 	});
 
+	it("admits every GraphQL closing-issue page and rejects cursor loops or incomplete finality", async () => {
+		const locators: ClosingIssueLocator[] = [212, 213].map((number) => ({
+			id: `ISSUE_${String(number)}`,
+			number,
+			url: `https://github.com/owner/repo/issues/${String(number)}`,
+			repository: { id: "REPO_1", name: "repo", owner: { id: "OWNER", login: "owner" } },
+		}));
+		const reads: IssueRead[] = locators.map(({ id, number, url }) => ({
+			id,
+			number,
+			url,
+			title: "title",
+			body: issue.body,
+		}));
+		const pages = (loop = false, unfinished = false) =>
+			JSON.stringify([
+				{
+					data: {
+						repository: {
+							pullRequest: {
+								closingIssuesReferences: { nodes: [locators[0]], pageInfo: { hasNextPage: true, endCursor: "C1" } },
+							},
+						},
+					},
+				},
+				{
+					data: {
+						repository: {
+							pullRequest: {
+								closingIssuesReferences: {
+									nodes: [locators[1]],
+									pageInfo: { hasNextPage: unfinished, endCursor: loop ? "C1" : unfinished ? "C2" : null },
+								},
+							},
+						},
+					},
+				},
+			]);
+		const valid = identityResponses(locators, reads);
+		valid[2] = pages();
+		const admitted = await fetchReviewSubject("/repo", 223, async () => valid.shift());
+		assert.deepEqual(
+			admitted?.context.pullRequest.closingIssues.map((entry) => entry.id),
+			["ISSUE_212", "ISSUE_213"],
+		);
+		for (const malformed of [pages(true, true), pages(false, true)]) {
+			const responses = identityResponses(locators, reads);
+			responses[2] = malformed;
+			assert.equal(await fetchReviewSubject("/repo", 223, async () => responses.shift()), undefined);
+		}
+	});
+
 	it("refuses non-conforming locator and explicit-read shapes", async () => {
 		const locator: ClosingIssueLocator = {
 			id: issue.id,
@@ -343,46 +410,48 @@ describe("review subject criterion union", () => {
 			title: issue.title,
 			body: issue.body,
 		};
+		const editLocator = (responses: string[], edit: (node: Record<string, unknown>) => void): void => {
+			const pages = JSON.parse(responses[2]) as {
+				data: { repository: { pullRequest: { closingIssuesReferences: { nodes: Record<string, unknown>[] } } } };
+			}[];
+			edit(pages[0].data.repository.pullRequest.closingIssuesReferences.nodes[0]);
+			responses[2] = JSON.stringify(pages);
+		};
 		const alterations: ((responses: string[]) => void)[] = [
+			(responses) =>
+				editLocator(responses, (node) => {
+					node.extra = true;
+				}),
+			(responses) =>
+				editLocator(responses, (node) => {
+					(node.repository as Record<string, unknown>).extra = true;
+				}),
+			(responses) =>
+				editLocator(responses, (node) => {
+					(node.repository as { id: string }).id = "";
+				}),
+			(responses) =>
+				editLocator(responses, (node) => {
+					(node.repository as { name: string }).name = "";
+				}),
+			(responses) =>
+				editLocator(responses, (node) => {
+					(node.repository as { owner: unknown }).owner = {};
+				}),
 			(responses) => {
-				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: Record<string, unknown>[] };
-				pull.closingIssuesReferences[0].extra = true;
-				responses[1] = JSON.stringify(pull);
-			},
-			(responses) => {
-				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: Record<string, unknown> }[] };
-				pull.closingIssuesReferences[0].repository.extra = true;
-				responses[1] = JSON.stringify(pull);
-			},
-			(responses) => {
-				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { id: string } }[] };
-				pull.closingIssuesReferences[0].repository.id = "";
-				responses[1] = JSON.stringify(pull);
-			},
-			(responses) => {
-				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { name: string } }[] };
-				pull.closingIssuesReferences[0].repository.name = "";
-				responses[1] = JSON.stringify(pull);
-			},
-			(responses) => {
-				const pull = JSON.parse(responses[1]) as { closingIssuesReferences: { repository: { owner: unknown } }[] };
-				pull.closingIssuesReferences[0].repository.owner = {};
-				responses[1] = JSON.stringify(pull);
-			},
-			(responses) => {
-				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				const value = JSON.parse(responses[3]) as Record<string, unknown>;
 				value.extra = true;
-				responses[2] = JSON.stringify(value);
+				responses[3] = JSON.stringify(value);
 			},
 			(responses) => {
-				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				const value = JSON.parse(responses[3]) as Record<string, unknown>;
 				value.title = 1;
-				responses[2] = JSON.stringify(value);
+				responses[3] = JSON.stringify(value);
 			},
 			(responses) => {
-				const value = JSON.parse(responses[2]) as Record<string, unknown>;
+				const value = JSON.parse(responses[3]) as Record<string, unknown>;
 				value.body = null;
-				responses[2] = JSON.stringify(value);
+				responses[3] = JSON.stringify(value);
 			},
 		];
 		for (const alter of alterations) {
@@ -394,10 +463,8 @@ describe("review subject criterion union", () => {
 
 	it("keeps zero closing references as a present empty criterion manifest", async () => {
 		const responses = platformResponses([]);
-		const pull = JSON.parse(responses[1]) as { closingIssuesReferences: unknown[] };
-		pull.closingIssuesReferences = [];
-		responses[1] = JSON.stringify(pull);
-		responses.splice(2, 1);
+		responses[2] = closingPages([]);
+		responses.splice(3, 1);
 		const subject = await fetchReviewSubject("/repo", 223, async () => responses.shift());
 		assert.deepEqual(subject?.criteria, []);
 		assert.deepEqual(subject?.context.pullRequest.closingIssues, []);

@@ -216,6 +216,8 @@ export interface RunDispatchOptions {
 	enteredAt?: number;
 	/** Transient operator-only trace; callers must never serialize it as a final result. */
 	onTrace?: (snapshot: TraceSnapshot) => void;
+	/** Recovery-only absolute monotonic deadline; omitted callers retain existing behavior. */
+	operationDeadline?: number;
 }
 
 async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
@@ -275,7 +277,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		typeof options.brief !== "string" ||
 		(options.expectedRef !== undefined && typeof options.expectedRef !== "string") ||
 		(options.timeoutMs !== undefined &&
-			(!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > MAX_RUN_BOUND_MS))
+			(!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > MAX_RUN_BOUND_MS)) ||
+		(options.operationDeadline !== undefined && !Number.isFinite(options.operationDeadline))
 	) {
 		return refuse("refuse-parameter", "PARAMETER_REFUSED", "preflight", "not-started");
 	}
@@ -289,6 +292,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		context = provisionDispatchContext(options.callerRepoRoot, {
 			brief: options.brief,
 			expectedRef: options.expectedRef,
+			operationDeadline: options.operationDeadline,
 		});
 	} catch {
 		return refuse("refuse-provision", "PROVISION_FAILED", "provision", "not-started");
@@ -298,8 +302,13 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 	try {
 		let terminalTrace: TraceSnapshot | undefined;
 		let traceUpdateDegraded = false;
+		const remaining =
+			options.operationDeadline === undefined ? undefined : Math.floor(options.operationDeadline - performance.now());
+		if (remaining !== undefined && remaining <= 0)
+			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const run = await runDelegate(context, options.delegateArgv, {
-			timeoutMs: options.timeoutMs,
+			timeoutMs:
+				remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining),
 			signal: options.signal,
 			onTrace: (snapshot) => {
 				terminalTrace = snapshot;
@@ -353,6 +362,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const exitCode = run.exitCode;
 		observedRun = { class: "exited", exitCode, signal: null };
 		currentPhase = "return";
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const admission = admitReturn(context.returnPath);
 		if (!admission.admitted) {
 			observedReturn = admission.class;
@@ -457,8 +468,22 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
  * The registered tool keeps its surface wrapper because its parameter refusals
  * happen before this function is reached and are operator-visible acts too.
  */
+function rejectCrossedOperationDeadline(options: RunDispatchOptions, outcome: DispatchOutcome): DispatchOutcome {
+	if (options.operationDeadline === undefined || performance.now() < options.operationDeadline) return outcome;
+	const diagnostic = makeDiagnostic({
+		status: "refused",
+		phase: "run",
+		run: { class: "aborted", exitCode: null, signal: null },
+		return: { class: "not-inspected" },
+		compare: { class: "not-reached" },
+		durationMs: Math.max(0, performance.now() - (options.enteredAt ?? options.operationDeadline)),
+		code: "ABORTED",
+	});
+	return { disposition: "refused", cause: diagnostic.message, diagnostic };
+}
+
 export async function runDispatch(options: RunDispatchOptions): Promise<DispatchOutcome> {
-	if (options.surface === undefined) return runDispatchCore(options);
+	if (options.surface === undefined) return rejectCrossedOperationDeadline(options, await runDispatchCore(options));
 	const update = (action: () => void): void => {
 		try {
 			action();
@@ -469,7 +494,7 @@ export async function runDispatch(options: RunDispatchOptions): Promise<Dispatch
 	update(() => options.surface?.dispatchStarted());
 	let terminal: TerminalClass = "failure";
 	try {
-		const outcome = await runDispatchCore(options);
+		const outcome = rejectCrossedOperationDeadline(options, await runDispatchCore(options));
 		terminal = dispatchTerminal(outcome);
 		return outcome;
 	} finally {

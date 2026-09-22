@@ -704,6 +704,22 @@ export const POSTURES: readonly PostureRow[] = [
 			"Before exclusive leaf creation, recovery hands off the current invocation without consuming the allowance; repair the private domain and start a new invocation to attempt its still-available claim. Once creation may have succeeded, that lineage is permanently consumed and domain repair serves only future distinct leaves. The runtime never repairs or resets an existing leaf or falls back to clone-local or public/server exclusion.",
 	},
 	{
+		dependency: "recovery-profile-preflight",
+		failureShape:
+			"the closed Phase-A profile set, materialized argv, installed executable grammar, attempt deadline, or independently admitted return is absent, malformed, expired, or unavailable",
+		posture: "closed",
+		justification:
+			"Before exclusive claim, profile refusal hands off without consuming the allowance. After claim, every actor, deadline, return, compare, record, or terminal failure consumes and hands off; no survivor, replacement slot, hidden provider/model override, or second allowance is inferred.",
+	},
+	{
+		dependency: "recovery-history-freshness",
+		failureShape:
+			"the complete attested subject, ordered history, repair basis, original diagnosis binding, or precontinue reread is unavailable or differs from the claimed operands",
+		posture: "closed",
+		justification:
+			"Recovery never crosses a stale history or identity boundary. Preclaim drift leaves the allowance available; postclaim drift remains consumed and hands off at the existing invalidation-selected gate.",
+	},
+	{
 		dependency: "landing-platform-snapshot",
 		failureShape:
 			"any addressed PR, ruleset, review, context, thread, actor, head, base, or repository fact is absent, stale, malformed, or unreadable",
