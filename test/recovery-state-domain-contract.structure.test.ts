@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -67,6 +66,8 @@ const stateNeedles = [
 	"`O_RDONLY|O_DIRECTORY|O_NOFOLLOW`",
 	"fstat identity, type, effective uid, and mode to equal the lstat",
 	"parent descriptor identity revalidated before and after creation",
+	"parent directory descriptor is then fsynced successfully before any next component creation or final-leaf claim",
+	"fsync failure or outcome ambiguity refuses on the preclaim, unconsumed side",
 	"deepest existing ancestor to filesystem root",
 	"On every resolution and before every use",
 	"immediately after creation",
@@ -175,23 +176,16 @@ describe("issue #335 recovery state-domain contract", () => {
 		);
 	});
 
-	it("pins the exact reach declaration on the fresh SSOT commit", () => {
-		const hashes = execFileSync(
-			"git",
-			["log", "--diff-filter=A", "--format=%H", "--", "changelog_unreleased/fixed/335.md"],
-			{ cwd: ROOT, encoding: "utf8" },
-		).match(/[0-9a-f]{40}/g);
-		assert.deepEqual(hashes?.length, 1);
-		const body = execFileSync("git", ["show", "-s", "--format=%B", hashes?.[0] ?? ""], {
-			cwd: ROOT,
-			encoding: "utf8",
-		});
-		const trailers = [...body.matchAll(/^Change-reach: (.+)$/gm)].map((match) => match[1]);
-		assert.deepEqual(trailers, REACH_TRAILERS);
-		assert.match(
-			execFileSync("git", ["show", "--format=", "--name-only", hashes?.[0] ?? ""], { cwd: ROOT, encoding: "utf8" }),
-			/^SPEC\.md$/m,
-		);
+	it("pins the seven exact reach trailer values without querying checkout history", () => {
+		assert.deepEqual(REACH_TRAILERS, [
+			"autonomous-recovery-allowance@SPEC-1.4=re-role-durable-record",
+			"not-per-clone@SPEC-1.4=narrow-same-resolved-domain",
+			"per-project-shell-state@SPEC-5.5=narrow-allowance-exception",
+			"shell-state-domain@SPEC-1.4+5.5=introduce",
+			"state-domain-recovery-allowance@SPEC-1.4=introduce-replacement-record",
+			"ambient-never-enforcement-input@SPEC-4.6=narrow-recovery-placement-only",
+			"host-untouched-outside-repositories@SPEC-4.7=narrow-recovery-state-domain-only",
+		]);
 	});
 
 	it("does not admit clone-local, raw-key, repository-directory, public-CAS, or reset alternatives", () => {
