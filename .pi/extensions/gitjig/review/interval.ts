@@ -186,9 +186,9 @@ export async function readCorrectionIntervals(
 	repoRoot: string,
 	pairs: readonly { earlierHead: string; laterHead: string }[],
 ): Promise<CorrectionInterval[] | undefined> {
-	const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };
 	const intervals: CorrectionInterval[] = [];
 	for (const pair of pairs) {
+		const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };
 		const interval = await readWithBudget(repoRoot, pair.earlierHead, pair.laterHead, budget);
 		if (interval === undefined) return undefined;
 		intervals.push(interval);

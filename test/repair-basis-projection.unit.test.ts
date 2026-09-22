@@ -128,7 +128,7 @@ describe("issue #238 repair-basis projection", () => {
 		);
 	});
 
-	it("shares one byte budget across every adjacent interval", async () => {
+	it("applies the finite byte budget independently to every adjacent interval", async () => {
 		const root = repo();
 		const finding: Finding = {
 			finding: "bounded",
@@ -139,14 +139,30 @@ describe("issue #238 repair-basis projection", () => {
 		const a = commit(root, "large", Buffer.alloc(3 * 1024 * 1024, 1));
 		const b = commit(root, "large", Buffer.alloc(6 * 1024 * 1024, 2));
 		const c = commit(root, "large", Buffer.alloc(9 * 1024 * 1024, 3));
-		assert.equal(
-			await deriveRepairBasis(root, [
-				state(record(a, [finding])),
-				state(record(b, [finding])),
-				state(record(c, [finding])),
-			]),
-			undefined,
-		);
+		const basis = await deriveRepairBasis(root, [
+			state(record(a, [finding])),
+			state(record(b, [finding])),
+			state(record(c, [finding])),
+		]);
+		assert.equal(basis?.intervals.length, 2);
+	});
+
+	it("refuses reordered ruling and disposition populations", async () => {
+		const root = repo();
+		const a = commit(root, "a", "1");
+		const b = commit(root, "a", "2");
+		const findings: Finding[] = [
+			{ finding: "first", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" },
+			{ finding: "second", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" },
+		];
+		for (const mutate of [
+			(record: ReviewRecord) => record.adjudication?.rulings.reverse(),
+			(record: ReviewRecord) => record.review.state === "resolved" && record.review.resolution.dispositions.reverse(),
+		]) {
+			const first = record(a, findings);
+			mutate(first);
+			assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, findings))]), undefined);
+		}
 	});
 
 	it("refuses duplicate, missing, and cardinality-misaligned joins without a partial basis", async () => {

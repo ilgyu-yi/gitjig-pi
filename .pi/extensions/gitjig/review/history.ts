@@ -261,11 +261,20 @@ export async function deriveRepairBasis(
 			record.review.resolution.outcome !== "repair"
 		)
 			return undefined;
+		const adjudication = record.adjudication;
+		if (adjudication === null) return undefined;
 		const bundles = uniqueByFinding(record.bundle);
-		const rulings = record.adjudication === null ? undefined : uniqueByFinding(record.adjudication.rulings);
+		const rulings = uniqueByFinding(adjudication.rulings);
 		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
 		if (bundles === undefined || rulings === undefined || dispositions === undefined) return undefined;
 		if (bundles.size !== rulings.size || bundles.size !== dispositions.size) return undefined;
+		for (let index = 0; index < record.bundle.length; index += 1) {
+			if (
+				adjudication.rulings[index]?.finding !== record.bundle[index].finding ||
+				record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding
+			)
+				return undefined;
+		}
 		const findings: RepairBasisFinding[] = [];
 		for (const bundle of record.bundle) {
 			const ruling = rulings.get(bundle.finding);

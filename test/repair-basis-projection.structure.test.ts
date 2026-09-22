@@ -25,12 +25,14 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		!interval.includes("merge-base") &&
 		!interval.includes("git diff") &&
 		interval.includes("const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 }") &&
-		interval.indexOf("const budget: Budget =") < interval.indexOf("for (const pair of pairs)") &&
+		interval.indexOf("const budget: Budget =") > interval.indexOf("for (const pair of pairs)") &&
 		history.includes('while (start > 0 && history[start - 1].outcome === "repair")') &&
 		history.includes('ruling.validity === "CONFIRMED"') &&
 		history.includes('ruling.severity === "SUBSTANTIVE"') &&
 		history.includes('disposition.disposition === "repair"') &&
 		history.includes("bundles.size !== rulings.size || bundles.size !== dispositions.size") &&
+		history.includes("adjudication.rulings[index]?.finding !== record.bundle[index].finding") &&
+		history.includes("record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
 		caller.includes("await deriveRepairBasis(repoRoot, history)") &&
@@ -68,8 +70,8 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL.replace('["120000", "blob"]', '["120000", "commit"]'), HISTORY, CALLER],
 			[
 				INTERVAL.replace(
-					"const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };\n\tconst intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs)",
 					"const intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {\n\t\tconst budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };",
+					"const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };\n\tconst intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {",
 				),
 				HISTORY,
 				CALLER,
@@ -88,6 +90,19 @@ describe("issue #238 structural mutation teeth", () => {
 			[
 				INTERVAL,
 				HISTORY.replace("bundles.size !== rulings.size || bundles.size !== dispositions.size", "false"),
+				CALLER,
+			],
+			[
+				INTERVAL,
+				HISTORY.replace("adjudication.rulings[index]?.finding !== record.bundle[index].finding", "false"),
+				CALLER,
+			],
+			[
+				INTERVAL,
+				HISTORY.replace(
+					"record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding",
+					"false",
+				),
 				CALLER,
 			],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
