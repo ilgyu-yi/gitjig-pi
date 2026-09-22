@@ -696,6 +696,14 @@ export const POSTURES: readonly PostureRow[] = [
 			"A run whose irreversible ceiling cannot later be established does not start. The false-block cost is the whole Tier-1 run; restore the owner-only state root and retry.",
 	},
 	{
+		dependency: "recovery-shell-state-domain",
+		failureShape:
+			"the resolved XDG/HOME domain, owner/mode/no-follow identity, repository exclusion, direct allowance leaf, exclusive claim, durable terminalization, or production/test boundary is absent, malformed, ambiguous, or unusable",
+		posture: "closed",
+		justification:
+			"Before exclusive leaf creation, recovery hands off the current invocation without consuming the allowance; repair the private domain and start a new invocation to attempt its still-available claim. Once creation may have succeeded, that lineage is permanently consumed and domain repair serves only future distinct leaves. The runtime never repairs or resets an existing leaf or falls back to clone-local or public/server exclusion.",
+	},
+	{
 		dependency: "landing-platform-snapshot",
 		failureShape:
 			"any addressed PR, ruleset, review, context, thread, actor, head, base, or repository fact is absent, stale, malformed, or unreadable",

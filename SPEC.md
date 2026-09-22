@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 177 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 189 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 203 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 229 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 241 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 282 |
-| §2 | Artifact hierarchy and lifecycle | 290 |
-| &nbsp;&nbsp;§2.1 | Issue types | 294 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 307 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 334 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 338 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 355 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 395 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 409 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 419 |
-| §3 | Enforcement-layer architecture | 431 |
-| &nbsp;&nbsp;§3.1 | The constraint | 435 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 442 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 450 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 571 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 581 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 585 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 597 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 613 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 749 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 763 |
-| &nbsp;&nbsp;§3.11 | Gate design | 777 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 799 |
-| §4 | Substrate and install contract | 809 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 813 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 825 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 833 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 839 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 843 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 847 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 859 |
-| &nbsp;&nbsp;§4.8 | The command layer | 869 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 926 |
-| §5 | Cross-cutting contracts | 1045 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1049 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1055 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1059 |
-| &nbsp;&nbsp;§5.4 | Work language | 1063 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1067 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1075 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1087 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1097 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1105 |
-| §6 | Self-governance milestone | 1117 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1128 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 181 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 193 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 207 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 233 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 245 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 286 |
+| §2 | Artifact hierarchy and lifecycle | 294 |
+| &nbsp;&nbsp;§2.1 | Issue types | 298 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 311 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 338 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 342 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 359 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 399 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 413 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 423 |
+| §3 | Enforcement-layer architecture | 435 |
+| &nbsp;&nbsp;§3.1 | The constraint | 439 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 446 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 454 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 575 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 585 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 589 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 601 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 617 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 753 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 767 |
+| &nbsp;&nbsp;§3.11 | Gate design | 781 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 803 |
+| §4 | Substrate and install contract | 813 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 817 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 829 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 837 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 843 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 847 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 851 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 863 |
+| &nbsp;&nbsp;§4.8 | The command layer | 873 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 930 |
+| §5 | Cross-cutting contracts | 1049 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1053 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1059 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1063 |
+| &nbsp;&nbsp;§5.4 | Work language | 1067 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1071 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1089 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1101 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1111 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1119 |
+| §6 | Self-governance milestone | 1131 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1142 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -146,6 +146,10 @@ The taxonomy value is exactly one of four, and this clause commits to them as th
 **What a value decides.** NONE admits ordinary continuation. STAGNATION, OSCILLATION, and INDETERMINATE interrupt ordinary repair and downstream flow; the resolved **decision mode** (§5.6), never the merge mode, then selects the recipient. Under `handoff` each value emits §2.2's idempotent handoff record and stops. Under `autonomous` the change may consume the single recovery allowance below. A handoff reached here is reached on this clause's terms rather than by re-running §5.7's blocker classification, and overlapping grounds produce one handoff. No diagnosis value itself grants progress: only the independently produced recovery evidence can return a change to ordinary flow.
 
 **The autonomous recovery allowance.** One allowance exists per stable change lineage, not per head, session, clone, mode selection, plan, or re-plan. Its **change key** is mechanically derived by the durable writer from platform-attested immutable identities: repository plus the sorted set of activated closing issues, or repository plus the pull request where no issue exists. A replacement pull request for the same activated issue set therefore reuses the key; the caller never supplies or mints it. A subject with unavailable or ambiguous attested identity hands off rather than receiving a key. A newly activated issue is a new lineage because activation, not an author's relabeling, admits that identity. The writer atomically changes the allowance from `available` to `claimed` **before** any intervention; claim, crash, invalid return, or unavailable actor consumes it, and no later event resets it for that lineage. The acting author cannot write, clear, or satisfy this record.
+
+The durable one-use record of the autonomous recovery allowance is the **state-domain recovery allowance**. A **shell state domain** is one resolved, account-owned filesystem domain shared only by invocations that resolve that same domain. Accordingly, “not per clone” above quantifies over every process and clone in one shell state domain; it does not claim exclusion across different resolved domains. Different domains — on one host or different hosts — can each claim the same platform lineage. This named residual reopens the design if one lineage is observed recovering from multiple domains, or if a private linearizable shared service is separately authorized and available; #240 or its explicit successor owns that hardening trigger. This is the one narrow exception to §5.5's ordinary per-project placement rule. It neither creates a second allowance nor changes the autonomous route permission.
+
+The existing **change key** remains the sole canonical lineage identity. Filesystem encoding uses only immutable components that already constitute that key; it is not a second identity or durable term. Every repository, issue, or pull-request platform node-id operand must be a non-empty Unicode scalar string whose exact UTF-8 encoding is at most 1,024 bytes; a lone surrogate, absence, overflow, or ambiguity refuses. `frame(s)` is the unsigned 32-bit big-endian UTF-8 byte length followed by those exact bytes. `repoHash` is lowercase hexadecimal SHA-256 of ASCII `gitjig-recovery-repository-path:v2`, one NUL byte, and `frame(repositoryNodeId)`. `keyHash` is lowercase hexadecimal SHA-256 of ASCII `gitjig-recovery-change-path:v2`, one NUL byte, and the already admitted change-key operands: byte `0x01`, unsigned 32-bit big-endian issue count, and every `frame(issueNodeId)` sorted by unsigned UTF-8 byte order for an issue-backed key; or byte `0x02` and `frame(pullRequestNodeId)` for a zero-issue key. No locale, JSON serialization, delimiter join, issue number, URL, checkout datum, or caller spelling participates. The fixed ASCII final leaf NAME is `r2-<repoHash>-<keyHash>.json` directly under `recovery` — 137 bytes, never a repository directory. The hashes and leaf spelling are path encodings of the sole change key, not identifiers that can authorize or distinguish a lineage. Checkout path, head, branch, replacement pull request for an issue-backed key, session, modes, plan, and re-plan never enter them.
 
 The closed recovery record carries the derived change key; a tagged basis; both resolved modes and their sources; allowance state `available | claimed | consumed`; selected route; independent actor identity; bounded measurement provenance and result class where present; next gate; and terminal `continue | handoff`. A `history-diagnosis` basis carries triggering review-state identity, taxonomy value, and invalidation; a `finding-escalation` basis carries the effective finding and adjudication identity and invents no invalidation. Missing, unknown, duplicate, or misaligned fields handoff. One allowance admits one route-specific intervention followed by exactly one fresh independent ruling at the gate its basis names. For a history diagnosis, only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling; every non-NONE, incomplete, invalid, or unavailable result hands off. A second recovery request hands off.
 
@@ -846,7 +850,7 @@ Freshness reconstructs the carried projection with §4.2's manifest grammar and 
 
 ### 4.6 Binding and resolution
 
-**Ambient never on the hot path.** The ambient environment is never an input on the enforcement hot path: every enforcement entry point self-locates from its own installed location, so a stale global setting cannot redirect which rule tree loads — the cross-clone contamination vector, where one clone's stale export makes another clone's enforcement load the wrong rules. A running session's hot path must not depend on a name the change under way is renaming — otherwise the rename disarms the very session performing it. Exactly one documented override seam exists, marked test-only, and an active seam announces itself in a live session (§5.9); a retired input is cut cleanly — never honored, never shimmed — with a live signal that it is now ignored.
+**Ambient never on the hot path.** The ambient environment is never an input on the enforcement hot path: every enforcement entry point self-locates from its own installed location, so a stale global setting cannot redirect which rule tree loads — the cross-clone contamination vector, where one clone's stale export makes another clone's enforcement load the wrong rules. A running session's hot path must not depend on a name the change under way is renaming — otherwise the rename disarms the very session performing it. Exactly one documented override seam exists, marked test-only, and an active seam announces itself in a live session (§5.9); a retired input is cut cleanly — never honored, never shimmed — with a live signal that it is now ignored. The sole enforcement-input exception is §1.4's recovery state-domain placement: its zero-argument resolver reads only whether `XDG_STATE_HOME` is present and its value, or only when absent whether `HOME` is present and its value, under §5.5's closed validation. Those values select placement and authorize no act. Every other ambient variable remains excluded; recovery rejects any present `GITJIG_TEST_STATE_ROOT` and creates no second override seam.
 
 **Write-target equals read-target.** The path an evidence or registration producer writes must be exactly the path the consuming gate reads: a divergence silently fails the gate open with no error anywhere — the write succeeds, the read finds nothing, and both report clean. Where both sides can compute the path from a fact each holds natively — the repository they are running against — the equality is established by **one derivation both perform**, not by two supplied values that happen to agree: a supplied path is the weaker construction, because nothing on either side reads the other's copy and a drift between them produces exactly the silent shape above. Audit destinations resolve to a real, durable location in every execution context except the test-run class §5.5 carves out, where teardown loss is the intent; anywhere else, a destination keyed to a disposable working copy loses the record at teardown. Relocated state keeps a read-only legacy floor: writers move unconditionally to the new location, and readers consult the old one only when the new one is absent, never in preference to it — §2.5(c)'s install-boundary premise, applied to state. One class of datum does **not** take the floor, and it is the class where the floor inverts its own purpose: a datum whose STALE COPY IS ITSELF THE FAULT — a suppression or debounce token, whose whole content is that something has already been said — is not read from the old location at all, because consulting it re-imposes exactly the suppression the relocation was performed to lift. The floor exists so a relocation does not lose durable state; where the state's loss IS the repair, reading it back is the regression. A relocation taking this carve-out records the ground where the relocated datum is defined, and the orphaned copy is left inert rather than reaped.
 
@@ -858,7 +862,7 @@ The norm is **procedural today**, enforced at review (§2.3), with one landed in
 
 ### 4.7 Host boundary
 
-Installation and operation leave the host untouched outside governed repositories: no home-directory configuration, shell login file, global version-control setting, PATH registration, service, or auto-start hook. Package-manager invocation and privilege escalation remain outside installer actions. Disabling the shell is ceasing to invoke it.
+Installation and operation leave the host untouched outside governed repositories: no home-directory configuration, shell login file, global version-control setting, PATH registration, service, or auto-start hook. The sole exception is §1.4's state-domain recovery allowance: it may create and update only §5.5's exact owner-only `gitjig/recovery` directory chain and direct allowance leaves in the resolved account state domain. It changes no configuration, registration, service, repository metadata, or other host path. Package-manager invocation and privilege escalation remain outside installer actions. Disabling the shell is ceasing to invoke it.
 
 Composition plans over the **old and new manifests** with closed actions `land`, `replace`, `retire`, `converged`, and `refuse`. Without a prior pin, only absent or exact-next destinations admit. With a valid same-source prior pin, exact-next converges, exact-old may replace, and a prior-only exact-old member may retire. The pin replaces only when its bytes exactly equal the admitted prior pin. Malformed/changed-source pins, missing ownership entries, foreign occupants, and bytes matching neither old nor new refuse. The **whole phase refuses before mutation** if any member refuses; no partial-success pin exists. Terminal results are `verified`, `converged`, or `refused`, with fixed phase/member causes, and success requires final verification.
 
@@ -1067,6 +1071,16 @@ Durable artifacts are authored in the repository's configured work language (def
 ### 5.5 State boundary
 
 The shell governs work in repositories that adopt it (§0.1), and its write scope ends where that governance ends, the same way its install scope ends at its own namespaces (§4.1). Per-project shell state — audit records, caches, working files — is therefore written only inside governed repositories. A state write whose working directory falls in a repository the shell does **not** govern must either fall through to shell-owned storage or exclude the created path from that repository's version control at creation — shell state carries operational text — an audit record names locators, categories, and command *shapes*, and it never carries the content a refusal withheld (§3.8): a secret match reports its pattern identity, never the matched text (§3.6) — and even that reduced text must never become committable history in a repository the shell does not control. Free text is encoded at the write, not at the composition: control bytes are removed and the record's own string delimiter and escape character are escaped, so one record stays one line and no field's content can close its field and open another. The write itself carries one property wherever a record is produced: the writer **refuses to write through a symbolic link** at any component of the state namespace it creates, so a link planted at one of those components cannot redirect a record out of the namespace §4.1 gives the shell and into a repository this boundary excludes; what a link ABOVE a writer's own components does is that writer's stated residual (§3.11). Delivery to the sink is a **single append where the record fits the writer's own output buffering**, and a residual otherwise — a record past that bound reaches the sink as several appends and a concurrent writer can land between them, so the trail can carry a fragment; the composition rule above keeps a fragment from closing a field it never opened, and a fragment can itself parse, so a consumer of the trail never reads parseability as provenance. Each writer states its bound where it is implemented (§3.11). The same reasoning binds the record at rest: a state file the shell creates is readable only by the account that writes it, because an audit record names what a repository's work touched and a host may carry accounts that work never concerned. Its plausible false-block cost is nil — the mode governs who may read a file the shell alone writes, so no legitimate flow is refused (§3.6 requirement (ii)). The boundary has a second face inside governed repositories: an execution context that exists to exercise the shell — a test or verification run — resolves shell state to a disposable root and never writes the operational sinks the calibration loop reads (§3.6); a suite that pollutes the evidence surface corrupts every decision read from it.
+
+The state-domain recovery allowance is the sole placement exception to the per-project rule above. Production resolution is closed. If `XDG_STATE_HOME` is set, it must be an existing absolute, effective-uid-owned, non-link directory of exact mode `0700`; invalid or unusable refuses with no HOME fallback, and the directory chain is `XDG_STATE_HOME/gitjig/recovery/`. Otherwise `HOME` must be an existing absolute, effective-uid-owned, non-link directory with no group/other write bits; the chain is `HOME/.local/state/gitjig/recovery/`. Pre-existing shared `.local` and `.local/state` components follow the same owner/non-link/no-group-or-other-write predicate and retain ordinary read/execute bits; the runtime never chmods them. Shared ancestors it creates use `0700`. Runtime-owned `gitjig` and `recovery` directories are exact mode `0700`. No `state` component is added to the XDG chain and none is omitted from HOME.
+
+For every existing component below the selected root, resolution performs lstat by path, opens `O_RDONLY|O_DIRECTORY|O_NOFOLLOW`, and requires fstat identity, type, effective uid, and mode to equal the lstat. A missing component is mkdir-created at `0700`, opened and checked identically, with its parent descriptor identity revalidated before and after creation. For every traversed component, whether pre-existing or newly created, its parent directory descriptor is then fsynced successfully before descending to the next component or attempting the final-leaf claim. This repeated barrier covers a component left visible by an earlier failed or outcome-ambiguous creation fsync. Any parent fsync failure or ambiguity refuses on the preclaim, unconsumed side; any mismatch refuses. Before creating a missing domain, repository exclusion walks from its deepest existing ancestor to filesystem root. On every resolution and before every use it walks from the final domain to root, and immediately after creation it repeats that final walk. Each walked ancestor refuses either a `.git` entry of any lstat type — file, directory, symlink, or other — or the conjunction of sibling entries `HEAD`, `objects`, and `refs`, each present by lstat regardless of type; this excludes intrinsically discoverable ordinary and bare Git layouts. It cannot detect an arbitrary directory designated as a work tree only by externally located metadata through `git --git-dir=… --work-tree=…` or external `core.worktree`: that directory has no intrinsic marker, and the runtime neither enumerates foreign metadata nor reads global Git configuration. This is an explicit operator-placement residual, not a never-committable guarantee. The operator must not select an XDG/HOME domain inside such an externally designated work tree; observing allowance state become committable through external metadata reopens #334 or its explicit successor for hardening. The deliberate false block is an unrelated ancestor that coincidentally carries the bare-marker trio. Recovery is to relocate the XDG/HOME state domain outside that ancestor and begin a new invocation; because exclusion precedes exclusive leaf creation, the refusal consumes no allowance. No exclusion file or repository metadata is mutated. Ancestors above the selected XDG/HOME root are the OS/operator placement residual and are not claimed as runtime-owned.
+
+The final allowance leaf is an effective-uid-owned, regular, single-link exact-mode-`0600` file opened no-follow. Claim is `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW` at that final path: the writable descriptor receives the complete `claimed` tombstone, and the file and parent directory are fsynced before any semantic dispatch. No delete, edit, clear, reset, repair, or stale-lock recovery API exists. Partial, torn, malformed, linked, loose-mode, or wrong-owner existing bytes are permanently unavailable. Terminalization first verifies the exact claimed bytes, writes a same-directory exclusive temporary at `0600`, fsyncs it, atomically renames it over the claim, and fsyncs the directory. Any write, rename, fsync, or outcome ambiguity remains consumed. Exclusive final-leaf creation is the consumption boundary. A domain-resolution, ancestry, mode, ownership, repository-exclusion, or directory-creation refusal before successful exclusive final-leaf creation creates no tombstone and leaves the allowance available; the current invocation hands off, and only a newly initiated invocation after repair may attempt the claim. Once exclusive creation may have succeeded, complete, partial, malformed, failed, or outcome-ambiguous state is consumed forever. The handoff record is interruption evidence, never asserted as durable consumption.
+
+Production recovery resolves this domain through the sole zero-argument export `resolveRecoveryStateDomain()` in the future owner `.pi/extensions/gitjig/recovery/state-domain.ts`. It has no root, environment-object, capability, or override operand and fails closed if `GITJIG_TEST_STATE_ROOT` is present at all, including empty, so recovery neither consumes nor creates a second §4.6 override seam. Resolver integration tests use a subprocess with an existing absolute disposable effective-uid-owned non-link exact-`0700` directory supplied through the production `XDG_STATE_HOME` branch or the absent-XDG `HOME` branch. Lower-level path and claim pure helpers may take explicit paths in unit tests, but cannot select or override production resolution and are not command or coordinator entry points. No verification token, wrapper, alternate resolver, or factory is exported.
+
+No comment, label, ref, repository variable, workflow artifact or cache, platform setting, credential service, daemon, new dependency, public/server mutation, or foreign-repository act may provide this allowance. Same-account separation is capability and order under the honest coordinator threat model: author and delegate surfaces receive no state-domain, key, claim, reset, or finalize capability. Arbitrary external filesystem tampering by the same account remains outside that claim; no OS/platform identity separation is asserted.
 
 A dispatch trace is per-project shell state on these same terms: it lands under the resolved governed state root as an owner-only regular file, never in the delegate's writable scratch state and never in a foreign repository. Its raw content is operational text, so it inherits the no-follow component rule and the file-at-rest mode above. The dispatcher bounds each trace and prunes it to the newest 50 completed traces and seven days, whichever is tighter; a pruning or write failure is an observable fail-open loss of an aid, not permission to move the file elsewhere. The trace has no runtime read-back path into tool results, session messages, or model context.
 
