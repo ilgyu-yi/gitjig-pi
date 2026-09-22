@@ -116,16 +116,13 @@ describe("issue #236 repair-basis settlement", () => {
 		for (const [crossReview, judge] of mutants) assert.equal(settlementHolds(crossReview, judge), false);
 	});
 
-	it("preserves the exact #238 migration bytes while mechanically prohibiting their call", () => {
-		assert.match(HISTORY_SOURCE, /superseded complete-record diagnosis brief/);
-		assert.match(HISTORY_SOURCE, /#238's exclusive owner/);
-		assert.match(HISTORY_SOURCE, /operation is prohibited by #236's bounded/);
-		assert.equal(HISTORY_SOURCE.match(/same findings across review states/g)?.length, 1);
-		assert.equal(HISTORY_SOURCE.match(/diagnosis reads the SAME findings across states/g)?.length, 1);
-		assert.match(CALLER_SOURCE, /const REPAIR_BASIS_PENDING = true;/);
-		const guard = CALLER_SOURCE.indexOf("if (REPAIR_BASIS_PENDING)");
-		const compose = CALLER_SOURCE.indexOf("composeDiagnosisBrief(history,");
-		assert.ok(guard >= 0 && compose > guard, "the fail-closed guard must precede the superseded composer call");
+	it("allows diagnosis only after #238's repair basis is fully admitted", () => {
+		assert.doesNotMatch(HISTORY_SOURCE, /same findings across review states|diagnosis reads the SAME findings/);
+		assert.doesNotMatch(CALLER_SOURCE, /REPAIR_BASIS_PENDING/);
+		const derive = CALLER_SOURCE.indexOf("await deriveRepairBasis(repoRoot, history)");
+		const guard = CALLER_SOURCE.indexOf("if (basis === undefined)");
+		const compose = CALLER_SOURCE.indexOf("composeDiagnosisBrief(basis,");
+		assert.ok(derive >= 0 && guard > derive && compose > guard);
 		assert.match(
 			CALLER_SOURCE.slice(guard, compose),
 			/return \{ disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" \}/,

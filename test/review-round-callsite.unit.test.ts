@@ -710,12 +710,8 @@ describe("review-round production call site", () => {
 		);
 		const second = await run(secondRoot, subject(first.base, first.head), repairRecord(first.head));
 		if ("diagnosis" in second && second.diagnosis !== undefined) diagnoses += 1;
-		assert.deepEqual(second, {
-			disposition: "hand-off",
-			cause: "review-round handed off: the required history diagnosis was unavailable or required handoff",
-			reentry: "none",
-		});
-		assert.equal(diagnoses, 0, "the superseded complete-record diagnosis must not run across clones");
+		assert.equal(second.disposition, "posted");
+		assert.equal(diagnoses, 1, "the admitted repair basis must diagnose across clones");
 		assert.ok(readRoots.includes(first.root));
 		assert.ok(readRoots.includes(secondRoot));
 	});
@@ -926,7 +922,7 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
-	it("prohibits a pre-existing triggered diagnosis before composition or dispatch", async () => {
+	it("withholds a pre-existing trigger when no repair basis can be formed", async () => {
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
 		let dispatched = 0;
 		let rounds = 0;
@@ -937,7 +933,7 @@ describe("review-round production call site", () => {
 				readComments: async () => population(bodies),
 				makeDispatch: () => async () => {
 					dispatched += 1;
-					throw new Error("superseded diagnosis dispatched");
+					throw new Error("unadmitted diagnosis dispatched");
 				},
 				runRound: async () => {
 					rounds += 1;
@@ -984,7 +980,7 @@ describe("review-round production call site", () => {
 		assert.equal(ran, false, "an unreadable history must not spend a round");
 	});
 
-	it("publishes a newly triggering repair record, then hands off without diagnosis dispatch", async () => {
+	it("publishes a newly triggering repair record, then withholds when its basis is unavailable", async () => {
 		const order: string[] = [];
 		let dispatched = 0;
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
@@ -999,7 +995,7 @@ describe("review-round production call site", () => {
 					),
 				makeDispatch: () => async () => {
 					dispatched += 1;
-					throw new Error("superseded diagnosis dispatched");
+					throw new Error("unadmitted diagnosis dispatched");
 				},
 				runRound: async () => {
 					order.push("round");

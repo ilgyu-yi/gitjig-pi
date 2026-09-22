@@ -23,6 +23,7 @@ import {
 	type Consequence,
 	composeDiagnosisBrief,
 	type DiagnosisInput,
+	deriveRepairBasis,
 	diagnosisConsequence,
 	historyAvailability,
 	repairHistory,
@@ -46,7 +47,6 @@ import { readRepositoryInput } from "./review-round-input.ts";
 const REFUSE_SPEC =
 	"review-round refused: the argument must name one readable, in-repository JSON spec of the closed shape; see README.md, Driving a review round";
 const HANDOFF_SUBJECT = "review-round handed off: the platform-attested review subject could not be established";
-const REPAIR_BASIS_PENDING = true;
 const HANDOFF_CRITERION_OWNER = "review-round handed off: the handed-over criterion owner was unavailable";
 const HANDOFF_HEAD = "review-round handed off: the attested head is not the head this clone resolves";
 const HANDOFF_DRIFT = "review-round handed off: the review subject changed while the round ran";
@@ -257,13 +257,11 @@ export async function driveReviewRound(
 			requiredReceipt?: ReviewPublicationReceipt,
 		): Promise<TerminalSeed | undefined> => {
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
-			// #236 retires the complete record as a diagnosis operand. Until #238
-			// supplies the repair-basis projection, the old operation is prohibited
-			// and fails closed before composition or dispatch.
-			if (REPAIR_BASIS_PENDING) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
+			const basis = await deriveRepairBasis(repoRoot, history);
+			if (basis === undefined) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
 			const admitted = admitDiagnosis(
 				await dispatch(
-					composeDiagnosisBrief(history, {
+					composeDiagnosisBrief(basis, {
 						changeDescription: spec.changeDescription,
 						withheldHead: head,
 						timing: briefTiming,
