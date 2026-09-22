@@ -23,7 +23,7 @@ export type DeltaEntry = { pathBase64: string; before: DeltaSide | null; after: 
 export type CorrectionInterval = { earlierHead: string; laterHead: string; entries: DeltaEntry[] };
 
 type TreeEntry = { path: Buffer; mode: string; type: "blob" | "commit"; oid: string };
-type Budget = { deadline: number; bytes: number };
+type Budget = { deadline: number; bytes: number; commits: number };
 
 function gitEnv(): NodeJS.ProcessEnv {
 	return { ...withoutRepoLocatingGitEnv(process.env), GIT_ADVICE: "0", GIT_NO_REPLACE_OBJECTS: "1", LC_ALL: "C" };
@@ -56,20 +56,33 @@ async function exactCommit(repoRoot: string, oid: string, budget: Budget): Promi
 function commitParents(raw: Buffer): string[] | undefined {
 	const end = raw.indexOf(Buffer.from("\n\n"));
 	if (end < 0) return undefined;
-	const lines = raw.subarray(0, end).toString("ascii").split("\n");
-	let trees = 0;
-	const parents: string[] = [];
-	for (const line of lines) {
-		if (line.startsWith("tree ")) {
-			if (!OID.test(line.slice(5))) return undefined;
-			trees += 1;
-		} else if (line.startsWith("parent ")) {
-			const parent = line.slice(7);
-			if (!OID.test(parent) || parents.includes(parent)) return undefined;
-			parents.push(parent);
-		}
+	const lines: Buffer[] = [];
+	let start = 0;
+	while (start <= end) {
+		const next = raw.indexOf(10, start);
+		if (next < 0 || next > end) break;
+		lines.push(raw.subarray(start, next));
+		start = next + 1;
 	}
-	return trees === 1 ? parents : undefined;
+	if (lines.length === 0 || !/^tree [0-9a-f]{40}$/.test(lines[0].toString("ascii"))) return undefined;
+	const parents: string[] = [];
+	let index = 1;
+	while (index < lines.length && lines[index].subarray(0, 7).equals(Buffer.from("parent "))) {
+		const line = lines[index];
+		if (!/^parent [0-9a-f]{40}$/.test(line.toString("ascii"))) return undefined;
+		const parent = line.subarray(7).toString("ascii");
+		if (parents.includes(parent)) return undefined;
+		parents.push(parent);
+		index += 1;
+	}
+	for (; index < lines.length; index += 1) {
+		if (
+			lines[index].subarray(0, 5).equals(Buffer.from("tree ")) ||
+			lines[index].subarray(0, 7).equals(Buffer.from("parent "))
+		)
+			return undefined;
+	}
+	return parents;
 }
 
 async function isRawAncestor(repoRoot: string, earlier: string, later: string, budget: Budget): Promise<boolean> {
@@ -80,7 +93,8 @@ async function isRawAncestor(repoRoot: string, earlier: string, later: string, b
 		if (oid === earlier) return true;
 		if (seen.has(oid)) continue;
 		seen.add(oid);
-		if (seen.size > COMMIT_CAP) return false;
+		budget.commits += 1;
+		if (budget.commits > COMMIT_CAP) return false;
 		const raw = await run(repoRoot, ["cat-file", "commit", oid], budget);
 		if (raw === undefined) return false;
 		const parents = commitParents(raw);
@@ -119,13 +133,13 @@ async function side(repoRoot: string, entry: TreeEntry, budget: Budget): Promise
 	return { mode: entry.mode, type: entry.type, oid: entry.oid, bytesBase64: bytes.toString("base64") };
 }
 
-export async function readCorrectionInterval(
+async function readWithBudget(
 	repoRoot: string,
 	earlierHead: string,
 	laterHead: string,
+	budget: Budget,
 ): Promise<CorrectionInterval | undefined> {
 	if (earlierHead === laterHead) return undefined;
-	const budget = { deadline: Date.now() + RUN_MS, bytes: 0 };
 	if (!(await exactCommit(repoRoot, earlierHead, budget)) || !(await exactCommit(repoRoot, laterHead, budget)))
 		return undefined;
 	if (!(await isRawAncestor(repoRoot, earlierHead, laterHead, budget))) return undefined;
@@ -166,4 +180,26 @@ export async function readCorrectionInterval(
 		if (order >= 0) right += 1;
 	}
 	return { earlierHead, laterHead, entries };
+}
+
+export async function readCorrectionIntervals(
+	repoRoot: string,
+	pairs: readonly { earlierHead: string; laterHead: string }[],
+): Promise<CorrectionInterval[] | undefined> {
+	const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };
+	const intervals: CorrectionInterval[] = [];
+	for (const pair of pairs) {
+		const interval = await readWithBudget(repoRoot, pair.earlierHead, pair.laterHead, budget);
+		if (interval === undefined) return undefined;
+		intervals.push(interval);
+	}
+	return intervals;
+}
+
+export async function readCorrectionInterval(
+	repoRoot: string,
+	earlierHead: string,
+	laterHead: string,
+): Promise<CorrectionInterval | undefined> {
+	return (await readCorrectionIntervals(repoRoot, [{ earlierHead, laterHead }]))?.[0];
 }

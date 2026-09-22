@@ -14,6 +14,8 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		interval.includes("const COMMIT_CAP = 100_000") &&
 		interval.includes('["rev-parse", "--verify", "--end-of-options", `${oid}^{commit}`]') &&
 		interval.includes('["cat-file", "commit", oid]') &&
+		interval.includes('if (lines.length === 0 || !/^tree [0-9a-f]{40}$/.test(lines[0].toString("ascii")))') &&
+		interval.includes('while (index < lines.length && lines[index].subarray(0, 7).equals(Buffer.from("parent ")))') &&
 		interval.includes('["ls-tree", "-r", "-z", "--full-tree", "--end-of-options", earlierHead]') &&
 		interval.includes('["cat-file", "blob", entry.oid]') &&
 		interval.includes('["100644", "blob"]') &&
@@ -22,15 +24,20 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		interval.includes('["160000", "commit"]') &&
 		!interval.includes("merge-base") &&
 		!interval.includes("git diff") &&
+		interval.includes("const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 }") &&
+		interval.indexOf("const budget: Budget =") < interval.indexOf("for (const pair of pairs)") &&
 		history.includes('while (start > 0 && history[start - 1].outcome === "repair")') &&
 		history.includes('ruling.validity === "CONFIRMED"') &&
 		history.includes('ruling.severity === "SUBSTANTIVE"') &&
 		history.includes('disposition.disposition === "repair"') &&
 		history.includes("bundles.size !== rulings.size || bundles.size !== dispositions.size") &&
+		history.includes("await readCorrectionIntervals(") &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
 		caller.includes("await deriveRepairBasis(repoRoot, history)") &&
 		caller.includes("if (basis === undefined)") &&
-		caller.indexOf("composeDiagnosisBrief(basis,") > caller.indexOf("if (basis === undefined)")
+		caller.indexOf("composeDiagnosisBrief(basis,") > caller.indexOf("if (basis === undefined)") &&
+		caller.indexOf('state = { phase: "diagnosis-admitted", diagnosis }') >
+			caller.indexOf("JSON.stringify(confirmed.history)")
 	);
 }
 
@@ -47,9 +54,26 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL.replace("const COMMIT_CAP = 100_000", "const COMMIT_CAP = Infinity"), HISTORY, CALLER],
 			[INTERVAL.replace('"--end-of-options", `${oid}^{commit}`', "`${oid}^{commit}`"), HISTORY, CALLER],
 			[INTERVAL.replace('["cat-file", "commit", oid]', '["merge-base", oid]'), HISTORY, CALLER],
+			[INTERVAL.replace('lines[0].toString("ascii")', 'raw.toString("ascii")'), HISTORY, CALLER],
+			[
+				INTERVAL.replace(
+					'while (index < lines.length && lines[index].subarray(0, 7).equals(Buffer.from("parent ")))',
+					"while (index < lines.length)",
+				),
+				HISTORY,
+				CALLER,
+			],
 			[INTERVAL.replace('"-z", "--full-tree"', '"--full-tree"'), HISTORY, CALLER],
 			[INTERVAL.replace('["cat-file", "blob", entry.oid]', '["show", entry.oid]'), HISTORY, CALLER],
 			[INTERVAL.replace('["120000", "blob"]', '["120000", "commit"]'), HISTORY, CALLER],
+			[
+				INTERVAL.replace(
+					"const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };\n\tconst intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs)",
+					"const intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {\n\t\tconst budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };",
+				),
+				HISTORY,
+				CALLER,
+			],
 			[
 				INTERVAL,
 				HISTORY.replace(
@@ -66,6 +90,7 @@ describe("issue #238 structural mutation teeth", () => {
 				HISTORY.replace("bundles.size !== rulings.size || bundles.size !== dispositions.size", "false"),
 				CALLER,
 			],
+			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
 			[
 				INTERVAL,
 				HISTORY.replace(
@@ -75,6 +100,17 @@ describe("issue #238 structural mutation teeth", () => {
 				CALLER,
 			],
 			[INTERVAL, HISTORY, CALLER.replace("if (basis === undefined)", "if (false)")],
+			[
+				INTERVAL,
+				HISTORY,
+				CALLER.replace(
+					"const confirmed = await durableState(repoRoot, subject, seams, requiredReceipt);",
+					'state = { phase: "diagnosis-admitted", diagnosis };\n\t\t\tconst confirmed = await durableState(repoRoot, subject, seams, requiredReceipt);',
+				).replace(
+					'\n\t\t\tstate = { phase: "diagnosis-admitted", diagnosis };\n\t\t\tdiagnosedHistory',
+					"\n\t\t\tdiagnosedHistory",
+				),
+			],
 		] as const;
 		mutants.forEach(([interval, history, caller], index) => {
 			assert.equal(contractHolds(interval, history, caller), false, `mutant ${index} survived`);

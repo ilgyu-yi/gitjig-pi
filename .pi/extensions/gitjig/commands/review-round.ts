@@ -271,12 +271,12 @@ export async function driveReviewRound(
 			);
 			if (!admitted.available) return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
 			const diagnosis = admitted.diagnosis;
-			state = { phase: "diagnosis-admitted", diagnosis };
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			const confirmed = await durableState(repoRoot, subject, seams, requiredReceipt);
 			if (confirmed === undefined || JSON.stringify(confirmed.history) !== JSON.stringify(history))
 				return { disposition: "hand-off", cause: HANDOFF_HISTORY, reentry: "none" };
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+			state = { phase: "diagnosis-admitted", diagnosis };
 			diagnosedHistory = JSON.stringify(history);
 			return reentryConsequence(diagnosisConsequence(diagnosis.value, diagnosis.invalidation));
 		};

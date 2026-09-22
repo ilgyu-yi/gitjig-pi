@@ -44,7 +44,7 @@
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import { type BriefTiming, composeDelegateDeadlines, DEFAULT_TIMING, DELEGATE_RETURN_CONTRACT } from "./briefs.ts";
-import { type CorrectionInterval, readCorrectionInterval } from "./interval.ts";
+import { type CorrectionInterval, readCorrectionIntervals } from "./interval.ts";
 // RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
 // type-only import of an absent or renamed module reds `tsc` with the
 // compiler's own message, never an authored one. The suite stays green
@@ -276,12 +276,11 @@ export async function deriveRepairBasis(
 		}
 		states.push({ head: state.head, findings });
 	}
-	const intervals: CorrectionInterval[] = [];
-	for (let index = 0; index + 1 < states.length; index += 1) {
-		const interval = await readCorrectionInterval(repoRoot, states[index].head, states[index + 1].head);
-		if (interval === undefined) return undefined;
-		intervals.push(interval);
-	}
+	const intervals = await readCorrectionIntervals(
+		repoRoot,
+		states.slice(0, -1).map((state, index) => ({ earlierHead: state.head, laterHead: states[index + 1].head })),
+	);
+	if (intervals === undefined) return undefined;
 	return { [REPAIR_BASIS]: true, states, intervals };
 }
 

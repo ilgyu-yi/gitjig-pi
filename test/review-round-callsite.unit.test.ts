@@ -922,6 +922,56 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
+	it("does not admit a dispatched diagnosis when the subject drifts before history revalidation", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let refetches = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				refetchSubject: async (_root, current) => {
+					refetches += 1;
+					return refetches >= 2 ? undefined : current;
+				},
+				makeDispatch: diagnosisDispatch({ value: "NONE", invalidation: "nothing", evidence: "stale" }),
+			}),
+		);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the review subject changed while the round ran",
+			reentry: "none",
+		});
+	});
+
+	it("does not admit a dispatched diagnosis when durable history changes before revalidation", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let reads = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				refetchSubject: async (_root, current) => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => {
+					reads += 1;
+					return population(reads === 1 ? bodies : [...bodies, composeReviewRecord(repairRecord("c".repeat(40)))]);
+				},
+				makeDispatch: diagnosisDispatch({ value: "NONE", invalidation: "nothing", evidence: "changed" }),
+			}),
+		);
+		assert.deepEqual(outcome, {
+			disposition: "hand-off",
+			cause: "review-round handed off: installed review history could not be read",
+			reentry: "none",
+		});
+	});
+
 	it("withholds a pre-existing trigger when no repair basis can be formed", async () => {
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
 		let dispatched = 0;

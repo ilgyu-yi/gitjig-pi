@@ -128,6 +128,27 @@ describe("issue #238 repair-basis projection", () => {
 		);
 	});
 
+	it("shares one byte budget across every adjacent interval", async () => {
+		const root = repo();
+		const finding: Finding = {
+			finding: "bounded",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		const a = commit(root, "large", Buffer.alloc(3 * 1024 * 1024, 1));
+		const b = commit(root, "large", Buffer.alloc(6 * 1024 * 1024, 2));
+		const c = commit(root, "large", Buffer.alloc(9 * 1024 * 1024, 3));
+		assert.equal(
+			await deriveRepairBasis(root, [
+				state(record(a, [finding])),
+				state(record(b, [finding])),
+				state(record(c, [finding])),
+			]),
+			undefined,
+		);
+	});
+
 	it("refuses duplicate, missing, and cardinality-misaligned joins without a partial basis", async () => {
 		const root = repo();
 		const a = commit(root, "a", "1");
