@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 177 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 189 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 203 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 229 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 241 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 282 |
-| §2 | Artifact hierarchy and lifecycle | 290 |
-| &nbsp;&nbsp;§2.1 | Issue types | 294 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 307 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 334 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 338 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 355 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 395 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 409 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 419 |
-| §3 | Enforcement-layer architecture | 431 |
-| &nbsp;&nbsp;§3.1 | The constraint | 435 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 442 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 450 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 571 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 581 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 585 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 597 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 613 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 749 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 763 |
-| &nbsp;&nbsp;§3.11 | Gate design | 777 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 799 |
-| §4 | Substrate and install contract | 809 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 813 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 825 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 833 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 839 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 843 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 847 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 859 |
-| &nbsp;&nbsp;§4.8 | The command layer | 869 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 926 |
-| §5 | Cross-cutting contracts | 1045 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1049 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1055 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1059 |
-| &nbsp;&nbsp;§5.4 | Work language | 1063 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1067 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1075 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1087 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1097 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1105 |
-| §6 | Self-governance milestone | 1117 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1128 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 181 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 193 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 207 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 233 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 245 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 286 |
+| §2 | Artifact hierarchy and lifecycle | 294 |
+| &nbsp;&nbsp;§2.1 | Issue types | 298 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 311 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 338 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 342 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 359 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 399 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 413 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 423 |
+| §3 | Enforcement-layer architecture | 435 |
+| &nbsp;&nbsp;§3.1 | The constraint | 439 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 446 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 454 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 575 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 585 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 589 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 601 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 617 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 753 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 767 |
+| &nbsp;&nbsp;§3.11 | Gate design | 781 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 803 |
+| §4 | Substrate and install contract | 813 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 817 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 829 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 837 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 843 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 847 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 851 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 863 |
+| &nbsp;&nbsp;§4.8 | The command layer | 873 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 930 |
+| §5 | Cross-cutting contracts | 1049 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1053 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1059 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1063 |
+| &nbsp;&nbsp;§5.4 | Work language | 1067 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1071 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1089 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1101 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1111 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1119 |
+| §6 | Self-governance milestone | 1131 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1142 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -146,6 +146,10 @@ The taxonomy value is exactly one of four, and this clause commits to them as th
 **What a value decides.** NONE admits ordinary continuation. STAGNATION, OSCILLATION, and INDETERMINATE interrupt ordinary repair and downstream flow; the resolved **decision mode** (§5.6), never the merge mode, then selects the recipient. Under `handoff` each value emits §2.2's idempotent handoff record and stops. Under `autonomous` the change may consume the single recovery allowance below. A handoff reached here is reached on this clause's terms rather than by re-running §5.7's blocker classification, and overlapping grounds produce one handoff. No diagnosis value itself grants progress: only the independently produced recovery evidence can return a change to ordinary flow.
 
 **The autonomous recovery allowance.** One allowance exists per stable change lineage, not per head, session, clone, mode selection, plan, or re-plan. Its **change key** is mechanically derived by the durable writer from platform-attested immutable identities: repository plus the sorted set of activated closing issues, or repository plus the pull request where no issue exists. A replacement pull request for the same activated issue set therefore reuses the key; the caller never supplies or mints it. A subject with unavailable or ambiguous attested identity hands off rather than receiving a key. A newly activated issue is a new lineage because activation, not an author's relabeling, admits that identity. The writer atomically changes the allowance from `available` to `claimed` **before** any intervention; claim, crash, invalid return, or unavailable actor consumes it, and no later event resets it for that lineage. The acting author cannot write, clear, or satisfy this record.
+
+The durable one-use record of the autonomous recovery allowance is the **state-domain recovery allowance**. A **shell state domain** is one resolved, account-owned filesystem domain shared only by invocations that resolve that same domain. Accordingly, “not per clone” above quantifies over every process and clone in one shell state domain; it does not claim exclusion across different resolved domains. Different domains — on one host or different hosts — can each claim the same platform lineage. This named residual reopens the design if one lineage is observed recovering from multiple domains, or if a private linearizable shared service is separately authorized and available; #240 or its explicit successor owns that hardening trigger. This is the one narrow exception to §5.5's ordinary per-project placement rule. It neither creates a second allowance nor changes the autonomous route permission.
+
+The existing **change key** remains the sole canonical lineage identity. For filesystem placement only, `repoHash` is lowercase SHA-256 over the ASCII domain `gitjig-recovery-repository-path:v1`, one LF, and the admitted immutable platform repository id. The final leaf NAME is `r1-<repoHash>-<changeKey>.json` directly under the domain's `recovery` directory; `repoHash` and this spelling are encodings, not durable terms, and no repository-key directory exists. Checkout path, head, branch, replacement pull request, session, modes, plan, and re-plan never enter either encoding.
 
 The closed recovery record carries the derived change key; a tagged basis; both resolved modes and their sources; allowance state `available | claimed | consumed`; selected route; independent actor identity; bounded measurement provenance and result class where present; next gate; and terminal `continue | handoff`. A `history-diagnosis` basis carries triggering review-state identity, taxonomy value, and invalidation; a `finding-escalation` basis carries the effective finding and adjudication identity and invents no invalidation. Missing, unknown, duplicate, or misaligned fields handoff. One allowance admits one route-specific intervention followed by exactly one fresh independent ruling at the gate its basis names. For a history diagnosis, only a fresh NONE returns to ordinary flow under the unchanged resolved merge-mode ceiling; every non-NONE, incomplete, invalid, or unavailable result hands off. A second recovery request hands off.
 
@@ -1067,6 +1071,16 @@ Durable artifacts are authored in the repository's configured work language (def
 ### 5.5 State boundary
 
 The shell governs work in repositories that adopt it (§0.1), and its write scope ends where that governance ends, the same way its install scope ends at its own namespaces (§4.1). Per-project shell state — audit records, caches, working files — is therefore written only inside governed repositories. A state write whose working directory falls in a repository the shell does **not** govern must either fall through to shell-owned storage or exclude the created path from that repository's version control at creation — shell state carries operational text — an audit record names locators, categories, and command *shapes*, and it never carries the content a refusal withheld (§3.8): a secret match reports its pattern identity, never the matched text (§3.6) — and even that reduced text must never become committable history in a repository the shell does not control. Free text is encoded at the write, not at the composition: control bytes are removed and the record's own string delimiter and escape character are escaped, so one record stays one line and no field's content can close its field and open another. The write itself carries one property wherever a record is produced: the writer **refuses to write through a symbolic link** at any component of the state namespace it creates, so a link planted at one of those components cannot redirect a record out of the namespace §4.1 gives the shell and into a repository this boundary excludes; what a link ABOVE a writer's own components does is that writer's stated residual (§3.11). Delivery to the sink is a **single append where the record fits the writer's own output buffering**, and a residual otherwise — a record past that bound reaches the sink as several appends and a concurrent writer can land between them, so the trail can carry a fragment; the composition rule above keeps a fragment from closing a field it never opened, and a fragment can itself parse, so a consumer of the trail never reads parseability as provenance. Each writer states its bound where it is implemented (§3.11). The same reasoning binds the record at rest: a state file the shell creates is readable only by the account that writes it, because an audit record names what a repository's work touched and a host may carry accounts that work never concerned. Its plausible false-block cost is nil — the mode governs who may read a file the shell alone writes, so no legitimate flow is refused (§3.6 requirement (ii)). The boundary has a second face inside governed repositories: an execution context that exists to exercise the shell — a test or verification run — resolves shell state to a disposable root and never writes the operational sinks the calibration loop reads (§3.6); a suite that pollutes the evidence surface corrupts every decision read from it.
+
+The state-domain recovery allowance is the sole placement exception to the per-project rule above. Production resolution is closed. If `XDG_STATE_HOME` is set, it must be an existing absolute, effective-uid-owned, non-link directory of exact mode `0700`; invalid or unusable refuses with no HOME fallback, and the directory chain is `XDG_STATE_HOME/gitjig/recovery/`. Otherwise `HOME` must be an existing absolute, effective-uid-owned, non-link directory with no group/other write bits; the chain is `HOME/.local/state/gitjig/recovery/`. Pre-existing shared `.local` and `.local/state` components follow the same owner/non-link/no-group-or-other-write predicate and retain ordinary read/execute bits; the runtime never chmods them. Shared ancestors it creates use `0700`. Runtime-owned `gitjig` and `recovery` directories are exact mode `0700`. No `state` component is added to the XDG chain and none is omitted from HOME.
+
+For every existing component below the selected root, resolution performs lstat by path, opens `O_RDONLY|O_DIRECTORY|O_NOFOLLOW`, and requires fstat identity, type, effective uid, and mode to equal the lstat. A missing component is mkdir-created at `0700`, opened and checked identically, with its parent descriptor identity revalidated before and after creation; any mismatch refuses. Before creating a missing domain, repository exclusion walks from its deepest existing ancestor to filesystem root. On every resolution and before every use it walks from the final domain to root, and immediately after creation it repeats that final walk. A `.git` entry of any lstat type — file, directory, symlink, or other — refuses. No exclusion file or repository metadata is mutated. Ancestors above the selected XDG/HOME root are the OS/operator placement residual and are not claimed as runtime-owned.
+
+The final allowance leaf is an effective-uid-owned, regular, single-link exact-mode-`0600` file opened no-follow. Claim is `O_CREAT|O_EXCL|O_NOFOLLOW` at that final path: the complete `claimed` tombstone is written and the file and parent directory are fsynced before any semantic dispatch. No delete, edit, clear, reset, repair, or stale-lock recovery API exists. Partial, torn, malformed, linked, loose-mode, or wrong-owner existing bytes are permanently unavailable. Terminalization first verifies the exact claimed bytes, writes a same-directory exclusive temporary at `0600`, fsyncs it, atomically renames it over the claim, and fsyncs the directory. Any write, rename, fsync, or outcome ambiguity remains consumed.
+
+Production recovery resolves this domain through a zero-argument owner and fails closed if `GITJIG_TEST_STATE_ROOT` is present at all, including empty. The future owner `.pi/extensions/gitjig/recovery/state-domain.ts` may expose only one verification wrapper: `withRecoveryVerificationRoot(target, callback)` validates an existing absolute disposable effective-uid-owned non-link exact-`0700` root, internally mints a private token, passes the private resolver's result only to the callback, and releases it afterward. No token or alternate resolver is exported; a structural import lock permits that wrapper only in named recovery tests. This is the §5.5 disposable-test rule, not a production resolution source.
+
+No comment, label, ref, repository variable, workflow artifact or cache, platform setting, credential service, daemon, new dependency, public/server mutation, or foreign-repository act may provide this allowance. Same-account separation is capability and order under the honest coordinator threat model: author and delegate surfaces receive no state-domain, key, claim, reset, or finalize capability. Arbitrary external filesystem tampering by the same account remains outside that claim; no OS/platform identity separation is asserted.
 
 A dispatch trace is per-project shell state on these same terms: it lands under the resolved governed state root as an owner-only regular file, never in the delegate's writable scratch state and never in a foreign repository. Its raw content is operational text, so it inherits the no-follow component rule and the file-at-rest mode above. The dispatcher bounds each trace and prunes it to the newest 50 completed traces and seven days, whichever is tighter; a pruning or write failure is an observable fail-open loss of an aid, not permission to move the file elsewhere. The trace has no runtime read-back path into tool results, session messages, or model context.
 

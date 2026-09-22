@@ -77,6 +77,10 @@ Use ordinary `body` publication for prose. New first-party machine-consumed reco
 
 The machine mode is fail-closed: it admits a bounded structured JSON domain and marker, deterministically emits inert JSON strings, scans both semantic values and wire bytes with the existing secret patterns, requires zero machine-body neutralizer rewrites, sends once, and verifies an exact destination-bound reread before claiming publication. Any post-spawn ambiguity is `outcome-unverified`, with no automatic resend. Full contract in SPEC §3.3.
 
+## Recovery state location
+
+The autonomous recovery allowance's durable tombstone is shared by every clone and process that resolves the same account-owned shell state domain. Production uses `${XDG_STATE_HOME}/gitjig/recovery/` when a valid private `XDG_STATE_HOME` is set, otherwise `${HOME}/.local/state/gitjig/recovery/`; it never stores the allowance in a governed repository. Different resolved domains can each claim the same change key, including on one host. That bounded residual and its hardening trigger are normative in SPEC §§1.4 and 5.5. Recovery performs no public/server act to obtain exclusion.
+
 ## The development toolchain
 
 Formatting, linting and type checking run from a root `package.json` and are **development and CI only**. They are not part of what an adopting repository receives, and they are not a precondition for the suite above — the command runs unchanged in a clone that never installs. Contract in SPEC §3.3 (`source-style`, `type-check`).
