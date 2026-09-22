@@ -339,7 +339,7 @@ export const POSTURES: readonly PostureRow[] = [
 		dependency: "ci-gate-machinery",
 		failureShape:
 			"actions/checkout fails at any required gate — fragment-gate, ssot-home, toc-freshness, source-style, " +
-			"type-check, suite — or actions/setup-node fails or `npm ci` cannot install from the committed lockfile " +
+			"type-check, suite, history-shape — or actions/setup-node fails or `npm ci` cannot install from the committed lockfile " +
 			"(registry unreachable, lockfile out of agreement) at source-style, type-check, or suite, the gates that " +
 			"install anything",
 		posture: "closed",
