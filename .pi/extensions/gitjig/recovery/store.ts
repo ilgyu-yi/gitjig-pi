@@ -17,11 +17,15 @@ import type { ReviewSubject } from "../review/subject.ts";
 import { deriveAllowancePathEncoding } from "./lineage.ts";
 import { resolveRecoveryStateDomain } from "./state-domain.ts";
 import {
+	type AttemptRecord,
 	type ClaimedRecordV3,
 	type ConsumedRecordV3,
 	canonicalJson,
 	contentDigest,
+	type FreshRuling,
 	type RecordRef,
+	type RecoveryMeasurement,
+	type SelectedIntervention,
 	structuralDigest,
 } from "./types.ts";
 
@@ -336,33 +340,66 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 						attempt.profileSetDigest !== group[0]?.profileSetDigest ||
 						attempt.materializationDigest !== group[0]?.materializationDigest ||
 						attempt.expectedHead !== group[0]?.expectedHead,
-				),
+				) ||
+				(group.length === 2 &&
+					!((attempt: AttemptRecord) =>
+						attempt.diagnostic.run.class === "exited" &&
+						Number.isInteger(attempt.diagnostic.run.exitCode) &&
+						attempt.diagnostic.return.class === "missing" &&
+						attempt.admission === "not-admitted")(group[0] as unknown as AttemptRecord)),
 		)
 	)
 		return false;
+	const retainedDigest = (slot: string): unknown =>
+		attemptGroups.get(slot)?.find((attempt) => attempt.admission === "retained")?.resultDigest;
 	if (
+		(record.route === "stagnation"
+			? record.basis.taxonomy !== "STAGNATION"
+			: record.route === "oscillation"
+				? record.basis.taxonomy !== "OSCILLATION"
+				: record.basis.taxonomy !== "INDETERMINATE") ||
 		(record.selectedIntervention !== null && !validSelected(record.selectedIntervention)) ||
 		(record.measurement !== null && !validMeasurement(record.measurement)) ||
 		(record.freshRuling !== null && !validFreshRuling(record.freshRuling))
 	)
 		return false;
+	const selected = record.selectedIntervention as SelectedIntervention | null;
+	const measurement = record.measurement as RecoveryMeasurement | null;
+	const freshRuling = record.freshRuling as FreshRuling | null;
 	const routeShape =
 		record.terminal === "continue"
 			? record.cause === null &&
+				canonicalJson(
+					required.filter((slot) => attemptGroups.get(slot)?.some((attempt) => attempt.admission === "retained")),
+				) === canonicalJson(required) &&
 				(record.route === "stagnation"
 					? record.reentry === "nothing" &&
 						record.nextGate === "author-repair" &&
-						validSelected(record.selectedIntervention) &&
+						selected !== null &&
+						validSelected(selected) &&
+						retainedDigest("stagnation-root") === selected.candidateDigests[0] &&
+						retainedDigest("stagnation-blast-radius") === selected.candidateDigests[1] &&
+						retainedDigest("recovery-selector") ===
+							structuralDigest("gitjig-recovery-selection:v1", {
+								selected: selected.slot,
+								materiallyDifferent: true,
+								evidence: selected.selectionEvidence,
+							}) &&
 						record.measurement === null &&
 						record.freshRuling === null
-					: record.selectedIntervention === null &&
-						validMeasurement(record.measurement) &&
-						validFreshRuling(record.freshRuling) &&
+					: selected === null &&
+						measurement !== null &&
+						freshRuling !== null &&
+						validMeasurement(measurement) &&
+						validFreshRuling(freshRuling) &&
 						(record.freshRuling as { diagnosis: { value: unknown } }).diagnosis.value === "NONE" &&
 						(record.freshRuling as { diagnosis: { invalidation: unknown } }).diagnosis.invalidation ===
 							record.reentry &&
 						["nothing", "plan"].includes(record.reentry as string) &&
-						record.nextGate === (record.reentry === "nothing" ? "ordinary-flow" : "planning"))
+						record.nextGate === (record.reentry === "nothing" ? "ordinary-flow" : "planning") &&
+						retainedDigest("recovery-selector") === measurement.specDigest &&
+						retainedDigest("recovery-measurement") === measurement.resultDigest &&
+						retainedDigest("recovery-diagnosis") === freshRuling.diagnosisDigest)
 			: record.terminal === "handoff" &&
 				record.cause !== null &&
 				record.nextGate ===
@@ -477,6 +514,8 @@ function readBounded(fd: number): Buffer | undefined {
 function existing(path: string, repoHash: string, keyHash: string): RecordRef | undefined {
 	let fd: number | undefined;
 	try {
+		const leaf = lstatSync(path);
+		if (!leaf.isFile() || leaf.isSymbolicLink()) return undefined;
 		fd = openSync(path, READ_FLAGS);
 		const first = safeFileStat(path, fd);
 		if (first === undefined || first.size > RECORD_LIMIT) return undefined;

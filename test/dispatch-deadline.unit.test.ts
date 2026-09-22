@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -93,6 +93,11 @@ describe("recovery optional dispatch deadline", () => {
 			});
 			assert.equal(crossed.disposition, "refused");
 			assert.equal(crossed.diagnostic.code, "ABORTED");
+			const records = readFileSync(join(second, "state", "audit.jsonl"), "utf8")
+				.trim()
+				.split("\n")
+				.map((line) => JSON.parse(line) as { action: string });
+			assert.equal(records.at(-1)?.action, "refuse-operation-deadline");
 		} finally {
 			Object.defineProperty(performance, "now", { configurable: true, value: original });
 			rmSync(second, { recursive: true, force: true });

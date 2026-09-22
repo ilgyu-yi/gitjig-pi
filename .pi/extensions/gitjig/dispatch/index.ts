@@ -72,14 +72,13 @@
  * frame is what this closes; the claim inside the payload is the reader's
  * to weigh, and §4.9's injectable-context residual already carries it.
  */
-import { readFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { renderActCall, renderActTerminal } from "../act-render.ts";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import type { SessionSurface, TerminalClass } from "../session-surface.ts";
-import { admitReturn } from "./admit.ts";
+import { admitReturn, admitReturnBytes, readReturnSnapshot } from "./admit.ts";
 import {
 	type CompareClass,
 	type DiagnosticCode,
@@ -321,15 +320,12 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			);
 			checkpointTimers.push(
 				setTimeout(() => {
-					if (!admitReturn(context.returnPath).admitted) {
+					const snapshot = readReturnSnapshot(context.returnPath);
+					if (!snapshot.ok || !admitReturnBytes(snapshot.bytes).admitted) {
 						checkpointAbort.abort();
 						return;
 					}
-					try {
-						finalCheckpointBytes = readFileSync(context.returnPath);
-					} catch {
-						checkpointAbort.abort();
-					}
+					finalCheckpointBytes = snapshot.bytes;
 				}, 540_000),
 			);
 		}
@@ -352,12 +348,9 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			options.signal?.removeEventListener("abort", relayAbort);
 		}
 		if (finalCheckpointBytes !== undefined) {
-			try {
-				if (!readFileSync(context.returnPath).equals(finalCheckpointBytes))
-					return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
-			} catch {
+			const snapshot = readReturnSnapshot(context.returnPath);
+			if (!snapshot.ok || !snapshot.bytes.equals(finalCheckpointBytes))
 				return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
-			}
 		}
 		const trace = terminalTrace ?? {
 			lifecycle: lifecycleOf(run),
@@ -527,6 +520,11 @@ function rejectCrossedOperationDeadline(options: RunDispatchOptions, outcome: Di
 		compare: { class: "not-reached" },
 		durationMs: Math.max(0, performance.now() - (options.enteredAt ?? options.operationDeadline)),
 		code: "ABORTED",
+	});
+	appendAuditRecord(options.stateRoot, {
+		category: "dispatch",
+		action: "refuse-operation-deadline",
+		text: diagnostic.message,
 	});
 	return { disposition: "refused", cause: diagnostic.message, diagnostic };
 }

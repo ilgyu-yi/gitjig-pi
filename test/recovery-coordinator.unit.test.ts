@@ -162,6 +162,51 @@ describe("Phase-A history recovery coordinator", () => {
 			assert.equal(result.selectedIntervention.method, "new root method");
 	});
 
+	it("marks the original diagnosis as classification context rather than fresh evidence", async () => {
+		let freshBrief = "";
+		const outputs: Partial<Record<PhaseAProfileId, unknown>> = {
+			"recovery-selector": {
+				kind: "measurement",
+				question: "new q",
+				method: "new m",
+				expectedDiscriminator: "new d",
+				evidence: "new spec",
+				nonMutating: true,
+				notPreviouslyPresent: true,
+			},
+			"recovery-measurement": {
+				kind: "measurement-result",
+				specDigest: "placeholder",
+				result: "new r",
+				evidence: "new result",
+			},
+			"recovery-diagnosis": { value: "NONE", invalidation: "nothing", evidence: "fresh ruling" },
+		};
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject,
+			history,
+			basis,
+			diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original-only" },
+			refreshPreclaim: async () => freshness(),
+			refreshPrecontinue: async () => freshness(),
+			dispatchProfile: async (ledger, profileId, semanticBrief) => {
+				if (profileId === "recovery-diagnosis") freshBrief = semanticBrief;
+				const value = structuredClone(outputs[profileId]) as Record<string, unknown>;
+				if (profileId === "recovery-measurement") {
+					const spec = JSON.parse(semanticBrief.match(/Input JSON: (.*)/)?.[1] ?? "{}") as { spec?: unknown };
+					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+					value.specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec.spec);
+				}
+				return observed(ledger, admitted(value));
+			},
+		});
+		assert.equal(result.terminal, "continue");
+		assert.match(freshBrief, /original diagnosis is classification context only/);
+		assert.match(freshBrief, /"original":\{"evidence":"original-only"/);
+	});
+
 	it("uses a fresh NONE invalidation to select planning after one new measurement", async () => {
 		const diagnosis: DiagnosisInput = {
 			value: "INDETERMINATE",
