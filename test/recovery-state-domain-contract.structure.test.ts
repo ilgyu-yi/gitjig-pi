@@ -72,6 +72,12 @@ const stateNeedles = [
 	"immediately after creation",
 	"`.git` entry of any lstat type",
 	"file, directory, symlink, or other",
+	"conjunction of sibling entries `HEAD`, `objects`, and `refs`",
+	"each present by lstat regardless of type",
+	"closes bare Git repositories that carry no `.git` entry",
+	"unrelated ancestor that coincidentally carries that exact three-entry conjunction",
+	"relocate the XDG/HOME state domain outside that ancestor and begin a new invocation",
+	"because exclusion precedes exclusive leaf creation, the refusal consumes no allowance",
 	"regular, single-link exact-mode-`0600`",
 	"`O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW`",
 	"writable descriptor receives the complete `claimed` tombstone",
@@ -187,5 +193,6 @@ describe("issue #335 recovery state-domain contract", () => {
 		);
 		assert.doesNotMatch(STATE, /issue comment.*compare-and-swap|delete.*allowance.*retry|reset.*allowance.*retry/i);
 		assert.match(STATE, /No exclusion file or repository metadata is mutated/);
+		assert.doesNotMatch(STATE, /`HEAD`, `objects`, or `refs`|regular `HEAD`|directory `objects`/);
 	});
 });
