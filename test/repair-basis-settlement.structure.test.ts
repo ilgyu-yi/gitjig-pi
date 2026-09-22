@@ -27,6 +27,9 @@ const JUDGE = section(SPEC, "### 1.9 Finding judgment", "## 2. Artifact hierarch
 function settlementHolds(crossReview: string, judge: string): boolean {
 	return (
 		crossReview.includes("repair history** of one change is the complete durable record") &&
+		crossReview.includes(
+			"every review state, effective finding, ruling, disposition, governed carry-forward fact, and correction between states remains retained whether or not diagnosis may consume it",
+		) &&
 		crossReview.includes("**repair-basis projection**") &&
 		crossReview.includes(
 			"exactly the current trailing consecutive run of review states whose Resolver outcome is `repair`",
@@ -58,6 +61,7 @@ describe("issue #236 repair-basis settlement", () => {
 	it("kills one meaning-changing mutant for every projection component", () => {
 		const mutants = [
 			[CROSS_REVIEW.replace("complete durable record", "diagnosis operand"), JUDGE],
+			[CROSS_REVIEW.replace("every review state", "every repair review state"), JUDGE],
 			[CROSS_REVIEW.replace("current trailing consecutive run", "all ordered repair states"), JUDGE],
 			[CROSS_REVIEW.replace("never reconnecting states across one", "omitting reset states"), JUDGE],
 			[
