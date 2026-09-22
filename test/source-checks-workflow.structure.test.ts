@@ -65,7 +65,7 @@ function recordedContexts(label: string, pattern: RegExp): string[] {
 
 const SHAPE_CONTEXTS = recordedContexts(
 	"§4.3 measured source profile",
-	/Current source required-check contexts equal the selected config and CI job names \(([^)]*)\)/,
+	/Current source required-check contexts equal the selected config \(([^)]*)\), and each is emitted by a CI job of the same name/,
 );
 const CONFIG_CONTEXTS = GOVERNANCE_CONFIG.capabilities.requiredStatusChecks.value.map(
 	(entry: { context: string }) => entry.context,
@@ -84,31 +84,57 @@ function workflows(): Map<string, string[]> {
 	return out;
 }
 
+/** One workflow job and any immediate display-name override. */
+interface JobDeclaration {
+	id: string;
+	name?: string;
+}
+
 /**
- * Job ids declared by one workflow: the two-space-indented keys directly
- * beneath a column-zero `jobs:`. The context a required check names is
- * the job id where the job declares no `name:`, which is what every
- * workflow in this tree writes.
+ * Jobs declared beneath a column-zero `jobs:`. Only an immediate
+ * four-space `name:` belongs to the job; nested step names do not.
  */
-function jobIds(lines: string[]): string[] {
+function jobDeclarations(lines: string[]): JobDeclaration[] {
 	const start = lines.findIndex((line) => /^jobs:\s*$/.test(line));
 	if (start < 0) return [];
-	const out: string[] = [];
+	const out: JobDeclaration[] = [];
+	let current: JobDeclaration | undefined;
 	for (const line of lines.slice(start + 1)) {
 		if (/^\S/.test(line)) break;
-		const m = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
-		if (m) out.push(m[1]);
+		const job = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+		if (job) {
+			current = { id: job[1] };
+			out.push(current);
+			continue;
+		}
+		const name = line.match(/^ {4}name:\s*(\S(?:.*\S)?)\s*$/);
+		if (current && name) current.name = name[1];
 	}
 	return out;
 }
 
-/** Every job id in the tree, with the file that declares it. */
-function declaredJobs(): Map<string, string> {
-	const out = new Map<string, string>();
+/** Every job id in the tree, with its file and display-name override. */
+function declaredJobs(): Map<string, { file: string; name?: string }> {
+	const out = new Map<string, { file: string; name?: string }>();
 	for (const [file, lines] of workflows()) {
-		for (const id of jobIds(lines)) out.set(id, file);
+		for (const job of jobDeclarations(lines)) out.set(job.id, { file, name: job.name });
 	}
 	return out;
+}
+
+function requiredGatePopulation(failureShape: string): string[] {
+	const match = failureShape.match(/any required gate — (.*?) — or actions\/setup-node/);
+	assert.ok(match, "ci-gate-machinery no longer carries a bounded any-required-gate clause");
+	return match[1].split(",").map((context) => context.trim());
+}
+
+function installGatePopulation(failureShape: string): string[] {
+	const match = failureShape.match(/committed lockfile .* at (.*?), the gates that install anything/);
+	assert.ok(match, "ci-gate-machinery no longer carries a bounded install-gate clause");
+	return match[1]
+		.replace(", or ", ", ")
+		.split(",")
+		.map((context) => context.trim());
 }
 
 /** The shell text of one workflow — every line of every `run:` block. */
@@ -126,27 +152,45 @@ describe("S1 — §4.3's measured source profile matches the target-owned select
 		assert.ok(SHAPE_CONTEXTS.includes("history-shape"), "the measured source profile omits `history-shape`");
 	});
 
-	it("the checkout-machinery posture names every selected required gate", () => {
+	it("the checkout-machinery posture names exactly the selected required gates", () => {
 		const row = POSTURES.find((candidate) => candidate.dependency === "ci-gate-machinery");
 		assert.ok(row, "the fail-posture inventory has no ci-gate-machinery row");
-		for (const context of CONFIG_CONTEXTS) {
-			assert.match(
-				row.failureShape,
-				new RegExp(`(?:^|[^A-Za-z0-9_-])${context}(?:$|[^A-Za-z0-9_-])`),
-				`the ci-gate-machinery row's any-required-gate population omits ${context}`,
-			);
-		}
+		assert.deepEqual(
+			[...requiredGatePopulation(row.failureShape)].sort(),
+			[...CONFIG_CONTEXTS].sort(),
+			"the ci-gate-machinery row's bounded any-required-gate population differs from the selected contexts",
+		);
+		assert.deepEqual(installGatePopulation(row.failureShape), ["source-style", "type-check", "suite"]);
+
+		const deletionMutant = row.failureShape.replace("source-style, type-check, suite, history-shape", "history-shape");
+		assert.notDeepEqual(
+			[...requiredGatePopulation(deletionMutant)].sort(),
+			[...CONFIG_CONTEXTS].sort(),
+			"deleting duplicated install-gate tokens from the any-required-gate clause must be observable",
+		);
 	});
 });
 
 describe("S2 — every recorded context is a job this tree declares (SPEC §4.3)", () => {
 	const jobs = declaredJobs();
 
+	it("detects a job-level display-name override in the immediate mapping", () => {
+		assert.deepEqual(jobDeclarations(["jobs:", "  history-shape:", "    name: renamed-check"]), [
+			{ id: "history-shape", name: "renamed-check" },
+		]);
+	});
+
 	for (const context of SHAPE_CONTEXTS) {
-		it(`\`${context}\` is declared by a workflow`, () => {
+		it(`\`${context}\` is emitted by a same-named workflow job`, () => {
+			const job = jobs.get(context);
 			assert.ok(
-				jobs.has(context),
+				job,
 				`§4.3 records \`${context}\` as a required-check context, but no job of that id is declared under .github/workflows/ (declared: ${[...jobs.keys()].sort().join(", ")}). A required check with no job never reports, so the branch ruleset blocks every PR forever, or the context is recorded and enforced by nothing`,
+			);
+			assert.equal(
+				job.name,
+				undefined,
+				`${job.file} overrides job \`${context}\` with display name ${job.name}; the configured context will not be emitted under its selected name`,
 			);
 		});
 	}
@@ -154,12 +198,12 @@ describe("S2 — every recorded context is a job this tree declares (SPEC §4.3)
 
 describe("S3 — the source-checks workflow's own contract (issue #121; SPEC §3.3)", () => {
 	const all = workflows();
-	const file = [...all.entries()].find(([, lines]) => jobIds(lines).includes("source-style"));
+	const file = [...all.entries()].find(([, lines]) => jobDeclarations(lines).some((job) => job.id === "source-style"));
 
 	it("declares both new gates in one workflow", () => {
 		assert.ok(file, "no workflow declares a `source-style` job");
 		assert.ok(
-			jobIds(file[1]).includes("type-check"),
+			jobDeclarations(file[1]).some((job) => job.id === "type-check"),
 			`\`source-style\` is declared in ${file[0]} but \`type-check\` is not: the two gates share one toolchain install and are meant to share one workflow`,
 		);
 	});
