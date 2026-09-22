@@ -66,8 +66,10 @@ const stateNeedles = [
 	"`O_RDONLY|O_DIRECTORY|O_NOFOLLOW`",
 	"fstat identity, type, effective uid, and mode to equal the lstat",
 	"parent descriptor identity revalidated before and after creation",
-	"parent directory descriptor is then fsynced successfully before any next component creation or final-leaf claim",
-	"fsync failure or outcome ambiguity refuses on the preclaim, unconsumed side",
+	"For every traversed component, whether pre-existing or newly created",
+	"fsynced successfully before descending to the next component or attempting the final-leaf claim",
+	"repeated barrier covers a component left visible by an earlier failed or outcome-ambiguous creation fsync",
+	"Any parent fsync failure or ambiguity refuses on the preclaim, unconsumed side",
 	"deepest existing ancestor to filesystem root",
 	"On every resolution and before every use",
 	"immediately after creation",
@@ -173,6 +175,18 @@ describe("issue #335 recovery state-domain contract", () => {
 				PUBLIC.replace("public or unretractable acts remain non-substitutable", "public acts may proceed"),
 			),
 			false,
+		);
+	});
+
+	it("kills the two-invocation retry that treats a visible prior mkdir as already durable", () => {
+		const missingOnly = STATE.replace(
+			"For every traversed component, whether pre-existing or newly created",
+			"Only for a newly created component",
+		);
+		assert.equal(settlementHolds(REPAIR, missingOnly), false);
+		assert.match(
+			STATE,
+			/repeated barrier covers a component left visible by an earlier failed or outcome-ambiguous creation fsync/,
 		);
 	});
 
