@@ -196,6 +196,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// is the stronger state: the escaping lock scans it and finds nothing,
 	// which stays true only while it holds no interpolation at all.
 	{ file: "gitjig/review/lens-policy.json", allow: [] },
+	// Closed profile data cannot carry an exemption comment; scanning keeps it interpolation-free.
+	{ file: "gitjig/recovery/profiles.json", allow: [] },
 	{
 		file: "gitjig/review/comments.ts",
 		// A positive integer admitted by the command-spec parser, and the

@@ -114,6 +114,11 @@ export function resolveModes(input: {
 	});
 }
 
+export function repositoryKey(repoRoot: string): string {
+	if (!isAbsolute(repoRoot)) throw new Error("repository key requires an absolute root");
+	return createHash("sha256").update(repoRoot).digest("hex");
+}
+
 export function recordModeRun(
 	stateRoot: string,
 	repoRoot: string,
@@ -131,12 +136,12 @@ export function recordModeRun(
 		);
 		try {
 			if (sinkRefusal(fstatSync(fd), path) !== undefined) return false;
-			const repositoryKey = createHash("sha256").update(repoRoot).digest("hex");
+			const key = repositoryKey(repoRoot);
 			writeRecordLine(
 				fd,
 				`${JSON.stringify({
 					schemaVersion: 1,
-					repositoryKey,
+					repositoryKey: key,
 					startedAt,
 					mergeMode: modes.mergeMode,
 					mergeSource: modes.mergeSource,

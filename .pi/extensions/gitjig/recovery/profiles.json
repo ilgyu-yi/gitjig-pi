@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"profiles": [
+		{
+			"id": "recovery-diagnosis",
+			"provider": "ambient-default",
+			"model": "ambient-default",
+			"thinking": "high",
+			"runBoundMs": 600000
+		},
+		{
+			"id": "recovery-measurement",
+			"provider": "ambient-default",
+			"model": "ambient-default",
+			"thinking": "high",
+			"runBoundMs": 600000
+		},
+		{
+			"id": "recovery-selector",
+			"provider": "ambient-default",
+			"model": "ambient-default",
+			"thinking": "high",
+			"runBoundMs": 600000
+		},
+		{
+			"id": "stagnation-blast-radius",
+			"provider": "ambient-default",
+			"model": "ambient-default",
+			"thinking": "high",
+			"runBoundMs": 600000
+		},
+		{
+			"id": "stagnation-root",
+			"provider": "ambient-default",
+			"model": "ambient-default",
+			"thinking": "high",
+			"runBoundMs": 600000
+		}
+	]
+}
