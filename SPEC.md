@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 175 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 187 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 201 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 227 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 239 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 280 |
-| §2 | Artifact hierarchy and lifecycle | 288 |
-| &nbsp;&nbsp;§2.1 | Issue types | 292 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 305 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 332 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 336 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 353 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 393 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 407 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 417 |
-| §3 | Enforcement-layer architecture | 429 |
-| &nbsp;&nbsp;§3.1 | The constraint | 433 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 440 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 448 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 569 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 579 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 583 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 595 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 611 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 747 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 761 |
-| &nbsp;&nbsp;§3.11 | Gate design | 775 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 797 |
-| §4 | Substrate and install contract | 807 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 811 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 823 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 831 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 837 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 841 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 845 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 857 |
-| &nbsp;&nbsp;§4.8 | The command layer | 867 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 924 |
-| §5 | Cross-cutting contracts | 1043 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1047 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1053 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1057 |
-| &nbsp;&nbsp;§5.4 | Work language | 1061 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1065 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1073 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1085 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1095 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1103 |
-| §6 | Self-governance milestone | 1115 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1126 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 177 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 189 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 203 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 229 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 241 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 282 |
+| §2 | Artifact hierarchy and lifecycle | 290 |
+| &nbsp;&nbsp;§2.1 | Issue types | 294 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 307 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 334 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 338 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 355 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 395 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 409 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 419 |
+| §3 | Enforcement-layer architecture | 431 |
+| &nbsp;&nbsp;§3.1 | The constraint | 435 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 442 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 450 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 571 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 581 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 585 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 597 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 613 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 749 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 763 |
+| &nbsp;&nbsp;§3.11 | Gate design | 777 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 799 |
+| §4 | Substrate and install contract | 809 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 813 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 825 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 833 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 839 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 843 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 847 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 859 |
+| &nbsp;&nbsp;§4.8 | The command layer | 869 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 926 |
+| §5 | Cross-cutting contracts | 1045 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1049 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1055 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1059 |
+| &nbsp;&nbsp;§5.4 | Work language | 1063 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1067 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1075 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1087 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1097 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1105 |
+| §6 | Self-governance milestone | 1117 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1128 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
