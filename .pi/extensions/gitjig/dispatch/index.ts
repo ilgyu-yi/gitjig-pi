@@ -306,19 +306,37 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			options.operationDeadline === undefined ? undefined : Math.floor(options.operationDeadline - performance.now());
 		if (remaining !== undefined && remaining <= 0)
 			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
-		const run = await runDelegate(context, options.delegateArgv, {
-			recoveryReturnCheckpoints: options.operationDeadline !== undefined,
-			timeoutMs:
-				remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining),
-			signal: options.signal,
-			onTrace: (snapshot) => {
-				terminalTrace = snapshot;
-				options.onTrace?.(snapshot);
-			},
-			onTraceError: () => {
-				traceUpdateDegraded = true;
-			},
-		});
+		const checkpointAbort = options.operationDeadline === undefined ? undefined : new AbortController();
+		const relayAbort = () => checkpointAbort?.abort();
+		options.signal?.addEventListener("abort", relayAbort, { once: true });
+		if (options.signal?.aborted) relayAbort();
+		const checkpointTimers: ReturnType<typeof setTimeout>[] = [];
+		if (checkpointAbort !== undefined) {
+			for (const delay of [360_000, 540_000])
+				checkpointTimers.push(
+					setTimeout(() => {
+						if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
+					}, delay),
+				);
+		}
+		let run: Awaited<ReturnType<typeof runDelegate>>;
+		try {
+			run = await runDelegate(context, options.delegateArgv, {
+				timeoutMs:
+					remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining),
+				signal: checkpointAbort?.signal ?? options.signal,
+				onTrace: (snapshot) => {
+					terminalTrace = snapshot;
+					options.onTrace?.(snapshot);
+				},
+				onTraceError: () => {
+					traceUpdateDegraded = true;
+				},
+			});
+		} finally {
+			for (const timer of checkpointTimers) clearTimeout(timer);
+			options.signal?.removeEventListener("abort", relayAbort);
+		}
 		const trace = terminalTrace ?? {
 			lifecycle: lifecycleOf(run),
 			lines: [],

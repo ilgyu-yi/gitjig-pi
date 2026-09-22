@@ -23,6 +23,7 @@ import {
 	terminalText,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
+import type { DispatchOutcome, RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import { runPlatformRead } from "../.pi/extensions/gitjig/platform/read.ts";
 import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
 import { scanBody } from "../.pi/extensions/gitjig/publish/scan.ts";
@@ -32,7 +33,12 @@ import {
 	recordsFromAttestedComments,
 } from "../.pi/extensions/gitjig/review/comments.ts";
 import type { DiagnosisInput } from "../.pi/extensions/gitjig/review/history.ts";
-import { type RoundOptions, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
+import {
+	createRecoveryAttemptLedger,
+	makeDispatcher,
+	type RoundOptions,
+	reviewRound,
+} from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewPublicationOutcome } from "../.pi/extensions/gitjig/review/publication.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 import type { PlatformReviewContext, ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
@@ -1250,5 +1256,89 @@ describe("review-round production call site", () => {
 		);
 		assert.match(commandOwner, /timeout:\s*10_000/);
 		assert.match(commandOwner, /killSignal:\s*"SIGKILL"/);
+	});
+});
+
+function recoveryDispatchOutcome(kind: "admitted" | "missing"): DispatchOutcome {
+	if (kind === "admitted")
+		return {
+			disposition: "admitted",
+			ok: true,
+			summary: "ok",
+			compare: "confirmed",
+			diagnostic: {
+				schemaVersion: 1,
+				status: "admitted",
+				phase: "compare",
+				run: { class: "exited", exitCode: 0, signal: null },
+				return: { class: "admitted" },
+				compare: { class: "confirmed" },
+				durationMs: 1,
+				code: "ADMITTED",
+				message: "dispatch admitted",
+			},
+		};
+	return {
+		disposition: "refused",
+		cause: "missing",
+		diagnostic: {
+			schemaVersion: 1,
+			status: "refused",
+			phase: "return",
+			run: { class: "exited", exitCode: 0, signal: null },
+			return: { class: "missing" },
+			compare: { class: "not-reached" },
+			durationMs: 1,
+			code: "RETURN_MISSING",
+			message: "dispatch refused: no return file was present after the delegate exited",
+		},
+	};
+}
+
+const recoveryDispatchOptions: Omit<RunDispatchOptions, "brief" | "expectedRef"> = {
+	callerRepoRoot: "/repo",
+	stateRoot: "/state",
+	delegateArgv: ["pi"],
+	timeoutMs: 600_000,
+	operationDeadline: performance.now() + 1_200_000,
+};
+
+describe("recovery attempt-policy call-site ownership", () => {
+	it("shares one opaque ledger across parallel dispatchers with global completion order", async () => {
+		const ledger = createRecoveryAttemptLedger(performance.now());
+		const run = async (): Promise<DispatchOutcome> => recoveryDispatchOutcome("admitted");
+		const one = makeDispatcher(recoveryDispatchOptions, run, { attemptPolicy: { ledger, beforeRetry: () => true } });
+		const two = makeDispatcher(recoveryDispatchOptions, run, { attemptPolicy: { ledger, beforeRetry: () => true } });
+		const results = await Promise.all([one("one", "a".repeat(40)), two("two", "a".repeat(40))]);
+		assert.deepEqual(
+			results
+				.flatMap((result) => result.attempts)
+				.map((event) => event.sequence)
+				.sort((a, b) => a - b),
+			[1, 2],
+		);
+	});
+
+	it("spends the sole retry slot before returning when the retry gate refuses", async () => {
+		const ledger = createRecoveryAttemptLedger(performance.now());
+		let calls = 0;
+		const dispatch = makeDispatcher(
+			recoveryDispatchOptions,
+			async () => {
+				calls += 1;
+				return recoveryDispatchOutcome("missing");
+			},
+			{ attemptPolicy: { ledger, beforeRetry: () => false } },
+		);
+		const result = await dispatch("brief", "a".repeat(40));
+		assert.equal(calls, 1);
+		assert.equal(result.retryState, "spent");
+		assert.equal(result.attempts.length, 1);
+	});
+
+	it("preserves the original outcome identity when attemptPolicy is omitted", async () => {
+		const expected = recoveryDispatchOutcome("admitted");
+		const dispatch = makeDispatcher({ ...recoveryDispatchOptions, operationDeadline: undefined }, async () => expected);
+		assert.equal(await dispatch("brief", "a".repeat(40)), expected);
 	});
 });

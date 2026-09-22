@@ -40,7 +40,6 @@
  */
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
-import { admitReturn } from "./admit.ts";
 import { type DispatchContext, withoutRepoLocatingGitEnv } from "./provision.ts";
 import { BoundedDelegateTrace, TRACE_UPDATE_MS, type TraceLifecycle, type TraceSnapshot } from "./trace.ts";
 
@@ -75,7 +74,6 @@ export interface DelegateRunOptions {
 	signal?: AbortSignal;
 	onTrace?: (snapshot: TraceSnapshot) => void;
 	onTraceError?: () => void;
-	recoveryReturnCheckpoints?: boolean;
 }
 
 export function lifecycleOf(outcome: DelegateRunOutcome): TraceLifecycle {
@@ -101,7 +99,6 @@ export function runDelegate(
 		let abortEscalation: ReturnType<typeof setTimeout> | undefined;
 		let outerTimer: ReturnType<typeof setTimeout> | undefined;
 		let abortListener: (() => void) | undefined;
-		const checkpointTimers: ReturnType<typeof setTimeout>[] = [];
 		let releaseChildResources = (): void => {};
 		const emitTrace = (lifecycle: TraceLifecycle = "running"): void => {
 			if (updateTimer !== undefined) clearTimeout(updateTimer);
@@ -120,7 +117,7 @@ export function runDelegate(
 			updateTimer = setTimeout(() => emitTrace(), TRACE_UPDATE_MS);
 		};
 		const cleanup = (): void => {
-			for (const timer of [updateTimer, killTimer, graceTimer, abortEscalation, outerTimer, ...checkpointTimers]) {
+			for (const timer of [updateTimer, killTimer, graceTimer, abortEscalation, outerTimer]) {
 				if (timer !== undefined) clearTimeout(timer);
 			}
 			updateTimer = undefined;
@@ -236,22 +233,12 @@ export function runDelegate(
 		};
 		abortListener = abort;
 		options.signal?.addEventListener("abort", abort, { once: true });
-		const timeout = (): void => {
+		killTimer = setTimeout(() => {
 			if (settled || termination !== "none") return;
 			termination = "timeout";
 			killGroup("SIGKILL");
 			armOuter();
-		};
-		killTimer = setTimeout(timeout, options.timeoutMs ?? DEFAULT_RUN_BOUND_MS);
-		if (options.recoveryReturnCheckpoints === true) {
-			for (const delay of [360_000, 540_000]) {
-				checkpointTimers.push(
-					setTimeout(() => {
-						if (!admitReturn(context.returnPath).admitted) timeout();
-					}, delay),
-				);
-			}
-		}
+		}, options.timeoutMs ?? DEFAULT_RUN_BOUND_MS);
 		const decide = (code: number | null, signal: NodeJS.Signals | null): void => {
 			settle({
 				exitCode: code,
