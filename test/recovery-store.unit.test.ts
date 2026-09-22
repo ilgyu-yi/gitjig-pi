@@ -128,6 +128,18 @@ describe("state-domain allowance store", () => {
 		assert.equal(finalizeAllowance(first.claim, consumed(claimed)).status, "consumed-unverified");
 	});
 
+	it("binds terminalization to every immutable claimed field", () => {
+		const current = subject("PR_IMMUTABLE");
+		const claimed = record(current);
+		const result = claimAllowance({ subject: current, record: claimed });
+		assert.equal(result.status, "claimed");
+		if (result.status !== "claimed") return;
+		const changed = consumed(claimed);
+		changed.profileSetDigest = "9".repeat(64);
+		assert.equal(finalizeAllowance(result.claim, changed).status, "consumed-unverified");
+		assert.equal(finalizeAllowance(result.claim, consumed(claimed)).status, "consumed-unverified");
+	});
+
 	it("treats malformed existing bytes as consumed without a record reference", () => {
 		const current = subject("PR_BAD");
 		const pathEncoding = encoding(current);

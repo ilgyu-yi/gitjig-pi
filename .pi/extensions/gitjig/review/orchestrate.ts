@@ -88,39 +88,52 @@ export type HostAttemptEvent = {
 };
 
 const LEDGER = Symbol("recovery-attempt-ledger");
+const LEDGER_TOKEN = Symbol("recovery-attempt-ledger-constructor");
+type LedgerState = { routeT0: number; sequence: number };
+const ledgerStates = new WeakMap<HostAttemptLedger, LedgerState>();
+const observedOwners = new WeakMap<object, HostAttemptLedger>();
+
 export class HostAttemptLedger {
 	readonly [LEDGER] = true;
-	readonly #routeT0: number;
-	#sequence = 0;
-
-	private constructor(routeT0: number) {
-		this.#routeT0 = routeT0;
+	private constructor(token: symbol) {
+		if (token !== LEDGER_TOKEN) throw new TypeError("recovery attempt ledger is host-owned");
 	}
 
-	static create(routeT0: number): HostAttemptLedger {
-		if (!Number.isFinite(routeT0) || routeT0 < 0) throw new TypeError("invalid recovery route epoch");
-		return new HostAttemptLedger(routeT0);
-	}
-
-	start(): number {
-		return Math.max(0, Math.trunc(performance.now() - this.#routeT0));
-	}
-
-	append(attempt: 1 | 2, startedOffsetMs: number, outcome: DispatchOutcome): HostAttemptEvent {
-		this.#sequence += 1;
-		return Object.freeze({
-			sequence: this.#sequence,
-			attempt,
-			startedOffsetMs,
-			finishedOffsetMs: Math.max(startedOffsetMs, Math.trunc(performance.now() - this.#routeT0)),
-			diagnostic: outcome.diagnostic,
-			outcomeDigest: digestOutcome(outcome),
-		});
+	static hostCreate(token: symbol): HostAttemptLedger {
+		return new HostAttemptLedger(token);
 	}
 }
 
 export function createRecoveryAttemptLedger(routeT0: number): HostAttemptLedger {
-	return HostAttemptLedger.create(routeT0);
+	if (!Number.isFinite(routeT0) || routeT0 < 0) throw new TypeError("invalid recovery route epoch");
+	const ledger = HostAttemptLedger.hostCreate(LEDGER_TOKEN);
+	ledgerStates.set(ledger, { routeT0, sequence: 0 });
+	return Object.freeze(ledger);
+}
+
+function ledgerStart(ledger: HostAttemptLedger): number {
+	const state = ledgerStates.get(ledger);
+	if (state === undefined) throw new TypeError("unrecognized recovery attempt ledger");
+	return Math.max(0, Math.trunc(performance.now() - state.routeT0));
+}
+
+function ledgerAppend(
+	ledger: HostAttemptLedger,
+	attempt: 1 | 2,
+	startedOffsetMs: number,
+	outcome: DispatchOutcome,
+): HostAttemptEvent {
+	const state = ledgerStates.get(ledger);
+	if (state === undefined) throw new TypeError("unrecognized recovery attempt ledger");
+	state.sequence += 1;
+	return Object.freeze({
+		sequence: state.sequence,
+		attempt,
+		startedOffsetMs,
+		finishedOffsetMs: Math.max(startedOffsetMs, Math.trunc(performance.now() - state.routeT0)),
+		diagnostic: outcome.diagnostic,
+		outcomeDigest: digestOutcome(outcome),
+	});
 }
 
 function canonical(value: unknown): string {
@@ -140,6 +153,12 @@ function canonical(value: unknown): string {
 	);
 }
 
+function deepFreeze<T>(value: T): T {
+	if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
+	for (const child of Object.values(value)) deepFreeze(child);
+	return Object.freeze(value);
+}
+
 function digestOutcome(outcome: DispatchOutcome): string {
 	return createHash("sha256")
 		.update("gitjig-recovery-dispatch-outcome:v1\n", "ascii")
@@ -152,6 +171,15 @@ export type ObservedDispatchOutcome = {
 	attempts: readonly HostAttemptEvent[];
 	retryState: "available" | "spent";
 };
+
+export function admitObservedDispatch(
+	ledger: HostAttemptLedger,
+	value: ObservedDispatchOutcome,
+): ObservedDispatchOutcome | undefined {
+	if (observedOwners.get(value as object) !== ledger) return undefined;
+	observedOwners.delete(value as object);
+	return value;
+}
 
 type RecoveryAttemptPolicy = {
 	attemptPolicy: { beforeRetry: (diagnostic: DispatchOutcome["diagnostic"]) => boolean; ledger: HostAttemptLedger };
@@ -186,9 +214,16 @@ export function makeDispatcher(
 		const attempts: HostAttemptEvent[] = [];
 		let attempt: 1 | 2 = 1;
 		const send = async (semanticBrief: string): Promise<DispatchOutcome> => {
-			const started = policy?.ledger.start();
-			const outcome = await run({ ...options, brief: semanticBrief, expectedRef: expectedHead });
-			if (policy !== undefined && started !== undefined) attempts.push(policy.ledger.append(attempt, started, outcome));
+			const started = policy === undefined ? undefined : ledgerStart(policy.ledger);
+			const returned = await run({
+				...options,
+				brief: semanticBrief,
+				expectedRef: expectedHead,
+				...(policy === undefined ? {} : { enteredAt: performance.now() }),
+			});
+			const outcome = policy === undefined ? returned : deepFreeze(structuredClone(returned));
+			if (policy !== undefined && started !== undefined)
+				attempts.push(ledgerAppend(policy.ledger, attempt, started, outcome));
 			return outcome;
 		};
 		let retryAvailable = true;
@@ -219,7 +254,13 @@ export function makeDispatcher(
 			outcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);
 		}
 		if (policy === undefined) return outcome;
-		return { outcome, attempts: Object.freeze(attempts.slice()), retryState: retryAvailable ? "available" : "spent" };
+		const observed = Object.freeze({
+			outcome,
+			attempts: Object.freeze(attempts.slice()),
+			retryState: retryAvailable ? ("available" as const) : ("spent" as const),
+		});
+		observedOwners.set(observed, policy.ledger);
+		return observed;
 	};
 }
 

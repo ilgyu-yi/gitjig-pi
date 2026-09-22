@@ -389,7 +389,28 @@ describe("review subject criterion union", () => {
 			admitted?.context.pullRequest.closingIssues.map((entry) => entry.id),
 			["ISSUE_212", "ISSUE_213"],
 		);
-		for (const malformed of [pages(true, true), pages(false, true)]) {
+		const nonAdjacentLoop = JSON.stringify([
+			...JSON.parse(pages(false, true)),
+			{
+				data: {
+					repository: {
+						pullRequest: {
+							closingIssuesReferences: { nodes: [], pageInfo: { hasNextPage: true, endCursor: "C1" } },
+						},
+					},
+				},
+			},
+			{
+				data: {
+					repository: {
+						pullRequest: {
+							closingIssuesReferences: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+						},
+					},
+				},
+			},
+		]);
+		for (const malformed of [pages(true, true), pages(false, true), nonAdjacentLoop]) {
 			const responses = identityResponses(locators, reads);
 			responses[2] = malformed;
 			assert.equal(await fetchReviewSubject("/repo", 223, async () => responses.shift()), undefined);

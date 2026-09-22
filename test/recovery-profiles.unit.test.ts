@@ -24,6 +24,10 @@ describe("closed Phase-A recovery profiles", () => {
 		assert.ok(loaded);
 		const value = materializeRecoveryProfile(loaded, "recovery-selector");
 		assert.ok(value);
+		assert.equal(
+			RECOVERY_INITIAL_PROMPT,
+			"Read ../brief.md completely. Write a complete provisional ../return.json early, then overwrite it with the final closed return before the stated deadline.",
+		);
 		assert.deepEqual(value.argv, [
 			"pi",
 			"-p",

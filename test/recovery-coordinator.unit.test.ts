@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -10,14 +10,39 @@ import {
 } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import type { PhaseAProfileId, RecoveryFreshness } from "../.pi/extensions/gitjig/recovery/types.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
+import { makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
 let stateRoot = "";
 const priorXdg = process.env.XDG_STATE_HOME;
 const priorTest = process.env.GITJIG_TEST_STATE_ROOT;
+const priorPath = process.env.PATH;
 beforeEach(() => {
 	stateRoot = mkdtempSync(join(tmpdir(), "gitjig-recovery-coordinator-"));
 	chmodSync(stateRoot, 0o700);
+	const bin = join(stateRoot, "bin");
+	mkdirSync(bin);
+	const pi = join(bin, "pi");
+	writeFileSync(
+		pi,
+		[
+			"#!/bin/sh",
+			"cat <<'EOF'",
+			"Options:",
+			"  --print, -p  x",
+			"  --thinking <level>  x",
+			"  --no-session  x",
+			"  --no-extensions, -ne  x",
+			"  --no-skills, -ns  x",
+			"  --no-context-files, -nc  x",
+			"  --approve, -a  x",
+			"  --  End option parsing;",
+			"Extensions can register additional flags",
+			"EOF",
+		].join("\n"),
+		{ mode: 0o700 },
+	);
+	process.env.PATH = `${bin}:${priorPath ?? ""}`;
 	process.env.XDG_STATE_HOME = stateRoot;
 	delete process.env.GITJIG_TEST_STATE_ROOT;
 });
@@ -26,6 +51,8 @@ afterEach(() => {
 	else process.env.XDG_STATE_HOME = priorXdg;
 	if (priorTest === undefined) delete process.env.GITJIG_TEST_STATE_ROOT;
 	else process.env.GITJIG_TEST_STATE_ROOT = priorTest;
+	if (priorPath === undefined) delete process.env.PATH;
+	else process.env.PATH = priorPath;
 	rmSync(stateRoot, { recursive: true, force: true });
 });
 
@@ -86,13 +113,16 @@ function admittedRaw(payload: string): DispatchOutcome {
 	return { ...base, payload };
 }
 
+function observed(ledger: Parameters<RecoveryProfileDispatcher>[0], outcome: DispatchOutcome) {
+	return makeDispatcher(
+		{ callerRepoRoot: "/repo", stateRoot: "/state", delegateArgv: ["pi"], timeoutMs: 600_000 },
+		async () => outcome,
+		{ attemptPolicy: { ledger, beforeRetry: () => true } },
+	)("brief", "b".repeat(40));
+}
+
 function dispatcher(outputs: Partial<Record<PhaseAProfileId, unknown>>): RecoveryProfileDispatcher {
-	return async (ledger, profileId) => {
-		const outcome = admitted(outputs[profileId]);
-		const started = ledger.start();
-		const event = ledger.append(1, started, outcome);
-		return { outcome, attempts: [event], retryState: "available" };
-	};
+	return async (ledger, profileId) => observed(ledger, admitted(outputs[profileId]));
 }
 
 function freshness(): RecoveryFreshness {
@@ -157,9 +187,7 @@ describe("Phase-A history recovery coordinator", () => {
 			} else if (profileId === "recovery-measurement") {
 				value = { kind: "measurement-result", specDigest, result: "unique result", evidence: "new result evidence" };
 			} else value = { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" };
-			const outcome = admitted(value);
-			const event = ledger.append(1, ledger.start(), outcome);
-			return { outcome, attempts: [event], retryState: "available" };
+			return observed(ledger, admitted(value));
 		};
 		const result = await coordinateHistoryRecovery({
 			repoRoot: process.cwd(),
@@ -191,6 +219,65 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(result.nextGate, "planning");
 	});
 
+	it("maps every fresh invalidation and non-NONE ruling to its closed re-entry gate", async () => {
+		const cases = [
+			{ value: "NONE", invalidation: "nothing", terminal: "continue", gate: "ordinary-flow" },
+			{ value: "NONE", invalidation: "authorization", terminal: "handoff", gate: "authorization-handoff" },
+			{ value: "STAGNATION", invalidation: "nothing", terminal: "handoff", gate: "park" },
+			{ value: "OSCILLATION", invalidation: "plan", terminal: "handoff", gate: "planning-handoff" },
+			{ value: "INDETERMINATE", invalidation: "authorization", terminal: "handoff", gate: "authorization-handoff" },
+		] as const;
+		for (const [index, expected] of cases.entries()) {
+			const current = {
+				...subject,
+				context: {
+					...subject.context,
+					pullRequest: { ...subject.context.pullRequest, id: `PR_REENTRY_${String(index)}` },
+				},
+			};
+			const spec = {
+				kind: "measurement",
+				question: `question ${String(index)}`,
+				method: `method ${String(index)}`,
+				expectedDiscriminator: `discriminator ${String(index)}`,
+				evidence: `selector ${String(index)}`,
+				nonMutating: true,
+				notPreviouslyPresent: true,
+			};
+			let digest = "";
+			const dispatchProfile: RecoveryProfileDispatcher = async (ledger, profileId) => {
+				let value: unknown;
+				if (profileId === "recovery-selector") {
+					value = spec;
+					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+					digest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+				} else if (profileId === "recovery-measurement") {
+					value = {
+						kind: "measurement-result",
+						specDigest: digest,
+						result: `result ${String(index)}`,
+						evidence: `measured ${String(index)}`,
+					};
+				} else
+					value = { value: expected.value, invalidation: expected.invalidation, evidence: `ruling ${String(index)}` };
+				return observed(ledger, admitted(value));
+			};
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				dispatchProfile,
+			});
+			assert.equal(result.terminal, expected.terminal);
+			assert.equal(result.nextGate, expected.gate);
+		}
+	});
+
 	it("rejects duplicate payload keys and lone-surrogate route text before selection", async () => {
 		for (const [suffix, malformed] of [
 			["DUP", '{"outcome":"ALTERNATIVE","outcome":"BASE_STANDS","method":"m","evidence":"e"}'],
@@ -216,12 +303,124 @@ describe("Phase-A history recovery coordinator", () => {
 						profileId === "stagnation-root"
 							? admittedRaw(malformed)
 							: admitted({ outcome: "BASE_STANDS", method: "", evidence: "bounded evidence" });
-					const event = ledger.append(1, ledger.start(), outcome);
-					return { outcome, attempts: [event], retryState: "available" };
+					return observed(ledger, outcome);
 				},
 			});
 			assert.equal(result.terminal, "handoff");
 			assert.equal(selectorCalled, false);
+		}
+	});
+
+	it("enforces the 8 KiB string budget across the whole route", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROUTE_BUDGET" } },
+		};
+		let precontinue = 0;
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => {
+				precontinue += 1;
+				return { ...freshness(), subject: structuredClone(current) };
+			},
+			dispatchProfile: dispatcher({
+				"stagnation-root": { outcome: "ALTERNATIVE", method: "m", evidence: "r".repeat(4_090) },
+				"stagnation-blast-radius": { outcome: "BASE_STANDS", method: "", evidence: "b".repeat(4_090) },
+				"recovery-selector": { selected: "root", materiallyDifferent: true, evidence: "selection evidence" },
+			}),
+		});
+		assert.equal(result.terminal, "handoff");
+		assert.equal(precontinue, 0);
+	});
+
+	it("records a completed parallel sibling when the other dispatch throws", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_PARALLEL_PARTIAL" } },
+		};
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			dispatchProfile: async (ledger, profileId) => {
+				if (profileId === "stagnation-root") throw new Error("root unavailable");
+				return observed(ledger, admitted({ outcome: "BASE_STANDS", method: "", evidence: "blast evidence" }));
+			},
+		});
+		assert.equal(result.terminal, "handoff");
+		const directory = join(stateRoot, "gitjig", "recovery");
+		const files = readdirSync(directory).filter((name) => name.endsWith(".json"));
+		assert.equal(files.length, 1);
+		const durable = JSON.parse(readFileSync(join(directory, files[0] as string), "utf8"));
+		assert.deepEqual(
+			durable.attempts.map((attempt: { slot: string }) => attempt.slot),
+			["stagnation-blast-radius"],
+		);
+	});
+
+	it("rejects an unbranded dispatcher attempt slice", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_FORGED_LEDGER" } },
+		};
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			dispatchProfile: async () => ({
+				outcome: admitted({ outcome: "BASE_STANDS", method: "", evidence: "e" }),
+				attempts: [],
+				retryState: "available",
+			}),
+		});
+		assert.equal(result.terminal, "handoff");
+		assert.equal(result.cause, "recovery-failed");
+	});
+
+	it("refuses a state-domain switch during the preclaim reread", async () => {
+		const replacement = mkdtempSync(join(tmpdir(), "gitjig-recovery-domain-switch-"));
+		chmodSync(replacement, 0o700);
+		try {
+			let dispatched = false;
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "evidence" },
+				refreshPreclaim: async () => {
+					process.env.XDG_STATE_HOME = replacement;
+					return freshness();
+				},
+				refreshPrecontinue: async () => freshness(),
+				dispatchProfile: async () => {
+					dispatched = true;
+					throw new Error("must not dispatch");
+				},
+			});
+			assert.equal(result.terminal, "handoff");
+			assert.equal(result.cause, "state-domain");
+			assert.equal(dispatched, false);
+		} finally {
+			process.env.XDG_STATE_HOME = stateRoot;
+			rmSync(replacement, { recursive: true, force: true });
 		}
 	});
 

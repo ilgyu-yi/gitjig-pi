@@ -7,7 +7,7 @@ import {
 	fsyncSync,
 	lstatSync,
 	openSync,
-	readFileSync,
+	readSync,
 	renameSync,
 	writeSync,
 } from "node:fs";
@@ -58,6 +58,7 @@ type ClaimState = {
 	device: number | bigint;
 	inode: number | bigint;
 	recordRef: RecordRef;
+	immutableDigest: string;
 };
 
 export type ClaimAllowanceResult =
@@ -374,6 +375,23 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 	);
 }
 
+function immutableRecordDigest(record: ClaimedRecordV3 | ConsumedRecordV3): string {
+	return canonicalJson({
+		schemaVersion: record.schemaVersion,
+		repoHash: record.repoHash,
+		keyHash: record.keyHash,
+		claimId: record.claimId,
+		createdAt: record.createdAt,
+		profileSetDigest: record.profileSetDigest,
+		subjectDigest: record.subjectDigest,
+		historyDigest: record.historyDigest,
+		basisDigest: record.basisDigest,
+		basis: record.basis,
+		modes: record.modes,
+		route: record.route,
+	});
+}
+
 function recordBytes(record: ClaimedRecordV3 | ConsumedRecordV3): Buffer | undefined {
 	try {
 		if (!coreRecord(record)) return undefined;
@@ -419,15 +437,27 @@ function refFromBytes(bytes: Buffer, repoHash: string, keyHash: string): RecordR
 	}
 }
 
+function readBounded(fd: number): Buffer | undefined {
+	const bytes = Buffer.allocUnsafe(RECORD_LIMIT + 1);
+	let offset = 0;
+	while (offset < bytes.length) {
+		const count = readSync(fd, bytes, offset, bytes.length - offset, null);
+		if (count === 0) break;
+		offset += count;
+	}
+	return offset > RECORD_LIMIT ? undefined : bytes.subarray(0, offset);
+}
+
 function existing(path: string, repoHash: string, keyHash: string): RecordRef | undefined {
 	let fd: number | undefined;
 	try {
 		fd = openSync(path, READ_FLAGS);
 		const first = safeFileStat(path, fd);
 		if (first === undefined || first.size > RECORD_LIMIT) return undefined;
-		const bytes = readFileSync(fd);
+		const bytes = readBounded(fd);
 		const second = fstatSync(fd);
-		if (first.dev !== second.dev || first.ino !== second.ino || first.size !== second.size) return undefined;
+		if (bytes === undefined || first.dev !== second.dev || first.ino !== second.ino || first.size !== second.size)
+			return undefined;
 		return refFromBytes(bytes, repoHash, keyHash);
 	} catch {
 		return undefined;
@@ -498,6 +528,7 @@ export function claimAllowance(input: { subject: ReviewSubject; record: ClaimedR
 			device: stat.dev,
 			inode: stat.ino,
 			recordRef,
+			immutableDigest: immutableRecordDigest(input.record),
 		});
 		return { status: "claimed", claim, recordRef };
 	} catch (error) {
@@ -531,7 +562,8 @@ export function finalizeAllowance(claim: AllowanceClaim, record: ConsumedRecordV
 		record.state !== "consumed" ||
 		record.repoHash !== state.recordRef.repoHash ||
 		record.keyHash !== state.recordRef.keyHash ||
-		record.claimId !== state.recordRef.claimId
+		record.claimId !== state.recordRef.claimId ||
+		immutableRecordDigest(record) !== state.immutableDigest
 	)
 		return { status: "consumed-unverified", recordRef: state.recordRef };
 	const resolved = resolveRecoveryStateDomain();
@@ -543,7 +575,8 @@ export function finalizeAllowance(claim: AllowanceClaim, record: ConsumedRecordV
 		const stat = safeFileStat(state.path, readFd);
 		if (stat === undefined || stat.dev !== state.device || stat.ino !== state.inode)
 			throw new Error("claim identity drift");
-		if (!readFileSync(readFd).equals(state.claimedBytes)) throw new Error("claim bytes drift");
+		const current = readBounded(readFd);
+		if (current === undefined || !current.equals(state.claimedBytes)) throw new Error("claim bytes drift");
 		closeSync(readFd);
 		readFd = undefined;
 		const temporary = join(resolved, `.gitjig-recovery-${randomUUID()}.tmp`);
@@ -559,7 +592,8 @@ export function finalizeAllowance(claim: AllowanceClaim, record: ConsumedRecordV
 			syncDirectory(resolved);
 			const finalFd = openSync(state.path, READ_FLAGS);
 			try {
-				if (safeFileStat(state.path, finalFd) === undefined || !readFileSync(finalFd).equals(bytes))
+				const finalBytes = readBounded(finalFd);
+				if (safeFileStat(state.path, finalFd) === undefined || finalBytes === undefined || !finalBytes.equals(bytes))
 					throw new Error("terminal predicates failed");
 			} finally {
 				closeSync(finalFd);

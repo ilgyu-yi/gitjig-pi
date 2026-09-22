@@ -5,6 +5,7 @@ import { runDispatch } from "../dispatch/index.ts";
 import type { ResolvedModes } from "../modes.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../review/history.ts";
 import {
+	admitObservedDispatch,
 	createRecoveryAttemptLedger,
 	type HostAttemptLedger,
 	makeDispatcher,
@@ -328,15 +329,16 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 		input.diagnosis.invalidation !== "nothing"
 	)
 		return handoff("identity", input.diagnosis.invalidation, null);
-	if (resolveRecoveryStateDomain() === undefined) return handoff("state-domain", "nothing", null);
+	const stateDomain = resolveRecoveryStateDomain();
+	if (stateDomain === undefined) return handoff("state-domain", "nothing", null);
 	const loaded = loadRecoveryProfiles();
 	if (loaded === undefined || !preflightRecoveryExecutable()) return handoff("profile-preflight", "nothing", null);
-	if (resolveRecoveryStateDomain() === undefined) return handoff("state-domain", "nothing", null);
+	if (resolveRecoveryStateDomain() !== stateDomain) return handoff("state-domain", "nothing", null);
 	const fresh = await input.refreshPreclaim();
 	if (fresh === undefined || !sameFreshness(fresh, input.subject, input.history, input.basis))
 		return handoff("identity", "nothing", null);
 	// Final synchronous every-use walk immediately precedes the exclusive claim.
-	if (resolveRecoveryStateDomain() === undefined) return handoff("state-domain", "nothing", null);
+	if (resolveRecoveryStateDomain() !== stateDomain) return handoff("state-domain", "nothing", null);
 	const encoding = deriveAllowancePathEncoding(input.subject);
 	const triggering = input.history.at(-1);
 	if (encoding === undefined || triggering === undefined || !/^[0-9a-f]{40}$/.test(triggering.head))
@@ -401,6 +403,14 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 	let measurement: RecoveryMeasurement | null = null;
 	let freshRuling: FreshRuling | null = null;
 	let reentry: "nothing" | "plan" | "authorization" = "nothing";
+	let retainedRouteBytes = 0;
+	const retainWithinRouteBudget = <T>(value: T | undefined, strings: readonly string[]): T | undefined => {
+		if (value === undefined) return undefined;
+		const bytes = strings.reduce((total, text) => total + Buffer.byteLength(text, "utf8"), 0);
+		if (retainedRouteBytes + bytes > 8 * 1024) return undefined;
+		retainedRouteBytes += bytes;
+		return value;
+	};
 	const requiredSlots: PhaseAProfileId[] =
 		route === "stagnation"
 			? ["stagnation-root", "stagnation-blast-radius", "recovery-selector"]
@@ -449,13 +459,14 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 		const now = performance.now();
 		if (routeDeadline - now < SLOT_RESERVE_MS) return undefined;
 		try {
-			return await input.dispatchProfile(
+			const observed = await input.dispatchProfile(
 				ledger,
 				profileId,
 				semanticBrief,
 				input.subject.context.pullRequest.head.oid,
 				now + SLOT_OPERATION_MS,
 			);
+			return admitObservedDispatch(ledger, observed);
 		} catch {
 			return undefined;
 		}
@@ -524,18 +535,36 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 				dispatch("stagnation-root", challengerBrief("root", input.diagnosis, input.basis)),
 				dispatch("stagnation-blast-radius", challengerBrief("blast-radius", input.diagnosis, input.basis)),
 			]);
-			if (rootRun === undefined || blastRun === undefined) return finalizeHandoff();
-			const root = challenger(payload(rootRun.outcome), "root");
-			const blast = challenger(payload(blastRun.outcome), "blast-radius");
+			const parsedRoot = rootRun === undefined ? undefined : challenger(payload(rootRun.outcome), "root");
+			const root = retainWithinRouteBudget(
+				parsedRoot,
+				parsedRoot === undefined ? [] : [parsedRoot.method, parsedRoot.evidence],
+			);
+			const parsedBlast = blastRun === undefined ? undefined : challenger(payload(blastRun.outcome), "blast-radius");
+			const blast = retainWithinRouteBudget(
+				parsedBlast,
+				parsedBlast === undefined ? [] : [parsedBlast.method, parsedBlast.evidence],
+			);
 			const rootDigest = root === undefined ? null : structuralDigest("gitjig-recovery-candidate:v1", root);
 			const blastDigest = blast === undefined ? null : structuralDigest("gitjig-recovery-candidate:v1", blast);
-			appendAttempts("stagnation-root", rootRun, rootDigest, root !== undefined);
-			appendAttempts("stagnation-blast-radius", blastRun, blastDigest, blast !== undefined);
-			if (root === undefined || blast === undefined || rootDigest === null || blastDigest === null)
+			if (rootRun !== undefined) appendAttempts("stagnation-root", rootRun, rootDigest, root !== undefined);
+			if (blastRun !== undefined) appendAttempts("stagnation-blast-radius", blastRun, blastDigest, blast !== undefined);
+			if (
+				rootRun === undefined ||
+				blastRun === undefined ||
+				root === undefined ||
+				blast === undefined ||
+				rootDigest === null ||
+				blastDigest === null
+			)
 				return finalizeHandoff();
 			const selectorRun = await dispatch("recovery-selector", contestSelectorBrief([root, blast]));
 			if (selectorRun === undefined) return finalizeHandoff();
-			const selection = contest(payload(selectorRun.outcome));
+			const parsedSelection = contest(payload(selectorRun.outcome));
+			const selection = retainWithinRouteBudget(
+				parsedSelection,
+				parsedSelection === undefined ? [] : [parsedSelection.evidence],
+			);
 			const selectionDigest =
 				selection === undefined ? null : structuralDigest("gitjig-recovery-selection:v1", selection);
 			appendAttempts("recovery-selector", selectorRun, selectionDigest, selection !== undefined);
@@ -553,7 +582,13 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 		} else {
 			const selectorRun = await dispatch("recovery-selector", measurementSelectorBrief(input.diagnosis, input.basis));
 			if (selectorRun === undefined) return finalizeHandoff();
-			const spec = measurementSpec(payload(selectorRun.outcome));
+			const parsedSpec = measurementSpec(payload(selectorRun.outcome));
+			const spec = retainWithinRouteBudget(
+				parsedSpec,
+				parsedSpec === undefined
+					? []
+					: [parsedSpec.question, parsedSpec.method, parsedSpec.expectedDiscriminator, parsedSpec.evidence],
+			);
 			const prior = priorContent(input.basis);
 			const specNovel =
 				spec !== undefined &&
@@ -565,7 +600,11 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 			if (spec === undefined || !specNovel || specDigest === null) return finalizeHandoff();
 			const measurementRun = await dispatch("recovery-measurement", measurementBrief(spec));
 			if (measurementRun === undefined) return finalizeHandoff();
-			const measured = measurementResult(payload(measurementRun.outcome), specDigest);
+			const parsedMeasurement = measurementResult(payload(measurementRun.outcome), specDigest);
+			const measured = retainWithinRouteBudget(
+				parsedMeasurement,
+				parsedMeasurement === undefined ? [] : [parsedMeasurement.result, parsedMeasurement.evidence],
+			);
 			const specContent = new Set(
 				[spec.question, spec.method, spec.expectedDiscriminator, spec.evidence].map(contentDigest),
 			);
@@ -592,7 +631,11 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 				freshDiagnosisBrief(input.diagnosis, input.basis, spec, measured),
 			);
 			if (diagnosisRun === undefined) return finalizeHandoff();
-			const freshDiagnosis = diagnosis(payload(diagnosisRun.outcome));
+			const parsedDiagnosis = diagnosis(payload(diagnosisRun.outcome));
+			const freshDiagnosis = retainWithinRouteBudget(
+				parsedDiagnosis,
+				parsedDiagnosis === undefined ? [] : [parsedDiagnosis.evidence],
+			);
 			const freshDigest = freshDiagnosis === undefined ? null : diagnosisDigest(freshDiagnosis);
 			appendAttempts("recovery-diagnosis", diagnosisRun, freshDigest, freshDiagnosis !== undefined);
 			if (freshDiagnosis === undefined || freshDigest === null) return finalizeHandoff();
@@ -610,7 +653,9 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 		const prospectiveGate =
 			route === "stagnation" ? "author-repair" : reentry === "plan" ? "planning" : "ordinary-flow";
 		if (overRetainedBudget(consumedRecord("continue", null, prospectiveGate))) return finalizeHandoff();
+		if (performance.now() >= routeDeadline) return finalizeHandoff();
 		const refreshed = await input.refreshPrecontinue();
+		if (performance.now() >= routeDeadline) return finalizeHandoff();
 		if (refreshed === undefined || !sameFreshness(refreshed, input.subject, input.history, input.basis))
 			return finalizeHandoff();
 		if (performance.now() >= routeT0 + ROUTE_TERMINAL_MS) return finalizeHandoff();

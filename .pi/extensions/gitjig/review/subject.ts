@@ -404,7 +404,7 @@ async function fetchClosingIssueReferences(
 	);
 	if (!Array.isArray(value) || value.length === 0) return undefined;
 	const nodes: unknown[] = [];
-	let previousCursor: string | undefined;
+	const seenCursors = new Set<string>();
 	for (let index = 0; index < value.length; index += 1) {
 		const page = value[index];
 		if (!object(page, ["data"])) return undefined;
@@ -419,9 +419,9 @@ async function fetchClosingIssueReferences(
 		const cursor = connection.pageInfo.endCursor;
 		if (typeof hasNext !== "boolean") return undefined;
 		if (hasNext) {
-			if (typeof cursor !== "string" || cursor.length === 0 || cursor === previousCursor || index === value.length - 1)
+			if (typeof cursor !== "string" || cursor.length === 0 || seenCursors.has(cursor) || index === value.length - 1)
 				return undefined;
-			previousCursor = cursor;
+			seenCursors.add(cursor);
 		} else {
 			if (index !== value.length - 1) return undefined;
 			if (cursor !== null && typeof cursor !== "string") return undefined;

@@ -307,6 +307,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		if (remaining !== undefined && remaining <= 0)
 			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const run = await runDelegate(context, options.delegateArgv, {
+			recoveryReturnCheckpoints: options.operationDeadline !== undefined,
 			timeoutMs:
 				remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining),
 			signal: options.signal,
@@ -365,6 +366,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
 			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const admission = admitReturn(context.returnPath);
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
 		if (!admission.admitted) {
 			observedReturn = admission.class;
 			return refuse(
@@ -396,6 +399,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			);
 		}
 		observedReturn = "admitted";
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
 		const compareClass: CompareClass =
 			options.expectedRef === undefined
 				? "not-requested"
@@ -404,6 +409,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 					: "invalid";
 		observedCompare = compareClass;
 		currentPhase = options.expectedRef === undefined ? "return" : "compare";
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-operation-deadline", "ABORTED", currentPhase, "aborted");
 		const admittedDiagnostic = diagnostic(
 			"ADMITTED",
 			options.expectedRef === undefined ? "return" : "compare",
@@ -425,6 +432,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			// The blind compare (§1.6 via §4.9): validity alone crosses back.
 			outcome.compare = admission.reviewedHead === context.heldHash ? "confirmed" : "invalid";
 		}
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-operation-deadline", "ABORTED", currentPhase, "aborted");
 		if (surfaceBytes(outcome) > DISPATCH_SURFACE_LIMITS.admittedOutcome) {
 			return refuse(
 				"refuse-surface-bound",

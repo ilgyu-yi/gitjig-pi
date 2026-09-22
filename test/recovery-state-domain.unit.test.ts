@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -66,5 +66,9 @@ describe("production recovery state-domain resolver", () => {
 		// root() is 0700; widening makes the XDG root invalid.
 		chmodSync(loose, 0o755);
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: loose }).stdout), null);
+		const linked = root();
+		const target = root();
+		symlinkSync(target, join(linked, "gitjig"));
+		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: linked }).stdout), null);
 	});
 });
