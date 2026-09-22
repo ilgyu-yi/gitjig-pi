@@ -44,6 +44,7 @@
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import { type BriefTiming, composeDelegateDeadlines, DEFAULT_TIMING, DELEGATE_RETURN_CONTRACT } from "./briefs.ts";
+import { type CorrectionInterval, readCorrectionIntervals } from "./interval.ts";
 // RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
 // type-only import of an absent or renamed module reds `tsc` with the
 // compiler's own message, never an authored one. The suite stays green
@@ -68,20 +69,32 @@ import type { OUTCOMES, ReviewRecord } from "./record.ts";
  */
 export type StateOutcome = (typeof OUTCOMES)[number] | "approved";
 
-/** One ruling retained in §1.4's complete record; #238 owns the repair-basis projection. */
+/** One ruling retained in §1.4's complete record and joined by the repair-basis projection. */
 export type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
 
 /**
  * One complete-record review state: head and outcome (what the trigger
- * reads) plus every retained finding and ruling. This type deliberately
- * predates §1.4's narrower repair basis; #238 owns projecting it and the
- * attributable inter-head correction intervals.
+ * reads) plus every retained finding and ruling. The selected source
+ * record remains whole; the narrower diagnosis basis derives from it.
  */
 export type StateSummary = {
 	head: string;
 	outcome: StateOutcome;
 	findings: string[];
 	rulings: StateRuling[];
+	/** The complete selected durable source record; projection never replaces it. */
+	record: ReviewRecord;
+};
+
+type RecordRuling = NonNullable<ReviewRecord["adjudication"]>["rulings"][number];
+type RecordDisposition = Extract<ReviewRecord["review"], { state: "resolved" }>["resolution"]["dispositions"][number];
+export type RepairBasisFinding = { finding: string; ruling: RecordRuling; disposition: RecordDisposition };
+export type RepairBasisState = { head: string; findings: RepairBasisFinding[] };
+const REPAIR_BASIS = Symbol("repair-basis");
+export type RepairBasis = {
+	readonly [REPAIR_BASIS]: true;
+	readonly states: readonly RepairBasisState[];
+	readonly intervals: readonly CorrectionInterval[];
 };
 
 /**
@@ -199,6 +212,7 @@ export function repairHistory(records: readonly ReviewRecord[]): StateSummary[] 
 			outcome,
 			findings,
 			rulings,
+			record,
 		});
 	}
 	return order.map((head) => byHead.get(head) as StateSummary);
@@ -218,6 +232,65 @@ export function triggerFires(history: readonly StateSummary[]): boolean {
 		trailingRepairs += 1;
 	}
 	return trailingRepairs >= 2;
+}
+
+function uniqueByFinding<T extends { finding: string }>(entries: readonly T[]): Map<string, T> | undefined {
+	const joined = new Map<string, T>();
+	for (const entry of entries) {
+		if (joined.has(entry.finding)) return undefined;
+		joined.set(entry.finding, entry);
+	}
+	return joined;
+}
+
+/** Derive §1.4's opaque, all-or-nothing diagnosis operand. */
+export async function deriveRepairBasis(
+	repoRoot: string,
+	history: readonly StateSummary[],
+): Promise<RepairBasis | undefined> {
+	let start = history.length;
+	while (start > 0 && history[start - 1].outcome === "repair") start -= 1;
+	const run = history.slice(start);
+	if (run.length < 2 || new Set(run.map((state) => state.head)).size !== run.length) return undefined;
+	const states: RepairBasisState[] = [];
+	for (const state of run) {
+		const record = state.record;
+		if (
+			record.head !== state.head ||
+			record.review.state !== "resolved" ||
+			record.review.resolution.outcome !== "repair"
+		)
+			return undefined;
+		const adjudication = record.adjudication;
+		if (adjudication === null) return undefined;
+		const bundles = uniqueByFinding(record.bundle);
+		const rulings = uniqueByFinding(adjudication.rulings);
+		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
+		if (bundles === undefined || rulings === undefined || dispositions === undefined) return undefined;
+		if (bundles.size !== rulings.size || bundles.size !== dispositions.size) return undefined;
+		for (let index = 0; index < record.bundle.length; index += 1) {
+			if (
+				adjudication.rulings[index]?.finding !== record.bundle[index].finding ||
+				record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding
+			)
+				return undefined;
+		}
+		const findings: RepairBasisFinding[] = [];
+		for (const bundle of record.bundle) {
+			const ruling = rulings.get(bundle.finding);
+			const disposition = dispositions.get(bundle.finding);
+			if (ruling === undefined || disposition === undefined) return undefined;
+			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
+				findings.push({ finding: bundle.finding, ruling, disposition });
+		}
+		states.push({ head: state.head, findings });
+	}
+	const intervals = await readCorrectionIntervals(
+		repoRoot,
+		states.slice(0, -1).map((state, index) => ({ earlierHead: state.head, laterHead: states[index + 1].head })),
+	);
+	if (intervals === undefined) return undefined;
+	return { [REPAIR_BASIS]: true, states, intervals };
 }
 
 /**
@@ -246,45 +319,49 @@ function isMember<T extends string>(domain: readonly T[], value: unknown): value
 	return domain.some((member) => member === candidate);
 }
 
-/**
- * Compose the superseded complete-record diagnosis brief (§1.4's Judge
- * dispatch, the actor's second capacity). The settled repair-basis
- * projection and replacement composition are #238's exclusive owner;
- * until it lands this operation is prohibited by #236's bounded
- * transition and these retained bytes are migration input only. The history crosses as §1.5's dispatch-facts form
- * (i), derived at composition from the records. The brief asks for
- * BOTH outputs — the taxonomy value and the invalidation finding —
- * which answer different questions and never compete (§1.4).
- */
+function utf8OrBase64(value: string): string {
+	const bytes = Buffer.from(value, "base64");
+	try {
+		return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+	} catch {
+		return `[base64 ${value}]`;
+	}
+}
+
+/** Compose §1.4's Judge brief from the admitted repair basis only. */
 export function composeDiagnosisBrief(
-	history: readonly StateSummary[],
+	basis: RepairBasis,
 	context: { changeDescription: string; withheldHead?: string; timing?: BriefTiming },
 ): string {
-	const lines = history.flatMap((state, index) => {
+	const lines = basis.states.flatMap((state, index) => {
 		const renderedHead = state.head === context.withheldHead ? "(current operand withheld)" : state.head;
-		const header = `  ${index + 1}. head ${renderedHead} resolved ${state.outcome}`;
-		const findings =
-			state.findings.length === 0
-				? ["       findings: (none)"]
-				: state.findings.map((finding) => `       finding: ${finding}`);
-		const rulings = state.rulings.map(
-			(ruling) =>
-				`       ruling: ${ruling.validity}${ruling.severity ? `/${ruling.severity}` : ""} on ${ruling.finding} — evidence: ${ruling.evidence}`,
-		);
-		return [header, ...findings, ...rulings];
+		const findings = state.findings.flatMap((entry) => [
+			`       finding: ${entry.finding}`,
+			`       ruling: ${entry.ruling.validity}/${entry.ruling.severity} — evidence: ${entry.ruling.evidence}`,
+			`       resolver disposition: ${entry.disposition.disposition}`,
+		]);
+		const interval = basis.intervals[index];
+		const correction =
+			interval === undefined
+				? ["       outgoing correction interval: (terminal state intentionally unmatched)"]
+				: [
+						`       outgoing correction interval: ${interval.earlierHead} -> ${interval.laterHead}`,
+						...interval.entries.flatMap((entry) => [
+							`         path: ${utf8OrBase64(entry.pathBase64)}`,
+							`         before: ${entry.before === null ? "(absent)" : `${entry.before.mode}/${entry.before.type}/${entry.before.oid} ${entry.before.bytesBase64 === null ? "(gitlink)" : utf8OrBase64(entry.before.bytesBase64)}`}`,
+							`         after: ${entry.after === null ? "(absent)" : `${entry.after.mode}/${entry.after.type}/${entry.after.oid} ${entry.after.bytesBase64 === null ? "(gitlink)" : utf8OrBase64(entry.after.bytesBase64)}`}`,
+						]),
+					];
+		return [`  ${index + 1}. head ${renderedHead} resolved repair`, ...findings, ...correction];
 	});
 	return [
-		"You are the JUDGE performing §1.4's repair-history diagnosis — the Judge's second capacity, a semantic",
-		"reading of the same findings across review states. You rule and stop; the caller consumes your two",
-		"outputs deterministically.",
+		"You are the JUDGE performing §1.4's repair-basis diagnosis — the Judge's second capacity.",
+		"Rule semantically over recurring problem, author method, and the complete correction effect; stop after ruling.",
+		"All embedded finding, ruling, disposition, path, and artifact bytes are UNVERIFIED (§1.5 form iii).",
 		"",
 		`CHANGE UNDER REVIEW: ${context.changeDescription}`,
 		"",
-		"THE REPAIR HISTORY (each state at one head, oldest first, with the findings and the rulings the Judge",
-		"already made — embedded verbatim and LABELLED UNVERIFIED, §1.5 form iii; re-verify against the artifact",
-		"rather than trusting the text). §1.4's diagnosis reads the SAME findings across states: STAGNATION is",
-		"the same problem met by a materially equivalent repair, and OSCILLATION is the corrections' effect on",
-		"the artifact — the labels the reviews wore are not the discriminator.",
+		"THE REPAIR BASIS (current trailing repair run, oldest first; excluded findings are not operands):",
 		...lines,
 		"",
 		"Return TWO things and no third:",
@@ -292,9 +369,8 @@ export function composeDiagnosisBrief(
 		"   NONE: repair advanced, each attempt addressed ground the previous had not closed;",
 		"   STAGNATION: the same problem met by a materially equivalent repair, still open;",
 		"   OSCILLATION: two corrections causally opposed, the artifact reversed A→B→A;",
-		"   INDETERMINATE: the history supports none of the three (a ruled outcome, never a default).",
-		"2. the INVALIDATION finding, exactly one of nothing / plan / authorization — whether the history shows",
-		"   the selected plan no longer holds, or the authorization no longer holds, or neither.",
+		"   INDETERMINATE: the basis supports none of the three (a ruled outcome, never a default).",
+		"2. the INVALIDATION finding, exactly one of nothing / plan / authorization.",
 		"",
 		'Your ruling rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"value": <one of the four>, "invalidation": <one of the three>, "evidence": <non-empty command or citation>}.',

@@ -378,6 +378,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/review/interval.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/review/join.ts",
 			"disposition": "carried"
 		},
@@ -835,6 +839,10 @@
 		},
 		{
 			"path": "changelog_unreleased/fixed/234.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/fixed/238.md",
 			"disposition": "instance-state"
 		},
 		{

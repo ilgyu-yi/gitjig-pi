@@ -52,6 +52,21 @@ type StateSummary = {
 	findings: string[];
 	rulings: StateRuling[];
 };
+type RepairBasis = {
+	states: {
+		head: string;
+		findings: { finding: string; ruling: StateRuling; disposition: { finding: string; disposition: string } }[];
+	}[];
+	intervals: {
+		earlierHead: string;
+		laterHead: string;
+		entries: {
+			pathBase64: string;
+			before: null;
+			after: { mode: string; type: "blob"; oid: string; bytesBase64: string };
+		}[];
+	}[];
+};
 type DiagnosisValue = "NONE" | "STAGNATION" | "OSCILLATION" | "INDETERMINATE";
 type Invalidation = "nothing" | "plan" | "authorization";
 type DiagnosisInput = { value: DiagnosisValue; invalidation: Invalidation; evidence: string };
@@ -75,7 +90,7 @@ type HistoryModule = {
 	repairHistory(records: ReviewRecord[]): StateSummary[];
 	triggerFires(history: StateSummary[]): boolean;
 	composeDiagnosisBrief(
-		history: StateSummary[],
+		basis: RepairBasis,
 		context: {
 			changeDescription: string;
 			withheldHead?: string;
@@ -559,325 +574,90 @@ describe("§1.4 the coarse deterministic trigger (issue #186)", () => {
 	});
 });
 
-describe("§1.4 the diagnosis brief carries the findings and asks both outputs (issue #186)", () => {
-	const state = (over: Partial<StateSummary> = {}): StateSummary => ({
-		head: "a".repeat(40),
-		outcome: "repair",
-		findings: ["zq the recurring finding"],
-		rulings: [
+describe("§1.4 the diagnosis brief consumes only the admitted repair basis (issue #238)", () => {
+	const basis = (): RepairBasis => ({
+		states: [
 			{
-				finding: "zq the recurring finding",
-				validity: "CONFIRMED",
-				severity: "SUBSTANTIVE",
-				evidence: "zq the evidence",
+				head: "a".repeat(40),
+				findings: [
+					{
+						finding: "zq included repair",
+						ruling: {
+							finding: "zq included repair",
+							validity: "CONFIRMED",
+							severity: "SUBSTANTIVE",
+							evidence: "zq evidence",
+						},
+						disposition: { finding: "zq included repair", disposition: "repair" },
+					},
+				],
+			},
+			{ head: "b".repeat(40), findings: [] },
+		],
+		intervals: [
+			{
+				earlierHead: "a".repeat(40),
+				laterHead: "b".repeat(40),
+				entries: [
+					{
+						pathBase64: Buffer.from("src/example.ts").toString("base64"),
+						before: null,
+						after: {
+							mode: "100644",
+							type: "blob",
+							oid: "c".repeat(40),
+							bytesBase64: Buffer.from("zq correction bytes").toString("base64"),
+						},
+					},
+				],
 			},
 		],
-		...over,
 	});
 
-	it("embeds each state's findings and rulings verbatim, labelled unverified", () => {
-		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
-		// Pin the per-state FINDINGS line with a needle only it
-		// can produce — a state carrying a finding but NO rulings, so the
-		// ruling line (which also renders the finding) cannot satisfy it.
-		const findingsOnly = mod().composeDiagnosisBrief([state({ findings: ["zq findings-only line"], rulings: [] })], {
-			changeDescription: "d",
-		});
-		assert.ok(
-			findingsOnly.includes("zq findings-only line"),
-			"a state with findings but no rulings lost its findings from the brief — the per-state findings line is " +
-				"not pinned, and a findings-but-no-rulings state (adjudication null) would drop its findings",
-		);
-		for (const [needle, why] of [
-			["zq the recurring finding", "the state's finding text — the diagnosis reads the same findings the Judge ruled"],
-			["zq the evidence", "the ruling's evidence verbatim"],
-			["CONFIRMED", "the ruling's validity"],
-			["UNVERIFIED", "the §1.5 form-iii label — a provisioned tree re-verifies, never trusts"],
-			["effect on", "OSCILLATION's discriminator is the artifact's effect, not the labels the reviews wore"],
-		] as const) {
-			assert.ok(text.includes(needle), `the diagnosis brief lost ${why} (missing: ${JSON.stringify(needle)})`);
-		}
+	it("renders joined finding, ruling, disposition and the whole outgoing interval", () => {
+		const text = mod().composeDiagnosisBrief(basis(), { changeDescription: "zq change" });
+		for (const needle of [
+			"zq included repair",
+			"CONFIRMED/SUBSTANTIVE",
+			"resolver disposition: repair",
+			"src/example.ts",
+			"zq correction bytes",
+			"UNVERIFIED",
+			"terminal state intentionally unmatched",
+		])
+			assert.ok(text.includes(needle), needle);
 	});
 
-	it("asks for BOTH the taxonomy value and the invalidation finding, and says absence is not NONE", () => {
-		const text = mod().composeDiagnosisBrief([state()], { changeDescription: "d" });
-		for (const needle of ["taxonomy VALUE", "INVALIDATION finding", "absence is not NONE"]) {
-			assert.ok(text.includes(needle), `the diagnosis brief no longer states ${JSON.stringify(needle)}`);
-		}
+	it("renders states and intervals oldest first and withholds only the current head", () => {
+		const value = basis();
+		const text = mod().composeDiagnosisBrief(value, { changeDescription: "d", withheldHead: "b".repeat(40) });
+		assert.ok(text.indexOf("a".repeat(40)) < text.indexOf("current operand withheld"));
+		assert.doesNotMatch(text, new RegExp(`^.*head ${"b".repeat(40)}`, "m"));
+		assert.match(text, /a{40} -> b{40}/);
 	});
 
-	it("carries the closed return envelope and caller-aligned provisional/final deadlines", () => {
-		const text = mod().composeDiagnosisBrief([state()], {
+	it("keeps the taxonomy, invalidation, closed return contract and aligned deadlines", () => {
+		const text = mod().composeDiagnosisBrief(basis(), {
 			changeDescription: "d",
 			timing: { firstReturnSeconds: 600, finalReturnSeconds: 900 },
 		});
 		for (const needle of [
+			"taxonomy VALUE",
+			"INVALIDATION finding",
+			"absence is not NONE",
+			"NONE / STAGNATION / OSCILLATION / INDETERMINATE",
+			"nothing / plan / authorization",
 			"The schema is CLOSED",
-			'"ok": boolean',
-			'"summary": string',
-			'"reviewedHead": string',
-			'"payload": string',
 			"T0+600 seconds",
 			"T0+900 seconds",
-		]) {
+		])
 			assert.ok(text.includes(needle), needle);
-		}
 	});
 
-	it("pins the per-state header and the change description — the head/outcome sequence IS the history", () => {
-		const text = mod().composeDiagnosisBrief([state({ head: "f".repeat(40), outcome: "repair" })], {
-			changeDescription: "zq the change description",
-		});
-		assert.ok(
-			text.includes("f".repeat(40)),
-			"the brief dropped the state's HEAD — the diagnosis reads the history's heads",
-		);
-		assert.ok(
-			/resolved repair/.test(text),
-			"the brief dropped the state's OUTCOME — OSCILLATION's A→B→A reading needs the ordered outcomes",
-		);
-		assert.ok(
-			text.includes("zq the change description"),
-			"the brief dropped the change description — the Judge cannot situate the history without it",
-		);
-		assert.ok(
-			text.includes("the labels the reviews wore are not the discriminator"),
-			"the brief dropped OSCILLATION's discriminator clause — §1.4 rules on the corrections' EFFECT, not the labels",
-		);
-	});
-
-	// Every arm above passes a ONE-state history, so the whole
-	// multi-state rendering is unmeasured — slice(-1), reverse(), a constant
-	// "1." ordinal, a filter to repair, and a duplicated first state all
-	// survived the suite 8-for-8. §1.4's diagnosis reads the same findings
-	// ACROSS states, oldest first: a brief free to carry one state, or to
-	// carry them reordered, makes STAGNATION and OSCILLATION unrulable, and
-	// the Judge's likely false NONE returns a still-open problem to ordinary
-	// flow on a history that warranted a handoff — a silent wrong-allow.
-	const multi = (): StateSummary[] =>
-		(
-			[
-				["b", "repair", "oldest"],
-				["c", "clear", "middle"],
-				["d", "repair", "newest"],
-			] as const
-		).map(([fill, outcome, position]) =>
-			state({
-				head: fill.repeat(40),
-				outcome,
-				// The needle must be distinct BY CONSTRUCTION
-				// from anything another rendered line can produce. Previously the
-				// finding text was identical to the ruling's `finding` field, and
-				// the ruling line renders that field — so a renderer that dropped
-				// the findings line entirely still satisfied the needle from the
-				// ruling line, and every findings mutant survived. These share no
-				// substring: "fq" vs "zq", and different position words.
-				findings: [`fq ${position}-only-in-findings`],
-				rulings: [
-					{
-						finding: `zq ${position} finding`,
-						validity: "CONFIRMED",
-						severity: "SUBSTANTIVE",
-						evidence: `zq ${position} evidence`,
-					},
-				],
-			}),
-		);
-
-	/**
-	 * A history whose SECOND state carries findings and no rulings — the
-	 * shape `repairHistory` produces for a panel the Judge has not ruled.
-	 * Pinned at position one alone, a renderer emitting findings for the
-	 * FIRST state only survives every arm; this fixture is why it does not.
-	 */
-	const findingsOnlyAtSecond = (): StateSummary[] => {
-		const history = multi();
-		return history.map((entry, index) => (index === 1 ? { ...entry, rulings: [] } : entry));
-	};
-
-	const headerLines = (text: string): string[] =>
-		text.split("\n").filter((line) => /^ {2}\d+\. head \S+ resolved /.test(line));
-
-	it("withholds the caller-held current operand while retaining older history heads", () => {
-		const oldHead = "a".repeat(40);
-		const currentHead = "b".repeat(40);
-		const text = mod().composeDiagnosisBrief([state({ head: oldHead }), state({ head: currentHead })], {
-			changeDescription: "d",
-			withheldHead: currentHead,
-		});
-		assert.match(text, new RegExp(oldHead));
-		assert.doesNotMatch(text, new RegExp(currentHead));
-		assert.match(text, /head \(current operand withheld\) resolved repair/);
-	});
-
-	it("renders EVERY state, not only one — each state's own finding and ruling evidence appears", () => {
-		const history = multi();
-		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
-		for (const position of ["oldest", "middle", "newest"]) {
-			for (const needle of [`zq ${position} finding`, `zq ${position} evidence`]) {
-				assert.ok(
-					text.includes(needle),
-					`the brief dropped the ${position} state (missing: ${JSON.stringify(needle)}) — a renderer free to ` +
-						"keep only the last state, only the first, or only the repair states hands the Judge a history " +
-						"STAGNATION and OSCILLATION cannot be read from",
-				);
-			}
-		}
-	});
-
-	it("renders EVERY entry of a state's findings AND rulings lists, in order", () => {
-		// Cardinality derived for the ASSEMBLER alone, and carried to the
-		// renderer only as a per-POSITION axis, leaves every brief fixture at
-		// 0 or 1 findings per state — and `.slice(0,1)` / `.reverse()` on the
-		// rendered lists then survive. Cardinality is an axis of EVERY
-		// function that consumes a list, this one included.
-		//
-		// Needles are distinct by construction across both axes: "fq" for
-		// findings, "zq" for ruling evidence, and an index per entry, so no
-		// entry's needle can be satisfied by another entry or another line.
-		const head = "e".repeat(40);
-		const findings = ["fq finding-one", "fq finding-two", "fq finding-three"];
-		const rulings = [
-			{ finding: "fq finding-one", validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "zq evidence-one" },
-			{ finding: "fq finding-two", validity: "REFUTED", evidence: "zq evidence-two" },
-		];
-		const text = mod().composeDiagnosisBrief([{ head, outcome: "repair", findings, rulings }], {
-			changeDescription: "d",
-		});
-
-		for (const finding of findings) {
-			assert.ok(
-				text.includes(finding),
-				`the brief dropped ${JSON.stringify(finding)} — a renderer free to emit a state's FIRST finding and ` +
-					"stop hands the Judge a history in which a recurrence across states is invisible, which is the " +
-					"wrong-allow the assembler's own cardinality repair closed one level upstream",
-			);
-		}
-		assert.ok(
-			findings.every(
-				(finding, index) => index === 0 || text.indexOf(finding) > text.indexOf(findings[index - 1] as string),
-			),
-			"the brief rendered a state's findings out of order — a reversed list is a different history",
-		);
-		for (const ruling of rulings) {
-			assert.ok(
-				text.includes(ruling.evidence),
-				`the brief dropped the ruling evidence ${JSON.stringify(ruling.evidence)} — a ruling travels with ` +
-					"the evidence it rests on",
-			);
-		}
-		assert.ok(
-			text.indexOf(rulings[1]?.evidence as string) > text.indexOf(rulings[0]?.evidence as string),
-			"the brief rendered a state's rulings out of order — §1.4 reads the rulings the Judge already made, and " +
-				"their order is part of what it reads",
-		);
-	});
-
-	it("renders EVERY state's own findings line, at every position — needles distinct by construction", () => {
-		// The falsifier for the findings line specifically: each state's
-		// findings needle appears nowhere else in the render, so a renderer
-		// that emits one state's findings for all, or only the first
-		// state's, or only the last's, cannot satisfy this from a
-		// neighbouring line.
-		const history = multi();
-		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
-		for (const entry of history) {
-			for (const needle of entry.findings) {
-				assert.ok(
-					text.includes(needle),
-					`the brief lost the findings line for ${entry.head.slice(0, 1)} (missing: ${JSON.stringify(needle)}) — ` +
-						"§1.4's diagnosis reads the same findings ACROSS states, so a brief carrying one state's " +
-						"findings makes STAGNATION's recurrence unreadable",
-				);
-			}
-		}
-	});
-
-	it("renders a findings-only state's findings at position TWO — the null-adjudication shape past the first", () => {
-		const history = findingsOnlyAtSecond();
-		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
-		const second = history[1] as StateSummary;
-		assert.ok(
-			text.includes(second.findings[0] as string),
-			"a state carrying findings with NO rulings lost its findings when it sat at position two — this is the " +
-				"shape repairHistory produces for a panel the Judge has not ruled, and the ruling line cannot " +
-				"stand in for the findings line when there are no rulings",
-		);
-		assert.ok(
-			!text.includes(`zq ${"middle"} evidence`),
-			"the fixture's second state still renders a ruling — it is supposed to carry none, so this arm would " +
-				"be measuring the wrong thing",
-		);
-	});
-
-	it("renders the states OLDEST FIRST — rendered position increases in history order", () => {
-		const text = mod().composeDiagnosisBrief(multi(), { changeDescription: "d" });
-		const at = (position: string) => text.indexOf(`zq ${position} finding`);
-		assert.ok(
-			at("oldest") < at("middle") && at("middle") < at("newest"),
-			"the brief did not render the states oldest first — OSCILLATION is the A→B→A reading of the ORDERED " +
-				"states, so a reversed or shuffled brief inverts the very sequence being ruled on",
-		);
-	});
-
-	it("numbers each state with ITS OWN ordinal, paired with ITS OWN head and outcome", () => {
-		const history = multi();
-		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
-		history.forEach((expected, index) => {
-			assert.ok(
-				text.includes(`${index + 1}. head ${expected.head} resolved ${expected.outcome}`),
-				`state ${index + 1} lost its own header — ordinal, head, and outcome must ride ONE line together, or a ` +
-					"constant ordinal (every state \"1.\") or a cross-paired header (one state's head, another's outcome) " +
-					"renders a history the Judge cannot index",
-			);
-		});
-	});
-
-	it("renders exactly one header line per state — no drop, no duplication", () => {
-		const history = multi();
-		assert.equal(
-			headerLines(mod().composeDiagnosisBrief(history, { changeDescription: "d" })).length,
-			history.length,
-			"the rendered header-line count is not the history length — a dropped state shortens the history the " +
-				"diagnosis rules on, and a duplicated one manufactures a recurrence that never happened",
-		);
-	});
-
-	it("a findings-free state renders ITS OWN (none) line rather than nothing", () => {
-		const history = [state({ head: "b".repeat(40), findings: [], rulings: [] }), ...multi().slice(1)];
-		const text = mod().composeDiagnosisBrief(history, { changeDescription: "d" });
-		assert.ok(
-			// Bound to its OWN state's header: whole-text membership let the
-			// literal be misattributed to a state that DOES carry findings while
-			// the findings-free state rendered nothing — which is what this arm's
-			// own message forbids.
-			/ {2}1\. head b{40} resolved repair\n {7}findings: \(none\)\n/.test(text),
-			"a state with no findings rendered nothing at all — an absent line reads as an absent STATE, and §1.4 " +
-				"counts a findings-free review as a state that resets, not as a gap in the history",
-		);
-	});
-
-	it("a ruling's severity rides its line; a ruling carrying none renders without the suffix", () => {
-		const text = mod().composeDiagnosisBrief(
-			[
-				state({
-					rulings: [
-						{ finding: "zq graded", validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "zq graded evidence" },
-						{ finding: "zq ungraded", validity: "REFUTED", evidence: "zq ungraded evidence" },
-					],
-				}),
-			],
-			{ changeDescription: "d" },
-		);
-		assert.ok(
-			text.includes("CONFIRMED/SUBSTANTIVE"),
-			"the ruling line dropped the SEVERITY — §1.4 weighs a recurrence by what it was graded, so a validity " +
-				"token alone cannot carry the ruling",
-		);
-		assert.ok(
-			/REFUTED on zq ungraded/.test(text),
-			"a ruling carrying no severity did not render bare — the suffix is conditional, not a constant",
-		);
+	it("labels non-UTF-8 blob bytes as base64 instead of corrupting them", () => {
+		const value = basis();
+		value.intervals[0].entries[0].after.bytesBase64 = Buffer.from([0xff, 0x00]).toString("base64");
+		assert.match(mod().composeDiagnosisBrief(value, { changeDescription: "d" }), /\[base64 \/wA=\]/);
 	});
 });
 
@@ -1288,29 +1068,10 @@ describe("§1.7 no drop, no duplication — every list pinned by COUNT", () => {
 		);
 	});
 
-	it("the RENDERER emits each findings line and each ruling line exactly once per entry", () => {
-		const [state] = mod().repairHistory([record()]);
-		const text = mod().composeDiagnosisBrief([state as StateSummary], { changeDescription: "d" });
-		const lines = text.split("\n");
-		const count = (predicate: (line: string) => boolean) => lines.filter(predicate).length;
-		assert.equal(
-			count((line) => line.includes("finding: ") && line.includes(DUP)),
-			2,
-			"the repeated finding was not rendered once per entry — a renderer that dedups understates what the " +
-				"panel found, and one that emits each line twice manufactures a recurrence; membership cannot see " +
-				"either, which is why this is a COUNT",
-		);
-		assert.equal(
-			count((line) => line.includes("finding: ")),
-			FINDINGS.length,
-			"the rendered findings-line count is not the state's findings length",
-		);
-		assert.equal(
-			count((line) => line.includes("ruling: ")),
-			RULINGS.length,
-			"the rendered ruling-line count is not the state's rulings length — a doubled or deduped ruling list " +
-				"changes what §1.4's diagnosis reads",
-		);
+	it("the complete state retains the entire selected durable source record", () => {
+		const source = record();
+		const [state] = mod().repairHistory([source]);
+		assert.equal((state as StateSummary & { record: ReviewRecord }).record, source);
 	});
 
 	it("the AVAILABILITY pass-through keeps a repeated record — count, not membership", () => {
@@ -1692,9 +1453,10 @@ describe("§1.4 the domains are pinned on the LIVE enforcing homes, never on the
 		// being named in the brief reds here — and a Judge is never told a
 		// different shape than the one admitted.
 		const h = mod();
-		const brief = h.composeDiagnosisBrief([{ head: "a".repeat(40), outcome: "repair", findings: [], rulings: [] }], {
-			changeDescription: "d",
-		});
+		const brief = h.composeDiagnosisBrief(
+			{ states: [{ head: "a".repeat(40), findings: [] }], intervals: [] },
+			{ changeDescription: "d" },
+		);
 		for (const value of h.DIAGNOSIS_VALUES) {
 			assert.ok(
 				brief.includes(value),
