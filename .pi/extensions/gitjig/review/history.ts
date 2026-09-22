@@ -1,6 +1,6 @@
 /**
  * §1.4's cross-review-repair history instruments (issue #186,
- * Directive #183) — the repair-history record, the coarse
+ * Directive #183) — the complete repair-history record, the coarse
  * deterministic trigger, the diagnosis dispatch's admission, and the
  * deterministic consumer. Read §1.4 for what each owes; the comments
  * here name the local decision, not a second copy of the clause
@@ -68,14 +68,14 @@ import type { OUTCOMES, ReviewRecord } from "./record.ts";
  */
 export type StateOutcome = (typeof OUTCOMES)[number] | "approved";
 
-/** One ruling as the diagnosis reads it — §1.4's "same findings the Judge already ruled". */
+/** One ruling retained in §1.4's complete record; #238 owns the repair-basis projection. */
 export type StateRuling = { finding: string; validity: string; severity?: string; evidence: string };
 
 /**
- * One review state: head and outcome (what the trigger reads) plus the
- * findings and rulings the diagnosis reads (§1.4 — the diagnosis reads
- * the same findings the Judge already ruled, undecidable from an
- * outcome label alone).
+ * One complete-record review state: head and outcome (what the trigger
+ * reads) plus every retained finding and ruling. This type deliberately
+ * predates §1.4's narrower repair basis; #238 owns projecting it and the
+ * attributable inter-head correction intervals.
  */
 export type StateSummary = {
 	head: string;
@@ -113,8 +113,8 @@ export type DiagnosisAdmission =
 export type Consequence = { proceed: boolean; handoff: boolean; reentry: "none" | "plan" | "authorization" };
 
 /**
- * Assemble the repair history from the durable review records, in the
- * order posted, one state per head. Two records at one head are one
+ * Assemble the complete repair-history record from durable review
+ * records, in posted order, one state per head. Two records at one head are one
  * state (§1.7's collapse); the later record wins, since a re-dispatched
  * slot re-posts the completed state. A resolved record maps to its
  * resolution's outcome and `approved` is its own state; an
@@ -247,8 +247,11 @@ function isMember<T extends string>(domain: readonly T[], value: unknown): value
 }
 
 /**
- * Compose the diagnosis brief (§1.4's Judge dispatch, the actor's
- * second capacity). The history crosses as §1.5's dispatch-facts form
+ * Compose the superseded complete-record diagnosis brief (§1.4's Judge
+ * dispatch, the actor's second capacity). The settled repair-basis
+ * projection and replacement composition are #238's exclusive owner;
+ * until it lands this operation is prohibited by #236's bounded
+ * transition and these retained bytes are migration input only. The history crosses as §1.5's dispatch-facts form
  * (i), derived at composition from the records. The brief asks for
  * BOTH outputs — the taxonomy value and the invalidation finding —
  * which answer different questions and never compete (§1.4).
