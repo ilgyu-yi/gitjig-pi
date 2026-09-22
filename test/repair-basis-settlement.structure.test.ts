@@ -29,14 +29,22 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("repair history** of one change is the complete durable record") &&
 		crossReview.includes("**repair-basis projection**") &&
 		crossReview.includes(
+			"exactly the current trailing consecutive run of review states whose Resolver outcome is `repair`",
+		) &&
+		crossReview.includes("beginning after the latest non-`repair` reset and never reconnecting states across one") &&
+		crossReview.includes(
 			"only effective findings whose joined ruling is `CONFIRMED`, severity is `SUBSTANTIVE`, and deterministic disposition is `repair`",
 		) &&
 		crossReview.includes("N projected states carry exactly N−1 complete author-authored correction intervals") &&
+		crossReview.includes("between adjacent states in that run, oldest first") &&
+		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
 		crossReview.includes("Several included findings in one state share that whole interval") &&
 		crossReview.includes("caller never slices edits or attributes an edit to a finding") &&
 		crossReview.includes("NIT/remedy, refuted/`none`, `defer`, `measure-escalate`, and Nit carry-forward") &&
 		crossReview.includes("Missing, duplicate, reordered, noncontiguous, cardinality-misaligned, or ambiguous") &&
+		crossReview.includes("withholds diagnosis rather than narrowing or guessing") &&
+		crossReview.includes("supplies the repair-basis projection") &&
 		judge.includes("reads that section's repair-basis projection") &&
 		judge.includes("neither an author repair method nor a side of OSCILLATION")
 	);
@@ -50,6 +58,8 @@ describe("issue #236 repair-basis settlement", () => {
 	it("kills one meaning-changing mutant for every projection component", () => {
 		const mutants = [
 			[CROSS_REVIEW.replace("complete durable record", "diagnosis operand"), JUDGE],
+			[CROSS_REVIEW.replace("current trailing consecutive run", "all ordered repair states"), JUDGE],
+			[CROSS_REVIEW.replace("never reconnecting states across one", "omitting reset states"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
 					"`CONFIRMED`, severity is `SUBSTANTIVE`, and deterministic disposition is `repair`",
@@ -58,6 +68,14 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("N−1", "N"), JUDGE],
+			[CROSS_REVIEW.replace("between adjacent states in that run, oldest first", "in any order"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"exact unique reviewed-head endpoints of one state and the immediately following state",
+					"available endpoints",
+				),
+				JUDGE,
+			],
 			[
 				CROSS_REVIEW.replace(
 					"terminal state remains intentionally unmatched",
@@ -84,17 +102,29 @@ describe("issue #236 repair-basis settlement", () => {
 				),
 				JUDGE,
 			],
+			[
+				CROSS_REVIEW.replace("withholds diagnosis rather than narrowing or guessing", "uses the available subset"),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("supplies the repair-basis projection", "supplies the history record"), JUDGE],
 			[CROSS_REVIEW, JUDGE.replace("reads that section's repair-basis projection", "reads the same findings again")],
 		] as const;
 		for (const [crossReview, judge] of mutants) assert.equal(settlementHolds(crossReview, judge), false);
 	});
 
-	it("marks only non-executable comments while preserving the exact #238 migration input", () => {
+	it("preserves the exact #238 migration bytes while mechanically prohibiting their call", () => {
 		assert.match(HISTORY_SOURCE, /superseded complete-record diagnosis brief/);
 		assert.match(HISTORY_SOURCE, /#238's exclusive owner/);
 		assert.match(HISTORY_SOURCE, /operation is prohibited by #236's bounded/);
 		assert.equal(HISTORY_SOURCE.match(/same findings across review states/g)?.length, 1);
 		assert.equal(HISTORY_SOURCE.match(/diagnosis reads the SAME findings across states/g)?.length, 1);
-		assert.match(CALLER_SOURCE, /composeDiagnosisBrief\(history,/);
+		assert.match(CALLER_SOURCE, /const REPAIR_BASIS_PENDING = true;/);
+		const guard = CALLER_SOURCE.indexOf("if (REPAIR_BASIS_PENDING)");
+		const compose = CALLER_SOURCE.indexOf("composeDiagnosisBrief(history,");
+		assert.ok(guard >= 0 && compose > guard, "the fail-closed guard must precede the superseded composer call");
+		assert.match(
+			CALLER_SOURCE.slice(guard, compose),
+			/return \{ disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" \}/,
+		);
 	});
 });

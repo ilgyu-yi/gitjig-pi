@@ -31,7 +31,7 @@ import {
 	fetchAttestedReviewComments,
 	recordsFromAttestedComments,
 } from "../.pi/extensions/gitjig/review/comments.ts";
-import { DIAGNOSIS_VALUES, type DiagnosisInput, INVALIDATIONS } from "../.pi/extensions/gitjig/review/history.ts";
+import type { DiagnosisInput } from "../.pi/extensions/gitjig/review/history.ts";
 import { type RoundOptions, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewPublicationOutcome } from "../.pi/extensions/gitjig/review/publication.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
@@ -710,8 +710,12 @@ describe("review-round production call site", () => {
 		);
 		const second = await run(secondRoot, subject(first.base, first.head), repairRecord(first.head));
 		if ("diagnosis" in second && second.diagnosis !== undefined) diagnoses += 1;
-		assert.equal(second.disposition, "posted");
-		assert.equal(diagnoses, 1, "the second clone must diagnose the two-record history");
+		assert.deepEqual(second, {
+			disposition: "hand-off",
+			cause: "review-round handed off: the required history diagnosis was unavailable or required handoff",
+			reentry: "none",
+		});
+		assert.equal(diagnoses, 0, "the superseded complete-record diagnosis must not run across clones");
 		assert.ok(readRoots.includes(first.root));
 		assert.ok(readRoots.includes(secondRoot));
 	});
@@ -922,51 +926,18 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
-	it("hands off when the subject drifts during post-diagnosis history confirmation", async () => {
+	it("prohibits a pre-existing triggered diagnosis before composition or dispatch", async () => {
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
-		let reads = 0;
-		let stale = false;
-		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "stale subject" };
-		const outcome = await driveReviewRound(
-			spec(),
-			"/unused",
-			seams({
-				readComments: async () => {
-					reads += 1;
-					if (reads === 2) stale = true;
-					return population(bodies);
-				},
-				refetchSubject: async (_root, current) => (stale ? undefined : current),
-				makeDispatch: diagnosisDispatch(diagnosis),
-			}),
-		);
-		assert.deepEqual(outcome, {
-			disposition: "hand-off",
-			cause: "review-round handed off: the review subject changed while the round ran",
-			reentry: "none",
-			diagnosis,
-		});
-	});
-
-	it("hands off when durable history changes during diagnosis", async () => {
-		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
+		let dispatched = 0;
 		let rounds = 0;
-		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "stale" };
 		const outcome = await driveReviewRound(
 			spec(),
 			"/unused",
 			seams({
 				readComments: async () => population(bodies),
 				makeDispatch: () => async () => {
-					bodies.push(composeReviewRecord(repairRecord("c".repeat(40))));
-					return {
-						disposition: "admitted",
-						ok: true,
-						summary: "",
-						compare: "confirmed",
-						payload: JSON.stringify(diagnosis),
-						diagnostic: ADMITTED_DIAGNOSTIC,
-					};
+					dispatched += 1;
+					throw new Error("superseded diagnosis dispatched");
 				},
 				runRound: async () => {
 					rounds += 1;
@@ -976,10 +947,10 @@ describe("review-round production call site", () => {
 		);
 		assert.deepEqual(outcome, {
 			disposition: "hand-off",
-			cause: "review-round handed off: installed review history could not be read",
+			cause: "review-round handed off: the required history diagnosis was unavailable or required handoff",
 			reentry: "none",
-			diagnosis,
 		});
+		assert.equal(dispatched, 0);
 		assert.equal(rounds, 0);
 	});
 
@@ -1013,15 +984,10 @@ describe("review-round production call site", () => {
 		assert.equal(ran, false, "an unreadable history must not spend a round");
 	});
 
-	it("hands off after the triggering record is durable, and never before the round", async () => {
-		const briefs: string[] = [];
+	it("publishes a newly triggering repair record, then hands off without diagnosis dispatch", async () => {
 		const order: string[] = [];
+		let dispatched = 0;
 		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
-		const diagnosis = {
-			value: "STAGNATION" as const,
-			invalidation: "nothing" as const,
-			evidence: "two recorded repair states",
-		};
 		const outcome = await driveReviewRound(
 			spec(),
 			"/unused",
@@ -1031,7 +997,10 @@ describe("review-round production call site", () => {
 						order.includes("publish") ? bodies : bodies.slice(0, 1),
 						order.includes("publish") ? "record" : undefined,
 					),
-				makeDispatch: diagnosisDispatch(diagnosis, briefs),
+				makeDispatch: () => async () => {
+					dispatched += 1;
+					throw new Error("superseded diagnosis dispatched");
+				},
 				runRound: async () => {
 					order.push("round");
 					return ROUND;
@@ -1043,53 +1012,12 @@ describe("review-round production call site", () => {
 			}),
 		);
 		assert.deepEqual(order, ["round", "publish"]);
-		assert.equal(briefs.length, 1);
-		assert.match(briefs[0], /repair-history diagnosis/);
-		assert.equal(briefs[0].includes(HEAD_B), false, "the round's own head stays withheld from the diagnosis brief");
+		assert.equal(dispatched, 0);
 		assert.deepEqual(outcome, {
 			disposition: "hand-off",
 			cause: "review-round handed off: the required history diagnosis was unavailable or required handoff",
 			reentry: "none",
-			diagnosis,
 		});
-	});
-
-	it("binds every diagnosis taxonomy × invalidation cell after one durable round", async () => {
-		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
-		for (const value of DIAGNOSIS_VALUES) {
-			for (const invalidation of INVALIDATIONS) {
-				let rounds = 0;
-				let publishes = 0;
-				const outcome = await driveReviewRound(
-					spec(),
-					"/unused",
-					seams({
-						readComments: async () => population(bodies, publishes > 0 ? "record" : undefined),
-						makeDispatch: diagnosisDispatch({ value, invalidation, evidence: "measured" }),
-						runRound: async () => {
-							rounds += 1;
-							return ROUND;
-						},
-						publishRecord: async (body) => {
-							publishes += 1;
-							return receipt(body);
-						},
-					}),
-				);
-				const continues = value === "NONE" && invalidation === "nothing";
-				assert.equal(rounds, continues ? 1 : 0, `${value}/${invalidation}: round count`);
-				assert.equal(publishes, continues ? 1 : 0, `${value}/${invalidation}: publish count`);
-				assert.ok("diagnosis" in outcome, `${value}/${invalidation}: diagnosis absent`);
-				if ("diagnosis" in outcome) assert.deepEqual(outcome.diagnosis, { value, invalidation, evidence: "measured" });
-				if (continues) {
-					assert.equal(outcome.disposition, "posted", `${value}/${invalidation}`);
-				} else {
-					assert.equal(outcome.disposition, "hand-off", `${value}/${invalidation}`);
-					if (outcome.disposition === "hand-off")
-						assert.equal(outcome.reentry, invalidation === "nothing" ? "none" : invalidation);
-				}
-			}
-		}
 	});
 
 	it("occasions no diagnosis where the trigger does not fire", async () => {
@@ -1112,62 +1040,6 @@ describe("review-round production call site", () => {
 		);
 		assert.deepEqual(outcome, { disposition: "posted", review: { state: "approved" } });
 		assert.equal(dispatched, 0);
-	});
-
-	it("projects an admitted diagnosis through every later failure class", async () => {
-		const bodies = [composeReviewRecord(repairRecord(HEAD_A)), composeReviewRecord(repairRecord(HEAD_B))];
-		const diagnosis = { value: "NONE" as const, invalidation: "nothing" as const, evidence: "retained" };
-		const base = {
-			readComments: async () => population(bodies),
-			makeDispatch: diagnosisDispatch(diagnosis),
-		};
-		for (const item of [
-			{
-				name: "round throw",
-				seams: seams({
-					...base,
-					runRound: async () => {
-						throw new Error("round");
-					},
-				}),
-				cause: "review-round handed off: the composed round could not produce a terminal result",
-			},
-			{
-				name: "publish throw",
-				seams: seams({
-					...base,
-					publishRecord: async () => {
-						throw new Error("publish");
-					},
-				}),
-				cause: "review-round handed off: the composed round could not produce a terminal result",
-			},
-			{
-				name: "publish not confirmed",
-				seams: seams({ ...base, publishRecord: async () => ({ ok: false, cause: "refused" }) }),
-				cause: "review-round handed off: the durable review record was not confirmed published",
-			},
-			{
-				name: "history unreadable after publication",
-				seams: (() => {
-					let reads = 0;
-					return seams({
-						...base,
-						readComments: async () => {
-							reads += 1;
-							return reads === 1 ? population(bodies) : { ok: false, cause: "unreadable" };
-						},
-					});
-				})(),
-				cause: "review-round handed off: installed review history could not be read",
-			},
-		]) {
-			assert.deepEqual(
-				await driveReviewRound(spec(), "/unused", item.seams),
-				{ disposition: "hand-off", cause: item.cause, reentry: "none", diagnosis },
-				item.name,
-			);
-		}
 	});
 
 	it("refuses every linked path component, including one later cancelled by dot-dot", () => {
