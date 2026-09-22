@@ -1066,6 +1066,77 @@ describe("review-round production call site", () => {
 		});
 	});
 
+	it("routes an admitted pre-round interruption through autonomous recovery and stops on author-repair", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let recoveries = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				refetchSubject: async (_root, current) => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "same method" }),
+			}),
+			{
+				stateRoot: fixture.root,
+				modes: {
+					mergeMode: "off",
+					mergeSource: "default",
+					decisionMode: "autonomous",
+					decisionSource: "environment",
+					refusals: [],
+				},
+				dispatchProfile: async () => assert.fail("the injected coordinator owns dispatch"),
+				coordinate: async (input) => {
+					recoveries += 1;
+					assert.equal(input.diagnosis.value, "STAGNATION");
+					return {
+						terminal: "continue",
+						selectedIntervention: null,
+						reentry: "none",
+						nextGate: "author-repair",
+						recordRef: { repositoryKey: "a".repeat(64), lineageKey: "b".repeat(64), claimId: "claim" },
+					};
+				},
+			},
+		);
+		assert.equal(recoveries, 1);
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") assert.equal(outcome.result.nextGate, "author-repair");
+	});
+
+	it("keeps handoff mode on the existing path and never calls autonomous recovery", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				refetchSubject: async (_root, current) => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "same method" }),
+			}),
+			{
+				stateRoot: fixture.root,
+				modes: {
+					mergeMode: "on",
+					mergeSource: "environment",
+					decisionMode: "handoff",
+					decisionSource: "default",
+					refusals: [],
+				},
+				dispatchProfile: async () => assert.fail("handoff dispatches no recovery actor"),
+				coordinate: async () => assert.fail("handoff invokes no recovery coordinator"),
+			},
+		);
+		assert.equal(outcome.disposition, "hand-off");
+	});
+
 	it("occasions no diagnosis where the trigger does not fire", async () => {
 		let dispatched = 0;
 		let publishedBody: string | undefined;

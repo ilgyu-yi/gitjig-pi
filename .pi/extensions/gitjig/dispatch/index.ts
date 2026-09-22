@@ -212,6 +212,8 @@ export interface RunDispatchOptions {
 	surface?: SessionSurface;
 	/** Cancellation belongs to the invocation and reaches the child process group. */
 	signal?: AbortSignal;
+	/** Optional monotonic absolute deadline used only by bounded recovery callers. */
+	operationDeadline?: number;
 	/** Handler monotonic start, supplied only by the registered tool wrapper. */
 	enteredAt?: number;
 	/** Transient operator-only trace; callers must never serialize it as a final result. */
@@ -275,7 +277,9 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		typeof options.brief !== "string" ||
 		(options.expectedRef !== undefined && typeof options.expectedRef !== "string") ||
 		(options.timeoutMs !== undefined &&
-			(!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > MAX_RUN_BOUND_MS))
+			(!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > MAX_RUN_BOUND_MS)) ||
+		(options.operationDeadline !== undefined &&
+			(!Number.isFinite(options.operationDeadline) || options.operationDeadline <= performance.now()))
 	) {
 		return refuse("refuse-parameter", "PARAMETER_REFUSED", "preflight", "not-started");
 	}
@@ -289,17 +293,28 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		context = provisionDispatchContext(options.callerRepoRoot, {
 			brief: options.brief,
 			expectedRef: options.expectedRef,
+			operationDeadline: options.operationDeadline,
 		});
 	} catch {
 		return refuse("refuse-provision", "PROVISION_FAILED", "provision", "not-started");
+	}
+	if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline) {
+		try {
+			cleanupDispatchContext(context);
+		} catch {}
+		return refuse("refuse-bound-exceeded", "TIMED_OUT", "provision", "timed-out");
 	}
 	record("run-started", "dispatch run started: the bounded delegate child is being observed");
 	currentPhase = "run";
 	try {
 		let terminalTrace: TraceSnapshot | undefined;
 		let traceUpdateDegraded = false;
+		const remaining =
+			options.operationDeadline === undefined
+				? undefined
+				: Math.max(1, Math.floor(options.operationDeadline - performance.now()));
 		const run = await runDelegate(context, options.delegateArgv, {
-			timeoutMs: options.timeoutMs,
+			timeoutMs: Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining ?? Number.POSITIVE_INFINITY),
 			signal: options.signal,
 			onTrace: (snapshot) => {
 				terminalTrace = snapshot;
@@ -353,6 +368,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const exitCode = run.exitCode;
 		observedRun = { class: "exited", exitCode, signal: null };
 		currentPhase = "return";
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-bound-exceeded", "TIMED_OUT", "run", "timed-out");
 		const admission = admitReturn(context.returnPath);
 		if (!admission.admitted) {
 			observedReturn = admission.class;
@@ -385,6 +402,8 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			);
 		}
 		observedReturn = "admitted";
+		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
+			return refuse("refuse-bound-exceeded", "TIMED_OUT", "return", "timed-out", observedReturn);
 		const compareClass: CompareClass =
 			options.expectedRef === undefined
 				? "not-requested"

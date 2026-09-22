@@ -270,8 +270,14 @@ export const PROVISION_REFUSAL_CAUSES = {
 
 export function provisionDispatchContext(
 	callerRepoRoot: string,
-	options: { brief: string; expectedRef?: string },
+	options: { brief: string; expectedRef?: string; operationDeadline?: number },
 ): DispatchContext {
+	const timeout = (): number | undefined => {
+		if (options.operationDeadline === undefined) return undefined;
+		const remaining = Math.floor(options.operationDeadline - performance.now());
+		if (remaining <= 0) throw new Error(PROVISION_REFUSAL_CAUSES.clone);
+		return remaining;
+	};
 	// Every git child below runs with the repo-locating and
 	// config-injection GIT_* families scrubbed: an inherited GIT_DIR would
 	// retarget these very children — the resolve, the detach, the origin
@@ -294,7 +300,7 @@ export function provisionDispatchContext(
 				"--end-of-options",
 				`${options.expectedRef ?? "HEAD"}^{commit}`,
 			],
-			{ encoding: "utf8", env },
+			{ encoding: "utf8", env, timeout: timeout(), killSignal: "SIGKILL" },
 		).trim();
 	} catch {
 		throw new Error(PROVISION_REFUSAL_CAUSES.unresolvable);
@@ -307,11 +313,26 @@ export function provisionDispatchContext(
 	const scratchRoot = mkdtempSync(join(scratchParent(), "gitjig-dispatch-"));
 	const treeDir = join(scratchRoot, "tree");
 	try {
-		execFileSync("git", ["clone", "-q", "--no-hardlinks", callerRepoRoot, treeDir], { encoding: "utf8", env });
-		execFileSync("git", ["-C", treeDir, "checkout", "-q", "--detach", heldHash], { encoding: "utf8", env });
+		execFileSync("git", ["clone", "-q", "--no-hardlinks", callerRepoRoot, treeDir], {
+			encoding: "utf8",
+			env,
+			timeout: timeout(),
+			killSignal: "SIGKILL",
+		});
+		execFileSync("git", ["-C", treeDir, "checkout", "-q", "--detach", heldHash], {
+			encoding: "utf8",
+			env,
+			timeout: timeout(),
+			killSignal: "SIGKILL",
+		});
 		// The clone's origin remote is a route back to the caller repository —
 		// push and fetch both — and is severed here (§1.5).
-		execFileSync("git", ["-C", treeDir, "remote", "remove", "origin"], { encoding: "utf8", env });
+		execFileSync("git", ["-C", treeDir, "remote", "remove", "origin"], {
+			encoding: "utf8",
+			env,
+			timeout: timeout(),
+			killSignal: "SIGKILL",
+		});
 		// The clone's reflog is the second planted route back: `.git/logs`
 		// records `clone: from <caller-path>`, and a by-path push needs no
 		// remote. Removed whole (§1.5).

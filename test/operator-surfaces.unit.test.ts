@@ -263,7 +263,7 @@ describe("#131 persistent session surface", () => {
 		assert.ok(entry.includes("registerDispatchTool(pi, repoRoot, stateRoot, sessionSurface)"));
 		assert.ok(entry.includes("registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface, modes)"));
 		assert.ok(commands.includes("registerReviewCommand(pi, repoRoot, stateRoot, surface)"));
-		assert.ok(commands.includes("registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface)"));
+		assert.ok(commands.includes("registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface, modes)"));
 		assert.ok(review.includes("surface,"));
 		assert.ok(round.includes("surface,"));
 	});
