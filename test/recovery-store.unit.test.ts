@@ -240,15 +240,17 @@ describe("state-domain allowance store", () => {
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 import {readFileSync} from "node:fs";
-import {claimAllowance} from "./gitjig/recovery/store.ts";
+import {claimAllowance,finalizeAllowance} from "./gitjig/recovery/store.ts";
 import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts";
 const subject={context:{repository:{id:"R",host:"github.com",nameWithOwner:"o/r"},pullRequest:{id:"P",number:1,url:"https://github.com/o/r/pull/1",authorId:"A",base:{repositoryId:"R",name:"main",oid:"a".repeat(40)},head:{repositoryId:"R",name:"topic",oid:"b".repeat(40)},closingIssues:[]}},writerId:"W",activation:[],criteria:[]};
 const e=deriveAllowancePathEncoding(subject), now=new Date().toISOString(); assert.ok(e);
 const record={schemaVersion:3,state:"claimed",repoHash:e.repoHash,keyHash:e.keyHash,claimId:randomUUID(),createdAt:now,updatedAt:now,profileSetDigest:"1".repeat(64),subjectDigest:"2".repeat(64),historyDigest:"3".repeat(64),basisDigest:"4".repeat(64),basis:{kind:"history-diagnosis",triggeringReviewState:{head:"a".repeat(40),historyIndex:0,stateDigest:"5".repeat(64)},taxonomy:"STAGNATION",invalidation:"nothing",diagnosisDigest:"6".repeat(64)},modes:{mergeMode:"off",decisionMode:"autonomous",mergeSource:"default",decisionSource:"default"},route:"stagnation",attempts:[],completeness:null,sequenceAuthority:null,selectedIntervention:null,measurement:null,freshRuling:null,reentry:"nothing",nextGate:null,terminal:null,cause:null};
-assert.equal(claimAllowance({subject,record}).status,"claimed");
-assert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);
+const claim=claimAllowance({subject,record}); assert.equal(claim.status,"claimed"); if(claim.status!=="claimed") process.exit(3);
+const consumed={...record,state:"consumed",updatedAt:new Date(Date.now()+1).toISOString(),attempts:[],completeness:{requiredSlots:["stagnation-root","stagnation-blast-radius","recovery-selector"],admittedSlots:[]},sequenceAuthority:{source:"host-attempt-order",lastSequence:0,retrySlots:[]},selectedIntervention:null,measurement:null,freshRuling:null,reentry:"nothing",nextGate:"park",terminal:"handoff",cause:"recovery-failed"};
+assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");
+assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 `;
-		for (const variant of ["baseline", "mutant"] as const) {
+		for (const variant of ["baseline", "parent-mutant", "terminal-mutant"] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-${variant}-`));
 			try {
 				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
@@ -260,10 +262,15 @@ assert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
-				if (variant === "mutant") {
+				if (variant === "parent-mutant") {
 					const from = "\t\tfsyncSync(fd);\n\t\tcloseSync(fd);\n\t\tfd = undefined;\n\t\tsyncDirectory(recoveryDir);";
 					assert.ok(source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from));
 					source = source.replace(from, "\t\tfsyncSync(fd);\n\t\tcloseSync(fd);\n\t\tfd = undefined;");
+				}
+				if (variant === "terminal-mutant") {
+					const from = "\t\t\twriteComplete(tempFd, bytes);\n\t\t\tfsyncSync(tempFd);";
+					assert.ok(source.includes(from));
+					source = source.replace(from, "\t\t\twriteComplete(tempFd, bytes);");
 				}
 				writeFileSync(target, source);
 				writeFileSync(join(box, "probe.mjs"), probe);
@@ -278,7 +285,7 @@ assert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);
 					env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: log },
 				});
 				if (variant === "baseline") assert.equal(result.status, 0, result.stderr);
-				else assert.notEqual(result.status, 0, "parent-fsync mutant survived");
+				else assert.notEqual(result.status, 0, `${variant} survived`);
 			} finally {
 				rmSync(box, { recursive: true, force: true });
 			}
@@ -303,7 +310,7 @@ assert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);
 			const probe = readFileSync(new URL(import.meta.url), "utf8").match(/const probe = `([\s\S]*?)`;\n/)?.[1];
 			assert.ok(probe);
 			const adjusted = probe.replace(
-				'assert.equal(claimAllowance({subject,record}).status,"claimed");\nassert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);',
+				/const claim=claimAllowance[\s\S]*?assert\.equal\(readFileSync\(process\.env\.FSYNC_LOG,"utf8"\),"fdfd"\);/,
 				'const result=claimAllowance({subject,record}); assert.equal(result.status,"consumed"); assert.equal(result.cause,"create-or-write-ambiguous");',
 			);
 			writeFileSync(join(box, "probe.mjs"), adjusted);

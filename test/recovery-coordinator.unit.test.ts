@@ -6,11 +6,12 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import type { DispatchOutcome } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import {
 	coordinateHistoryRecovery,
+	makeRecoveryProfileDispatcher,
 	type RecoveryProfileDispatcher,
 } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import type { PhaseAProfileId, RecoveryFreshness } from "../.pi/extensions/gitjig/recovery/types.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
-import { makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
+import { createRecoveryAttemptLedger, makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
 let stateRoot = "";
@@ -130,6 +131,19 @@ function freshness(): RecoveryFreshness {
 }
 
 describe("Phase-A history recovery coordinator", () => {
+	it("refuses the missing-return retry below the 660-second reserve cutoff", async () => {
+		const dispatch = makeRecoveryProfileDispatcher({ repoRoot: process.cwd(), stateRoot });
+		const result = await dispatch(
+			createRecoveryAttemptLedger(performance.now()),
+			"recovery-selector",
+			"brief",
+			"b".repeat(40),
+			performance.now() + 5_000,
+		);
+		assert.equal(result.retryState, "available");
+		assert.equal(result.attempts.length, 1);
+	});
+
 	it("runs the complete mutually blind STAGNATION contest and returns only the selected method route", async () => {
 		let preclaim = 0;
 		let precontinue = 0;

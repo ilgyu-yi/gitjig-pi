@@ -1243,7 +1243,13 @@ describe("review-round production call site", () => {
 			}),
 			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
 		);
-		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") {
+			assert.equal(outcome.result.terminal, "handoff");
+			assert.equal(outcome.result.route, "stagnation");
+			assert.equal(outcome.result.cause, "recovery-failed");
+			assert.equal(outcome.result.recordRef?.claimId, "00000000-0000-4000-8000-000000000000");
+		}
 		assert.equal(coordinated, 1);
 	});
 

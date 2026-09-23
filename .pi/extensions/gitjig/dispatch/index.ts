@@ -207,7 +207,7 @@ function checkpointSnapshot(path: string): Buffer | undefined {
 	try {
 		const before = lstatSync(path);
 		if (!before.isFile() || before.size > RETURN_LIMIT_BYTES) return undefined;
-		fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+		fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		const opened = fstatSync(fd);
 		if (opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) return undefined;
 		const bytes = Buffer.alloc(RETURN_LIMIT_BYTES + 1);

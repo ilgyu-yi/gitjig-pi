@@ -348,13 +348,6 @@ export async function driveReviewRound(
 				refreshPrecontinue: refresh,
 				dispatchProfile: seams.recoveryDispatch,
 			});
-			if (recovery.terminal === "handoff") {
-				return {
-					disposition: "hand-off",
-					cause: recovery.reentry === "nothing" ? HANDOFF_DIAGNOSIS : HANDOFF_REENTRY,
-					reentry: recovery.reentry === "nothing" ? "none" : recovery.reentry,
-				};
-			}
 			if (recovery.nextGate === "ordinary-flow") return undefined;
 			return { disposition: "recovery", result: recovery };
 		};

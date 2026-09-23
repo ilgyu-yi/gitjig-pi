@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	cpSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -52,6 +62,39 @@ describe("production recovery state-domain resolver", () => {
 			const home = join(parent, name);
 			mkdirSync(home, { mode: 0o755 });
 			assert.equal(JSON.parse(resolveWith({ HOME: home }).stdout), join(home, ".local", "state", "gitjig", "recovery"));
+		}
+	});
+
+	it("kills omission of every created component's parent-directory fsync", () => {
+		for (const variant of ["baseline", "mutant"] as const) {
+			const box = root();
+			cpSync(new URL("../.pi/extensions/gitjig/recovery", import.meta.url), join(box, "recovery"), { recursive: true });
+			const shim = join(box, "fs-shim.mjs");
+			writeFileSync(
+				shim,
+				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,mkdirSync,openSync}=fs;\nexport function fsyncSync(fd){fs.appendFileSync(process.env.FSYNC_LOG,"d");return fs.fsyncSync(fd);}\n`,
+			);
+			const target = join(box, "recovery", "state-domain.ts");
+			let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
+			if (variant === "mutant") source = source.replace("\t\t\t\tfsyncSync(parent.fd);", "");
+			writeFileSync(target, source);
+			const xdg = join(box, "xdg");
+			mkdirSync(xdg, { mode: 0o700 });
+			const log = join(box, "fsync.log");
+			writeFileSync(log, "");
+			const result = spawnSync(
+				process.execPath,
+				[
+					"--input-type=module",
+					"-e",
+					`import {readFileSync} from "node:fs"; import {resolveRecoveryStateDomain as r} from ${JSON.stringify(new URL(`file://${target}`).href)}; if(!r() || readFileSync(process.env.FSYNC_LOG,"utf8")!=="dd") process.exit(2);`,
+				],
+				{ encoding: "utf8", env: { PATH: process.env.PATH, XDG_STATE_HOME: xdg, FSYNC_LOG: log } },
+			);
+			if (variant === "baseline") {
+				assert.equal(result.status, 0, result.stderr);
+				assert.equal(readFileSync(log, "utf8"), "dd");
+			} else assert.notEqual(result.status, 0, "component parent-fsync mutant survived");
 		}
 	});
 

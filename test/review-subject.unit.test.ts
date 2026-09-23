@@ -244,6 +244,22 @@ describe("review subject criterion union", () => {
 			"#212: current-only criterion",
 		]);
 		assert.equal(calls.length, 6);
+		assert.deepEqual(calls[2], [
+			"api",
+			"--hostname",
+			"github.com",
+			"graphql",
+			"--paginate",
+			"--slurp",
+			"-f",
+			"query=query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:100,after:$endCursor){nodes{id number url repository{id name owner{id}}}pageInfo{hasNextPage endCursor}}}}}",
+			"-F",
+			"owner=owner",
+			"-F",
+			"name=repo",
+			"-F",
+			"number=223",
+		]);
 		assert.deepEqual(calls[3], [
 			"issue",
 			"view",
