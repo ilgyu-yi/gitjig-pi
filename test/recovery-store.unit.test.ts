@@ -400,6 +400,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				},
 			],
 			[
+				"dependency-overlap",
+				(value: ConsumedRecordV3) => {
+					const selector = value.attempts.find((attempt) => attempt.profileId === "recovery-selector");
+					assert.ok(selector);
+					selector.startedOffsetMs = 0;
+				},
+			],
+			[
 				"dependency-order",
 				(value: ConsumedRecordV3) => {
 					value.attempts = [value.attempts[2], value.attempts[0], value.attempts[1]].map((attempt, index) => ({

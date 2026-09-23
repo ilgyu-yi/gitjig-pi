@@ -410,7 +410,9 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 		if (before === undefined) return false;
 		return (
 			Math.max(...before.map((attempt) => attempt.sequence as number)) <
-			Math.min(...after.map((attempt) => attempt.sequence as number))
+				Math.min(...after.map((attempt) => attempt.sequence as number)) &&
+			Math.max(...before.map((attempt) => attempt.finishedOffsetMs as number)) <=
+				Math.min(...after.map((attempt) => attempt.startedOffsetMs as number))
 		);
 	};
 	const orderIsCoherent =
