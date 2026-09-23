@@ -607,7 +607,11 @@ describe("Phase-A history recovery coordinator", () => {
 			).entries()) {
 				let clock = 0;
 				let refreshes = 0;
-				Object.defineProperty(performance, "now", { configurable: true, value: () => clock });
+				let afterRefreshReads = -1;
+				Object.defineProperty(performance, "now", {
+					configurable: true,
+					value: () => (scenario.terminal && afterRefreshReads >= 0 && afterRefreshReads++ > 0 ? 3_840_000 : clock),
+				});
 				const current = {
 					...subject,
 					context: {
@@ -625,7 +629,7 @@ describe("Phase-A history recovery coordinator", () => {
 					refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
 					refreshPrecontinue: async () => {
 						refreshes += 1;
-						if (scenario.terminal) clock = 3_840_000;
+						if (scenario.terminal) afterRefreshReads = 0;
 						return { ...freshness(), subject: structuredClone(current) };
 					},
 					dispatchProfile: async (ledger, profileId) => {
@@ -641,7 +645,9 @@ describe("Phase-A history recovery coordinator", () => {
 					},
 				});
 				assert.equal(result.nextGate, scenario.nextGate);
+				assert.equal(result.terminal, scenario.nextGate === "park" ? "handoff" : "continue");
 				assert.equal(refreshes, scenario.refreshes);
+				if (scenario.terminal) assert.ok(afterRefreshReads >= 2, "terminal guard must be reached after the work check");
 				const directory = join(stateRoot, "gitjig", "recovery");
 				assert.ok(result.recordRef);
 				const durable = JSON.parse(
@@ -650,6 +656,19 @@ describe("Phase-A history recovery coordinator", () => {
 				assert.equal(durable.state, "consumed");
 				assert.equal(durable.nextGate, scenario.nextGate);
 				assert.equal(durable.terminal, scenario.nextGate === "park" ? "handoff" : "continue");
+				assert.deepEqual(durable.completeness.requiredSlots, [
+					"stagnation-root",
+					"stagnation-blast-radius",
+					"recovery-selector",
+				]);
+				assert.deepEqual(durable.completeness.admittedSlots, [
+					"stagnation-root",
+					"stagnation-blast-radius",
+					"recovery-selector",
+				]);
+				assert.equal(durable.attempts.length, 3);
+				assert.equal(durable.sequenceAuthority.lastSequence, 3);
+				assert.deepEqual(durable.sequenceAuthority.retrySlots, []);
 			}
 		} finally {
 			Object.defineProperty(performance, "now", { configurable: true, value: original });
