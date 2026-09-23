@@ -250,7 +250,13 @@ const consumed={...record,state:"consumed",updatedAt:new Date(Date.now()+1).toIS
 assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");
 assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 `;
-		for (const variant of ["baseline", "parent-mutant", "terminal-mutant"] as const) {
+		for (const variant of [
+			"baseline",
+			"claim-file-mutant",
+			"parent-mutant",
+			"terminal-mutant",
+			"terminal-parent-mutant",
+		] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-${variant}-`));
 			try {
 				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
@@ -262,6 +268,11 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
+				if (variant === "claim-file-mutant") {
+					const from = "\t\twriteComplete(fd, bytes);\n\t\tfsyncSync(fd);";
+					assert.ok(source.includes(from));
+					source = source.replace(from, "\t\twriteComplete(fd, bytes);");
+				}
 				if (variant === "parent-mutant") {
 					const from = "\t\tfsyncSync(fd);\n\t\tcloseSync(fd);\n\t\tfd = undefined;\n\t\tsyncDirectory(recoveryDir);";
 					assert.ok(source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from));
@@ -271,6 +282,11 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					const from = "\t\t\twriteComplete(tempFd, bytes);\n\t\t\tfsyncSync(tempFd);";
 					assert.ok(source.includes(from));
 					source = source.replace(from, "\t\t\twriteComplete(tempFd, bytes);");
+				}
+				if (variant === "terminal-parent-mutant") {
+					const from = "\t\t\trenameSync(temporary, state.path);\n\t\t\tsyncDirectory(resolved);";
+					assert.ok(source.includes(from));
+					source = source.replace(from, "\t\t\trenameSync(temporary, state.path);");
 				}
 				writeFileSync(target, source);
 				writeFileSync(join(box, "probe.mjs"), probe);
@@ -286,6 +302,57 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				});
 				if (variant === "baseline") assert.equal(result.status, 0, result.stderr);
 				else assert.notEqual(result.status, 0, `${variant} survived`);
+			} finally {
+				rmSync(box, { recursive: true, force: true });
+			}
+		}
+	});
+
+	it("consumes failed claim and terminal fsync points without reopening allowance", () => {
+		const owner = readFileSync(new URL(import.meta.url), "utf8");
+		const probe = owner.match(/const probe = `([\s\S]*?)`;\n\t\tfor \(const variant of \[/)?.[1];
+		assert.ok(probe);
+		const replaced = probe.replace(
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");\nassert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");',
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"consumed-unverified"); assert.equal(claimAllowance({subject,record}).status,"consumed");',
+		);
+		assert.notEqual(replaced, probe);
+		for (const failure of ["claim-file", "claim-parent", "terminal-file", "terminal-parent"] as const) {
+			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-error-${failure}-`));
+			try {
+				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+				const shim = join(box, "fs-shim.mjs");
+				writeFileSync(
+					shim,
+					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,openSync,readSync,renameSync,writeSync}=fs;\nlet f=0,d=0; export function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;const target=process.env.FAIL_ON;if(target===(directory?"d":"f")+String(n)){const error=new Error("injected");error.code="EIO";throw error;}return fs.fsyncSync(fd);}\n`,
+				);
+				const target = join(box, "gitjig", "recovery", "store.ts");
+				writeFileSync(
+					target,
+					readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
+				);
+				const script = failure.startsWith("claim")
+					? probe.replace(
+							'assert.equal(claim.status,"claimed"); if(claim.status!=="claimed") process.exit(3);',
+							'assert.equal(claim.status,"consumed"); assert.equal(claim.cause,"create-or-write-ambiguous"); assert.equal(claimAllowance({subject,record}).status,"consumed"); process.exit(0);',
+						)
+					: replaced;
+				writeFileSync(join(box, "probe.mjs"), script);
+				const xdg = join(box, "state");
+				mkdirSync(xdg, { mode: 0o700 });
+				const log = join(box, "fsync.log");
+				writeFileSync(log, "");
+				const point = { "claim-file": "f1", "claim-parent": "d1", "terminal-file": "f2", "terminal-parent": "d2" }[
+					failure
+				];
+				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					encoding: "utf8",
+					timeout: 10_000,
+					env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: log, FAIL_ON: point },
+				});
+				assert.equal(result.status, 0, `${failure}: ${result.stderr}`);
 			} finally {
 				rmSync(box, { recursive: true, force: true });
 			}
