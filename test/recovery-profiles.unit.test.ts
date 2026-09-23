@@ -87,6 +87,32 @@ describe("closed Phase-A recovery profiles", () => {
 		assert.match(source, /RETRY_REMAINING_MS = 660_000/);
 	});
 
+	it("kills private-copy retry reserve and slot arithmetic mutants at the exact boundary", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-retry-mutants-"));
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(root, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(root, "node_modules"), "dir");
+			const path = join(root, "gitjig", "recovery", "coordinator.ts");
+			const original = readFileSync(path, "utf8");
+			assert.equal(hasRecoveryRetryReserve(600_000, 0), true);
+			assert.equal(hasRecoveryRetryReserve(599_999, 0), false);
+			for (const [index, [needle, replacement]] of (
+				[
+					["RETRY_REMAINING_MS = 660_000", "RETRY_REMAINING_MS = 660_001"],
+					["SLOT_RESERVE_MS = 1_260_000", "SLOT_RESERVE_MS = 1_259_999"],
+					["SLOT_OPERATION_MS = 1_200_000", "SLOT_OPERATION_MS = 1_200_001"],
+				] as const
+			).entries()) {
+				assert.equal(original.split(needle).length, 2);
+				writeFileSync(path, original.replace(needle, replacement));
+				const mutant = await import(`${new URL(`file://${path}`).href}?retryMutant=${String(index)}`);
+				assert.equal(mutant.hasRecoveryRetryReserve(600_000, 0), false);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("pins the installed executable help grammar before claim", () => {
 		assert.equal(preflightRecoveryExecutable(), true);
 	});
