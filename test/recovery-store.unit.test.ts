@@ -423,7 +423,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					"terminal-write": "w2",
 					"terminal-close": "c3",
 					"terminal-rename": "rename",
-					"terminal-post-read": "r2",
+					"terminal-post-read": "r3",
 				}[failure];
 				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
 					cwd: box,
@@ -460,6 +460,48 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				);
 				if (mutant) writeFileSync(target, source.replace("\t\tmodes: record.modes,", ""));
 				writeFileSync(join(box, "probe.mjs"), adjusted);
+				const xdg = join(box, "state");
+				mkdirSync(xdg, { mode: 0o700 });
+				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					encoding: "utf8",
+					timeout: 10_000,
+					env: { ...process.env, XDG_STATE_HOME: xdg, EXPECT: mutant ? "finalized" : "consumed-unverified" },
+				});
+				assert.equal(result.status, 0, result.stderr);
+			} finally {
+				rmSync(box, { recursive: true, force: true });
+			}
+		}
+	});
+
+	it("kills omission of the terminal post-rename reread in a private copy", () => {
+		const owner = readFileSync(new URL(import.meta.url), "utf8");
+		const probe = owner.match(/const probe = `([\s\S]*?)`;\n\t\tfor \(const variant of \[/)?.[1];
+		assert.ok(probe);
+		const script = probe.replace(
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");\nassert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");',
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,process.env.EXPECT); assert.equal(claimAllowance({subject,record}).status,"consumed");',
+		);
+		assert.notEqual(script, probe);
+		for (const mutant of [false, true]) {
+			const box = mkdtempSync(join(tmpdir(), "gitjig-post-read-mutant-"));
+			try {
+				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+				const shim = join(box, "fs-shim.mjs");
+				writeFileSync(
+					shim,
+					`import * as fs from "node:fs"; export const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,writeSync}=fs; let reads=0; export function readSync(...args){if(++reads===3){const error=new Error("post-read failure");error.code="EIO";throw error;}return fs.readSync(...args);}`,
+				);
+				const target = join(box, "gitjig", "recovery", "store.ts");
+				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
+				const postRead =
+					/\t\t\tconst finalFd = openSync\(state\.path, READ_FLAGS\);[\s\S]*?\t\t\t}\n\t\t\treturn \{ status: "finalized"/;
+				assert.match(source, postRead);
+				if (mutant) source = source.replace(postRead, '\t\t\treturn { status: "finalized"');
+				writeFileSync(target, source);
+				writeFileSync(join(box, "probe.mjs"), script);
 				const xdg = join(box, "state");
 				mkdirSync(xdg, { mode: 0o700 });
 				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
@@ -717,6 +759,33 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				{ status: "consumed", cause: "existing" },
 				name,
 			);
+		}
+	});
+
+	it("keeps a finalized allowance consumed after mode, head, branch and replan changes", () => {
+		const current = subject("PR_REUSE_AFTER_FINAL");
+		const claimed = record(current);
+		const first = claimAllowance({ subject: current, record: claimed });
+		assert.equal(first.status, "claimed");
+		if (first.status !== "claimed") return;
+		assert.equal(finalizeAllowance(first.claim, consumed(claimed)).status, "finalized");
+		for (const [index, change] of (
+			[
+				(value: ReviewSubject) => {
+					value.context.pullRequest.head.oid = "c".repeat(40);
+				},
+				(value: ReviewSubject) => {
+					value.context.pullRequest.head.name = "new-branch";
+				},
+				(_value: ReviewSubject) => {},
+			] as const
+		).entries()) {
+			const changed = structuredClone(current);
+			change(changed);
+			const repeated = record(changed);
+			repeated.modes.mergeMode = index === 2 ? "on" : "off";
+			repeated.basis.diagnosisDigest = index === 2 ? "9".repeat(64) : repeated.basis.diagnosisDigest;
+			assert.equal(claimAllowance({ subject: changed, record: repeated }).status, "consumed");
 		}
 	});
 
