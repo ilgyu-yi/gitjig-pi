@@ -365,7 +365,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		}
 	});
 
-	it("consumes failed claim and terminal fsync points without reopening allowance", () => {
+	it("consumes claim and terminal write, close, fsync, rename, and post-read failures without reopening allowance", () => {
 		const owner = readFileSync(new URL(import.meta.url), "utf8");
 		const probe = owner.match(/const probe = `([\s\S]*?)`;\n\t\tfor \(const variant of \[/)?.[1];
 		assert.ok(probe);
@@ -374,7 +374,19 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"consumed-unverified"); assert.equal(claimAllowance({subject,record}).status,"consumed");',
 		);
 		assert.notEqual(replaced, probe);
-		for (const failure of ["claim-file", "claim-parent", "terminal-file", "terminal-parent"] as const) {
+		for (const failure of [
+			"claim-file",
+			"claim-parent",
+			"terminal-file",
+			"terminal-parent",
+			"claim-write",
+			"claim-close",
+			"terminal-create",
+			"terminal-write",
+			"terminal-close",
+			"terminal-rename",
+			"terminal-post-read",
+		] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-error-${failure}-`));
 			try {
 				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
@@ -382,7 +394,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,openSync,readSync,renameSync,writeSync}=fs;\nlet f=0,d=0; export function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;const target=process.env.FAIL_ON;if(target===(directory?"d":"f")+String(n)){const error=new Error("injected");error.code="EIO";throw error;}return fs.fsyncSync(fd);}\n`,
+					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				writeFileSync(
@@ -400,9 +412,19 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				mkdirSync(xdg, { mode: 0o700 });
 				const log = join(box, "fsync.log");
 				writeFileSync(log, "");
-				const point = { "claim-file": "f1", "claim-parent": "d1", "terminal-file": "f2", "terminal-parent": "d2" }[
-					failure
-				];
+				const point = {
+					"claim-file": "f1",
+					"claim-parent": "d1",
+					"terminal-file": "f2",
+					"terminal-parent": "d2",
+					"claim-write": "w1",
+					"claim-close": "c1",
+					"terminal-create": "temp-create",
+					"terminal-write": "w2",
+					"terminal-close": "c3",
+					"terminal-rename": "rename",
+					"terminal-post-read": "r2",
+				}[failure];
 				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
 					cwd: box,
 					encoding: "utf8",
