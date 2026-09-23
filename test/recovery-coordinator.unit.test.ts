@@ -571,7 +571,25 @@ describe("Phase-A history recovery coordinator", () => {
 				},
 			});
 			assert.equal(result.terminal, "handoff");
+			assert.equal(result.nextGate, "park");
 			assert.equal(refreshes, 0);
+			const directory = join(stateRoot, "gitjig", "recovery");
+			const leaves = readdirSync(directory).filter((name) => name.endsWith(".json"));
+			assert.equal(leaves.length, 1);
+			const durable = JSON.parse(readFileSync(join(directory, leaves[0] as string), "utf8"));
+			assert.equal(durable.state, "consumed");
+			assert.equal(durable.terminal, "handoff");
+			assert.equal(durable.nextGate, "park");
+			assert.deepEqual(durable.completeness.requiredSlots, [
+				"stagnation-root",
+				"stagnation-blast-radius",
+				"recovery-selector",
+			]);
+			assert.deepEqual(durable.attempts.map((attempt: { profileId: string }) => attempt.profileId).sort(), [
+				"recovery-selector",
+				"stagnation-blast-radius",
+				"stagnation-root",
+			]);
 		} finally {
 			Object.defineProperty(performance, "now", { configurable: true, value: original });
 		}
