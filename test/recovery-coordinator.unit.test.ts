@@ -141,6 +141,47 @@ function freshness(): RecoveryFreshness {
 }
 
 describe("Phase-A history recovery coordinator", () => {
+	it("returns profile-preflight before claim when executable help is unavailable", async () => {
+		const saved = process.env.PATH;
+		let refreshed = 0;
+		try {
+			process.env.PATH = stateRoot;
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: async () => {
+					refreshed += 1;
+					return freshness();
+				},
+				refreshPrecontinue: async () => {
+					throw new Error("no claim");
+				},
+				dispatchProfile: async () => {
+					throw new Error("no dispatch");
+				},
+			});
+			assert.deepEqual(result, {
+				terminal: "handoff",
+				route: "none",
+				cause: "profile-preflight",
+				reentry: "nothing",
+				nextGate: "park",
+				recordRef: null,
+			});
+			assert.equal(refreshed, 0);
+			assert.equal(
+				readdirSync(join(stateRoot, "gitjig", "recovery")).filter((name) => name.endsWith(".json")).length,
+				0,
+			);
+		} finally {
+			process.env.PATH = saved;
+		}
+	});
+
 	it("pins the missing-return retry cutoff at exactly 660,000 ms of reserve", async () => {
 		assert.equal(hasRecoveryRetryReserve(599_999, 0), false);
 		assert.equal(hasRecoveryRetryReserve(600_000, 0), true);

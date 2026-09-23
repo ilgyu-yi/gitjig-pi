@@ -1217,6 +1217,52 @@ describe("review-round production call site", () => {
 		assert.equal(rounds, 0);
 	});
 
+	it("keeps both merge modes inert at the handoff decision gate and routes both autonomous modes", async () => {
+		const fixture = repo();
+		const current = subject(fixture.base, fixture.head);
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		for (const mergeMode of ["off", "on"] as const)
+			for (const decisionMode of ["handoff", "autonomous"] as const) {
+				let coordinatorCalls = 0;
+				let rounds = 0;
+				const outcome = await driveReviewRound(
+					spec(),
+					fixture.root,
+					seams({
+						fetchSubject: async () => current,
+						refetchSubject: async () => current,
+						resolveHead: () => fixture.head,
+						readComments: async () => population(bodies),
+						makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "trigger" }),
+						runRound: async () => {
+							rounds += 1;
+							throw new Error("trigger must gate the round");
+						},
+						coordinateRecovery: async ({ modes: received }) => {
+							coordinatorCalls += 1;
+							assert.equal(received.mergeMode, mergeMode);
+							assert.equal(received.decisionMode, "autonomous");
+							return {
+								terminal: "handoff",
+								route: "none",
+								cause: "profile-preflight",
+								reentry: "nothing",
+								nextGate: "park",
+								recordRef: null,
+							};
+						},
+						recoveryDispatch: async () => {
+							throw new Error("no profile attempt in caller fixture");
+						},
+					}),
+					{ mergeMode, mergeSource: "default", decisionMode, decisionSource: "default", refusals: [] },
+				);
+				assert.equal(rounds, 0);
+				assert.equal(coordinatorCalls, decisionMode === "autonomous" ? 1 : 0);
+				assert.equal(outcome.disposition, decisionMode === "autonomous" ? "recovery" : "hand-off");
+			}
+	});
+
 	it("routes a newly triggered post-publication diagnosis through the same autonomous coordinator", async () => {
 		const fixture = repo();
 		let publishedBody: string | undefined;
