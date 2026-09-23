@@ -142,8 +142,10 @@ function freshness(): RecoveryFreshness {
 
 describe("Phase-A history recovery coordinator", () => {
 	it("pins the missing-return retry cutoff at exactly 660,000 ms of reserve", async () => {
-		assert.equal(hasRecoveryRetryReserve(659_999, 0), false);
-		assert.equal(hasRecoveryRetryReserve(660_000, 0), true);
+		assert.equal(hasRecoveryRetryReserve(599_999, 0), false);
+		assert.equal(hasRecoveryRetryReserve(600_000, 0), true);
+		const source = readFileSync(new URL("../.pi/extensions/gitjig/recovery/coordinator.ts", import.meta.url), "utf8");
+		assert.match(source, /beforeRetry:\s*\(\) => hasRecoveryRetryReserve\(operationDeadline, performance\.now\(\)\)/);
 		const dispatch = makeRecoveryProfileDispatcher({ repoRoot: process.cwd(), stateRoot });
 		const result = await dispatch(
 			createRecoveryAttemptLedger(performance.now()),
@@ -313,8 +315,7 @@ describe("Phase-A history recovery coordinator", () => {
 			diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original" },
 			refreshPreclaim: async () => freshness(),
 			refreshPrecontinue: async () => {
-				renameSync(join(stateRoot, "gitjig", "recovery"), join(stateRoot, "gitjig", "recovery-moved"));
-				return freshness();
+				throw new Error("authorization cannot enter precontinue");
 			},
 			dispatchProfile: async (ledger, profileId) => {
 				let value: unknown;
@@ -324,23 +325,22 @@ describe("Phase-A history recovery coordinator", () => {
 					specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
 				} else if (profileId === "recovery-measurement")
 					value = { kind: "measurement-result", specDigest, result: "new result", evidence: "measurement evidence" };
-				else
-					value = {
-						taxonomy: "INDETERMINATE",
-						invalidation: "authorization",
-						ruling: "NEW_EVIDENCE",
-						evidence: "fresh ruling evidence",
-					};
-				return observed(ledger, admitted(value));
+				else value = { value: "INDETERMINATE", invalidation: "authorization", evidence: "fresh ruling evidence" };
+				const outcome = await observed(ledger, admitted(value));
+				if (profileId === "recovery-diagnosis")
+					renameSync(join(stateRoot, "gitjig", "recovery"), join(stateRoot, "gitjig", "recovery-moved"));
+				return outcome;
 			},
 		});
 		assert.equal(result.terminal, "handoff");
-		if (result.terminal === "handoff" && result.route === "indeterminate" && result.reentry === "authorization") {
-			assert.equal(result.cause, "recovery-failed");
-			assert.equal(result.nextGate, "authorization-handoff");
-			assert.equal(result.measurement.result, "new result");
-			assert.equal(result.freshRuling.diagnosis.invalidation, "authorization");
-		}
+		assert.equal(result.route, "indeterminate");
+		assert.equal(result.reentry, "authorization");
+		if (result.terminal !== "handoff" || result.route !== "indeterminate" || result.reentry !== "authorization")
+			assert.fail("expected authorization handoff");
+		assert.equal(result.cause, "recovery-failed");
+		assert.equal(result.nextGate, "authorization-handoff");
+		assert.equal(result.measurement.result, "new result");
+		assert.equal(result.freshRuling.diagnosis.invalidation, "authorization");
 	});
 
 	it("hands off when the sole precontinue refresh drifts", async () => {

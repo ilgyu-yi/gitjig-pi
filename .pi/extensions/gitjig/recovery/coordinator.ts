@@ -83,7 +83,8 @@ export type CoordinateRecoveryInput = {
 	dispatchProfile: RecoveryProfileDispatcher;
 };
 
-export function hasRecoveryRetryReserve(reserveDeadline: number, now: number): boolean {
+export function hasRecoveryRetryReserve(operationDeadline: number, now: number): boolean {
+	const reserveDeadline = operationDeadline + (SLOT_RESERVE_MS - SLOT_OPERATION_MS);
 	return reserveDeadline - now >= RETRY_REMAINING_MS;
 }
 
@@ -96,7 +97,6 @@ export function makeRecoveryProfileDispatcher(input: {
 		const loaded = loadRecoveryProfiles();
 		const materialized = loaded === undefined ? undefined : materializeRecoveryProfile(loaded, profileId);
 		if (materialized === undefined) throw new Error("recovery profile unavailable");
-		const reserveDeadline = operationDeadline + (SLOT_RESERVE_MS - SLOT_OPERATION_MS);
 		const dispatch = makeDispatcher(
 			{
 				callerRepoRoot: input.repoRoot,
@@ -110,7 +110,7 @@ export function makeRecoveryProfileDispatcher(input: {
 			{
 				attemptPolicy: {
 					ledger,
-					beforeRetry: () => hasRecoveryRetryReserve(reserveDeadline, performance.now()),
+					beforeRetry: () => hasRecoveryRetryReserve(operationDeadline, performance.now()),
 				},
 			},
 		);

@@ -357,8 +357,8 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 		);
 	if (!timestamp(record.updatedAt) || (record.updatedAt as string) <= (record.createdAt as string)) return false;
 	if (!validAttempts(record.attempts)) return false;
-	const basisHead = (record.basis as { triggeringReviewState: { head: string } }).triggeringReviewState.head;
-	if (record.attempts.some((attempt) => attempt.expectedHead !== basisHead)) return false;
+	const routeHead = record.attempts[0]?.expectedHead;
+	if (routeHead !== undefined && record.attempts.some((attempt) => attempt.expectedHead !== routeHead)) return false;
 	const required =
 		record.route === "stagnation"
 			? ["stagnation-root", "stagnation-blast-radius", "recovery-selector"]

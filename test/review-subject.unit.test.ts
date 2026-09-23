@@ -436,7 +436,17 @@ describe("review subject criterion union", () => {
 				},
 			},
 		]);
-		for (const malformed of [pages(true, true), pages(false, true), nonAdjacentLoop]) {
+		const wrongLaterRepository = JSON.parse(pages()) as { data: { repository: { id: string } } }[];
+		wrongLaterRepository[1].data.repository.id = "OTHER_REPO";
+		const wrongLaterPull = JSON.parse(pages()) as { data: { repository: { pullRequest: { id: string } } } }[];
+		wrongLaterPull[1].data.repository.pullRequest.id = "OTHER_PR";
+		for (const malformed of [
+			pages(true, true),
+			pages(false, true),
+			nonAdjacentLoop,
+			JSON.stringify(wrongLaterRepository),
+			JSON.stringify(wrongLaterPull),
+		]) {
 			const responses = identityResponses(locators, reads);
 			responses[2] = malformed;
 			assert.equal(await fetchReviewSubject("/repo", 223, async () => responses.shift()), undefined);
