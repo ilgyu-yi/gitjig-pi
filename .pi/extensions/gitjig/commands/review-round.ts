@@ -131,6 +131,8 @@ export function terminalText(outcome: CommandDisposition): string {
 				outcome.result.terminal,
 				"/",
 				outcome.result.nextGate,
+				"; route ",
+				outcome.result.route,
 				identifiers,
 				diagnosis,
 			].join("");

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { runDispatch } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import { provisionDispatchContext } from "../.pi/extensions/gitjig/dispatch/provision.ts";
 
 function repository(): string {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-recovery-deadline-"));
@@ -24,6 +25,19 @@ const writer = [
 ].join("");
 
 describe("recovery optional dispatch deadline", () => {
+	it("refuses before the first provision operation when no time remains", () => {
+		const repo = repository();
+		try {
+			assert.throws(
+				() =>
+					provisionDispatchContext(repo, { brief: "brief", expectedRef: "HEAD", operationDeadline: performance.now() }),
+				/expected ref resolves to no commit/,
+			);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
 	it("caps a running delegate at the remaining absolute operation time", async () => {
 		const repo = repository();
 		try {

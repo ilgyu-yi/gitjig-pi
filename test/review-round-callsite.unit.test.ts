@@ -325,6 +325,21 @@ describe("review-round production call site", () => {
 			terminalText({ disposition: "posted", review: { state: "approved" } }),
 			"review-round: posted approved",
 		);
+		assert.equal(
+			terminalText({
+				disposition: "recovery",
+				result: {
+					terminal: "handoff",
+					route: "none",
+					cause: "identity",
+					reentry: "nothing",
+					nextGate: "park",
+					recordRef: null,
+				},
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "hidden" },
+			}),
+			"review-round: recovery handoff/park; route none; diagnosis STAGNATION/nothing",
+		);
 	});
 	it("retries one transient platform comment-read failure", async () => {
 		let attempts = 0;
