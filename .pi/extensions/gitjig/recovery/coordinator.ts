@@ -299,8 +299,9 @@ function diagnosis(value: unknown): DiagnosisInput | undefined {
 	return value as DiagnosisInput;
 }
 
-function priorContent(basis: RepairBasis): Set<string> {
+function priorContent(history: readonly StateSummary[], basis: RepairBasis): Set<string> {
 	const values = new Set<string>();
+	for (const state of history) for (const ruling of state.rulings) values.add(contentDigest(ruling.evidence));
 	for (const state of basis.states)
 		for (const finding of state.findings) values.add(contentDigest(finding.ruling.evidence));
 	return values;
@@ -651,7 +652,7 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 					? []
 					: [parsedSpec.question, parsedSpec.method, parsedSpec.expectedDiscriminator, parsedSpec.evidence],
 			);
-			const prior = priorContent(input.basis);
+			const prior = priorContent(input.history, input.basis);
 			const specNovel =
 				spec !== undefined &&
 				[spec.question, spec.method, spec.expectedDiscriminator, spec.evidence].every(

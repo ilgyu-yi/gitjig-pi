@@ -15,6 +15,13 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { makeDiagnostic } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { DispatchOutcome } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import {
+	challengerBrief,
+	contestSelectorBrief,
+	freshDiagnosisBrief,
+	measurementBrief,
+	measurementSelectorBrief,
+} from "../.pi/extensions/gitjig/recovery/briefs.ts";
+import {
 	coordinateHistoryRecovery,
 	hasRecoveryRetryReserve,
 	makeRecoveryProfileDispatcher,
@@ -142,6 +149,37 @@ function freshness(): RecoveryFreshness {
 }
 
 describe("Phase-A history recovery coordinator", () => {
+	it("forbids public acts and artifact mutations in every closed recovery role brief", () => {
+		const diagnosis = { value: "STAGNATION", invalidation: "nothing", evidence: "original" } as const;
+		const spec = {
+			kind: "measurement",
+			question: "q",
+			method: "m",
+			expectedDiscriminator: "d",
+			evidence: "e",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		} as const;
+		const roles = [
+			challengerBrief("root", diagnosis, basis),
+			challengerBrief("blast-radius", diagnosis, basis),
+			contestSelectorBrief([]),
+			measurementSelectorBrief(diagnosis, basis),
+			measurementBrief(spec),
+			freshDiagnosisBrief(diagnosis, basis, spec, {
+				kind: "measurement-result",
+				specDigest: "1".repeat(64),
+				result: "r",
+				evidence: "e",
+			}),
+		];
+		for (const role of roles) {
+			assert.match(role, /do not make any public\/server or platform act/);
+			assert.match(role, /do not publish, merge, plan, re-plan, authorize, mutate repository metadata or artifacts/);
+			assert.match(role, /except the required provisional\/final \.\.\/return\.json/);
+		}
+	});
+
 	it("returns profile-preflight before claim when executable help is unavailable", async () => {
 		const saved = process.env.PATH;
 		let refreshed = 0;
@@ -385,6 +423,52 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(result.freshRuling.diagnosis.invalidation, "authorization");
 	});
 
+	it("refuses subject, complete history and basis drift at the sole preclaim read without a claim", async () => {
+		for (const drift of ["subject", "history", "basis"] as const) {
+			const current = {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: `PR_PRECLAIM_${drift}` } },
+			};
+			let refreshes = 0;
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: async () => {
+					refreshes += 1;
+					const state = { ...freshness(), subject: structuredClone(current) };
+					if (drift === "subject") state.subject.context.pullRequest.head.oid = "c".repeat(40);
+					if (drift === "history") state.history = [{ ...history[0], head: "c".repeat(40) }];
+					if (drift === "basis")
+						state.basis = { ...basis, intervals: [{ distinct: "changed" }] } as unknown as RepairBasis;
+					return state;
+				},
+				refreshPrecontinue: async () => {
+					throw new Error("no claim");
+				},
+				dispatchProfile: async () => {
+					throw new Error("no dispatch");
+				},
+			});
+			assert.equal(refreshes, 1);
+			assert.deepEqual(result, {
+				terminal: "handoff",
+				route: "none",
+				cause: "identity",
+				reentry: "nothing",
+				nextGate: "park",
+				recordRef: null,
+			});
+			assert.equal(
+				readdirSync(join(stateRoot, "gitjig", "recovery")).filter((name) => name.endsWith(".json")).length,
+				0,
+			);
+		}
+	});
+
 	it("hands off when subject, complete history or repair basis drifts at the sole precontinue read", async () => {
 		for (const drift of ["subject", "history", "basis"] as const) {
 			const current = {
@@ -449,6 +533,55 @@ describe("Phase-A history recovery coordinator", () => {
 			assert.equal(durable.state, "consumed");
 			assert.equal(durable.terminal, "handoff");
 		}
+	});
+
+	it("rejects measurement replay from a complete joined history ruling omitted by the basis projection", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_HISTORY_REPLAY" } },
+		};
+		const complete = structuredClone(history);
+		complete[0].rulings = [{ finding: "omitted", validity: "CONFIRMED", evidence: "recorded question" }];
+		const calls: PhaseAProfileId[] = [];
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history: complete,
+			basis,
+			diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original" },
+			refreshPreclaim: async () => ({ subject: structuredClone(current), history: structuredClone(complete), basis }),
+			refreshPrecontinue: async () => {
+				throw new Error("replay must park");
+			},
+			dispatchProfile: async (ledger, profileId) => {
+				calls.push(profileId);
+				return observed(
+					ledger,
+					admitted({
+						kind: "measurement",
+						question: "recorded question",
+						method: "new method",
+						expectedDiscriminator: "new discriminator",
+						evidence: "new selector",
+						nonMutating: true,
+						notPreviouslyPresent: true,
+					}),
+				);
+			},
+		});
+		assert.equal(result.terminal, "handoff");
+		assert.equal(result.nextGate, "park");
+		assert.deepEqual(calls, ["recovery-selector"]);
+		assert.ok(result.recordRef);
+		const durable = JSON.parse(
+			readFileSync(
+				join(stateRoot, "gitjig", "recovery", `r2-${result.recordRef.repoHash}-${result.recordRef.keyHash}.json`),
+				"utf8",
+			),
+		);
+		assert.equal(durable.state, "consumed");
+		assert.deepEqual(durable.completeness.admittedSlots, []);
 	});
 
 	it("rejects a repeated measurement selector before executing measurement", async () => {

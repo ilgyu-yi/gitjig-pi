@@ -14,6 +14,7 @@ const RETURN =
 function brief(role: string, input: unknown, output: string): RecoverySemanticBrief {
 	return [
 		`Role: ${role}. This is independent recovery evidence, not author repair or authorization.`,
+		"Read-only evidence only: do not make any public/server or platform act; do not publish, merge, plan, re-plan, authorize, mutate repository metadata or artifacts, or write anything except the required provisional/final ../return.json in your isolated scratch. Report inability without acting.",
 		RETURN,
 		`Input JSON: ${canonicalJson(input)}`,
 		`The decoded payload must be exact JSON of shape ${output}. No extra keys.`,
