@@ -595,6 +595,67 @@ describe("Phase-A history recovery coordinator", () => {
 		}
 	});
 
+	it("pins both sides of the route work cutoff and the post-refresh terminal cutoff to durable outcomes", async () => {
+		const original = performance.now;
+		try {
+			for (const [index, scenario] of (
+				[
+					{ work: 3_779_999, terminal: false, nextGate: "author-repair", refreshes: 1 },
+					{ work: 3_780_000, terminal: false, nextGate: "park", refreshes: 0 },
+					{ work: 3_779_999, terminal: true, nextGate: "park", refreshes: 1 },
+				] as const
+			).entries()) {
+				let clock = 0;
+				let refreshes = 0;
+				Object.defineProperty(performance, "now", { configurable: true, value: () => clock });
+				const current = {
+					...subject,
+					context: {
+						...subject.context,
+						pullRequest: { ...subject.context.pullRequest, id: `PR_ROUTE_BOUND_${String(index)}` },
+					},
+				};
+				const result = await coordinateHistoryRecovery({
+					repoRoot: process.cwd(),
+					modes,
+					subject: current,
+					history,
+					basis,
+					diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "original" },
+					refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+					refreshPrecontinue: async () => {
+						refreshes += 1;
+						if (scenario.terminal) clock = 3_840_000;
+						return { ...freshness(), subject: structuredClone(current) };
+					},
+					dispatchProfile: async (ledger, profileId) => {
+						const value =
+							profileId === "stagnation-root"
+								? { outcome: "ALTERNATIVE", method: "root", evidence: "root evidence" }
+								: profileId === "stagnation-blast-radius"
+									? { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" }
+									: { selected: "root", materiallyDifferent: true, evidence: "selection" };
+						const outcome = await observed(ledger, admitted(value));
+						if (profileId === "recovery-selector") clock = scenario.work;
+						return outcome;
+					},
+				});
+				assert.equal(result.nextGate, scenario.nextGate);
+				assert.equal(refreshes, scenario.refreshes);
+				const directory = join(stateRoot, "gitjig", "recovery");
+				assert.ok(result.recordRef);
+				const durable = JSON.parse(
+					readFileSync(join(directory, `r2-${result.recordRef.repoHash}-${result.recordRef.keyHash}.json`), "utf8"),
+				);
+				assert.equal(durable.state, "consumed");
+				assert.equal(durable.nextGate, scenario.nextGate);
+				assert.equal(durable.terminal, scenario.nextGate === "park" ? "handoff" : "continue");
+			}
+		} finally {
+			Object.defineProperty(performance, "now", { configurable: true, value: original });
+		}
+	});
+
 	it("maps every fresh invalidation and non-NONE ruling to its closed re-entry gate", async () => {
 		const cases = [
 			{ value: "NONE", invalidation: "nothing", terminal: "continue", gate: "ordinary-flow" },
