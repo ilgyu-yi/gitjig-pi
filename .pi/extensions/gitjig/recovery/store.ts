@@ -403,11 +403,27 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 	const freshRuling = record.freshRuling as FreshRuling | null;
 	const retained = (slot: string): boolean =>
 		attemptGroups.get(slot)?.some((attempt) => attempt.admission === "retained") ?? false;
+	const completedBefore = (prerequisite: string, dependent: string): boolean => {
+		const before = attemptGroups.get(prerequisite);
+		const after = attemptGroups.get(dependent);
+		if (after === undefined) return true;
+		if (before === undefined) return false;
+		return (
+			Math.max(...before.map((attempt) => attempt.sequence as number)) <
+			Math.min(...after.map((attempt) => attempt.sequence as number))
+		);
+	};
 	const orderIsCoherent =
 		record.route === "stagnation"
-			? !attemptGroups.has("recovery-selector") || (retained("stagnation-root") && retained("stagnation-blast-radius"))
-			: (!attemptGroups.has("recovery-measurement") || retained("recovery-selector")) &&
-				(!attemptGroups.has("recovery-diagnosis") || retained("recovery-measurement"));
+			? !attemptGroups.has("recovery-selector") ||
+				(retained("stagnation-root") &&
+					retained("stagnation-blast-radius") &&
+					completedBefore("stagnation-root", "recovery-selector") &&
+					completedBefore("stagnation-blast-radius", "recovery-selector"))
+			: (!attemptGroups.has("recovery-measurement") ||
+					(retained("recovery-selector") && completedBefore("recovery-selector", "recovery-measurement"))) &&
+				(!attemptGroups.has("recovery-diagnosis") ||
+					(retained("recovery-measurement") && completedBefore("recovery-measurement", "recovery-diagnosis")));
 	const outputsAreBound =
 		record.route === "stagnation"
 			? measurement === null &&

@@ -400,6 +400,15 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				},
 			],
 			[
+				"dependency-order",
+				(value: ConsumedRecordV3) => {
+					value.attempts = [value.attempts[2], value.attempts[0], value.attempts[1]].map((attempt, index) => ({
+						...attempt,
+						sequence: index + 1,
+					}));
+				},
+			],
+			[
 				"route-head",
 				(value: ConsumedRecordV3) => {
 					const first = value.attempts[0];
