@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { chmodSync, cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -107,6 +108,50 @@ describe("closed Phase-A recovery profiles", () => {
 				writeFileSync(path, original.replace(needle, replacement));
 				const mutant = await import(`${new URL(`file://${path}`).href}?retryMutant=${String(index)}`);
 				assert.equal(mutant.hasRecoveryRetryReserve(600_000, 0), false);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("kills private-copy route work and terminal deadline mutants through durable owner probes", () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-route-mutants-"));
+		try {
+			mkdirSync(join(root, ".pi", "extensions"), { recursive: true });
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(root, ".pi", "extensions", "gitjig"), {
+				recursive: true,
+			});
+			mkdirSync(join(root, "test"));
+			cpSync(
+				new URL("./recovery-coordinator.unit.test.ts", import.meta.url),
+				join(root, "test", "recovery-coordinator.unit.test.ts"),
+			);
+			symlinkSync(new URL("../node_modules", import.meta.url), join(root, "node_modules"), "dir");
+			const path = join(root, ".pi", "extensions", "gitjig", "recovery", "coordinator.ts");
+			const original = readFileSync(path, "utf8");
+			for (const [needle, replacement] of [
+				["ROUTE_WORK_MS = 3_780_000", "ROUTE_WORK_MS = 3_780_001"],
+				["ROUTE_TERMINAL_MS = 3_840_000", "ROUTE_TERMINAL_MS = 3_840_001"],
+			] as const) {
+				assert.equal(original.split(needle).length, 2);
+				writeFileSync(path, original.replace(needle, replacement));
+				const result = spawnSync(
+					process.execPath,
+					[
+						"--test",
+						"--test-name-pattern=pins both sides of the route work cutoff",
+						join(root, "test", "recovery-coordinator.unit.test.ts"),
+					],
+					{
+						cwd: process.cwd(),
+						env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("NODE_TEST"))),
+						encoding: "utf8",
+						timeout: 30_000,
+					},
+				);
+				assert.equal(result.signal, null, result.stderr);
+				assert.equal(result.status, 1, `route mutant survived: ${needle}\n${result.stdout}\n${result.stderr}`);
+				assert.match(result.stdout, /✖ pins both sides of the route work cutoff/);
 			}
 		} finally {
 			rmSync(root, { recursive: true, force: true });
