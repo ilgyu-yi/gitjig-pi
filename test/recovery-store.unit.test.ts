@@ -117,8 +117,8 @@ function consumed(claimed: ClaimedRecordV3): ConsumedRecordV3 {
 	};
 }
 
-function successful(current: ReviewSubject): ConsumedRecordV3 {
-	const base = consumed(record(current));
+function successful(current: ReviewSubject, claimed = record(current)): ConsumedRecordV3 {
+	const base = consumed(claimed);
 	const candidates = [
 		{ slot: "root", outcome: "ALTERNATIVE", method: "root method", evidence: "root evidence" },
 		{ slot: "blast-radius", outcome: "ALTERNATIVE", method: "blast method", evidence: "blast evidence" },
@@ -768,7 +768,13 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		const first = claimAllowance({ subject: current, record: claimed });
 		assert.equal(first.status, "claimed");
 		if (first.status !== "claimed") return;
-		assert.equal(finalizeAllowance(first.claim, consumed(claimed)).status, "finalized");
+		const complete = successful(current, claimed);
+		assert.equal(finalizeAllowance(first.claim, complete).status, "finalized");
+		const path = encoding(current);
+		const durable = JSON.parse(readFileSync(join(stateRoot, "gitjig", "recovery", path.leaf), "utf8"));
+		assert.equal(durable.state, "consumed");
+		assert.equal(durable.terminal, "continue");
+		assert.equal(durable.nextGate, "author-repair");
 		for (const [index, change] of (
 			[
 				(value: ReviewSubject) => {
