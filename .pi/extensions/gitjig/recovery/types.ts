@@ -11,6 +11,7 @@ export type PhaseAProfileId =
 	| "recovery-measurement"
 	| "recovery-diagnosis";
 export type RecoveryRoute = "stagnation" | "oscillation" | "indeterminate";
+export type RecoverySemanticBrief = string;
 export type RecoveryReentry = "nothing" | "plan" | "authorization";
 export type RecoveryGate =
 	| "author-repair"

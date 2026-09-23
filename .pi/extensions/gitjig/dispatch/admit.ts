@@ -1,9 +1,12 @@
 /**
- * Closed return-slot admission (§4.9). Non-regular leaves are rejected before
- * open; a no-follow descriptor is then bounded and identity/metadata-stable
- * across the complete read. Delegate streams are never an input here.
+ * Closed return-slot admission (§4.9). lstat precedes every read so links,
+ * FIFOs, devices and directories refuse without being followed or opened;
+ * the whole regular file is bounded before and after reading, decoded as
+ * fatal UTF-8, parsed as JSON, and checked against the exact schema. Each
+ * failure retains its dispatcher-owned class and fixed message. Delegate
+ * streams are never an input to this module.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, type Stats } from "node:fs";
+import { lstatSync, readFileSync, type Stats } from "node:fs";
 import { DIAGNOSTIC_MESSAGES, type ReturnClass } from "./diagnostics.ts";
 
 export const RETURN_LIMIT_BYTES = 65_536;
@@ -31,7 +34,6 @@ type InvalidReturnClass = Exclude<ReturnClass, "not-inspected" | "admitted">;
 export type ReturnAdmission =
 	| { admitted: true; class: "admitted"; ok: boolean; summary: string; reviewedHead?: string; payload?: string }
 	| { admitted: false; class: InvalidReturnClass; cause: string };
-export type ReturnSnapshot = { ok: true; bytes: Buffer } | { ok: false; admission: ReturnAdmission };
 
 const SCHEMA_KEYS = new Set(["ok", "summary", "reviewedHead", "payload"]);
 const refused = (classification: InvalidReturnClass): ReturnAdmission => ({
@@ -39,50 +41,23 @@ const refused = (classification: InvalidReturnClass): ReturnAdmission => ({
 	class: classification,
 	cause: RETURN_CAUSES[classification],
 });
-const same = (left: Stats, right: Stats): boolean =>
-	left.isFile() &&
-	right.isFile() &&
-	left.dev === right.dev &&
-	left.ino === right.ino &&
-	left.uid === right.uid &&
-	(left.mode & 0o7777) === (right.mode & 0o7777) &&
-	left.size === right.size;
 
-export function readReturnSnapshot(returnPath: string): ReturnSnapshot {
-	let before: Stats;
+export function admitReturn(returnPath: string): ReturnAdmission {
+	let stat: Stats;
 	try {
-		before = lstatSync(returnPath);
+		stat = lstatSync(returnPath);
 	} catch {
-		return { ok: false, admission: refused("missing") };
+		return refused("missing");
 	}
-	if (!before.isFile()) return { ok: false, admission: refused("not-regular") };
-	if (before.size > RETURN_LIMIT_BYTES) return { ok: false, admission: refused("oversize") };
-	let fd: number | undefined;
+	if (!stat.isFile()) return refused("not-regular");
+	if (stat.size > RETURN_LIMIT_BYTES) return refused("oversize");
+	let raw: Buffer;
 	try {
-		fd = openSync(returnPath, constants.O_RDONLY | constants.O_NOFOLLOW);
-		const opened = fstatSync(fd);
-		if (!same(before, opened)) return { ok: false, admission: refused("unreadable") };
-		const bytes = Buffer.alloc(RETURN_LIMIT_BYTES + 1);
-		let offset = 0;
-		while (offset < bytes.length) {
-			const count = readSync(fd, bytes, offset, bytes.length - offset, null);
-			if (count === 0) break;
-			offset += count;
-		}
-		if (offset > RETURN_LIMIT_BYTES) return { ok: false, admission: refused("oversize") };
-		const afterDescriptor = fstatSync(fd);
-		const afterPath = lstatSync(returnPath);
-		if (!same(opened, afterDescriptor) || !same(afterDescriptor, afterPath) || offset !== afterDescriptor.size)
-			return { ok: false, admission: refused("unreadable") };
-		return { ok: true, bytes: bytes.subarray(0, offset) };
+		raw = readFileSync(returnPath);
 	} catch {
-		return { ok: false, admission: refused("unreadable") };
-	} finally {
-		if (fd !== undefined) closeSync(fd);
+		return refused("unreadable");
 	}
-}
-
-export function admitReturnBytes(raw: Buffer): ReturnAdmission {
+	if (raw.byteLength > RETURN_LIMIT_BYTES) return refused("oversize");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
@@ -103,9 +78,4 @@ export function admitReturnBytes(raw: Buffer): ReturnAdmission {
 		...(reviewedHead === undefined ? {} : { reviewedHead }),
 		...(payload === undefined ? {} : { payload }),
 	};
-}
-
-export function admitReturn(returnPath: string): ReturnAdmission {
-	const snapshot = readReturnSnapshot(returnPath);
-	return snapshot.ok ? admitReturnBytes(snapshot.bytes) : snapshot.admission;
 }

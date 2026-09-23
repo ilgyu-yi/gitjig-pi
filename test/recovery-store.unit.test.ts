@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -235,6 +235,92 @@ describe("state-domain allowance store", () => {
 		assert.ok(statuses.filter((status) => status === "consumed").length === 7);
 	});
 
+	it("kills omission of the claimed-leaf parent fsync in an isolated copy", () => {
+		const probe = `
+import assert from "node:assert/strict";
+import {randomUUID} from "node:crypto";
+import {readFileSync} from "node:fs";
+import {claimAllowance} from "./gitjig/recovery/store.ts";
+import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts";
+const subject={context:{repository:{id:"R",host:"github.com",nameWithOwner:"o/r"},pullRequest:{id:"P",number:1,url:"https://github.com/o/r/pull/1",authorId:"A",base:{repositoryId:"R",name:"main",oid:"a".repeat(40)},head:{repositoryId:"R",name:"topic",oid:"b".repeat(40)},closingIssues:[]}},writerId:"W",activation:[],criteria:[]};
+const e=deriveAllowancePathEncoding(subject), now=new Date().toISOString(); assert.ok(e);
+const record={schemaVersion:3,state:"claimed",repoHash:e.repoHash,keyHash:e.keyHash,claimId:randomUUID(),createdAt:now,updatedAt:now,profileSetDigest:"1".repeat(64),subjectDigest:"2".repeat(64),historyDigest:"3".repeat(64),basisDigest:"4".repeat(64),basis:{kind:"history-diagnosis",triggeringReviewState:{head:"a".repeat(40),historyIndex:0,stateDigest:"5".repeat(64)},taxonomy:"STAGNATION",invalidation:"nothing",diagnosisDigest:"6".repeat(64)},modes:{mergeMode:"off",decisionMode:"autonomous",mergeSource:"default",decisionSource:"default"},route:"stagnation",attempts:[],completeness:null,sequenceAuthority:null,selectedIntervention:null,measurement:null,freshRuling:null,reentry:"nothing",nextGate:null,terminal:null,cause:null};
+assert.equal(claimAllowance({subject,record}).status,"claimed");
+assert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);
+`;
+		for (const variant of ["baseline", "mutant"] as const) {
+			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-${variant}-`));
+			try {
+				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+				const shim = join(box, "fs-shim.mjs");
+				writeFileSync(
+					shim,
+					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,openSync,readSync,renameSync,writeSync}=fs;\nexport function fsyncSync(fd){fs.appendFileSync(process.env.FSYNC_LOG,fs.fstatSync(fd).isDirectory()?"d":"f");return fs.fsyncSync(fd);}\n`,
+				);
+				const target = join(box, "gitjig", "recovery", "store.ts");
+				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
+				if (variant === "mutant") {
+					const from = "\t\tfsyncSync(fd);\n\t\tcloseSync(fd);\n\t\tfd = undefined;\n\t\tsyncDirectory(recoveryDir);";
+					assert.ok(source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from));
+					source = source.replace(from, "\t\tfsyncSync(fd);\n\t\tcloseSync(fd);\n\t\tfd = undefined;");
+				}
+				writeFileSync(target, source);
+				writeFileSync(join(box, "probe.mjs"), probe);
+				const xdg = join(box, "state");
+				mkdirSync(xdg, { mode: 0o700 });
+				const log = join(box, "fsync.log");
+				writeFileSync(log, "");
+				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					encoding: "utf8",
+					timeout: 10_000,
+					env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: log },
+				});
+				if (variant === "baseline") assert.equal(result.status, 0, result.stderr);
+				else assert.notEqual(result.status, 0, "parent-fsync mutant survived");
+			} finally {
+				rmSync(box, { recursive: true, force: true });
+			}
+		}
+	});
+
+	it("consumes a claim when exclusive creation may have succeeded before throwing", () => {
+		const box = mkdtempSync(join(tmpdir(), "gitjig-store-ambiguous-create-"));
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+			const shim = join(box, "fs-shim.mjs");
+			writeFileSync(
+				shim,
+				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);const error=new Error("ambiguous");error.code="EIO";throw error;}return fs.openSync(path,flags,mode);}\n`,
+			);
+			const target = join(box, "gitjig", "recovery", "store.ts");
+			writeFileSync(
+				target,
+				readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
+			);
+			const probe = readFileSync(new URL(import.meta.url), "utf8").match(/const probe = `([\s\S]*?)`;\n/)?.[1];
+			assert.ok(probe);
+			const adjusted = probe.replace(
+				'assert.equal(claimAllowance({subject,record}).status,"claimed");\nassert.match(readFileSync(process.env.FSYNC_LOG,"utf8"),/d/);',
+				'const result=claimAllowance({subject,record}); assert.equal(result.status,"consumed"); assert.equal(result.cause,"create-or-write-ambiguous");',
+			);
+			writeFileSync(join(box, "probe.mjs"), adjusted);
+			const xdg = join(box, "state");
+			mkdirSync(xdg, { mode: 0o700 });
+			const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+				cwd: box,
+				encoding: "utf8",
+				timeout: 10_000,
+				env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: join(box, "unused") },
+			});
+			assert.equal(result.status, 0, result.stderr);
+		} finally {
+			rmSync(box, { recursive: true, force: true });
+		}
+	});
+
 	it("classifies a non-regular existing leaf without opening it", () => {
 		const current = subject("PR_FIFO");
 		const path = encoding(current);
@@ -292,6 +378,61 @@ describe("state-domain allowance store", () => {
 			const result = claimAllowance({ subject: current, record: record(current) });
 			assert.equal(result.status, "consumed");
 			assert.equal(result.status === "consumed" ? result.recordRef !== undefined : false, name === "valid");
+		}
+	});
+
+	it("rejects claimed taxonomy drift and impossible handoff attempt order", () => {
+		for (const [name, value] of (() => {
+			const claimedSubject = subject("PR_CLAIMED_TAXONOMY");
+			const claimed = record(claimedSubject);
+			claimed.basis.taxonomy = "OSCILLATION";
+			const orderSubject = subject("PR_HANDOFF_ORDER");
+			const handoff = consumed(record(orderSubject));
+			handoff.attempts = [
+				{
+					sequence: 1,
+					startedOffsetMs: 0,
+					finishedOffsetMs: 1,
+					diagnostic: {
+						schemaVersion: 1,
+						status: "admitted",
+						phase: "compare",
+						run: { class: "exited", exitCode: 0, signal: null },
+						return: { class: "admitted" },
+						compare: { class: "confirmed" },
+						durationMs: 1,
+						code: "ADMITTED",
+					},
+					outcomeDigest: "7".repeat(64),
+					slot: "recovery-selector",
+					profileId: "recovery-selector",
+					profileVersion: 1,
+					profileSetDigest: handoff.profileSetDigest,
+					materializationDigest: "8".repeat(64),
+					expectedHead: orderSubject.context.pullRequest.head.oid,
+					admission: "retained",
+					resultDigest: "9".repeat(64),
+				},
+			];
+			handoff.completeness = {
+				requiredSlots: ["stagnation-root", "stagnation-blast-radius", "recovery-selector"],
+				admittedSlots: ["recovery-selector"],
+			};
+			handoff.sequenceAuthority = { source: "host-attempt-order", lastSequence: 1, retrySlots: [] };
+			return [
+				["claimed", { subject: claimedSubject, record: claimed }],
+				["order", { subject: orderSubject, record: handoff }],
+			] as const;
+		})()) {
+			const path = encoding(value.subject);
+			const directory = join(stateRoot, "gitjig", "recovery");
+			mkdirSync(directory, { recursive: true, mode: 0o700 });
+			writeFileSync(join(directory, path.leaf), canonicalJson(value.record), { mode: 0o600 });
+			assert.deepEqual(
+				claimAllowance({ subject: value.subject, record: record(value.subject) }),
+				{ status: "consumed", cause: "existing" },
+				name,
+			);
 		}
 	});
 
@@ -363,7 +504,11 @@ describe("state-domain allowance store", () => {
 		const source = readFileSync(new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url), "utf8");
 		const functions = [...source.matchAll(/^export function (\w+)/gm)].map((match) => match[1]);
 		assert.deepEqual(functions, ["claimAllowance", "finalizeAllowance"]);
-		assert.doesNotMatch(source, /^export (?:function|const) .*?(?:reset|delete|inject)/gim);
+		assert.deepEqual(
+			[...source.matchAll(/^export const (\w+)/gm)].map((match) => match[1]),
+			[],
+		);
+		assert.doesNotMatch(source, /^export .*?(?:reset|delete|clear|repair|unlock|inject)/gim);
 	});
 
 	it("keeps definite preclaim domain refusal unconsumed", () => {

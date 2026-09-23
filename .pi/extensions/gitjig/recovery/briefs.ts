@@ -1,11 +1,17 @@
 /** Warning-surface roster: EXEMPT — this module emits no operator-facing warning text. */
 import type { DiagnosisInput, RepairBasis } from "../review/history.ts";
-import { type Challenger, canonicalJson, type MeasurementResult, type MeasurementSpec } from "./types.ts";
+import {
+	type Challenger,
+	canonicalJson,
+	type MeasurementResult,
+	type MeasurementSpec,
+	type RecoverySemanticBrief,
+} from "./types.ts";
 
 const RETURN =
 	'Return only through ../return.json with exact outer keys {"ok":true,"summary":"recovery-result","reviewedHead":"<held head>","payload":"<JSON string>"}. Write a complete provisional return within 360 seconds and overwrite it with the final return within 540 seconds after process start.';
 
-function brief(role: string, input: unknown, output: string): string {
+function brief(role: string, input: unknown, output: string): RecoverySemanticBrief {
 	return [
 		`Role: ${role}. This is independent recovery evidence, not author repair or authorization.`,
 		RETURN,
@@ -14,7 +20,11 @@ function brief(role: string, input: unknown, output: string): string {
 	].join("\n\n");
 }
 
-export function challengerBrief(slot: "root" | "blast-radius", diagnosis: DiagnosisInput, basis: RepairBasis): string {
+export function challengerBrief(
+	slot: "root" | "blast-radius",
+	diagnosis: DiagnosisInput,
+	basis: RepairBasis,
+): RecoverySemanticBrief {
 	return brief(
 		`STAGNATION ${slot} challenger; remain mutually blind from the other challenger`,
 		{ slot, diagnosis, basis: { states: basis.states, intervals: basis.intervals } },
@@ -22,7 +32,7 @@ export function challengerBrief(slot: "root" | "blast-radius", diagnosis: Diagno
 	);
 }
 
-export function contestSelectorBrief(candidates: readonly Challenger[]): string {
+export function contestSelectorBrief(candidates: readonly Challenger[]): RecoverySemanticBrief {
 	return brief(
 		"STAGNATION selector",
 		{ candidates },
@@ -30,7 +40,7 @@ export function contestSelectorBrief(candidates: readonly Challenger[]): string 
 	);
 }
 
-export function measurementSelectorBrief(diagnosis: DiagnosisInput, basis: RepairBasis): string {
+export function measurementSelectorBrief(diagnosis: DiagnosisInput, basis: RepairBasis): RecoverySemanticBrief {
 	return brief(
 		`${diagnosis.value} non-mutating measurement selector`,
 		{ taxonomy: diagnosis.value, basis: { states: basis.states, intervals: basis.intervals } },
@@ -38,7 +48,7 @@ export function measurementSelectorBrief(diagnosis: DiagnosisInput, basis: Repai
 	);
 }
 
-export function measurementBrief(spec: MeasurementSpec): string {
+export function measurementBrief(spec: MeasurementSpec): RecoverySemanticBrief {
 	return brief(
 		"bounded non-mutating recovery measurement executor",
 		{ spec },
@@ -51,7 +61,7 @@ export function freshDiagnosisBrief(
 	basis: RepairBasis,
 	spec: MeasurementSpec,
 	result: MeasurementResult,
-): string {
+): RecoverySemanticBrief {
 	return brief(
 		"fresh history Judge; the measurement result is new evidence and the original diagnosis is classification context only",
 		{ original, basis: { states: basis.states, intervals: basis.intervals }, spec, result },

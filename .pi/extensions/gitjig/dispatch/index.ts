@@ -72,13 +72,14 @@
  * frame is what this closes; the claim inside the payload is the reader's
  * to weigh, and §4.9's injectable-context residual already carries it.
  */
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { renderActCall, renderActTerminal } from "../act-render.ts";
 import { appendAuditRecord } from "../audit.ts";
 import { quoted } from "../quote.ts";
 import type { SessionSurface, TerminalClass } from "../session-surface.ts";
-import { admitReturn, admitReturnBytes, readReturnSnapshot } from "./admit.ts";
+import { admitReturn, RETURN_LIMIT_BYTES } from "./admit.ts";
 import {
 	type CompareClass,
 	type DiagnosticCode,
@@ -201,6 +202,42 @@ export function namesHeldOperand(text: string, heldHash: string): boolean {
 	});
 }
 
+function checkpointSnapshot(path: string): Buffer | undefined {
+	let fd: number | undefined;
+	try {
+		const before = lstatSync(path);
+		if (!before.isFile() || before.size > RETURN_LIMIT_BYTES) return undefined;
+		fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+		const opened = fstatSync(fd);
+		if (opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) return undefined;
+		const bytes = Buffer.alloc(RETURN_LIMIT_BYTES + 1);
+		let offset = 0;
+		while (offset < bytes.length) {
+			const count = readSync(fd, bytes, offset, bytes.length - offset, null);
+			if (count === 0) break;
+			offset += count;
+		}
+		const after = fstatSync(fd);
+		const pathAfter = lstatSync(path);
+		if (
+			offset > RETURN_LIMIT_BYTES ||
+			offset !== after.size ||
+			after.dev !== opened.dev ||
+			after.ino !== opened.ino ||
+			after.size !== opened.size ||
+			pathAfter.dev !== after.dev ||
+			pathAfter.ino !== after.ino ||
+			pathAfter.size !== after.size
+		)
+			return undefined;
+		return bytes.subarray(0, offset);
+	} catch {
+		return undefined;
+	} finally {
+		if (fd !== undefined) closeSync(fd);
+	}
+}
+
 export interface RunDispatchOptions {
 	callerRepoRoot: string;
 	stateRoot: string;
@@ -320,12 +357,14 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			);
 			checkpointTimers.push(
 				setTimeout(() => {
-					const snapshot = readReturnSnapshot(context.returnPath);
-					if (!snapshot.ok || !admitReturnBytes(snapshot.bytes).admitted) {
+					const before = checkpointSnapshot(context.returnPath);
+					const admission = admitReturn(context.returnPath);
+					const after = checkpointSnapshot(context.returnPath);
+					if (before === undefined || !admission.admitted || after === undefined || !after.equals(before)) {
 						checkpointAbort.abort();
 						return;
 					}
-					finalCheckpointBytes = snapshot.bytes;
+					finalCheckpointBytes = after;
 				}, 540_000),
 			);
 		}
@@ -348,9 +387,9 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			options.signal?.removeEventListener("abort", relayAbort);
 		}
 		if (finalCheckpointBytes !== undefined) {
-			const snapshot = readReturnSnapshot(context.returnPath);
-			if (!snapshot.ok || !snapshot.bytes.equals(finalCheckpointBytes))
-				return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
+			const snapshot = checkpointSnapshot(context.returnPath);
+			if (snapshot === undefined || !snapshot.equals(finalCheckpointBytes))
+				return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		}
 		const trace = terminalTrace ?? {
 			lifecycle: lifecycleOf(run),
@@ -400,7 +439,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const admission = admitReturn(context.returnPath);
 		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
-			return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
+			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		if (!admission.admitted) {
 			observedReturn = admission.class;
 			return refuse(
@@ -433,7 +472,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		}
 		observedReturn = "admitted";
 		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
-			return refuse("refuse-operation-deadline", "ABORTED", "return", "aborted");
+			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const compareClass: CompareClass =
 			options.expectedRef === undefined
 				? "not-requested"
@@ -443,7 +482,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		observedCompare = compareClass;
 		currentPhase = options.expectedRef === undefined ? "return" : "compare";
 		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
-			return refuse("refuse-operation-deadline", "ABORTED", currentPhase, "aborted");
+			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		const admittedDiagnostic = diagnostic(
 			"ADMITTED",
 			options.expectedRef === undefined ? "return" : "compare",
@@ -466,7 +505,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			outcome.compare = admission.reviewedHead === context.heldHash ? "confirmed" : "invalid";
 		}
 		if (options.operationDeadline !== undefined && performance.now() >= options.operationDeadline)
-			return refuse("refuse-operation-deadline", "ABORTED", currentPhase, "aborted");
+			return refuse("refuse-operation-deadline", "ABORTED", "run", "aborted");
 		if (surfaceBytes(outcome) > DISPATCH_SURFACE_LIMITS.admittedOutcome) {
 			return refuse(
 				"refuse-surface-bound",

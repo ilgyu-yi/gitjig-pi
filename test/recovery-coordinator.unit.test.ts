@@ -164,6 +164,7 @@ describe("Phase-A history recovery coordinator", () => {
 
 	it("marks the original diagnosis as classification context rather than fresh evidence", async () => {
 		let freshBrief = "";
+		let selectorBrief = "";
 		const outputs: Partial<Record<PhaseAProfileId, unknown>> = {
 			"recovery-selector": {
 				kind: "measurement",
@@ -192,6 +193,7 @@ describe("Phase-A history recovery coordinator", () => {
 			refreshPreclaim: async () => freshness(),
 			refreshPrecontinue: async () => freshness(),
 			dispatchProfile: async (ledger, profileId, semanticBrief) => {
+				if (profileId === "recovery-selector") selectorBrief = semanticBrief;
 				if (profileId === "recovery-diagnosis") freshBrief = semanticBrief;
 				const value = structuredClone(outputs[profileId]) as Record<string, unknown>;
 				if (profileId === "recovery-measurement") {
@@ -203,6 +205,7 @@ describe("Phase-A history recovery coordinator", () => {
 			},
 		});
 		assert.equal(result.terminal, "continue");
+		assert.doesNotMatch(selectorBrief, /original-only/);
 		assert.match(freshBrief, /original diagnosis is classification context only/);
 		assert.match(freshBrief, /"original":\{"evidence":"original-only"/);
 	});
@@ -262,6 +265,102 @@ describe("Phase-A history recovery coordinator", () => {
 		});
 		assert.equal(result.terminal, "continue");
 		assert.equal(result.nextGate, "planning");
+	});
+
+	it("hands off when the sole precontinue refresh drifts", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_PRECONTINUE_DRIFT" } },
+		};
+		const spec = {
+			kind: "measurement",
+			question: "drift q",
+			method: "drift m",
+			expectedDiscriminator: "drift d",
+			evidence: "drift selector",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		let digest = "";
+		let precontinue = 0;
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => {
+				precontinue += 1;
+				const drifted = structuredClone(current);
+				drifted.context.pullRequest.head.oid = "c".repeat(40);
+				return { ...freshness(), subject: drifted };
+			},
+			dispatchProfile: async (ledger, profileId) => {
+				let value: unknown;
+				if (profileId === "recovery-selector") {
+					value = spec;
+					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+					digest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+				} else if (profileId === "recovery-measurement")
+					value = {
+						kind: "measurement-result",
+						specDigest: digest,
+						result: "drift result",
+						evidence: "drift measured",
+					};
+				else value = { value: "NONE", invalidation: "nothing", evidence: "fresh" };
+				return observed(ledger, admitted(value));
+			},
+		});
+		assert.equal(precontinue, 1);
+		assert.equal(result.terminal, "handoff");
+	});
+
+	it("rejects a repeated measurement selector before executing measurement", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_REPEAT" } },
+		};
+		const repeatedBasis = {
+			states: [{ head: "b".repeat(40), evidence: "already measured" }],
+			intervals: [],
+		} as unknown as RepairBasis;
+		const calls: PhaseAProfileId[] = [];
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis: repeatedBasis,
+			diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original" },
+			refreshPreclaim: async () => ({
+				subject: structuredClone(current),
+				history: structuredClone(history),
+				basis: repeatedBasis,
+			}),
+			refreshPrecontinue: async () => {
+				throw new Error("repeated spec cannot continue");
+			},
+			dispatchProfile: async (ledger, profileId) => {
+				calls.push(profileId);
+				return observed(
+					ledger,
+					admitted({
+						kind: "measurement",
+						question: "already measured",
+						method: "new method",
+						expectedDiscriminator: "new discriminator",
+						evidence: "new selector",
+						nonMutating: true,
+						notPreviouslyPresent: true,
+					}),
+				);
+			},
+		});
+		assert.equal(result.terminal, "handoff");
+		assert.deepEqual(calls, ["recovery-selector"]);
 	});
 
 	it("maps every fresh invalidation and non-NONE ruling to its closed re-entry gate", async () => {

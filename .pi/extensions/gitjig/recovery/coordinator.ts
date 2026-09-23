@@ -47,6 +47,7 @@ import {
 	type RecoveryFreshness,
 	type RecoveryMeasurement,
 	type RecoveryResult,
+	type RecoverySemanticBrief,
 	type SelectedIntervention,
 	type SelectorContest,
 	structuralDigest,
@@ -65,7 +66,7 @@ type RecoveryDispatchResult = ObservedDispatchOutcome;
 export type RecoveryProfileDispatcher = (
 	ledger: HostAttemptLedger,
 	profileId: PhaseAProfileId,
-	semanticBrief: string,
+	semanticBrief: RecoverySemanticBrief,
 	expectedHead: string,
 	operationDeadline: number,
 ) => Promise<RecoveryDispatchResult>;
@@ -454,7 +455,7 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 
 	const dispatch = async (
 		profileId: PhaseAProfileId,
-		semanticBrief: string,
+		semanticBrief: RecoverySemanticBrief,
 	): Promise<RecoveryDispatchResult | undefined> => {
 		const now = performance.now();
 		if (routeDeadline - now < SLOT_RESERVE_MS) return undefined;

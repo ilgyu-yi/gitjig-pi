@@ -104,6 +104,41 @@ describe("recovery optional dispatch deadline", () => {
 		}
 	});
 
+	it("freezes final checkpoint bytes and rejects a later overwrite", async () => {
+		const repo = repository();
+		const originalSetTimeout = globalThis.setTimeout;
+		try {
+			globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) =>
+				originalSetTimeout(
+					callback,
+					delay === 360_000 ? 30 : delay === 540_000 ? 60 : delay,
+					...args,
+				)) as typeof setTimeout;
+			const script = [
+				"const {execFileSync}=require('node:child_process'); const {writeFileSync}=require('node:fs');",
+				"const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();",
+				"const put=(summary)=>writeFileSync('../return.json',JSON.stringify({ok:true,summary,reviewedHead:head}));",
+				"put('provisional'); setTimeout(()=>put('too late'),80); setTimeout(()=>{},110);",
+			].join("");
+			const outcome = await runDispatch({
+				callerRepoRoot: repo,
+				stateRoot: join(repo, "state"),
+				delegateArgv: [process.execPath, "-e", script],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 10_000,
+				operationDeadline: performance.now() + 5_000,
+				enteredAt: performance.now(),
+			});
+			assert.equal(outcome.disposition, "refused");
+			assert.equal(outcome.diagnostic.code, "ABORTED");
+			assert.equal(outcome.diagnostic.phase, "run");
+		} finally {
+			globalThis.setTimeout = originalSetTimeout;
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
 	it("preserves the admitted path when the optional deadline is absent", async () => {
 		const repo = repository();
 		try {

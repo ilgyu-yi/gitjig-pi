@@ -80,6 +80,20 @@ export type FinalizeAllowanceResult =
 	| { status: "finalized"; recordRef: RecordRef }
 	| { status: "consumed-unverified"; recordRef: RecordRef };
 
+const DEFINITE_PRECREATE_ERRORS = new Set([
+	"EACCES",
+	"EPERM",
+	"ENOENT",
+	"ENOTDIR",
+	"ELOOP",
+	"EISDIR",
+	"EINVAL",
+	"EMFILE",
+	"ENFILE",
+	"ENAMETOOLONG",
+	"EROFS",
+]);
+
 const spent = new WeakSet<object>();
 const claimStates = new WeakMap<object, ClaimState>();
 
@@ -302,6 +316,13 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 		!["stagnation", "oscillation", "indeterminate"].includes(record.route as string)
 	)
 		return false;
+	const routeMatchesTaxonomy =
+		record.route === "stagnation"
+			? record.basis.taxonomy === "STAGNATION"
+			: record.route === "oscillation"
+				? record.basis.taxonomy === "OSCILLATION"
+				: record.basis.taxonomy === "INDETERMINATE";
+	if (!routeMatchesTaxonomy) return false;
 	if (record.state === "claimed")
 		return (
 			record.createdAt === record.updatedAt &&
@@ -353,11 +374,6 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 	const retainedDigest = (slot: string): unknown =>
 		attemptGroups.get(slot)?.find((attempt) => attempt.admission === "retained")?.resultDigest;
 	if (
-		(record.route === "stagnation"
-			? record.basis.taxonomy !== "STAGNATION"
-			: record.route === "oscillation"
-				? record.basis.taxonomy !== "OSCILLATION"
-				: record.basis.taxonomy !== "INDETERMINATE") ||
 		(record.selectedIntervention !== null && !validSelected(record.selectedIntervention)) ||
 		(record.measurement !== null && !validMeasurement(record.measurement)) ||
 		(record.freshRuling !== null && !validFreshRuling(record.freshRuling))
@@ -366,8 +382,36 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 	const selected = record.selectedIntervention as SelectedIntervention | null;
 	const measurement = record.measurement as RecoveryMeasurement | null;
 	const freshRuling = record.freshRuling as FreshRuling | null;
+	const retained = (slot: string): boolean =>
+		attemptGroups.get(slot)?.some((attempt) => attempt.admission === "retained") ?? false;
+	const orderIsCoherent =
+		record.route === "stagnation"
+			? !attemptGroups.has("recovery-selector") || (retained("stagnation-root") && retained("stagnation-blast-radius"))
+			: (!attemptGroups.has("recovery-measurement") || retained("recovery-selector")) &&
+				(!attemptGroups.has("recovery-diagnosis") || retained("recovery-measurement"));
+	const outputsAreBound =
+		record.route === "stagnation"
+			? measurement === null &&
+				freshRuling === null &&
+				(selected === null ||
+					(retainedDigest("stagnation-root") === selected.candidateDigests[0] &&
+						retainedDigest("stagnation-blast-radius") === selected.candidateDigests[1] &&
+						retainedDigest("recovery-selector") ===
+							structuralDigest("gitjig-recovery-selection:v1", {
+								selected: selected.slot,
+								materiallyDifferent: true,
+								evidence: selected.selectionEvidence,
+							})))
+			: selected === null &&
+				(measurement === null ||
+					(retainedDigest("recovery-selector") === measurement.specDigest &&
+						retainedDigest("recovery-measurement") === measurement.resultDigest)) &&
+				(freshRuling === null ||
+					(measurement !== null && retainedDigest("recovery-diagnosis") === freshRuling.diagnosisDigest));
 	const routeShape =
-		record.terminal === "continue"
+		orderIsCoherent &&
+		outputsAreBound &&
+		(record.terminal === "continue"
 			? record.cause === null &&
 				canonicalJson(
 					required.filter((slot) => attemptGroups.get(slot)?.some((attempt) => attempt.admission === "retained")),
@@ -407,7 +451,7 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 						? "park"
 						: record.reentry === "plan"
 							? "planning-handoff"
-							: "authorization-handoff");
+							: "authorization-handoff"));
 	return (
 		routeShape &&
 		object(record.completeness, ["requiredSlots", "admittedSlots"]) &&
@@ -605,13 +649,14 @@ export function claimAllowance(input: { subject: ReviewSubject; record: ClaimedR
 			const recordRef = existing(path, encoding.repoHash, encoding.keyHash);
 			return { status: "consumed", cause: "existing", ...(recordRef === undefined ? {} : { recordRef }) };
 		}
-		return created
-			? {
-					status: "consumed",
-					cause: "create-or-write-ambiguous",
-					recordRef: { repoHash: encoding.repoHash, keyHash: encoding.keyHash, claimId: input.record.claimId },
-				}
-			: { status: "preclaim-refused", cause: "state-domain" };
+		const code = (error as { code?: string }).code;
+		if (!created && code !== undefined && DEFINITE_PRECREATE_ERRORS.has(code))
+			return { status: "preclaim-refused", cause: "state-domain" };
+		return {
+			status: "consumed",
+			cause: "create-or-write-ambiguous",
+			recordRef: { repoHash: encoding.repoHash, keyHash: encoding.keyHash, claimId: input.record.claimId },
+		};
 	}
 }
 
