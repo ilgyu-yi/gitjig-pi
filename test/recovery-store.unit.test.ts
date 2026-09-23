@@ -438,6 +438,43 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		}
 	});
 
+	it("kills an immutable-mode author mutation in a private copy", () => {
+		const owner = readFileSync(new URL(import.meta.url), "utf8");
+		const probe = owner.match(/const probe = `([\s\S]*?)`;\n\t\tfor \(const variant of \[/)?.[1];
+		assert.ok(probe);
+		const adjusted = probe.replace(
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");\nassert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");',
+			'consumed.modes={...record.modes,mergeMode:"on"}; assert.equal(finalizeAllowance(claim.claim,consumed).status,process.env.EXPECT);',
+		);
+		assert.notEqual(adjusted, probe);
+		for (const mutant of [false, true]) {
+			const box = mkdtempSync(join(tmpdir(), "gitjig-immutable-mode-"));
+			try {
+				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+				const target = join(box, "gitjig", "recovery", "store.ts");
+				const source = readFileSync(target, "utf8");
+				assert.ok(
+					source.includes("\t\tmodes: record.modes,") &&
+						source.indexOf("\t\tmodes: record.modes,") === source.lastIndexOf("\t\tmodes: record.modes,"),
+				);
+				if (mutant) writeFileSync(target, source.replace("\t\tmodes: record.modes,", ""));
+				writeFileSync(join(box, "probe.mjs"), adjusted);
+				const xdg = join(box, "state");
+				mkdirSync(xdg, { mode: 0o700 });
+				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					encoding: "utf8",
+					timeout: 10_000,
+					env: { ...process.env, XDG_STATE_HOME: xdg, EXPECT: mutant ? "finalized" : "consumed-unverified" },
+				});
+				assert.equal(result.status, 0, result.stderr);
+			} finally {
+				rmSync(box, { recursive: true, force: true });
+			}
+		}
+	});
+
 	it("distinguishes definite ENOSPC/EDQUOT from may-have-created open failure", () => {
 		for (const code of ["EIO", "ENOSPC", "EDQUOT", "LSTAT_EIO"] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-create-${code}-`));
