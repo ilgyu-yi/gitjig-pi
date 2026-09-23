@@ -129,6 +129,44 @@ describe("closed Phase-A recovery profiles", () => {
 		}
 	});
 
+	it("kills each omitted materialized flag and initial prompt in a private copy", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-argv-mutants-"));
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(root, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(root, "node_modules"), "dir");
+			const path = join(root, "gitjig", "recovery", "profiles.ts");
+			const original = readFileSync(path, "utf8");
+			const baseline = loadRecoveryProfiles();
+			assert.ok(baseline);
+			const expected = materializeRecoveryProfile(baseline, "recovery-selector")?.argv;
+			assert.ok(expected);
+			for (const [index, token] of [
+				"-p",
+				"--thinking",
+				"high",
+				"--no-session",
+				"--no-extensions",
+				"--no-skills",
+				"--no-context-files",
+				"--approve",
+				"--",
+				"RECOVERY_INITIAL_PROMPT",
+			].entries()) {
+				const target = `\t\t"${token}",`;
+				const needle = token === "RECOVERY_INITIAL_PROMPT" ? "\t\tRECOVERY_INITIAL_PROMPT," : target;
+				assert.equal(original.split(needle).length, 2, token);
+				writeFileSync(path, original.replace(needle, ""));
+				const mutated = await import(`${new URL(`file://${path}`).href}?argvMutant=${String(index)}`);
+				const set = mutated.loadRecoveryProfiles();
+				assert.ok(set);
+				const argv = mutated.materializeRecoveryProfile(set, "recovery-selector")?.argv;
+				assert.notDeepEqual(argv, expected, `owner exact argv assertion must reject missing ${token}`);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("kills closed profile schema and digest-input mutants in an isolated copy", async () => {
 		const root = mkdtempSync(join(tmpdir(), "gitjig-profile-mutants-"));
 		try {
