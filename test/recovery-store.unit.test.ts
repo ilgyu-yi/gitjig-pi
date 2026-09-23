@@ -235,6 +235,63 @@ describe("state-domain allowance store", () => {
 		assert.ok(statuses.filter((status) => status === "consumed").length === 7);
 	});
 
+	it("kills non-exclusive claim in a synchronized private copy", async () => {
+		const box = mkdtempSync(join(tmpdir(), "gitjig-nonexclusive-mutant-"));
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+			const shim = join(box, "fs-shim.mjs");
+			writeFileSync(
+				shim,
+				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0&&String(path).endsWith(".json")){fs.appendFileSync(process.env.ARRIVALS,"x");const until=Date.now()+5000;while(fs.readFileSync(process.env.ARRIVALS).length<2&&Date.now()<until)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);}return fs.openSync(path,flags,mode);}\n`,
+			);
+			const target = join(box, "gitjig", "recovery", "store.ts");
+			const original = readFileSync(target, "utf8");
+			assert.ok(original.includes("constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW"));
+			writeFileSync(
+				target,
+				original
+					.replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href))
+					.replace(
+						"constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW",
+						"constants.O_CREAT | constants.O_NOFOLLOW",
+					),
+			);
+			const script = `import {randomUUID} from "node:crypto"; import {claimAllowance} from "./gitjig/recovery/store.ts"; import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts"; const subject=${JSON.stringify(subject("PR_NONEXCLUSIVE"))}; const e=deriveAllowancePathEncoding(subject), now=new Date().toISOString(); const record={schemaVersion:3,state:"claimed",repoHash:e.repoHash,keyHash:e.keyHash,claimId:randomUUID(),createdAt:now,updatedAt:now,profileSetDigest:"1".repeat(64),subjectDigest:"2".repeat(64),historyDigest:"3".repeat(64),basisDigest:"4".repeat(64),basis:{kind:"history-diagnosis",triggeringReviewState:{head:"a".repeat(40),historyIndex:0,stateDigest:"5".repeat(64)},taxonomy:"STAGNATION",invalidation:"nothing",diagnosisDigest:"6".repeat(64)},modes:{mergeMode:"off",decisionMode:"autonomous",mergeSource:"default",decisionSource:"default"},route:"stagnation",attempts:[],completeness:null,sequenceAuthority:null,selectedIntervention:null,measurement:null,freshRuling:null,reentry:"nothing",nextGate:null,terminal:null,cause:null}; console.log(claimAllowance({subject,record}).status);`;
+			writeFileSync(join(box, "probe.mjs"), script);
+			const xdg = join(box, "state");
+			mkdirSync(xdg, { mode: 0o700 });
+			const arrivals = join(box, "arrivals");
+			writeFileSync(arrivals, "");
+			const children = Array.from({ length: 2 }, () =>
+				spawn(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					env: { ...process.env, XDG_STATE_HOME: xdg, ARRIVALS: arrivals },
+					stdio: ["ignore", "pipe", "pipe"],
+				}),
+			);
+			const results = await Promise.all(
+				children.map(
+					(child) =>
+						new Promise<string>((resolve, reject) => {
+							let stdout = "",
+								stderr = "";
+							child.stdout.on("data", (chunk) => {
+								stdout += String(chunk);
+							});
+							child.stderr.on("data", (chunk) => {
+								stderr += String(chunk);
+							});
+							child.on("close", (code) => (code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr))));
+						}),
+				),
+			);
+			assert.deepEqual(results, ["claimed", "claimed"], "removing O_EXCL must violate the production one-winner test");
+		} finally {
+			rmSync(box, { recursive: true, force: true });
+		}
+	});
+
 	it("kills omission of the claimed-leaf parent fsync in an isolated copy", () => {
 		const probe = `
 import assert from "node:assert/strict";
