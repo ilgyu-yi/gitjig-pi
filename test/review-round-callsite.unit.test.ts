@@ -1158,6 +1158,80 @@ describe("review-round production call site", () => {
 		assert.equal(refreshed, 2);
 	});
 
+	it("resumes ordinary pre-round flow only for the ordinary-flow recovery gate", async () => {
+		const fixture = repo();
+		const current = subject(fixture.base, fixture.head);
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let rounds = 0;
+		let coordinated = 0;
+		let publishedBody: string | undefined;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => current,
+				refetchSubject: async () => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies, publishedBody),
+				makeDispatch: diagnosisDispatch({ value: "OSCILLATION", invalidation: "nothing", evidence: "original" }),
+				runRound: async () => {
+					rounds += 1;
+					return {
+						review: { state: "approved" },
+						record: repairRecord(fixture.head),
+						recordBody: composeReviewRecord(repairRecord(fixture.head)),
+					};
+				},
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+				coordinateRecovery: async () => {
+					coordinated += 1;
+					return {
+						terminal: "continue",
+						route: "oscillation",
+						reentry: "nothing",
+						nextGate: "ordinary-flow",
+						measurement: {
+							spec: {
+								kind: "measurement",
+								question: "q",
+								method: "m",
+								expectedDiscriminator: "d",
+								evidence: "s",
+								nonMutating: true,
+								notPreviouslyPresent: true,
+							},
+							specDigest: "1".repeat(64),
+							result: "r",
+							evidence: "e",
+							resultDigest: "2".repeat(64),
+							evidenceDigest: "3".repeat(64),
+						},
+						freshRuling: {
+							diagnosis: { value: "NONE", invalidation: "nothing", evidence: "fresh" },
+							diagnosisDigest: "4".repeat(64),
+							evidenceDigest: "5".repeat(64),
+						},
+						recordRef: {
+							repoHash: "6".repeat(64),
+							keyHash: "7".repeat(64),
+							claimId: "00000000-0000-4000-8000-000000000000",
+						},
+					};
+				},
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(rounds, 1, "the ordinary-flow gate alone resumes the review round");
+		assert.ok(coordinated >= 1);
+		assert.equal(outcome.disposition, "posted");
+	});
+
 	it("stops at the planning gate for a pre-round measurement continue", async () => {
 		const fixture = repo();
 		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];

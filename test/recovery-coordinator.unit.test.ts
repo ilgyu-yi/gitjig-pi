@@ -385,55 +385,70 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(result.freshRuling.diagnosis.invalidation, "authorization");
 	});
 
-	it("hands off when the sole precontinue refresh drifts", async () => {
-		const current = {
-			...subject,
-			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_PRECONTINUE_DRIFT" } },
-		};
-		const spec = {
-			kind: "measurement",
-			question: "drift q",
-			method: "drift m",
-			expectedDiscriminator: "drift d",
-			evidence: "drift selector",
-			nonMutating: true,
-			notPreviouslyPresent: true,
-		};
-		let digest = "";
-		let precontinue = 0;
-		const result = await coordinateHistoryRecovery({
-			repoRoot: process.cwd(),
-			modes,
-			subject: current,
-			history,
-			basis,
-			diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original" },
-			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
-			refreshPrecontinue: async () => {
-				precontinue += 1;
-				const drifted = structuredClone(current);
-				drifted.context.pullRequest.head.oid = "c".repeat(40);
-				return { ...freshness(), subject: drifted };
-			},
-			dispatchProfile: async (ledger, profileId) => {
-				let value: unknown;
-				if (profileId === "recovery-selector") {
-					value = spec;
-					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
-					digest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
-				} else if (profileId === "recovery-measurement")
-					value = {
-						kind: "measurement-result",
-						specDigest: digest,
-						result: "drift result",
-						evidence: "drift measured",
-					};
-				else value = { value: "NONE", invalidation: "nothing", evidence: "fresh" };
-				return observed(ledger, admitted(value));
-			},
-		});
-		assert.equal(precontinue, 1);
-		assert.equal(result.terminal, "handoff");
+	it("hands off when subject, complete history or repair basis drifts at the sole precontinue read", async () => {
+		for (const drift of ["subject", "history", "basis"] as const) {
+			const current = {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: `PR_PRECONTINUE_${drift}` } },
+			};
+			const spec = {
+				kind: "measurement",
+				question: "drift q",
+				method: "drift m",
+				expectedDiscriminator: "drift d",
+				evidence: "drift selector",
+				nonMutating: true,
+				notPreviouslyPresent: true,
+			};
+			let digest = "";
+			let precontinue = 0;
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis: { value: "OSCILLATION", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				refreshPrecontinue: async () => {
+					precontinue += 1;
+					const state = { ...freshness(), subject: structuredClone(current) };
+					if (drift === "subject") state.subject.context.pullRequest.head.oid = "c".repeat(40);
+					if (drift === "history") state.history = [{ ...history[0], head: "c".repeat(40) }];
+					if (drift === "basis")
+						state.basis = { ...basis, intervals: [{ distinct: "changed" }] } as unknown as RepairBasis;
+					return state;
+				},
+				dispatchProfile: async (ledger, profileId) => {
+					let value: unknown;
+					if (profileId === "recovery-selector") {
+						value = spec;
+						const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+						digest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+					} else if (profileId === "recovery-measurement")
+						value = {
+							kind: "measurement-result",
+							specDigest: digest,
+							result: "drift result",
+							evidence: "drift measured",
+						};
+					else value = { value: "NONE", invalidation: "nothing", evidence: "fresh" };
+					return observed(ledger, admitted(value));
+				},
+			});
+			assert.equal(precontinue, 1);
+			assert.equal(result.terminal, "handoff", drift);
+			assert.equal(result.nextGate, "park", drift);
+			assert.ok(result.recordRef);
+			const durable = JSON.parse(
+				readFileSync(
+					join(stateRoot, "gitjig", "recovery", `r2-${result.recordRef.repoHash}-${result.recordRef.keyHash}.json`),
+					"utf8",
+				),
+			);
+			assert.equal(durable.state, "consumed");
+			assert.equal(durable.terminal, "handoff");
+		}
 	});
 
 	it("rejects a repeated measurement selector before executing measurement", async () => {
