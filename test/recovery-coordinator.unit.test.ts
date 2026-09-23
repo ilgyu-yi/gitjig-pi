@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { makeDiagnostic } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { DispatchOutcome } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import {
 	coordinateHistoryRecovery,
@@ -593,6 +594,85 @@ describe("Phase-A history recovery coordinator", () => {
 		} finally {
 			Object.defineProperty(performance, "now", { configurable: true, value: original });
 		}
+	});
+
+	it("persists the one missing-return retry with global attempt order and nonempty retrySlots", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_DURABLE_RETRY" } },
+		};
+		let rootCalls = 0;
+		const missing: DispatchOutcome = {
+			disposition: "refused",
+			cause: "no return",
+			diagnostic: makeDiagnostic({
+				status: "refused",
+				phase: "return",
+				run: { class: "exited", exitCode: 0, signal: null },
+				return: { class: "missing" },
+				compare: { class: "not-reached" },
+				durationMs: 1,
+				code: "RETURN_MISSING",
+			}),
+		};
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "original" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => {
+				throw new Error("selector parks");
+			},
+			dispatchProfile: async (ledger, profileId) => {
+				const value =
+					profileId === "stagnation-root"
+						? { outcome: "ALTERNATIVE", method: "root", evidence: "root evidence" }
+						: profileId === "stagnation-blast-radius"
+							? { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" }
+							: { selected: "none", materiallyDifferent: false, evidence: "no choice" };
+				return makeDispatcher(
+					{ callerRepoRoot: "/repo", stateRoot: "/state", delegateArgv: ["pi"], timeoutMs: 600_000 },
+					async () => (profileId === "stagnation-root" && rootCalls++ === 0 ? missing : admitted(value)),
+					{ attemptPolicy: { ledger, beforeRetry: () => true } },
+				)("brief", "b".repeat(40));
+			},
+		});
+		assert.equal(rootCalls, 2);
+		assert.equal(result.terminal, "handoff");
+		assert.equal(result.nextGate, "park");
+		assert.ok(result.recordRef);
+		const directory = join(stateRoot, "gitjig", "recovery");
+		const durable = JSON.parse(
+			readFileSync(join(directory, `r2-${result.recordRef.repoHash}-${result.recordRef.keyHash}.json`), "utf8"),
+		);
+		assert.equal(durable.state, "consumed");
+		assert.equal(durable.terminal, "handoff");
+		assert.deepEqual(durable.completeness.requiredSlots, [
+			"stagnation-root",
+			"stagnation-blast-radius",
+			"recovery-selector",
+		]);
+		assert.deepEqual(durable.completeness.admittedSlots, [
+			"stagnation-root",
+			"stagnation-blast-radius",
+			"recovery-selector",
+		]);
+		assert.equal(durable.attempts.length, 4);
+		assert.deepEqual(
+			durable.attempts.map((attempt: { sequence: number }) => attempt.sequence),
+			[1, 2, 3, 4],
+		);
+		assert.equal(durable.attempts.filter((attempt: { slot: string }) => attempt.slot === "stagnation-root").length, 2);
+		assert.equal(
+			durable.attempts.find((attempt: { diagnostic: { code: string } }) => attempt.diagnostic.code === "RETURN_MISSING")
+				?.admission,
+			"not-admitted",
+		);
+		assert.deepEqual(durable.sequenceAuthority.retrySlots, ["stagnation-root"]);
+		assert.equal(durable.sequenceAuthority.lastSequence, 4);
 	});
 
 	it("pins both sides of the route work cutoff and the post-refresh terminal cutoff to durable outcomes", async () => {
