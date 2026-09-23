@@ -98,6 +98,34 @@ describe("production recovery state-domain resolver", () => {
 		}
 	});
 
+	it("rejects directory metadata owned by a different effective uid", () => {
+		const box = root();
+		cpSync(new URL("../.pi/extensions/gitjig/recovery", import.meta.url), join(box, "recovery"), { recursive: true });
+		const shim = join(box, "uid-fs-shim.mjs");
+		writeFileSync(
+			shim,
+			`import * as fs from "node:fs";\nexport const {closeSync,constants,fsyncSync,mkdirSync,openSync}=fs;\nconst other=(value)=>new Proxy(value,{get(target,key){if(key==="uid") return target.uid+1; const item=Reflect.get(target,key,target); return typeof item==="function"?item.bind(target):item;}});\nexport const lstatSync=(path)=>other(fs.lstatSync(path)); export const fstatSync=(fd)=>other(fs.fstatSync(fd));\n`,
+		);
+		const target = join(box, "recovery", "state-domain.ts");
+		writeFileSync(
+			target,
+			readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
+		);
+		const xdg = join(box, "xdg");
+		mkdirSync(xdg, { mode: 0o700 });
+		const result = spawnSync(
+			process.execPath,
+			[
+				"--input-type=module",
+				"-e",
+				`import {resolveRecoveryStateDomain as r} from ${JSON.stringify(new URL(`file://${target}`).href)}; console.log(r()===undefined?"refused":"admitted");`,
+			],
+			{ encoding: "utf8", env: { PATH: process.env.PATH, XDG_STATE_HOME: xdg } },
+		);
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(result.stdout.trim(), "refused");
+	});
+
 	it("rejects the production test-root variable even when empty", () => {
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: root(), GITJIG_TEST_STATE_ROOT: "" }).stdout), null);
 	});

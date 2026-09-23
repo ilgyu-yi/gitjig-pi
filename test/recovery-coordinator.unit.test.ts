@@ -377,6 +377,103 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.deepEqual(calls, ["recovery-selector"]);
 	});
 
+	it("rejects a repeated measurement result before fresh diagnosis", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_REPEAT_RESULT" } },
+		};
+		const repeatedBasis = {
+			states: [{ head: "b".repeat(40), findings: [{ ruling: { evidence: "old result" } }] }],
+			intervals: [],
+		} as unknown as RepairBasis;
+		const spec = {
+			kind: "measurement",
+			question: "unique q",
+			method: "unique m",
+			expectedDiscriminator: "unique d",
+			evidence: "unique selector",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		let digest = "";
+		const calls: PhaseAProfileId[] = [];
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis: repeatedBasis,
+			diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original" },
+			refreshPreclaim: async () => ({
+				subject: structuredClone(current),
+				history: structuredClone(history),
+				basis: repeatedBasis,
+			}),
+			refreshPrecontinue: async () => {
+				throw new Error("repeated result cannot continue");
+			},
+			dispatchProfile: async (ledger, profileId) => {
+				calls.push(profileId);
+				let value: unknown;
+				if (profileId === "recovery-selector") {
+					value = spec;
+					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+					digest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+				} else
+					value = {
+						kind: "measurement-result",
+						specDigest: digest,
+						result: "old result",
+						evidence: "unique measurement evidence",
+					};
+				return observed(ledger, admitted(value));
+			},
+		});
+		assert.equal(result.terminal, "handoff");
+		assert.deepEqual(calls, ["recovery-selector", "recovery-measurement"]);
+	});
+
+	it("enforces the route work deadline before precontinue", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROUTE_DEADLINE" } },
+		};
+		const original = performance.now;
+		let clock = 0;
+		let refreshes = 0;
+		try {
+			Object.defineProperty(performance, "now", { configurable: true, value: () => clock });
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				refreshPrecontinue: async () => {
+					refreshes += 1;
+					return { ...freshness(), subject: structuredClone(current) };
+				},
+				dispatchProfile: async (ledger, profileId) => {
+					const value =
+						profileId === "stagnation-root"
+							? { outcome: "ALTERNATIVE", method: "root", evidence: "root evidence" }
+							: profileId === "stagnation-blast-radius"
+								? { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" }
+								: { selected: "root", materiallyDifferent: true, evidence: "selection" };
+					const result = await observed(ledger, admitted(value));
+					if (profileId === "recovery-selector") clock = 3_800_000;
+					return result;
+				},
+			});
+			assert.equal(result.terminal, "handoff");
+			assert.equal(refreshes, 0);
+		} finally {
+			Object.defineProperty(performance, "now", { configurable: true, value: original });
+		}
+	});
+
 	it("maps every fresh invalidation and non-NONE ruling to its closed re-entry gate", async () => {
 		const cases = [
 			{ value: "NONE", invalidation: "nothing", terminal: "continue", gate: "ordinary-flow" },

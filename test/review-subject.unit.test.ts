@@ -433,6 +433,25 @@ describe("review subject criterion union", () => {
 		}
 	});
 
+	it("refuses more than 10,000 unique closing-issue nodes", async () => {
+		const locators: ClosingIssueLocator[] = Array.from({ length: 10_001 }, (_, index) => ({
+			id: `CAP_${String(index)}`,
+			number: index + 1,
+			url: `https://github.com/owner/repo/issues/${String(index + 1)}`,
+			repository: { id: "REPO_1", name: "repo", owner: { id: "OWNER", login: "owner" } },
+		}));
+		const base = platformResponses([]);
+		const responses = [
+			base[0],
+			base[1],
+			closingPages(locators),
+			...locators.map(({ id, number, url }) => JSON.stringify({ id, number, url, title: "t", body: "" })),
+			base[4],
+			...locators.map(({ id, number }) => JSON.stringify(platformComments(id, number))),
+		];
+		assert.equal(await fetchReviewSubject("/repo", 223, async () => responses.shift()), undefined);
+	});
+
 	it("refuses non-conforming locator and explicit-read shapes", async () => {
 		const locator: ClosingIssueLocator = {
 			id: issue.id,

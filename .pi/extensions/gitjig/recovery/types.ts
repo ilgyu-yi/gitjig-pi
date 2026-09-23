@@ -111,7 +111,7 @@ export type ClaimedRecordV3 = {
 	cause: null;
 };
 
-export type ConsumedRecordV3 = Omit<
+type ConsumedRecordBase = Omit<
 	ClaimedRecordV3,
 	| "state"
 	| "updatedAt"
@@ -131,14 +131,71 @@ export type ConsumedRecordV3 = Omit<
 	attempts: AttemptRecord[];
 	completeness: { requiredSlots: PhaseAProfileId[]; admittedSlots: PhaseAProfileId[] };
 	sequenceAuthority: { source: "host-attempt-order"; lastSequence: number; retrySlots: PhaseAProfileId[] };
-	selectedIntervention: SelectedIntervention | null;
-	measurement: RecoveryMeasurement | null;
-	freshRuling: FreshRuling | null;
-	reentry: RecoveryReentry;
-	nextGate: RecoveryGate;
-	terminal: "continue" | "handoff";
-	cause: "allowance-consumed" | "recovery-failed" | "authorization" | null;
 };
+
+export type ConsumedRecordV3 = ConsumedRecordBase &
+	(
+		| {
+				route: "stagnation";
+				selectedIntervention: SelectedIntervention;
+				measurement: null;
+				freshRuling: null;
+				reentry: "nothing";
+				nextGate: "author-repair";
+				terminal: "continue";
+				cause: null;
+		  }
+		| {
+				route: "oscillation" | "indeterminate";
+				selectedIntervention: null;
+				measurement: RecoveryMeasurement;
+				freshRuling: FreshRuling;
+				reentry: "nothing" | "plan";
+				nextGate: "ordinary-flow" | "planning";
+				terminal: "continue";
+				cause: null;
+		  }
+		| {
+				route: "stagnation";
+				selectedIntervention: SelectedIntervention | null;
+				measurement: null;
+				freshRuling: null;
+				reentry: "nothing";
+				nextGate: "park";
+				terminal: "handoff";
+				cause: "recovery-failed";
+		  }
+		| {
+				route: "oscillation" | "indeterminate";
+				selectedIntervention: null;
+				measurement: RecoveryMeasurement | null;
+				freshRuling: FreshRuling | null;
+				reentry: "nothing";
+				nextGate: "park";
+				terminal: "handoff";
+				cause: "recovery-failed";
+		  }
+		| {
+				route: "oscillation" | "indeterminate";
+				selectedIntervention: null;
+				measurement: RecoveryMeasurement;
+				freshRuling: FreshRuling;
+				reentry: "plan";
+				nextGate: "planning-handoff";
+				terminal: "handoff";
+				cause: "recovery-failed";
+		  }
+		| {
+				route: "oscillation" | "indeterminate";
+				selectedIntervention: null;
+				measurement: RecoveryMeasurement;
+				freshRuling: FreshRuling;
+				reentry: "authorization";
+				nextGate: "authorization-handoff";
+				terminal: "handoff";
+				cause: "authorization";
+		  }
+	);
 
 export type RecoveryFreshness = { subject: ReviewSubject; history: readonly StateSummary[]; basis: RepairBasis };
 
@@ -171,17 +228,43 @@ export type RecoveryResult =
 	  }
 	| {
 			terminal: "handoff";
-			route: "none" | RecoveryRoute;
-			cause:
-				| "profile-preflight"
-				| "state-domain"
-				| "identity"
-				| "allowance-consumed"
-				| "recovery-failed"
-				| "authorization";
-			reentry: RecoveryReentry;
-			nextGate: "park" | "planning-handoff" | "authorization-handoff";
+			route: "none";
+			cause: "profile-preflight" | "state-domain" | "identity" | "allowance-consumed";
+			reentry: "nothing";
+			nextGate: "park";
 			recordRef: RecordRef | null;
+	  }
+	| {
+			terminal: "handoff";
+			route: "stagnation";
+			cause: "recovery-failed";
+			reentry: "nothing";
+			nextGate: "park";
+			recordRef: RecordRef;
+	  }
+	| {
+			terminal: "handoff";
+			route: "oscillation" | "indeterminate";
+			cause: "recovery-failed";
+			reentry: "nothing";
+			nextGate: "park";
+			recordRef: RecordRef;
+	  }
+	| {
+			terminal: "handoff";
+			route: "oscillation" | "indeterminate";
+			cause: "recovery-failed";
+			reentry: "plan";
+			nextGate: "planning-handoff";
+			recordRef: RecordRef;
+	  }
+	| {
+			terminal: "handoff";
+			route: "oscillation" | "indeterminate";
+			cause: "authorization";
+			reentry: "authorization";
+			nextGate: "authorization-handoff";
+			recordRef: RecordRef;
 	  };
 
 function compareText(left: string, right: string): number {

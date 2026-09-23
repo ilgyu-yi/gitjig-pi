@@ -313,14 +313,33 @@ function handoff(
 	recordRef: RecordRef | null,
 	route: Extract<RecoveryResult, { terminal: "handoff" }>["route"] = "none",
 ): RecoveryResult {
-	return {
-		terminal: "handoff",
-		route,
-		cause,
-		reentry,
-		nextGate: reentry === "plan" ? "planning-handoff" : reentry === "authorization" ? "authorization-handoff" : "park",
-		recordRef,
-	};
+	if (route === "none" || recordRef === null) {
+		const preclaimCause = ["profile-preflight", "state-domain", "identity", "allowance-consumed"].includes(cause)
+			? (cause as "profile-preflight" | "state-domain" | "identity" | "allowance-consumed")
+			: "identity";
+		return {
+			terminal: "handoff",
+			route: "none",
+			cause: preclaimCause,
+			reentry: "nothing",
+			nextGate: "park",
+			recordRef,
+		};
+	}
+	if (route === "stagnation")
+		return { terminal: "handoff", route, cause: "recovery-failed", reentry: "nothing", nextGate: "park", recordRef };
+	if (reentry === "authorization")
+		return {
+			terminal: "handoff",
+			route,
+			cause: "authorization",
+			reentry,
+			nextGate: "authorization-handoff",
+			recordRef,
+		};
+	if (reentry === "plan")
+		return { terminal: "handoff", route, cause: "recovery-failed", reentry, nextGate: "planning-handoff", recordRef };
+	return { terminal: "handoff", route, cause: "recovery-failed", reentry, nextGate: "park", recordRef };
 }
 
 export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput): Promise<RecoveryResult> {
@@ -481,25 +500,26 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 		terminal: "continue" | "handoff",
 		cause: ConsumedRecordV3["cause"],
 		nextGate: ConsumedRecordV3["nextGate"],
-	): ConsumedRecordV3 => ({
-		...claimed,
-		state: "consumed",
-		updatedAt: consumedTimestamp(),
-		attempts: attempts.sort((left, right) => left.sequence - right.sequence),
-		completeness: { requiredSlots, admittedSlots },
-		sequenceAuthority: {
-			source: "host-attempt-order",
-			lastSequence: attempts.reduce((maximum, attempt) => Math.max(maximum, attempt.sequence), 0),
-			retrySlots,
-		},
-		selectedIntervention,
-		measurement,
-		freshRuling,
-		reentry,
-		nextGate,
-		terminal,
-		cause,
-	});
+	): ConsumedRecordV3 =>
+		({
+			...claimed,
+			state: "consumed",
+			updatedAt: consumedTimestamp(),
+			attempts: attempts.sort((left, right) => left.sequence - right.sequence),
+			completeness: { requiredSlots, admittedSlots },
+			sequenceAuthority: {
+				source: "host-attempt-order",
+				lastSequence: attempts.reduce((maximum, attempt) => Math.max(maximum, attempt.sequence), 0),
+				retrySlots,
+			},
+			selectedIntervention,
+			measurement,
+			freshRuling,
+			reentry,
+			nextGate,
+			terminal,
+			cause,
+		}) as unknown as ConsumedRecordV3;
 
 	const overRetainedBudget = (record: ConsumedRecordV3): boolean =>
 		Buffer.byteLength(canonicalJson(record), "utf8") > MAX_RETAINED_RECORD_BYTES;

@@ -292,35 +292,77 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		}
 	});
 
-	it("consumes a claim when exclusive creation may have succeeded before throwing", () => {
-		const box = mkdtempSync(join(tmpdir(), "gitjig-store-ambiguous-create-"));
+	it("distinguishes definite ENOSPC/EDQUOT from may-have-created open failure", () => {
+		for (const code of ["EIO", "ENOSPC", "EDQUOT"] as const) {
+			const box = mkdtempSync(join(tmpdir(), `gitjig-store-create-${code}-`));
+			try {
+				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+				const shim = join(box, "fs-shim.mjs");
+				writeFileSync(
+					shim,
+					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){if(process.env.OPEN_CODE==="EIO"){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);}const error=new Error("injected");error.code=process.env.OPEN_CODE;throw error;}return fs.openSync(path,flags,mode);}\n`,
+				);
+				const target = join(box, "gitjig", "recovery", "store.ts");
+				writeFileSync(
+					target,
+					readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
+				);
+				const probe = readFileSync(new URL(import.meta.url), "utf8").match(/const probe = `([\s\S]*?)`;\n/)?.[1];
+				assert.ok(probe);
+				const expectation =
+					code === "EIO"
+						? 'assert.equal(result.status,"consumed"); assert.equal(result.cause,"create-or-write-ambiguous");'
+						: 'assert.equal(result.status,"preclaim-refused"); assert.equal(result.cause,"state-domain");';
+				const adjusted = probe.replace(
+					/const claim=claimAllowance[\s\S]*?assert\.equal\(readFileSync\(process\.env\.FSYNC_LOG,"utf8"\),"fdfd"\);/,
+					`const result=claimAllowance({subject,record}); ${expectation}`,
+				);
+				writeFileSync(join(box, "probe.mjs"), adjusted);
+				const xdg = join(box, "state");
+				mkdirSync(xdg, { mode: 0o700 });
+				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					encoding: "utf8",
+					timeout: 10_000,
+					env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: join(box, "unused"), OPEN_CODE: code },
+				});
+				assert.equal(result.status, 0, result.stderr);
+			} finally {
+				rmSync(box, { recursive: true, force: true });
+			}
+		}
+	});
+
+	it("pins the existing-record read to 256 KiB plus one byte", () => {
+		const box = mkdtempSync(join(tmpdir(), "gitjig-store-record-cap-"));
 		try {
 			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
 			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 			const shim = join(box, "fs-shim.mjs");
 			writeFileSync(
 				shim,
-				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);const error=new Error("ambiguous");error.code="EIO";throw error;}return fs.openSync(path,flags,mode);}\n`,
+				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,writeSync}=fs;\nexport function readSync(fd,buffer,offset,length,position){fs.appendFileSync(process.env.READ_LOG,String(buffer.length)+"\\n");return fs.readSync(fd,buffer,offset,length,position);}\n`,
 			);
 			const target = join(box, "gitjig", "recovery", "store.ts");
 			writeFileSync(
 				target,
 				readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
 			);
-			const probe = readFileSync(new URL(import.meta.url), "utf8").match(/const probe = `([\s\S]*?)`;\n/)?.[1];
-			assert.ok(probe);
-			const adjusted = probe.replace(
-				/const claim=claimAllowance[\s\S]*?assert\.equal\(readFileSync\(process\.env\.FSYNC_LOG,"utf8"\),"fdfd"\);/,
-				'const result=claimAllowance({subject,record}); assert.equal(result.status,"consumed"); assert.equal(result.cause,"create-or-write-ambiguous");',
-			);
-			writeFileSync(join(box, "probe.mjs"), adjusted);
+			const owner = readFileSync(new URL(import.meta.url), "utf8").match(/const probe = `([\s\S]*?)`;\n/)?.[1];
+			assert.ok(owner);
+			const setup = owner.slice(0, owner.indexOf("const claim="));
+			const script = `${setup}\nconst {mkdirSync,writeFileSync}=await import("node:fs"); const {join}=await import("node:path"); const directory=join(process.env.XDG_STATE_HOME,"gitjig","recovery"); mkdirSync(directory,{recursive:true,mode:0o700}); writeFileSync(join(directory,\`r2-\${e.repoHash}-\${e.keyHash}.json\`),"x".repeat(300000),{mode:0o600}); const result=claimAllowance({subject,record}); assert.equal(result.status,"consumed"); assert.equal(result.recordRef,undefined); assert.equal(readFileSync(process.env.READ_LOG,"utf8"),"");`;
+			writeFileSync(join(box, "probe.mjs"), script);
 			const xdg = join(box, "state");
 			mkdirSync(xdg, { mode: 0o700 });
+			const log = join(box, "read.log");
+			writeFileSync(log, "");
 			const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
 				cwd: box,
 				encoding: "utf8",
 				timeout: 10_000,
-				env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: join(box, "unused") },
+				env: { ...process.env, XDG_STATE_HOME: xdg, READ_LOG: log },
 			});
 			assert.equal(result.status, 0, result.stderr);
 		} finally {
@@ -355,6 +397,33 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					const first = value.attempts[0];
 					assert.ok(first);
 					first.resultDigest = "f".repeat(64);
+				},
+			],
+			[
+				"refused-retained",
+				(value: ConsumedRecordV3) => {
+					const first = value.attempts[0];
+					assert.ok(first);
+					first.diagnostic = {
+						schemaVersion: 1,
+						status: "refused",
+						phase: "run",
+						run: { class: "aborted", exitCode: null, signal: null },
+						return: { class: "not-inspected" },
+						compare: { class: "not-reached" },
+						durationMs: 1,
+						code: "ABORTED",
+					};
+				},
+			],
+			[
+				"impossible-handoff",
+				(value: ConsumedRecordV3) => {
+					const mutable = value as unknown as Record<string, unknown>;
+					mutable.terminal = "handoff";
+					mutable.cause = "recovery-failed";
+					mutable.reentry = "plan";
+					mutable.nextGate = "planning-handoff";
 				},
 			],
 			[

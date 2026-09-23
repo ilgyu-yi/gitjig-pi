@@ -92,6 +92,8 @@ const DEFINITE_PRECREATE_ERRORS = new Set([
 	"ENFILE",
 	"ENAMETOOLONG",
 	"EROFS",
+	"ENOSPC",
+	"EDQUOT",
 ]);
 
 const spent = new WeakSet<object>();
@@ -167,6 +169,17 @@ function validAttempts(value: unknown): value is Record<string, unknown>[] {
 		)
 			return false;
 		const integers = [entry.sequence, entry.startedOffsetMs, entry.finishedOffsetMs];
+		const diagnostic = entry.diagnostic as {
+			status: unknown;
+			code: unknown;
+			return: { class: unknown };
+			compare: { class: unknown };
+		};
+		const admittedDiagnostic =
+			diagnostic.status === "admitted" &&
+			diagnostic.code === "ADMITTED" &&
+			diagnostic.return.class === "admitted" &&
+			diagnostic.compare.class === "confirmed";
 		return (
 			integers.every((number) => Number.isSafeInteger(number) && (number as number) >= 0) &&
 			entry.sequence === index + 1 &&
@@ -181,8 +194,12 @@ function validAttempts(value: unknown): value is Record<string, unknown>[] {
 			/^[0-9a-f]{40}$/.test(entry.expectedHead) &&
 			["retained", "deadline-rejected", "semantic-rejected", "not-admitted"].includes(entry.admission as string) &&
 			(entry.admission === "retained"
-				? typeof entry.resultDigest === "string" && /^[0-9a-f]{64}$/.test(entry.resultDigest)
-				: entry.resultDigest === null) &&
+				? admittedDiagnostic && typeof entry.resultDigest === "string" && /^[0-9a-f]{64}$/.test(entry.resultDigest)
+				: entry.admission === "semantic-rejected"
+					? admittedDiagnostic && entry.resultDigest === null
+					: entry.admission === "deadline-rejected"
+						? diagnostic.code === "ABORTED" && entry.resultDigest === null
+						: !admittedDiagnostic && entry.resultDigest === null) &&
 			validDiagnostic(entry.diagnostic)
 		);
 	});
@@ -408,6 +425,22 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 						retainedDigest("recovery-measurement") === measurement.resultDigest)) &&
 				(freshRuling === null ||
 					(measurement !== null && retainedDigest("recovery-diagnosis") === freshRuling.diagnosisDigest));
+	const handoffShape =
+		record.route === "stagnation"
+			? record.cause === "recovery-failed" && record.reentry === "nothing" && record.nextGate === "park"
+			: record.reentry === "authorization"
+				? record.cause === "authorization" &&
+					record.nextGate === "authorization-handoff" &&
+					freshRuling !== null &&
+					freshRuling.diagnosis.invalidation === "authorization"
+				: record.reentry === "plan"
+					? record.cause === "recovery-failed" &&
+						record.nextGate === "planning-handoff" &&
+						freshRuling !== null &&
+						freshRuling.diagnosis.invalidation === "plan"
+					: record.cause === "recovery-failed" &&
+						record.nextGate === "park" &&
+						(freshRuling === null || freshRuling.diagnosis.invalidation === "nothing");
 	const routeShape =
 		orderIsCoherent &&
 		outputsAreBound &&
@@ -444,14 +477,7 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 						retainedDigest("recovery-selector") === measurement.specDigest &&
 						retainedDigest("recovery-measurement") === measurement.resultDigest &&
 						retainedDigest("recovery-diagnosis") === freshRuling.diagnosisDigest)
-			: record.terminal === "handoff" &&
-				record.cause !== null &&
-				record.nextGate ===
-					(record.reentry === "nothing"
-						? "park"
-						: record.reentry === "plan"
-							? "planning-handoff"
-							: "authorization-handoff"));
+			: record.terminal === "handoff" && handoffShape);
 	return (
 		routeShape &&
 		object(record.completeness, ["requiredSlots", "admittedSlots"]) &&
