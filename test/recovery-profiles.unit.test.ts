@@ -158,6 +158,55 @@ describe("closed Phase-A recovery profiles", () => {
 		}
 	});
 
+	it("kills a private-copy attempt-bound mutant and observes min(bound, remaining) at the dispatcher seam", async () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-attempt-bound-"));
+		const priorLog = process.env.RECOVERY_TIMEOUT_LOG;
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(root, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(root, "node_modules"), "dir");
+			const path = join(root, "gitjig", "recovery", "coordinator.ts");
+			const original = readFileSync(path, "utf8");
+			const needle = 'import { runDispatch } from "../dispatch/index.ts";';
+			assert.equal(original.split(needle).length, 2);
+			const shim = join(root, "gitjig", "recovery", "timeout-shim.ts");
+			writeFileSync(
+				shim,
+				`import {writeFileSync} from "node:fs"; import {makeDiagnostic} from "../dispatch/diagnostics.ts"; export async function runDispatch(options){writeFileSync(process.env.RECOVERY_TIMEOUT_LOG,String(options.timeoutMs));return {disposition:"refused",cause:"absent",diagnostic:makeDiagnostic({status:"refused",phase:"spawn",run:{class:"not-started",exitCode:null,signal:null},return:{class:"not-inspected"},compare:{class:"not-reached"},durationMs:0,code:"SPAWN_FAILED"})};}`,
+			);
+			const log = join(root, "timeout.log");
+			process.env.RECOVERY_TIMEOUT_LOG = log;
+			const ledger = await import(new URL(`file://${join(root, "gitjig", "review", "orchestrate.ts")}`).href);
+			for (const [index, bound] of ([600_000, 600_001] as const).entries()) {
+				const source =
+					index === 0 ? original : original.replace("ATTEMPT_BOUND_MS = 600_000", "ATTEMPT_BOUND_MS = 600_001");
+				writeFileSync(path, source.replace(needle, 'import { runDispatch } from "./timeout-shim.ts";'));
+				const coordinator = await import(`${new URL(`file://${path}`).href}?bound=${String(index)}`);
+				for (const [remaining, expected] of [
+					[650_000, bound],
+					[500_000, 500_000],
+				] as const) {
+					const dispatch = coordinator.makeRecoveryProfileDispatcher({ repoRoot: process.cwd(), stateRoot: root });
+					await dispatch(
+						ledger.createRecoveryAttemptLedger(performance.now()),
+						"recovery-selector",
+						"brief",
+						"b".repeat(40),
+						performance.now() + remaining,
+					);
+					const observed = Number(readFileSync(log, "utf8"));
+					if (remaining === 650_000) {
+						assert.equal(observed, expected);
+						if (index === 1) assert.notEqual(observed, 600_000, "mutant must fail the owner bound assertion");
+					} else assert.ok(observed <= 500_000 && observed >= 499_000, `remaining bound: ${String(observed)}`);
+				}
+			}
+		} finally {
+			if (priorLog === undefined) delete process.env.RECOVERY_TIMEOUT_LOG;
+			else process.env.RECOVERY_TIMEOUT_LOG = priorLog;
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("pins the installed executable help grammar before claim", () => {
 		assert.equal(preflightRecoveryExecutable(), true);
 	});
