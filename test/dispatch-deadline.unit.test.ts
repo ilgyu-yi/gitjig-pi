@@ -235,6 +235,50 @@ describe("recovery optional dispatch deadline", () => {
 		}
 	});
 
+	it("kills a private-copy omission of the final checkpoint freeze", async () => {
+		const box = mkdtempSync(join(tmpdir(), "gitjig-final-mutant-"));
+		const repo = repository();
+		const originalSetTimeout = globalThis.setTimeout;
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+			const path = join(box, "gitjig", "dispatch", "index.ts");
+			const original = readFileSync(path, "utf8");
+			assert.equal(original.split("finalCheckpointBytes = after;").length, 2);
+			writeFileSync(path, original.replace("finalCheckpointBytes = after;", "void after;"));
+			globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) =>
+				originalSetTimeout(
+					callback,
+					delay === 360_000 ? 100 : delay === 540_000 ? 160 : delay,
+					...args,
+				)) as typeof setTimeout;
+			const script = [
+				"const {execFileSync}=require('node:child_process'); const {writeFileSync}=require('node:fs');",
+				"const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();",
+				"const put=(summary)=>writeFileSync('../return.json',JSON.stringify({ok:true,summary,reviewedHead:head}));",
+				"put('provisional'); setTimeout(()=>put('changed after freeze'),220); setTimeout(()=>{},260);",
+			].join("");
+			const options = {
+				callerRepoRoot: repo,
+				stateRoot: join(repo, "state"),
+				delegateArgv: [process.execPath, "-e", script],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 5_000,
+			};
+			const baseline = await runDispatch({ ...options, operationDeadline: performance.now() + 5_000 });
+			assert.equal(baseline.disposition, "refused");
+			assert.equal(baseline.diagnostic.code, "ABORTED");
+			const mutated = await import(new URL(`file://${path}`).href);
+			const result = await mutated.runDispatch({ ...options, operationDeadline: performance.now() + 5_000 });
+			assert.equal(result.disposition, "admitted", "removing final freeze must fail the owner behavioral assertion");
+		} finally {
+			globalThis.setTimeout = originalSetTimeout;
+			rmSync(repo, { recursive: true, force: true });
+			rmSync(box, { recursive: true, force: true });
+		}
+	});
+
 	it("preserves the admitted path when the optional deadline is absent", async () => {
 		const repo = repository();
 		try {
