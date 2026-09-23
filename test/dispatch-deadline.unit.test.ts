@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -115,6 +115,88 @@ describe("recovery optional dispatch deadline", () => {
 		} finally {
 			Object.defineProperty(performance, "now", { configurable: true, value: original });
 			rmSync(second, { recursive: true, force: true });
+		}
+	});
+
+	it("refuses an absent provisional return at the 360-second checkpoint", async () => {
+		const repo = repository();
+		const originalSetTimeout = globalThis.setTimeout;
+		try {
+			globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) =>
+				originalSetTimeout(
+					callback,
+					delay === 360_000 ? 100 : delay === 540_000 ? 250 : delay,
+					...args,
+				)) as typeof setTimeout;
+			const outcome = await runDispatch({
+				callerRepoRoot: repo,
+				stateRoot: join(repo, "state"),
+				delegateArgv: [process.execPath, "-e", "setTimeout(()=>{},500)"],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 5_000,
+				operationDeadline: performance.now() + 5_000,
+				enteredAt: performance.now(),
+			});
+			assert.equal(outcome.disposition, "refused");
+			assert.equal(outcome.diagnostic.code, "ABORTED");
+			assert.equal(outcome.diagnostic.phase, "run");
+			const actions = readFileSync(join(repo, "state", "audit.jsonl"), "utf8")
+				.trim()
+				.split("\n")
+				.map((line) => (JSON.parse(line) as { action: string }).action);
+			assert.ok(actions.includes("refuse-aborted"));
+		} finally {
+			globalThis.setTimeout = originalSetTimeout;
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	it("kills a private-copy removal of the provisional checkpoint", async () => {
+		const box = mkdtempSync(join(tmpdir(), "gitjig-checkpoint-mutant-"));
+		const repo = repository();
+		const originalSetTimeout = globalThis.setTimeout;
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+			const path = join(box, "gitjig", "dispatch", "index.ts");
+			const original = readFileSync(path, "utf8");
+			const needle = "if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();";
+			assert.equal(original.split(needle).length, 2);
+			writeFileSync(path, original.replace(needle, "void context.returnPath;"));
+			globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) =>
+				originalSetTimeout(
+					callback,
+					delay === 360_000 ? 90 : delay === 540_000 ? 500 : delay,
+					...args,
+				)) as typeof setTimeout;
+			const mutated = await import(new URL(`file://${path}`).href);
+			const lateWriter = [
+				"const {execFileSync}=require('node:child_process'); const {writeFileSync}=require('node:fs');",
+				"const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();",
+				"setTimeout(()=>writeFileSync('../return.json',JSON.stringify({ok:true,summary:'late',reviewedHead:head})),170);",
+			].join("");
+			const options = {
+				callerRepoRoot: repo,
+				stateRoot: join(repo, "state"),
+				delegateArgv: [process.execPath, "-e", lateWriter],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 5_000,
+			};
+			const baseline = await runDispatch({ ...options, operationDeadline: performance.now() + 5_000 });
+			assert.equal(baseline.disposition, "refused");
+			assert.equal(baseline.diagnostic.code, "ABORTED");
+			const outcome = await mutated.runDispatch({ ...options, operationDeadline: performance.now() + 5_000 });
+			assert.equal(
+				outcome.disposition,
+				"admitted",
+				"mutant must survive without the checkpoint and thus be killed by the owner test",
+			);
+		} finally {
+			globalThis.setTimeout = originalSetTimeout;
+			rmSync(repo, { recursive: true, force: true });
+			rmSync(box, { recursive: true, force: true });
 		}
 	});
 
