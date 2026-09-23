@@ -372,12 +372,13 @@ export async function fetchPlatformReviewContext(
 	return fetchPullContext(repoRoot, repositoryIdentity, pr, read);
 }
 
-const CLOSING_ISSUES_QUERY = `query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:100,after:$endCursor){nodes{id number url repository{id name owner{id}}}pageInfo{hasNextPage endCursor}}}}}`;
+const CLOSING_ISSUES_QUERY = `query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){id pullRequest(number:$number){id closingIssuesReferences(first:100,after:$endCursor){nodes{id number url repository{id name owner{id}}}pageInfo{hasNextPage endCursor}}}}}`;
 
 async function fetchClosingIssueReferences(
 	repoRoot: string,
 	repository: PlatformRepositoryIdentity,
 	pr: number,
+	pullRequestId: string,
 	read: PlatformRead,
 ): Promise<unknown[] | undefined> {
 	const [owner, name, extra] = repository.nameWithOwner.split("/");
@@ -409,9 +410,14 @@ async function fetchClosingIssueReferences(
 		const page = value[index];
 		if (!object(page, ["data"])) return undefined;
 		const data = page.data;
-		if (!object(data, ["repository"]) || !object(data.repository, ["pullRequest"])) return undefined;
+		if (
+			!object(data, ["repository"]) ||
+			!object(data.repository, ["id", "pullRequest"]) ||
+			data.repository.id !== repository.id
+		)
+			return undefined;
 		const pull = data.repository.pullRequest;
-		if (!object(pull, ["closingIssuesReferences"])) return undefined;
+		if (!object(pull, ["id", "closingIssuesReferences"]) || pull.id !== pullRequestId) return undefined;
 		const connection = pull.closingIssuesReferences;
 		if (!object(connection, ["nodes", "pageInfo"]) || !Array.isArray(connection.nodes)) return undefined;
 		if (!object(connection.pageInfo, ["hasNextPage", "endCursor"])) return undefined;
@@ -465,11 +471,12 @@ async function fetchPullContext(
 		]) ||
 		pullValue.number !== pr ||
 		!exactHttpsUrl(pullValue.url, repositoryIdentity.host, `/${repositoryIdentity.nameWithOwner}/pull/${String(pr)}`) ||
+		!text(pullValue.id) ||
 		!platformNode(pullValue.author) ||
 		!platformNode(pullValue.headRepository)
 	)
 		return undefined;
-	const closingReferences = await fetchClosingIssueReferences(repoRoot, repositoryIdentity, pr, read);
+	const closingReferences = await fetchClosingIssueReferences(repoRoot, repositoryIdentity, pr, pullValue.id, read);
 	if (closingReferences === undefined) return undefined;
 	const closingIssues: PlatformIssueSnapshot[] = [];
 	const issueIds = new Set<string>();

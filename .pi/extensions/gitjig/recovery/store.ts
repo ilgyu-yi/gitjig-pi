@@ -357,6 +357,8 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 		);
 	if (!timestamp(record.updatedAt) || (record.updatedAt as string) <= (record.createdAt as string)) return false;
 	if (!validAttempts(record.attempts)) return false;
+	const basisHead = (record.basis as { triggeringReviewState: { head: string } }).triggeringReviewState.head;
+	if (record.attempts.some((attempt) => attempt.expectedHead !== basisHead)) return false;
 	const required =
 		record.route === "stagnation"
 			? ["stagnation-root", "stagnation-blast-radius", "recovery-selector"]
@@ -429,7 +431,7 @@ function coreRecord(value: unknown): value is Record<string, unknown> {
 		record.route === "stagnation"
 			? record.cause === "recovery-failed" && record.reentry === "nothing" && record.nextGate === "park"
 			: record.reentry === "authorization"
-				? record.cause === "authorization" &&
+				? (record.cause === "authorization" || record.cause === "recovery-failed") &&
 					record.nextGate === "authorization-handoff" &&
 					freshRuling !== null &&
 					freshRuling.diagnosis.invalidation === "authorization"
@@ -640,7 +642,7 @@ export function claimAllowance(input: { subject: ReviewSubject; record: ClaimedR
 		const recordRef = existing(path, encoding.repoHash, encoding.keyHash);
 		return { status: "consumed", cause: "existing", ...(recordRef === undefined ? {} : { recordRef }) };
 	} catch (error) {
-		if ((error as { code?: string }).code !== "ENOENT") return { status: "consumed", cause: "existing" };
+		if ((error as { code?: string }).code !== "ENOENT") return { status: "preclaim-refused", cause: "state-domain" };
 	}
 	let fd: number | undefined;
 	let created = false;

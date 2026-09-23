@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { DispatchOutcome } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import {
 	coordinateHistoryRecovery,
+	hasRecoveryRetryReserve,
 	makeRecoveryProfileDispatcher,
 	type RecoveryProfileDispatcher,
 } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
@@ -131,7 +141,9 @@ function freshness(): RecoveryFreshness {
 }
 
 describe("Phase-A history recovery coordinator", () => {
-	it("refuses the missing-return retry below the 660-second reserve cutoff", async () => {
+	it("pins the missing-return retry cutoff at exactly 660,000 ms of reserve", async () => {
+		assert.equal(hasRecoveryRetryReserve(659_999, 0), false);
+		assert.equal(hasRecoveryRetryReserve(660_000, 0), true);
 		const dispatch = makeRecoveryProfileDispatcher({ repoRoot: process.cwd(), stateRoot });
 		const result = await dispatch(
 			createRecoveryAttemptLedger(performance.now()),
@@ -279,6 +291,56 @@ describe("Phase-A history recovery coordinator", () => {
 		});
 		assert.equal(result.terminal, "continue");
 		assert.equal(result.nextGate, "planning");
+	});
+
+	it("preserves authorization products and gate when finalization fails", async () => {
+		let specDigest = "";
+		const spec = {
+			kind: "measurement",
+			question: "fresh question",
+			method: "fresh method",
+			expectedDiscriminator: "fresh discriminator",
+			evidence: "selector evidence",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject,
+			history,
+			basis,
+			diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original" },
+			refreshPreclaim: async () => freshness(),
+			refreshPrecontinue: async () => {
+				renameSync(join(stateRoot, "gitjig", "recovery"), join(stateRoot, "gitjig", "recovery-moved"));
+				return freshness();
+			},
+			dispatchProfile: async (ledger, profileId) => {
+				let value: unknown;
+				if (profileId === "recovery-selector") {
+					value = spec;
+					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+					specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+				} else if (profileId === "recovery-measurement")
+					value = { kind: "measurement-result", specDigest, result: "new result", evidence: "measurement evidence" };
+				else
+					value = {
+						taxonomy: "INDETERMINATE",
+						invalidation: "authorization",
+						ruling: "NEW_EVIDENCE",
+						evidence: "fresh ruling evidence",
+					};
+				return observed(ledger, admitted(value));
+			},
+		});
+		assert.equal(result.terminal, "handoff");
+		if (result.terminal === "handoff" && result.route === "indeterminate" && result.reentry === "authorization") {
+			assert.equal(result.cause, "recovery-failed");
+			assert.equal(result.nextGate, "authorization-handoff");
+			assert.equal(result.measurement.result, "new result");
+			assert.equal(result.freshRuling.diagnosis.invalidation, "authorization");
+		}
 	});
 
 	it("hands off when the sole precontinue refresh drifts", async () => {

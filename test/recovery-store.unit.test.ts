@@ -76,7 +76,7 @@ function record(current: ReviewSubject): ClaimedRecordV3 {
 		basisDigest: "4".repeat(64),
 		basis: {
 			kind: "history-diagnosis",
-			triggeringReviewState: { head: "a".repeat(40), historyIndex: 0, stateDigest: "5".repeat(64) },
+			triggeringReviewState: { head: "b".repeat(40), historyIndex: 0, stateDigest: "5".repeat(64) },
 			taxonomy: "STAGNATION",
 			invalidation: "nothing",
 			diagnosisDigest: "6".repeat(64),
@@ -293,7 +293,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 	});
 
 	it("distinguishes definite ENOSPC/EDQUOT from may-have-created open failure", () => {
-		for (const code of ["EIO", "ENOSPC", "EDQUOT"] as const) {
+		for (const code of ["EIO", "ENOSPC", "EDQUOT", "LSTAT_EIO"] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-create-${code}-`));
 			try {
 				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
@@ -301,7 +301,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){if(process.env.OPEN_CODE==="EIO"){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);}const error=new Error("injected");error.code=process.env.OPEN_CODE;throw error;}return fs.openSync(path,flags,mode);}\n`,
+					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,readSync,renameSync,writeSync}=fs;\nexport function lstatSync(path){if(process.env.OPEN_CODE==="LSTAT_EIO"&&String(path).endsWith(".json")){const error=new Error("injected");error.code="EIO";throw error;}return fs.lstatSync(path);}\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){if(process.env.OPEN_CODE==="EIO"){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);}const error=new Error("injected");error.code=process.env.OPEN_CODE;throw error;}return fs.openSync(path,flags,mode);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				writeFileSync(
@@ -352,7 +352,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 			const owner = readFileSync(new URL(import.meta.url), "utf8").match(/const probe = `([\s\S]*?)`;\n/)?.[1];
 			assert.ok(owner);
 			const setup = owner.slice(0, owner.indexOf("const claim="));
-			const script = `${setup}\nconst {mkdirSync,writeFileSync}=await import("node:fs"); const {join}=await import("node:path"); const directory=join(process.env.XDG_STATE_HOME,"gitjig","recovery"); mkdirSync(directory,{recursive:true,mode:0o700}); writeFileSync(join(directory,\`r2-\${e.repoHash}-\${e.keyHash}.json\`),"x".repeat(300000),{mode:0o600}); const result=claimAllowance({subject,record}); assert.equal(result.status,"consumed"); assert.equal(result.recordRef,undefined); assert.equal(readFileSync(process.env.READ_LOG,"utf8"),"");`;
+			const script = `${setup}\nconst {mkdirSync,writeFileSync}=await import("node:fs"); const {join}=await import("node:path"); const directory=join(process.env.XDG_STATE_HOME,"gitjig","recovery"); mkdirSync(directory,{recursive:true,mode:0o700}); writeFileSync(join(directory,\`r2-\${e.repoHash}-\${e.keyHash}.json\`),"x".repeat(262144),{mode:0o600}); const result=claimAllowance({subject,record}); assert.equal(result.status,"consumed"); assert.equal(result.recordRef,undefined); assert.match(readFileSync(process.env.READ_LOG,"utf8"),/^262145\\n/);`;
 			writeFileSync(join(box, "probe.mjs"), script);
 			const xdg = join(box, "state");
 			mkdirSync(xdg, { mode: 0o700 });
@@ -397,6 +397,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					const first = value.attempts[0];
 					assert.ok(first);
 					first.resultDigest = "f".repeat(64);
+				},
+			],
+			[
+				"route-head",
+				(value: ConsumedRecordV3) => {
+					const first = value.attempts[0];
+					assert.ok(first);
+					first.expectedHead = "c".repeat(40);
 				},
 			],
 			[

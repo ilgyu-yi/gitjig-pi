@@ -82,7 +82,9 @@ function closingPages(locators: readonly ClosingIssueLocator[]): string {
 		{
 			data: {
 				repository: {
+					id: "REPO_1",
 					pullRequest: {
+						id: "PR_223",
 						closingIssuesReferences: {
 							nodes: locators,
 							pageInfo: { hasNextPage: false, endCursor: null },
@@ -252,7 +254,7 @@ describe("review subject criterion union", () => {
 			"--paginate",
 			"--slurp",
 			"-f",
-			"query=query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:100,after:$endCursor){nodes{id number url repository{id name owner{id}}}pageInfo{hasNextPage endCursor}}}}}",
+			"query=query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){id pullRequest(number:$number){id closingIssuesReferences(first:100,after:$endCursor){nodes{id number url repository{id name owner{id}}}pageInfo{hasNextPage endCursor}}}}}",
 			"-F",
 			"owner=owner",
 			"-F",
@@ -379,7 +381,9 @@ describe("review subject criterion union", () => {
 				{
 					data: {
 						repository: {
+							id: "REPO_1",
 							pullRequest: {
+								id: "PR_223",
 								closingIssuesReferences: { nodes: [locators[0]], pageInfo: { hasNextPage: true, endCursor: "C1" } },
 							},
 						},
@@ -388,7 +392,9 @@ describe("review subject criterion union", () => {
 				{
 					data: {
 						repository: {
+							id: "REPO_1",
 							pullRequest: {
+								id: "PR_223",
 								closingIssuesReferences: {
 									nodes: [locators[1]],
 									pageInfo: { hasNextPage: unfinished, endCursor: loop ? "C1" : unfinished ? "C2" : null },
@@ -410,7 +416,9 @@ describe("review subject criterion union", () => {
 			{
 				data: {
 					repository: {
+						id: "REPO_1",
 						pullRequest: {
+							id: "PR_223",
 							closingIssuesReferences: { nodes: [], pageInfo: { hasNextPage: true, endCursor: "C1" } },
 						},
 					},
@@ -419,7 +427,9 @@ describe("review subject criterion union", () => {
 			{
 				data: {
 					repository: {
+						id: "REPO_1",
 						pullRequest: {
+							id: "PR_223",
 							closingIssuesReferences: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
 						},
 					},
@@ -474,6 +484,16 @@ describe("review subject criterion union", () => {
 			responses[2] = JSON.stringify(pages);
 		};
 		const alterations: ((responses: string[]) => void)[] = [
+			(responses) => {
+				const pages = JSON.parse(responses[2]) as { data: { repository: { id: string } } }[];
+				pages[0].data.repository.id = "OTHER_REPO";
+				responses[2] = JSON.stringify(pages);
+			},
+			(responses) => {
+				const pages = JSON.parse(responses[2]) as { data: { repository: { pullRequest: { id: string } } } }[];
+				pages[0].data.repository.pullRequest.id = "OTHER_PR";
+				responses[2] = JSON.stringify(pages);
+			},
 			(responses) =>
 				editLocator(responses, (node) => {
 					node.extra = true;

@@ -193,7 +193,7 @@ export type ConsumedRecordV3 = ConsumedRecordBase &
 				reentry: "authorization";
 				nextGate: "authorization-handoff";
 				terminal: "handoff";
-				cause: "authorization";
+				cause: "authorization" | "recovery-failed";
 		  }
 	);
 
@@ -238,6 +238,7 @@ export type RecoveryResult =
 			terminal: "handoff";
 			route: "stagnation";
 			cause: "recovery-failed";
+			selectedIntervention: SelectedIntervention | null;
 			reentry: "nothing";
 			nextGate: "park";
 			recordRef: RecordRef;
@@ -246,6 +247,8 @@ export type RecoveryResult =
 			terminal: "handoff";
 			route: "oscillation" | "indeterminate";
 			cause: "recovery-failed";
+			measurement: RecoveryMeasurement | null;
+			freshRuling: FreshRuling | null;
 			reentry: "nothing";
 			nextGate: "park";
 			recordRef: RecordRef;
@@ -254,6 +257,8 @@ export type RecoveryResult =
 			terminal: "handoff";
 			route: "oscillation" | "indeterminate";
 			cause: "recovery-failed";
+			measurement: RecoveryMeasurement;
+			freshRuling: FreshRuling;
 			reentry: "plan";
 			nextGate: "planning-handoff";
 			recordRef: RecordRef;
@@ -261,7 +266,9 @@ export type RecoveryResult =
 	| {
 			terminal: "handoff";
 			route: "oscillation" | "indeterminate";
-			cause: "authorization";
+			cause: "authorization" | "recovery-failed";
+			measurement: RecoveryMeasurement;
+			freshRuling: FreshRuling;
 			reentry: "authorization";
 			nextGate: "authorization-handoff";
 			recordRef: RecordRef;

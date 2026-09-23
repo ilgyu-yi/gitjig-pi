@@ -83,6 +83,10 @@ export type CoordinateRecoveryInput = {
 	dispatchProfile: RecoveryProfileDispatcher;
 };
 
+export function hasRecoveryRetryReserve(reserveDeadline: number, now: number): boolean {
+	return reserveDeadline - now >= RETRY_REMAINING_MS;
+}
+
 export function makeRecoveryProfileDispatcher(input: {
 	repoRoot: string;
 	stateRoot: string;
@@ -106,7 +110,7 @@ export function makeRecoveryProfileDispatcher(input: {
 			{
 				attemptPolicy: {
 					ledger,
-					beforeRetry: () => reserveDeadline - performance.now() >= RETRY_REMAINING_MS,
+					beforeRetry: () => hasRecoveryRetryReserve(reserveDeadline, performance.now()),
 				},
 			},
 		);
@@ -312,6 +316,11 @@ function handoff(
 	reentry: "nothing" | "plan" | "authorization",
 	recordRef: RecordRef | null,
 	route: Extract<RecoveryResult, { terminal: "handoff" }>["route"] = "none",
+	products: {
+		selectedIntervention: SelectedIntervention | null;
+		measurement: RecoveryMeasurement | null;
+		freshRuling: FreshRuling | null;
+	} = { selectedIntervention: null, measurement: null, freshRuling: null },
 ): RecoveryResult {
 	if (route === "none" || recordRef === null) {
 		const preclaimCause = ["profile-preflight", "state-domain", "identity", "allowance-consumed"].includes(cause)
@@ -327,19 +336,47 @@ function handoff(
 		};
 	}
 	if (route === "stagnation")
-		return { terminal: "handoff", route, cause: "recovery-failed", reentry: "nothing", nextGate: "park", recordRef };
-	if (reentry === "authorization")
 		return {
 			terminal: "handoff",
 			route,
-			cause: "authorization",
+			cause: "recovery-failed",
+			selectedIntervention: products.selectedIntervention,
+			reentry: "nothing",
+			nextGate: "park",
+			recordRef,
+		};
+	if (reentry === "authorization" && products.measurement !== null && products.freshRuling !== null)
+		return {
+			terminal: "handoff",
+			route,
+			cause: cause === "authorization" ? "authorization" : "recovery-failed",
+			measurement: products.measurement,
+			freshRuling: products.freshRuling,
 			reentry,
 			nextGate: "authorization-handoff",
 			recordRef,
 		};
-	if (reentry === "plan")
-		return { terminal: "handoff", route, cause: "recovery-failed", reentry, nextGate: "planning-handoff", recordRef };
-	return { terminal: "handoff", route, cause: "recovery-failed", reentry, nextGate: "park", recordRef };
+	if (reentry === "plan" && products.measurement !== null && products.freshRuling !== null)
+		return {
+			terminal: "handoff",
+			route,
+			cause: "recovery-failed",
+			measurement: products.measurement,
+			freshRuling: products.freshRuling,
+			reentry,
+			nextGate: "planning-handoff",
+			recordRef,
+		};
+	return {
+		terminal: "handoff",
+		route,
+		cause: "recovery-failed",
+		measurement: products.measurement,
+		freshRuling: products.freshRuling,
+		reentry: "nothing",
+		nextGate: "park",
+		recordRef,
+	};
 }
 
 export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput): Promise<RecoveryResult> {
@@ -547,7 +584,11 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 			record = consumedRecord("handoff", cause, gate);
 		}
 		const finalized = finalizeAllowance(claim, record);
-		return handoff(finalized.status === "finalized" ? cause : "recovery-failed", reentry, recordRef, route);
+		return handoff(finalized.status === "finalized" ? cause : "recovery-failed", reentry, recordRef, route, {
+			selectedIntervention,
+			measurement,
+			freshRuling,
+		});
 	};
 
 	try {
@@ -682,7 +723,8 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 		if (performance.now() >= routeT0 + ROUTE_TERMINAL_MS) return finalizeHandoff();
 		const nextGate = prospectiveGate;
 		const finalized = finalizeAllowance(claim, consumedRecord("continue", null, nextGate));
-		if (finalized.status !== "finalized") return handoff("recovery-failed", reentry, recordRef, route);
+		if (finalized.status !== "finalized")
+			return handoff("recovery-failed", reentry, recordRef, route, { selectedIntervention, measurement, freshRuling });
 		if (route === "stagnation" && selectedIntervention !== null)
 			return {
 				terminal: "continue",
@@ -698,7 +740,7 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 			if (reentry === "nothing")
 				return { terminal: "continue", route, measurement, freshRuling, reentry, nextGate: "ordinary-flow", recordRef };
 		}
-		return handoff("recovery-failed", reentry, recordRef, route);
+		return handoff("recovery-failed", reentry, recordRef, route, { selectedIntervention, measurement, freshRuling });
 	} catch {
 		return finalizeHandoff();
 	}

@@ -1228,6 +1228,7 @@ describe("review-round production call site", () => {
 						terminal: "handoff",
 						route: "stagnation",
 						cause: "recovery-failed",
+						selectedIntervention: null,
 						reentry: "nothing",
 						nextGate: "park",
 						recordRef: {
