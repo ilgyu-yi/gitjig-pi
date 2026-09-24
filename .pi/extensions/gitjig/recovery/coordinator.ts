@@ -21,12 +21,7 @@ import {
 	measurementSelectorBrief,
 } from "./briefs.ts";
 import { deriveAllowancePathEncoding } from "./lineage.ts";
-import {
-	loadRecoveryProfiles,
-	materializeRecoveryProfile,
-	preflightRecoveryExecutable,
-	type RecoveryProfileSet,
-} from "./profiles.ts";
+import { loadRecoveryProfiles, materializeRecoveryProfile, preflightRecoveryExecutable } from "./profiles.ts";
 import { resolveRecoveryStateDomain } from "./state-domain.ts";
 import { claimAllowance, finalizeAllowance } from "./store.ts";
 import {
@@ -746,20 +741,4 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 	} catch {
 		return finalizeHandoff();
 	}
-}
-
-export function recoveryInputDigest(input: {
-	subject: ReviewSubject;
-	history: readonly StateSummary[];
-	basis: RepairBasis;
-}): string {
-	return structuralDigest("gitjig-recovery-input:v1", {
-		subjectDigest: subjectDigest(input.subject),
-		historyDigest: historyDigest(input.history),
-		basisDigest: basisDigest(input.basis),
-	});
-}
-
-export function recoveryProfileSetDigest(set: RecoveryProfileSet): string {
-	return structuralDigest("gitjig-recovery-profiles:v1", JSON.parse(canonicalJson(set)));
 }

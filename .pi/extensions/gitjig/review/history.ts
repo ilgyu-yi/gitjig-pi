@@ -6,8 +6,7 @@
  * here name the local decision, not a second copy of the clause
  * (§2.8).
  *
- * §1.4's clause sleeps on its own subject's absence (§5.3) until these
- * derive; this module is that derivation. The history's unit is
+ * The history's unit is
  * Execution (a)'s durable review record (record.ts): one resolved
  * review at one head is one review state, and the panel's slots at one
  * head collapse into one state (§1.7).

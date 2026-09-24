@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
-import { canonicalJson, type PhaseAProfileId, structuralDigest } from "./types.ts";
+import { type PhaseAProfileId, structuralDigest } from "./types.ts";
 
 export const RECOVERY_INITIAL_PROMPT =
 	"Read ../brief.md completely. Write a complete provisional ../return.json early, then overwrite it with the final closed return before the stated deadline.";
@@ -132,8 +132,4 @@ export function preflightRecoveryExecutable(): boolean {
 	} catch {
 		return false;
 	}
-}
-
-export function profileSetCanonicalBytes(set: RecoveryProfileSet): string {
-	return canonicalJson(set);
 }

@@ -13,14 +13,6 @@ export type PhaseAProfileId =
 	| "recovery-diagnosis";
 export type RecoveryRoute = "stagnation" | "oscillation" | "indeterminate";
 export type RecoverySemanticBrief = string;
-export type RecoveryReentry = "nothing" | "plan" | "authorization";
-export type RecoveryGate =
-	| "author-repair"
-	| "ordinary-flow"
-	| "planning"
-	| "park"
-	| "planning-handoff"
-	| "authorization-handoff";
 export type RecordRef = { repoHash: string; keyHash: string; claimId: string };
 
 export type AttemptRecord = {
