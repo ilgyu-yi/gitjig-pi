@@ -266,7 +266,8 @@ export async function deriveRepairBasis(
 		// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
 		// Retain that bundle in the complete source record; never invent a raw-text
 		// or positional pairing between it and the Judge's rulings.
-		if (!adjudication.dedupAttested || record.bundle.length === 0) return undefined;
+		if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length > record.bundle.length)
+			return undefined;
 		const slots = new Set(record.bundle.map(({ slot }) => JSON.stringify([slot.lens, slot.surface])));
 		const unattributedSlots = new Set(slots);
 		const rulings = uniqueByFinding(adjudication.rulings);

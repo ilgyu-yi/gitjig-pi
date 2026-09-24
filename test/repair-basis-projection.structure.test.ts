@@ -30,7 +30,9 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes('ruling.validity === "CONFIRMED"') &&
 		history.includes('ruling.severity === "SUBSTANTIVE"') &&
 		history.includes('disposition.disposition === "repair"') &&
-		history.includes("!adjudication.dedupAttested || record.bundle.length === 0") &&
+		history.includes("!adjudication.dedupAttested ||") &&
+		history.includes("record.bundle.length === 0 ||") &&
+		history.includes("adjudication.rulings.length > record.bundle.length") &&
 		history.includes("const slots = new Set(record.bundle.map") &&
 		history.includes("const unattributedSlots = new Set(slots)") &&
 		history.includes("unattributedSlots.delete(key)") &&
@@ -94,7 +96,9 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace('ruling.validity === "CONFIRMED"', 'ruling.validity !== "REFUTED"'), CALLER],
 			[INTERVAL, HISTORY.replace('ruling.severity === "SUBSTANTIVE"', 'ruling.severity !== "NIT"'), CALLER],
 			[INTERVAL, HISTORY.replace('disposition.disposition === "repair"', 'disposition.disposition !== "none"'), CALLER],
-			[INTERVAL, HISTORY.replace("!adjudication.dedupAttested || record.bundle.length === 0", "false"), CALLER],
+			[INTERVAL, HISTORY.replace("!adjudication.dedupAttested ||", "false ||"), CALLER],
+			[INTERVAL, HISTORY.replace("record.bundle.length === 0 ||", "false ||"), CALLER],
+			[INTERVAL, HISTORY.replace("adjudication.rulings.length > record.bundle.length", "false"), CALLER],
 			[
 				INTERVAL,
 				HISTORY.replace("const slots = new Set(record.bundle.map", "const slots = new Set(record.bundle.flatMap"),

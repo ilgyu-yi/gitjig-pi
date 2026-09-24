@@ -386,6 +386,32 @@ describe("issue #238 repair-basis projection", () => {
 		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
 	});
 
+	it("rejects more effective Judge findings than raw findings despite complete slot coverage", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = {
+			finding: "one raw",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		const first = record(a, [finding]);
+		if (first.adjudication === null || first.review.state !== "resolved") throw new Error("bad fixture");
+		const original = first.adjudication.rulings[0];
+		first.adjudication.rulings = ["effective one", "effective two", "effective three"].map((name) => ({
+			...original,
+			finding: name,
+		}));
+		first.review.resolution.dispositions = first.adjudication.rulings.map(({ finding: name }) => ({
+			finding: name,
+			disposition: "repair",
+		}));
+		assert.equal(first.bundle.length, 1);
+		assert.equal(first.adjudication.rulings.length, 3);
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+	});
+
 	it("withholds on repeated, missing or non-ancestor correction endpoints", async () => {
 		const root = repo();
 		const finding: Finding = {
