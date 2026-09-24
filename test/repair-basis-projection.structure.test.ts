@@ -35,6 +35,7 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("const unattributedSlots = new Set(slots)") &&
 		history.includes("unattributedSlots.delete(key)") &&
 		history.includes("if (unattributedSlots.size !== 0) return undefined") &&
+		history.includes("if (joined.has(entry.finding)) return undefined") &&
 		history.includes("rulings.size !== dispositions.size") &&
 		history.includes("!Array.isArray(ruling.provenance) || ruling.provenance.length === 0") &&
 		history.includes("!slots.has(key) || attributed.has(key)") &&
@@ -109,6 +110,11 @@ describe("issue #238 structural mutation teeth", () => {
 			[
 				INTERVAL,
 				HISTORY.replace("if (unattributedSlots.size !== 0) return undefined", "if (false) return undefined"),
+				CALLER,
+			],
+			[
+				INTERVAL,
+				HISTORY.replace("if (joined.has(entry.finding)) return undefined", "if (false) return undefined"),
 				CALLER,
 			],
 			[INTERVAL, HISTORY.replace("rulings.size !== dispositions.size", "false"), CALLER],

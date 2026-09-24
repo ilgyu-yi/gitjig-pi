@@ -330,6 +330,62 @@ describe("issue #238 repair-basis projection", () => {
 		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
 	});
 
+	it("rejects an empty raw bundle even when both effective populations are empty", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const empty = record(a, []);
+		assert.equal(
+			await deriveRepairBasis(root, [
+				state(empty),
+				state(
+					record(b, [{ finding: "present", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" }]),
+				),
+			]),
+			undefined,
+		);
+	});
+
+	it("rejects an empty second ruling provenance even when the first covers every raw slot", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const findings: Finding[] = ["one", "two"].map((finding) => ({
+			finding,
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		}));
+		const first = record(a, findings);
+		if (first.adjudication === null) throw new Error("bad fixture");
+		first.adjudication.rulings[1].provenance = [];
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, findings))]), undefined);
+	});
+
+	it("rejects an unknown provenance slot even when that ruling also covers every raw slot", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = { finding: "one", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" };
+		const first = record(a, [finding]);
+		if (first.adjudication === null) throw new Error("bad fixture");
+		first.adjudication.rulings[0].provenance.push({ lens: "suite", surface: "not contributing" });
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+	});
+
+	it("rejects repeated effective keys even when ruling and disposition populations match positionally", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = { finding: "one", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" };
+		const first = record(a, [finding, finding]);
+		assert.equal(
+			first.adjudication?.rulings.length,
+			first.review.state === "resolved" ? first.review.resolution.dispositions.length : -1,
+		);
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+	});
+
 	it("withholds on repeated, missing or non-ancestor correction endpoints", async () => {
 		const root = repo();
 		const finding: Finding = {
