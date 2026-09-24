@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -27,14 +27,95 @@ const writer = [
 describe("recovery optional dispatch deadline", () => {
 	it("refuses before the first provision operation when no time remains", () => {
 		const repo = repository();
+		const originalPath = process.env.PATH;
+		const bin = join(repo, "bin");
+		const log = join(repo, "git-operations");
 		try {
+			const git = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+			mkdirSync(bin);
+			writeFileSync(
+				join(bin, "git"),
+				`#!/bin/sh\nprintf 'git\\n' >> ${JSON.stringify(log)}\nexec ${JSON.stringify(git)} "$@"\n`,
+				{
+					mode: 0o700,
+				},
+			);
+			process.env.PATH = `${bin}:${originalPath ?? ""}`;
 			assert.throws(
 				() =>
 					provisionDispatchContext(repo, { brief: "brief", expectedRef: "HEAD", operationDeadline: performance.now() }),
-				/expected ref resolves to no commit/,
+				/optional operation deadline expired before an authorized provision act/,
 			);
+			assert.equal(existsSync(log), false, "expired operation must not start even ref resolution");
+		} finally {
+			if (originalPath === undefined) delete process.env.PATH;
+			else process.env.PATH = originalPath;
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	it("kills the deadline and each provisioning checkpoint in private copies", () => {
+		const repo = repository();
+		const box = mkdtempSync(join(tmpdir(), "gitjig-provision-guard-mutants-"));
+		try {
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+			const path = join(box, "gitjig", "dispatch", "provision.ts");
+			const original = readFileSync(path, "utf8");
+			const probe = [
+				"import fs from 'node:fs'; import cp from 'node:child_process';",
+				"import {syncBuiltinESMExports} from 'node:module'; import {pathToFileURL} from 'node:url';",
+				"const [modulePath,repo,thresholdText]=process.argv.slice(1); const threshold=Number(thresholdText);",
+				"let clocks=0; const observed=[];",
+				"const mark=(kind,path)=>{if(typeof path==='string'&&(kind==='git'||(kind==='logs'&&path.endsWith('/.git/logs'))||(kind==='brief'&&path.endsWith('/brief.md'))||(kind==='state'&&path.endsWith('/state'))))observed.push(kind)};",
+				"const original={git:cp.execFileSync,logs:fs.rmSync,brief:fs.writeFileSync,state:fs.mkdirSync};",
+				"cp.execFileSync=(...args)=>{mark('git',args[0]);return original.git(...args)};",
+				"fs.rmSync=(...args)=>{mark('logs',args[0]);return original.logs(...args)};",
+				"fs.writeFileSync=(...args)=>{mark('brief',args[0]);return original.brief(...args)};",
+				"fs.mkdirSync=(...args)=>{mark('state',args[0]);return original.state(...args)};",
+				"syncBuiltinESMExports();",
+				"const {provisionDispatchContext,cleanupDispatchContext}=await import(pathToFileURL(modulePath).href);",
+				"const saved=performance.now; Object.defineProperty(performance,'now',{configurable:true,value:()=>{clocks++;return clocks>=threshold?2000:0}});",
+				"let outcome;try{const context=provisionDispatchContext(repo,{brief:'brief',expectedRef:'HEAD',operationDeadline:1000});outcome='returned';cleanupDispatchContext(context)}catch(error){outcome=error?.message}",
+				"Object.defineProperty(performance,'now',{configurable:true,value:saved});",
+				"console.log(JSON.stringify({outcome,clocks,observed}));",
+			].join("\n");
+			const run = (threshold: number) => {
+				const child = spawnSync(process.execPath, ["--input-type=module", "-e", probe, path, repo, String(threshold)], {
+					encoding: "utf8",
+					timeout: 30_000,
+				});
+				assert.equal(child.status, 0, child.stderr);
+				return JSON.parse(child.stdout.trim()) as { outcome: string; observed: string[] };
+			};
+			for (const [needle, replacement, threshold, forbidden] of [
+				[
+					"if (remaining <= 0) throw new OperationDeadlineExpired();",
+					"if (false) throw new OperationDeadlineExpired();",
+					1,
+					"git",
+				],
+				["\t\tguard();\n\t\t// The clone's reflog", "\t\tvoid 0;\n\t\t// The clone's reflog", 6, "logs"],
+				["\t\tguard();\n\t\twriteFileSync", "\t\tvoid 0;\n\t\twriteFileSync", 7, "brief"],
+				["\t\tguard();\n\t\tmkdirSync", "\t\tvoid 0;\n\t\tmkdirSync", 8, "state"],
+				["\t\tguard();\n\t} catch {", "\t\tvoid 0;\n\t} catch {", 9, "returned"],
+			] as const) {
+				writeFileSync(path, original);
+				const baseline = run(threshold);
+				assert.equal(baseline.observed.includes(forbidden), false, `baseline must refuse before ${forbidden}`);
+				assert.notEqual(baseline.outcome, "returned");
+				assert.equal(original.split(needle).length, 2, needle);
+				writeFileSync(path, original.replace(needle, replacement));
+				const mutant = run(threshold);
+				assert.equal(
+					forbidden === "returned" ? mutant.outcome === "returned" : mutant.observed.includes(forbidden),
+					true,
+					`private-copy guard mutant survived: ${forbidden}`,
+				);
+			}
 		} finally {
 			rmSync(repo, { recursive: true, force: true });
+			rmSync(box, { recursive: true, force: true });
 		}
 	});
 
@@ -191,7 +272,7 @@ describe("recovery optional dispatch deadline", () => {
 			assert.equal(
 				outcome.disposition,
 				"admitted",
-				"mutant must survive without the checkpoint and thus be killed by the owner test",
+				"mutant must survive without the checkpoint; this arm's own baseline and needle assertions are what red on its removal",
 			);
 		} finally {
 			globalThis.setTimeout = originalSetTimeout;

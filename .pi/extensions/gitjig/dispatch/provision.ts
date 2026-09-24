@@ -266,7 +266,14 @@ export const PROVISION_REFUSAL_CAUSES = {
 		"an unresolvable expected head is ambiguity, never a provisioned tree (SPEC §4.9, §3.9)",
 	clone:
 		"dispatch provision refused: the isolated tree could not be cloned and detached at the held hash (SPEC §4.9, §1.5)",
+	deadline: "dispatch provision refused: the optional operation deadline expired before an authorized provision act",
 } as const;
+
+class OperationDeadlineExpired extends Error {
+	constructor() {
+		super(PROVISION_REFUSAL_CAUSES.deadline);
+	}
+}
 
 export function provisionDispatchContext(
 	callerRepoRoot: string,
@@ -282,7 +289,7 @@ export function provisionDispatchContext(
 	const guard = (): number | undefined => {
 		if (options.operationDeadline === undefined) return undefined;
 		const remaining = Math.floor(options.operationDeadline - performance.now());
-		if (remaining <= 0) throw new Error(PROVISION_REFUSAL_CAUSES.clone);
+		if (remaining <= 0) throw new OperationDeadlineExpired();
 		return remaining;
 	};
 	const childOptions = (): { encoding: "utf8"; env: NodeJS.ProcessEnv; timeout?: number; killSignal?: "SIGKILL" } => {
@@ -308,7 +315,8 @@ export function provisionDispatchContext(
 			],
 			childOptions(),
 		).trim();
-	} catch {
+	} catch (error) {
+		if (error instanceof OperationDeadlineExpired) throw error;
 		throw new Error(PROVISION_REFUSAL_CAUSES.unresolvable);
 	}
 	if (!/^[0-9a-f]{40}$/.test(heldHash)) {

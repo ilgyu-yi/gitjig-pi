@@ -193,6 +193,11 @@ describe("closed Phase-A recovery profiles", () => {
 					'if (false && claimedResult.status === "consumed")',
 					"refuses a second recovery request at the consumed-allowance guard",
 				],
+				[
+					'if (claimedResult.status === "preclaim-refused")',
+					'if (false && claimedResult.status === "preclaim-refused")',
+					"preserves a store preclaim refusal without dispatching or consuming an allowance",
+				],
 			] as const) {
 				assert.equal(original.split(needle).length, 2, needle);
 				writeFileSync(path, original.replace(needle, replacement));
