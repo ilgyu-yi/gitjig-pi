@@ -289,12 +289,10 @@ export async function deriveRepairBasis(
 					(ruling.severity === "NIT" && !ruling.remedy))
 			)
 				return undefined;
-			const attributed = new Set<string>();
 			for (const slot of ruling.provenance) {
-				if (typeof slot?.lens !== "string" || typeof slot.surface !== "string") return undefined;
+				if (typeof slot?.lens !== "string") return undefined;
 				const key = JSON.stringify([slot.lens, slot.surface]);
-				if (!slots.has(key) || attributed.has(key)) return undefined;
-				attributed.add(key);
+				if (!slots.has(key)) return undefined;
 				unattributedSlots.delete(key);
 			}
 			const disposition = record.review.resolution.dispositions[index];

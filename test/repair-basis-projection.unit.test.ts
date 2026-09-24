@@ -284,7 +284,7 @@ describe("issue #238 repair-basis projection", () => {
 		}
 	});
 
-	it("withholds the whole basis on absent attestation or empty, unknown, repeated, or malformed attribution", async () => {
+	it("withholds the whole basis on absent attestation or empty, unknown, or malformed attribution", async () => {
 		const root = repo();
 		const a = commit(root, "a", "first");
 		const b = commit(root, "a", "second");
@@ -301,11 +301,11 @@ describe("issue #238 repair-basis projection", () => {
 					record.adjudication.rulings[0].provenance = [{ lens: "suite", surface: "not contributing" }];
 			},
 			(record: ReviewRecord) => {
-				if (record.adjudication)
-					record.adjudication.rulings[0].provenance.push(record.adjudication.rulings[0].provenance[0]);
+				if (record.adjudication) record.adjudication.rulings[0].provenance = [null as never];
 			},
 			(record: ReviewRecord) => {
-				if (record.adjudication) record.adjudication.rulings[0].provenance = [null as never];
+				if (record.adjudication)
+					record.adjudication.rulings[0].provenance = [{ lens: "runtime", surface: 42 as never }];
 			},
 			(record: ReviewRecord) => {
 				record.adjudication = null;
@@ -315,6 +315,34 @@ describe("issue #238 repair-basis projection", () => {
 			mutate(first);
 			assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
 		}
+	});
+
+	it("admits repeated provenance for two raw findings merged from the same contributing slot", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = {
+			finding: "raw one",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		const first = record(a, [finding, { ...finding, finding: "raw two" }]);
+		if (first.adjudication === null || first.review.state !== "resolved") throw new Error("bad fixture");
+		const slot = first.bundle[0].slot;
+		first.adjudication.rulings = [{ ...first.adjudication.rulings[0], finding: "merged", provenance: [slot, slot] }];
+		first.review.resolution.dispositions = [{ finding: "merged", disposition: "repair" }];
+		const basis = await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]);
+		assert.ok(basis);
+		assert.deepEqual(
+			basis.states[0].findings.map(({ finding }) => finding),
+			["merged"],
+		);
+		assert.deepEqual(basis.states[0].findings[0].ruling.provenance, [slot, slot]);
+		assert.deepEqual(
+			first.bundle.map(({ finding }) => finding),
+			["raw one", "raw two"],
+		);
 	});
 
 	it("withholds when a contributing raw slot has no Judge attribution or rulings vanish", async () => {

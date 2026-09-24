@@ -44,7 +44,7 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("ruling.direction === undefined ||") &&
 		history.includes("ruling.onCriterion === undefined ||") &&
 		history.includes('ruling.severity === "NIT" && !ruling.remedy') &&
-		history.includes("!slots.has(key) || attributed.has(key)") &&
+		history.includes("if (!slots.has(key)) return undefined") &&
 		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
@@ -138,7 +138,7 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace("ruling.direction === undefined ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace("ruling.onCriterion === undefined ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace('ruling.severity === "NIT" && !ruling.remedy', "false"), CALLER],
-			[INTERVAL, HISTORY.replace("!slots.has(key) || attributed.has(key)", "false"), CALLER],
+			[INTERVAL, HISTORY.replace("if (!slots.has(key)) return undefined", "if (false) return undefined"), CALLER],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
 			[
 				INTERVAL,
