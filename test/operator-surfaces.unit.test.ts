@@ -78,6 +78,29 @@ describe("#131 collapsed operator-visible acts", () => {
 			assert.ok(section.includes(clause), `SPEC §5.9 lost the #131 clause: ${clause}`);
 	});
 
+	it("#347 contract settles only the operator-only, explicit-subject lifecycle projection", () => {
+		const spec = readFileSync(fileURLToPath(new URL("../SPEC.md", import.meta.url)), "utf8");
+		const section = spec.slice(
+			spec.indexOf("### 5.9 Session surfaces"),
+			spec.indexOf("## 6. Self-governance milestone"),
+		);
+		for (const clause of [
+			"Issue or PR explicitly addressed by an operator act with a platform-attested repository and subject identity",
+			"an Issue key has an explicit null head",
+			"pagination-complete, platform-fetched comment population",
+			"read-only, terminal-aware `blocked` and handoff inspectors owed by this contract",
+			"same-repository `authorizedResolver` predicate (`WRITE`, `MAINTAIN`, or `ADMIN`)",
+			"a Bot requires independent first-party-producer proof or is not projected",
+			"never a guessed current state",
+			"passes a two-second read bound at its own platform call site",
+			"caches only a successful computation for five minutes",
+			"never polls",
+			"no TTL stamp, no status call without UI, no blocked act, and no model-visible record body",
+			"neither widens §4.9's model-visible return nor copies raw traces into model context",
+		])
+			assert.ok(section.includes(clause), `SPEC §5.9 lost the #347 settlement: ${clause}`);
+	});
+
 	it("dispatch renders fixed intent, a non-secret target, and three styled terminal classes", () => {
 		const tool = capture((pi) => registerDispatchTool(pi, "/repo", "/state"));
 		const expectedRef = "refs/heads/redacted-ref";
