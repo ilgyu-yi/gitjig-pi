@@ -263,25 +263,30 @@ export async function deriveRepairBasis(
 			return undefined;
 		const adjudication = record.adjudication;
 		if (adjudication === null) return undefined;
-		const bundles = uniqueByFinding(record.bundle);
+		// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
+		// Retain that bundle in the complete source record; never invent a raw-text
+		// or positional pairing between it and the Judge's rulings.
+		if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length === 0)
+			return undefined;
+		const slots = new Set(record.bundle.map(({ slot }) => JSON.stringify([slot.lens, slot.surface])));
 		const rulings = uniqueByFinding(adjudication.rulings);
 		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
-		if (bundles === undefined || rulings === undefined || dispositions === undefined) return undefined;
-		if (bundles.size !== rulings.size || bundles.size !== dispositions.size) return undefined;
-		for (let index = 0; index < record.bundle.length; index += 1) {
-			if (
-				adjudication.rulings[index]?.finding !== record.bundle[index].finding ||
-				record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding
-			)
-				return undefined;
-		}
+		if (rulings === undefined || dispositions === undefined || rulings.size !== dispositions.size) return undefined;
 		const findings: RepairBasisFinding[] = [];
-		for (const bundle of record.bundle) {
-			const ruling = rulings.get(bundle.finding);
-			const disposition = dispositions.get(bundle.finding);
-			if (ruling === undefined || disposition === undefined) return undefined;
+		for (let index = 0; index < adjudication.rulings.length; index += 1) {
+			const ruling = adjudication.rulings[index];
+			if (ruling === undefined || !Array.isArray(ruling.provenance) || ruling.provenance.length === 0) return undefined;
+			const attributed = new Set<string>();
+			for (const slot of ruling.provenance) {
+				if (typeof slot?.lens !== "string" || typeof slot.surface !== "string") return undefined;
+				const key = JSON.stringify([slot.lens, slot.surface]);
+				if (!slots.has(key) || attributed.has(key)) return undefined;
+				attributed.add(key);
+			}
+			const disposition = record.review.resolution.dispositions[index];
+			if (disposition?.finding !== ruling.finding || dispositions.get(ruling.finding) !== disposition) return undefined;
 			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
-				findings.push({ finding: bundle.finding, ruling, disposition });
+				findings.push({ finding: ruling.finding, ruling, disposition });
 		}
 		states.push({ head: state.head, findings });
 	}

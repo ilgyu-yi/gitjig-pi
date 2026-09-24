@@ -30,9 +30,12 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes('ruling.validity === "CONFIRMED"') &&
 		history.includes('ruling.severity === "SUBSTANTIVE"') &&
 		history.includes('disposition.disposition === "repair"') &&
-		history.includes("bundles.size !== rulings.size || bundles.size !== dispositions.size") &&
-		history.includes("adjudication.rulings[index]?.finding !== record.bundle[index].finding") &&
-		history.includes("record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding") &&
+		history.includes("!adjudication.dedupAttested || record.bundle.length === 0") &&
+		history.includes("const slots = new Set(record.bundle.map") &&
+		history.includes("rulings.size !== dispositions.size") &&
+		history.includes("!Array.isArray(ruling.provenance) || ruling.provenance.length === 0") &&
+		history.includes("!slots.has(key) || attributed.has(key)") &&
+		history.includes("disposition?.finding !== ruling.finding || dispositions.get(ruling.finding) !== disposition") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
 		caller.includes("await deriveRepairBasis(repoRoot, history)") &&
@@ -87,24 +90,27 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace('ruling.validity === "CONFIRMED"', 'ruling.validity !== "REFUTED"'), CALLER],
 			[INTERVAL, HISTORY.replace('ruling.severity === "SUBSTANTIVE"', 'ruling.severity !== "NIT"'), CALLER],
 			[INTERVAL, HISTORY.replace('disposition.disposition === "repair"', 'disposition.disposition !== "none"'), CALLER],
+			[INTERVAL, HISTORY.replace("!adjudication.dedupAttested || record.bundle.length === 0", "false"), CALLER],
 			[
 				INTERVAL,
-				HISTORY.replace("bundles.size !== rulings.size || bundles.size !== dispositions.size", "false"),
-				CALLER,
-			],
-			[
-				INTERVAL,
-				HISTORY.replace("adjudication.rulings[index]?.finding !== record.bundle[index].finding", "false"),
+				HISTORY.replace("const slots = new Set(record.bundle.map", "const slots = new Set(record.bundle.flatMap"),
 				CALLER,
 			],
 			[
 				INTERVAL,
 				HISTORY.replace(
-					"record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding",
+					"disposition?.finding !== ruling.finding || dispositions.get(ruling.finding) !== disposition",
 					"false",
 				),
 				CALLER,
 			],
+			[INTERVAL, HISTORY.replace("rulings.size !== dispositions.size", "false"), CALLER],
+			[
+				INTERVAL,
+				HISTORY.replace("!Array.isArray(ruling.provenance) || ruling.provenance.length === 0", "false"),
+				CALLER,
+			],
+			[INTERVAL, HISTORY.replace("!slots.has(key) || attributed.has(key)", "false"), CALLER],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
 			[
 				INTERVAL,

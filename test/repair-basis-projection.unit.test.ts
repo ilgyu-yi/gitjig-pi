@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { deriveRepairBasis, type StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
+import { deriveRepairBasis, repairHistory, type StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
 import { readCorrectionInterval } from "../.pi/extensions/gitjig/review/interval.ts";
-import type { ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
+import { parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 
 const roots: string[] = [];
 const env = {
@@ -83,6 +83,90 @@ afterEach(() => {
 });
 
 describe("issue #238 repair-basis projection", () => {
+	it("projects rephrased effective findings and a genuine two-slot dedup without raw-text pairing", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const first = record(a, [
+			{ finding: "raw runtime", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" },
+		]);
+		const second = record(b, [
+			{ finding: "raw runtime", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" },
+			{ finding: "raw suite", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" },
+		]);
+		second.bundle[1].slot = { lens: "suite", surface: "tests" };
+		for (const [source, effective] of [
+			[first, "Judge rewrote runtime"],
+			[second, "Judge merged runtime and suite"],
+		] as const) {
+			if (source.adjudication === null || source.review.state !== "resolved") throw new Error("bad fixture");
+			source.adjudication.rulings = [
+				{
+					...source.adjudication.rulings[0],
+					finding: effective,
+					provenance: [...new Map(source.bundle.map(({ slot }) => [JSON.stringify(slot), slot])).values()],
+				},
+			];
+			source.review.resolution.dispositions = [{ finding: effective, disposition: "repair" }];
+		}
+		const basis = await deriveRepairBasis(root, [state(first), state(second)]);
+		assert.ok(basis);
+		assert.deepEqual(
+			basis.states.map(({ findings }) => findings.map(({ finding }) => finding)),
+			[["Judge rewrote runtime"], ["Judge merged runtime and suite"]],
+		);
+		assert.deepEqual(
+			first.bundle.map(({ finding }) => finding),
+			["raw runtime"],
+		);
+		assert.deepEqual(
+			second.bundle.map(({ finding }) => finding),
+			["raw runtime", "raw suite"],
+		);
+		assert.equal(basis.intervals.length, 1);
+	});
+
+	it("projects machine-parsed authentic repair records with a hermetic local correction interval", async () => {
+		const original = ["earlier", "later"].map((name) => {
+			const bytes = readFileSync(new URL(`./fixtures/repair-basis-345/${name}.txt`, import.meta.url), "utf8");
+			const parsed = parseReviewRecord(bytes);
+			assert.ok(parsed, `authentic record fixture ${name} must parse without rewriting its bytes`);
+			return parsed;
+		});
+		assert.equal(original[0].review.state, "resolved");
+		assert.equal(original[1].review.state, "resolved");
+		const root = repo();
+		const a = commit(root, "correction", "before\n");
+		const b = commit(root, "correction", "after\n");
+		const assembled = repairHistory([
+			{ ...original[0], head: a },
+			{ ...original[1], head: b },
+		]);
+		const basis = await deriveRepairBasis(root, assembled);
+		assert.ok(basis);
+		assert.deepEqual(
+			basis.states.map(({ head }) => head),
+			[a, b],
+		);
+		assert.equal(basis.intervals.length, 1);
+		assert.deepEqual([basis.intervals[0].earlierHead, basis.intervals[0].laterHead], [a, b]);
+		assert.equal(basis.intervals[0].entries.length, 1);
+		assert.deepEqual(
+			assembled.map(({ record }) => record.bundle),
+			original.map(({ bundle }) => bundle),
+		);
+		for (const projected of basis.states) {
+			for (const effective of projected.findings) {
+				assert.equal(effective.ruling.validity, "CONFIRMED");
+				assert.equal(effective.ruling.severity, "SUBSTANTIVE");
+				assert.equal(effective.disposition.disposition, "repair");
+			}
+		}
+		assert.deepEqual(
+			basis.states.map(({ findings }) => findings.length),
+			[1, 2],
+		);
+	});
 	it("selects only the trailing repair run and exact confirmed substantive repair joins", async () => {
 		const root = repo();
 		const h1 = commit(root, "a.txt", "old\n");
@@ -106,11 +190,19 @@ describe("issue #238 repair-basis projection", () => {
 			{ finding: "defer", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "defer" },
 			{ finding: "measure", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "measure-escalate" },
 		];
+		const repaired = [record(h3, [included, ...excluded]), record(h4, [included, ...excluded])];
+		for (const source of repaired) {
+			if (source.adjudication === null || source.review.state !== "resolved") throw new Error("bad fixture");
+			for (let index = 0; index < source.adjudication.rulings.length; index += 1) {
+				const effective = `Judge effective ${index}`;
+				source.adjudication.rulings[index].finding = effective;
+				source.review.resolution.dispositions[index].finding = effective;
+			}
+		}
 		const basis = await deriveRepairBasis(root, [
 			state(malformedBeforeReset),
 			state(record(h2, [], "clear")),
-			state(record(h3, [included, ...excluded])),
-			state(record(h4, [included, ...excluded])),
+			...repaired.map(state),
 		]);
 		assert.ok(basis);
 		assert.deepEqual(
@@ -119,7 +211,7 @@ describe("issue #238 repair-basis projection", () => {
 		);
 		assert.deepEqual(
 			basis.states.map(({ findings }) => findings.map(({ finding }) => finding)),
-			[["included"], ["included"]],
+			[["Judge effective 0"], ["Judge effective 0"]],
 		);
 		assert.equal(basis.intervals.length, 1);
 		assert.deepEqual([basis.intervals[0].earlierHead, basis.intervals[0].laterHead], [h3, h4]);
@@ -171,14 +263,73 @@ describe("issue #238 repair-basis projection", () => {
 		const b = commit(root, "a", "2");
 		const finding: Finding = { finding: "f", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" };
 		for (const mutate of [
-			(record: ReviewRecord) => record.bundle.push(record.bundle[0]),
+			(record: ReviewRecord) => record.adjudication?.rulings.push(record.adjudication.rulings[0]),
 			(record: ReviewRecord) => record.adjudication?.rulings.pop(),
 			(record: ReviewRecord) => record.review.state === "resolved" && record.review.resolution.dispositions.pop(),
+			(record: ReviewRecord) =>
+				record.review.state === "resolved" &&
+				record.review.resolution.dispositions.push({ finding: "extra", disposition: "repair" }),
 		]) {
 			const first = record(a, [finding]);
 			mutate(first);
 			assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
 		}
+	});
+
+	it("withholds the whole basis on absent attestation or empty, unknown, repeated, or malformed attribution", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = { finding: "raw", validity: "CONFIRMED", severity: "SUBSTANTIVE", disposition: "repair" };
+		for (const mutate of [
+			(record: ReviewRecord) => {
+				if (record.adjudication) record.adjudication.dedupAttested = false;
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication) record.adjudication.rulings[0].provenance = [];
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication)
+					record.adjudication.rulings[0].provenance = [{ lens: "suite", surface: "not contributing" }];
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication)
+					record.adjudication.rulings[0].provenance.push(record.adjudication.rulings[0].provenance[0]);
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication) record.adjudication.rulings[0].provenance = [null as never];
+			},
+			(record: ReviewRecord) => {
+				record.adjudication = null;
+			},
+		]) {
+			const first = record(a, [finding]);
+			mutate(first);
+			assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+		}
+	});
+
+	it("withholds on repeated, missing or non-ancestor correction endpoints", async () => {
+		const root = repo();
+		const finding: Finding = {
+			finding: "effective",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		assert.equal(await deriveRepairBasis(root, [state(record(a, [finding])), state(record(a, [finding]))]), undefined);
+		assert.equal(
+			await deriveRepairBasis(root, [state(record(a, [finding])), state(record("f".repeat(40), [finding]))]),
+			undefined,
+		);
+		git(root, ["checkout", "-q", "--detach", a]);
+		const divergent = commit(root, "divergent", "other");
+		assert.equal(
+			await deriveRepairBasis(root, [state(record(b, [finding])), state(record(divergent, [finding]))]),
+			undefined,
+		);
 	});
 });
 
