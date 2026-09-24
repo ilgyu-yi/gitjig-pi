@@ -372,6 +372,72 @@ export async function fetchPlatformReviewContext(
 	return fetchPullContext(repoRoot, repositoryIdentity, pr, read);
 }
 
+const CLOSING_ISSUES_QUERY = `query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){id pullRequest(number:$number){id closingIssuesReferences(first:100,after:$endCursor){nodes{id number url repository{id name owner{id}}}pageInfo{hasNextPage endCursor}}}}}`;
+
+async function fetchClosingIssueReferences(
+	repoRoot: string,
+	repository: PlatformRepositoryIdentity,
+	pr: number,
+	pullRequestId: string,
+	read: PlatformRead,
+): Promise<unknown[] | undefined> {
+	const [owner, name, extra] = repository.nameWithOwner.split("/");
+	if (owner === undefined || name === undefined || extra !== undefined) return undefined;
+	const value = await readJson(
+		read,
+		[
+			"api",
+			"--hostname",
+			repository.host,
+			"graphql",
+			"--paginate",
+			"--slurp",
+			"-f",
+			`query=${CLOSING_ISSUES_QUERY}`,
+			"-f",
+			`owner=${owner}`,
+			"-f",
+			`name=${name}`,
+			"-F",
+			`number=${String(pr)}`,
+		],
+		repoRoot,
+	);
+	if (!Array.isArray(value) || value.length === 0) return undefined;
+	const nodes: unknown[] = [];
+	const seenCursors = new Set<string>();
+	for (let index = 0; index < value.length; index += 1) {
+		const page = value[index];
+		if (!object(page, ["data"])) return undefined;
+		const data = page.data;
+		if (
+			!object(data, ["repository"]) ||
+			!object(data.repository, ["id", "pullRequest"]) ||
+			data.repository.id !== repository.id
+		)
+			return undefined;
+		const pull = data.repository.pullRequest;
+		if (!object(pull, ["id", "closingIssuesReferences"]) || pull.id !== pullRequestId) return undefined;
+		const connection = pull.closingIssuesReferences;
+		if (!object(connection, ["nodes", "pageInfo"]) || !Array.isArray(connection.nodes)) return undefined;
+		if (!object(connection.pageInfo, ["hasNextPage", "endCursor"])) return undefined;
+		const hasNext = connection.pageInfo.hasNextPage;
+		const cursor = connection.pageInfo.endCursor;
+		if (typeof hasNext !== "boolean") return undefined;
+		if (hasNext) {
+			if (typeof cursor !== "string" || cursor.length === 0 || seenCursors.has(cursor) || index === value.length - 1)
+				return undefined;
+			seenCursors.add(cursor);
+		} else {
+			if (index !== value.length - 1) return undefined;
+			if (cursor !== null && typeof cursor !== "string") return undefined;
+		}
+		nodes.push(...connection.nodes);
+		if (nodes.length > 10_000) return undefined;
+	}
+	return nodes;
+}
+
 async function fetchPullContext(
 	repoRoot: string,
 	repositoryIdentity: PlatformRepositoryIdentity,
@@ -387,7 +453,7 @@ async function fetchPullContext(
 			"--repo",
 			[repositoryIdentity.host, repositoryIdentity.nameWithOwner].join("/"),
 			"--json",
-			"id,number,url,author,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,closingIssuesReferences",
+			"id,number,url,author,baseRefName,baseRefOid,headRefName,headRefOid,headRepository",
 		],
 		repoRoot,
 	);
@@ -402,19 +468,20 @@ async function fetchPullContext(
 			"headRefName",
 			"headRefOid",
 			"headRepository",
-			"closingIssuesReferences",
 		]) ||
 		pullValue.number !== pr ||
 		!exactHttpsUrl(pullValue.url, repositoryIdentity.host, `/${repositoryIdentity.nameWithOwner}/pull/${String(pr)}`) ||
+		!text(pullValue.id) ||
 		!platformNode(pullValue.author) ||
-		!platformNode(pullValue.headRepository) ||
-		!Array.isArray(pullValue.closingIssuesReferences)
+		!platformNode(pullValue.headRepository)
 	)
 		return undefined;
+	const closingReferences = await fetchClosingIssueReferences(repoRoot, repositoryIdentity, pr, pullValue.id, read);
+	if (closingReferences === undefined) return undefined;
 	const closingIssues: PlatformIssueSnapshot[] = [];
 	const issueIds = new Set<string>();
 	const issueNumbers = new Set<number>();
-	for (const entry of pullValue.closingIssuesReferences) {
+	for (const entry of closingReferences) {
 		if (
 			!object(entry, ["id", "number", "url", "repository"]) ||
 			!text(entry.id) ||
