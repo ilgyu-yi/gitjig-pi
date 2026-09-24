@@ -4,7 +4,7 @@
  * durable review records, the coarse deterministic trigger, the
  * diagnosis dispatch's admission, and the deterministic consumer.
  *
- * The instruments SLEEP per §5.3 until derived; this suite is their
+ * The instruments are installed per §1.4; this suite is their
  * derivation's failing-first pin. The diagnosis is never dispatched
  * live here — the admission is exercised through injected outcome
  * shapes, the same discipline the Orchestrator suite keeps.
