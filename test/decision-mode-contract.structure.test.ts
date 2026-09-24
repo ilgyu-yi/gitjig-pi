@@ -128,6 +128,56 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		);
 	});
 
+	it("keeps Phase A on the history route with no public mutation, plan-owner, or finding-escalation reach", () => {
+		const root = repoRoot();
+		const recoveryFiles = [
+			"briefs.ts",
+			"coordinator.ts",
+			"lineage.ts",
+			"profiles.ts",
+			"state-domain.ts",
+			"store.ts",
+			"types.ts",
+		];
+		const recovery = recoveryFiles
+			.map((name) => readFileSync(join(root, ".pi/extensions/gitjig/recovery", name), "utf8"))
+			.join("\n");
+		assert.doesNotMatch(
+			recovery,
+			/platform\/write|publish\/|landing\/|registerCommand|measure-escalate|plan contest owner/i,
+		);
+		for (const path of [
+			".pi/extensions/gitjig/commands/index.ts",
+			".pi/extensions/gitjig/commands/review-round.ts",
+			".pi/extensions/gitjig/recovery/coordinator.ts",
+		]) {
+			const source = readFileSync(join(root, path), "utf8");
+			if (path.endsWith("coordinator.ts")) assert.match(source, /claimAllowance/);
+			else assert.doesNotMatch(source, /claimAllowance|finalizeAllowance|resolveRecoveryStateDomain/);
+		}
+	});
+
+	it("keeps allowance mutation capabilities private to the coordinator", () => {
+		const root = repoRoot();
+		const production = [
+			".pi/extensions/gitjig.ts",
+			".pi/extensions/gitjig/commands/index.ts",
+			".pi/extensions/gitjig/commands/review-round.ts",
+			".pi/extensions/gitjig/recovery/briefs.ts",
+			".pi/extensions/gitjig/recovery/lineage.ts",
+			".pi/extensions/gitjig/recovery/profiles.ts",
+			".pi/extensions/gitjig/recovery/state-domain.ts",
+			".pi/extensions/gitjig/recovery/types.ts",
+		];
+		for (const path of production) {
+			const source = readFileSync(join(root, path), "utf8");
+			assert.doesNotMatch(source, /from ["']\.\/?(?:\.\.\/)*recovery\/store\.ts["']|claimAllowance|finalizeAllowance/);
+		}
+		const store = readFileSync(join(root, ".pi/extensions/gitjig/recovery/store.ts"), "utf8");
+		assert.match(store, /export type AllowanceClaim = \{ readonly \[CLAIM\]: true \}/);
+		assert.doesNotMatch(store, /readonly (?:path|recoveryDir|claimedBytes|device|inode|recordRef):/);
+	});
+
 	it("keeps context lifecycle bounded and repository-keyed", () => {
 		requireAll(context, [
 			"Working context is a managed resource",

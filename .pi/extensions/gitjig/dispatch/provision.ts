@@ -270,7 +270,7 @@ export const PROVISION_REFUSAL_CAUSES = {
 
 export function provisionDispatchContext(
 	callerRepoRoot: string,
-	options: { brief: string; expectedRef?: string },
+	options: { brief: string; expectedRef?: string; operationDeadline?: number },
 ): DispatchContext {
 	// Every git child below runs with the repo-locating and
 	// config-injection GIT_* families scrubbed: an inherited GIT_DIR would
@@ -279,6 +279,18 @@ export function provisionDispatchContext(
 	// inherited GIT_CONFIG_COUNT could inject a core.hooksPath that runs a
 	// program inside them (§1.5).
 	const env = withoutRepoLocatingGitEnv(process.env);
+	const guard = (): number | undefined => {
+		if (options.operationDeadline === undefined) return undefined;
+		const remaining = Math.floor(options.operationDeadline - performance.now());
+		if (remaining <= 0) throw new Error(PROVISION_REFUSAL_CAUSES.clone);
+		return remaining;
+	};
+	const childOptions = (): { encoding: "utf8"; env: NodeJS.ProcessEnv; timeout?: number; killSignal?: "SIGKILL" } => {
+		const remaining = guard();
+		return remaining === undefined
+			? { encoding: "utf8", env }
+			: { encoding: "utf8", env, timeout: remaining, killSignal: "SIGKILL" };
+	};
 	// Resolved once, here, in the caller's repository; the hash is held and
 	// every later act binds to it (§4.9 pin-at-provision).
 	let heldHash: string;
@@ -294,7 +306,7 @@ export function provisionDispatchContext(
 				"--end-of-options",
 				`${options.expectedRef ?? "HEAD"}^{commit}`,
 			],
-			{ encoding: "utf8", env },
+			childOptions(),
 		).trim();
 	} catch {
 		throw new Error(PROVISION_REFUSAL_CAUSES.unresolvable);
@@ -304,20 +316,25 @@ export function provisionDispatchContext(
 	}
 	// mkdtemp's exclusive creation is the isolation floor two racing
 	// dispatches stand on (§1.5).
+	guard();
 	const scratchRoot = mkdtempSync(join(scratchParent(), "gitjig-dispatch-"));
 	const treeDir = join(scratchRoot, "tree");
 	try {
-		execFileSync("git", ["clone", "-q", "--no-hardlinks", callerRepoRoot, treeDir], { encoding: "utf8", env });
-		execFileSync("git", ["-C", treeDir, "checkout", "-q", "--detach", heldHash], { encoding: "utf8", env });
+		execFileSync("git", ["clone", "-q", "--no-hardlinks", callerRepoRoot, treeDir], childOptions());
+		execFileSync("git", ["-C", treeDir, "checkout", "-q", "--detach", heldHash], childOptions());
 		// The clone's origin remote is a route back to the caller repository —
 		// push and fetch both — and is severed here (§1.5).
-		execFileSync("git", ["-C", treeDir, "remote", "remove", "origin"], { encoding: "utf8", env });
+		execFileSync("git", ["-C", treeDir, "remote", "remove", "origin"], childOptions());
+		guard();
 		// The clone's reflog is the second planted route back: `.git/logs`
 		// records `clone: from <caller-path>`, and a by-path push needs no
 		// remote. Removed whole (§1.5).
 		rmSync(join(treeDir, ".git", "logs"), { recursive: true, force: true });
+		guard();
 		writeFileSync(join(scratchRoot, "brief.md"), options.brief);
+		guard();
 		mkdirSync(join(scratchRoot, "state"));
+		guard();
 	} catch {
 		// A half-provisioned scratch is removed before the loud refusal: the
 		// caller holds no context to clean (§3.9).

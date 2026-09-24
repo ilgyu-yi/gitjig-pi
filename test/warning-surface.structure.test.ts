@@ -309,6 +309,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// The command spine composes no message text: the rung-1 commands hand
 	// fixed literals to the dispatcher and report its causes unrephrased.
 	{ file: "gitjig/authoring/policy.json", allow: [] },
+	// Closed recovery profile data contains no interpolation or emitting surface.
+	{ file: "gitjig/recovery/profiles.json", allow: [] },
 	{ file: "gitjig/commands/index.ts", allow: [] },
 	{
 		file: "gitjig/commands/authoring-brief.ts",
