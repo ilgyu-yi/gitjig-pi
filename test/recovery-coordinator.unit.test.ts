@@ -305,6 +305,12 @@ describe("Phase-A history recovery coordinator", () => {
 		const second = await coordinateHistoryRecovery(input);
 		assert.equal(second.terminal, "handoff");
 		assert.equal(second.cause, "allowance-consumed");
+		assert.ok(first.recordRef, "first claim must create a content-free record reference");
+		assert.deepEqual(
+			second.recordRef,
+			first.recordRef,
+			"consumed-allowance handoff must preserve the claimed reference",
+		);
 		assert.equal(dispatchCount, dispatched);
 	});
 

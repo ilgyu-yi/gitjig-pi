@@ -340,6 +340,21 @@ describe("review-round production call site", () => {
 			}),
 			"review-round: recovery handoff/park; route none; diagnosis STAGNATION/nothing",
 		);
+		assert.equal(
+			terminalText({
+				disposition: "recovery",
+				result: {
+					terminal: "handoff",
+					route: "none",
+					cause: "allowance-consumed",
+					reentry: "nothing",
+					nextGate: "park",
+					recordRef: { repoHash: "a".repeat(64), keyHash: "b".repeat(64), claimId: "claim-1" },
+				},
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "hidden" },
+			}),
+			`review-round: recovery handoff/park; route none; hashes "${"a".repeat(64)}"/"${"b".repeat(64)}"; claim "claim-1"; diagnosis STAGNATION/nothing`,
+		);
 	});
 	it("retries one transient platform comment-read failure", async () => {
 		let attempts = 0;

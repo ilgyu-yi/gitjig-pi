@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -87,13 +87,21 @@ const modes = section(spec, "### 5.6 Operating modes", "### 5.7 Run conduct");
 const context = section(spec, "### 5.8 Context lifecycle", "### 5.9 Session surfaces");
 const sessions = section(spec, "### 5.9 Session surfaces", "## 6. Self-governance milestone");
 
+function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): string[] {
+	return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
+		const path = join(dir, entry.name);
+		if (entry.isDirectory()) return productionExtensionFiles(root, path);
+		return entry.isFile() && entry.name.endsWith(".ts") ? [path] : [];
+	});
+}
+
 function assertNoStoreCapability(root: string, path: string, source: string): void {
 	const store = join(root, ".pi/extensions/gitjig/recovery/store.ts");
 	for (const match of source.matchAll(/\b(?:from\s*|import\s*\(\s*)["']([^"']+)["']/g)) {
 		const specifier = match[1];
 		if (specifier?.startsWith(".")) {
 			assert.notEqual(
-				resolve(dirname(join(root, path)), specifier),
+				resolve(dirname(join(root, path)), specifier.replace(/[?#].*$/, "")),
 				store,
 				`store capability crosses through ${path}: ${specifier}`,
 			);
@@ -175,16 +183,11 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 
 	it("keeps allowance mutation capabilities private to the coordinator", () => {
 		const root = repoRoot();
-		const production = [
-			".pi/extensions/gitjig.ts",
-			".pi/extensions/gitjig/commands/index.ts",
-			".pi/extensions/gitjig/commands/review-round.ts",
-			".pi/extensions/gitjig/recovery/briefs.ts",
-			".pi/extensions/gitjig/recovery/lineage.ts",
-			".pi/extensions/gitjig/recovery/profiles.ts",
-			".pi/extensions/gitjig/recovery/state-domain.ts",
-			".pi/extensions/gitjig/recovery/types.ts",
-		];
+		const production = [".pi/extensions/gitjig.ts", ...productionExtensionFiles(root)].filter(
+			(path) =>
+				![".pi/extensions/gitjig/recovery/coordinator.ts", ".pi/extensions/gitjig/recovery/store.ts"].includes(path),
+		);
+		assert.ok(production.includes(".pi/extensions/gitjig/review/orchestrate.ts"));
 		for (const path of production) {
 			const source = readFileSync(join(root, path), "utf8");
 			assertNoStoreCapability(root, path, source);
@@ -195,6 +198,8 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 				[".pi/extensions/gitjig/recovery/types.ts", "./store.ts"],
 				[".pi/extensions/gitjig/commands/index.ts", "../recovery/store.ts"],
 				[".pi/extensions/gitjig.ts", "./gitjig/recovery/store.ts"],
+				[".pi/extensions/gitjig/review/orchestrate.ts", "../recovery/store.ts"],
+				[".pi/extensions/gitjig/recovery/types.ts", "./store.ts?cap=1"],
 			] as const) {
 				const target = join(copy, path);
 				mkdirSync(dirname(target), { recursive: true });
