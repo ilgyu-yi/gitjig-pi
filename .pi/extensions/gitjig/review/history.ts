@@ -276,7 +276,19 @@ export async function deriveRepairBasis(
 		const findings: RepairBasisFinding[] = [];
 		for (let index = 0; index < adjudication.rulings.length; index += 1) {
 			const ruling = adjudication.rulings[index];
-			if (ruling === undefined || !Array.isArray(ruling.provenance) || ruling.provenance.length === 0) return undefined;
+			// Read-time presence mirror of admitAdjudication's owed axes (§1.9):
+			// the durable record lacks the original manifest, so it cannot re-mint
+			// that branded adjudication. This only withholds incomplete data; it
+			// never rules validity, direction, or criterion impact on the Judge's behalf.
+			if (ruling.provenance.length === 0 || !ruling.evidence) return undefined;
+			if (
+				ruling.validity === "CONFIRMED" &&
+				(ruling.severity === undefined ||
+					ruling.direction === undefined ||
+					ruling.onCriterion === undefined ||
+					(ruling.severity === "NIT" && !ruling.remedy))
+			)
+				return undefined;
 			const attributed = new Set<string>();
 			for (const slot of ruling.provenance) {
 				if (typeof slot?.lens !== "string" || typeof slot.surface !== "string") return undefined;

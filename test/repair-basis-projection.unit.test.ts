@@ -50,6 +50,13 @@ function record(head: string, findings: Finding[], outcome: "repair" | "clear" =
 				provenance: [{ lens: "runtime", surface: "tree" }],
 				validity,
 				...(severity === undefined ? {} : { severity }),
+				...(validity === "CONFIRMED"
+					? {
+							direction: "fail-closed" as const,
+							onCriterion: true,
+							...(severity === "NIT" ? { remedy: "exact remedy" } : {}),
+						}
+					: {}),
 				evidence: `evidence ${finding}`,
 			})),
 		},
@@ -138,6 +145,7 @@ describe("issue #238 repair-basis projection", () => {
 		const root = repo();
 		const a = commit(root, "correction", "before\n");
 		const b = commit(root, "correction", "after\n");
+		const rawBundlesBeforeAssembly = original.map(({ bundle }) => structuredClone(bundle));
 		const assembled = repairHistory([
 			{ ...original[0], head: a },
 			{ ...original[1], head: b },
@@ -153,7 +161,7 @@ describe("issue #238 repair-basis projection", () => {
 		assert.equal(basis.intervals[0].entries.length, 1);
 		assert.deepEqual(
 			assembled.map(({ record }) => record.bundle),
-			original.map(({ bundle }) => bundle),
+			rawBundlesBeforeAssembly,
 		);
 		for (const projected of basis.states) {
 			for (const effective of projected.findings) {
@@ -410,6 +418,46 @@ describe("issue #238 repair-basis projection", () => {
 		assert.equal(first.bundle.length, 1);
 		assert.equal(first.adjudication.rulings.length, 3);
 		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+	});
+
+	it("withholds an incomplete effective ruling before filtering or rendering any diagnosis", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const valid: Finding = {
+			finding: "complete",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		for (const mutate of [
+			(record: ReviewRecord) => {
+				if (record.adjudication) delete record.adjudication.rulings[0].severity;
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication) delete record.adjudication.rulings[0].direction;
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication) delete record.adjudication.rulings[0].onCriterion;
+			},
+			(record: ReviewRecord) => {
+				if (record.adjudication) record.adjudication.rulings[0].evidence = "";
+			},
+		]) {
+			const first = record(a, [valid]);
+			mutate(first);
+			assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [valid]))]), undefined);
+		}
+		const nit: Finding = { finding: "nit", validity: "CONFIRMED", severity: "NIT", disposition: "none" };
+		const incompleteNit = record(a, [nit]);
+		if (incompleteNit.adjudication === null) throw new Error("bad fixture");
+		delete incompleteNit.adjudication.rulings[0].remedy;
+		assert.equal(await deriveRepairBasis(root, [state(incompleteNit), state(record(b, [valid]))]), undefined);
+		const refuted: Finding = { finding: "refuted", validity: "REFUTED", disposition: "none" };
+		const incompleteRefuted = record(a, [refuted]);
+		if (incompleteRefuted.adjudication === null) throw new Error("bad fixture");
+		incompleteRefuted.adjudication.rulings[0].evidence = "";
+		assert.equal(await deriveRepairBasis(root, [state(incompleteRefuted), state(record(b, [valid]))]), undefined);
 	});
 
 	it("withholds on repeated, missing or non-ancestor correction endpoints", async () => {

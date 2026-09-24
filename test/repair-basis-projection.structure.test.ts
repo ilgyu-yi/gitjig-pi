@@ -27,9 +27,9 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		interval.includes("const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 }") &&
 		interval.indexOf("const budget: Budget =") > interval.indexOf("for (const pair of pairs)") &&
 		history.includes('while (start > 0 && history[start - 1].outcome === "repair")') &&
-		history.includes('ruling.validity === "CONFIRMED"') &&
-		history.includes('ruling.severity === "SUBSTANTIVE"') &&
-		history.includes('disposition.disposition === "repair"') &&
+		history.includes(
+			'if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")',
+		) &&
 		history.includes("!adjudication.dedupAttested ||") &&
 		history.includes("record.bundle.length === 0 ||") &&
 		history.includes("adjudication.rulings.length > record.bundle.length") &&
@@ -39,7 +39,11 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("if (unattributedSlots.size !== 0) return undefined") &&
 		history.includes("if (joined.has(entry.finding)) return undefined") &&
 		history.includes("rulings.size !== dispositions.size") &&
-		history.includes("!Array.isArray(ruling.provenance) || ruling.provenance.length === 0") &&
+		history.includes("ruling.provenance.length === 0 || !ruling.evidence") &&
+		history.includes("ruling.severity === undefined ||") &&
+		history.includes("ruling.direction === undefined ||") &&
+		history.includes("ruling.onCriterion === undefined ||") &&
+		history.includes('ruling.severity === "NIT" && !ruling.remedy') &&
 		history.includes("!slots.has(key) || attributed.has(key)") &&
 		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
@@ -93,7 +97,14 @@ describe("issue #238 structural mutation teeth", () => {
 				),
 				CALLER,
 			],
-			[INTERVAL, HISTORY.replace('ruling.validity === "CONFIRMED"', 'ruling.validity !== "REFUTED"'), CALLER],
+			[
+				INTERVAL,
+				HISTORY.replace(
+					'if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")',
+					'if (ruling.validity !== "REFUTED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")',
+				),
+				CALLER,
+			],
 			[INTERVAL, HISTORY.replace('ruling.severity === "SUBSTANTIVE"', 'ruling.severity !== "NIT"'), CALLER],
 			[INTERVAL, HISTORY.replace('disposition.disposition === "repair"', 'disposition.disposition !== "none"'), CALLER],
 			[INTERVAL, HISTORY.replace("!adjudication.dedupAttested ||", "false ||"), CALLER],
@@ -122,11 +133,11 @@ describe("issue #238 structural mutation teeth", () => {
 				CALLER,
 			],
 			[INTERVAL, HISTORY.replace("rulings.size !== dispositions.size", "false"), CALLER],
-			[
-				INTERVAL,
-				HISTORY.replace("!Array.isArray(ruling.provenance) || ruling.provenance.length === 0", "false"),
-				CALLER,
-			],
+			[INTERVAL, HISTORY.replace("ruling.provenance.length === 0 || !ruling.evidence", "false"), CALLER],
+			[INTERVAL, HISTORY.replace("ruling.severity === undefined ||", "false ||"), CALLER],
+			[INTERVAL, HISTORY.replace("ruling.direction === undefined ||", "false ||"), CALLER],
+			[INTERVAL, HISTORY.replace("ruling.onCriterion === undefined ||", "false ||"), CALLER],
+			[INTERVAL, HISTORY.replace('ruling.severity === "NIT" && !ruling.remedy', "false"), CALLER],
 			[INTERVAL, HISTORY.replace("!slots.has(key) || attributed.has(key)", "false"), CALLER],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
 			[
