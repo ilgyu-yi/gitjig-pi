@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { repoRoot } from "./harness/run-pi.ts";
 
@@ -85,6 +86,21 @@ function assertCrossReviewHandoffContract(source: string): void {
 const modes = section(spec, "### 5.6 Operating modes", "### 5.7 Run conduct");
 const context = section(spec, "### 5.8 Context lifecycle", "### 5.9 Session surfaces");
 const sessions = section(spec, "### 5.9 Session surfaces", "## 6. Self-governance milestone");
+
+function assertNoStoreCapability(root: string, path: string, source: string): void {
+	const store = join(root, ".pi/extensions/gitjig/recovery/store.ts");
+	for (const match of source.matchAll(/\b(?:from\s*|import\s*\(\s*)["']([^"']+)["']/g)) {
+		const specifier = match[1];
+		if (specifier?.startsWith(".")) {
+			assert.notEqual(
+				resolve(dirname(join(root, path)), specifier),
+				store,
+				`store capability crosses through ${path}: ${specifier}`,
+			);
+		}
+	}
+	assert.doesNotMatch(source, /\bclaimAllowance\b|\bfinalizeAllowance\b/);
+}
 
 describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 	it("pins the two independent setting domains and their fail-safe resolution", () => {
@@ -171,7 +187,27 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		];
 		for (const path of production) {
 			const source = readFileSync(join(root, path), "utf8");
-			assert.doesNotMatch(source, /from ["']\.\/?(?:\.\.\/)*recovery\/store\.ts["']|claimAllowance|finalizeAllowance/);
+			assertNoStoreCapability(root, path, source);
+		}
+		const copy = mkdtempSync(join(tmpdir(), "gitjig-store-export-mutant-"));
+		try {
+			for (const [path, specifier] of [
+				[".pi/extensions/gitjig/recovery/types.ts", "./store.ts"],
+				[".pi/extensions/gitjig/commands/index.ts", "../recovery/store.ts"],
+				[".pi/extensions/gitjig.ts", "./gitjig/recovery/store.ts"],
+			] as const) {
+				const target = join(copy, path);
+				mkdirSync(dirname(target), { recursive: true });
+				cpSync(join(root, path), target);
+				writeFileSync(target, `${readFileSync(target, "utf8")}\nexport * from "${specifier}";\n`);
+				assert.throws(
+					() => assertNoStoreCapability(copy, path, readFileSync(target, "utf8")),
+					/store capability crosses/,
+					path,
+				);
+			}
+		} finally {
+			rmSync(copy, { recursive: true, force: true });
 		}
 		const store = readFileSync(join(root, ".pi/extensions/gitjig/recovery/store.ts"), "utf8");
 		assert.match(store, /export type AllowanceClaim = \{ readonly \[CLAIM\]: true \}/);
