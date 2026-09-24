@@ -149,6 +149,12 @@ function freshness(): RecoveryFreshness {
 }
 
 describe("Phase-A history recovery coordinator", () => {
+	it("pins the exact 192 KiB durable consumed-record cap", () => {
+		const source = readFileSync(new URL("../.pi/extensions/gitjig/recovery/coordinator.ts", import.meta.url), "utf8");
+		assert.match(source, /MAX_RETAINED_RECORD_BYTES = 192 \* 1024;/);
+		assert.match(source, /Buffer\.byteLength\(canonicalJson\(record\), "utf8"\) > MAX_RETAINED_RECORD_BYTES/);
+	});
+
 	it("forbids public acts and artifact mutations in every closed recovery role brief", () => {
 		const diagnosis = { value: "STAGNATION", invalidation: "nothing", evidence: "original" } as const;
 		const spec = {
@@ -177,6 +183,8 @@ describe("Phase-A history recovery coordinator", () => {
 			assert.match(role, /do not make any public\/server or platform act/);
 			assert.match(role, /do not publish, merge, plan, re-plan, authorize, mutate repository metadata or artifacts/);
 			assert.match(role, /except the required provisional\/final \.\.\/return\.json/);
+			assert.match(role, /full 40-hex output of `git rev-parse HEAD` in your provisioned tree/);
+			assert.match(role, /do not copy a head from the input JSON/);
 		}
 	});
 
@@ -962,10 +970,13 @@ describe("Phase-A history recovery coordinator", () => {
 		}
 	});
 
-	it("rejects duplicate payload keys and lone-surrogate route text before selection", async () => {
+	it("rejects duplicate/extra payload keys and noncanonical route text before selection", async () => {
 		for (const [suffix, malformed] of [
-			["DUP", '{"outcome":"ALTERNATIVE","outcome":"BASE_STANDS","method":"m","evidence":"e"}'],
+			["DUP", '{"outcome":"ALTERNATIVE","outcome":"ALTERNATIVE","method":"m","evidence":"e"}'],
+			["EXTRA", '{"outcome":"ALTERNATIVE","method":"m","evidence":"e","extra":true}'],
 			["SURROGATE", '{"outcome":"ALTERNATIVE","method":"\\ud800","evidence":"e"}'],
+			["NON_NFC", '{"outcome":"ALTERNATIVE","method":"e\\u0301","evidence":"e"}'],
+			["C0", '{"outcome":"ALTERNATIVE","method":"m\\u0000","evidence":"e"}'],
 		] as const) {
 			const current = {
 				...subject,
@@ -993,6 +1004,34 @@ describe("Phase-A history recovery coordinator", () => {
 			assert.equal(result.terminal, "handoff");
 			assert.equal(selectorCalled, false);
 		}
+	});
+
+	it("rejects a recovery payload without independently confirmed head compare", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_COMPARE_INVALID" } },
+		};
+		let selectorCalled = false;
+		const result = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			dispatchProfile: async (ledger, profileId) => {
+				if (profileId === "recovery-selector") selectorCalled = true;
+				const outcome =
+					profileId === "stagnation-root"
+						? { ...admitted({ outcome: "ALTERNATIVE", method: "m", evidence: "e" }), compare: "invalid" as const }
+						: admitted({ outcome: "BASE_STANDS", method: "", evidence: "e" });
+				return observed(ledger, outcome);
+			},
+		});
+		assert.equal(result.terminal, "handoff");
+		assert.equal(selectorCalled, false);
 	});
 
 	it("enforces the 8 KiB string budget across the whole route", async () => {

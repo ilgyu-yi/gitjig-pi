@@ -114,6 +114,102 @@ describe("closed Phase-A recovery profiles", () => {
 		}
 	});
 
+	it("kills the private-copy retained-record byte-cap mutant in its owner test", () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-record-cap-mutant-"));
+		try {
+			mkdirSync(join(root, ".pi", "extensions"), { recursive: true });
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(root, ".pi", "extensions", "gitjig"), {
+				recursive: true,
+			});
+			mkdirSync(join(root, "test"));
+			cpSync(
+				new URL("./recovery-coordinator.unit.test.ts", import.meta.url),
+				join(root, "test", "recovery-coordinator.unit.test.ts"),
+			);
+			symlinkSync(new URL("../node_modules", import.meta.url), join(root, "node_modules"), "dir");
+			const path = join(root, ".pi", "extensions", "gitjig", "recovery", "coordinator.ts");
+			const original = readFileSync(path, "utf8");
+			assert.equal(original.split("MAX_RETAINED_RECORD_BYTES = 192 * 1024").length, 2);
+			writeFileSync(
+				path,
+				original.replace("MAX_RETAINED_RECORD_BYTES = 192 * 1024", "MAX_RETAINED_RECORD_BYTES = 1920 * 1024"),
+			);
+			const result = spawnSync(
+				process.execPath,
+				[
+					"--test",
+					"--test-name-pattern=pins the exact 192 KiB durable consumed-record cap",
+					join(root, "test", "recovery-coordinator.unit.test.ts"),
+				],
+				{
+					cwd: process.cwd(),
+					env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("NODE_TEST"))),
+					encoding: "utf8",
+					timeout: 30_000,
+				},
+			);
+			assert.equal(result.signal, null, result.stderr);
+			assert.equal(result.status, 1, `retained-record cap mutant survived\n${result.stdout}\n${result.stderr}`);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("kills private-copy recovery payload and route-text guard mutants through owner refusals", () => {
+		const root = mkdtempSync(join(tmpdir(), "gitjig-recovery-input-mutants-"));
+		try {
+			mkdirSync(join(root, ".pi", "extensions"), { recursive: true });
+			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(root, ".pi", "extensions", "gitjig"), {
+				recursive: true,
+			});
+			mkdirSync(join(root, "test"));
+			cpSync(
+				new URL("./recovery-coordinator.unit.test.ts", import.meta.url),
+				join(root, "test", "recovery-coordinator.unit.test.ts"),
+			);
+			symlinkSync(new URL("../node_modules", import.meta.url), join(root, "node_modules"), "dir");
+			const path = join(root, ".pi", "extensions", "gitjig", "recovery", "coordinator.ts");
+			const original = readFileSync(path, "utf8");
+			for (const [needle, replacement, arm] of [
+				["Object.keys(value).length === keys.length &&", "true &&", "rejects duplicate/extra payload keys"],
+				[
+					'if (value !== value.normalize("NFC")) return false;',
+					"if (false) return false;",
+					"rejects duplicate/extra payload keys",
+				],
+				[
+					"if (hasDuplicateJsonKeys(outcome.payload)) return undefined;",
+					"if (false) return undefined;",
+					"rejects duplicate/extra payload keys",
+				],
+				[
+					'outcome.compare !== "confirmed" ||',
+					"false ||",
+					"rejects a recovery payload without independently confirmed head compare",
+				],
+				["codePoint <= 0x1f ||", "false ||", "rejects duplicate/extra payload keys"],
+			] as const) {
+				assert.equal(original.split(needle).length, 2, needle);
+				writeFileSync(path, original.replace(needle, replacement));
+				const result = spawnSync(
+					process.execPath,
+					["--test", `--test-name-pattern=${arm}`, join(root, "test", "recovery-coordinator.unit.test.ts")],
+					{
+						cwd: process.cwd(),
+						env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("NODE_TEST"))),
+						encoding: "utf8",
+						timeout: 30_000,
+					},
+				);
+				assert.equal(result.signal, null, result.stderr);
+				assert.equal(result.status, 1, `recovery guard mutant survived: ${needle}\n${result.stdout}\n${result.stderr}`);
+				writeFileSync(path, original);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("kills private-copy route work and terminal deadline mutants through durable owner probes", () => {
 		const root = mkdtempSync(join(tmpdir(), "gitjig-route-mutants-"));
 		try {

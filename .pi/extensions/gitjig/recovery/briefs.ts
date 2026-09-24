@@ -9,7 +9,7 @@ import {
 } from "./types.ts";
 
 const RETURN =
-	'Return only through ../return.json with exact outer keys {"ok":true,"summary":"recovery-result","reviewedHead":"<held head>","payload":"<JSON string>"}. Write a complete provisional return within 360 seconds and overwrite it with the final return within 540 seconds after process start.';
+	'Return only through ../return.json with exact outer keys {"ok":true,"summary":"recovery-result","reviewedHead":"<held head>","payload":"<JSON string>"}. Resolve <held head> independently as the full 40-hex output of `git rev-parse HEAD` in your provisioned tree; do not copy a head from the input JSON. Put that hash only in reviewedHead, not in summary or payload. Write a complete provisional return within 360 seconds and overwrite it with the final return within 540 seconds after process start.';
 
 function brief(role: string, input: unknown, output: string): RecoverySemanticBrief {
 	return [
