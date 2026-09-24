@@ -1146,6 +1146,50 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(result.cause, "recovery-failed");
 	});
 
+	it("preserves a store preclaim refusal without dispatching or consuming an allowance", async () => {
+		const current = structuredClone(subject);
+		current.context.pullRequest.id = "PR_STORE_PRECLAIM_REFUSAL";
+		const directory = join(stateRoot, "gitjig", "recovery");
+		let changed = false;
+		let dispatched = false;
+		Object.defineProperty(current.context.pullRequest, "closingIssues", {
+			configurable: true,
+			get() {
+				// Inject a domain failure only after the coordinator's final every-use walk,
+				// while it derives the key and before the store's own preclaim walk.
+				if (!changed && new Error().stack?.includes("deriveAllowancePathEncoding")) {
+					changed = true;
+					chmodSync(directory, 0o750);
+				}
+				return [];
+			},
+		});
+		try {
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				dispatchProfile: async () => {
+					dispatched = true;
+					throw new Error("must not dispatch after store refusal");
+				},
+			});
+			assert.equal(changed, true);
+			assert.equal(result.terminal, "handoff");
+			assert.equal(result.cause, "state-domain");
+			assert.equal(result.recordRef, null);
+			assert.equal(dispatched, false);
+			assert.equal(readdirSync(directory).filter((name) => name.endsWith(".json")).length, 0);
+		} finally {
+			if (changed) chmodSync(directory, 0o700);
+		}
+	});
+
 	it("refuses a state-domain switch during the preclaim reread", async () => {
 		const replacement = mkdtempSync(join(tmpdir(), "gitjig-recovery-domain-switch-"));
 		chmodSync(replacement, 0o700);
