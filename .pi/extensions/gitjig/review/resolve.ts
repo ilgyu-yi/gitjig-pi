@@ -36,7 +36,7 @@
  * NOT here, by design: the Judge's semantic acts (validity, dedup,
  * severity, direction, AC impact arrive as ruled data — this module
  * validates shape and completeness and infers none of them); §1.4's
- * history-diagnosis capacity (asleep, §5.3); and the orchestration loop
+ * history-diagnosis capacity; and the orchestration loop
  * (fresh-panel-per-repair, nit carry-forward re-issue) — the dispositions
  * carry those semantics, the caller performs them.
  */
