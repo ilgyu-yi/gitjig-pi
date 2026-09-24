@@ -98,12 +98,12 @@ describe("recovery optional dispatch deadline", () => {
 				["\t\tguard();\n\t\t// The clone's reflog", "\t\tvoid 0;\n\t\t// The clone's reflog", 6, "logs"],
 				["\t\tguard();\n\t\twriteFileSync", "\t\tvoid 0;\n\t\twriteFileSync", 7, "brief"],
 				["\t\tguard();\n\t\tmkdirSync", "\t\tvoid 0;\n\t\tmkdirSync", 8, "state"],
-				["\t\tguard();\n\t} catch {", "\t\tvoid 0;\n\t} catch {", 9, "returned"],
+				["\t\tguard();\n\t} catch (error) {", "\t\tvoid 0;\n\t} catch (error) {", 9, "returned"],
 			] as const) {
 				writeFileSync(path, original);
 				const baseline = run(threshold);
 				assert.equal(baseline.observed.includes(forbidden), false, `baseline must refuse before ${forbidden}`);
-				assert.notEqual(baseline.outcome, "returned");
+				assert.match(baseline.outcome, /optional operation deadline expired before an authorized provision act/);
 				assert.equal(original.split(needle).length, 2, needle);
 				writeFileSync(path, original.replace(needle, replacement));
 				const mutant = run(threshold);

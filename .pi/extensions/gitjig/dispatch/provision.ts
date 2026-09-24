@@ -343,10 +343,11 @@ export function provisionDispatchContext(
 		guard();
 		mkdirSync(join(scratchRoot, "state"));
 		guard();
-	} catch {
+	} catch (error) {
 		// A half-provisioned scratch is removed before the loud refusal: the
 		// caller holds no context to clean (§3.9).
 		rmSync(scratchRoot, { recursive: true, force: true });
+		if (error instanceof OperationDeadlineExpired) throw error;
 		throw new Error(PROVISION_REFUSAL_CAUSES.clone);
 	}
 	return {
