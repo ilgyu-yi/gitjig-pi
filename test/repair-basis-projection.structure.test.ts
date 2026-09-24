@@ -35,7 +35,7 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("rulings.size !== dispositions.size") &&
 		history.includes("!Array.isArray(ruling.provenance) || ruling.provenance.length === 0") &&
 		history.includes("!slots.has(key) || attributed.has(key)") &&
-		history.includes("disposition?.finding !== ruling.finding || dispositions.get(ruling.finding) !== disposition") &&
+		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
 		caller.includes("await deriveRepairBasis(repoRoot, history)") &&
@@ -96,14 +96,7 @@ describe("issue #238 structural mutation teeth", () => {
 				HISTORY.replace("const slots = new Set(record.bundle.map", "const slots = new Set(record.bundle.flatMap"),
 				CALLER,
 			],
-			[
-				INTERVAL,
-				HISTORY.replace(
-					"disposition?.finding !== ruling.finding || dispositions.get(ruling.finding) !== disposition",
-					"false",
-				),
-				CALLER,
-			],
+			[INTERVAL, HISTORY.replace("disposition?.finding !== ruling.finding", "false"), CALLER],
 			[INTERVAL, HISTORY.replace("rulings.size !== dispositions.size", "false"), CALLER],
 			[
 				INTERVAL,

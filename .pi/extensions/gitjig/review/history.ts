@@ -284,7 +284,7 @@ export async function deriveRepairBasis(
 				attributed.add(key);
 			}
 			const disposition = record.review.resolution.dispositions[index];
-			if (disposition?.finding !== ruling.finding || dispositions.get(ruling.finding) !== disposition) return undefined;
+			if (disposition?.finding !== ruling.finding) return undefined;
 			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
 				findings.push({ finding: ruling.finding, ruling, disposition });
 		}
