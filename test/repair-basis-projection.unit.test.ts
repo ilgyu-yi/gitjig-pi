@@ -309,6 +309,27 @@ describe("issue #238 repair-basis projection", () => {
 		}
 	});
 
+	it("withholds when a contributing raw slot has no Judge attribution or rulings vanish", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = {
+			finding: "raw runtime",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		const first = record(a, [finding, { ...finding, finding: "raw suite" }]);
+		first.bundle[1].slot = { lens: "suite", surface: "tests" };
+		if (first.adjudication === null || first.review.state !== "resolved") throw new Error("bad fixture");
+		first.adjudication.rulings = [{ ...first.adjudication.rulings[0], finding: "effective runtime only" }];
+		first.review.resolution.dispositions = [{ finding: "effective runtime only", disposition: "repair" }];
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+		first.adjudication.rulings = [];
+		first.review.resolution.dispositions = [];
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+	});
+
 	it("withholds on repeated, missing or non-ancestor correction endpoints", async () => {
 		const root = repo();
 		const finding: Finding = {

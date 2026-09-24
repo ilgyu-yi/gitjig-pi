@@ -266,9 +266,9 @@ export async function deriveRepairBasis(
 		// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
 		// Retain that bundle in the complete source record; never invent a raw-text
 		// or positional pairing between it and the Judge's rulings.
-		if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length === 0)
-			return undefined;
+		if (!adjudication.dedupAttested || record.bundle.length === 0) return undefined;
 		const slots = new Set(record.bundle.map(({ slot }) => JSON.stringify([slot.lens, slot.surface])));
+		const unattributedSlots = new Set(slots);
 		const rulings = uniqueByFinding(adjudication.rulings);
 		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
 		if (rulings === undefined || dispositions === undefined || rulings.size !== dispositions.size) return undefined;
@@ -282,12 +282,16 @@ export async function deriveRepairBasis(
 				const key = JSON.stringify([slot.lens, slot.surface]);
 				if (!slots.has(key) || attributed.has(key)) return undefined;
 				attributed.add(key);
+				unattributedSlots.delete(key);
 			}
 			const disposition = record.review.resolution.dispositions[index];
 			if (disposition?.finding !== ruling.finding) return undefined;
 			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
 				findings.push({ finding: ruling.finding, ruling, disposition });
 		}
+		// Dedup may merge raw findings, but never discard a contributing slot.
+		// Do not guess which of several raw findings within one slot was merged.
+		if (unattributedSlots.size !== 0) return undefined;
 		states.push({ head: state.head, findings });
 	}
 	const intervals = await readCorrectionIntervals(
