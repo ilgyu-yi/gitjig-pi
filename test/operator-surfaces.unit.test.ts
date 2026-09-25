@@ -85,10 +85,13 @@ describe("#131 collapsed operator-visible acts", () => {
 			spec.indexOf("## 6. Self-governance milestone"),
 		);
 		for (const clause of [
+			"The #133 lifecycle-record projection is a read-only, optional extension of the same composable status slot, not another lifecycle resolver.",
 			"Issue or PR explicitly addressed by an operator act with a platform-attested repository and subject identity",
 			"an Issue key has an explicit null head",
-			"pagination-complete, platform-fetched comment population",
-			"read-only, terminal-aware `blocked` and handoff inspectors owed by this contract",
+			"Absent an addressed target the projection is silent: no current Issue/PR identity or workflow phase is inferred, no merge/decision mode is re-resolved, and no label alone asserts a lifecycle state or authority.",
+			"The #276 handed-over `.github/workflows/gitjig-lifecycle.mjs` engine owns the record and terminal admission.",
+			"read-only, terminal-aware `blocked` and handoff inspectors owed by this contract must inspect a pagination-complete, platform-fetched comment population",
+			"It cannot substitute for the transition service or the governing lifecycle record (§2.2).",
 			"same-repository `authorizedResolver` predicate (`WRITE`, `MAINTAIN`, or `ADMIN`)",
 			"a Bot requires independent first-party-producer proof or is not projected",
 			"Proposed and Active remain distinct; neither a missing label nor an unavailable read establishes Active.",
