@@ -99,6 +99,8 @@ export interface RunOptions {
 	timeoutMs?: number;
 	/** Select the host output surface; JSON exposes real tool update events. */
 	outputMode?: "text" | "json";
+	/** Run against a separately provisioned project; all harness session/state/home paths remain in the fixture. */
+	projectRoot?: string;
 }
 
 export interface PiRunResult {
@@ -222,7 +224,11 @@ export function runPi(fixture: Fixture, options: RunOptions = {}): Promise<PiRun
 	return new Promise((resolvePromise) => {
 		// stdio[0] = "ignore" attaches /dev/null: the explicit end-of-input
 		// the spike requires for headless runs.
-		const child = spawn("pi", args, { cwd: fixture.root, env, stdio: ["ignore", "pipe", "pipe"] });
+		const child = spawn("pi", args, {
+			cwd: options.projectRoot ?? fixture.root,
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
 		let stdout = "";
 		let stderr = "";
 		let timedOut = false;
