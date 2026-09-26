@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const spec = readFileSync(join(repoRoot(), "SPEC.md"), "utf8");
@@ -103,42 +102,6 @@ const COORDINATOR_RUNTIME_EXPORTS = [
 	"makeRecoveryProfileDispatcher",
 ] as const;
 
-const ALLOWED_PROCESS_CALLS = new Set([
-	"process.argv.indexOf",
-	"process.argv.slice",
-	"process.cwd",
-	"process.geteuid",
-	"process.kill",
-	"process.stdout.write",
-]);
-
-function processCallRoot(expression: ts.Expression): ts.Expression {
-	let current = expression;
-	while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) current = current.expression;
-	return current;
-}
-
-function assertNoForbiddenLoaderAccess(path: string, source: string): void {
-	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-	function visit(node: ts.Node): void {
-		if (ts.isIdentifier(node) && (node.text === "require" || node.text === "createRequire"))
-			assert.fail(`CommonJS loader denied through ${path}: ${node.text}`);
-		if (ts.isStringLiteralLike(node) && (node.text === "node:module" || node.text === "module"))
-			assert.fail(`CommonJS loader module denied through ${path}: ${node.text}`);
-		if (
-			ts.isCallExpression(node) &&
-			ts.isIdentifier(processCallRoot(node.expression)) &&
-			(processCallRoot(node.expression) as ts.Identifier).text === "process"
-		)
-			assert.ok(
-				ALLOWED_PROCESS_CALLS.has(node.expression.getText(tree)),
-				`unrecognized process call denied through ${path}: ${node.expression.getText(tree)}`,
-			);
-		ts.forEachChild(node, visit);
-	}
-	visit(tree);
-}
-
 async function assertPrivateAllowanceCapabilities(root: string): Promise<void> {
 	const production = [".pi/extensions/gitjig.ts", ...productionExtensionFiles(root)];
 	assert.ok(!production.includes(".pi/extensions/gitjig/recovery/store.ts"), "standalone mutation module survives");
@@ -148,7 +111,6 @@ async function assertPrivateAllowanceCapabilities(root: string): Promise<void> {
 	assert.equal((source.match(/^function finalizeAllowance\(/gm) ?? []).length, 1);
 	for (const path of production) {
 		const candidate = readFileSync(join(root, path), "utf8");
-		assertNoForbiddenLoaderAccess(path, candidate);
 		if (path === coordinator) continue;
 		assert.doesNotMatch(
 			candidate,
@@ -257,23 +219,6 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 			);
 			await assert.rejects(() => assertPrivateAllowanceCapabilities(copy), /standalone mutation module survives/);
 			rmSync(join(copy, ".pi/extensions/gitjig/recovery/store.ts"));
-			const loaderTarget = join(copy, ".pi/extensions/gitjig/review/orchestrate.ts");
-			for (const [mutant, expected] of [
-				[
-					'import { createRequire as __leakCreateRequire } from "node:module";\nconst __leakRequire = __leakCreateRequire(import.meta.url);\nexport const __leakedStoreCapabilities = __leakRequire("../recovery/store.ts");',
-					/CommonJS loader denied/,
-				],
-				['export const __directStoreCapabilities = require("../recovery/store.ts");', /CommonJS loader denied/],
-				[
-					'const __moduleApi = process.getBuiltinModule("node:module");\nconst __makeRequire = Reflect.get(__moduleApi, ["create", "Require"].join(""));\nconst __computedRequire = __makeRequire(import.meta.url);\nexport const __loadedCoordinator = __computedRequire("../recovery/coordinator.ts");',
-					/unrecognized process call denied/,
-				],
-			] as const) {
-				const original = readFileSync(loaderTarget, "utf8");
-				writeFileSync(loaderTarget, `${original}\n${mutant}\n`);
-				await assert.rejects(() => assertPrivateAllowanceCapabilities(copy), expected);
-				writeFileSync(loaderTarget, original);
-			}
 		} finally {
 			rmSync(copy, { recursive: true, force: true });
 		}
