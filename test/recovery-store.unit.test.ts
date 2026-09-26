@@ -195,6 +195,18 @@ describe("state-domain allowance store", () => {
 		assert.equal(finalizeAllowance(first.claim, consumed(claimed)).status, "consumed-unverified");
 	});
 
+	it("rejects a special-bit allowance leaf as non-exact mode 0600", () => {
+		const current = subject("PR_SPECIAL_MODE");
+		const first = claimAllowance({ subject: current, record: record(current) });
+		assert.equal(first.status, "claimed");
+		const path = join(stateRoot, "gitjig", "recovery", encoding(current).leaf);
+		chmodSync(path, 0o4600);
+		assert.deepEqual(claimAllowance({ subject: current, record: record(current) }), {
+			status: "consumed",
+			cause: "existing",
+		});
+	});
+
 	it("admits exactly one winner across synchronized competing processes", async () => {
 		const gate = join(stateRoot, "go");
 		const storeUrl = new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url).href;

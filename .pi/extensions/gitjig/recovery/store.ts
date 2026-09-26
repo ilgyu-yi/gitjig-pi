@@ -570,7 +570,7 @@ function safeFileStat(path: string, fd: number): ReturnType<typeof fstatSync> | 
 			before.dev !== after.dev ||
 			before.ino !== after.ino ||
 			after.nlink !== 1 ||
-			(after.mode & 0o777) !== FILE_MODE ||
+			(after.mode & 0o7777) !== FILE_MODE ||
 			(uid !== undefined && after.uid !== uid)
 		)
 			return undefined;

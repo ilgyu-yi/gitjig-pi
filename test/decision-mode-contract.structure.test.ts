@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
+import ts from "typescript";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const spec = readFileSync(join(repoRoot(), "SPEC.md"), "utf8");
@@ -95,11 +96,40 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 	});
 }
 
+function staticString(node: ts.Expression): string | undefined {
+	if (ts.isStringLiteralLike(node)) return node.text;
+	if (ts.isParenthesizedExpression(node)) return staticString(node.expression);
+	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+		const left = staticString(node.left);
+		const right = staticString(node.right);
+		return left === undefined || right === undefined ? undefined : left + right;
+	}
+	return undefined;
+}
+
+function staticallyKnownModuleSpecifiers(path: string, source: string): string[] {
+	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+	const specifiers: string[] = [];
+	function visit(node: ts.Node): void {
+		let expression: ts.Expression | undefined;
+		if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) expression = node.moduleSpecifier;
+		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
+			expression = node.arguments[0];
+		else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) expression = node.argument.literal;
+		if (expression !== undefined) {
+			const specifier = staticString(expression);
+			if (specifier !== undefined) specifiers.push(specifier);
+		}
+		ts.forEachChild(node, visit);
+	}
+	visit(tree);
+	return specifiers;
+}
+
 function assertNoStoreCapability(root: string, path: string, source: string): void {
 	const store = join(root, ".pi/extensions/gitjig/recovery/store.ts");
-	for (const match of source.matchAll(/\b(?:from\s*|import\s*\(\s*)["']([^"']+)["']/g)) {
-		const specifier = match[1];
-		if (specifier?.startsWith(".")) {
+	for (const specifier of staticallyKnownModuleSpecifiers(path, source)) {
+		if (specifier.startsWith(".")) {
 			assert.notEqual(
 				resolve(dirname(join(root, path)), specifier.replace(/[?#].*$/, "")),
 				store,
@@ -194,17 +224,21 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		}
 		const copy = mkdtempSync(join(tmpdir(), "gitjig-store-export-mutant-"));
 		try {
-			for (const [path, specifier] of [
-				[".pi/extensions/gitjig/recovery/types.ts", "./store.ts"],
-				[".pi/extensions/gitjig/commands/index.ts", "../recovery/store.ts"],
-				[".pi/extensions/gitjig.ts", "./gitjig/recovery/store.ts"],
-				[".pi/extensions/gitjig/review/orchestrate.ts", "../recovery/store.ts"],
-				[".pi/extensions/gitjig/recovery/types.ts", "./store.ts?cap=1"],
+			for (const [path, statement] of [
+				[".pi/extensions/gitjig/recovery/types.ts", 'export * from "./store.ts";'],
+				[".pi/extensions/gitjig/commands/index.ts", 'export * from "../recovery/store.ts";'],
+				[".pi/extensions/gitjig.ts", 'export * from "./gitjig/recovery/store.ts";'],
+				[".pi/extensions/gitjig/review/orchestrate.ts", 'export * from "../recovery/store.ts";'],
+				[".pi/extensions/gitjig/recovery/types.ts", 'export * from "./store.ts?cap=1";'],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'export const leakedStoreCapabilities = import("../recovery/" + "store.ts");',
+				],
 			] as const) {
 				const target = join(copy, path);
 				mkdirSync(dirname(target), { recursive: true });
 				cpSync(join(root, path), target);
-				writeFileSync(target, `${readFileSync(target, "utf8")}\nexport * from "${specifier}";\n`);
+				writeFileSync(target, `${readFileSync(target, "utf8")}\n${statement}\n`);
 				assert.throws(
 					() => assertNoStoreCapability(copy, path, readFileSync(target, "utf8")),
 					/store capability crosses/,

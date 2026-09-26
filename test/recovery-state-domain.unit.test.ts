@@ -141,7 +141,7 @@ describe("production recovery state-domain resolver", () => {
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: bare }).stdout), null);
 	});
 
-	it("rejects every non-exact XDG mode and linked chain components", () => {
+	it("rejects XDG modes 0755 and 01700 and a symlinked gitjig chain component", () => {
 		const loose = root();
 		// root() is 0700; widening makes the XDG root invalid.
 		chmodSync(loose, 0o755);
@@ -154,5 +154,14 @@ describe("production recovery state-domain resolver", () => {
 		const target = root();
 		symlinkSync(target, join(linked, "gitjig"));
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: linked }).stdout), null);
+	});
+
+	it("rejects XDG roots with setuid and setgid modes", () => {
+		for (const mode of [0o4700, 0o2700]) {
+			const special = root();
+			chmodSync(special, mode);
+			assert.equal(statSync(special).mode & 0o7777, mode);
+			assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: special }).stdout), null);
+		}
 	});
 });
