@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { after, afterEach, beforeEach, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import { deriveAllowancePathEncoding } from "../.pi/extensions/gitjig/recovery/lineage.ts";
-import { claimAllowance, finalizeAllowance } from "../.pi/extensions/gitjig/recovery/store.ts";
 import {
 	type ClaimedRecordV3,
 	type ConsumedRecordV3,
@@ -18,6 +28,27 @@ import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 let stateRoot = "";
 const oldXdg = process.env.XDG_STATE_HOME;
 const oldTest = process.env.GITJIG_TEST_STATE_ROOT;
+
+function exposePrivateStore(source: string): string {
+	const claimed = source.replace("function claimAllowance(", "export function claimAllowance(");
+	const finalized = claimed.replace("function finalizeAllowance(", "export function finalizeAllowance(");
+	assert.notEqual(claimed, source, "private claim function anchor did not match");
+	assert.notEqual(finalized, claimed, "private finalize function anchor did not match");
+	return finalized;
+}
+
+function copyGitjigWithPrivateStoreAccess(box: string): string {
+	cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+	const target = join(box, "gitjig", "recovery", "coordinator.ts");
+	writeFileSync(target, exposePrivateStore(readFileSync(target, "utf8")));
+	return target;
+}
+
+const privateAccessRoot = mkdtempSync(join(tmpdir(), "gitjig-private-store-access-"));
+const privateStorePath = copyGitjigWithPrivateStoreAccess(privateAccessRoot);
+symlinkSync(new URL("../node_modules", import.meta.url), join(privateAccessRoot, "node_modules"), "dir");
+const { claimAllowance, finalizeAllowance } = await import(pathToFileURL(privateStorePath).href);
+after(() => rmSync(privateAccessRoot, { recursive: true, force: true }));
 
 beforeEach(() => {
 	stateRoot = mkdtempSync(join(tmpdir(), "gitjig-recovery-store-"));
@@ -215,7 +246,7 @@ describe("state-domain allowance store", () => {
 
 	it("admits exactly one winner across synchronized competing processes", async () => {
 		const gate = join(stateRoot, "go");
-		const storeUrl = new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url).href;
+		const storeUrl = pathToFileURL(privateStorePath).href;
 		const script = [
 			`import {claimAllowance} from ${JSON.stringify(storeUrl)};`,
 			"import {randomUUID} from 'node:crypto'; import {existsSync} from 'node:fs';",
@@ -258,14 +289,14 @@ describe("state-domain allowance store", () => {
 	it("kills non-exclusive claim in a synchronized private copy", async () => {
 		const box = mkdtempSync(join(tmpdir(), "gitjig-nonexclusive-mutant-"));
 		try {
-			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			copyGitjigWithPrivateStoreAccess(box);
 			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 			const shim = join(box, "fs-shim.mjs");
 			writeFileSync(
 				shim,
 				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,unlinkSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0&&String(path).endsWith(".json")){fs.appendFileSync(process.env.ARRIVALS,"x");const until=Date.now()+5000;while(fs.readFileSync(process.env.ARRIVALS).length<2&&Date.now()<until)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);}return fs.openSync(path,flags,mode);}\n`,
 			);
-			const target = join(box, "gitjig", "recovery", "store.ts");
+			const target = join(box, "gitjig", "recovery", "coordinator.ts");
 			const original = readFileSync(target, "utf8");
 			assert.ok(original.includes("constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW"));
 			writeFileSync(
@@ -277,7 +308,7 @@ describe("state-domain allowance store", () => {
 						"constants.O_CREAT | constants.O_NOFOLLOW",
 					),
 			);
-			const script = `import {randomUUID} from "node:crypto"; import {claimAllowance} from "./gitjig/recovery/store.ts"; import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts"; const subject=${JSON.stringify(subject("PR_NONEXCLUSIVE"))}; const e=deriveAllowancePathEncoding(subject), now=new Date().toISOString(); const record={schemaVersion:3,state:"claimed",repoHash:e.repoHash,keyHash:e.keyHash,changeKey:e.operands,claimId:randomUUID(),createdAt:now,updatedAt:now,profileSetDigest:"1".repeat(64),subjectDigest:"2".repeat(64),historyDigest:"3".repeat(64),basisDigest:"4".repeat(64),basis:{kind:"history-diagnosis",triggeringReviewState:{head:"a".repeat(40),historyIndex:0,stateDigest:"5".repeat(64)},taxonomy:"STAGNATION",invalidation:"nothing",diagnosisDigest:"6".repeat(64)},modes:{mergeMode:"off",decisionMode:"autonomous",mergeSource:"default",decisionSource:"default"},route:"stagnation",attempts:[],completeness:null,sequenceAuthority:null,selectedIntervention:null,measurement:null,freshRuling:null,reentry:"nothing",nextGate:null,terminal:null,cause:null}; console.log(claimAllowance({subject,record}).status);`;
+			const script = `import {randomUUID} from "node:crypto"; import {claimAllowance} from "./gitjig/recovery/coordinator.ts"; import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts"; const subject=${JSON.stringify(subject("PR_NONEXCLUSIVE"))}; const e=deriveAllowancePathEncoding(subject), now=new Date().toISOString(); const record={schemaVersion:3,state:"claimed",repoHash:e.repoHash,keyHash:e.keyHash,changeKey:e.operands,claimId:randomUUID(),createdAt:now,updatedAt:now,profileSetDigest:"1".repeat(64),subjectDigest:"2".repeat(64),historyDigest:"3".repeat(64),basisDigest:"4".repeat(64),basis:{kind:"history-diagnosis",triggeringReviewState:{head:"a".repeat(40),historyIndex:0,stateDigest:"5".repeat(64)},taxonomy:"STAGNATION",invalidation:"nothing",diagnosisDigest:"6".repeat(64)},modes:{mergeMode:"off",decisionMode:"autonomous",mergeSource:"default",decisionSource:"default"},route:"stagnation",attempts:[],completeness:null,sequenceAuthority:null,selectedIntervention:null,measurement:null,freshRuling:null,reentry:"nothing",nextGate:null,terminal:null,cause:null}; console.log(claimAllowance({subject,record}).status);`;
 			writeFileSync(join(box, "probe.mjs"), script);
 			const xdg = join(box, "state");
 			mkdirSync(xdg, { mode: 0o700 });
@@ -317,7 +348,7 @@ describe("state-domain allowance store", () => {
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 import {readFileSync,readdirSync} from "node:fs";
-import {claimAllowance,finalizeAllowance} from "./gitjig/recovery/store.ts";
+import {claimAllowance,finalizeAllowance} from "./gitjig/recovery/coordinator.ts";
 import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts";
 const subject={context:{repository:{id:"R",host:"github.com",nameWithOwner:"o/r"},pullRequest:{id:"P",number:1,url:"https://github.com/o/r/pull/1",authorId:"A",base:{repositoryId:"R",name:"main",oid:"a".repeat(40)},head:{repositoryId:"R",name:"topic",oid:"b".repeat(40)},closingIssues:[]}},writerId:"W",activation:[],criteria:[]};
 const e=deriveAllowancePathEncoding(subject), now=new Date().toISOString(); assert.ok(e);
@@ -336,14 +367,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-${variant}-`));
 			try {
-				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				copyGitjigWithPrivateStoreAccess(box);
 				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
 					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,openSync,readSync,renameSync,unlinkSync,writeSync}=fs;\nexport function fsyncSync(fd){fs.appendFileSync(process.env.FSYNC_LOG,fs.fstatSync(fd).isDirectory()?"d":"f");return fs.fsyncSync(fd);}\n`,
 				);
-				const target = join(box, "gitjig", "recovery", "store.ts");
+				const target = join(box, "gitjig", "recovery", "coordinator.ts");
 				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
 				if (variant === "claim-file-mutant") {
 					const from = "\t\twriteComplete(fd, bytes);\n\t\tfsyncSync(fd);";
@@ -410,14 +441,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-fsync-error-${failure}-`));
 			try {
-				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				copyGitjigWithPrivateStoreAccess(box);
 				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
 					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,unlinkSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fs.appendFileSync(process.env.FSYNC_LOG,directory?"d":"f");fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
 				);
-				const target = join(box, "gitjig", "recovery", "store.ts");
+				const target = join(box, "gitjig", "recovery", "coordinator.ts");
 				const source = readFileSync(target, "utf8").replace(
 					'"node:fs"',
 					JSON.stringify(new URL(`file://${shim}`).href),
@@ -507,14 +538,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		for (const variant of ["baseline", "cleanup-sync-omission", "cleanup-order"] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-cleanup-order-${variant}-`));
 			try {
-				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				copyGitjigWithPrivateStoreAccess(box);
 				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
 					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,readSync}=fs;\nconst identities=new Map(); let writes=0; const emit=(event)=>fs.appendFileSync(process.env.OPERATION_LOG,JSON.stringify(event)+"\\n");\nexport function openSync(path,...args){const fd=fs.openSync(path,...args);const identity=String(path);identities.set(fd,identity);emit({operation:"open",fd,path:identity});return fd;}\nexport function writeSync(...args){const fd=args[0],path=identities.get(fd);if(++writes===2){emit({operation:"write-failure",fd,path});const error=new Error("injected");error.code="EIO";throw error;}return fs.writeSync(...args);}\nexport function closeSync(fd){emit({operation:"close",fd,path:identities.get(fd)});const result=fs.closeSync(fd);identities.delete(fd);return result;}\nexport function fsyncSync(fd){emit({operation:"fsync",fd,path:identities.get(fd)});return fs.fsyncSync(fd);}\nexport function unlinkSync(path){const identity=String(path);emit({operation:"unlink",path:identity});return fs.unlinkSync(path);}\nexport function renameSync(from,...args){emit({operation:"rename",path:String(from)});return fs.renameSync(from,...args);}\n`,
 				);
-				const target = join(box, "gitjig", "recovery", "store.ts");
+				const target = join(box, "gitjig", "recovery", "coordinator.ts");
 				let source = readFileSync(target, "utf8");
 				const cleanupSync = "\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}";
 				const orderedCleanup =
@@ -568,9 +599,9 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		for (const mutant of [false, true]) {
 			const box = mkdtempSync(join(tmpdir(), "gitjig-immutable-mode-"));
 			try {
-				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				copyGitjigWithPrivateStoreAccess(box);
 				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
-				const target = join(box, "gitjig", "recovery", "store.ts");
+				const target = join(box, "gitjig", "recovery", "coordinator.ts");
 				const source = readFileSync(target, "utf8");
 				assert.ok(
 					source.includes("\t\tmodes: record.modes,") &&
@@ -605,14 +636,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		for (const mutant of [false, true]) {
 			const box = mkdtempSync(join(tmpdir(), "gitjig-post-read-mutant-"));
 			try {
-				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				copyGitjigWithPrivateStoreAccess(box);
 				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
 					`import * as fs from "node:fs"; export const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,unlinkSync,writeSync}=fs; let reads=0; export function readSync(...args){if(++reads===3){const error=new Error("post-read failure");error.code="EIO";throw error;}return fs.readSync(...args);}`,
 				);
-				const target = join(box, "gitjig", "recovery", "store.ts");
+				const target = join(box, "gitjig", "recovery", "coordinator.ts");
 				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
 				const postRead =
 					/\t\t\tconst finalFd = openSync\(state\.path, READ_FLAGS\);[\s\S]*?\t\t\t}\n\t\t\treturn \{ status: "finalized"/;
@@ -639,14 +670,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		for (const code of ["EIO", "ENOSPC", "EDQUOT", "LSTAT_EIO"] as const) {
 			const box = mkdtempSync(join(tmpdir(), `gitjig-store-create-${code}-`));
 			try {
-				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				copyGitjigWithPrivateStoreAccess(box);
 				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
 					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,readSync,renameSync,unlinkSync,writeSync}=fs;\nexport function lstatSync(path){if(process.env.OPEN_CODE==="LSTAT_EIO"&&String(path).endsWith(".json")){const error=new Error("injected");error.code="EIO";throw error;}return fs.lstatSync(path);}\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){if(process.env.OPEN_CODE==="EIO"){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);}const error=new Error("injected");error.code=process.env.OPEN_CODE;throw error;}return fs.openSync(path,flags,mode);}\n`,
 				);
-				const target = join(box, "gitjig", "recovery", "store.ts");
+				const target = join(box, "gitjig", "recovery", "coordinator.ts");
 				writeFileSync(
 					target,
 					readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
@@ -680,14 +711,14 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 	it("pins the existing-record read to 256 KiB plus one byte", () => {
 		const box = mkdtempSync(join(tmpdir(), "gitjig-store-record-cap-"));
 		try {
-			cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+			copyGitjigWithPrivateStoreAccess(box);
 			symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
 			const shim = join(box, "fs-shim.mjs");
 			writeFileSync(
 				shim,
 				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,unlinkSync,writeSync}=fs;\nexport function readSync(fd,buffer,offset,length,position){fs.appendFileSync(process.env.READ_LOG,String(buffer.length)+"\\n");return fs.readSync(fd,buffer,offset,length,position);}\n`,
 			);
-			const target = join(box, "gitjig", "recovery", "store.ts");
+			const target = join(box, "gitjig", "recovery", "coordinator.ts");
 			writeFileSync(
 				target,
 				readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
@@ -995,14 +1026,13 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		});
 	});
 
-	it("exports no reset, delete, or injection capability", () => {
-		const source = readFileSync(new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url), "utf8");
-		const functions = [...source.matchAll(/^export function (\w+)/gm)].map((match) => match[1]);
-		assert.deepEqual(functions, ["claimAllowance", "finalizeAllowance"]);
-		assert.deepEqual(
-			[...source.matchAll(/^export const (\w+)/gm)].map((match) => match[1]),
-			[],
-		);
+	it("keeps claim and finalize lexically private with no reset, delete, or injection capability", () => {
+		const coordinatorUrl = new URL("../.pi/extensions/gitjig/recovery/coordinator.ts", import.meta.url);
+		const source = readFileSync(coordinatorUrl, "utf8");
+		assert.equal(existsSync(new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url)), false);
+		assert.match(source, /^function claimAllowance\(/m);
+		assert.match(source, /^function finalizeAllowance\(/m);
+		assert.doesNotMatch(source, /^export (?:async )?function (?:claimAllowance|finalizeAllowance)\(/m);
 		assert.doesNotMatch(source, /^export .*?(?:reset|delete|clear|repair|unlock|inject)/gim);
 	});
 

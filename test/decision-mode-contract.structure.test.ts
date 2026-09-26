@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import { describe, it } from "node:test";
-import ts from "typescript";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const spec = readFileSync(join(repoRoot(), "SPEC.md"), "utf8");
@@ -96,92 +95,23 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 	});
 }
 
-const NONLITERAL_DYNAMIC_IMPORT_ALLOWLIST = {
-	governanceLoader: {
-		path: ".pi/extensions/gitjig/commands/governance.ts",
-		declaration: "const load = (path: string) => import(pathToFileURL(join(repoRoot, path)).href);",
-	},
-} as const;
-
-function isAllowlistedDynamicImport(path: string, node: ts.CallExpression): boolean {
-	for (const exception of Object.values(NONLITERAL_DYNAMIC_IMPORT_ALLOWLIST)) {
-		if (path !== exception.path) continue;
-		let owner: ts.Node = node;
-		while (owner.parent !== undefined && !ts.isVariableStatement(owner)) owner = owner.parent;
-		if (ts.isVariableStatement(owner) && owner.getText() === exception.declaration) return true;
-	}
-	return false;
-}
-
-const ALLOWED_PROCESS_CALLS = new Set([
-	"process.argv.indexOf",
-	"process.argv.slice",
-	"process.cwd",
-	"process.geteuid",
-	"process.kill",
-	"process.stdout.write",
-]);
-
-function processCallRoot(expression: ts.Expression): ts.Expression {
-	let current = expression;
-	while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) current = current.expression;
-	return current;
-}
-
-function literalModuleSpecifiers(path: string, source: string): string[] {
-	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-	const specifiers: string[] = [];
-	function retainLiteral(expression: ts.Expression, kind: string): void {
-		assert.ok(ts.isStringLiteralLike(expression), `${kind} denied through ${path}: ${expression.getText(tree)}`);
-		assert.ok(
-			expression.text !== "node:module" && expression.text !== "module",
-			`CommonJS loader denied through ${path}: ${expression.text}`,
+function assertPrivateAllowanceCapabilities(root: string): void {
+	const production = [".pi/extensions/gitjig.ts", ...productionExtensionFiles(root)];
+	assert.ok(!production.includes(".pi/extensions/gitjig/recovery/store.ts"), "standalone mutation module survives");
+	const coordinator = ".pi/extensions/gitjig/recovery/coordinator.ts";
+	const source = readFileSync(join(root, coordinator), "utf8");
+	assert.equal((source.match(/^function claimAllowance\(/gm) ?? []).length, 1);
+	assert.equal((source.match(/^function finalizeAllowance\(/gm) ?? []).length, 1);
+	assert.doesNotMatch(source, /^export (?:async )?function (?:claimAllowance|finalizeAllowance)\(/m);
+	assert.doesNotMatch(source, /^export \{[^}]*\b(?:claimAllowance|finalizeAllowance)\b[^}]*\}/m);
+	for (const path of production) {
+		if (path === coordinator) continue;
+		assert.doesNotMatch(
+			readFileSync(join(root, path), "utf8"),
+			/\bclaimAllowance\b|\bfinalizeAllowance\b/,
+			`allowance mutation name crosses lexical module boundary through ${path}`,
 		);
-		specifiers.push(expression.text);
 	}
-	function visit(node: ts.Node): void {
-		if (ts.isIdentifier(node) && (node.text === "require" || node.text === "createRequire"))
-			assert.fail(`CommonJS loader denied through ${path}: ${node.text}`);
-		if (
-			ts.isCallExpression(node) &&
-			ts.isIdentifier(processCallRoot(node.expression)) &&
-			(processCallRoot(node.expression) as ts.Identifier).text === "process"
-		)
-			assert.ok(
-				ALLOWED_PROCESS_CALLS.has(node.expression.getText(tree)),
-				`unrecognized process call denied through ${path}: ${node.expression.getText(tree)}`,
-			);
-		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined)
-			retainLiteral(node.moduleSpecifier, "nonliteral module specifier");
-		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-			const expression = node.arguments[0];
-			assert.ok(expression !== undefined, `argumentless dynamic import denied through ${path}`);
-			if (ts.isStringLiteralLike(expression)) retainLiteral(expression, "nonliteral dynamic import");
-			else
-				assert.ok(
-					isAllowlistedDynamicImport(path, node),
-					`nonliteral dynamic import denied through ${path}: ${expression.getText(tree)}`,
-				);
-		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
-			retainLiteral(node.argument.literal, "nonliteral import type");
-		ts.forEachChild(node, visit);
-	}
-	visit(tree);
-	return specifiers;
-}
-
-function assertNoStoreCapability(root: string, path: string, source: string): void {
-	const store = join(root, ".pi/extensions/gitjig/recovery/store.ts");
-	for (const specifier of literalModuleSpecifiers(path, source)) {
-		if (specifier.startsWith(".")) {
-			assert.notEqual(
-				resolve(dirname(join(root, path)), specifier.replace(/[?#].*$/, "")),
-				store,
-				`store capability crosses through ${path}: ${specifier}`,
-			);
-		}
-	}
-	assert.doesNotMatch(source, /\bclaimAllowance\b|\bfinalizeAllowance\b/);
 }
 
 describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
@@ -228,15 +158,7 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 
 	it("keeps Phase A on the history route with no public mutation, plan-owner, or finding-escalation reach", () => {
 		const root = repoRoot();
-		const recoveryFiles = [
-			"briefs.ts",
-			"coordinator.ts",
-			"lineage.ts",
-			"profiles.ts",
-			"state-domain.ts",
-			"store.ts",
-			"types.ts",
-		];
+		const recoveryFiles = ["briefs.ts", "coordinator.ts", "lineage.ts", "profiles.ts", "state-domain.ts", "types.ts"];
 		const recovery = recoveryFiles
 			.map((name) => readFileSync(join(root, ".pi/extensions/gitjig/recovery", name), "utf8"))
 			.join("\n");
@@ -255,68 +177,29 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		}
 	});
 
-	it("keeps allowance mutation capabilities private to the coordinator", () => {
+	it("keeps allowance mutation capabilities lexically private to the coordinator", () => {
 		const root = repoRoot();
-		const production = [".pi/extensions/gitjig.ts", ...productionExtensionFiles(root)].filter(
-			(path) =>
-				![".pi/extensions/gitjig/recovery/coordinator.ts", ".pi/extensions/gitjig/recovery/store.ts"].includes(path),
+		assertPrivateAllowanceCapabilities(root);
+		const coordinator = join(root, ".pi/extensions/gitjig/recovery/coordinator.ts");
+		assert.doesNotMatch(
+			readFileSync(coordinator, "utf8"),
+			/readonly (?:path|recoveryDir|claimedBytes|device|inode|recordRef):/,
 		);
-		assert.ok(production.includes(".pi/extensions/gitjig/review/orchestrate.ts"));
-		for (const path of production) {
-			const source = readFileSync(join(root, path), "utf8");
-			assertNoStoreCapability(root, path, source);
-		}
-		const copy = mkdtempSync(join(tmpdir(), "gitjig-store-export-mutant-"));
+		const copy = mkdtempSync(join(tmpdir(), "gitjig-private-capability-mutant-"));
 		try {
-			for (const [path, statement, expected] of [
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'export * from "../recovery/store.ts";',
-					/store capability crosses/,
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					"const opaquePath = process.env.GITJIG_MODULE;\nexport const opaqueImport = import(opaquePath);",
-					/nonliteral dynamic import denied/,
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'const __storePath = "../recovery/store.ts";\nexport const __aliasStoreCapabilities = import(__storePath);',
-					/nonliteral dynamic import denied/,
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'const __storePath = "../recovery/store.ts" as const;\nexport const __asConstStoreCapabilities = import(__storePath);',
-					/nonliteral dynamic import denied/,
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'import { createRequire as __leakCreateRequire } from "node:module";\nconst __leakRequire = __leakCreateRequire(import.meta.url);\nexport const __leakedStoreCapabilities = __leakRequire("../recovery/store.ts");',
-					/CommonJS loader denied/,
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'const __module = process.getBuiltinModule("node:module");\nconst __makeRequire = __module["create" + "Require"];\nconst __builtinRequire = __makeRequire(import.meta.url);\nexport const __builtinStoreCapabilities = __builtinRequire("../recovery/store.ts");',
-					/unrecognized process call denied/,
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'export const __directStoreCapabilities = require("../recovery/store.ts");',
-					/CommonJS loader denied/,
-				],
-			] as const) {
-				const target = join(copy, path);
-				mkdirSync(dirname(target), { recursive: true });
-				cpSync(join(root, path), target);
-				writeFileSync(target, `${readFileSync(target, "utf8")}\n${statement}\n`);
-				assert.throws(() => assertNoStoreCapability(copy, path, readFileSync(target, "utf8")), expected, path);
-			}
+			cpSync(join(root, ".pi"), join(copy, ".pi"), { recursive: true });
+			const target = join(copy, ".pi/extensions/gitjig/recovery/coordinator.ts");
+			writeFileSync(target, `${readFileSync(target, "utf8")}\nexport { claimAllowance };\n`);
+			assert.throws(() => assertPrivateAllowanceCapabilities(copy), /export/);
+			cpSync(coordinator, target);
+			writeFileSync(
+				join(copy, ".pi/extensions/gitjig/recovery/store.ts"),
+				"export function claimAllowance() {}\nexport function finalizeAllowance() {}\n",
+			);
+			assert.throws(() => assertPrivateAllowanceCapabilities(copy), /standalone mutation module survives/);
 		} finally {
 			rmSync(copy, { recursive: true, force: true });
 		}
-		const store = readFileSync(join(root, ".pi/extensions/gitjig/recovery/store.ts"), "utf8");
-		assert.match(store, /export type AllowanceClaim = \{ readonly \[CLAIM\]: true \}/);
-		assert.doesNotMatch(store, /readonly (?:path|recoveryDir|claimedBytes|device|inode|recordRef):/);
 	});
 
 	it("keeps context lifecycle bounded and repository-keyed", () => {

@@ -386,10 +386,6 @@
 			"disposition": "carried"
 		},
 		{
-			"path": ".pi/extensions/gitjig/recovery/store.ts",
-			"disposition": "carried"
-		},
-		{
 			"path": ".pi/extensions/gitjig/recovery/types.ts",
 			"disposition": "carried"
 		},
