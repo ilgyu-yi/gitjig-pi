@@ -263,26 +263,47 @@ export async function deriveRepairBasis(
 			return undefined;
 		const adjudication = record.adjudication;
 		if (adjudication === null) return undefined;
-		const bundles = uniqueByFinding(record.bundle);
+		// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
+		// Retain that bundle in the complete source record; never invent a raw-text
+		// or positional pairing between it and the Judge's rulings.
+		if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length > record.bundle.length)
+			return undefined;
+		const slots = new Set(record.bundle.map(({ slot }) => JSON.stringify([slot.lens, slot.surface])));
+		const unattributedSlots = new Set(slots);
 		const rulings = uniqueByFinding(adjudication.rulings);
 		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
-		if (bundles === undefined || rulings === undefined || dispositions === undefined) return undefined;
-		if (bundles.size !== rulings.size || bundles.size !== dispositions.size) return undefined;
-		for (let index = 0; index < record.bundle.length; index += 1) {
+		if (rulings === undefined || dispositions === undefined || rulings.size !== dispositions.size) return undefined;
+		const findings: RepairBasisFinding[] = [];
+		for (let index = 0; index < adjudication.rulings.length; index += 1) {
+			const ruling = adjudication.rulings[index];
+			// Read-time presence mirror of admitAdjudication's owed axes (§1.9):
+			// the durable record lacks the original manifest, so it cannot re-mint
+			// that branded adjudication. This only withholds incomplete data; it
+			// never rules validity, direction, or criterion impact on the Judge's behalf.
+			if (ruling.provenance.length === 0 || !ruling.evidence) return undefined;
 			if (
-				adjudication.rulings[index]?.finding !== record.bundle[index].finding ||
-				record.review.resolution.dispositions[index]?.finding !== record.bundle[index].finding
+				ruling.validity === "CONFIRMED" &&
+				(ruling.severity === undefined ||
+					ruling.direction === undefined ||
+					ruling.onCriterion === undefined ||
+					(ruling.severity === "NIT" && !ruling.remedy))
 			)
 				return undefined;
-		}
-		const findings: RepairBasisFinding[] = [];
-		for (const bundle of record.bundle) {
-			const ruling = rulings.get(bundle.finding);
-			const disposition = dispositions.get(bundle.finding);
-			if (ruling === undefined || disposition === undefined) return undefined;
+			for (const slot of ruling.provenance) {
+				// record.ts already admits only slots with string lens/surface; do not
+				// duplicate its wire predicate in this read-time relation.
+				const key = JSON.stringify([slot.lens, slot.surface]);
+				if (!slots.has(key)) return undefined;
+				unattributedSlots.delete(key);
+			}
+			const disposition = record.review.resolution.dispositions[index];
+			if (disposition?.finding !== ruling.finding) return undefined;
 			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
-				findings.push({ finding: bundle.finding, ruling, disposition });
+				findings.push({ finding: ruling.finding, ruling, disposition });
 		}
+		// Dedup may merge raw findings, but never discard a contributing slot.
+		// Do not guess which of several raw findings within one slot was merged.
+		if (unattributedSlots.size !== 0) return undefined;
 		states.push({ head: state.head, findings });
 	}
 	const intervals = await readCorrectionIntervals(
