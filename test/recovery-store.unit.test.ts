@@ -404,6 +404,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 			"claim-close",
 			"terminal-create",
 			"terminal-write",
+			"terminal-cleanup-parent-mutant",
 			"terminal-close",
 			"terminal-rename",
 			"terminal-post-read",
@@ -415,19 +416,28 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,unlinkSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
+					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,unlinkSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fs.appendFileSync(process.env.FSYNC_LOG,directory?"d":"f");fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
-				writeFileSync(
-					target,
-					readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href)),
-				);
-				const script = failure.startsWith("claim")
+				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
+				if (failure === "terminal-cleanup-parent-mutant") {
+					const cleanupSync = "\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}";
+					assert.ok(source.includes(cleanupSync));
+					source = source.replace(cleanupSync, "");
+				}
+				writeFileSync(target, source);
+				let script = failure.startsWith("claim")
 					? probe.replace(
 							'assert.equal(claim.status,"claimed"); if(claim.status!=="claimed") process.exit(3);',
 							'assert.equal(claim.status,"consumed"); assert.equal(claim.cause,"create-or-write-ambiguous"); assert.equal(claimAllowance({subject,record}).status,"consumed"); process.exit(0);',
 						)
 					: replaced;
+				if (failure === "terminal-write" || failure === "terminal-cleanup-parent-mutant") {
+					script = script.replace(
+						'assert.deepEqual(readdirSync(process.env.XDG_STATE_HOME+"/gitjig/recovery").filter(name=>name.endsWith(".tmp")),[]);',
+						'assert.deepEqual(readdirSync(process.env.XDG_STATE_HOME+"/gitjig/recovery").filter(name=>name.endsWith(".tmp")),[]); assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdd");',
+					);
+				}
 				writeFileSync(join(box, "probe.mjs"), script);
 				const xdg = join(box, "state");
 				mkdirSync(xdg, { mode: 0o700 });
@@ -442,6 +452,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					"claim-close": "c1",
 					"terminal-create": "temp-create",
 					"terminal-write": "w2",
+					"terminal-cleanup-parent-mutant": "w2",
 					"terminal-close": "c3",
 					"terminal-rename": "rename",
 					"terminal-post-read": "r3",
@@ -452,7 +463,9 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					timeout: 10_000,
 					env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: log, FAIL_ON: point },
 				});
-				assert.equal(result.status, 0, `${failure}: ${result.stderr}`);
+				if (failure === "terminal-cleanup-parent-mutant")
+					assert.notEqual(result.status, 0, "cleanup parent-sync omission survived");
+				else assert.equal(result.status, 0, `${failure}: ${result.stderr}`);
 			} finally {
 				rmSync(box, { recursive: true, force: true });
 			}
