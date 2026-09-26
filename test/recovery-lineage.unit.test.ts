@@ -35,6 +35,27 @@ function subject(issueIds: string[], pullRequestId = "PR_A"): ReviewSubject {
 }
 
 describe("Phase-A v2 allowance path encoding", () => {
+	it("pins the normative digest and leaf bytes for both key kinds", () => {
+		assert.deepEqual(deriveAllowancePathEncoding(subject(["z", "ä"])), {
+			operands: {
+				repositoryNodeId: "REPO_A",
+				subject: { kind: "issues", issueNodeIds: ["z", "ä"] },
+			},
+			repoHash: "82120c296958f571c8482313d3bd6c3fa97b7e2e58b2ba9f99c243b00a2af000",
+			keyHash: "34c05e98c0636de6884c20ddbb2cd979e5139fb99a61871cdd547cadd004b732",
+			leaf: "r2-82120c296958f571c8482313d3bd6c3fa97b7e2e58b2ba9f99c243b00a2af000-34c05e98c0636de6884c20ddbb2cd979e5139fb99a61871cdd547cadd004b732.json",
+		});
+		assert.deepEqual(deriveAllowancePathEncoding(subject([], "PR_A")), {
+			operands: {
+				repositoryNodeId: "REPO_A",
+				subject: { kind: "pull-request", pullRequestNodeId: "PR_A" },
+			},
+			repoHash: "82120c296958f571c8482313d3bd6c3fa97b7e2e58b2ba9f99c243b00a2af000",
+			keyHash: "d1afb5f47743b6ca3ecc742b8deaa82a8d60336da225d151919c714d35622e24",
+			leaf: "r2-82120c296958f571c8482313d3bd6c3fa97b7e2e58b2ba9f99c243b00a2af000-d1afb5f47743b6ca3ecc742b8deaa82a8d60336da225d151919c714d35622e24.json",
+		});
+	});
+
 	it("sorts issue ids by unsigned UTF-8 bytes and ignores PR replacement/head/modes", () => {
 		const left = deriveAllowancePathEncoding(subject(["z", "ä"]));
 		const replacement = subject(["ä", "z"], "PR_REPLACEMENT");

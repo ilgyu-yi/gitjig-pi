@@ -141,11 +141,15 @@ describe("production recovery state-domain resolver", () => {
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: bare }).stdout), null);
 	});
 
-	it("rejects loose XDG mode and linked chain components", () => {
+	it("rejects every non-exact XDG mode and linked chain components", () => {
 		const loose = root();
 		// root() is 0700; widening makes the XDG root invalid.
 		chmodSync(loose, 0o755);
 		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: loose }).stdout), null);
+		const special = root();
+		chmodSync(special, 0o1700);
+		assert.equal(statSync(special).mode & 0o7777, 0o1700);
+		assert.equal(JSON.parse(resolveWith({ XDG_STATE_HOME: special }).stdout), null);
 		const linked = root();
 		const target = root();
 		symlinkSync(target, join(linked, "gitjig"));

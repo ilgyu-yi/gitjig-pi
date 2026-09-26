@@ -28,7 +28,7 @@ function safeDirectory(path: string, exactMode: boolean): { fd: number; stat: St
 			before.mode !== after.mode ||
 			before.uid !== after.uid ||
 			(effectiveUid !== undefined && after.uid !== effectiveUid) ||
-			(exactMode ? (after.mode & 0o777) !== OWNER_DIRECTORY_MODE : (after.mode & 0o022) !== 0)
+			(exactMode ? (after.mode & 0o7777) !== OWNER_DIRECTORY_MODE : (after.mode & 0o022) !== 0)
 		) {
 			closeSync(fd);
 			return undefined;
