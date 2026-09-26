@@ -11,7 +11,14 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
+import type { ResolvedModes } from "../modes.ts";
 import { quoted } from "../quote.ts";
+import {
+	coordinateHistoryRecovery,
+	makeRecoveryProfileDispatcher,
+	type RecoveryProfileDispatcher,
+} from "../recovery/coordinator.ts";
+import type { RecoveryFreshness, RecoveryResult } from "../recovery/types.ts";
 import type { BriefTiming, ReviewFences } from "../review/briefs.ts";
 import {
 	type AttestedCommentPopulation,
@@ -73,17 +80,24 @@ export type ReviewRoundSpec = {
 export type CommandDisposition =
 	| { disposition: "refused"; cause: string }
 	| { disposition: "hand-off"; cause: string; reentry: Consequence["reentry"]; diagnosis?: DiagnosisInput }
-	| { disposition: "posted"; review: RoundResult["review"]; diagnosis?: DiagnosisInput };
+	| { disposition: "posted"; review: RoundResult["review"]; diagnosis?: DiagnosisInput }
+	| { disposition: "recovery"; result: RecoveryResult; diagnosis: DiagnosisInput };
 
 type TerminalSeed =
 	| { disposition: "refused"; cause: string }
 	| { disposition: "hand-off"; cause: string; reentry: Consequence["reentry"] }
-	| { disposition: "posted"; review: RoundResult["review"] };
+	| { disposition: "posted"; review: RoundResult["review"] }
+	| { disposition: "recovery"; result: RecoveryResult };
 
 type TransactionState = { phase: "pre-admission" } | { phase: "diagnosis-admitted"; diagnosis: DiagnosisInput };
 
 /** The sole constructor of a public command outcome. */
 function finish(state: TransactionState, seed: TerminalSeed): CommandDisposition {
+	if (seed.disposition === "recovery") {
+		if (state.phase !== "diagnosis-admitted")
+			return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
+		return { ...seed, diagnosis: state.diagnosis };
+	}
 	if (state.phase === "pre-admission" || seed.disposition === "refused") return seed;
 	return { ...seed, diagnosis: state.diagnosis };
 }
@@ -99,6 +113,30 @@ export function terminalText(outcome: CommandDisposition): string {
 			return ["review-round: hand-off (", outcome.reentry, ") — ", quoted(outcome.cause), diagnosis].join("");
 		case "posted":
 			return ["review-round: posted ", outcome.review.state, diagnosis].join("");
+		case "recovery": {
+			const reference = outcome.result.recordRef;
+			const identifiers =
+				reference === null
+					? ""
+					: [
+							"; hashes ",
+							quoted(reference.repoHash),
+							"/",
+							quoted(reference.keyHash),
+							"; claim ",
+							quoted(reference.claimId),
+						].join("");
+			return [
+				"review-round: recovery ",
+				outcome.result.terminal,
+				"/",
+				outcome.result.nextGate,
+				"; route ",
+				outcome.result.route,
+				identifiers,
+				diagnosis,
+			].join("");
+		}
 	}
 }
 
@@ -112,6 +150,8 @@ export type ReviewRoundSeams = {
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
 	publishAwaitingAuthor: (subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
 	resolveHead: (repoRoot: string, headRef: string) => string | undefined;
+	coordinateRecovery?: typeof coordinateHistoryRecovery;
+	recoveryDispatch?: RecoveryProfileDispatcher;
 };
 
 function exactObject(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
@@ -238,6 +278,13 @@ export async function driveReviewRound(
 	spec: ReviewRoundSpec,
 	repoRoot: string,
 	seams: ReviewRoundSeams,
+	modes: ResolvedModes = {
+		mergeMode: "off",
+		mergeSource: "default",
+		decisionMode: "handoff",
+		decisionSource: "default",
+		refusals: [],
+	},
 ): Promise<CommandDisposition> {
 	let state: TransactionState = { phase: "pre-admission" };
 	try {
@@ -278,7 +325,33 @@ export async function driveReviewRound(
 			if (!(await currentSubject())) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			state = { phase: "diagnosis-admitted", diagnosis };
 			diagnosedHistory = JSON.stringify(history);
-			return reentryConsequence(diagnosisConsequence(diagnosis.value, diagnosis.invalidation));
+			const consequence = diagnosisConsequence(diagnosis.value, diagnosis.invalidation);
+			if (diagnosis.value === "NONE" || diagnosis.invalidation !== "nothing" || modes.decisionMode !== "autonomous")
+				return reentryConsequence(consequence);
+			if (seams.coordinateRecovery === undefined || seams.recoveryDispatch === undefined)
+				return { disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" };
+			const refresh = async (): Promise<RecoveryFreshness | undefined> => {
+				const refreshedSubject = await seams.refetchSubject(repoRoot, subject);
+				if (refreshedSubject === undefined) return undefined;
+				const refreshedState = await durableState(repoRoot, refreshedSubject, seams, requiredReceipt);
+				if (refreshedState === undefined) return undefined;
+				const refreshedBasis = await deriveRepairBasis(repoRoot, refreshedState.history);
+				if (refreshedBasis === undefined) return undefined;
+				return { subject: refreshedSubject, history: refreshedState.history, basis: refreshedBasis };
+			};
+			const recovery = await seams.coordinateRecovery({
+				repoRoot,
+				modes,
+				subject,
+				history,
+				basis,
+				diagnosis,
+				refreshPreclaim: refresh,
+				refreshPrecontinue: refresh,
+				dispatchProfile: seams.recoveryDispatch,
+			});
+			if (recovery.nextGate === "ordinary-flow") return undefined;
+			return { disposition: "recovery", result: recovery };
 		};
 
 		// A trigger already present at invocation gates the round; another state
@@ -363,9 +436,32 @@ export function registerReviewRoundCommand(
 	pi: ExtensionAPI,
 	repoRoot: string,
 	stateRoot: string,
-	injected: Partial<ReviewRoundSeams> = {},
+	modes: ResolvedModes,
+	injected?: Partial<ReviewRoundSeams>,
 	surface?: SessionSurface,
+): void;
+/** Compatibility overload for tests and non-spine embeddings; production always supplies startup modes. */
+export function registerReviewRoundCommand(
+	pi: ExtensionAPI,
+	repoRoot: string,
+	stateRoot: string,
+	injected?: Partial<ReviewRoundSeams>,
+	surface?: SessionSurface,
+): void;
+export function registerReviewRoundCommand(
+	pi: ExtensionAPI,
+	repoRoot: string,
+	stateRoot: string,
+	fourth: ResolvedModes | Partial<ReviewRoundSeams> = {},
+	fifth: Partial<ReviewRoundSeams> | SessionSurface = {},
+	sixth?: SessionSurface,
 ): void {
+	const hasModes = "decisionMode" in fourth && "mergeMode" in fourth;
+	const modes: ResolvedModes = hasModes
+		? (fourth as ResolvedModes)
+		: { mergeMode: "off", mergeSource: "default", decisionMode: "handoff", decisionSource: "default", refusals: [] };
+	const injected = (hasModes ? fifth : fourth) as Partial<ReviewRoundSeams>;
+	const surface = (hasModes ? sixth : fifth) as SessionSurface | undefined;
 	pi.registerCommand("review-round", {
 		description:
 			"Drive panel, Judge, Resolver, durable record, and §1.4 history from one closed JSON spec: " +
@@ -395,8 +491,10 @@ export function registerReviewRoundCommand(
 					publishRecord: (body, current) => publishAndRefetchReviewRecord(body, current, repoRoot, stateRoot),
 					publishAwaitingAuthor: (current) => publishResolverRepairHandoff(current, repoRoot, stateRoot),
 					resolveHead: resolveLocalHead,
+					coordinateRecovery: coordinateHistoryRecovery,
+					recoveryDispatch: makeRecoveryProfileDispatcher({ repoRoot, stateRoot, surface }),
 				};
-				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected });
+				outcome = await driveReviewRound(spec, repoRoot, { ...defaults, ...injected }, modes);
 			}
 			pi.appendEntry("gitjig-review-round", outcome);
 			pi.sendMessage(

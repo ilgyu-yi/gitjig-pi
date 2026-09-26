@@ -13,7 +13,7 @@
  * NOT measured here, so a reader does not over-read it: the Judge's own
  * conduct (a dispatched semantic actor — this file pins what the CALLER
  * admits of its return, never how it rules); §1.4's history-diagnosis
- * capacity (asleep, §5.3); the dispatcher's own arms, which live in
+ * capacity; the dispatcher's own arms, which live in
  * `dispatch-module` and which issue #177 must leave untouched; and
  * whether admission leaves the CALLER's input untouched on the GAP path
  * — no clause or comment claims that guard (the stated aliasing

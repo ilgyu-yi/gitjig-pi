@@ -362,6 +362,38 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/recovery/briefs.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/coordinator.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/lineage.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/profiles.json",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/profiles.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/state-domain.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/store.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/recovery/types.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/review/briefs.ts",
 			"disposition": "carried"
 		},
@@ -595,6 +627,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/327.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/332.md",
 			"disposition": "instance-state"
 		},
 		{

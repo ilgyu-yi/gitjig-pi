@@ -23,6 +23,7 @@ import {
 	terminalText,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { readRepositoryInput } from "../.pi/extensions/gitjig/commands/review-round-input.ts";
+import type { DispatchOutcome, RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import { runPlatformRead } from "../.pi/extensions/gitjig/platform/read.ts";
 import { neutralizeForDestination } from "../.pi/extensions/gitjig/publish/neutralize.ts";
 import { scanBody } from "../.pi/extensions/gitjig/publish/scan.ts";
@@ -32,7 +33,12 @@ import {
 	recordsFromAttestedComments,
 } from "../.pi/extensions/gitjig/review/comments.ts";
 import type { DiagnosisInput } from "../.pi/extensions/gitjig/review/history.ts";
-import { type RoundOptions, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
+import {
+	createRecoveryAttemptLedger,
+	makeDispatcher,
+	type RoundOptions,
+	reviewRound,
+} from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewPublicationOutcome } from "../.pi/extensions/gitjig/review/publication.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 import type { PlatformReviewContext, ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
@@ -318,6 +324,36 @@ describe("review-round production call site", () => {
 		assert.equal(
 			terminalText({ disposition: "posted", review: { state: "approved" } }),
 			"review-round: posted approved",
+		);
+		assert.equal(
+			terminalText({
+				disposition: "recovery",
+				result: {
+					terminal: "handoff",
+					route: "none",
+					cause: "identity",
+					reentry: "nothing",
+					nextGate: "park",
+					recordRef: null,
+				},
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "hidden" },
+			}),
+			"review-round: recovery handoff/park; route none; diagnosis STAGNATION/nothing",
+		);
+		assert.equal(
+			terminalText({
+				disposition: "recovery",
+				result: {
+					terminal: "handoff",
+					route: "none",
+					cause: "allowance-consumed",
+					reentry: "nothing",
+					nextGate: "park",
+					recordRef: { repoHash: "a".repeat(64), keyHash: "b".repeat(64), claimId: "claim-1" },
+				},
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "hidden" },
+			}),
+			`review-round: recovery handoff/park; route none; hashes "${"a".repeat(64)}"/"${"b".repeat(64)}"; claim "claim-1"; diagnosis STAGNATION/nothing`,
 		);
 	});
 	it("retries one transient platform comment-read failure", async () => {
@@ -1088,6 +1124,352 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
+	it("routes a pre-round autonomous STAGNATION through the shared coordinator after both freshness callbacks", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let coordinated = 0;
+		let refreshed = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "trigger" }),
+				coordinateRecovery: async (input) => {
+					coordinated += 1;
+					assert.ok(await input.refreshPreclaim());
+					refreshed += 1;
+					assert.ok(await input.refreshPrecontinue());
+					refreshed += 1;
+					return {
+						terminal: "continue",
+						route: "stagnation",
+						selectedIntervention: {
+							slot: "root",
+							method: "different method",
+							candidateEvidence: "candidate",
+							selectionEvidence: "selection",
+							candidateDigests: ["1".repeat(64), "2".repeat(64)],
+						},
+						reentry: "nothing",
+						nextGate: "author-repair",
+						recordRef: {
+							repoHash: "3".repeat(64),
+							keyHash: "4".repeat(64),
+							claimId: "00000000-0000-4000-8000-000000000000",
+						},
+					};
+				},
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(outcome.disposition, "recovery");
+		assert.equal(coordinated, 1);
+		assert.equal(refreshed, 2);
+	});
+
+	it("resumes ordinary pre-round flow only for the ordinary-flow recovery gate", async () => {
+		const fixture = repo();
+		const current = subject(fixture.base, fixture.head);
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let rounds = 0;
+		let coordinated = 0;
+		let publishedBody: string | undefined;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => current,
+				refetchSubject: async () => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies, publishedBody),
+				makeDispatch: diagnosisDispatch({ value: "OSCILLATION", invalidation: "nothing", evidence: "original" }),
+				runRound: async () => {
+					rounds += 1;
+					return {
+						review: { state: "approved" },
+						record: repairRecord(fixture.head),
+						recordBody: composeReviewRecord(repairRecord(fixture.head)),
+					};
+				},
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+				coordinateRecovery: async () => {
+					coordinated += 1;
+					return {
+						terminal: "continue",
+						route: "oscillation",
+						reentry: "nothing",
+						nextGate: "ordinary-flow",
+						measurement: {
+							spec: {
+								kind: "measurement",
+								question: "q",
+								method: "m",
+								expectedDiscriminator: "d",
+								evidence: "s",
+								nonMutating: true,
+								notPreviouslyPresent: true,
+							},
+							specDigest: "1".repeat(64),
+							result: "r",
+							evidence: "e",
+							resultDigest: "2".repeat(64),
+							evidenceDigest: "3".repeat(64),
+						},
+						freshRuling: {
+							diagnosis: { value: "NONE", invalidation: "nothing", evidence: "fresh" },
+							diagnosisDigest: "4".repeat(64),
+							evidenceDigest: "5".repeat(64),
+						},
+						recordRef: {
+							repoHash: "6".repeat(64),
+							keyHash: "7".repeat(64),
+							claimId: "00000000-0000-4000-8000-000000000000",
+						},
+					};
+				},
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(rounds, 1, "the ordinary-flow gate alone resumes the review round");
+		assert.ok(coordinated >= 1);
+		assert.equal(outcome.disposition, "posted");
+	});
+
+	it("stops at the planning gate for a pre-round measurement continue", async () => {
+		const fixture = repo();
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		let rounds = 0;
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => subject(fixture.base, fixture.head),
+				resolveHead: () => fixture.head,
+				readComments: async () => population(bodies),
+				makeDispatch: diagnosisDispatch({ value: "OSCILLATION", invalidation: "nothing", evidence: "trigger" }),
+				runRound: async () => {
+					rounds += 1;
+					throw new Error("planning must suppress the round");
+				},
+				coordinateRecovery: async () => ({
+					terminal: "continue",
+					route: "oscillation",
+					reentry: "plan",
+					nextGate: "planning",
+					measurement: {
+						spec: {
+							kind: "measurement",
+							question: "q",
+							method: "m",
+							expectedDiscriminator: "d",
+							evidence: "s",
+							nonMutating: true,
+							notPreviouslyPresent: true,
+						},
+						specDigest: "1".repeat(64),
+						result: "r",
+						evidence: "e",
+						resultDigest: "2".repeat(64),
+						evidenceDigest: "3".repeat(64),
+					},
+					freshRuling: {
+						diagnosis: { value: "NONE", invalidation: "plan", evidence: "fresh" },
+						diagnosisDigest: "4".repeat(64),
+						evidenceDigest: "5".repeat(64),
+					},
+					recordRef: {
+						repoHash: "6".repeat(64),
+						keyHash: "7".repeat(64),
+						claimId: "00000000-0000-4000-8000-000000000000",
+					},
+				}),
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") assert.equal(outcome.result.nextGate, "planning");
+		assert.equal(rounds, 0);
+	});
+
+	it("keeps both merge modes inert at the handoff decision gate and routes both autonomous modes", async () => {
+		const fixture = repo();
+		const current = subject(fixture.base, fixture.head);
+		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+		for (const mergeMode of ["off", "on"] as const)
+			for (const decisionMode of ["handoff", "autonomous"] as const) {
+				let coordinatorCalls = 0;
+				let rounds = 0;
+				const outcome = await driveReviewRound(
+					spec(),
+					fixture.root,
+					seams({
+						fetchSubject: async () => current,
+						refetchSubject: async () => current,
+						resolveHead: () => fixture.head,
+						readComments: async () => population(bodies),
+						makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "trigger" }),
+						runRound: async () => {
+							rounds += 1;
+							throw new Error("trigger must gate the round");
+						},
+						coordinateRecovery: async ({ modes: received }) => {
+							coordinatorCalls += 1;
+							assert.equal(received.mergeMode, mergeMode);
+							assert.equal(received.decisionMode, "autonomous");
+							return {
+								terminal: "handoff",
+								route: "none",
+								cause: "profile-preflight",
+								reentry: "nothing",
+								nextGate: "park",
+								recordRef: null,
+							};
+						},
+						recoveryDispatch: async () => {
+							throw new Error("no profile attempt in caller fixture");
+						},
+					}),
+					{ mergeMode, mergeSource: "default", decisionMode, decisionSource: "default", refusals: [] },
+				);
+				assert.equal(rounds, 0);
+				assert.equal(coordinatorCalls, decisionMode === "autonomous" ? 1 : 0);
+				assert.equal(outcome.disposition, decisionMode === "autonomous" ? "recovery" : "hand-off");
+			}
+	});
+
+	it("routes a newly triggered post-publication diagnosis through the same autonomous coordinator", async () => {
+		const fixture = repo();
+		let publishedBody: string | undefined;
+		let coordinated = 0;
+		const current = subject(fixture.base, fixture.head);
+		const record = repairRecord(fixture.head);
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => current,
+				refetchSubject: async () => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population([composeReviewRecord(repairRecord(fixture.base))], publishedBody),
+				runRound: async () => ({ review: record.review, record, recordBody: composeReviewRecord(record) }),
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+				makeDispatch: diagnosisDispatch({ value: "STAGNATION", invalidation: "nothing", evidence: "post trigger" }),
+				coordinateRecovery: async () => {
+					coordinated += 1;
+					return {
+						terminal: "handoff",
+						route: "stagnation",
+						cause: "recovery-failed",
+						selectedIntervention: null,
+						reentry: "nothing",
+						nextGate: "park",
+						recordRef: {
+							repoHash: "3".repeat(64),
+							keyHash: "4".repeat(64),
+							claimId: "00000000-0000-4000-8000-000000000000",
+						},
+					};
+				},
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") {
+			assert.equal(outcome.result.terminal, "handoff");
+			assert.equal(outcome.result.route, "stagnation");
+			assert.equal(outcome.result.cause, "recovery-failed");
+			assert.equal(outcome.result.recordRef?.claimId, "00000000-0000-4000-8000-000000000000");
+		}
+		assert.equal(coordinated, 1);
+	});
+
+	it("stops at the planning gate for a post-publication measurement continue", async () => {
+		const fixture = repo();
+		let publishedBody: string | undefined;
+		let rounds = 0;
+		const current = subject(fixture.base, fixture.head);
+		const record = repairRecord(fixture.head);
+		const outcome = await driveReviewRound(
+			spec(),
+			fixture.root,
+			seams({
+				fetchSubject: async () => current,
+				refetchSubject: async () => current,
+				resolveHead: () => fixture.head,
+				readComments: async () => population([composeReviewRecord(repairRecord(fixture.base))], publishedBody),
+				runRound: async () => {
+					rounds += 1;
+					return { review: record.review, record, recordBody: composeReviewRecord(record) };
+				},
+				publishRecord: async (body) => {
+					publishedBody = body;
+					return receipt(body);
+				},
+				makeDispatch: diagnosisDispatch({ value: "OSCILLATION", invalidation: "nothing", evidence: "post trigger" }),
+				coordinateRecovery: async () => ({
+					terminal: "continue",
+					route: "indeterminate",
+					reentry: "plan",
+					nextGate: "planning",
+					measurement: {
+						spec: {
+							kind: "measurement",
+							question: "q",
+							method: "m",
+							expectedDiscriminator: "d",
+							evidence: "s",
+							nonMutating: true,
+							notPreviouslyPresent: true,
+						},
+						specDigest: "1".repeat(64),
+						result: "r",
+						evidence: "e",
+						resultDigest: "2".repeat(64),
+						evidenceDigest: "3".repeat(64),
+					},
+					freshRuling: {
+						diagnosis: { value: "NONE", invalidation: "plan", evidence: "fresh" },
+						diagnosisDigest: "4".repeat(64),
+						evidenceDigest: "5".repeat(64),
+					},
+					recordRef: {
+						repoHash: "6".repeat(64),
+						keyHash: "7".repeat(64),
+						claimId: "00000000-0000-4000-8000-000000000000",
+					},
+				}),
+				recoveryDispatch: async () => {
+					throw new Error("fake coordinator owns this test");
+				},
+			}),
+			{ mergeMode: "on", mergeSource: "default", decisionMode: "autonomous", decisionSource: "default", refusals: [] },
+		);
+		assert.equal(rounds, 1);
+		assert.equal(outcome.disposition, "recovery");
+		if (outcome.disposition === "recovery") assert.equal(outcome.result.nextGate, "planning");
+	});
+
 	it("refuses every linked path component, including one later cancelled by dot-dot", () => {
 		const fixture = repo();
 		writeFileSync(join(fixture.root, "round.json"), "root");
@@ -1156,5 +1538,89 @@ describe("review-round production call site", () => {
 		);
 		assert.match(commandOwner, /timeout:\s*10_000/);
 		assert.match(commandOwner, /killSignal:\s*"SIGKILL"/);
+	});
+});
+
+function recoveryDispatchOutcome(kind: "admitted" | "missing"): DispatchOutcome {
+	if (kind === "admitted")
+		return {
+			disposition: "admitted",
+			ok: true,
+			summary: "ok",
+			compare: "confirmed",
+			diagnostic: {
+				schemaVersion: 1,
+				status: "admitted",
+				phase: "compare",
+				run: { class: "exited", exitCode: 0, signal: null },
+				return: { class: "admitted" },
+				compare: { class: "confirmed" },
+				durationMs: 1,
+				code: "ADMITTED",
+				message: "dispatch admitted",
+			},
+		};
+	return {
+		disposition: "refused",
+		cause: "missing",
+		diagnostic: {
+			schemaVersion: 1,
+			status: "refused",
+			phase: "return",
+			run: { class: "exited", exitCode: 0, signal: null },
+			return: { class: "missing" },
+			compare: { class: "not-reached" },
+			durationMs: 1,
+			code: "RETURN_MISSING",
+			message: "dispatch refused: no return file was present after the delegate exited",
+		},
+	};
+}
+
+const recoveryDispatchOptions: Omit<RunDispatchOptions, "brief" | "expectedRef"> = {
+	callerRepoRoot: "/repo",
+	stateRoot: "/state",
+	delegateArgv: ["pi"],
+	timeoutMs: 600_000,
+	operationDeadline: performance.now() + 1_200_000,
+};
+
+describe("recovery attempt-policy call-site ownership", () => {
+	it("shares one opaque ledger across parallel dispatchers with global completion order", async () => {
+		const ledger = createRecoveryAttemptLedger(performance.now());
+		const run = async (): Promise<DispatchOutcome> => recoveryDispatchOutcome("admitted");
+		const one = makeDispatcher(recoveryDispatchOptions, run, { attemptPolicy: { ledger, beforeRetry: () => true } });
+		const two = makeDispatcher(recoveryDispatchOptions, run, { attemptPolicy: { ledger, beforeRetry: () => true } });
+		const results = await Promise.all([one("one", "a".repeat(40)), two("two", "a".repeat(40))]);
+		assert.deepEqual(
+			results
+				.flatMap((result) => result.attempts)
+				.map((event) => event.sequence)
+				.sort((a, b) => a - b),
+			[1, 2],
+		);
+	});
+
+	it("spends the sole retry slot before returning when the retry gate refuses", async () => {
+		const ledger = createRecoveryAttemptLedger(performance.now());
+		let calls = 0;
+		const dispatch = makeDispatcher(
+			recoveryDispatchOptions,
+			async () => {
+				calls += 1;
+				return recoveryDispatchOutcome("missing");
+			},
+			{ attemptPolicy: { ledger, beforeRetry: () => false } },
+		);
+		const result = await dispatch("brief", "a".repeat(40));
+		assert.equal(calls, 1);
+		assert.equal(result.retryState, "spent");
+		assert.equal(result.attempts.length, 1);
+	});
+
+	it("preserves the original outcome identity when attemptPolicy is omitted", async () => {
+		const expected = recoveryDispatchOutcome("admitted");
+		const dispatch = makeDispatcher({ ...recoveryDispatchOptions, operationDeadline: undefined }, async () => expected);
+		assert.equal(await dispatch("brief", "a".repeat(40)), expected);
 	});
 });
