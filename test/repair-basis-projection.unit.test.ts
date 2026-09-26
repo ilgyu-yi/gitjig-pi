@@ -244,7 +244,13 @@ describe("issue #238 repair-basis projection", () => {
 			state(record(b, [finding])),
 			state(record(c, [finding])),
 		]);
-		assert.equal(basis?.intervals.length, 2);
+		assert.deepEqual(
+			basis?.intervals.map(({ earlierHead, laterHead }) => [earlierHead, laterHead]),
+			[
+				[a, b],
+				[b, c],
+			],
+		);
 	});
 
 	it("refuses reordered ruling and disposition populations", async () => {

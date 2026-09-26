@@ -47,6 +47,9 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("if (count === undefined || count === 0) return undefined") &&
 		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
+		history.includes(
+			"states.slice(0, -1).map((state, index) => ({ earlierHead: state.head, laterHead: states[index + 1].head }))",
+		) &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
 		caller.includes("await deriveRepairBasis(repoRoot, history)") &&
 		caller.includes("if (basis === undefined)") &&
@@ -130,6 +133,11 @@ describe("issue #238 structural mutation teeth", () => {
 				CALLER,
 			],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
+			[
+				INTERVAL,
+				HISTORY.replace("laterHead: states[index + 1].head", "laterHead: states[states.length - 1].head"),
+				CALLER,
+			],
 			[
 				INTERVAL,
 				HISTORY.replace(
