@@ -150,6 +150,7 @@ describe("issue #238 repair-basis projection", () => {
 			{ ...original[0], head: a },
 			{ ...original[1], head: b },
 		]);
+		const completeRecordsBeforeProjection = assembled.map(({ record }) => structuredClone(record));
 		const basis = await deriveRepairBasis(root, assembled);
 		assert.ok(basis);
 		assert.deepEqual(
@@ -162,6 +163,10 @@ describe("issue #238 repair-basis projection", () => {
 		assert.deepEqual(
 			assembled.map(({ record }) => record.bundle),
 			rawBundlesBeforeAssembly,
+		);
+		assert.deepEqual(
+			assembled.map(({ record }) => record),
+			completeRecordsBeforeProjection,
 		);
 		for (const projected of basis.states) {
 			for (const effective of projected.findings) {
