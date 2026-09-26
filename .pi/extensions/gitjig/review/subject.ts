@@ -227,20 +227,26 @@ export async function criteriaFromClosingIssues(issues: readonly PlatformIssueSn
 const ACTIVATION_MARKER = "gitjig-activation-criteria";
 const ACTIVATION_PASS_MARKER = "<!-- activation-verdict: pass -->";
 
-/** Admit exactly one writer-attributed activation snapshot immediately following its PASS. */
-export function activationCriteriaFromComments(
+/** Select the latest PASS and its immediately adjacent snapshot; old pairs are immutable history. */
+function latestActivationPair(
 	issue: PlatformIssueSnapshot,
 	writerId: string,
 	comments: readonly PlatformCommentSnapshot[],
-): string[] | undefined {
+): { verdict: PlatformCommentSnapshot; snapshot: PlatformCommentSnapshot; criteria: string[] } | undefined {
 	const prefix = `<!-- ${ACTIVATION_MARKER}:`;
-	const candidateIndexes = comments.flatMap((comment, index) =>
-		comment.authorId === writerId && comment.body.startsWith(prefix) ? [index] : [],
+	if (comments.some((comment, index) => index > 0 && comment.id <= comments[index - 1].id)) return undefined;
+	const passIndexes = comments.flatMap((comment, index) =>
+		comment.body.startsWith(ACTIVATION_PASS_MARKER) ? [index] : [],
 	);
-	if (candidateIndexes.length !== 1) return undefined;
-	const index = candidateIndexes[0];
-	const verdict = comments[index - 1];
-	const snapshot = comments[index];
+	const index = passIndexes.at(-1);
+	if (index === undefined) return undefined;
+	const verdict = comments[index];
+	const snapshot = comments[index + 1];
+	if (verdict === undefined || snapshot === undefined) return undefined;
+	// A later candidate snapshot without a fresh PASS makes selection ambiguous;
+	// an unpaired newer PASS must never fall back to a previous activation.
+	if (comments.slice(index + 2).some((comment) => comment.authorId === writerId && comment.body.startsWith(prefix)))
+		return undefined;
 	if (
 		verdict === undefined ||
 		!(["OWNER", "MEMBER", "COLLABORATOR"] as const).includes(
@@ -249,7 +255,8 @@ export function activationCriteriaFromComments(
 		(verdict.body !== ACTIVATION_PASS_MARKER &&
 			!verdict.body.startsWith(`${ACTIVATION_PASS_MARKER}\n`) &&
 			!verdict.body.startsWith(`${ACTIVATION_PASS_MARKER}\r\n`)) ||
-		verdict.id >= snapshot.id
+		verdict.id >= snapshot.id ||
+		snapshot.authorId !== writerId
 	)
 		return undefined;
 	const marker = `<!-- ${ACTIVATION_MARKER}: ${issue.id} -->`;
@@ -263,10 +270,19 @@ export function activationCriteriaFromComments(
 		if (!object(value, ["issueId", "issueNumber", "criteria"])) return undefined;
 		if (value.issueId !== issue.id || value.issueNumber !== issue.number) return undefined;
 		if (!Array.isArray(value.criteria) || !value.criteria.every(text)) return undefined;
-		return value.criteria.map((criterion) => `#${String(issue.number)}: ${criterion}`);
+		return { verdict, snapshot, criteria: value.criteria.map((criterion) => `#${String(issue.number)}: ${criterion}`) };
 	} catch {
 		return undefined;
 	}
+}
+
+/** The same admitted pair supplies both criteria and the sealed ReviewSubject. */
+export function activationCriteriaFromComments(
+	issue: PlatformIssueSnapshot,
+	writerId: string,
+	comments: readonly PlatformCommentSnapshot[],
+): string[] | undefined {
+	return latestActivationPair(issue, writerId, comments)?.criteria;
 }
 
 /** Stable activation-first union; exact duplicates retain their first position. */
@@ -570,13 +586,10 @@ export async function fetchReviewSubject(
 	for (const issue of context.pullRequest.closingIssues) {
 		const comments = await fetchIssueComments(repoRoot, context.repository, issue, read);
 		if (comments === undefined) return undefined;
-		const criteria = activationCriteriaFromComments(issue, writerId, comments);
-		if (criteria === undefined) return undefined;
-		const marker = `<!-- ${ACTIVATION_MARKER}:`;
-		const index = comments.findIndex((comment) => comment.authorId === writerId && comment.body.startsWith(marker));
-		if (index < 1) return undefined;
-		activation.push({ issueId: issue.id, verdict: comments[index - 1], snapshot: comments[index] });
-		activationCriteria.push(...criteria);
+		const pair = latestActivationPair(issue, writerId, comments);
+		if (pair === undefined) return undefined;
+		activation.push({ issueId: issue.id, verdict: pair.verdict, snapshot: pair.snapshot });
+		activationCriteria.push(...pair.criteria);
 	}
 	const currentCriteria = await criteriaFromClosingIssues(context.pullRequest.closingIssues);
 	return admitReviewSubject({
