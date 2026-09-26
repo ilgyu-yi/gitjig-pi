@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
 	activationCriteriaFromComments,
 	admitReviewSubject,
@@ -145,6 +149,101 @@ describe("review subject criterion union", () => {
 			]),
 			["#212: activation-only criterion", "#212: retained criterion"],
 		);
+	});
+
+	it("selects the latest intact activation pair without editing the old pair", async () => {
+		const old = [verdict("WRITER", 1), comment(activationBody(["old criterion"]), "WRITER", 2)];
+		const latest = [verdict("WRITER", 3), comment(activationBody(["new criterion"]), "WRITER", 4)];
+		const comments = [...old, ...latest];
+		const frozenOld = JSON.stringify(old);
+		assert.deepEqual(activationCriteriaFromComments(issue, "WRITER", comments), ["#212: new criterion"]);
+		assert.equal(JSON.stringify(old), frozenOld);
+		const toWire = (entry: (typeof comments)[number]) => ({
+			id: entry.id,
+			body: entry.body,
+			user: { node_id: entry.authorId },
+			author_association: entry.authorAssociation,
+		});
+		const responses = platformResponses([[...comments.map(toWire)]]);
+		const subject = await fetchReviewSubject("/repo", 223, async () => responses.shift());
+		assert.equal(subject?.activation[0].verdict.id, 3);
+		assert.equal(subject?.activation[0].snapshot.id, 4);
+		assert.deepEqual(subject?.criteria, [
+			"#212: new criterion",
+			"#212: retained criterion",
+			"#212: current-only criterion",
+		]);
+		assert.deepEqual(await admitReviewSubject(subject), subject);
+		const changed = platformResponses([[...comments.map(toWire), toWire(verdict("WRITER", 5))]]);
+		assert.equal(await fetchReviewSubject("/repo", 223, async () => changed.shift()), undefined);
+	});
+
+	it("never falls back when a newer activation tail is incomplete or ambiguous", () => {
+		const old = [verdict("WRITER", 1), comment(activationBody(["old"]), "WRITER", 2)];
+		for (const tail of [
+			[verdict("WRITER", 3)],
+			[verdict("WRITER", 3), comment(activationBody(["new"]), "OTHER", 4)],
+			[verdict("WRITER", 3), comment(activationBody(["new"], "OTHER_ISSUE"), "WRITER", 4)],
+			[verdict("WRITER", 3), comment(`${activationBody(["new"])} trailing`, "WRITER", 4)],
+			[verdict("WRITER", 3), comment(activationBody(["new"]), "WRITER", 4), comment(activationBody([]), "WRITER", 5)],
+			[verdict("WRITER", 3), comment("interposed", "OTHER", 4), comment(activationBody(["new"]), "WRITER", 5)],
+			[verdict("WRITER", 3), comment(activationBody(["new"]), "WRITER", 2)],
+		]) {
+			assert.equal(activationCriteriaFromComments(issue, "WRITER", [...old, ...tail]), undefined);
+		}
+	});
+
+	it("private-copy mutants independently red latest selection, unpaired refusal and sealed-pair use", async () => {
+		const sourceRoot = fileURLToPath(new URL("../.pi/extensions/gitjig", import.meta.url));
+		const sourceFile = join(sourceRoot, "review/subject.ts");
+		const old = [verdict("WRITER", 1), comment(activationBody(["old"]), "WRITER", 2)];
+		const latest = [verdict("WRITER", 3), comment(activationBody(["new"]), "WRITER", 4)];
+		const toWire = (entry: (typeof old)[number]) => ({
+			id: entry.id,
+			body: entry.body,
+			user: { node_id: entry.authorId },
+			author_association: entry.authorAssociation,
+		});
+		for (const [from, to, probe] of [
+			[
+				"passIndexes.at(-1)",
+				"passIndexes[0]",
+				async (mutant: typeof import("../.pi/extensions/gitjig/review/subject.ts")) =>
+					assert.deepEqual(mutant.activationCriteriaFromComments(issue, "WRITER", [...old, ...latest]), ["#212: new"]),
+			],
+			[
+				"if (verdict === undefined || snapshot === undefined) return undefined;",
+				"if (verdict === undefined) return undefined;",
+				async (mutant: typeof import("../.pi/extensions/gitjig/review/subject.ts")) =>
+					assert.equal(
+						mutant.activationCriteriaFromComments(issue, "WRITER", [...old, verdict("WRITER", 3)]),
+						undefined,
+					),
+			],
+			[
+				"snapshot: pair.snapshot",
+				"snapshot: comments[1]",
+				async (mutant: typeof import("../.pi/extensions/gitjig/review/subject.ts")) => {
+					const responses = platformResponses([[...old, ...latest].map(toWire)]);
+					const subject = await mutant.fetchReviewSubject("/repo", 223, async () => responses.shift());
+					assert.equal(subject?.activation[0].snapshot.id, 4);
+				},
+			],
+		] as const) {
+			const root = mkdtempSync(join(tmpdir(), "gitjig-latest-activation-mutant-"));
+			try {
+				const targetRoot = join(root, "gitjig");
+				cpSync(sourceRoot, targetRoot, { recursive: true });
+				const target = join(targetRoot, "review/subject.ts");
+				const original = readFileSync(sourceFile, "utf8");
+				assert.equal(original.split(from).length, 2, `non-unique mutant target: ${from}`);
+				writeFileSync(target, original.replace(from, to));
+				const mutant = await import(pathToFileURL(target).href);
+				await assert.rejects(() => probe(mutant), `surviving mutant: ${from}`);
+			} finally {
+				rmSync(root, { recursive: true, force: true });
+			}
+		}
 	});
 
 	it("fails closed on missing, malformed, mismatched, or ambiguous activation evidence", () => {
