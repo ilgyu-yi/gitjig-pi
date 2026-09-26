@@ -1026,14 +1026,19 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		});
 	});
 
-	it("keeps claim and finalize lexically private with no reset, delete, or injection capability", () => {
+	it("keeps claim and finalize lexically private with no reset, delete, or injection capability", async () => {
 		const coordinatorUrl = new URL("../.pi/extensions/gitjig/recovery/coordinator.ts", import.meta.url);
 		const source = readFileSync(coordinatorUrl, "utf8");
 		assert.equal(existsSync(new URL("../.pi/extensions/gitjig/recovery/store.ts", import.meta.url)), false);
 		assert.match(source, /^function claimAllowance\(/m);
 		assert.match(source, /^function finalizeAllowance\(/m);
-		assert.doesNotMatch(source, /^export (?:async )?function (?:claimAllowance|finalizeAllowance)\(/m);
 		assert.doesNotMatch(source, /^export .*?(?:reset|delete|clear|repair|unlock|inject)/gim);
+		const namespace = await import(`${coordinatorUrl.href}?store-privacy=${Date.now()}-${Math.random()}`);
+		assert.deepEqual(Object.keys(namespace).sort(), [
+			"coordinateHistoryRecovery",
+			"hasRecoveryRetryReserve",
+			"makeRecoveryProfileDispatcher",
+		]);
 	});
 
 	it("keeps definite preclaim domain refusal unconsumed", () => {

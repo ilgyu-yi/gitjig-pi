@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
+import ts from "typescript";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const spec = readFileSync(join(repoRoot(), "SPEC.md"), "utf8");
@@ -95,23 +97,47 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 	});
 }
 
-function assertPrivateAllowanceCapabilities(root: string): void {
+const COORDINATOR_RUNTIME_EXPORTS = [
+	"coordinateHistoryRecovery",
+	"hasRecoveryRetryReserve",
+	"makeRecoveryProfileDispatcher",
+] as const;
+
+function assertNoCommonJsLoader(path: string, source: string): void {
+	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+	function visit(node: ts.Node): void {
+		if (ts.isIdentifier(node) && (node.text === "require" || node.text === "createRequire"))
+			assert.fail(`CommonJS loader denied through ${path}: ${node.text}`);
+		ts.forEachChild(node, visit);
+	}
+	visit(tree);
+}
+
+async function assertPrivateAllowanceCapabilities(root: string): Promise<void> {
 	const production = [".pi/extensions/gitjig.ts", ...productionExtensionFiles(root)];
 	assert.ok(!production.includes(".pi/extensions/gitjig/recovery/store.ts"), "standalone mutation module survives");
 	const coordinator = ".pi/extensions/gitjig/recovery/coordinator.ts";
 	const source = readFileSync(join(root, coordinator), "utf8");
 	assert.equal((source.match(/^function claimAllowance\(/gm) ?? []).length, 1);
 	assert.equal((source.match(/^function finalizeAllowance\(/gm) ?? []).length, 1);
-	assert.doesNotMatch(source, /^export (?:async )?function (?:claimAllowance|finalizeAllowance)\(/m);
-	assert.doesNotMatch(source, /^export \{[^}]*\b(?:claimAllowance|finalizeAllowance)\b[^}]*\}/m);
 	for (const path of production) {
+		const candidate = readFileSync(join(root, path), "utf8");
+		assertNoCommonJsLoader(path, candidate);
 		if (path === coordinator) continue;
 		assert.doesNotMatch(
-			readFileSync(join(root, path), "utf8"),
+			candidate,
 			/\bclaimAllowance\b|\bfinalizeAllowance\b/,
 			`allowance mutation name crosses lexical module boundary through ${path}`,
 		);
 	}
+	const namespace = await import(
+		`${pathToFileURL(join(root, coordinator)).href}?privacy=${Date.now()}-${Math.random()}`
+	);
+	assert.deepEqual(
+		Object.keys(namespace).sort(),
+		[...COORDINATOR_RUNTIME_EXPORTS].sort(),
+		"coordinator runtime namespace exposes an unapproved capability",
+	);
 }
 
 describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
@@ -177,9 +203,9 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		}
 	});
 
-	it("keeps allowance mutation capabilities lexically private to the coordinator", () => {
+	it("keeps allowance mutation capabilities lexically private to the coordinator", async () => {
 		const root = repoRoot();
-		assertPrivateAllowanceCapabilities(root);
+		await assertPrivateAllowanceCapabilities(root);
 		const coordinator = join(root, ".pi/extensions/gitjig/recovery/coordinator.ts");
 		assert.doesNotMatch(
 			readFileSync(coordinator, "utf8"),
@@ -188,15 +214,33 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		const copy = mkdtempSync(join(tmpdir(), "gitjig-private-capability-mutant-"));
 		try {
 			cpSync(join(root, ".pi"), join(copy, ".pi"), { recursive: true });
+			symlinkSync(join(root, "node_modules"), join(copy, "node_modules"), "dir");
 			const target = join(copy, ".pi/extensions/gitjig/recovery/coordinator.ts");
-			writeFileSync(target, `${readFileSync(target, "utf8")}\nexport { claimAllowance };\n`);
-			assert.throws(() => assertPrivateAllowanceCapabilities(copy), /export/);
+			writeFileSync(
+				target,
+				`${readFileSync(target, "utf8")}\nconst __leakedClaim = claimAllowance;\nconst __leakedFinalize = finalizeAllowance;\nexport { __leakedClaim, __leakedFinalize };\n`,
+			);
+			await assert.rejects(
+				() => assertPrivateAllowanceCapabilities(copy),
+				/coordinator runtime namespace exposes an unapproved capability/,
+			);
 			cpSync(coordinator, target);
 			writeFileSync(
 				join(copy, ".pi/extensions/gitjig/recovery/store.ts"),
 				"export function claimAllowance() {}\nexport function finalizeAllowance() {}\n",
 			);
-			assert.throws(() => assertPrivateAllowanceCapabilities(copy), /standalone mutation module survives/);
+			await assert.rejects(() => assertPrivateAllowanceCapabilities(copy), /standalone mutation module survives/);
+			rmSync(join(copy, ".pi/extensions/gitjig/recovery/store.ts"));
+			const loaderTarget = join(copy, ".pi/extensions/gitjig/review/orchestrate.ts");
+			for (const mutant of [
+				'import { createRequire as __leakCreateRequire } from "node:module";\nconst __leakRequire = __leakCreateRequire(import.meta.url);\nexport const __leakedStoreCapabilities = __leakRequire("../recovery/store.ts");',
+				'export const __directStoreCapabilities = require("../recovery/store.ts");',
+			]) {
+				const original = readFileSync(loaderTarget, "utf8");
+				writeFileSync(loaderTarget, `${original}\n${mutant}\n`);
+				await assert.rejects(() => assertPrivateAllowanceCapabilities(copy), /CommonJS loader denied/);
+				writeFileSync(loaderTarget, original);
+			}
 		} finally {
 			rmSync(copy, { recursive: true, force: true });
 		}
