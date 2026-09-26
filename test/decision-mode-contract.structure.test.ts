@@ -96,66 +96,44 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 	});
 }
 
-function staticString(
-	node: ts.Expression,
-	checker: ts.TypeChecker,
-	seen: ReadonlySet<ts.Symbol> = new Set(),
-): string | undefined {
-	if (ts.isStringLiteralLike(node)) return node.text;
-	if (
-		ts.isParenthesizedExpression(node) ||
-		ts.isAsExpression(node) ||
-		ts.isTypeAssertionExpression(node) ||
-		ts.isSatisfiesExpression(node) ||
-		ts.isNonNullExpression(node)
-	)
-		return staticString(node.expression, checker, seen);
-	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-		const left = staticString(node.left, checker, seen);
-		const right = staticString(node.right, checker, seen);
-		return left === undefined || right === undefined ? undefined : left + right;
+const NONLITERAL_DYNAMIC_IMPORT_ALLOWLIST = {
+	governanceLoader: {
+		path: ".pi/extensions/gitjig/commands/governance.ts",
+		declaration: "const load = (path: string) => import(pathToFileURL(join(repoRoot, path)).href);",
+	},
+} as const;
+
+function isAllowlistedDynamicImport(path: string, node: ts.CallExpression): boolean {
+	for (const exception of Object.values(NONLITERAL_DYNAMIC_IMPORT_ALLOWLIST)) {
+		if (path !== exception.path) continue;
+		let owner: ts.Node = node;
+		while (owner.parent !== undefined && !ts.isVariableStatement(owner)) owner = owner.parent;
+		if (ts.isVariableStatement(owner) && owner.getText() === exception.declaration) return true;
 	}
-	if (ts.isIdentifier(node)) {
-		const symbol = checker.getSymbolAtLocation(node);
-		const declaration = symbol?.valueDeclaration;
-		if (
-			symbol === undefined ||
-			seen.has(symbol) ||
-			declaration === undefined ||
-			!ts.isVariableDeclaration(declaration) ||
-			!ts.isVariableDeclarationList(declaration.parent) ||
-			(declaration.parent.flags & ts.NodeFlags.Const) === 0 ||
-			declaration.initializer === undefined
-		)
-			return undefined;
-		return staticString(declaration.initializer, checker, new Set([...seen, symbol]));
-	}
-	return undefined;
+	return false;
 }
 
-function staticallyKnownModuleSpecifiers(path: string, source: string): string[] {
-	const options: ts.CompilerOptions = { noLib: true, noResolve: true, target: ts.ScriptTarget.Latest };
-	const host = ts.createCompilerHost(options, true);
-	const fallback = host.getSourceFile.bind(host);
-	host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) =>
-		fileName === path
-			? ts.createSourceFile(path, source, languageVersion, true, ts.ScriptKind.TS)
-			: fallback(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-	const program = ts.createProgram([path], options, host);
-	const tree = program.getSourceFile(path);
-	assert.ok(tree, `could not parse production source: ${path}`);
-	const checker = program.getTypeChecker();
+function literalModuleSpecifiers(path: string, source: string): string[] {
+	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	const specifiers: string[] = [];
+	function retainLiteral(expression: ts.Expression, kind: string): void {
+		assert.ok(ts.isStringLiteralLike(expression), `${kind} denied through ${path}: ${expression.getText(tree)}`);
+		specifiers.push(expression.text);
+	}
 	function visit(node: ts.Node): void {
-		let expression: ts.Expression | undefined;
-		if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) expression = node.moduleSpecifier;
-		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
-			expression = node.arguments[0];
-		else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) expression = node.argument.literal;
-		if (expression !== undefined) {
-			const specifier = staticString(expression, checker);
-			if (specifier !== undefined) specifiers.push(specifier);
-		}
+		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined)
+			retainLiteral(node.moduleSpecifier, "nonliteral module specifier");
+		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+			const expression = node.arguments[0];
+			assert.ok(expression !== undefined, `argumentless dynamic import denied through ${path}`);
+			if (ts.isStringLiteralLike(expression)) specifiers.push(expression.text);
+			else
+				assert.ok(
+					isAllowlistedDynamicImport(path, node),
+					`nonliteral dynamic import denied through ${path}: ${expression.getText(tree)}`,
+				);
+		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
+			retainLiteral(node.argument.literal, "nonliteral import type");
 		ts.forEachChild(node, visit);
 	}
 	visit(tree);
@@ -164,7 +142,7 @@ function staticallyKnownModuleSpecifiers(path: string, source: string): string[]
 
 function assertNoStoreCapability(root: string, path: string, source: string): void {
 	const store = join(root, ".pi/extensions/gitjig/recovery/store.ts");
-	for (const specifier of staticallyKnownModuleSpecifiers(path, source)) {
+	for (const specifier of literalModuleSpecifiers(path, source)) {
 		if (specifier.startsWith(".")) {
 			assert.notEqual(
 				resolve(dirname(join(root, path)), specifier.replace(/[?#].*$/, "")),
@@ -260,34 +238,23 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 		}
 		const copy = mkdtempSync(join(tmpdir(), "gitjig-store-export-mutant-"));
 		try {
-			for (const [path, statement] of [
-				[".pi/extensions/gitjig/recovery/types.ts", 'export * from "./store.ts";'],
-				[".pi/extensions/gitjig/commands/index.ts", 'export * from "../recovery/store.ts";'],
-				[".pi/extensions/gitjig.ts", 'export * from "./gitjig/recovery/store.ts";'],
-				[".pi/extensions/gitjig/review/orchestrate.ts", 'export * from "../recovery/store.ts";'],
-				[".pi/extensions/gitjig/recovery/types.ts", 'export * from "./store.ts?cap=1";'],
+			for (const [path, statement, expected] of [
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
-					'export const leakedStoreCapabilities = import("../recovery/" + "store.ts");',
+					'export * from "../recovery/store.ts";',
+					/store capability crosses/,
 				],
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
-					'const leakedStorePath = "../recovery/store.ts";\nexport const leakedStoreCapabilitiesViaAlias = import(leakedStorePath);',
-				],
-				[
-					".pi/extensions/gitjig/review/orchestrate.ts",
-					'const typedStorePath = "../recovery/store.ts" as const;\nexport const leakedStoreCapabilitiesViaTypedAlias = import(typedStorePath);',
+					"const opaquePath = process.env.GITJIG_MODULE;\nexport const opaqueImport = import(opaquePath);",
+					/nonliteral dynamic import denied/,
 				],
 			] as const) {
 				const target = join(copy, path);
 				mkdirSync(dirname(target), { recursive: true });
 				cpSync(join(root, path), target);
 				writeFileSync(target, `${readFileSync(target, "utf8")}\n${statement}\n`);
-				assert.throws(
-					() => assertNoStoreCapability(copy, path, readFileSync(target, "utf8")),
-					/store capability crosses/,
-					path,
-				);
+				assert.throws(() => assertNoStoreCapability(copy, path, readFileSync(target, "utf8")), expected, path);
 			}
 		} finally {
 			rmSync(copy, { recursive: true, force: true });

@@ -3,7 +3,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { deriveAllowancePathEncoding } from "../.pi/extensions/gitjig/recovery/lineage.ts";
 import { claimAllowance, finalizeAllowance } from "../.pi/extensions/gitjig/recovery/store.ts";
@@ -404,8 +404,6 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 			"claim-close",
 			"terminal-create",
 			"terminal-write",
-			"terminal-cleanup-parent-mutant",
-			"terminal-cleanup-order-mutant",
 			"terminal-close",
 			"terminal-rename",
 			"terminal-post-read",
@@ -417,40 +415,20 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fs.appendFileSync(process.env.FSYNC_LOG,directory?"d":"f");fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\nexport function unlinkSync(...args){fs.appendFileSync(process.env.FSYNC_LOG,"u");return fs.unlinkSync(...args);}\n`,
+					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,unlinkSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fs.appendFileSync(process.env.FSYNC_LOG,directory?"d":"f");fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
-				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
-				if (failure === "terminal-cleanup-parent-mutant") {
-					const cleanupSync = "\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}";
-					assert.ok(source.includes(cleanupSync));
-					source = source.replace(cleanupSync, "");
-				}
-				if (failure === "terminal-cleanup-order-mutant") {
-					const orderedCleanup =
-						"\t\t\t\ttry {\n\t\t\t\t\tunlinkSync(temporary);\n\t\t\t\t} catch {}\n\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}";
-					const reorderedCleanup =
-						"\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}\n\t\t\t\ttry {\n\t\t\t\t\tunlinkSync(temporary);\n\t\t\t\t} catch {}";
-					assert.ok(source.includes(orderedCleanup));
-					source = source.replace(orderedCleanup, reorderedCleanup);
-				}
+				const source = readFileSync(target, "utf8").replace(
+					'"node:fs"',
+					JSON.stringify(new URL(`file://${shim}`).href),
+				);
 				writeFileSync(target, source);
-				let script = failure.startsWith("claim")
+				const script = failure.startsWith("claim")
 					? probe.replace(
 							'assert.equal(claim.status,"claimed"); if(claim.status!=="claimed") process.exit(3);',
 							'assert.equal(claim.status,"consumed"); assert.equal(claim.cause,"create-or-write-ambiguous"); assert.equal(claimAllowance({subject,record}).status,"consumed"); process.exit(0);',
 						)
 					: replaced;
-				if (
-					failure === "terminal-write" ||
-					failure === "terminal-cleanup-parent-mutant" ||
-					failure === "terminal-cleanup-order-mutant"
-				) {
-					script = script.replace(
-						'assert.deepEqual(readdirSync(process.env.XDG_STATE_HOME+"/gitjig/recovery").filter(name=>name.endsWith(".tmp")),[]);',
-						'assert.deepEqual(readdirSync(process.env.XDG_STATE_HOME+"/gitjig/recovery").filter(name=>name.endsWith(".tmp")),[]); assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdud");',
-					);
-				}
 				writeFileSync(join(box, "probe.mjs"), script);
 				const xdg = join(box, "state");
 				mkdirSync(xdg, { mode: 0o700 });
@@ -465,8 +443,6 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					"claim-close": "c1",
 					"terminal-create": "temp-create",
 					"terminal-write": "w2",
-					"terminal-cleanup-parent-mutant": "w2",
-					"terminal-cleanup-order-mutant": "w2",
 					"terminal-close": "c3",
 					"terminal-rename": "rename",
 					"terminal-post-read": "r3",
@@ -477,11 +453,103 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					timeout: 10_000,
 					env: { ...process.env, XDG_STATE_HOME: xdg, FSYNC_LOG: log, FAIL_ON: point },
 				});
-				if (failure === "terminal-cleanup-parent-mutant")
-					assert.notEqual(result.status, 0, "cleanup parent-sync omission survived");
-				else if (failure === "terminal-cleanup-order-mutant")
-					assert.notEqual(result.status, 0, "cleanup parent-sync reordering survived");
-				else assert.equal(result.status, 0, `${failure}: ${result.stderr}`);
+				assert.equal(result.status, 0, `${failure}: ${result.stderr}`);
+			} finally {
+				rmSync(box, { recursive: true, force: true });
+			}
+		}
+	});
+
+	it("closes and unlinks a failed terminal temporary before syncing its parent", () => {
+		const owner = readFileSync(new URL(import.meta.url), "utf8");
+		const originalProbe = owner.match(/const probe = `([\s\S]*?)`;\n\t\tfor \(const variant of \[/)?.[1];
+		assert.ok(originalProbe);
+		const probe = originalProbe.replace(
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");\nassert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");',
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"consumed-unverified"); assert.equal(claimAllowance({subject,record}).status,"consumed");',
+		);
+		assert.notEqual(probe, originalProbe);
+		type Operation = { operation: string; fd?: number; path?: string };
+		const assertCleanupOrder = (events: Operation[]): void => {
+			const opened = events.findIndex((event) => event.operation === "open" && event.path?.endsWith(".tmp"));
+			assert.ok(opened >= 0, "temporary leaf was not created");
+			const temporary = events[opened];
+			assert.ok(temporary?.fd !== undefined && temporary.path !== undefined);
+			const failed = events.findIndex(
+				(event, index) =>
+					index > opened &&
+					event.operation === "write-failure" &&
+					event.fd === temporary.fd &&
+					event.path === temporary.path,
+			);
+			assert.ok(failed > opened, "temporary write did not fail before rename");
+			assert.equal(
+				events.some((event) => event.operation === "rename" && event.path === temporary.path),
+				false,
+				"failed temporary was renamed",
+			);
+			const closed = events.findIndex(
+				(event, index) =>
+					index > failed && event.operation === "close" && event.fd === temporary.fd && event.path === temporary.path,
+			);
+			assert.ok(closed > failed, "temporary descriptor was not closed after the failed write");
+			const unlinked = events.findIndex(
+				(event, index) => index > closed && event.operation === "unlink" && event.path === temporary.path,
+			);
+			assert.ok(unlinked > closed, "temporary leaf was not unlinked after close");
+			const parentSynced = events.findIndex(
+				(event, index) =>
+					index > unlinked && event.operation === "fsync" && event.path === dirname(temporary.path as string),
+			);
+			assert.ok(parentSynced > unlinked, "temporary parent was not fsynced after unlink");
+		};
+
+		for (const variant of ["baseline", "cleanup-sync-omission", "cleanup-order"] as const) {
+			const box = mkdtempSync(join(tmpdir(), `gitjig-store-cleanup-order-${variant}-`));
+			try {
+				cpSync(new URL("../.pi/extensions/gitjig", import.meta.url), join(box, "gitjig"), { recursive: true });
+				symlinkSync(new URL("../node_modules", import.meta.url), join(box, "node_modules"), "dir");
+				const shim = join(box, "fs-shim.mjs");
+				writeFileSync(
+					shim,
+					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,readSync}=fs;\nconst identities=new Map(); let writes=0; const emit=(event)=>fs.appendFileSync(process.env.OPERATION_LOG,JSON.stringify(event)+"\\n");\nexport function openSync(path,...args){const fd=fs.openSync(path,...args);const identity=String(path);identities.set(fd,identity);emit({operation:"open",fd,path:identity});return fd;}\nexport function writeSync(...args){const fd=args[0],path=identities.get(fd);if(++writes===2){emit({operation:"write-failure",fd,path});const error=new Error("injected");error.code="EIO";throw error;}return fs.writeSync(...args);}\nexport function closeSync(fd){emit({operation:"close",fd,path:identities.get(fd)});const result=fs.closeSync(fd);identities.delete(fd);return result;}\nexport function fsyncSync(fd){emit({operation:"fsync",fd,path:identities.get(fd)});return fs.fsyncSync(fd);}\nexport function unlinkSync(path){const identity=String(path);emit({operation:"unlink",path:identity});return fs.unlinkSync(path);}\nexport function renameSync(from,...args){emit({operation:"rename",path:String(from)});return fs.renameSync(from,...args);}\n`,
+				);
+				const target = join(box, "gitjig", "recovery", "store.ts");
+				let source = readFileSync(target, "utf8");
+				const cleanupSync = "\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}";
+				const orderedCleanup =
+					"\t\t\t\ttry {\n\t\t\t\t\tunlinkSync(temporary);\n\t\t\t\t} catch {}\n\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}";
+				if (variant === "cleanup-sync-omission") {
+					assert.ok(source.includes(cleanupSync));
+					source = source.replace(cleanupSync, "");
+				} else if (variant === "cleanup-order") {
+					assert.ok(source.includes(orderedCleanup));
+					source = source.replace(
+						orderedCleanup,
+						"\t\t\t\ttry {\n\t\t\t\t\tsyncDirectory(resolved);\n\t\t\t\t} catch {}\n\t\t\t\ttry {\n\t\t\t\t\tunlinkSync(temporary);\n\t\t\t\t} catch {}",
+					);
+				}
+				source = source.replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
+				writeFileSync(target, source);
+				writeFileSync(join(box, "probe.mjs"), probe);
+				const xdg = join(box, "state");
+				mkdirSync(xdg, { mode: 0o700 });
+				const operationLog = join(box, "operations.ndjson");
+				writeFileSync(operationLog, "");
+				const result = spawnSync(process.execPath, [join(box, "probe.mjs")], {
+					cwd: box,
+					encoding: "utf8",
+					timeout: 10_000,
+					env: { ...process.env, XDG_STATE_HOME: xdg, OPERATION_LOG: operationLog },
+				});
+				assert.equal(result.status, 0, `${variant}: ${result.stderr}`);
+				const events = readFileSync(operationLog, "utf8")
+					.trim()
+					.split("\n")
+					.filter(Boolean)
+					.map((line) => JSON.parse(line) as Operation);
+				if (variant === "baseline") assertCleanupOrder(events);
+				else assert.throws(() => assertCleanupOrder(events), /temporary parent was not fsynced after unlink/);
 			} finally {
 				rmSync(box, { recursive: true, force: true });
 			}
