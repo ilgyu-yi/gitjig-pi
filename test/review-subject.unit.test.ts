@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -232,13 +232,23 @@ describe("review subject criterion union", () => {
 		] as const) {
 			const root = mkdtempSync(join(tmpdir(), "gitjig-latest-activation-mutant-"));
 			try {
-				const targetRoot = join(root, "gitjig");
+				const targetRoot = join(root, ".pi/extensions/gitjig");
 				cpSync(sourceRoot, targetRoot, { recursive: true });
+				const ownerDir = join(root, ".github/workflows");
+				mkdirSync(ownerDir, { recursive: true });
+				cpSync(
+					fileURLToPath(new URL("../.github/workflows/ac-closeout.mjs", import.meta.url)),
+					join(ownerDir, "ac-closeout.mjs"),
+				);
 				const target = join(targetRoot, "review/subject.ts");
 				const original = readFileSync(sourceFile, "utf8");
 				assert.equal(original.split(from).length, 2, `non-unique mutant target: ${from}`);
+				const url = pathToFileURL(target).href;
+				// Apparatus witness: the copied, unchanged owner and criterion module must
+				// pass this exact probe before a mutant's failure can count as a kill.
+				await probe(await import(`${url}?baseline=${encodeURIComponent(from)}`));
 				writeFileSync(target, original.replace(from, to));
-				const mutant = await import(pathToFileURL(target).href);
+				const mutant = await import(`${url}?mutant=${encodeURIComponent(from)}`);
 				await assert.rejects(() => probe(mutant), `surviving mutant: ${from}`);
 			} finally {
 				rmSync(root, { recursive: true, force: true });
