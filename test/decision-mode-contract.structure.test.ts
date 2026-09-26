@@ -125,7 +125,10 @@ function literalModuleSpecifiers(path: string, source: string): string[] {
 		specifiers.push(expression.text);
 	}
 	function visit(node: ts.Node): void {
-		if (ts.isIdentifier(node) && (node.text === "require" || node.text === "createRequire"))
+		if (
+			ts.isIdentifier(node) &&
+			(node.text === "require" || node.text === "createRequire" || node.text === "getBuiltinModule")
+		)
 			assert.fail(`CommonJS loader denied through ${path}: ${node.text}`);
 		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined)
 			retainLiteral(node.moduleSpecifier, "nonliteral module specifier");
@@ -257,7 +260,22 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 				],
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
+					'const __storePath = "../recovery/store.ts";\nexport const __aliasStoreCapabilities = import(__storePath);',
+					/nonliteral dynamic import denied/,
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'const __storePath = "../recovery/store.ts" as const;\nexport const __asConstStoreCapabilities = import(__storePath);',
+					/nonliteral dynamic import denied/,
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
 					'import { createRequire as __leakCreateRequire } from "node:module";\nconst __leakRequire = __leakCreateRequire(import.meta.url);\nexport const __leakedStoreCapabilities = __leakRequire("../recovery/store.ts");',
+					/CommonJS loader denied/,
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'const __module = process.getBuiltinModule("node:module");\nconst __makeRequire = __module["create" + "Require"];\nconst __builtinRequire = __makeRequire(import.meta.url);\nexport const __builtinStoreCapabilities = __builtinRequire("../recovery/store.ts");',
 					/CommonJS loader denied/,
 				],
 				[
