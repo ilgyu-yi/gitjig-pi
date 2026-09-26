@@ -96,19 +96,48 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 	});
 }
 
-function staticString(node: ts.Expression): string | undefined {
+function staticString(
+	node: ts.Expression,
+	checker: ts.TypeChecker,
+	seen: ReadonlySet<ts.Symbol> = new Set(),
+): string | undefined {
 	if (ts.isStringLiteralLike(node)) return node.text;
-	if (ts.isParenthesizedExpression(node)) return staticString(node.expression);
+	if (ts.isParenthesizedExpression(node)) return staticString(node.expression, checker, seen);
 	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-		const left = staticString(node.left);
-		const right = staticString(node.right);
+		const left = staticString(node.left, checker, seen);
+		const right = staticString(node.right, checker, seen);
 		return left === undefined || right === undefined ? undefined : left + right;
+	}
+	if (ts.isIdentifier(node)) {
+		const symbol = checker.getSymbolAtLocation(node);
+		const declaration = symbol?.valueDeclaration;
+		if (
+			symbol === undefined ||
+			seen.has(symbol) ||
+			declaration === undefined ||
+			!ts.isVariableDeclaration(declaration) ||
+			!ts.isVariableDeclarationList(declaration.parent) ||
+			(declaration.parent.flags & ts.NodeFlags.Const) === 0 ||
+			declaration.initializer === undefined
+		)
+			return undefined;
+		return staticString(declaration.initializer, checker, new Set([...seen, symbol]));
 	}
 	return undefined;
 }
 
 function staticallyKnownModuleSpecifiers(path: string, source: string): string[] {
-	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+	const options: ts.CompilerOptions = { noLib: true, noResolve: true, target: ts.ScriptTarget.Latest };
+	const host = ts.createCompilerHost(options, true);
+	const fallback = host.getSourceFile.bind(host);
+	host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) =>
+		fileName === path
+			? ts.createSourceFile(path, source, languageVersion, true, ts.ScriptKind.TS)
+			: fallback(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+	const program = ts.createProgram([path], options, host);
+	const tree = program.getSourceFile(path);
+	assert.ok(tree, `could not parse production source: ${path}`);
+	const checker = program.getTypeChecker();
 	const specifiers: string[] = [];
 	function visit(node: ts.Node): void {
 		let expression: ts.Expression | undefined;
@@ -117,7 +146,7 @@ function staticallyKnownModuleSpecifiers(path: string, source: string): string[]
 			expression = node.arguments[0];
 		else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) expression = node.argument.literal;
 		if (expression !== undefined) {
-			const specifier = staticString(expression);
+			const specifier = staticString(expression, checker);
 			if (specifier !== undefined) specifiers.push(specifier);
 		}
 		ts.forEachChild(node, visit);
@@ -233,6 +262,10 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
 					'export const leakedStoreCapabilities = import("../recovery/" + "store.ts");',
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'const leakedStorePath = "../recovery/store.ts";\nexport const leakedStoreCapabilitiesViaAlias = import(leakedStorePath);',
 				],
 			] as const) {
 				const target = join(copy, path);
