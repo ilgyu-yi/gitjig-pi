@@ -118,15 +118,21 @@ function literalModuleSpecifiers(path: string, source: string): string[] {
 	const specifiers: string[] = [];
 	function retainLiteral(expression: ts.Expression, kind: string): void {
 		assert.ok(ts.isStringLiteralLike(expression), `${kind} denied through ${path}: ${expression.getText(tree)}`);
+		assert.ok(
+			expression.text !== "node:module" && expression.text !== "module",
+			`CommonJS loader denied through ${path}: ${expression.text}`,
+		);
 		specifiers.push(expression.text);
 	}
 	function visit(node: ts.Node): void {
+		if (ts.isIdentifier(node) && (node.text === "require" || node.text === "createRequire"))
+			assert.fail(`CommonJS loader denied through ${path}: ${node.text}`);
 		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined)
 			retainLiteral(node.moduleSpecifier, "nonliteral module specifier");
 		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
 			const expression = node.arguments[0];
 			assert.ok(expression !== undefined, `argumentless dynamic import denied through ${path}`);
-			if (ts.isStringLiteralLike(expression)) specifiers.push(expression.text);
+			if (ts.isStringLiteralLike(expression)) retainLiteral(expression, "nonliteral dynamic import");
 			else
 				assert.ok(
 					isAllowlistedDynamicImport(path, node),
@@ -248,6 +254,16 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 					".pi/extensions/gitjig/review/orchestrate.ts",
 					"const opaquePath = process.env.GITJIG_MODULE;\nexport const opaqueImport = import(opaquePath);",
 					/nonliteral dynamic import denied/,
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'import { createRequire as __leakCreateRequire } from "node:module";\nconst __leakRequire = __leakCreateRequire(import.meta.url);\nexport const __leakedStoreCapabilities = __leakRequire("../recovery/store.ts");',
+					/CommonJS loader denied/,
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'export const __directStoreCapabilities = require("../recovery/store.ts");',
+					/CommonJS loader denied/,
 				],
 			] as const) {
 				const target = join(copy, path);

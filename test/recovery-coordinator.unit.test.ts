@@ -788,6 +788,69 @@ describe("Phase-A history recovery coordinator", () => {
 		}
 	});
 
+	it("bounds a never-settling precontinue refresh and durably consumes the claim", async () => {
+		const current = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_REFRESH_DEADLINE" } },
+		};
+		const original = performance.now;
+		let clock = 0;
+		let refreshes = 0;
+		let watchdog: ReturnType<typeof setTimeout> | undefined;
+		try {
+			Object.defineProperty(performance, "now", { configurable: true, value: () => clock });
+			const recovery = coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				refreshPrecontinue: () => {
+					refreshes += 1;
+					return new Promise<RecoveryFreshness | undefined>(() => {});
+				},
+				dispatchProfile: async (ledger, profileId) => {
+					const value =
+						profileId === "stagnation-root"
+							? { outcome: "ALTERNATIVE", method: "root", evidence: "root evidence" }
+							: profileId === "stagnation-blast-radius"
+								? { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" }
+								: { selected: "root", materiallyDifferent: true, evidence: "selection" };
+					const outcome = await observed(ledger, admitted(value));
+					if (profileId === "recovery-selector") clock = 3_779_990;
+					return outcome;
+				},
+			});
+			const outcome = await Promise.race([
+				recovery.then((result) => ({ state: "settled" as const, result })),
+				new Promise<{ state: "pending" }>((resolve) => {
+					watchdog = setTimeout(() => resolve({ state: "pending" }), 1_000);
+				}),
+			]);
+			assert.notEqual(outcome.state, "pending", "the precontinue refresh outlived its route deadline");
+			if (outcome.state === "pending") assert.fail("the precontinue refresh remained pending");
+			assert.equal(refreshes, 1);
+			assert.equal(outcome.result.terminal, "handoff");
+			assert.equal(outcome.result.nextGate, "park");
+			assert.ok(outcome.result.recordRef);
+			const directory = join(stateRoot, "gitjig", "recovery");
+			const durable = JSON.parse(
+				readFileSync(
+					join(directory, `r2-${outcome.result.recordRef.repoHash}-${outcome.result.recordRef.keyHash}.json`),
+					"utf8",
+				),
+			);
+			assert.equal(durable.state, "consumed");
+			assert.equal(durable.terminal, "handoff");
+			assert.equal(durable.nextGate, "park");
+		} finally {
+			if (watchdog !== undefined) clearTimeout(watchdog);
+			Object.defineProperty(performance, "now", { configurable: true, value: original });
+		}
+	});
+
 	it("persists the one missing-return retry with global attempt order and nonempty retrySlots", async () => {
 		const current = {
 			...subject,

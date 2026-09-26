@@ -713,7 +713,18 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 			route === "stagnation" ? "author-repair" : reentry === "plan" ? "planning" : "ordinary-flow";
 		if (overRetainedBudget(consumedRecord("continue", null, prospectiveGate))) return finalizeHandoff();
 		if (performance.now() >= routeDeadline) return finalizeHandoff();
-		const refreshed = await input.refreshPrecontinue();
+		const refreshRemaining = routeDeadline - performance.now();
+		if (refreshRemaining <= 0) return finalizeHandoff();
+		let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+		let refreshed: RecoveryFreshness | undefined;
+		try {
+			const refreshDeadline = new Promise<undefined>((resolve) => {
+				refreshTimer = setTimeout(() => resolve(undefined), refreshRemaining);
+			});
+			refreshed = await Promise.race([input.refreshPrecontinue(), refreshDeadline]);
+		} finally {
+			if (refreshTimer !== undefined) clearTimeout(refreshTimer);
+		}
 		if (performance.now() >= routeDeadline) return finalizeHandoff();
 		if (refreshed === undefined || !sameFreshness(refreshed, input.subject, input.history, input.basis))
 			return finalizeHandoff();
