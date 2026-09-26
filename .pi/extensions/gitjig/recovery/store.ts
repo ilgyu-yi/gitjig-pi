@@ -9,6 +9,7 @@ import {
 	openSync,
 	readSync,
 	renameSync,
+	unlinkSync,
 	writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -741,6 +742,7 @@ export function finalizeAllowance(claim: AllowanceClaim, record: ConsumedRecordV
 		readFd = undefined;
 		const temporary = join(resolved, `.gitjig-recovery-${randomUUID()}.tmp`);
 		let tempFd: number | undefined;
+		let temporaryRenamed = false;
 		try {
 			tempFd = openSync(temporary, CLAIM_FLAGS, FILE_MODE);
 			if (safeFileStat(temporary, tempFd) === undefined) throw new Error("terminal temp predicates failed");
@@ -749,6 +751,7 @@ export function finalizeAllowance(claim: AllowanceClaim, record: ConsumedRecordV
 			closeSync(tempFd);
 			tempFd = undefined;
 			renameSync(temporary, state.path);
+			temporaryRenamed = true;
 			syncDirectory(resolved);
 			const finalFd = openSync(state.path, READ_FLAGS);
 			try {
@@ -764,6 +767,14 @@ export function finalizeAllowance(claim: AllowanceClaim, record: ConsumedRecordV
 				try {
 					closeSync(tempFd);
 				} catch {}
+			if (!temporaryRenamed) {
+				try {
+					unlinkSync(temporary);
+				} catch {}
+				try {
+					syncDirectory(resolved);
+				} catch {}
+			}
 		}
 	} catch {
 		return { status: "consumed-unverified", recordRef: state.recordRef };

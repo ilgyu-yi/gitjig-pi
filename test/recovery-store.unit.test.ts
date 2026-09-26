@@ -195,16 +195,22 @@ describe("state-domain allowance store", () => {
 		assert.equal(finalizeAllowance(first.claim, consumed(claimed)).status, "consumed-unverified");
 	});
 
-	it("rejects a special-bit allowance leaf as non-exact mode 0600", () => {
-		const current = subject("PR_SPECIAL_MODE");
-		const first = claimAllowance({ subject: current, record: record(current) });
-		assert.equal(first.status, "claimed");
-		const path = join(stateRoot, "gitjig", "recovery", encoding(current).leaf);
-		chmodSync(path, 0o4600);
-		assert.deepEqual(claimAllowance({ subject: current, record: record(current) }), {
-			status: "consumed",
-			cause: "existing",
-		});
+	it("rejects sticky, setgid, and setuid allowance leaves as non-exact mode 0600", () => {
+		for (const [name, mode] of [
+			["sticky", 0o1600],
+			["setgid", 0o2600],
+			["setuid", 0o4600],
+		] as const) {
+			const current = subject(`PR_SPECIAL_MODE_${name}`);
+			const first = claimAllowance({ subject: current, record: record(current) });
+			assert.equal(first.status, "claimed");
+			const path = join(stateRoot, "gitjig", "recovery", encoding(current).leaf);
+			chmodSync(path, mode);
+			assert.deepEqual(claimAllowance({ subject: current, record: record(current) }), {
+				status: "consumed",
+				cause: "existing",
+			});
+		}
 	});
 
 	it("admits exactly one winner across synchronized competing processes", async () => {
@@ -257,7 +263,7 @@ describe("state-domain allowance store", () => {
 			const shim = join(box, "fs-shim.mjs");
 			writeFileSync(
 				shim,
-				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0&&String(path).endsWith(".json")){fs.appendFileSync(process.env.ARRIVALS,"x");const until=Date.now()+5000;while(fs.readFileSync(process.env.ARRIVALS).length<2&&Date.now()<until)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);}return fs.openSync(path,flags,mode);}\n`,
+				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,readSync,renameSync,unlinkSync,writeSync}=fs;\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0&&String(path).endsWith(".json")){fs.appendFileSync(process.env.ARRIVALS,"x");const until=Date.now()+5000;while(fs.readFileSync(process.env.ARRIVALS).length<2&&Date.now()<until)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);}return fs.openSync(path,flags,mode);}\n`,
 			);
 			const target = join(box, "gitjig", "recovery", "store.ts");
 			const original = readFileSync(target, "utf8");
@@ -310,7 +316,7 @@ describe("state-domain allowance store", () => {
 		const probe = `
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
-import {readFileSync} from "node:fs";
+import {readFileSync,readdirSync} from "node:fs";
 import {claimAllowance,finalizeAllowance} from "./gitjig/recovery/store.ts";
 import {deriveAllowancePathEncoding} from "./gitjig/recovery/lineage.ts";
 const subject={context:{repository:{id:"R",host:"github.com",nameWithOwner:"o/r"},pullRequest:{id:"P",number:1,url:"https://github.com/o/r/pull/1",authorId:"A",base:{repositoryId:"R",name:"main",oid:"a".repeat(40)},head:{repositoryId:"R",name:"topic",oid:"b".repeat(40)},closingIssues:[]}},writerId:"W",activation:[],criteria:[]};
@@ -335,7 +341,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,openSync,readSync,renameSync,writeSync}=fs;\nexport function fsyncSync(fd){fs.appendFileSync(process.env.FSYNC_LOG,fs.fstatSync(fd).isDirectory()?"d":"f");return fs.fsyncSync(fd);}\n`,
+					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,lstatSync,openSync,readSync,renameSync,unlinkSync,writeSync}=fs;\nexport function fsyncSync(fd){fs.appendFileSync(process.env.FSYNC_LOG,fs.fstatSync(fd).isDirectory()?"d":"f");return fs.fsyncSync(fd);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
@@ -355,9 +361,10 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 					source = source.replace(from, "\t\t\twriteComplete(tempFd, bytes);");
 				}
 				if (variant === "terminal-parent-mutant") {
-					const from = "\t\t\trenameSync(temporary, state.path);\n\t\t\tsyncDirectory(resolved);";
+					const from =
+						"\t\t\trenameSync(temporary, state.path);\n\t\t\ttemporaryRenamed = true;\n\t\t\tsyncDirectory(resolved);";
 					assert.ok(source.includes(from));
-					source = source.replace(from, "\t\t\trenameSync(temporary, state.path);");
+					source = source.replace(from, "\t\t\trenameSync(temporary, state.path);\n\t\t\ttemporaryRenamed = true;");
 				}
 				writeFileSync(target, source);
 				writeFileSync(join(box, "probe.mjs"), probe);
@@ -385,7 +392,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		assert.ok(probe);
 		const replaced = probe.replace(
 			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"finalized");\nassert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");',
-			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"consumed-unverified"); assert.equal(claimAllowance({subject,record}).status,"consumed");',
+			'assert.equal(finalizeAllowance(claim.claim,consumed).status,"consumed-unverified"); assert.equal(claimAllowance({subject,record}).status,"consumed"); assert.deepEqual(readdirSync(process.env.XDG_STATE_HOME+"/gitjig/recovery").filter(name=>name.endsWith(".tmp")),[]);',
 		);
 		assert.notEqual(replaced, probe);
 		for (const failure of [
@@ -408,7 +415,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
+					`import * as fs from "node:fs";\nexport const {constants,fstatSync,lstatSync,unlinkSync}=fs;\nlet f=0,d=0,w=0,c=0,r=0; const fail=(point)=>{if(process.env.FAIL_ON===point){const error=new Error("injected");error.code="EIO";throw error;}};\nexport function fsyncSync(fd){const directory=fs.fstatSync(fd).isDirectory();const n=directory?++d:++f;fail((directory?"d":"f")+String(n));return fs.fsyncSync(fd);}\nexport function writeSync(...args){fail("w"+String(++w));return fs.writeSync(...args);}\nexport function closeSync(fd){fail("c"+String(++c));return fs.closeSync(fd);}\nexport function readSync(...args){fail("r"+String(++r));return fs.readSync(...args);}\nexport function openSync(path,...args){if(String(path).endsWith(".tmp"))fail("temp-create");return fs.openSync(path,...args);}\nexport function renameSync(...args){fail("rename");return fs.renameSync(...args);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				writeFileSync(
@@ -506,7 +513,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs"; export const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,writeSync}=fs; let reads=0; export function readSync(...args){if(++reads===3){const error=new Error("post-read failure");error.code="EIO";throw error;}return fs.readSync(...args);}`,
+					`import * as fs from "node:fs"; export const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,unlinkSync,writeSync}=fs; let reads=0; export function readSync(...args){if(++reads===3){const error=new Error("post-read failure");error.code="EIO";throw error;}return fs.readSync(...args);}`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				let source = readFileSync(target, "utf8").replace('"node:fs"', JSON.stringify(new URL(`file://${shim}`).href));
@@ -540,7 +547,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 				const shim = join(box, "fs-shim.mjs");
 				writeFileSync(
 					shim,
-					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,readSync,renameSync,writeSync}=fs;\nexport function lstatSync(path){if(process.env.OPEN_CODE==="LSTAT_EIO"&&String(path).endsWith(".json")){const error=new Error("injected");error.code="EIO";throw error;}return fs.lstatSync(path);}\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){if(process.env.OPEN_CODE==="EIO"){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);}const error=new Error("injected");error.code=process.env.OPEN_CODE;throw error;}return fs.openSync(path,flags,mode);}\n`,
+					`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,readSync,renameSync,unlinkSync,writeSync}=fs;\nexport function lstatSync(path){if(process.env.OPEN_CODE==="LSTAT_EIO"&&String(path).endsWith(".json")){const error=new Error("injected");error.code="EIO";throw error;}return fs.lstatSync(path);}\nexport function openSync(path,flags,mode){if((flags&fs.constants.O_CREAT)!==0){if(process.env.OPEN_CODE==="EIO"){const fd=fs.openSync(path,flags,mode);fs.closeSync(fd);}const error=new Error("injected");error.code=process.env.OPEN_CODE;throw error;}return fs.openSync(path,flags,mode);}\n`,
 				);
 				const target = join(box, "gitjig", "recovery", "store.ts");
 				writeFileSync(
@@ -581,7 +588,7 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 			const shim = join(box, "fs-shim.mjs");
 			writeFileSync(
 				shim,
-				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,writeSync}=fs;\nexport function readSync(fd,buffer,offset,length,position){fs.appendFileSync(process.env.READ_LOG,String(buffer.length)+"\\n");return fs.readSync(fd,buffer,offset,length,position);}\n`,
+				`import * as fs from "node:fs";\nexport const {closeSync,constants,fstatSync,fsyncSync,lstatSync,openSync,renameSync,unlinkSync,writeSync}=fs;\nexport function readSync(fd,buffer,offset,length,position){fs.appendFileSync(process.env.READ_LOG,String(buffer.length)+"\\n");return fs.readSync(fd,buffer,offset,length,position);}\n`,
 			);
 			const target = join(box, "gitjig", "recovery", "store.ts");
 			writeFileSync(

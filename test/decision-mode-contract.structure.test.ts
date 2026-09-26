@@ -102,7 +102,14 @@ function staticString(
 	seen: ReadonlySet<ts.Symbol> = new Set(),
 ): string | undefined {
 	if (ts.isStringLiteralLike(node)) return node.text;
-	if (ts.isParenthesizedExpression(node)) return staticString(node.expression, checker, seen);
+	if (
+		ts.isParenthesizedExpression(node) ||
+		ts.isAsExpression(node) ||
+		ts.isTypeAssertionExpression(node) ||
+		ts.isSatisfiesExpression(node) ||
+		ts.isNonNullExpression(node)
+	)
+		return staticString(node.expression, checker, seen);
 	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
 		const left = staticString(node.left, checker, seen);
 		const right = staticString(node.right, checker, seen);
@@ -266,6 +273,10 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
 					'const leakedStorePath = "../recovery/store.ts";\nexport const leakedStoreCapabilitiesViaAlias = import(leakedStorePath);',
+				],
+				[
+					".pi/extensions/gitjig/review/orchestrate.ts",
+					'const typedStorePath = "../recovery/store.ts" as const;\nexport const leakedStoreCapabilitiesViaTypedAlias = import(typedStorePath);',
 				],
 			] as const) {
 				const target = join(copy, path);
