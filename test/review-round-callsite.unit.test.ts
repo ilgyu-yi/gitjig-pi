@@ -274,7 +274,15 @@ function repairRecord(head: string): ReviewRecord {
 		adjudication: {
 			dedupAttested: true,
 			rulings: [
-				{ finding, provenance: [SLOT], validity: "CONFIRMED", severity: "SUBSTANTIVE", evidence: "inspection" },
+				{
+					finding,
+					provenance: [SLOT],
+					validity: "CONFIRMED",
+					severity: "SUBSTANTIVE",
+					direction: "fail-closed",
+					onCriterion: true,
+					evidence: "inspection",
+				},
 			],
 		},
 		review: {
