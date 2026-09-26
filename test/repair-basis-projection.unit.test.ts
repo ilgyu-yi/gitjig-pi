@@ -349,6 +349,28 @@ describe("issue #238 repair-basis projection", () => {
 		);
 	});
 
+	it("withholds an omitted or invented same-slot raw contribution without guessing finding text", async () => {
+		const root = repo();
+		const a = commit(root, "a", "first");
+		const b = commit(root, "a", "second");
+		const finding: Finding = {
+			finding: "raw one",
+			validity: "CONFIRMED",
+			severity: "SUBSTANTIVE",
+			disposition: "repair",
+		};
+		const first = record(a, [finding, { ...finding, finding: "raw two" }]);
+		if (first.adjudication === null || first.review.state !== "resolved") throw new Error("bad fixture");
+		const slot = first.bundle[0].slot;
+		first.adjudication.rulings = [{ ...first.adjudication.rulings[0], finding: "merged", provenance: [slot] }];
+		first.review.resolution.dispositions = [{ finding: "merged", disposition: "repair" }];
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+		first.adjudication.rulings[0].provenance = [slot, slot];
+		assert.ok(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]));
+		first.adjudication.rulings[0].provenance = [slot, slot, slot];
+		assert.equal(await deriveRepairBasis(root, [state(first), state(record(b, [finding]))]), undefined);
+	});
+
 	it("withholds when a contributing raw slot has no Judge attribution or rulings vanish", async () => {
 		const root = repo();
 		const a = commit(root, "a", "first");

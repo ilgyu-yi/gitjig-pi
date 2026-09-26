@@ -33,10 +33,10 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("!adjudication.dedupAttested ||") &&
 		history.includes("record.bundle.length === 0 ||") &&
 		history.includes("adjudication.rulings.length > record.bundle.length") &&
-		history.includes("const slots = new Set(record.bundle.map") &&
-		history.includes("const unattributedSlots = new Set(slots)") &&
-		history.includes("unattributedSlots.delete(key)") &&
-		history.includes("if (unattributedSlots.size !== 0) return undefined") &&
+		history.includes("const remaining = new Map<string, number>()") &&
+		history.includes("remaining.set(key, (remaining.get(key) ?? 0) + 1)") &&
+		history.includes("remaining.set(key, count - 1)") &&
+		history.includes("[...remaining.values()].some((count) => count !== 0)") &&
 		history.includes("if (joined.has(entry.finding)) return undefined") &&
 		history.includes("rulings.size !== dispositions.size") &&
 		history.includes("ruling.provenance.length === 0 || !ruling.evidence") &&
@@ -44,7 +44,7 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("ruling.direction === undefined ||") &&
 		history.includes("ruling.onCriterion === undefined ||") &&
 		history.includes('ruling.severity === "NIT" && !ruling.remedy') &&
-		history.includes("if (!slots.has(key)) return undefined") &&
+		history.includes("if (count === undefined || count === 0) return undefined") &&
 		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
@@ -110,23 +110,9 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace("!adjudication.dedupAttested ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace("record.bundle.length === 0 ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace("adjudication.rulings.length > record.bundle.length", "false"), CALLER],
-			[
-				INTERVAL,
-				HISTORY.replace("const slots = new Set(record.bundle.map", "const slots = new Set(record.bundle.flatMap"),
-				CALLER,
-			],
+			[INTERVAL, HISTORY.replace("remaining.set(key, count - 1)", "remaining.set(key, count)"), CALLER],
 			[INTERVAL, HISTORY.replace("disposition?.finding !== ruling.finding", "false"), CALLER],
-			[
-				INTERVAL,
-				HISTORY.replace("const unattributedSlots = new Set(slots)", "const unattributedSlots = new Set()"),
-				CALLER,
-			],
-			[INTERVAL, HISTORY.replace("unattributedSlots.delete(key)", "void key"), CALLER],
-			[
-				INTERVAL,
-				HISTORY.replace("if (unattributedSlots.size !== 0) return undefined", "if (false) return undefined"),
-				CALLER,
-			],
+			[INTERVAL, HISTORY.replace("[...remaining.values()].some((count) => count !== 0)", "false"), CALLER],
 			[
 				INTERVAL,
 				HISTORY.replace("if (joined.has(entry.finding)) return undefined", "if (false) return undefined"),
@@ -138,7 +124,11 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace("ruling.direction === undefined ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace("ruling.onCriterion === undefined ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace('ruling.severity === "NIT" && !ruling.remedy', "false"), CALLER],
-			[INTERVAL, HISTORY.replace("if (!slots.has(key)) return undefined", "if (false) return undefined"), CALLER],
+			[
+				INTERVAL,
+				HISTORY.replace("if (count === undefined || count === 0) return undefined", "if (false) return undefined"),
+				CALLER,
+			],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
 			[
 				INTERVAL,

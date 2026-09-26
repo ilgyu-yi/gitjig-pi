@@ -268,8 +268,14 @@ export async function deriveRepairBasis(
 		// or positional pairing between it and the Judge's rulings.
 		if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length > record.bundle.length)
 			return undefined;
-		const slots = new Set(record.bundle.map(({ slot }) => JSON.stringify([slot.lens, slot.surface])));
-		const unattributedSlots = new Set(slots);
+		// Preserve the raw provenance MULTISET, not merely the set of slots:
+		// two findings from one slot still contribute two provenance entries.
+		// This checks counts without guessing a raw-to-effective finding pairing.
+		const remaining = new Map<string, number>();
+		for (const { slot } of record.bundle) {
+			const key = JSON.stringify([slot.lens, slot.surface]);
+			remaining.set(key, (remaining.get(key) ?? 0) + 1);
+		}
 		const rulings = uniqueByFinding(adjudication.rulings);
 		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
 		if (rulings === undefined || dispositions === undefined || rulings.size !== dispositions.size) return undefined;
@@ -293,17 +299,18 @@ export async function deriveRepairBasis(
 				// record.ts already admits only slots with string lens/surface; do not
 				// duplicate its wire predicate in this read-time relation.
 				const key = JSON.stringify([slot.lens, slot.surface]);
-				if (!slots.has(key)) return undefined;
-				unattributedSlots.delete(key);
+				const count = remaining.get(key);
+				if (count === undefined || count === 0) return undefined;
+				remaining.set(key, count - 1);
 			}
 			const disposition = record.review.resolution.dispositions[index];
 			if (disposition?.finding !== ruling.finding) return undefined;
 			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
 				findings.push({ finding: ruling.finding, ruling, disposition });
 		}
-		// Dedup may merge raw findings, but never discard a contributing slot.
-		// Do not guess which of several raw findings within one slot was merged.
-		if (unattributedSlots.size !== 0) return undefined;
+		// Every raw contribution is retained, even when a slot recurs. Judge
+		// attestation remains the semantic authority for the dedup itself.
+		if ([...remaining.values()].some((count) => count !== 0)) return undefined;
 		states.push({ head: state.head, findings });
 	}
 	const intervals = await readCorrectionIntervals(
