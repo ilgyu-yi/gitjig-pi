@@ -113,6 +113,21 @@ function isAllowlistedDynamicImport(path: string, node: ts.CallExpression): bool
 	return false;
 }
 
+const ALLOWED_PROCESS_CALLS = new Set([
+	"process.argv.indexOf",
+	"process.argv.slice",
+	"process.cwd",
+	"process.geteuid",
+	"process.kill",
+	"process.stdout.write",
+]);
+
+function processCallRoot(expression: ts.Expression): ts.Expression {
+	let current = expression;
+	while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) current = current.expression;
+	return current;
+}
+
 function literalModuleSpecifiers(path: string, source: string): string[] {
 	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	const specifiers: string[] = [];
@@ -125,11 +140,17 @@ function literalModuleSpecifiers(path: string, source: string): string[] {
 		specifiers.push(expression.text);
 	}
 	function visit(node: ts.Node): void {
-		if (
-			ts.isIdentifier(node) &&
-			(node.text === "require" || node.text === "createRequire" || node.text === "getBuiltinModule")
-		)
+		if (ts.isIdentifier(node) && (node.text === "require" || node.text === "createRequire"))
 			assert.fail(`CommonJS loader denied through ${path}: ${node.text}`);
+		if (
+			ts.isCallExpression(node) &&
+			ts.isIdentifier(processCallRoot(node.expression)) &&
+			(processCallRoot(node.expression) as ts.Identifier).text === "process"
+		)
+			assert.ok(
+				ALLOWED_PROCESS_CALLS.has(node.expression.getText(tree)),
+				`unrecognized process call denied through ${path}: ${node.expression.getText(tree)}`,
+			);
 		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined)
 			retainLiteral(node.moduleSpecifier, "nonliteral module specifier");
 		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
@@ -276,7 +297,7 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
 					'const __module = process.getBuiltinModule("node:module");\nconst __makeRequire = __module["create" + "Require"];\nconst __builtinRequire = __makeRequire(import.meta.url);\nexport const __builtinStoreCapabilities = __builtinRequire("../recovery/store.ts");',
-					/CommonJS loader denied/,
+					/unrecognized process call denied/,
 				],
 				[
 					".pi/extensions/gitjig/review/orchestrate.ts",
