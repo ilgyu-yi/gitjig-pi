@@ -12,6 +12,7 @@ import {
 	fetchReviewSubject,
 	type PlatformAuthorAssociation,
 	type PlatformIssueSnapshot,
+	refetchReviewSubject,
 } from "../.pi/extensions/gitjig/review/subject.ts";
 
 const issue: PlatformIssueSnapshot = {
@@ -174,8 +175,10 @@ describe("review subject criterion union", () => {
 			"#212: current-only criterion",
 		]);
 		assert.deepEqual(await admitReviewSubject(subject), subject);
+		const unchanged = platformResponses([[...comments.map(toWire)]]);
+		assert.deepEqual(await refetchReviewSubject("/repo", subject, async () => unchanged.shift()), subject);
 		const changed = platformResponses([[...comments.map(toWire), toWire(verdict("WRITER", 5))]]);
-		assert.equal(await fetchReviewSubject("/repo", 223, async () => changed.shift()), undefined);
+		assert.equal(await refetchReviewSubject("/repo", subject, async () => changed.shift()), undefined);
 	});
 
 	it("never falls back when a newer activation tail is incomplete or ambiguous", () => {
