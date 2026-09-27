@@ -890,6 +890,10 @@
 			"disposition": "instance-state"
 		},
 		{
+			"path": "changelog_unreleased/fixed/366.md",
+			"disposition": "instance-state"
+		},
+		{
 			"path": "changelog_unreleased/fixed/43.md",
 			"disposition": "instance-state"
 		},

@@ -51,14 +51,14 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 		kill(
 			"stale-identity",
 			".github/workflows/ac-closeout.mjs",
-			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==",
 			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===",
+			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==",
 		);
 		kill(
 			"stale-head",
 			".github/workflows/ac-closeout.mjs",
-			"record.headSha !== input.headSha || record.baseSha !== input.baseSha",
-			"record.headSha !== input.headSha && record.baseSha !== input.baseSha",
+			"record.headSha === input.headSha && record.baseSha === input.baseSha",
+			"record.headSha === input.headSha || record.baseSha === input.baseSha",
 		);
 		kill(
 			"unattested-writer",
@@ -66,7 +66,7 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"record.writerId !== comment.authorId",
 			"record.writerId === comment.authorId",
 		);
-		kill("duplicate", ".github/workflows/ac-closeout.mjs", "marked.length !== 1", "marked.length === 1");
+		kill("duplicate", ".github/workflows/ac-closeout.mjs", "current.length !== 1", "current.length === 1");
 		kill(
 			"unresolved-item",
 			".github/workflows/ac-closeout.mjs",

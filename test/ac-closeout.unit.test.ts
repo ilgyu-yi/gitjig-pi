@@ -84,6 +84,71 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.deepEqual(evaluateAcCloseout(subject), { ok: true, arm: "pass" });
 	});
 
+	it("supersedes admitted immutable records from an old PR, head, base, or criterion set", () => {
+		const value = copy(subject);
+		for (const stale of [
+			{ ...record, pullRequestId: "OLD_PR", pullRequestNumber: 281 },
+			{ ...record, headSha: "c".repeat(40) },
+			{ ...record, baseSha: "d".repeat(40) },
+			{ ...record, criteria: [{ identity: "#282: old criterion", disposition: "checked" }] },
+		]) {
+			value.closingIssues[0].comments.unshift({
+				body: `${AC_CLOSEOUT_MARKER}\n${JSON.stringify(stale)}`,
+				authorId: "USER",
+				createdAt: "2026-03-12T00:00:00Z",
+				updatedAt: "2026-03-12T00:00:00Z",
+			});
+		}
+		assert.deepEqual(evaluateAcCloseout(value), { ok: true, arm: "pass" });
+		assert.equal(value.closingIssues[0].comments.length, 5);
+	});
+
+	it("refuses an invalid historical marker even beside one exact current record", () => {
+		for (const [mutate, arm] of [
+			[
+				(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+					comment.body = `${AC_CLOSEOUT_MARKER}\n{}`;
+				},
+				"evidence-malformed",
+			],
+			[
+				(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+					comment.updatedAt = "2026-03-12T00:00:01Z";
+				},
+				"evidence-edited",
+			],
+			[
+				(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+					comment.authorId = "OTHER";
+				},
+				"writer-unattested",
+			],
+		] as const) {
+			const value = copy(subject);
+			const historical = copy(value.closingIssues[0].comments[0]);
+			historical.body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({ ...record, pullRequestId: "OLD_PR" })}`;
+			mutate(historical);
+			value.closingIssues[0].comments.unshift(historical);
+			assert.equal(evaluateAcCloseout(value).arm, arm);
+		}
+	});
+
+	it("refuses a copied repository or Issue record even when current evidence exists", () => {
+		for (const stale of [
+			{ ...record, repositoryId: "OTHER" },
+			{ ...record, issueId: "OTHER" },
+		]) {
+			const value = copy(subject);
+			value.closingIssues[0].comments.unshift({
+				body: `${AC_CLOSEOUT_MARKER}\n${JSON.stringify(stale)}`,
+				authorId: "USER",
+				createdAt: "2026-03-12T00:00:00Z",
+				updatedAt: "2026-03-12T00:00:00Z",
+			});
+			assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
+		}
+	});
+
 	it("refuses every malformed subject, Issue, criterion and record shape", () => {
 		assert.equal(evaluateAcCloseout({}).arm, "subject-malformed");
 		assert.equal(closeoutCriteria({ id: "ISSUE", number: 0, body: "" }).arm, "issue-malformed");

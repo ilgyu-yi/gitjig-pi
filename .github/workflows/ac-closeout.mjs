@@ -202,27 +202,36 @@ export function evaluateAcCloseout(input) {
 				typeof comment?.body === "string" && comment.body.includes(AC_CLOSEOUT_MARKER),
 		);
 		if (marked.length === 0) return { ok: false, arm: "evidence-absent" };
-		if (marked.length !== 1) return { ok: false, arm: "evidence-ambiguous" };
-		const comment = marked[0];
-		const record = parseCloseoutRecord(comment.body);
-		if (!admitCloseoutRecord(record)) return { ok: false, arm: "evidence-malformed" };
-		if (comment.createdAt !== comment.updatedAt) return { ok: false, arm: "evidence-edited" };
-		if (!text(comment.authorId) || record.writerId !== comment.authorId) return { ok: false, arm: "writer-unattested" };
-		if (
-			record.repositoryId !== input.repositoryId ||
-			record.issueId !== issue.id ||
-			record.issueNumber !== issue.number ||
-			record.pullRequestId !== input.pullRequestId ||
-			record.pullRequestNumber !== input.pullRequestNumber
-		)
-			return { ok: false, arm: "evidence-copied" };
-		if (record.headSha !== input.headSha || record.baseSha !== input.baseSha)
-			return { ok: false, arm: "evidence-stale-subject" };
-		if (
-			JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==
-			JSON.stringify(derived.criteria)
-		)
-			return { ok: false, arm: "evidence-stale-criteria" };
+		const admitted = [];
+		for (const comment of marked) {
+			const record = parseCloseoutRecord(comment.body);
+			if (!admitCloseoutRecord(record)) return { ok: false, arm: "evidence-malformed" };
+			if (comment.createdAt !== comment.updatedAt) return { ok: false, arm: "evidence-edited" };
+			if (!text(comment.authorId) || record.writerId !== comment.authorId)
+				return { ok: false, arm: "writer-unattested" };
+			if (
+				record.repositoryId !== input.repositoryId ||
+				record.issueId !== issue.id ||
+				record.issueNumber !== issue.number
+			)
+				return { ok: false, arm: "evidence-copied" };
+			admitted.push(record);
+		}
+		const pullCandidates = admitted.filter(
+			(record) => record.pullRequestId === input.pullRequestId && record.pullRequestNumber === input.pullRequestNumber,
+		);
+		if (pullCandidates.length === 0) return { ok: false, arm: "evidence-copied" };
+		const subjectCandidates = pullCandidates.filter(
+			(record) => record.headSha === input.headSha && record.baseSha === input.baseSha,
+		);
+		if (subjectCandidates.length === 0) return { ok: false, arm: "evidence-stale-subject" };
+		const current = subjectCandidates.filter(
+			(record) =>
+				JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===
+				JSON.stringify(derived.criteria),
+		);
+		if (current.length === 0) return { ok: false, arm: "evidence-stale-criteria" };
+		if (current.length !== 1) return { ok: false, arm: "evidence-ambiguous" };
 	}
 	return { ok: true, arm: "pass" };
 }
