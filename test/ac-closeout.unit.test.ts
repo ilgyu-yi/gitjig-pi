@@ -364,7 +364,7 @@ describe("handed-over ac-closeout predicate", () => {
 		it(`refuses ${name}`, () => {
 			const value = copy(subject);
 			mutate(value);
-			assert.equal(evaluateAcCloseout(value).arm, arm);
+			assert.deepEqual(evaluateAcCloseout(value), { ok: false, arm });
 		});
 	}
 });
