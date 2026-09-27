@@ -66,6 +66,18 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"record.writerId !== comment.authorId",
 			"record.writerId === comment.authorId",
 		);
+		kill(
+			"issue-number",
+			".github/workflows/ac-closeout.mjs",
+			"record.issueNumber !== issue.number",
+			"record.issueNumber === issue.number",
+		);
+		kill(
+			"pull-number",
+			".github/workflows/ac-closeout.mjs",
+			"record.pullRequestNumber === input.pullRequestNumber",
+			"record.pullRequestNumber !== input.pullRequestNumber",
+		);
 		kill("duplicate", ".github/workflows/ac-closeout.mjs", "current.length !== 1", "current.length === 1");
 		kill(
 			"unresolved-item",

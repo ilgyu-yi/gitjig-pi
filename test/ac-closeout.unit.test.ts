@@ -137,6 +137,7 @@ describe("handed-over ac-closeout predicate", () => {
 		for (const stale of [
 			{ ...record, repositoryId: "OTHER" },
 			{ ...record, issueId: "OTHER" },
+			{ ...record, issueNumber: 281 },
 		]) {
 			const value = copy(subject);
 			value.closingIssues[0].comments.unshift({
@@ -147,6 +148,15 @@ describe("handed-over ac-closeout predicate", () => {
 			});
 			assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
 		}
+	});
+
+	it("refuses a record whose PR id matches but numeric PR identity does not", () => {
+		const value = copy(subject);
+		value.closingIssues[0].comments[0].body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({
+			...record,
+			pullRequestNumber: 284,
+		})}`;
+		assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
 	});
 
 	it("refuses every malformed subject, Issue, criterion and record shape", () => {
