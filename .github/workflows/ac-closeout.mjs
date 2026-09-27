@@ -39,7 +39,10 @@ function positive(value) {
 }
 /** @param {any} value */
 function instant(value) {
-	return text(value) && Number.isFinite(Date.parse(value));
+	if (!text(value)) return false;
+	const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{3}))?Z$/.exec(value);
+	if (match === null || !Number.isFinite(Date.parse(value))) return false;
+	return new Date(value).toISOString() === (match[2] === undefined ? `${match[1]}.000Z` : value);
 }
 
 /** Preserve the existing full-item, Issue-prefixed, EMPTY-never-absent derivation. */

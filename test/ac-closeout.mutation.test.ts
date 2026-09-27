@@ -73,6 +73,12 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"instant(comment.createdAt) ||",
 		);
 		kill(
+			"calendar-instant",
+			".github/workflows/ac-closeout.mjs",
+			"return new Date(value).toISOString() === (match[2] === undefined ? `${match[1]}.000Z` : value);",
+			"return true;",
+		);
+		kill(
 			"issue-number",
 			".github/workflows/ac-closeout.mjs",
 			"record.issueNumber !== issue.number",

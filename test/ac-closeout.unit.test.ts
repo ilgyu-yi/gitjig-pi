@@ -169,6 +169,10 @@ describe("handed-over ac-closeout predicate", () => {
 				comment.createdAt = "not-an-instant";
 				comment.updatedAt = "not-an-instant";
 			},
+			(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+				comment.createdAt = "2026-02-30T00:00:00Z";
+				comment.updatedAt = "2026-02-30T00:00:00Z";
+			},
 		]) {
 			const value = copy(subject);
 			mutate(value.closingIssues[0].comments[0]);
