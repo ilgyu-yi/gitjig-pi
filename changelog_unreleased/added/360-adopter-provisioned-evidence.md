@@ -1,0 +1,1 @@
+- Prove in a hermetic integration fixture that reviewed adopter delivery and local provision produce target-local Tier-1, Tier-2, and executable Tier-3 behavior that survives removal of the source snapshot.
