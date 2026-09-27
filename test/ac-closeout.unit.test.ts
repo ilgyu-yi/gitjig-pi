@@ -197,12 +197,14 @@ describe("handed-over ac-closeout predicate", () => {
 				"writer-unattested",
 			],
 		] as const) {
-			const value = copy(subject);
-			const historical = copy(value.closingIssues[0].comments[0]);
-			historical.body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({ ...record, pullRequestId: "OLD_PR" })}`;
-			mutate(historical);
-			value.closingIssues[0].comments.unshift(historical);
-			assert.equal(evaluateAcCloseout(value).arm, arm);
+			for (const position of ["before", "after"] as const) {
+				const value = copy(subject);
+				const historical = copy(value.closingIssues[0].comments[0]);
+				historical.body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({ ...record, pullRequestId: "OLD_PR" })}`;
+				mutate(historical);
+				value.closingIssues[0].comments[position === "before" ? "unshift" : "push"](historical);
+				assert.equal(evaluateAcCloseout(value).arm, arm);
+			}
 		}
 	});
 
@@ -249,14 +251,16 @@ describe("handed-over ac-closeout predicate", () => {
 			{ ...record, issueId: "OTHER" },
 			{ ...record, issueNumber: 281 },
 		]) {
-			const value = copy(subject);
-			value.closingIssues[0].comments.unshift({
-				body: `${AC_CLOSEOUT_MARKER}\n${JSON.stringify(stale)}`,
-				authorId: "USER",
-				createdAt: "2026-03-12T00:00:00Z",
-				updatedAt: "2026-03-12T00:00:00Z",
-			});
-			assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
+			for (const position of ["before", "after"] as const) {
+				const value = copy(subject);
+				value.closingIssues[0].comments[position === "before" ? "unshift" : "push"]({
+					body: `${AC_CLOSEOUT_MARKER}\n${JSON.stringify(stale)}`,
+					authorId: "USER",
+					createdAt: "2026-03-12T00:00:00Z",
+					updatedAt: "2026-03-12T00:00:00Z",
+				});
+				assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
+			}
 		}
 	});
 

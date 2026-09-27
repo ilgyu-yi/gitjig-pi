@@ -97,6 +97,24 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"if (population.every(({ record }) => !admitCloseoutRecord(record)))",
 		);
 		kill(
+			"edited-complete-population",
+			".github/workflows/ac-closeout.mjs",
+			"population.some(\n\t\t\t\t({ comment }) =>",
+			"population.slice(0, 1).some(\n\t\t\t\t({ comment }) =>",
+		);
+		kill(
+			"writer-complete-population",
+			".github/workflows/ac-closeout.mjs",
+			"population.some(({ comment, record }) => record.writerId !== comment.authorId)",
+			"population.slice(0, 1).some(({ comment, record }) => record.writerId !== comment.authorId)",
+		);
+		kill(
+			"copied-complete-population",
+			".github/workflows/ac-closeout.mjs",
+			"population.some(\n\t\t\t\t({ record }) =>",
+			"population.slice(0, 1).some(\n\t\t\t\t({ record }) =>",
+		);
+		kill(
 			"created-instant",
 			".github/workflows/ac-closeout.mjs",
 			"!instant(comment.createdAt) ||",
