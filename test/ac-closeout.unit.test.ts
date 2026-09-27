@@ -45,6 +45,9 @@ const subject = {
 };
 
 const copy = <T>(value: T): T => structuredClone(value);
+const assertRefusal = (actual: unknown, arm: string): void => {
+	assert.deepEqual(actual, { ok: false, arm });
+};
 
 describe("handed-over ac-closeout predicate", () => {
 	it("preserves the review manifest grammar while normalizing only closeout identities", () => {
@@ -52,9 +55,9 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.deepEqual(criteriaFromClosingIssues([issue]), ["#282: [ ] exact closeout works"]);
 		assert.deepEqual(closeoutCriteria(issue), { ok: true, criteria: [identity] });
 		assert.deepEqual(criteriaFromClosingIssues([]), []);
-		assert.equal(closeoutCriteria({ ...issue, body: "## Acceptance criteria" }).arm, "criteria-absent");
-		assert.equal(
-			closeoutCriteria({ ...issue, body: "## Acceptance criteria\n- [~] N/A — no" }).arm,
+		assertRefusal(closeoutCriteria({ ...issue, body: "## Acceptance criteria" }), "criteria-absent");
+		assertRefusal(
+			closeoutCriteria({ ...issue, body: "## Acceptance criteria\n- [~] N/A — no" }),
 			"criterion-marker-invalid",
 		);
 	});
@@ -114,7 +117,7 @@ describe("handed-over ac-closeout predicate", () => {
 		});
 		assert.deepEqual(evaluateAcCloseout(value), { ok: true, arm: "pass" });
 		value.closingIssues[1].comments[0].body = `${AC_CLOSEOUT_MARKER}\n{}`;
-		assert.equal(evaluateAcCloseout(value).arm, "evidence-malformed");
+		assertRefusal(evaluateAcCloseout(value), "evidence-malformed");
 	});
 
 	it("selects current evidence by criterion identity while admitting a reasoned N/A disposition", () => {
@@ -146,7 +149,7 @@ describe("handed-over ac-closeout predicate", () => {
 			[exactCriteria[0], { identity: "#282: wrong second criterion", disposition: "checked" }],
 		]) {
 			setCriteria(criteria);
-			assert.equal(evaluateAcCloseout(multi).arm, "evidence-stale-criteria");
+			assertRefusal(evaluateAcCloseout(multi), "evidence-stale-criteria");
 		}
 	});
 
@@ -203,7 +206,7 @@ describe("handed-over ac-closeout predicate", () => {
 				historical.body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({ ...record, pullRequestId: "OLD_PR" })}`;
 				mutate(historical);
 				value.closingIssues[0].comments[position === "before" ? "unshift" : "push"](historical);
-				assert.equal(evaluateAcCloseout(value).arm, arm);
+				assertRefusal(evaluateAcCloseout(value), arm);
 			}
 		}
 	});
@@ -220,7 +223,7 @@ describe("handed-over ac-closeout predicate", () => {
 		]) {
 			const value = copy(subject);
 			value.closingIssues[0].comments.unshift(...historical);
-			assert.equal(evaluateAcCloseout(value).arm, "evidence-malformed");
+			assertRefusal(evaluateAcCloseout(value), "evidence-malformed");
 		}
 	});
 
@@ -241,7 +244,7 @@ describe("handed-over ac-closeout predicate", () => {
 		]) {
 			const value = copy(subject);
 			mutate(value.closingIssues[0].comments[0]);
-			assert.equal(evaluateAcCloseout(value).arm, "evidence-edited");
+			assertRefusal(evaluateAcCloseout(value), "evidence-edited");
 		}
 	});
 
@@ -259,7 +262,7 @@ describe("handed-over ac-closeout predicate", () => {
 					createdAt: "2026-03-12T00:00:00Z",
 					updatedAt: "2026-03-12T00:00:00Z",
 				});
-				assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
+				assertRefusal(evaluateAcCloseout(value), "evidence-copied");
 			}
 		}
 	});
@@ -270,30 +273,30 @@ describe("handed-over ac-closeout predicate", () => {
 			...record,
 			pullRequestNumber: 284,
 		})}`;
-		assert.equal(evaluateAcCloseout(value).arm, "evidence-copied");
+		assertRefusal(evaluateAcCloseout(value), "evidence-copied");
 	});
 
 	it("refuses every malformed subject, Issue, criterion and record shape", () => {
-		assert.equal(evaluateAcCloseout({}).arm, "subject-malformed");
-		assert.equal(closeoutCriteria({ id: "ISSUE", number: 0, body: "" }).arm, "issue-malformed");
-		assert.equal(
-			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- criterion without marker" }).arm,
+		assertRefusal(evaluateAcCloseout({}), "subject-malformed");
+		assertRefusal(closeoutCriteria({ id: "ISSUE", number: 0, body: "" }), "issue-malformed");
+		assertRefusal(
+			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- criterion without marker" }),
 			"criterion-marker-absent",
 		);
-		assert.equal(
-			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- [ ] same\n- [x] same" }).arm,
+		assertRefusal(
+			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- [ ] same\n- [x] same" }),
 			"criteria-duplicate",
 		);
-		assert.equal(
-			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- [ ] valid then\u0001bad" }).arm,
+		assertRefusal(
+			closeoutCriteria({ id: "ISSUE", number: 282, body: "## Acceptance criteria\n- [ ] valid then\u0001bad" }),
 			"criterion-malformed",
 		);
 		const malformedPopulation = copy(subject) as unknown as { closingIssues: { comments: unknown }[] };
 		malformedPopulation.closingIssues[0].comments = null;
-		assert.equal(evaluateAcCloseout(malformedPopulation).arm, "issue-population-malformed");
+		assertRefusal(evaluateAcCloseout(malformedPopulation), "issue-population-malformed");
 		const malformedRecord = copy(subject);
 		malformedRecord.closingIssues[0].comments[0].body = `${AC_CLOSEOUT_MARKER}\n{}`;
-		assert.equal(evaluateAcCloseout(malformedRecord).arm, "evidence-malformed");
+		assertRefusal(evaluateAcCloseout(malformedRecord), "evidence-malformed");
 	});
 
 	for (const [name, mutate, arm] of [
@@ -364,7 +367,7 @@ describe("handed-over ac-closeout predicate", () => {
 		it(`refuses ${name}`, () => {
 			const value = copy(subject);
 			mutate(value);
-			assert.deepEqual(evaluateAcCloseout(value), { ok: false, arm });
+			assertRefusal(evaluateAcCloseout(value), arm);
 		});
 	}
 });

@@ -41,6 +41,26 @@ function kill(name: string, path: string, from: string, to: string): void {
 	assert.notEqual(result.status, 0, `${name}: mutant survived\n${result.stdout}\n${result.stderr}`);
 }
 
+function killEveryOccurrence(name: string, path: string, from: string, to: string): void {
+	const source = readFileSync(join(repository, path), "utf8");
+	const positions = [];
+	for (let cursor = source.indexOf(from); cursor !== -1; cursor = source.indexOf(from, cursor + from.length)) {
+		positions.push(cursor);
+	}
+	assert.ok(positions.length > 0, `${name}: no mutation targets`);
+	for (const [index, position] of positions.entries()) {
+		const cwd = box(`${name}-${index + 1}`);
+		const mutated = `${source.slice(0, position)}${to}${source.slice(position + from.length)}`;
+		writeFileSync(join(cwd, path), mutated);
+		const result = run(cwd);
+		assert.notEqual(
+			result.status,
+			0,
+			`${name} occurrence ${index + 1}/${positions.length}: mutant survived\n${result.stdout}\n${result.stderr}`,
+		);
+	}
+}
+
 describe("#282 isolated ac-closeout guard mutants", () => {
 	it("keeps the focused baseline green", () => {
 		const result = run(box("baseline"));
@@ -166,6 +186,15 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			".github/workflows/ac-closeout.mjs",
 			"if (!prChecklistTerminal(input.pullRequestBody))",
 			"if (prChecklistTerminal(input.pullRequestBody))",
+		);
+	});
+
+	it("kills every fail-closed result-polarity mutant", () => {
+		killEveryOccurrence(
+			"refusal-polarity",
+			".github/workflows/ac-closeout.mjs",
+			"return { ok: false, arm:",
+			"return { ok: true, arm:",
 		);
 	});
 
