@@ -12,13 +12,16 @@ const anchors = [
 	"The first-clone acquisition launcher is the self-standing handed-over `.github/bin/gitjig-bootstrap.mjs`",
 	"The first-clone architecture has exactly that one launcher address",
 	"`.pi/extensions/gitjig/install/bootstrap.ts` is not a launcher address, and no redirect or shim address is admitted.",
-	"Exact invocation is `node .github/bin/gitjig-bootstrap.mjs` with no following argument. Any argument is `invalid-input`.",
-	"must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob",
+	"Exact invocation is `NODE_OPTIONS= NODE_PATH= node .github/bin/gitjig-bootstrap.mjs` with no following argument",
+	"the empty assignments are part of the invocation and prevent Node startup injection before the handed launcher can run",
+	"Any argument is `invalid-input`.",
+	"must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob under pre/post pathname and descriptor identity checks",
 	"own `source` object with exactly `provider`, `host`, `owner`, and `repository` and no other own key",
 	"This projection selects acquisition only. After snapshot confirmation, the acquired existing canonical codec and verifier reread the complete target pin and remain the sole integrity admission before mutation.",
 	"every HEAD entry is a regular blob mode",
 	"The complete HEAD and working populations at `.pi/extensions/gitjig.ts` plus `.pi/extensions/gitjig/**` are equal",
 	"every working byte equals its HEAD blob",
+	"The initial handed process admits only the exact startup-injection-clearing invocation above",
 	"Every Git child receives EOF on stdin, a 120-second timeout, and independent 1 MiB stdout and stderr caps.",
 	"The provision Node child receives EOF, a 300-second timeout, and the same per-stream caps.",
 	"they clear inherited `GIT_*`, `NODE_OPTIONS`, `NODE_PATH`, and loader injection",
@@ -56,6 +59,10 @@ it("#363 settles the complete first-clone trust transition without runtime smugg
 
 it("#363's representative contract mutants independently break the owner", () => {
 	const replacements = [
+		[
+			"the empty assignments are part of the invocation and prevent Node startup injection before the handed launcher can run",
+			"the inherited Node startup environment is accepted",
+		],
 		["Any argument is `invalid-input`.", "Arguments may select another source."],
 		["and no other own key", "and optional routing keys"],
 		["every HEAD entry is a regular blob mode", "every HEAD entry may be a blob, symlink, or submodule"],
