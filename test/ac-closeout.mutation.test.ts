@@ -55,6 +55,12 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==",
 		);
 		kill(
+			"partial-criterion-vector",
+			".github/workflows/ac-closeout.mjs",
+			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===",
+			"(record.criteria.length > 1 && record.criteria[0].identity === derived.criteria[0]) ||\n\t\t\t\tJSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===",
+		);
+		kill(
 			"stale-head",
 			".github/workflows/ac-closeout.mjs",
 			"record.headSha === input.headSha && record.baseSha === input.baseSha",

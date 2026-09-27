@@ -126,6 +126,30 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.deepEqual(evaluateAcCloseout(value), { ok: true, arm: "pass" });
 	});
 
+	it("requires the complete ordered criterion identity vector", () => {
+		const identities = ["#282: first criterion", "#282: second criterion"];
+		const exactCriteria = identities.map((criterionIdentity) => ({
+			identity: criterionIdentity,
+			disposition: "checked",
+		}));
+		const multi = copy(subject);
+		multi.closingIssues[0].body = "## Acceptance criteria\n- [ ] first criterion\n- [ ] second criterion";
+		const setCriteria = (criteria: typeof exactCriteria) => {
+			multi.closingIssues[0].comments[0].body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({ ...record, criteria })}`;
+		};
+		setCriteria(exactCriteria);
+		assert.deepEqual(evaluateAcCloseout(multi), { ok: true, arm: "pass" });
+		for (const criteria of [
+			[exactCriteria[0]],
+			[...exactCriteria, { identity: "#282: extra criterion", disposition: "checked" }],
+			[exactCriteria[1], exactCriteria[0]],
+			[exactCriteria[0], { identity: "#282: wrong second criterion", disposition: "checked" }],
+		]) {
+			setCriteria(criteria);
+			assert.equal(evaluateAcCloseout(multi).arm, "evidence-stale-criteria");
+		}
+	});
+
 	it("supersedes admitted immutable records from an old PR, head, base, or criterion set", () => {
 		const value = copy(subject);
 		for (const stale of [
