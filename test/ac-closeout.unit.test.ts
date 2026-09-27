@@ -117,7 +117,7 @@ describe("handed-over ac-closeout predicate", () => {
 		for (const [mutate, arm] of [
 			[
 				(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
-					comment.body = `${AC_CLOSEOUT_MARKER}\n{}`;
+					comment.body = `quoted historical marker ${AC_CLOSEOUT_MARKER}\n{}`;
 				},
 				"evidence-malformed",
 			],
