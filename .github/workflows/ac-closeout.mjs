@@ -224,7 +224,7 @@ export function evaluateAcCloseout(input) {
 			)
 		)
 			return { ok: false, arm: "evidence-edited" };
-		if (population.some(({ comment, record }) => !text(comment.authorId) || record.writerId !== comment.authorId))
+		if (population.some(({ comment, record }) => record.writerId !== comment.authorId))
 			return { ok: false, arm: "writer-unattested" };
 		if (
 			population.some(

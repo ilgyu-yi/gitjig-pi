@@ -84,6 +84,39 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.deepEqual(evaluateAcCloseout(subject), { ok: true, arm: "pass" });
 	});
 
+	it("evaluates every closing Issue while excluding ordinary unmarked sibling comments", () => {
+		const secondIdentity = "#283: second exact closeout works";
+		const secondRecord = {
+			...record,
+			issueId: "ISSUE2",
+			issueNumber: 283,
+			criteria: [{ identity: secondIdentity, disposition: "checked" }],
+		};
+		const value = copy(subject);
+		value.closingIssues[0].comments.unshift({
+			body: "ordinary discussion without a closeout marker",
+			authorId: "",
+			createdAt: "",
+			updatedAt: "",
+		});
+		value.closingIssues.push({
+			id: "ISSUE2",
+			number: 283,
+			body: "## Acceptance criteria\n- [ ] second exact closeout works",
+			comments: [
+				{
+					body: `${AC_CLOSEOUT_MARKER}\n${JSON.stringify(secondRecord)}`,
+					authorId: "USER",
+					createdAt: "2026-03-13T00:00:00Z",
+					updatedAt: "2026-03-13T00:00:00Z",
+				},
+			],
+		});
+		assert.deepEqual(evaluateAcCloseout(value), { ok: true, arm: "pass" });
+		value.closingIssues[1].comments[0].body = `${AC_CLOSEOUT_MARKER}\n{}`;
+		assert.equal(evaluateAcCloseout(value).arm, "evidence-malformed");
+	});
+
 	it("selects current evidence by criterion identity while admitting a reasoned N/A disposition", () => {
 		const value = copy(subject);
 		value.closingIssues[0].comments[0].body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({
@@ -130,6 +163,12 @@ describe("handed-over ac-closeout predicate", () => {
 			[
 				(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
 					comment.authorId = "OTHER";
+				},
+				"writer-unattested",
+			],
+			[
+				(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+					comment.authorId = "";
 				},
 				"writer-unattested",
 			],

@@ -67,10 +67,28 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"record.writerId === comment.authorId",
 		);
 		kill(
+			"every-closing-issue",
+			".github/workflows/ac-closeout.mjs",
+			"for (const issue of input.closingIssues)",
+			"for (const issue of input.closingIssues.slice(0, 1))",
+		);
+		kill(
 			"marked-substring",
 			".github/workflows/ac-closeout.mjs",
 			"comment.body.includes(AC_CLOSEOUT_MARKER)",
 			"comment.body.startsWith(AC_CLOSEOUT_MARKER)",
+		);
+		kill(
+			"unmarked-exclusion",
+			".github/workflows/ac-closeout.mjs",
+			'typeof comment?.body === "string" && comment.body.includes(AC_CLOSEOUT_MARKER)',
+			'typeof comment?.body === "string"',
+		);
+		kill(
+			"record-schema",
+			".github/workflows/ac-closeout.mjs",
+			"if (population.some(({ record }) => !admitCloseoutRecord(record)))",
+			"if (population.every(({ record }) => !admitCloseoutRecord(record)))",
 		);
 		kill(
 			"created-instant",
@@ -79,23 +97,45 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"instant(comment.createdAt) ||",
 		);
 		kill(
+			"updated-instant",
+			".github/workflows/ac-closeout.mjs",
+			"!instant(comment.updatedAt) ||",
+			"instant(comment.updatedAt) ||",
+		);
+		kill(
+			"timestamp-equality",
+			".github/workflows/ac-closeout.mjs",
+			"comment.createdAt !== comment.updatedAt",
+			"comment.createdAt === comment.updatedAt",
+		);
+		kill(
 			"calendar-instant",
 			".github/workflows/ac-closeout.mjs",
 			"return new Date(value).toISOString() === (match[2] === undefined ? `${match[1]}.000Z` : value);",
 			"return true;",
 		);
 		kill(
-			"issue-number",
+			"repository-identity",
 			".github/workflows/ac-closeout.mjs",
-			"record.issueNumber !== issue.number",
-			"record.issueNumber === issue.number",
+			"record.repositoryId !== input.repositoryId ||",
+			"false ||",
+		);
+		kill("issue-identity", ".github/workflows/ac-closeout.mjs", "record.issueId !== issue.id ||", "false ||");
+		kill("issue-number", ".github/workflows/ac-closeout.mjs", "record.issueNumber !== issue.number", "false");
+		kill(
+			"pull-identity",
+			".github/workflows/ac-closeout.mjs",
+			"record.pullRequestId === input.pullRequestId &&",
+			"true &&",
 		);
 		kill(
 			"pull-number",
 			".github/workflows/ac-closeout.mjs",
 			"record.pullRequestNumber === input.pullRequestNumber",
-			"record.pullRequestNumber !== input.pullRequestNumber",
+			"true",
 		);
+		kill("head-identity", ".github/workflows/ac-closeout.mjs", "record.headSha === input.headSha &&", "true &&");
+		kill("base-identity", ".github/workflows/ac-closeout.mjs", "record.baseSha === input.baseSha", "true");
 		kill("duplicate", ".github/workflows/ac-closeout.mjs", "current.length !== 1", "current.length === 1");
 		kill(
 			"unresolved-item",
