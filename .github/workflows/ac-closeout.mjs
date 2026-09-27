@@ -37,6 +37,10 @@ function text(value) {
 function positive(value) {
 	return Number.isSafeInteger(value) && value > 0;
 }
+/** @param {any} value */
+function instant(value) {
+	return text(value) && Number.isFinite(Date.parse(value));
+}
 
 /** Preserve the existing full-item, Issue-prefixed, EMPTY-never-absent derivation. */
 /** @param {readonly any[]} issues @returns {string[]} */
@@ -202,21 +206,34 @@ export function evaluateAcCloseout(input) {
 				typeof comment?.body === "string" && comment.body.includes(AC_CLOSEOUT_MARKER),
 		);
 		if (marked.length === 0) return { ok: false, arm: "evidence-absent" };
-		const admitted = [];
-		for (const comment of marked) {
-			const record = parseCloseoutRecord(comment.body);
-			if (!admitCloseoutRecord(record)) return { ok: false, arm: "evidence-malformed" };
-			if (comment.createdAt !== comment.updatedAt) return { ok: false, arm: "evidence-edited" };
-			if (!text(comment.authorId) || record.writerId !== comment.authorId)
-				return { ok: false, arm: "writer-unattested" };
-			if (
-				record.repositoryId !== input.repositoryId ||
-				record.issueId !== issue.id ||
-				record.issueNumber !== issue.number
+		/** @type {{comment:any,record:any}[]} */
+		const population = marked.map(
+			/** @param {any} comment */ (comment) => ({
+				comment,
+				record: parseCloseoutRecord(comment.body),
+			}),
+		);
+		if (population.some(({ record }) => !admitCloseoutRecord(record))) return { ok: false, arm: "evidence-malformed" };
+		if (
+			population.some(
+				({ comment }) =>
+					!instant(comment.createdAt) || !instant(comment.updatedAt) || comment.createdAt !== comment.updatedAt,
 			)
-				return { ok: false, arm: "evidence-copied" };
-			admitted.push(record);
-		}
+		)
+			return { ok: false, arm: "evidence-edited" };
+		if (population.some(({ comment, record }) => !text(comment.authorId) || record.writerId !== comment.authorId))
+			return { ok: false, arm: "writer-unattested" };
+		if (
+			population.some(
+				({ record }) =>
+					record.repositoryId !== input.repositoryId ||
+					record.issueId !== issue.id ||
+					record.issueNumber !== issue.number,
+			)
+		)
+			return { ok: false, arm: "evidence-copied" };
+		/** @type {any[]} */
+		const admitted = population.map(({ record }) => record);
 		const pullCandidates = admitted.filter(
 			(record) => record.pullRequestId === input.pullRequestId && record.pullRequestNumber === input.pullRequestNumber,
 		);

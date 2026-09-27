@@ -67,6 +67,12 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"record.writerId === comment.authorId",
 		);
 		kill(
+			"created-instant",
+			".github/workflows/ac-closeout.mjs",
+			"!instant(comment.createdAt) ||",
+			"instant(comment.createdAt) ||",
+		);
+		kill(
 			"issue-number",
 			".github/workflows/ac-closeout.mjs",
 			"record.issueNumber !== issue.number",

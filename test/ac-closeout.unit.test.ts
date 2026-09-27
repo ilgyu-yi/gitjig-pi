@@ -96,7 +96,8 @@ describe("handed-over ac-closeout predicate", () => {
 	it("supersedes admitted immutable records from an old PR, head, base, or criterion set", () => {
 		const value = copy(subject);
 		for (const stale of [
-			{ ...record, pullRequestId: "OLD_PR", pullRequestNumber: 281 },
+			{ ...record, pullRequestId: "OLD_PR" },
+			{ ...record, pullRequestNumber: 281 },
 			{ ...record, headSha: "c".repeat(40) },
 			{ ...record, baseSha: "d".repeat(40) },
 			{ ...record, criteria: [{ identity: "#282: old criterion", disposition: "checked" }] },
@@ -109,7 +110,7 @@ describe("handed-over ac-closeout predicate", () => {
 			});
 		}
 		assert.deepEqual(evaluateAcCloseout(value), { ok: true, arm: "pass" });
-		assert.equal(value.closingIssues[0].comments.length, 5);
+		assert.equal(value.closingIssues[0].comments.length, 6);
 	});
 
 	it("refuses an invalid historical marker even beside one exact current record", () => {
@@ -139,6 +140,39 @@ describe("handed-over ac-closeout predicate", () => {
 			mutate(historical);
 			value.closingIssues[0].comments.unshift(historical);
 			assert.equal(evaluateAcCloseout(value).arm, arm);
+		}
+	});
+
+	it("admits the complete marked population with order-independent refusal precedence", () => {
+		const malformed = { ...copy(subject.closingIssues[0].comments[0]), body: `${AC_CLOSEOUT_MARKER}\n{}` };
+		const edited = {
+			...copy(subject.closingIssues[0].comments[0]),
+			updatedAt: "2026-03-13T00:00:01Z",
+		};
+		for (const historical of [
+			[malformed, edited],
+			[edited, malformed],
+		]) {
+			const value = copy(subject);
+			value.closingIssues[0].comments.unshift(...historical);
+			assert.equal(evaluateAcCloseout(value).arm, "evidence-malformed");
+		}
+	});
+
+	it("refuses missing or malformed immutability timestamps", () => {
+		for (const mutate of [
+			(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+				comment.createdAt = "";
+				comment.updatedAt = "";
+			},
+			(comment: (typeof subject)["closingIssues"][0]["comments"][0]) => {
+				comment.createdAt = "not-an-instant";
+				comment.updatedAt = "not-an-instant";
+			},
+		]) {
+			const value = copy(subject);
+			mutate(value.closingIssues[0].comments[0]);
+			assert.equal(evaluateAcCloseout(value).arm, "evidence-edited");
 		}
 	});
 
