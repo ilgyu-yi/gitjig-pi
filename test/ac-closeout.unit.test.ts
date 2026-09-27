@@ -84,6 +84,15 @@ describe("handed-over ac-closeout predicate", () => {
 		assert.deepEqual(evaluateAcCloseout(subject), { ok: true, arm: "pass" });
 	});
 
+	it("selects current evidence by criterion identity while admitting a reasoned N/A disposition", () => {
+		const value = copy(subject);
+		value.closingIssues[0].comments[0].body = `${AC_CLOSEOUT_MARKER}\n${JSON.stringify({
+			...record,
+			criteria: [{ identity, disposition: "na", reason: "not applicable to this change" }],
+		})}`;
+		assert.deepEqual(evaluateAcCloseout(value), { ok: true, arm: "pass" });
+	});
+
 	it("supersedes admitted immutable records from an old PR, head, base, or criterion set", () => {
 		const value = copy(subject);
 		for (const stale of [
