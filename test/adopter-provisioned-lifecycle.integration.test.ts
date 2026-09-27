@@ -146,7 +146,7 @@ function assertTargetRuntimeIsLocal(target: string): void {
 function runTargetPi(root: string, target: string, phase: string): void {
 	const agent = join(root, "pi-agent");
 	const sessions = join(root, `sessions-${phase}`);
-	const state = join(root, "pi-state");
+	const state = join(root, `pi-state-${phase}`);
 	const home = join(root, "pi-home");
 	for (const path of [join(agent, "extensions"), sessions, state, home]) mkdirSync(path, { recursive: true });
 	cpSync(join(repository, "test/harness/scripted-provider.ts"), join(agent, "extensions/scripted-provider.ts"));
@@ -179,31 +179,42 @@ function runTargetPi(root: string, target: string, phase: string): void {
 	assertTargetRuntimeIsLocal(target);
 }
 
+function commitResult(target: string, message: string) {
+	return spawnSync(
+		"git",
+		[
+			"-C",
+			target,
+			"-c",
+			"user.name=Fixture",
+			"-c",
+			"user.email=fixture@example.invalid",
+			"-c",
+			"commit.gpgsign=false",
+			"commit",
+			"-qm",
+			message,
+		],
+		{ encoding: "utf8", env: { PATH: process.env.PATH, HOME: target, GIT_CONFIG_NOSYSTEM: "1" } },
+	);
+}
+
 function tierTwoCommit(target: string, phase: string, first: boolean): void {
 	if (first) {
 		git(target, ["switch", "-q", "main"]);
 		writeFileSync(join(target, "blocked.txt"), "blocked\n");
 		git(target, ["add", "blocked.txt"]);
-		const refused = spawnSync(
-			"git",
-			[
-				"-C",
-				target,
-				"-c",
-				"user.name=Fixture",
-				"-c",
-				"user.email=fixture@example.invalid",
-				"commit.gpgsign=false",
-				"commit",
-				"-qm",
-				"must refuse",
-			],
-			{ encoding: "utf8", env: { PATH: process.env.PATH, HOME: target, GIT_CONFIG_NOSYSTEM: "1" } },
-		);
+		const refused = commitResult(target, "must refuse on main");
 		assert.notEqual(refused.status, 0, "protected main commit must be refused");
 		git(target, ["reset", "--hard", "-q", "HEAD"]);
 		git(target, ["switch", "-q", "-c", "evidence"]);
 	}
+	writeFileSync(join(target, `secret-${phase}.txt`), ["gh", "p_", "A".repeat(36)].join(""));
+	git(target, ["add", `secret-${phase}.txt`]);
+	const secretRefused = commitResult(target, `must refuse staged secret ${phase}`);
+	assert.notEqual(secretRefused.status, 0, `staged-secret hook must run during ${phase}`);
+	assert.match(secretRefused.stderr, /staged-secret scan refused/u);
+	git(target, ["reset", "--hard", "-q", "HEAD"]);
 	writeFileSync(join(target, `evidence-${phase}.txt`), `${phase}\n`);
 	commit(target, `test: evidence ${phase}`);
 }
