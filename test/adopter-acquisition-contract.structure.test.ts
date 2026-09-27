@@ -10,29 +10,41 @@ const readme = readFileSync(join(root, "README.md"), "utf8");
 
 const anchors = [
 	"The first-clone acquisition launcher is the self-standing handed-over `.github/bin/gitjig-bootstrap.mjs`",
-	"The former carried `.pi/extensions/gitjig/install/bootstrap.ts` retires when that launcher lands, with no redirect or shim.",
+	"The first-clone architecture has exactly that one launcher address",
+	"`.pi/extensions/gitjig/install/bootstrap.ts` is not a launcher address, and no redirect or shim address is admitted.",
 	"Exact invocation is `node .github/bin/gitjig-bootstrap.mjs` with no following argument. Any argument is `invalid-input`.",
+	"must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob",
+	"own `source` object with exactly `provider`, `host`, `owner`, and `repository` and no other own key",
 	"This projection selects acquisition only. After snapshot confirmation, the acquired existing canonical codec and verifier reread the complete target pin and remain the sole integrity admission before mutation.",
+	"every HEAD entry is a regular blob mode",
 	"The complete HEAD and working populations at `.pi/extensions/gitjig.ts` plus `.pi/extensions/gitjig/**` are equal",
 	"every working byte equals its HEAD blob",
 	"Every Git child receives EOF on stdin, a 120-second timeout, and independent 1 MiB stdout and stderr caps.",
 	"The provision Node child receives EOF, a 300-second timeout, and the same per-stream caps.",
 	"they clear inherited `GIT_*`, `NODE_OPTIONS`, `NODE_PATH`, and loader injection",
+	"set `GIT_CONFIG_NOSYSTEM=1`, point global config at an owned empty file",
 	"its own regular non-link handed path derives the target top, and no ambient or caller-supplied target can redirect it.",
 	"creates exactly one `gitjig-acquire-*` child",
+	"every created directory has exact mode `0700`, and every created regular file has exact mode `0600`",
 	"Cleanup responsibility begins with that first artifact, is attempted on every controlled terminal, and confirms all owned artifacts absent before success.",
 	"abrupt termination is outside the controlled terminal guarantee",
-	"`invalid-input`/`64`",
-	"`snapshot-identity-mismatch`/`65`",
-	"`source-unavailable`/`69`",
-	"`provision-refused`/`70`",
-	"`temporary-storage-unavailable`/`73`",
-	"`cleanup-failed`/`74`",
 	"Cleanup failure overrides every simultaneous post-creation cause and makes success impossible.",
 ] as const;
 
+const causes = [
+	["invalid-input", "64"],
+	["snapshot-identity-mismatch", "65"],
+	["source-unavailable", "69"],
+	["provision-refused", "70"],
+	["temporary-storage-unavailable", "73"],
+	["cleanup-failed", "74"],
+] as const;
+
 function contractHolds(text: string): boolean {
-	return anchors.every((anchor) => text.includes(anchor));
+	if (!anchors.every((anchor) => text.includes(anchor))) return false;
+	const terminal = text.match(/\*\*First-clone terminal algebra\.\*\*([\s\S]*?)\n\nComposition plans/u)?.[1] ?? "";
+	const observed = [...terminal.matchAll(/`([a-z-]+)`\/`([0-9]+)`/gu)].map((match) => [match[1], match[2]]);
+	return JSON.stringify(observed) === JSON.stringify(causes);
 }
 
 it("#363 settles the complete first-clone trust transition without runtime smuggling", () => {
@@ -43,20 +55,28 @@ it("#363 settles the complete first-clone trust transition without runtime smugg
 });
 
 it("#363's representative contract mutants independently break the owner", () => {
-	const mutations = [
-		"Any argument is `invalid-input`.",
-		"This projection selects acquisition only.",
-		"every working byte equals its HEAD blob",
-		"a 120-second timeout",
-		"`NODE_OPTIONS`, `NODE_PATH`",
-		"Cleanup responsibility begins with that first artifact",
-		"`source-unavailable`/`69`",
-		"Cleanup failure overrides every simultaneous post-creation cause",
+	const replacements = [
+		["Any argument is `invalid-input`.", "Arguments may select another source."],
+		["and no other own key", "and optional routing keys"],
+		["every HEAD entry is a regular blob mode", "every HEAD entry may be a blob, symlink, or submodule"],
+		["set `GIT_CONFIG_NOSYSTEM=1`", "permit system Git configuration"],
+		["every working byte equals its HEAD blob", "working bytes need only exist"],
+		[
+			"every created directory has exact mode `0700`, and every created regular file has exact mode `0600`",
+			"created directories may use mode `0755` and files mode `0644`",
+		],
+		["Cleanup responsibility begins with that first artifact", "Cleanup begins after identity confirmation"],
+		["Cleanup failure overrides every simultaneous post-creation cause", "The primary cause overrides cleanup failure"],
 	] as const;
-	for (const mutation of mutations) {
-		assert.equal(spec.split(mutation).length, 2, `mutation site must be unique: ${mutation}`);
-		assert.equal(contractHolds(spec.replace(mutation, "")), false, `mutant survived: ${mutation}`);
+	for (const [needle, replacement] of replacements) {
+		assert.equal(spec.split(needle).length, 2, `mutation site must be unique: ${needle}`);
+		assert.equal(contractHolds(spec.replace(needle, replacement)), false, `mutant survived: ${needle}`);
 	}
+	const extraCause = spec.replace(
+		"`cleanup-failed`/`74` whenever controlled cleanup",
+		"`unexpected`/`75` for another cause; and `cleanup-failed`/`74` whenever controlled cleanup",
+	);
+	assert.equal(contractHolds(extraCause), false, "a seventh terminal cause survived");
 });
 
 after(() => {
