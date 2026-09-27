@@ -1489,6 +1489,8 @@ describe("fail-posture inventory (§3.9)", () => {
 				"mode-run-record → closed",
 				"platform-file-listing → closed",
 				"provenance-reader → open",
+				"recovery-history-freshness → closed",
+				"recovery-profile-preflight → closed",
 				"recovery-shell-state-domain → closed",
 				"repo-root-discovery → open",
 				"seam-target → closed",

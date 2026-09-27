@@ -31,7 +31,7 @@ export function registerSpineCommands(
 ): void {
 	registerAuthoringBriefCommand(pi, repoRoot);
 	registerReviewCommand(pi, repoRoot, stateRoot, surface);
-	registerReviewRoundCommand(pi, repoRoot, stateRoot, {}, surface);
+	registerReviewRoundCommand(pi, repoRoot, stateRoot, modes, {}, surface);
 	registerShipCommand(pi, repoRoot);
 	registerLandCommand(pi, repoRoot, modes);
 	registerGovernanceCommand(pi, repoRoot);

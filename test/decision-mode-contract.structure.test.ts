@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const spec = readFileSync(join(repoRoot(), "SPEC.md"), "utf8");
@@ -86,6 +88,46 @@ const modes = section(spec, "### 5.6 Operating modes", "### 5.7 Run conduct");
 const context = section(spec, "### 5.8 Context lifecycle", "### 5.9 Session surfaces");
 const sessions = section(spec, "### 5.9 Session surfaces", "## 6. Self-governance milestone");
 
+function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): string[] {
+	return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
+		const path = join(dir, entry.name);
+		if (entry.isDirectory()) return productionExtensionFiles(root, path);
+		return entry.isFile() && entry.name.endsWith(".ts") ? [path] : [];
+	});
+}
+
+const COORDINATOR_RUNTIME_EXPORTS = [
+	"coordinateHistoryRecovery",
+	"hasRecoveryRetryReserve",
+	"makeRecoveryProfileDispatcher",
+] as const;
+
+async function assertPrivateAllowanceCapabilities(root: string): Promise<void> {
+	const production = [".pi/extensions/gitjig.ts", ...productionExtensionFiles(root)];
+	assert.ok(!production.includes(".pi/extensions/gitjig/recovery/store.ts"), "standalone mutation module survives");
+	const coordinator = ".pi/extensions/gitjig/recovery/coordinator.ts";
+	const source = readFileSync(join(root, coordinator), "utf8");
+	assert.equal((source.match(/^function claimAllowance\(/gm) ?? []).length, 1);
+	assert.equal((source.match(/^function finalizeAllowance\(/gm) ?? []).length, 1);
+	for (const path of production) {
+		const candidate = readFileSync(join(root, path), "utf8");
+		if (path === coordinator) continue;
+		assert.doesNotMatch(
+			candidate,
+			/\bclaimAllowance\b|\bfinalizeAllowance\b/,
+			`allowance mutation name crosses lexical module boundary through ${path}`,
+		);
+	}
+	const namespace = await import(
+		`${pathToFileURL(join(root, coordinator)).href}?privacy=${Date.now()}-${Math.random()}`
+	);
+	assert.deepEqual(
+		Object.keys(namespace).sort(),
+		[...COORDINATOR_RUNTIME_EXPORTS].sort(),
+		"coordinator runtime namespace exposes an unapproved capability",
+	);
+}
+
 describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 	it("pins the two independent setting domains and their fail-safe resolution", () => {
 		assertModeAcceptedSet(spec);
@@ -126,6 +168,60 @@ describe("§§5.6–5.9 accepted set after actor-neutral settlement", () => {
 			() => assertCrossReviewHandoffContract(wrong),
 			/missing accepted-set member: A second recovery request hands off\./,
 		);
+	});
+
+	it("keeps Phase A on the history route with no public mutation, plan-owner, or finding-escalation reach", () => {
+		const root = repoRoot();
+		const recoveryFiles = ["briefs.ts", "coordinator.ts", "lineage.ts", "profiles.ts", "state-domain.ts", "types.ts"];
+		const recovery = recoveryFiles
+			.map((name) => readFileSync(join(root, ".pi/extensions/gitjig/recovery", name), "utf8"))
+			.join("\n");
+		assert.doesNotMatch(
+			recovery,
+			/platform\/write|publish\/|landing\/|registerCommand|measure-escalate|plan contest owner/i,
+		);
+		for (const path of [
+			".pi/extensions/gitjig/commands/index.ts",
+			".pi/extensions/gitjig/commands/review-round.ts",
+			".pi/extensions/gitjig/recovery/coordinator.ts",
+		]) {
+			const source = readFileSync(join(root, path), "utf8");
+			if (path.endsWith("coordinator.ts")) assert.match(source, /claimAllowance/);
+			else assert.doesNotMatch(source, /claimAllowance|finalizeAllowance|resolveRecoveryStateDomain/);
+		}
+	});
+
+	it("keeps allowance mutation capabilities lexically private to the coordinator", async () => {
+		const root = repoRoot();
+		await assertPrivateAllowanceCapabilities(root);
+		const coordinator = join(root, ".pi/extensions/gitjig/recovery/coordinator.ts");
+		assert.doesNotMatch(
+			readFileSync(coordinator, "utf8"),
+			/readonly (?:path|recoveryDir|claimedBytes|device|inode|recordRef):/,
+		);
+		const copy = mkdtempSync(join(tmpdir(), "gitjig-private-capability-mutant-"));
+		try {
+			cpSync(join(root, ".pi"), join(copy, ".pi"), { recursive: true });
+			symlinkSync(join(root, "node_modules"), join(copy, "node_modules"), "dir");
+			const target = join(copy, ".pi/extensions/gitjig/recovery/coordinator.ts");
+			writeFileSync(
+				target,
+				`${readFileSync(target, "utf8")}\nconst __leakedClaim = claimAllowance;\nconst __leakedFinalize = finalizeAllowance;\nexport { __leakedClaim, __leakedFinalize };\n`,
+			);
+			await assert.rejects(
+				() => assertPrivateAllowanceCapabilities(copy),
+				/coordinator runtime namespace exposes an unapproved capability/,
+			);
+			cpSync(coordinator, target);
+			writeFileSync(
+				join(copy, ".pi/extensions/gitjig/recovery/store.ts"),
+				"export function claimAllowance() {}\nexport function finalizeAllowance() {}\n",
+			);
+			await assert.rejects(() => assertPrivateAllowanceCapabilities(copy), /standalone mutation module survives/);
+			rmSync(join(copy, ".pi/extensions/gitjig/recovery/store.ts"));
+		} finally {
+			rmSync(copy, { recursive: true, force: true });
+		}
 	});
 
 	it("keeps context lifecycle bounded and repository-keyed", () => {
