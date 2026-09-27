@@ -37,6 +37,13 @@ function text(value) {
 function positive(value) {
 	return Number.isSafeInteger(value) && value > 0;
 }
+/** @param {any} value */
+function instant(value) {
+	if (!text(value)) return false;
+	const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{3}))?Z$/.exec(value);
+	if (match === null || !Number.isFinite(Date.parse(value))) return false;
+	return new Date(value).toISOString() === (match[2] === undefined ? `${match[1]}.000Z` : value);
+}
 
 /** Preserve the existing full-item, Issue-prefixed, EMPTY-never-absent derivation. */
 /** @param {readonly any[]} issues @returns {string[]} */
@@ -202,27 +209,49 @@ export function evaluateAcCloseout(input) {
 				typeof comment?.body === "string" && comment.body.includes(AC_CLOSEOUT_MARKER),
 		);
 		if (marked.length === 0) return { ok: false, arm: "evidence-absent" };
-		if (marked.length !== 1) return { ok: false, arm: "evidence-ambiguous" };
-		const comment = marked[0];
-		const record = parseCloseoutRecord(comment.body);
-		if (!admitCloseoutRecord(record)) return { ok: false, arm: "evidence-malformed" };
-		if (comment.createdAt !== comment.updatedAt) return { ok: false, arm: "evidence-edited" };
-		if (!text(comment.authorId) || record.writerId !== comment.authorId) return { ok: false, arm: "writer-unattested" };
+		/** @type {{comment:any,record:any}[]} */
+		const population = marked.map(
+			/** @param {any} comment */ (comment) => ({
+				comment,
+				record: parseCloseoutRecord(comment.body),
+			}),
+		);
+		if (population.some(({ record }) => !admitCloseoutRecord(record))) return { ok: false, arm: "evidence-malformed" };
 		if (
-			record.repositoryId !== input.repositoryId ||
-			record.issueId !== issue.id ||
-			record.issueNumber !== issue.number ||
-			record.pullRequestId !== input.pullRequestId ||
-			record.pullRequestNumber !== input.pullRequestNumber
+			population.some(
+				({ comment }) =>
+					!instant(comment.createdAt) || !instant(comment.updatedAt) || comment.createdAt !== comment.updatedAt,
+			)
+		)
+			return { ok: false, arm: "evidence-edited" };
+		if (population.some(({ comment, record }) => record.writerId !== comment.authorId))
+			return { ok: false, arm: "writer-unattested" };
+		if (
+			population.some(
+				({ record }) =>
+					record.repositoryId !== input.repositoryId ||
+					record.issueId !== issue.id ||
+					record.issueNumber !== issue.number,
+			)
 		)
 			return { ok: false, arm: "evidence-copied" };
-		if (record.headSha !== input.headSha || record.baseSha !== input.baseSha)
-			return { ok: false, arm: "evidence-stale-subject" };
-		if (
-			JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==
-			JSON.stringify(derived.criteria)
-		)
-			return { ok: false, arm: "evidence-stale-criteria" };
+		/** @type {any[]} */
+		const admitted = population.map(({ record }) => record);
+		const pullCandidates = admitted.filter(
+			(record) => record.pullRequestId === input.pullRequestId && record.pullRequestNumber === input.pullRequestNumber,
+		);
+		if (pullCandidates.length === 0) return { ok: false, arm: "evidence-copied" };
+		const subjectCandidates = pullCandidates.filter(
+			(record) => record.headSha === input.headSha && record.baseSha === input.baseSha,
+		);
+		if (subjectCandidates.length === 0) return { ok: false, arm: "evidence-stale-subject" };
+		const current = subjectCandidates.filter(
+			(record) =>
+				JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===
+				JSON.stringify(derived.criteria),
+		);
+		if (current.length === 0) return { ok: false, arm: "evidence-stale-criteria" };
+		if (current.length !== 1) return { ok: false, arm: "evidence-ambiguous" };
 	}
 	return { ok: true, arm: "pass" };
 }

@@ -41,6 +41,26 @@ function kill(name: string, path: string, from: string, to: string): void {
 	assert.notEqual(result.status, 0, `${name}: mutant survived\n${result.stdout}\n${result.stderr}`);
 }
 
+function killEveryOccurrence(name: string, path: string, from: string, to: string): void {
+	const source = readFileSync(join(repository, path), "utf8");
+	const positions = [];
+	for (let cursor = source.indexOf(from); cursor !== -1; cursor = source.indexOf(from, cursor + from.length)) {
+		positions.push(cursor);
+	}
+	assert.ok(positions.length > 0, `${name}: no mutation targets`);
+	for (const [index, position] of positions.entries()) {
+		const cwd = box(`${name}-${index + 1}`);
+		const mutated = `${source.slice(0, position)}${to}${source.slice(position + from.length)}`;
+		writeFileSync(join(cwd, path), mutated);
+		const result = run(cwd);
+		assert.notEqual(
+			result.status,
+			0,
+			`${name} occurrence ${index + 1}/${positions.length}: mutant survived\n${result.stdout}\n${result.stderr}`,
+		);
+	}
+}
+
 describe("#282 isolated ac-closeout guard mutants", () => {
 	it("keeps the focused baseline green", () => {
 		const result = run(box("baseline"));
@@ -51,14 +71,20 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 		kill(
 			"stale-identity",
 			".github/workflows/ac-closeout.mjs",
-			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==",
 			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===",
+			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) !==",
+		);
+		kill(
+			"partial-criterion-vector",
+			".github/workflows/ac-closeout.mjs",
+			"JSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===",
+			"(record.criteria.length > 1 && record.criteria[0].identity === derived.criteria[0]) ||\n\t\t\t\tJSON.stringify(record.criteria.map(/** @param {any} entry */ (entry) => entry.identity)) ===",
 		);
 		kill(
 			"stale-head",
 			".github/workflows/ac-closeout.mjs",
-			"record.headSha !== input.headSha || record.baseSha !== input.baseSha",
-			"record.headSha !== input.headSha && record.baseSha !== input.baseSha",
+			"record.headSha === input.headSha && record.baseSha === input.baseSha",
+			"record.headSha === input.headSha || record.baseSha === input.baseSha",
 		);
 		kill(
 			"unattested-writer",
@@ -66,12 +92,109 @@ describe("#282 isolated ac-closeout guard mutants", () => {
 			"record.writerId !== comment.authorId",
 			"record.writerId === comment.authorId",
 		);
-		kill("duplicate", ".github/workflows/ac-closeout.mjs", "marked.length !== 1", "marked.length === 1");
+		kill(
+			"every-closing-issue",
+			".github/workflows/ac-closeout.mjs",
+			"for (const issue of input.closingIssues)",
+			"for (const issue of input.closingIssues.slice(0, 1))",
+		);
+		kill(
+			"marked-substring",
+			".github/workflows/ac-closeout.mjs",
+			"comment.body.includes(AC_CLOSEOUT_MARKER)",
+			"comment.body.startsWith(AC_CLOSEOUT_MARKER)",
+		);
+		kill(
+			"unmarked-exclusion",
+			".github/workflows/ac-closeout.mjs",
+			'typeof comment?.body === "string" && comment.body.includes(AC_CLOSEOUT_MARKER)',
+			'typeof comment?.body === "string"',
+		);
+		kill(
+			"record-schema",
+			".github/workflows/ac-closeout.mjs",
+			"if (population.some(({ record }) => !admitCloseoutRecord(record)))",
+			"if (population.every(({ record }) => !admitCloseoutRecord(record)))",
+		);
+		kill(
+			"edited-complete-population",
+			".github/workflows/ac-closeout.mjs",
+			"population.some(\n\t\t\t\t({ comment }) =>",
+			"population.slice(0, 1).some(\n\t\t\t\t({ comment }) =>",
+		);
+		kill(
+			"writer-complete-population",
+			".github/workflows/ac-closeout.mjs",
+			"population.some(({ comment, record }) => record.writerId !== comment.authorId)",
+			"population.slice(0, 1).some(({ comment, record }) => record.writerId !== comment.authorId)",
+		);
+		kill(
+			"copied-complete-population",
+			".github/workflows/ac-closeout.mjs",
+			"population.some(\n\t\t\t\t({ record }) =>",
+			"population.slice(0, 1).some(\n\t\t\t\t({ record }) =>",
+		);
+		kill(
+			"created-instant",
+			".github/workflows/ac-closeout.mjs",
+			"!instant(comment.createdAt) ||",
+			"instant(comment.createdAt) ||",
+		);
+		kill(
+			"updated-instant",
+			".github/workflows/ac-closeout.mjs",
+			"!instant(comment.updatedAt) ||",
+			"instant(comment.updatedAt) ||",
+		);
+		kill(
+			"timestamp-equality",
+			".github/workflows/ac-closeout.mjs",
+			"comment.createdAt !== comment.updatedAt",
+			"comment.createdAt === comment.updatedAt",
+		);
+		kill(
+			"calendar-instant",
+			".github/workflows/ac-closeout.mjs",
+			"return new Date(value).toISOString() === (match[2] === undefined ? `${match[1]}.000Z` : value);",
+			"return true;",
+		);
+		kill(
+			"repository-identity",
+			".github/workflows/ac-closeout.mjs",
+			"record.repositoryId !== input.repositoryId ||",
+			"false ||",
+		);
+		kill("issue-identity", ".github/workflows/ac-closeout.mjs", "record.issueId !== issue.id ||", "false ||");
+		kill("issue-number", ".github/workflows/ac-closeout.mjs", "record.issueNumber !== issue.number", "false");
+		kill(
+			"pull-identity",
+			".github/workflows/ac-closeout.mjs",
+			"record.pullRequestId === input.pullRequestId &&",
+			"true &&",
+		);
+		kill(
+			"pull-number",
+			".github/workflows/ac-closeout.mjs",
+			"record.pullRequestNumber === input.pullRequestNumber",
+			"true",
+		);
+		kill("head-identity", ".github/workflows/ac-closeout.mjs", "record.headSha === input.headSha &&", "true &&");
+		kill("base-identity", ".github/workflows/ac-closeout.mjs", "record.baseSha === input.baseSha", "true");
+		kill("duplicate", ".github/workflows/ac-closeout.mjs", "current.length !== 1", "current.length === 1");
 		kill(
 			"unresolved-item",
 			".github/workflows/ac-closeout.mjs",
 			"if (!prChecklistTerminal(input.pullRequestBody))",
 			"if (prChecklistTerminal(input.pullRequestBody))",
+		);
+	});
+
+	it("kills every fail-closed result-polarity mutant", () => {
+		killEveryOccurrence(
+			"refusal-polarity",
+			".github/workflows/ac-closeout.mjs",
+			"return { ok: false, arm:",
+			"return { ok: true, arm:",
 		);
 	});
 
