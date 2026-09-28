@@ -78,33 +78,35 @@ describe("#131 collapsed operator-visible acts", () => {
 			assert.ok(section.includes(clause), `SPEC §5.9 lost the #131 clause: ${clause}`);
 	});
 
-	it("#347 contract settles only the operator-only, explicit-subject lifecycle projection", () => {
-		const spec = readFileSync(fileURLToPath(new URL("../SPEC.md", import.meta.url)), "utf8");
-		const section = spec.slice(
-			spec.indexOf("### 5.9 Session surfaces"),
-			spec.indexOf("## 6. Self-governance milestone"),
-		);
-		for (const clause of [
-			"The #133 lifecycle-record projection is a read-only, optional extension of the same composable status slot, not another lifecycle resolver.",
-			"Issue or PR explicitly addressed by an operator act with a platform-attested repository and subject identity",
-			"an Issue key has an explicit null head",
-			"Absent an addressed target the projection is silent: no current Issue/PR identity or workflow phase is inferred, no merge/decision mode is re-resolved, and no label alone asserts a lifecycle state or authority.",
-			"The #276 handed-over `.github/workflows/gitjig-lifecycle.mjs` engine owns the record and terminal admission.",
-			"read-only, terminal-aware `blocked` and handoff inspectors owed by this contract must inspect a pagination-complete, platform-fetched comment population",
-			"It cannot substitute for the transition service or the governing lifecycle record (§2.2).",
-			"same-repository `authorizedResolver` predicate (`WRITE`, `MAINTAIN`, or `ADMIN`)",
-			"a Bot requires independent first-party-producer proof or is not projected",
-			"Proposed and Active remain distinct; neither a missing label nor an unavailable read establishes Active.",
-			"This display never writes, clears, authorizes, or blocks an act.",
-			"never a guessed current state",
-			"passes a two-second read bound at its own platform call site",
-			"caches only a successful computation for five minutes",
-			"Status refresh cannot leak one subject's state into another's",
-			"never polls",
-			"no TTL stamp, no status call without UI, no blocked act, and no model-visible record body",
-			"neither widens §4.9's model-visible return nor copies raw traces into model context",
-		])
-			assert.ok(section.includes(clause), `SPEC §5.9 lost the #347 settlement: ${clause}`);
+	it("#347 contract owns the complete operator-only lifecycle projection block", () => {
+		const spec = readFileSync(fileURLToPath(new URL("../SPEC.md", import.meta.url)), "utf8").replaceAll("\r\n", "\n");
+		const expected = readFileSync(
+			fileURLToPath(new URL("./fixtures/lifecycle-projection.contract.txt", import.meta.url)),
+			"utf8",
+		)
+			.replaceAll("\r\n", "\n")
+			.trim();
+		const extract = (value: string) => {
+			const start = value.indexOf("The #133 lifecycle-record projection");
+			const end = value.indexOf("\n\nThe norm is **explicitly advisory**", start);
+			assert.ok(start >= 0 && end > start, "SPEC §5.9 lost the bounded #347 projection block");
+			return value.slice(start, end).trim();
+		};
+		assert.equal(extract(spec), expected);
+		for (const [from, to] of [
+			["permission must pass #276's existing", "permission may pass #276's existing"],
+			[", without changing a shared reader's default for any other caller", ""],
+			[" with attested carrying-comment identity", ""],
+			[
+				"; the existing active-dispatch/latest-terminal class and #131 dispatch/publish act rendering remain unchanged",
+				"",
+			],
+			["Every marker and terminal is checked:", "Some markers and terminals are checked:"],
+			["populations result in silence", "populations may result in silence"],
+		] as const) {
+			assert.ok(spec.includes(from), `mutation operand absent: ${from}`);
+			assert.notEqual(extract(spec.replace(from, to)), expected, `projection mutant survived: ${from}`);
+		}
 	});
 
 	it("dispatch renders fixed intent, a non-secret target, and three styled terminal classes", () => {
