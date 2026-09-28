@@ -92,6 +92,11 @@ describe("#131 collapsed operator-visible acts", () => {
 			const sectionEnd = value.indexOf("## 6. Self-governance milestone", sectionStart);
 			assert.ok(sectionStart >= 0 && sectionEnd > sectionStart, "SPEC lost the bounded §5.9 section");
 			const section = value.slice(sectionStart, sectionEnd);
+			assert.equal(
+				section.split("The #133 lifecycle-record projection").length - 1,
+				1,
+				"SPEC §5.9 must carry exactly one #347 projection block",
+			);
 			const start = section.indexOf("The #133 lifecycle-record projection");
 			const end = section.indexOf("\n\nThe norm is **explicitly advisory**", start);
 			assert.ok(start >= 0 && end > start, "SPEC §5.9 lost the bounded #347 projection block");
