@@ -73,9 +73,50 @@ describe("#131 collapsed operator-visible acts", () => {
 			"active-dispatch count",
 			"#278's `.pi/extensions/gitjig/modes.ts` resolver feeds its resolved merge-mode value and source",
 			"Current issue or PR and workflow phase are excluded",
+			"The consumer may not infer authority from labels alone.",
 			"A UI-less mode makes no status call",
 		])
 			assert.ok(section.includes(clause), `SPEC §5.9 lost the #131 clause: ${clause}`);
+	});
+
+	it("#347 contract owns the complete operator-only lifecycle projection block", () => {
+		const spec = readFileSync(fileURLToPath(new URL("../SPEC.md", import.meta.url)), "utf8").replaceAll("\r\n", "\n");
+		const expected = readFileSync(
+			fileURLToPath(new URL("./fixtures/lifecycle-projection.contract.txt", import.meta.url)),
+			"utf8",
+		)
+			.replaceAll("\r\n", "\n")
+			.trim();
+		const extract = (value: string) => {
+			const sectionStart = value.indexOf("### 5.9 Session surfaces");
+			const sectionEnd = value.indexOf("## 6. Self-governance milestone", sectionStart);
+			assert.ok(sectionStart >= 0 && sectionEnd > sectionStart, "SPEC lost the bounded §5.9 section");
+			const section = value.slice(sectionStart, sectionEnd);
+			assert.equal(
+				section.split("The #133 lifecycle-record projection").length - 1,
+				1,
+				"SPEC §5.9 must carry exactly one #347 projection block",
+			);
+			const start = section.indexOf("The #133 lifecycle-record projection");
+			const end = section.indexOf("\n\nThe norm is **explicitly advisory**", start);
+			assert.ok(start >= 0 && end > start, "SPEC §5.9 lost the bounded #347 projection block");
+			return section.slice(start, end).trim();
+		};
+		assert.equal(extract(spec), expected);
+		for (const [from, to] of [
+			["permission must pass #276's existing", "permission may pass #276's existing"],
+			[", without changing a shared reader's default for any other caller", ""],
+			[" with attested carrying-comment identity", ""],
+			[
+				"; the existing active-dispatch/latest-terminal class and #131 dispatch/publish act rendering remain unchanged",
+				"",
+			],
+			["Every marker and terminal is checked:", "Some markers and terminals are checked:"],
+			["populations result in silence", "populations may result in silence"],
+		] as const) {
+			assert.ok(spec.includes(from), `mutation operand absent: ${from}`);
+			assert.notEqual(extract(spec.replace(from, to)), expected, `projection mutant survived: ${from}`);
+		}
 	});
 
 	it("dispatch renders fixed intent, a non-secret target, and three styled terminal classes", () => {
