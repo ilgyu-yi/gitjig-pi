@@ -59,12 +59,14 @@ function panelContract(source: string): void {
 		"a discretionary same-round or later-round redispatch",
 		"sibling calls never share or replenish it",
 		"unrelated to §1.4's per-lineage recovery allowance",
-		"standing brief contract for each such call instructs the delegate",
+		"For generic argv calls, the standing brief contract instructs the delegate",
+		"For explicitly selected Pi RPC calls only, the standing brief instead instructs the delegate",
+		"submit_result` tool, not to write `../return.json` directly",
 		"changes it to `spent` before its one retry",
 		"repeats the same options and pin",
 		"\\n\\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.",
 		"each written `\\n` denotes one U+000A byte sequence",
-		"absence of the required file is the sole trigger",
+		"absence of the required return slot is the sole trigger",
 		"A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result",
 		"no third send occurs for that call",
 		"new call with its own one-retry bound",
@@ -285,7 +287,7 @@ describe("Execution #264 contract settlement", () => {
 	it("pins §1.7's bounded per-slot retry and its separation from verdicts and later rounds", () => panelContract(spec));
 	it("locks the shipped retry suffix to §1.7's byte sequence", () => {
 		const panel = section(spec, "### 1.7 The reviewer panel", "### 1.8 Plan contest");
-		const written = /with exactly this suffix: `([^`]*)`/.exec(panel)?.[1];
+		const written = /Generic argv retains exactly this suffix: `([^`]*)`/.exec(panel)?.[1];
 		assert.ok(written, "SPEC §1.7 has no written retry suffix to lock");
 		assert.equal(
 			written.replaceAll("\\n", "\n"),
@@ -304,7 +306,7 @@ describe("Execution #264 contract settlement", () => {
 			["changes it to `spent` before its one retry", "changes it to spent after its retry"],
 			["repeats the same options and pin", "changes the options and pin"],
 			["each written `\\n` denotes one U+000A byte sequence", "each written \\n is literal text"],
-			["absence of the required file is the sole trigger", "any refusal is a retry trigger"],
+			["absence of the required return slot is the sole trigger", "any refusal is a retry trigger"],
 			[
 				"A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result",
 				"A second missing return supplies a result",
