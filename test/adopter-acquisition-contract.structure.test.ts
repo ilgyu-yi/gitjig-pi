@@ -1,115 +1,161 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const spec = readFileSync(join(root, "SPEC.md"), "utf8");
+const spec = readFileSync(join(root, "SPEC.md"), "utf8").replaceAll("\r\n", "\n");
 const readme = readFileSync(join(root, "README.md"), "utf8");
+const fixturePath = join(root, "test/fixtures/adopter-acquisition-contract.v1.json");
+const fixture = JSON.parse(readFileSync(fixturePath, "utf8")) as {
+	schemaVersion: number;
+	regions: Array<{ name: string; text: string }>;
+};
+const names = ["launcher", "trust", "binding", "host"] as const;
+const sections = {
+	launcher: ["### 4.1 Namespaces", "### 4.2 Target-parameterization"],
+	trust: ["### 4.2 Target-parameterization", "### 4.3 PR-based installs"],
+	binding: ["### 4.6 Binding and resolution", "### 4.7 Host boundary"],
+	host: ["### 4.7 Host boundary", "### 4.8 The command layer"],
+} as const;
 
-const anchors = [
-	"The first-clone acquisition launcher is the self-standing handed-over `.github/bin/gitjig-bootstrap.mjs`",
-	"The first-clone architecture has exactly that one launcher address",
-	"`.pi/extensions/gitjig/install/bootstrap.ts` is not a launcher address, and no redirect or shim address is admitted.",
-	'Exact invocation is `env -i PATH="$PATH" HOME="$HOME" LC_ALL=C node .github/bin/gitjig-bootstrap.mjs` with no following argument',
-	"the empty environment plus explicit allowlist is part of the invocation and prevents every inherited `NODE_*`, `GIT_*`, loader, coverage, config, and other startup input from acting before the handed launcher can run",
-	"Any argument is `invalid-input`.",
-	"must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob under pre/post pathname and descriptor identity checks",
-	"own `source` object with exactly `provider`, `host`, `owner`, and `repository` and no other own key",
-	'`provider: "github"`; `host: "github.com"`',
-	"This projection selects acquisition only. After snapshot confirmation, the acquired existing canonical codec and verifier reread the complete target pin and remain the sole integrity admission before mutation.",
-	"every HEAD entry is a regular blob mode",
-	"every ancestor and working entry is non-link and confined",
-	"The complete HEAD and working populations at `.pi/extensions/gitjig.ts` plus `.pi/extensions/gitjig/**` are equal",
-	"every working byte equals its HEAD blob",
-	"The initial handed process admits only the exact empty-environment invocation above; its first executable step replaces its three admitted startup values with the narrower child allowlist below before any acquisition operation",
-	"Every Git child receives EOF on stdin, a 120-second timeout, and independent 1 MiB stdout and stderr caps.",
-	"The provision Node child receives EOF, a 300-second timeout, and the same per-stream caps.",
-	"they clear inherited `GIT_*`, `NODE_OPTIONS`, `NODE_PATH`, and loader injection",
-	"set `GIT_CONFIG_NOSYSTEM=1`, point global config at an owned empty file",
-	"its own regular non-link handed path derives the target top, and no ambient or caller-supplied target can redirect it.",
-	"creates exactly one `gitjig-acquire-*` child",
-	"every artifact from the first successfully created child onward is non-link and current-user-owned where uid exists",
-	"every created directory has exact mode `0700`, and every created regular file has exact mode `0600`",
-	"Cleanup responsibility begins with that first artifact, is attempted on every controlled terminal, and confirms all owned artifacts absent before success.",
-	"abrupt termination is outside the controlled terminal guarantee",
-	"Cleanup failure overrides every simultaneous post-creation cause and makes success impossible.",
-	"Git errors to `69`",
-] as const;
-
-const causes = [
-	["invalid-input", "64"],
-	["snapshot-identity-mismatch", "65"],
-	["source-unavailable", "69"],
-	["provision-refused", "70"],
-	["temporary-storage-unavailable", "73"],
-	["cleanup-failed", "74"],
-] as const;
-const contradictions = [
-	"the carried bootstrap remains the scheduled first-clone launcher",
-	"additional source routing keys are accepted",
-	"an unexpected cause exits 75",
-] as const;
-
-function contractHolds(text: string): boolean {
-	if (!anchors.every((anchor) => text.includes(anchor))) return false;
-	if (contradictions.some((contradiction) => text.includes(contradiction))) return false;
-	const terminal = text.match(/\*\*First-clone terminal algebra\.\*\*([\s\S]*?)\n\nComposition plans/u)?.[1] ?? "";
-	const observed = [...terminal.matchAll(/`([a-z-]+)`\/`([0-9]+)`/gu)].map((match) => [match[1], match[2]]);
-	return JSON.stringify(observed) === JSON.stringify(causes);
+function exactFixture(value: unknown): value is typeof fixture {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const record = value as Record<string, unknown>;
+	if (Object.keys(record).sort().join(",") !== "regions,schemaVersion" || record.schemaVersion !== 1) return false;
+	if (!Array.isArray(record.regions) || record.regions.length !== names.length) return false;
+	return record.regions.every(
+		(region, index) =>
+			typeof region === "object" &&
+			region !== null &&
+			!Array.isArray(region) &&
+			Object.keys(region).sort().join(",") === "name,text" &&
+			(region as { name?: unknown }).name === names[index] &&
+			typeof (region as { text?: unknown }).text === "string" &&
+			(region as { text: string }).text.trim() === (region as { text: string }).text,
+	);
 }
 
-it("#363 pins the named first-clone settlement clauses without runtime smuggling", () => {
+function extractRegions(text: string): Array<{ name: string; text: string }> | undefined {
+	const positions: number[] = [];
+	const regions = [];
+	for (const name of names) {
+		const startMarker = `<!-- acquisition-contract: ${name}:start -->`;
+		const endMarker = `<!-- acquisition-contract: ${name}:end -->`;
+		if (text.split(startMarker).length !== 2 || text.split(endMarker).length !== 2) return undefined;
+		const sectionStart = text.indexOf(sections[name][0]);
+		const sectionEnd = text.indexOf(sections[name][1], sectionStart);
+		const start = text.indexOf(startMarker);
+		const end = text.indexOf(endMarker, start + startMarker.length);
+		if (sectionStart < 0 || sectionEnd <= sectionStart || start <= sectionStart || end <= start || end >= sectionEnd)
+			return undefined;
+		positions.push(start, end);
+		regions.push({ name, text: text.slice(start + startMarker.length, end).trim() });
+	}
+	if (!positions.every((position, index) => index === 0 || position > positions[index - 1])) return undefined;
+	return regions;
+}
+
+function contractHolds(text: string): boolean {
+	return exactFixture(fixture) && JSON.stringify(extractRegions(text)) === JSON.stringify(fixture.regions);
+}
+
+it("#363 owns the complete bounded first-clone contract without runtime smuggling", () => {
 	assert.equal(contractHolds(spec), true);
 	assert.match(readme, /SPEC §§4\.1–4\.2 and 4\.6–4\.7/u);
 	assert.equal(existsSync(join(root, ".github/bin/gitjig-bootstrap.mjs")), false);
 	assert.equal(existsSync(join(root, ".pi/extensions/gitjig/install/bootstrap.ts")), true);
 });
 
-it("#363's representative contract mutants independently break the owner", () => {
-	const replacements = [
-		[
-			"the empty environment plus explicit allowlist is part of the invocation and prevents every inherited `NODE_*`, `GIT_*`, loader, coverage, config, and other startup input from acting before the handed launcher can run",
-			"the inherited Node startup environment is accepted",
-		],
+it("#363 rejects omission, insertion, contradiction, movement, and terminal mutants", () => {
+	for (const region of fixture.regions) {
+		assert.equal(
+			contractHolds(spec.replace(region.text, region.text.slice(0, -1))),
+			false,
+			`${region.name}: terminal-byte deletion survived`,
+		);
+		assert.equal(
+			contractHolds(spec.replace(region.text, `${region.text}\nContradictory fallback authority is also accepted.`)),
+			false,
+			`${region.name}: contradictory insertion survived`,
+		);
+	}
+	for (const [from, to] of [
 		["before any acquisition operation", "after acquisition begins"],
 		["Any argument is `invalid-input`.", "Arguments may select another source."],
 		["and no other own key", "and optional routing keys"],
 		['`provider: "github"`; `host: "github.com"`', '`provider: "gitlab"`; `host: "gitlab.com"`'],
-		["every HEAD entry is a regular blob mode", "every HEAD entry may be a blob, symlink, or submodule"],
-		["every ancestor and working entry is non-link and confined", "ancestors may be linked or escaping"],
+		["every HEAD entry is a regular blob mode", "every HEAD entry may be a symlink"],
+		["every ancestor and working entry is non-link and confined", "ancestors may escape"],
 		["set `GIT_CONFIG_NOSYSTEM=1`", "permit system Git configuration"],
 		["every working byte equals its HEAD blob", "working bytes need only exist"],
-		[
-			"every artifact from the first successfully created child onward is non-link and current-user-owned where uid exists",
-			"created artifacts may be linked or foreign-owned",
-		],
-		[
-			"every created directory has exact mode `0700`, and every created regular file has exact mode `0600`",
-			"created directories may use mode `0755` and files mode `0644`",
-		],
 		["Cleanup responsibility begins with that first artifact", "Cleanup begins after identity confirmation"],
-		["Cleanup failure overrides every simultaneous post-creation cause", "The primary cause overrides cleanup failure"],
+		["Cleanup failure overrides every simultaneous post-creation cause", "The primary cause overrides cleanup"],
 		["Git errors to `69`", "Git errors to `70`"],
-	] as const;
-	for (const [needle, replacement] of replacements) {
-		assert.equal(spec.split(needle).length, 2, `mutation site must be unique: ${needle}`);
-		assert.equal(contractHolds(spec.replace(needle, replacement)), false, `mutant survived: ${needle}`);
-	}
-	const insertAt = "\n\nComposition plans over the **old and new manifests**";
-	for (const contradiction of contradictions) {
-		assert.equal(
-			contractHolds(spec.replace(insertAt, ` ${contradiction}.${insertAt}`)),
-			false,
-			`contradictory prose survived: ${contradiction}`,
-		);
+	] as const) {
+		assert.equal(spec.split(from).length, 2, `mutation site must be unique: ${from}`);
+		assert.equal(contractHolds(spec.replace(from, to)), false, `mutant survived: ${from}`);
 	}
 	const extraCause = spec.replace(
 		"`cleanup-failed`/`74` whenever controlled cleanup",
 		"`unexpected`/`75` for another cause; and `cleanup-failed`/`74` whenever controlled cleanup",
 	);
 	assert.equal(contractHolds(extraCause), false, "a seventh terminal cause survived");
+	const launcher = fixture.regions[0];
+	const moved = spec
+		.replace(
+			`<!-- acquisition-contract: launcher:start -->\n${launcher.text}\n<!-- acquisition-contract: launcher:end -->`,
+			"",
+		)
+		.replace("### 4.1 Namespaces", `### 4.1 Namespaces\n\n${launcher.text}`);
+	assert.equal(contractHolds(moved), false, "a moved owner region survived");
+	assert.equal(
+		contractHolds(spec.replace("## 6. Self-governance milestone", "## 6. Self-governance milestone\ncontrol")),
+		true,
+	);
+});
+
+it("the exact empty-environment boundary erases inherited startup influence", () => {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-acquisition-env-"));
+	const preload = join(scratch, "preload.cjs");
+	const marker = join(scratch, "preloaded");
+	const coverage = join(scratch, "coverage");
+	const probe = join(scratch, "probe.mjs");
+	writeFileSync(preload, `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "loaded");`);
+	writeFileSync(probe, "process.stdout.write(JSON.stringify(process.env));");
+	const hostile = {
+		...process.env,
+		NODE_OPTIONS: `--require=${preload}`,
+		NODE_V8_COVERAGE: coverage,
+		GIT_CONFIG_SYSTEM: join(scratch, "gitconfig"),
+		ARBITRARY_SENTINEL: "hostile",
+	};
+	const control = spawnSync(process.execPath, [probe], { encoding: "utf8", env: hostile });
+	assert.equal(control.status, 0);
+	assert.equal(existsSync(marker), true, "control preload did not establish the witness");
+	rmSync(marker);
+	rmSync(coverage, { recursive: true, force: true });
+	const clean = spawnSync(
+		"env",
+		["-i", `PATH=${process.env.PATH ?? ""}`, `HOME=${process.env.HOME ?? ""}`, "LC_ALL=C", process.execPath, probe],
+		{ encoding: "utf8", env: hostile },
+	);
+	assert.equal(clean.status, 0, clean.stderr);
+	const observed = JSON.parse(clean.stdout) as Record<string, string>;
+	assert.deepEqual(
+		{ HOME: observed.HOME, LC_ALL: observed.LC_ALL, PATH: observed.PATH },
+		{ HOME: process.env.HOME ?? "", LC_ALL: "C", PATH: process.env.PATH ?? "" },
+	);
+	for (const inherited of ["NODE_OPTIONS", "NODE_V8_COVERAGE", "GIT_CONFIG_SYSTEM", "ARBITRARY_SENTINEL"])
+		assert.equal(Object.hasOwn(observed, inherited), false, `inherited startup input survived: ${inherited}`);
+	const platformCreated = Object.keys(observed).filter((key) => !new Set(["HOME", "LC_ALL", "PATH"]).has(key));
+	assert.deepEqual(platformCreated, process.platform === "darwin" ? ["__CF_USER_TEXT_ENCODING"] : []);
+	assert.equal(existsSync(marker), false);
+	assert.equal(existsSync(coverage), false);
+	rmSync(scratch, { recursive: true, force: true });
 });
 
 after(() => {
