@@ -20,6 +20,7 @@ function settled(text: string): boolean {
 		"For generic argv calls, the standing brief contract instructs",
 		"For explicitly selected Pi RPC calls only, the standing brief instead instructs",
 		"the invocation-bound `submit_result` tool, not to write `../return.json` directly",
+		"no provisional file is required from that child",
 		"appending exactly one transport-selected suffix",
 		`Generic argv retains exactly this suffix: \`${generic}\``,
 		`Explicitly selected Pi RPC uses exactly this suffix instead: \`${pi}\``,
@@ -47,6 +48,7 @@ test("baseline-first isolated SPEC mutations kill either branch and retry-bound 
 				`Explicitly selected Pi RPC uses exactly this suffix instead: \`${pi}\``,
 				"Pi RPC uses generic direct-file retry",
 			],
+			["no provisional file is required from that child", "a provisional file is also required from that child"],
 			["appending exactly one transport-selected suffix", "appending an arbitrary delegate-selected suffix"],
 			[
 				"The Pi subprocess itself adds no second missing-submission continuation",
