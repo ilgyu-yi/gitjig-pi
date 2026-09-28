@@ -59,6 +59,11 @@ describe("repository fail-closed polarity ownership", () => {
 	it("fails closed on unowned, duplicate, skipped, and drifted ownership inputs", () => {
 		const occurrences = refusalOccurrences(repository);
 		assert.throws(() => validatePolarityOwners(occurrences, owners.slice(1)), /unowned refusal occurrence/);
+		assert.throws(
+			() =>
+				validatePolarityOwners([...occurrences, { source: ".github/bin/gitjig-governance.mjs", offset: 0 }], owners),
+			/unowned refusal occurrence/,
+		);
 		assert.throws(() => validatePolarityOwners(occurrences, [...owners, owners[0]]), /duplicate polarity owner/);
 		assert.throws(
 			() =>
@@ -69,6 +74,13 @@ describe("repository fail-closed polarity ownership", () => {
 			/owner has no refusal occurrence/,
 		);
 		assert.throws(() => flipRefusalPolarity("no refusal", occurrences[0]), /drifted/);
+	});
+
+	it("establishes every mapped focused owner before interpreting mutant failure", () => {
+		for (const [index, owner] of owners.entries()) {
+			const result = run(box(`baseline-owner-${index + 1}`), owner.owner);
+			assert.equal(result.status, 0, `${owner.owner}: baseline failed\n${result.stdout}\n${result.stderr}`);
+		}
 	});
 
 	it("kills every event and lifecycle refusal-polarity mutant with its focused owner", () => {

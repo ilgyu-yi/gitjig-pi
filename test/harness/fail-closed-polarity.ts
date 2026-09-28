@@ -23,7 +23,7 @@ function filesUnder(root: string, directory: string): string[] {
 }
 
 export function refusalOccurrences(root: string): RefusalOccurrence[] {
-	const files = [...filesUnder(root, ".github/workflows"), ...filesUnder(root, ".pi/extensions")];
+	const files = [...filesUnder(root, ".github"), ...filesUnder(root, ".pi/extensions")];
 	return files.flatMap((source) => {
 		const text = readFileSync(join(root, source), "utf8");
 		const occurrences: RefusalOccurrence[] = [];
