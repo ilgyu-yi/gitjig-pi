@@ -1,15 +1,54 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	clearBlockedTransition,
+	createBlockedTransition,
+	createHandoffTransition,
 	eligibleApprovalCount,
+	inspectAwaitingAuthorPopulation,
 	invalidatesLandingAdvisory,
 	RECORD_MARKERS,
+	reenterHandoffTransition,
 } from "../.github/workflows/gitjig-lifecycle.mjs";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
+const NOW = "2026-09-28T00:00:00.000Z";
+const assertRefusal = (actual: unknown, arm: string, extra: Record<string, unknown> = {}): void => {
+	assert.deepEqual(actual, { ok: false, arm, ...extra });
+};
+const blocked = { condition: "condition", recovery: "recovery", observedAt: NOW, subjectHead: A, baseHead: B };
+const handoff = {
+	cause: "cause",
+	recipient: "maintainer",
+	reentry: "none",
+	observedAt: NOW,
+	subjectHead: A,
+	baseHead: B,
+};
+const awaiting = {
+	producer: "ACTOR",
+	producerKind: "resolver-repair",
+	observedAt: NOW,
+	subjectHead: A,
+	baseHead: B,
+};
+const comment = (id: number, marker: string, record: unknown) => ({
+	id,
+	attested: true,
+	authorId: "ACTOR",
+	body: `${marker}\n\n\`\`\`json\n${JSON.stringify(record)}\n\`\`\``,
+});
+
 describe("settled lifecycle ownership", () => {
-	it("zero native quorum is satisfied, never an escape", () => {
+	it("returns complete quorum decisions", () => {
+		assertRefusal(eligibleApprovalCount([], "author", A, -1), "quorum-unmeasurable");
+		assert.deepEqual(eligibleApprovalCount([], "author", A, 1), {
+			ok: false,
+			arm: "quorum-missing",
+			count: 0,
+			quorum: 1,
+		});
 		assert.deepEqual(eligibleApprovalCount([], "author", A, 0), {
 			ok: true,
 			arm: "quorum-satisfied",
@@ -21,6 +60,104 @@ describe("settled lifecycle ownership", () => {
 			false,
 		);
 	});
+	it("returns complete population refusal and success results", () => {
+		assertRefusal(inspectAwaitingAuthorPopulation(null as never, "pull"), "population-unmeasurable");
+		assertRefusal(
+			inspectAwaitingAuthorPopulation(
+				[{ id: 1, attested: true, authorId: "ACTOR", body: `${RECORD_MARKERS.awaitingAuthor}\nmalformed` }],
+				"pull",
+			),
+			"record-unparseable",
+		);
+		const current = comment(1, RECORD_MARKERS.awaitingAuthor, awaiting);
+		assertRefusal(
+			inspectAwaitingAuthorPopulation(
+				[current, { ...comment(2, RECORD_MARKERS.awaitingAuthorTerminal, {}), authorId: "OTHER" }],
+				"pull",
+			),
+			"terminal-unparseable",
+		);
+		const terminal = comment(2, RECORD_MARKERS.awaitingAuthorTerminal, {
+			recordCommentId: 99,
+			clearerId: "ACTOR",
+			clearedAt: NOW,
+			cause: "pull-synchronize",
+			subjectHead: A,
+			baseHead: B,
+		});
+		assertRefusal(inspectAwaitingAuthorPopulation([current, terminal], "pull"), "terminal-ambiguous");
+		const duplicate = comment(2, RECORD_MARKERS.awaitingAuthor, awaiting);
+		assertRefusal(inspectAwaitingAuthorPopulation([current, duplicate], "pull"), "record-ambiguous", {
+			current: [
+				{ comment: current, record: awaiting },
+				{ comment: duplicate, record: awaiting },
+			],
+			terminals: [],
+		});
+		assert.deepEqual(inspectAwaitingAuthorPopulation([current], "pull"), {
+			ok: true,
+			current: [{ comment: current, record: awaiting }],
+			terminals: [],
+		});
+	});
+
+	it("returns complete blocked and handoff transition decisions", () => {
+		assertRefusal(createBlockedTransition({}), "blocked-record");
+		assert.deepEqual(createBlockedTransition(blocked), {
+			ok: true,
+			plan: [
+				{
+					kind: "comment",
+					body: `${RECORD_MARKERS.blocked}\n\n\`\`\`json\n${JSON.stringify(blocked)}\n\`\`\``,
+				},
+				{ kind: "add-label", label: "blocked" },
+			],
+		});
+		assertRefusal(clearBlockedTransition({ status: "Completed" }), "blocked-status");
+		assertRefusal(clearBlockedTransition({ status: "Active", directiveChanged: true }), "activation-required");
+		assertRefusal(clearBlockedTransition({ status: "Proposed" }), "blocked-terminal");
+		const transitionInput = {
+			status: "Proposed",
+			directiveChanged: false,
+			recordCommentId: 1,
+			observedAt: NOW,
+			subjectHead: A,
+			baseHead: B,
+		};
+		assert.deepEqual(clearBlockedTransition(transitionInput), {
+			ok: true,
+			preservedStatus: "Proposed",
+			plan: [
+				{
+					kind: "comment",
+					body: `${RECORD_MARKERS.blockedTerminal}\n\n\`\`\`json\n${JSON.stringify({ recordCommentId: 1, transition: "blocked-clear", observedAt: NOW, subjectHead: A, baseHead: B })}\n\`\`\``,
+				},
+				{ kind: "remove-label", label: "blocked" },
+			],
+		});
+		assertRefusal(createHandoffTransition({}), "handoff-record");
+		assert.deepEqual(createHandoffTransition(handoff), {
+			ok: true,
+			key: JSON.stringify(["cause", "maintainer", "none", A, B]),
+			plan: [
+				{
+					kind: "comment",
+					body: `${RECORD_MARKERS.handoff}\n\n\`\`\`json\n${JSON.stringify(handoff)}\n\`\`\``,
+				},
+			],
+		});
+		assertRefusal(reenterHandoffTransition({}), "handoff-terminal");
+		assert.deepEqual(reenterHandoffTransition({ recordCommentId: 1, observedAt: NOW, subjectHead: A, baseHead: B }), {
+			ok: true,
+			plan: [
+				{
+					kind: "comment",
+					body: `${RECORD_MARKERS.handoffTerminal}\n\n\`\`\`json\n${JSON.stringify({ recordCommentId: 1, transition: "handoff-reentry", observedAt: NOW, subjectHead: A, baseHead: B })}\n\`\`\``,
+				},
+			],
+		});
+	});
+
 	it("synchronize invalidates only an observed head change", () => {
 		assert.equal(
 			invalidatesLandingAdvisory({ kind: "synchronize", before: A, after: B, eventRef: null, baseRef: "main" }),
