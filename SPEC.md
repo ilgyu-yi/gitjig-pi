@@ -47,25 +47,25 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | §4 | Substrate and install contract | 813 |
 | &nbsp;&nbsp;§4.1 | Namespaces | 817 |
 | &nbsp;&nbsp;§4.2 | Target-parameterization | 831 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 849 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 855 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 859 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 863 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 879 |
-| &nbsp;&nbsp;§4.8 | The command layer | 893 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 950 |
-| §5 | Cross-cutting contracts | 1069 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1073 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1079 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1083 |
-| &nbsp;&nbsp;§5.4 | Work language | 1087 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1091 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1109 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1121 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1131 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1139 |
-| §6 | Self-governance milestone | 1151 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1162 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 866 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 872 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 876 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 880 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 896 |
+| &nbsp;&nbsp;§4.8 | The command layer | 910 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 967 |
+| §5 | Cross-cutting contracts | 1086 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1090 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1096 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1100 |
+| &nbsp;&nbsp;§5.4 | Work language | 1104 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1108 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1126 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1138 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1148 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1156 |
+| §6 | Self-governance milestone | 1172 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1183 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -837,13 +837,30 @@ The pin's closed v1 JSON contains exactly `schemaVersion: 1`; platform-attested 
 Manifest order is unsigned UTF-8 path-byte order. Each digest record is one class byte (`0x48` handed, `0x43` carried), uint32-big-endian path-byte length, path bytes, uint64-big-endian file-byte length, and the raw 32-byte member digest. `payloadDigest` hashes all concatenated records; `carriedDigest` hashes only carried records; an empty projection hashes the empty byte string. Acquisition obtains bytes from the platform-attested source at exactly `revision`, reconstructs the complete manifest and both aggregate digests, and refuses before any target mutation on any mismatch. Provisioning and freshness reconstruct the carried records with this same grammar. Another provider or algorithm requires a new version, never reinterpretation of v1.
 
 <!-- acquisition-contract: trust:start -->
-**First-clone trust transition.** Exact invocation is `env -i PATH="$PATH" HOME="$HOME" LC_ALL=C node .github/bin/gitjig-bootstrap.mjs` with no following argument: the empty environment plus explicit allowlist is part of the invocation and prevents every inherited `NODE_*`, `GIT_*`, loader, coverage, config, and other startup input from acting before the handed launcher can run. Any argument is `invalid-input`. The regular non-link handed launcher physically self-locates the exact target Git top from its installed `.github/bin/` path; there is no target operand. Before routing, target `.pi/gitjig.pin.json` must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob under pre/post pathname and descriptor identity checks. Any substituted, dirty, linked, exchanged, oversized, or non-blob pin is `invalid-input`. The launcher reads those admitted committed bytes only for a closed, non-authorizing routing projection: UTF-8 JSON object; own `schemaVersion` equal to `1`; own `source` object with exactly `provider`, `host`, `owner`, and `repository` and no other own key; `provider: "github"`; `host: "github.com"`; non-empty NFC UTF-8 owner/repository scalars containing no control, slash, or percent; and own lowercase 40-hex `revision`. Other top-level fields are not interpreted here. This projection selects acquisition only. After snapshot confirmation, the acquired existing canonical codec and verifier reread the complete target pin and remain the sole integrity admission before mutation.
+**First-clone trust transition.** Exact invocation is `env -i PATH="$PATH" HOME="$HOME" LC_ALL=C node .github/bin/gitjig-bootstrap.mjs` with no following argument: after the selected Node process starts, the empty environment plus explicit allowlist prevents inherited `NODE_*`, `GIT_*`, loader, coverage, config, and other omitted startup inputs from reaching the handed launcher. The caller-supplied `PATH` and `HOME`, and the shell's selection of `env` and the PATH-selected `node`, necessarily act before these handed bytes execute; this pre-process executable/value selection is an explicit residual, not acquisition authority or evidence that the selected executable is trusted. Any argument is `invalid-input`. The regular non-link handed launcher physically self-locates the exact target Git top from its installed `.github/bin/` path; there is no target operand. Before routing, target `.pi/gitjig.pin.json` must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob under pre/post pathname and descriptor identity checks. Any substituted, dirty, linked, exchanged, oversized, or non-blob pin is `invalid-input`. The launcher reads those admitted committed bytes only for a closed, non-authorizing routing projection: UTF-8 JSON object; own `schemaVersion` equal to `1`; own `source` object with exactly `provider`, `host`, `owner`, and `repository` and no other own key; `provider: "github"`; `host: "github.com"`; non-empty NFC UTF-8 owner/repository scalars containing no control, slash, or percent; and own lowercase 40-hex `revision`. Other top-level fields are not interpreted here. This projection selects acquisition only. After snapshot confirmation, the acquired existing canonical codec and verifier reread the complete target pin and remain the sole integrity admission before mutation.
 
 For projected owner `O` and repository `R`, acquisition input is byte-exact `https://github.com/O/R`; the confirmed origin may equal only that or `https://github.com/O/R.git`. No suffix is stripped, so an `R` that itself ends in `.git` remains literal. Revision is exactly the projected object: no branch, tag, default HEAD, local path, URL rewrite, mirror, alternate, cache, package, global install, or fallback may satisfy identity.
 
 **Acquired executable closure.** Before any acquired byte executes, Git's common directory and work tree resolve inside the fresh destination; HEAD is detached and byte-equal to the projected revision; origin has one allowed spelling; and porcelain is empty. The complete HEAD and working populations at `.pi/extensions/gitjig.ts` plus `.pi/extensions/gitjig/**` are equal: there is no extra path; every HEAD entry is a regular blob mode; every ancestor and working entry is non-link and confined; and every working byte equals its HEAD blob. The fixed `.pi/extensions/gitjig/install/provision-cli.ts` entry belongs to that population. Only that entry may then run, with the existing exact target/source/revision inputs. Executable-byte closure is a pre-launch safety rule, not a second payload classifier or digest owner.
 
 The initial handed process admits only the exact empty-environment invocation above; its first executable step replaces its three admitted startup values with the narrower child allowlist below before any acquisition operation. Every Git child receives EOF on stdin, a 120-second timeout, and independent 1 MiB stdout and stderr caps. The provision Node child receives EOF, a 300-second timeout, and the same per-stream caps. Timeout, overflow, signal, spawn failure, or nonzero outcome is observed by stage. Child environments are allowlists containing only minimum executable-path/locale values and the required target HOME; they clear inherited `GIT_*`, `NODE_OPTIONS`, `NODE_PATH`, and loader injection, set `GIT_CONFIG_NOSYSTEM=1`, point global config at an owned empty file, disable terminal prompts, credential helpers, hooks, filters, URL rewrites and HTTP redirects, and admit no alternates, replacement refs, object-directory, work-tree/git-dir, or local-file transport input. Operands and child diagnostics never reach the terminal.
+
+The following is the one closed process-creation-through-cleanup owner. Its stage set is exactly `startup`, `target-admission`, `temporary-create`, `source-acquisition`, `snapshot-confirmation`, `provision`, `cleanup`, and `terminal`; its surface set is exactly `launcher`, `git-child`, `provision-node`, `filesystem`, and `terminal`. A row is one admitted stage/surface cell, and no unlisted pair has acquisition authority.
+
+<!-- acquisition-process-matrix: start -->
+| stage | surface | authority | bound | refusal | cleanup obligation |
+| --- | --- | --- | --- | --- | --- |
+| startup | launcher | handed physical launcher path after caller executable selection | zero operands; process environment exactly `PATH`, `HOME`, `LC_ALL=C` apart from platform-created variables | `invalid-input`/`64` | none before the first owned artifact |
+| target-admission | launcher | physical target plus HEAD pin routing projection only | no-follow current-user-owned pin, at most 1 MiB, byte-equal to HEAD | `invalid-input`/`64` | none before the first owned artifact |
+| temporary-create | filesystem | one real platform-temporary-base child | exactly one child; owned non-links; directories `0700`; files `0600` | `temporary-storage-unavailable`/`73` | responsibility starts with the first created artifact |
+| source-acquisition | git-child | canonical projected source and exact revision only | EOF; 120 seconds; 1 MiB each stream; closed Git environment | `source-unavailable`/`69` | remove every owned artifact on every controlled terminal |
+| snapshot-confirmation | launcher | detached revision and complete HEAD/working executable closure | confined clean checkout; exact regular-blob population and bytes; fixed entry | `snapshot-identity-mismatch`/`65` | remove every owned artifact on every controlled terminal |
+| provision | provision-node | confirmed fixed entry under the existing full verifier | EOF; 300 seconds; 1 MiB each stream; closed Node environment | `provision-refused`/`70` | remove every owned artifact on every controlled terminal |
+| cleanup | filesystem | owned-artifact ledger beginning at first creation | every controlled terminal; confirmed absence before success | `cleanup-failed`/`74` | failure overrides every simultaneous post-creation cause |
+| terminal | terminal | stage result joined with cleanup result | success is silent `0`; refusal is one content-free line and no stdout | the closed six-cause/status algebra in §4.7 | no success until cleanup confirms absence |
+<!-- acquisition-process-matrix: end -->
+
+The matrix order is the process order. No `git-child` starts before `temporary-create`; no `provision-node` starts before `snapshot-confirmation`; every controlled terminal after `temporary-create` reaches `cleanup`; and the `terminal` cell is selected only after cleanup, with `cleanup-failed` overriding the earlier stage result. Those four cross-stage invariants and the closed row population are the semantic owner; the surrounding prose explains their operands and never supplies an additional stage, surface, or terminal. The allowlisted `PATH` and `HOME` are values, not attestations: PATH selection of `env`, `node`, or `git`, and HOME-sensitive behavior in a selected executable, remain explicit executable-selection residuals at the applicable launcher or child surface.
 <!-- acquisition-contract: trust:end -->
 
 ### 4.3 PR-based installs

@@ -1,21 +1,31 @@
 {
-	"schemaVersion": 1,
-	"regions": [
-		{
-			"name": "launcher",
-			"text": "The local tier's handed-over helpers live at `.githooks/helpers/`; its explicit bind instrument is `.githooks/bind_local_tier.sh`. The generated pin is the sole handed-over exception under `.pi/`, at `.pi/gitjig.pin.json`. The first-clone acquisition launcher is the self-standing handed-over `.github/bin/gitjig-bootstrap.mjs`; it is available from target history before carried runtime exists. The first-clone architecture has exactly that one launcher address: `.pi/extensions/gitjig/install/bootstrap.ts` is not a launcher address, and no redirect or shim address is admitted. `.gitjig/installed-pin.json` and all other `.gitjig/` state are per-clone and never committed."
-		},
-		{
-			"name": "trust",
-			"text": "**First-clone trust transition.** Exact invocation is `env -i PATH=\"$PATH\" HOME=\"$HOME\" LC_ALL=C node .github/bin/gitjig-bootstrap.mjs` with no following argument: the empty environment plus explicit allowlist is part of the invocation and prevents every inherited `NODE_*`, `GIT_*`, loader, coverage, config, and other startup input from acting before the handed launcher can run. Any argument is `invalid-input`. The regular non-link handed launcher physically self-locates the exact target Git top from its installed `.github/bin/` path; there is no target operand. Before routing, target `.pi/gitjig.pin.json` must be a HEAD-tracked regular blob reached through non-link ancestors, opened no-follow as one-link current-user-owned bytes, no larger than 1 MiB, and byte-equal to the target HEAD blob under pre/post pathname and descriptor identity checks. Any substituted, dirty, linked, exchanged, oversized, or non-blob pin is `invalid-input`. The launcher reads those admitted committed bytes only for a closed, non-authorizing routing projection: UTF-8 JSON object; own `schemaVersion` equal to `1`; own `source` object with exactly `provider`, `host`, `owner`, and `repository` and no other own key; `provider: \"github\"`; `host: \"github.com\"`; non-empty NFC UTF-8 owner/repository scalars containing no control, slash, or percent; and own lowercase 40-hex `revision`. Other top-level fields are not interpreted here. This projection selects acquisition only. After snapshot confirmation, the acquired existing canonical codec and verifier reread the complete target pin and remain the sole integrity admission before mutation.\n\nFor projected owner `O` and repository `R`, acquisition input is byte-exact `https://github.com/O/R`; the confirmed origin may equal only that or `https://github.com/O/R.git`. No suffix is stripped, so an `R` that itself ends in `.git` remains literal. Revision is exactly the projected object: no branch, tag, default HEAD, local path, URL rewrite, mirror, alternate, cache, package, global install, or fallback may satisfy identity.\n\n**Acquired executable closure.** Before any acquired byte executes, Git's common directory and work tree resolve inside the fresh destination; HEAD is detached and byte-equal to the projected revision; origin has one allowed spelling; and porcelain is empty. The complete HEAD and working populations at `.pi/extensions/gitjig.ts` plus `.pi/extensions/gitjig/**` are equal: there is no extra path; every HEAD entry is a regular blob mode; every ancestor and working entry is non-link and confined; and every working byte equals its HEAD blob. The fixed `.pi/extensions/gitjig/install/provision-cli.ts` entry belongs to that population. Only that entry may then run, with the existing exact target/source/revision inputs. Executable-byte closure is a pre-launch safety rule, not a second payload classifier or digest owner.\n\nThe initial handed process admits only the exact empty-environment invocation above; its first executable step replaces its three admitted startup values with the narrower child allowlist below before any acquisition operation. Every Git child receives EOF on stdin, a 120-second timeout, and independent 1 MiB stdout and stderr caps. The provision Node child receives EOF, a 300-second timeout, and the same per-stream caps. Timeout, overflow, signal, spawn failure, or nonzero outcome is observed by stage. Child environments are allowlists containing only minimum executable-path/locale values and the required target HOME; they clear inherited `GIT_*`, `NODE_OPTIONS`, `NODE_PATH`, and loader injection, set `GIT_CONFIG_NOSYSTEM=1`, point global config at an owned empty file, disable terminal prompts, credential helpers, hooks, filters, URL rewrites and HTTP redirects, and admit no alternates, replacement refs, object-directory, work-tree/git-dir, or local-file transport input. Operands and child diagnostics never reach the terminal."
-		},
-		{
-			"name": "binding",
-			"text": "The first-clone launcher follows the same physical-location rule before carried code exists: its own regular non-link handed path derives the target top, and no ambient or caller-supplied target can redirect it."
-		},
-		{
-			"name": "host",
-			"text": "Installation and operation leave the host untouched outside governed repositories: no home-directory configuration, shell login file, global version-control setting, PATH registration, service, or auto-start hook. Two bounded exceptions exist. First, §1.4's state-domain recovery allowance may create and update only §5.5's exact owner-only `gitjig/recovery` directory chain and direct allowance leaves in the resolved account state domain. Second, first-clone acquisition resolves Node's platform temporary base once, requires its realpath to be an absolute existing non-link directory, and creates exactly one `gitjig-acquire-*` child. The shared operating-system base may be sticky or world-writable; every artifact from the first successfully created child onward is non-link and current-user-owned where uid exists, every created directory has exact mode `0700`, and every created regular file has exact mode `0600`. Cleanup responsibility begins with that first artifact, is attempted on every controlled terminal, and confirms all owned artifacts absent before success. Filesystem failure, abrupt process death, or host termination may leave a residual; abrupt termination is outside the controlled terminal guarantee. Neither exception changes configuration, registration, service, repository metadata, or another host path. Package-manager invocation and privilege escalation remain outside installer actions. Disabling the shell is ceasing to invoke it.\n\n**First-clone terminal algebra.** Controlled success has empty stdout and stderr and exits `0`. Every controlled refusal has empty stdout, writes exactly one ASCII `gitjig-bootstrap: <cause>\\n` line to stderr, renders no operand or child diagnostic, and exits: `invalid-input`/`64` for argv, self-location, target, or routing-projection admission; `snapshot-identity-mismatch`/`65` for origin, HEAD, confinement, cleanliness, closed-population, blob, ancestor, or safe-shape disagreement; `source-unavailable`/`69` for Git spawn, timeout, overflow, signal, transport, source, object, or acquisition failure; `provision-refused`/`70` for the confirmed fixed child spawn, timeout, overflow, signal, nonzero or unconfirmed result, including full-pin/verifier/provision refusal; `temporary-storage-unavailable`/`73` for base/create failure when nothing remains after cleanup; and `cleanup-failed`/`74` whenever controlled cleanup cannot confirm every owned artifact absent. Cleanup failure overrides every simultaneous post-creation cause and makes success impossible. Unknown admission errors map to `64`, pre-creation temporary errors to `73`, post-creation pre-identity non-Git errors to `65`, Git errors to `69`, and post-identity errors to `70`, before the cleanup override."
-		}
+	"schemaVersion": 2,
+	"stages": [
+		"startup",
+		"target-admission",
+		"temporary-create",
+		"source-acquisition",
+		"snapshot-confirmation",
+		"provision",
+		"cleanup",
+		"terminal"
+	],
+	"surfaces": ["launcher", "git-child", "provision-node", "filesystem", "terminal"],
+	"cells": [
+		["startup", "launcher", "invalid-input", 64],
+		["target-admission", "launcher", "invalid-input", 64],
+		["temporary-create", "filesystem", "temporary-storage-unavailable", 73],
+		["source-acquisition", "git-child", "source-unavailable", 69],
+		["snapshot-confirmation", "launcher", "snapshot-identity-mismatch", 65],
+		["provision", "provision-node", "provision-refused", 70],
+		["cleanup", "filesystem", "cleanup-failed", 74],
+		["terminal", "terminal", "closed-six-cause-status-algebra", 0]
+	],
+	"crossStage": [
+		"temporary-create<source-acquisition",
+		"snapshot-confirmation<provision",
+		"temporary-create=>cleanup",
+		"cleanup<terminal",
+		"cleanup-failed>stage-result"
 	]
 }
