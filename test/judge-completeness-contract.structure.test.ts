@@ -6,12 +6,34 @@ import { describe, it } from "node:test";
 const spec = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
 const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 
-/**
- * The four settled paragraphs, byte for byte, each with its owning section.
- * Pinning whole paragraphs is what catches an appended, prefixed or
- * rewritten sentence that keeps every named obligation below as a substring
- * while contradicting it (the defect class of PR #380's first three reviews).
+/*
+ * What this guard checks, defined positively. Text is split on LF; a section
+ * runs from its heading line up to (not including) the next `### ` or `## `
+ * heading, joined with LF.
+ * SPEC:
+ *   - each OWNED paragraph occurs exactly once, byte-identical, in its section,
+ *     and each OBLIGATION occurs in exactly one OWNED paragraph (diagnostics);
+ *   - each of §§1.4, 1.7 and 1.9 hashes to its SECTION_SHA256. Any edit,
+ *     insertion, deletion, move or reordering inside those sections fails, so
+ *     a future change there must update these digests deliberately and be
+ *     re-reviewed;
+ *   - outside those sections, the document-order sequence of lines matching
+ *     COINED equals SETTLED_COINED ([section, SHA-256]).
+ * README:
+ *   - the section headed README_SECTION_HEADING occurs once, hashes to
+ *     README_SECTION_SHA256 and contains README_POINTER exactly once;
+ *   - README_POINTER occurs exactly once in README;
+ *   - the document-order sequence of lines matching README_TOPIC or COINED
+ *     equals SETTLED_README, and COINED matches only README_POINTER.
+ * Residual, stated exactly: every text change that leaves all of the above
+ * true is not detected. That is precisely a change outside §§1.4/1.7/1.9 and
+ * outside the pinned README section, confined to lines that match no COINED
+ * pattern (SPEC or README) and no README_TOPIC pattern (README). These are
+ * finite regular expressions: any wording, spelling, separator, homoglyph or
+ * abbreviation they do not match is outside the guard, however contradictory.
  */
+
+/** The four settled paragraphs, byte for byte, each with its owning section. */
 const OWNED = [
 	{
 		section: "1.4",
@@ -31,36 +53,18 @@ const OWNED = [
 	},
 ] as const;
 
+/** The three sections holding the contract, each pinned whole by SHA-256. */
+const SECTION_SHA256: ReadonlyArray<readonly [string, string]> = [
+	["1.4", "a5cd7acd88b1b690a2002a6fa5489732331c66154f15433495670e318011d7f7"],
+	["1.7", "778770b1f5c7d24518d0991a6347b2b730043e7c498197ebae41c3da0f0c42da"],
+	["1.9", "989f91156c41b631b5453ddb1f3b301ad6dd1d3719e0eadaa4280fe032f553cb"],
+];
+
 /** The adopter pointer, byte for byte: it must stay a future-tense, contract-only claim. */
 const README_POINTER =
 	"The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed, including an incomplete record when a required return was unavailable; `recovery` reports the bounded recovery route's terminal, next gate, and route, and a content-free record reference where one exists, not an approval or landing decision. The terminal line reports the disposition and, when present, the review state and diagnosis. SPEC §§1.7 and 1.9 settle the **future** indexed-bundle completeness and one bounded full-bundle Judge re-request before a resolved review; §1.4 keeps ambiguous legacy history fail-closed. This contract-only settlement does not claim that the current `/review-round` implements the new re-request or releases any existing handoff.";
-
-/**
- * The README section that carries the pointer, from its `## ` heading up to
- * the next `## ` heading, pinned by SHA-256. Moving the pointer within or out
- * of this section, or into its fenced examples, changes the section.
- */
 const README_SECTION_HEADING = "## Driving a review round";
 const README_SECTION_SHA256 = "390e9e9796b4b32421d65419cffc2edbb0b1a537bbca5d54a740980397ac7433";
-
-/**
- * Every README line carrying a review/Judge/completeness topic term or a
- * coined term, the pointer included, in document order as [SHA-256, locator
- * prefix]. The README's matching lines must equal exactly this sequence.
- */
-const README_TOPIC =
-	/\bJudge\b|\bResolver\b|\bbundle\b|review[- ]round|review record|adjudicat|re-?request|completeness|\bretry|full-bundle|\bindexed/i;
-const SETTLED_README: ReadonlyArray<readonly [string, string]> = [
-	["ee995c8797a0f64c4334bd21e2a55b518bb29008d2381f52a6c29a42f24d17f5", "## Driving a review round"],
-	["55e4c158e0bab28f9ed46a411bdf9388e1043a205fc1acce0ea188045846e523", "Run the composed panel, Judge, Resolver,"],
-	["46fa2b872c272e19a0ca2a9b4fd09953989b605559661361c95f0a8b5a3db6f1", "/review-round review-round.json"],
-	["0eb97762ca1a13f5603394a462a082a20fa4ae53b3f0b14a6a0a0b23ae08b7b4", '    "priorFindings": [{"label": "F1", "t'],
-	["e9f9ac87382ab133a5f519240737fc75f82d21ce384a0bd04bd9cbdbfe34ab77", '  "changeDescription": "Add the review-r'],
-	["228ebd548da1c49b942672ce4edba9ddf1ff2060b009873b84c6a3c227b95b2d", "The command appends one structured `gitj"],
-	["06d8faf183324bd6936fea16fd02f30889fe525c0f79f300049cd9216b89cc59", "Use ordinary `body` publication for pros"],
-	["4619fc4f7cff0f89053cd2c3e4c7bdbe54b2822c1bb0ba74cd8728fc22710f19", "Tier 1 always tries ordinary landing fir"],
-	["662de89b6062fc7aa669989a92db2854e10179502d8e2e918a322ad75c6a71e0", "A current operator may instead direct Ti"],
-];
 
 /** Named obligations, so a failure points at the meaning that moved; each lives in exactly one owned paragraph. */
 const OBLIGATIONS = [
@@ -92,31 +96,6 @@ const OBLIGATIONS = [
 	"The existing unversioned parser and bytes remain valid historical input",
 ] as const;
 
-/*
- * What this guard checks, defined positively. Lines are split on LF.
- * SPEC:
- *   - each OWNED paragraph occurs exactly once, byte-identical, in its section;
- *   - each OBLIGATION occurs in exactly one OWNED paragraph;
- *   - the document-order sequence of non-owned lines matching COINED equals
- *     SETTLED_COINED ([section, SHA-256]);
- *   - the document-order sequence of non-owned lines inside §§1.4/1.7/1.9
- *     matching both TOPIC and PERMISSION equals SETTLED_SCAN.
- * README:
- *   - the section headed README_SECTION_HEADING hashes to README_SECTION_SHA256
- *     and contains README_POINTER exactly once;
- *   - README_POINTER occurs exactly once in README;
- *   - the document-order sequence of lines matching README_TOPIC or COINED
- *     equals SETTLED_README (SHA-256), and COINED matches only README_POINTER.
- * A pinned line or section that is edited, deleted, duplicated, moved or
- * reordered therefore fails, as does any new line matching a scan.
- * Residual, stated exactly: every text change that leaves all of the above
- * true is not detected. That is precisely a change confined to lines that
- * match none of the scans' patterns (COINED; TOPIC with PERMISSION inside
- * §§1.4/1.7/1.9; README_TOPIC in README), outside the owned paragraphs and
- * outside the pinned README section. These patterns are finite regular
- * expressions: any wording, spelling, separator, homoglyph or abbreviation
- * they do not match is outside the guard, however contradictory.
- */
 const SEP = "[\\s_\\-\\u2010-\\u2015]?";
 const COINED = new RegExp(
 	[
@@ -132,10 +111,8 @@ const COINED = new RegExp(
 	].join("|"),
 	"i",
 );
-const TOPIC = /\bJudge\b|\bruling|\bResolver\b|\bbundle\b|review record|adjudicat/i;
-const PERMISSION = /\bmay\b|\boptional|need not|\bpermitted\b|\ballowed\b|\bcontinu|\binfer|\bpartial|\bskip|\bomit/i;
-const SCANNED_SECTIONS = new Set(["1.4", "1.7", "1.9"]);
-/** Document-order [section, SHA-256, locator prefix] of every settled line matching scan (1). */
+const PINNED_SECTIONS = new Set(SECTION_SHA256.map(([section]) => section));
+/** Document-order [section, SHA-256, locator prefix] of settled SPEC lines outside the pinned sections matching COINED. */
 const SETTLED_COINED: ReadonlyArray<readonly [string, string, string]> = [
 	[
 		"5.5",
@@ -143,86 +120,22 @@ const SETTLED_COINED: ReadonlyArray<readonly [string, string, string]> = [
 		"The final allowance leaf is an effective",
 	],
 ];
-/** Document-order [section, SHA-256, locator prefix] of every settled line matching scan (2). */
-const SETTLED_SCAN: ReadonlyArray<readonly [string, string, string]> = [
-	[
-		"1.4",
-		"ad5750e9df5f9c904704dbc0d366b8a2dbe3c5fcc5f4be805836014201f4a389",
-		"Repeated repair at a review gate must ca",
-	],
-	[
-		"1.4",
-		"c45ef51f81d0bfffe47a4707d1043477697024b6e85be0b3c4b998617548ce59",
-		"**A count triggers inspection, never esc",
-	],
-	[
-		"1.4",
-		"f9c296fcc680b7037d3c525968adbc13c5732cad846648ef5a9c21c889d3785c",
-		"**The diagnosis.** Inspecting the repair",
-	],
-	[
-		"1.4",
-		"2945ed7bee0dc031056a8a72aff660706f1f752682ce4522c514d5971575500d",
-		"The closed recovery record carries the d",
-	],
-	[
-		"1.4",
-		"b024d49c311c52021b88c0447e17e5f88c055f8ab26b0cbfcaec3ef52a04bf82",
-		"The history-diagnosis route is bounded b",
-	],
-	[
-		"1.4",
-		"ec171c706d987c40c6d42dc7edd106db996590ea469e29ca517a2cf3a940101a",
-		"**The planning boundary.** **Which gate*",
-	],
-	[
-		"1.7",
-		"c4bff12c10a2e1a8308d8fc28c21b15aaf44d4f742335963047cd8540d9d3030",
-		"Majority vote is the **rejected design**",
-	],
-	[
-		"1.7",
-		"96f9603dd92c4a181a2421e208b1854d598831aa554e500f34e278edab9eba8a",
-		"**Routing coverage.** Every reviewable c",
-	],
-	[
-		"1.9",
-		"b00d11ef4392630fed9dbfaca8b6cfc13f93dde013405dd9bdd87c250b2c54e4",
-		"- **Severity** — **SUBSTANTIVE** or **NI",
-	],
-	[
-		"1.9",
-		"d97ac468756aa98077df66456007a02771713d41ea8059de00e318f24de8c166",
-		"**The author's non-role.** The author of",
-	],
-	[
-		"1.9",
-		"61c8148bd34deaf640af3ba9f6cc66c0cd9490c55162fa8872e68415727dfdc9",
-		"**Reconsideration.** A Judge ruling is d",
-	],
-	[
-		"1.9",
-		"f31918fdfbb5f0d665c9811f9a2223b3591ea5e515773203065378803ec8049d",
-		"- **measure-escalate** — INDETERMINATE o",
-	],
-	[
-		"1.9",
-		"2cf1afcd1a2ce16a366b068e5e28b8e038dad36abc23837bf248dcc3b0999bb5",
-		"**The never-list.** The Resolver never c",
-	],
-	[
-		"1.9",
-		"7a72a77216558f29b3ee55093e6d95e7120cfb956650e46df3ab69d0b494d6c2",
-		"**The Judge dispatch.** The instrument i",
-	],
-	[
-		"1.9",
-		"a399470e8d57141ab2f7874aed7858f356db453259b7a7a35135588712dd60c4",
-		"The norm is **procedural today**, enforc",
-	],
+const README_TOPIC =
+	/\bJudge\b|\bResolver\b|\bbundle\b|review[- ]round|review record|adjudicat|re-?request|completeness|\bretry|full-bundle|\bindexed/i;
+/** Document-order [SHA-256, locator prefix] of README lines matching README_TOPIC or COINED, pointer included. */
+const SETTLED_README: ReadonlyArray<readonly [string, string]> = [
+	["ee995c8797a0f64c4334bd21e2a55b518bb29008d2381f52a6c29a42f24d17f5", "## Driving a review round"],
+	["55e4c158e0bab28f9ed46a411bdf9388e1043a205fc1acce0ea188045846e523", "Run the composed panel, Judge, Resolver,"],
+	["46fa2b872c272e19a0ca2a9b4fd09953989b605559661361c95f0a8b5a3db6f1", "/review-round review-round.json"],
+	["0eb97762ca1a13f5603394a462a082a20fa4ae53b3f0b14a6a0a0b23ae08b7b4", '    "priorFindings": [{"label": "F1", "t'],
+	["e9f9ac87382ab133a5f519240737fc75f82d21ce384a0bd04bd9cbdbfe34ab77", '  "changeDescription": "Add the review-r'],
+	["228ebd548da1c49b942672ce4edba9ddf1ff2060b009873b84c6a3c227b95b2d", "The command appends one structured `gitj"],
+	["06d8faf183324bd6936fea16fd02f30889fe525c0f79f300049cd9216b89cc59", "Use ordinary `body` publication for pros"],
+	["4619fc4f7cff0f89053cd2c3e4c7bdbe54b2822c1bb0ba74cd8728fc22710f19", "Tier 1 always tries ordinary landing fir"],
+	["662de89b6062fc7aa669989a92db2854e10179502d8e2e918a322ad75c6a71e0", "A current operator may instead direct Ti"],
 ];
 
-const digest = (line: string): string => createHash("sha256").update(line).digest("hex");
+const digest = (text: string): string => createHash("sha256").update(text).digest("hex");
 
 function sectionOf(lines: readonly string[]): string[] {
 	let current = "";
@@ -234,11 +147,15 @@ function sectionOf(lines: readonly string[]): string[] {
 	});
 }
 
+function sectionText(lines: readonly string[], start: number): string {
+	const end = lines.findIndex((line, index) => index > start && (line.startsWith("### ") || line.startsWith("## ")));
+	return lines.slice(start, end < 0 ? undefined : end).join("\n");
+}
+
 function violations(text: string, prose: string): string[] {
 	const found: string[] = [];
 	const lines = text.split("\n");
 	const sections = sectionOf(lines);
-	const owned = new Set<string>(OWNED.map((entry) => entry.text));
 	for (const entry of OWNED) {
 		const at = lines.flatMap((line, index) => (line === entry.text ? [index] : []));
 		if (at.length !== 1) found.push(`owned paragraph count ${at.length}: ${entry.text.slice(0, 48)}`);
@@ -248,19 +165,16 @@ function violations(text: string, prose: string): string[] {
 		if (OWNED.filter((entry) => entry.text.includes(clause)).length !== 1)
 			found.push(`obligation not owned once: ${clause}`);
 	}
-	const coinedSeen: string[] = [];
-	const scanSeen: string[] = [];
-	lines.forEach((line, index) => {
-		if (owned.has(line)) return;
-		if (COINED.test(line)) coinedSeen.push(`${sections[index]}:${digest(line)}`);
-		if (SCANNED_SECTIONS.has(sections[index]) && TOPIC.test(line) && PERMISSION.test(line))
-			scanSeen.push(`${sections[index]}:${digest(line)}`);
-	});
-	const expected = (rows: typeof SETTLED_SCAN) => rows.map(([section, hash]) => `${section}:${hash}`);
-	if (JSON.stringify(coinedSeen) !== JSON.stringify(expected(SETTLED_COINED)))
-		found.push("coined-term lines differ from the pinned settled sequence");
-	if (JSON.stringify(scanSeen) !== JSON.stringify(expected(SETTLED_SCAN)))
-		found.push("topic+permission lines differ from the pinned settled sequence");
+	for (const [section, hash] of SECTION_SHA256) {
+		const starts = lines.flatMap((line, index) => (line.startsWith(`### ${section} `) ? [index] : []));
+		if (starts.length !== 1) found.push(`§${section} heading count ${starts.length}`);
+		else if (digest(sectionText(lines, starts[0])) !== hash) found.push(`§${section} changed`);
+	}
+	const coinedSeen = lines.flatMap((line, index) =>
+		!PINNED_SECTIONS.has(sections[index]) && COINED.test(line) ? [`${sections[index]}:${digest(line)}`] : [],
+	);
+	if (JSON.stringify(coinedSeen) !== JSON.stringify(SETTLED_COINED.map(([section, hash]) => `${section}:${hash}`)))
+		found.push("coined-term lines outside the pinned sections differ from the settled sequence");
 	const proseLines = prose.split("\n");
 	if (proseLines.filter((line) => line === README_POINTER).length !== 1)
 		found.push("README pointer changed or duplicated");
@@ -268,15 +182,17 @@ function violations(text: string, prose: string): string[] {
 		found.push("coined term elsewhere in README");
 	const readmeSeen = proseLines.filter((line) => README_TOPIC.test(line) || COINED.test(line)).map(digest);
 	if (JSON.stringify(readmeSeen) !== JSON.stringify(SETTLED_README.map(([hash]) => hash)))
-		found.push("README topical lines differ from the pinned settled sequence");
+		found.push("README topical lines differ from the settled sequence");
 	const start = proseLines.indexOf(README_SECTION_HEADING);
-	const next = proseLines.findIndex((line, index) => index > start && line.startsWith("## "));
-	const sectionLines = start < 0 ? [] : proseLines.slice(start, next < 0 ? undefined : next);
 	if (start < 0 || proseLines.lastIndexOf(README_SECTION_HEADING) !== start)
 		found.push("README pointer section heading missing or duplicated");
-	else if (digest(sectionLines.join("\n")) !== README_SECTION_SHA256) found.push("README pointer section changed");
-	if (sectionLines.filter((line) => line === README_POINTER).length !== 1)
-		found.push("README pointer outside its pinned section");
+	else {
+		const end = proseLines.findIndex((line, index) => index > start && line.startsWith("## "));
+		const sectionLines = proseLines.slice(start, end < 0 ? undefined : end);
+		if (digest(sectionLines.join("\n")) !== README_SECTION_SHA256) found.push("README pointer section changed");
+		if (sectionLines.filter((line) => line === README_POINTER).length !== 1)
+			found.push("README pointer outside its pinned section");
+	}
 	return found;
 }
 
@@ -285,8 +201,14 @@ function mutate(from: string, to: string): string {
 	return spec.replace(from, to);
 }
 
+function lineStarting(prefix: string): string {
+	const hits = spec.split("\n").filter((line) => line.startsWith(prefix));
+	assert.equal(hits.length, 1, `unique line: ${prefix}`);
+	return hits[0];
+}
+
 describe("#379 prospective Judge completeness settlement", () => {
-	it("pins the four owned paragraphs, the README pointer and every named obligation", () => {
+	it("pins the owned paragraphs, the three contract sections, the README pointer and every obligation", () => {
 		assert.deepEqual(violations(spec, readme), []);
 	});
 
@@ -352,83 +274,86 @@ describe("#379 prospective Judge completeness settlement", () => {
 		for (const [name, text] of cases) assert.notDeepEqual(violations(text, readme), [], `survived: ${name}`);
 	});
 
-	it("baseline-first: kills out-of-paragraph permissions caught by either scan", () => {
+	it("baseline-first: kills any change inside the pinned sections, including unpatterned wording and moves", () => {
+		const author = lineStarting("**The author's non-role.**");
+		const durable = lineStarting("**Reconsideration.**");
+		const repeated = lineStarting("Repeated repair at a review gate");
+		const planning = lineStarting("**The planning boundary.**");
+		const swap = (a: string, b: string): string => spec.replace(a, "\u0000A").replace(b, a).replace("\u0000A", b);
 		const cases: Array<[string, string]> = [
 			[
-				"coined term in §1.8",
-				mutate("### 1.8 Plan contest\n", "### 1.8 Plan contest\n\nA rawOrdinal may be reused across rulings.\n"),
+				"unpatterned replacement in §1.9",
+				mutate(
+					author,
+					"**The author's role.** The artifact author performs every initial validity, deduplication, severity, direction, and impact decision.",
+				),
 			],
 			[
-				"hyphenated ruling-envelope in §1.8",
-				mutate("### 1.8 Plan contest\n", "### 1.8 Plan contest\n\nA ruling-envelope may omit any unresolved input.\n"),
+				"replacement plus relocation within §1.9",
+				mutate(author, "**The author's role.** The artifact author performs every initial ruling.").replace(
+					`${durable}\n`,
+					`${durable}\n\n${author}\n`,
+				),
 			],
+			["pinned line moved across an unscanned paragraph", swap(author, durable)],
+			["§1.4 paragraphs swapped", swap(repeated, planning)],
 			[
-				"underscored ruling_index in §3.3",
-				mutate("### 3.3 Gate classes\n", "### 3.3 Gate classes\n\nA ruling_index may repeat.\n"),
-			],
-			[
-				"coined term in §3.3",
-				mutate("### 3.3 Gate classes\n", "### 3.3 Gate classes\n\nThe semantic re-request is optional.\n"),
-			],
-			...["re_request", "re request", "re\u2011request", "semanticcall", "rulingenvelope"].map(
-				(term): [string, string] => [
-					`${term} spelling in §1.8`,
-					mutate("### 1.8 Plan contest\n", `### 1.8 Plan contest\n\nA ${term} may omit raw findings.\n`),
-				],
-			),
-			[
-				"topic+permission in §1.9",
+				"topic+permission line in §1.9",
 				mutate(
 					"### 1.9 Finding judgment\n",
 					"### 1.9 Finding judgment\n\nThe Resolver may dispose the ruled subset when some findings are unruled.\n",
 				),
 			],
 			[
-				"topic+permission in §1.7",
+				"unpatterned line in §1.7",
 				mutate(
 					"### 1.7 The reviewer panel\n",
-					"### 1.7 The reviewer panel\n\nThe Judge may skip raw findings it considers duplicates.\n",
+					"### 1.7 The reviewer panel\n\nReviewers need not report every finding.\n",
 				),
 			],
+			["whitespace-only edit in §1.4", mutate(`${repeated}\n`, `${repeated} \n`)],
 		];
-		for (const [name, text] of cases) assert.notDeepEqual(violations(text, readme), [], `survived: ${name}`);
+		for (const [name, text] of cases) {
+			assert.notEqual(text, spec, `${name}: mutant must change the text`);
+			assert.notDeepEqual(violations(text, readme), [], `survived: ${name}`);
+		}
 	});
 
-	it("baseline-first: kills replacement, deletion, duplication, relocation and reordering of settled lines", () => {
-		const settled = (row: readonly [string, string, string]): string => {
-			const hits = spec.split("\n").filter((line) => digest(line) === row[1]);
-			assert.equal(hits.length, 1, `settled line present once: ${row[2]}`);
-			return hits[0];
-		};
-		const author = settled(
-			SETTLED_SCAN.find((row) => row[2].startsWith("**The author's non-role.**")) ?? SETTLED_SCAN[0],
-		);
-		const first14 = settled(SETTLED_SCAN[0]);
-		const last14 = settled([...SETTLED_SCAN].reverse().find((row) => row[0] === "1.4") ?? SETTLED_SCAN[0]);
-		const coined = settled(SETTLED_COINED[0]);
-		const swapped = spec.replace(first14, "\u0000A").replace(last14, first14).replace("\u0000A", last14);
+	it("baseline-first: kills coined vocabulary outside the pinned sections in any separator spelling", () => {
 		const cases: Array<[string, string]> = [
 			[
-				"permission-evading reversal",
-				mutate(
-					author,
-					"**The author's new role.** The author performs the initial adjudication and controls each ruling.",
-				),
+				"coined term in §1.8",
+				mutate("### 1.8 Plan contest\n", "### 1.8 Plan contest\n\nA rawOrdinal may be reused across rulings.\n"),
 			],
-			["settled line appended to", mutate(author, `${author} The Judge may omit findings.`)],
-			["settled line deleted", mutate(`${author}\n`, "")],
-			["settled §1.4 paragraphs swapped", swapped],
-			["settled coined line duplicated", `${spec}\n${coined}\n`],
 			[
-				"settled coined line moved into §1.9",
-				mutate(`${coined}\n`, "").replace("### 1.9 Finding judgment\n", `### 1.9 Finding judgment\n\n${coined}\n`),
+				"coined term in §3.3",
+				mutate("### 3.3 Gate classes\n", "### 3.3 Gate classes\n\nThe semantic re-request is optional.\n"),
 			],
+			...[
+				"ruling-envelope",
+				"ruling_index",
+				"re_request",
+				"re request",
+				"re\u2011request",
+				"semanticcall",
+				"rulingenvelope",
+				"admittedincomplete",
+			].map((term): [string, string] => [
+				`${term} in §1.8`,
+				mutate("### 1.8 Plan contest\n", `### 1.8 Plan contest\n\nA ${term} may omit raw findings.\n`),
+			]),
 		];
-		assert.notEqual(swapped, spec, "swap mutant must change the text");
 		for (const [name, text] of cases) assert.notDeepEqual(violations(text, readme), [], `survived: ${name}`);
+		for (const [, hash, prefix] of SETTLED_COINED) {
+			const line = spec.split("\n").find((candidate) => digest(candidate) === hash);
+			assert.ok(line, `settled coined line present: ${prefix}`);
+			assert.notDeepEqual(violations(`${spec}\n${line}\n`, readme), [], "survived: settled coined line duplicated");
+			assert.notDeepEqual(violations(mutate(`${line}\n`, ""), readme), [], "survived: settled coined line deleted");
+		}
 	});
 
-	it("baseline-first: kills README pointer drift", () => {
+	it("baseline-first: kills README pointer drift, relocation and contradiction", () => {
+		assert.equal(readme.split(`${README_POINTER}\n`).length, 2, "pointer line is unique and LF-terminated");
 		const cases = [
 			`${readme}\nThe current command implements the full-bundle Judge retry.\n`,
 			readme.replace(
@@ -443,7 +368,9 @@ describe("#379 prospective Judge completeness settlement", () => {
 			readme.replace("```json\n", "```json\n\n"),
 			`${readme}\nA re_request or re request may be skipped.\n`,
 		];
-		assert.equal(readme.split(`${README_POINTER}\n`).length, 2, "pointer line is unique and LF-terminated");
-		for (const prose of cases) assert.notDeepEqual(violations(spec, prose), [], "survived README drift");
+		for (const prose of cases) {
+			assert.notEqual(prose, readme, "README mutant must change the text");
+			assert.notDeepEqual(violations(spec, prose), [], "survived README drift");
+		}
 	});
 });
