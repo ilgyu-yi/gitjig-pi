@@ -897,7 +897,12 @@ describe("the tool's DECLARED kinds are the instrument's kinds (issue #129, §3.
 			"/nonexistent-state-root",
 		);
 		assert.ok(registered !== undefined, "registerPublishTool registered no tool — the arm is vacuous");
-		const top = registered.parameters as { anyOf?: Array<Record<string, unknown>>; additionalProperties?: unknown };
+		const top = registered.parameters as {
+			type?: unknown;
+			anyOf?: Array<Record<string, unknown>>;
+			additionalProperties?: unknown;
+		};
+		assert.equal(top.type, "object", "MCP requires every tool input schema to declare an object root");
 		assert.equal(top.additionalProperties, undefined);
 		assert.equal(top.anyOf?.length, 2, "the request schema must declare exactly two exclusive content arms");
 		const declared = new Set<unknown>();

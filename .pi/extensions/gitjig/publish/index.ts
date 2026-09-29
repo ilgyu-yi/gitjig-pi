@@ -71,33 +71,38 @@ const DestinationParams = Type.Union(
 // semantic boundary open at pre-validation; admitMachineRecord is the closed,
 // stack-safe authority for value shape, scalar domain, depth, and body bytes.
 const JsonValueParams = Type.Unknown();
-const PublishParams = Type.Union([
-	Type.Object(
-		{
-			body: Type.String({ description: "Ordinary prose, scanned and neutralized before one send." }),
-			destination: DestinationParams,
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			machineRecord: Type.Object(
-				{
-					marker: Type.String({
-						maxLength: 256,
-						pattern:
-							"^<!-- [a-z][a-z0-9]*(?:-[a-z0-9]+)*: v(?:[1-9][0-9]{0,8})(?: [a-z][a-zA-Z0-9]*=[A-Za-z0-9][A-Za-z0-9._:-]{0,127})* -->$",
-						description: "The admitted ASCII machine-record marker.",
-					}),
-					value: JsonValueParams,
-				},
-				{ additionalProperties: false },
-			),
-			destination: DestinationParams,
-		},
-		{ additionalProperties: false },
-	),
-]);
+const PublishParams = Type.Union(
+	[
+		Type.Object(
+			{
+				body: Type.String({ description: "Ordinary prose, scanned and neutralized before one send." }),
+				destination: DestinationParams,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				machineRecord: Type.Object(
+					{
+						marker: Type.String({
+							maxLength: 256,
+							pattern:
+								"^<!-- [a-z][a-z0-9]*(?:-[a-z0-9]+)*: v(?:[1-9][0-9]{0,8})(?: [a-z][a-zA-Z0-9]*=[A-Za-z0-9][A-Za-z0-9._:-]{0,127})* -->$",
+							description: "The admitted ASCII machine-record marker.",
+						}),
+						value: JsonValueParams,
+					},
+					{ additionalProperties: false },
+				),
+				destination: DestinationParams,
+			},
+			{ additionalProperties: false },
+		),
+	],
+	// MCP Tool.inputSchema requires an explicit object root even when every
+	// union arm is already a closed object schema.
+	{ type: "object" },
+);
 
 export function publishTarget(args: unknown): string {
 	const destination =
