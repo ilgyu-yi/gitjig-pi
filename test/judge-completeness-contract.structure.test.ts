@@ -25,12 +25,22 @@ const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
  *   - README_POINTER occurs exactly once in README;
  *   - the document-order sequence of lines matching README_TOPIC or COINED
  *     equals SETTLED_README, and COINED matches only README_POINTER.
- * Residual, stated exactly: every text change that leaves all of the above
- * true is not detected. That is precisely a change outside §§1.4/1.7/1.9 and
- * outside the pinned README section, confined to lines that match no COINED
- * pattern (SPEC or README) and no README_TOPIC pattern (README). These are
- * finite regular expressions: any wording, spelling, separator, homoglyph or
- * abbreviation they do not match is outside the guard, however contradictory.
+ * Residual: the guard fails exactly when one of the checks above is false, so
+ * every change that leaves all of them true is undetected. The examples below
+ * illustrate both directions; they are not an exhaustive characterization.
+ *   Undetected, for example: new or replacement wording outside §§1.4/1.7/1.9
+ *   and outside the pinned README section that matches no COINED pattern
+ *   (SPEC or README) and no README_TOPIC pattern (README), however
+ *   contradictory, including a matching README line replaced by such wording
+ *   while its exact original text is reinserted elsewhere without changing
+ *   the matching lines' document order; and any wording, spelling, separator,
+ *   homoglyph or abbreviation the finite patterns do not match.
+ *   Detected although the edited line itself matches no pattern, for example:
+ *   section membership and extent are derived from heading lines, so
+ *   renumbering a SPEC heading changes the recorded section of a settled
+ *   coined line, and changing a README heading's level changes the pinned
+ *   README section's extent.
+ * The "documents its residual in both directions" test pins these examples.
  */
 
 /** The four settled paragraphs, byte for byte, each with its owning section. */
@@ -372,5 +382,33 @@ describe("#379 prospective Judge completeness settlement", () => {
 			assert.notEqual(prose, readme, "README mutant must change the text");
 			assert.notDeepEqual(violations(spec, prose), [], "survived README drift");
 		}
+	});
+
+	it("documents its residual in both directions", () => {
+		const detected: Array<[string, string, string]> = [
+			["renumbered SPEC heading", mutate("### 5.5 State boundary\n", "### 5.4 State boundary\n"), readme],
+			["demoted README heading", spec, readme.replace("## Pre-authoring brief\n", "### Pre-authoring brief\n")],
+		];
+		for (const [name, text, prose] of detected) {
+			assert.notEqual(`${text}${prose}`, `${spec}${readme}`, `${name}: mutant must change the text`);
+			assert.notDeepEqual(violations(text, prose), [], `documented detection missing: ${name}`);
+		}
+		const topical = readme.split("\n").find((line) => line.startsWith("Use ordinary `body` publication"));
+		assert.ok(topical, "README topical example line present");
+		const replaced = readme
+			.replace(`${topical}\n`, "Ordinary prose publication is now fully automatic.\n")
+			.replace("## Recovery state location\n", `## Recovery state location\n\n${topical}\n`);
+		assert.notEqual(replaced, readme, "residual example must change the text");
+		assert.deepEqual(
+			violations(spec, replaced),
+			[],
+			"documented undetected README example is now detected; update the residual comment",
+		);
+		const unrelated = mutate("### 3.3 Gate classes\n", "### 3.3 Gate classes\n\nAn unrelated clarifying sentence.\n");
+		assert.deepEqual(
+			violations(unrelated, readme),
+			[],
+			"documented undetected SPEC example is now detected; update the residual comment",
+		);
 	});
 });
