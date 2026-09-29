@@ -65,6 +65,11 @@ const mutations = [
 		'await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);\n\t\ttry {\n\t\t\tconst second = JSON.parse(output ?? "");\n\t\t\tsecond.user = { node_id: subject.writerId };\n\t\t\toutput = JSON.stringify(second);\n\t\t} catch {}',
 	],
 	[
+		"reread-root-drift",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], stateRoot);",
+	],
+	[
 		"second-send",
 		"const locator = publishedCommentLocator(published, context);",
 		"await publishReviewRecord(body, context, repoRoot, stateRoot, publish);\n\tconst locator = publishedCommentLocator(published, context);",

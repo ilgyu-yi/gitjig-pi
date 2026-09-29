@@ -61,6 +61,8 @@ const REFUSALS: Array<[string, string]> = [
 		JSON.stringify({ issue_url: ISSUE_URL, html_url: COMMENT_URL, body: BODY, user: { node_id: "WRITER" } }),
 	],
 	["wrong-repository", payload({ issue_url: "https://api.github.com/repos/other/repo/issues/7" })],
+	["foreign-api-host", payload({ issue_url: "https://api.example.com/repos/owner/repo/issues/7" })],
+	["foreign-html-host", payload({ html_url: `https://example.com/owner/repo/pull/7#issuecomment-${COMMENT_ID}` })],
 	["wrong-parent", payload({ issue_url: "https://api.github.com/repos/owner/repo/issues/8" })],
 	["typed-parent", payload({ issue_url: 7 })],
 	["wrong-html", payload({ html_url: `https://github.com/owner/repo/pull/8#issuecomment-${COMMENT_ID}` })],
@@ -79,6 +81,7 @@ type Event = "read" | "delay";
 async function receipt(responses: Array<string | undefined>) {
 	const events: Event[] = [];
 	const reads: string[][] = [];
+	const roots: string[] = [];
 	const delays: number[] = [];
 	const sent: unknown[] = [];
 	let sends = 0;
@@ -92,9 +95,10 @@ async function receipt(responses: Array<string | undefined>) {
 			sent.push(params);
 			return published()();
 		},
-		async (argv) => {
+		async (argv, root) => {
 			events.push("read");
 			reads.push(argv);
+			roots.push(root);
 			if (reads.length > responses.length) throw new Error("unscripted read");
 			return responses[reads.length - 1];
 		},
@@ -103,7 +107,7 @@ async function receipt(responses: Array<string | undefined>) {
 			delays.push(ms);
 		},
 	);
-	return { outcome, events, reads, delays, sends, sent };
+	return { outcome, events, reads, roots, delays, sends, sent };
 }
 
 const ARGV = ["api", "--hostname", "github.com", `repos/owner/repo/issues/comments/${COMMENT_ID}`];
@@ -126,6 +130,7 @@ describe("#381 targeted legacy review publication receipt", () => {
 		assert.equal(run.sends, 1);
 		assert.deepEqual(run.sent, [{ body: BODY, destination: { kind: "pr-comment", number: 7 } }]);
 		assert.deepEqual(run.reads, [ARGV]);
+		assert.deepEqual(run.roots, ["/repo"]);
 		assert.deepEqual(run.delays, []);
 		assert.deepEqual(run.outcome, ADMITTED);
 	});
@@ -135,6 +140,7 @@ describe("#381 targeted legacy review publication receipt", () => {
 		assert.deepEqual(run.events, ["read", "delay", "read"]);
 		assert.deepEqual(run.delays, [5_000]);
 		assert.deepEqual(run.reads, [ARGV, ARGV]);
+		assert.deepEqual(run.roots, ["/repo", "/repo"]);
 		assert.equal(run.sends, 1);
 		assert.deepEqual(run.outcome, ADMITTED);
 	});
