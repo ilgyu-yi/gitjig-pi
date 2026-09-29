@@ -35,37 +35,37 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.1 | The constraint | 439 |
 | &nbsp;&nbsp;§3.2 | The three tiers | 446 |
 | &nbsp;&nbsp;§3.3 | Gate classes | 454 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 575 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 585 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 589 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 601 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 617 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 753 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 767 |
-| &nbsp;&nbsp;§3.11 | Gate design | 781 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 803 |
-| §4 | Substrate and install contract | 813 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 817 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 829 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 837 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 843 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 847 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 851 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 863 |
-| &nbsp;&nbsp;§4.8 | The command layer | 873 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 930 |
-| §5 | Cross-cutting contracts | 1049 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1053 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1059 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1063 |
-| &nbsp;&nbsp;§5.4 | Work language | 1067 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1071 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1089 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1101 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1111 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1119 |
-| §6 | Self-governance milestone | 1135 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1146 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 577 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 587 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 591 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 603 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 619 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 755 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 769 |
+| &nbsp;&nbsp;§3.11 | Gate design | 783 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 805 |
+| §4 | Substrate and install contract | 815 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 819 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 831 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 839 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 845 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 849 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 853 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 865 |
+| &nbsp;&nbsp;§4.8 | The command layer | 875 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 932 |
+| §5 | Cross-cutting contracts | 1051 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1055 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1061 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1065 |
+| &nbsp;&nbsp;§5.4 | Work language | 1069 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1073 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1091 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1103 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1113 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1121 |
+| §6 | Self-governance milestone | 1137 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1148 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -545,6 +545,8 @@ The second is **§1.1's linkage line**: a body whose FIRST line is exactly that 
 *Named false-block cost (§3.6).* A body legitimately carrying format characters inside a secret-shaped span is over-blocked by the Cf strip, which joins what its author meant as inert. The in-flow recovery is defuse-and-recall: respell the span inertly and call the tool again — no repair commit and no escape needed, because the refused body never left the session.
 
 *Machine-record amendment.* A first-party closed record whose consumer depends on parsed JSON values uses the publish tool's `machineRecord:{marker,value}` arm, not plain `body`. Two exact procedural legacy call sites remain on `body`: review-round records retain their byte-identical fenced/pretty composition, parser, publication and refetch; lifecycle awaiting-author records retain the composition in `gitjig-lifecycle.mjs` and admission/refetch in `review/publication.ts`. Runtime never infers a legacy exception from arbitrary prose. The request, machine record and destination are descriptor-read ordinary records (prototype exactly `Object.prototype` or null; own enumerable/configurable/writable data properties only; no unknown, inherited-enumerable, symbolic or accessor properties). Exactly one content arm exists. Numbered destinations carry exactly `kind,number`, with a positive safe integer number; create destinations exactly `kind,title`, with a nonempty primitive-string title that is not option-shaped and contains no CR, LF or NUL. This tightens malformed inputs without changing valid plain-text acts.
+
+*Legacy review-record receipt availability.* This paragraph governs only the review-round legacy call site above; the machine-record arm's one-GET/no-retry rule below and the lifecycle legacy call site are unchanged. One review record has exactly one publishing send. A confirmed strict locator supplies one positive comment ID and the immutable verification operands: host, repository, parent PR number, expected comment HTML locator, sealed writer and exact body. The verifier performs one authenticated targeted GET for that comment ID. If and only if the bounded platform reader returns `undefined` — no admitted output because the read was unavailable, nonzero, timed out, exceeded its byte bound or contained invalid UTF-8 — the verifier invokes its injected delay once for exactly **5,000 ms**, then performs one second targeted GET with every operand and route byte-identical. A present response, including malformed JSON or any identity/body mismatch, is observed evidence and fails immediately without delay or retry. Either read succeeds only by independently passing the complete exact receipt admission. An unavailable or non-admitted second read leaves publication unconfirmed. There is no zero-delay retry, third read, changed route or operand, collection fallback, second send, body edit, locator substitution, inferred or retroactive success, or review-history mutation.
 
 `value` is recursive JSON: null, booleans, scalar-only primitive strings, finite safe integers other than negative zero, dense arrays, and ordinary string-keyed objects. Every object has exactly the ordinary-record prototype/property/descriptor constraints above. NUL, unpaired surrogates and category-Cf code points refuse. Arrays admit only `Array.prototype`, their canonical non-enumerable/non-configurable own `length` data descriptor, and enumerable/configurable/writable own indexes `0..length-1`; holes, extras, symbols, accessors, inherited-enumerable inputs, cycles and repeated container aliases refuse. Descriptor traversal invokes no getter. A dedicated serializer orders object keys lexicographically by Unicode scalar sequence (shorter exact prefix first, including numeric-looking keys), renders null/booleans canonically and integers as shortest base-10, quotes quote/reverse-solidus, renders controls as lowercase `\u00xx`, and otherwise emits admitted scalar UTF-8.
 
