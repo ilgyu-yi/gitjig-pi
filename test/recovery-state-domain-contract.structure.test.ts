@@ -121,9 +121,9 @@ const bindingNeedles = [
 ] as const;
 
 const hostNeedles = [
-	"sole exception is §1.4's state-domain recovery allowance",
+	"Two bounded exceptions exist. First, §1.4's state-domain recovery allowance",
 	"only §5.5's exact owner-only `gitjig/recovery` directory chain and direct allowance leaves",
-	"no configuration, registration, service, repository metadata, or other host path",
+	"Neither exception changes configuration, registration, service, repository metadata, or another host path",
 ] as const;
 
 function settlementHolds(
