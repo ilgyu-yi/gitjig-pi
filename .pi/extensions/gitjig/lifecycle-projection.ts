@@ -226,7 +226,9 @@ export class LifecycleProjection {
 		const transitions = await attestTransitionComments(engine, comments, repositoryId, permissionOf);
 		const blocked = engine.inspectBlockedPopulation(transitions);
 		const handoff = engine.inspectHandoffPopulation(transitions);
-		const populations: Array<[LifecycleState, { ok: boolean; current?: { record: { subjectHead: unknown } }[] }]> = [
+		const populations: Array<
+			[LifecycleState, { ok: boolean; current?: { record: { subjectHead: unknown; baseHead: unknown } }[] }]
+		> = [
 			["awaiting-author", awaiting],
 			["blocked", blocked],
 			["handoff", handoff],
@@ -235,8 +237,12 @@ export class LifecycleProjection {
 		for (const [state, population] of populations) {
 			if (!population.ok) return undefined;
 			const current = population.current ?? [];
-			// A current record for another head is stale evidence, never a guessed state.
-			if (current.some(({ record }) => record.subjectHead !== head)) return undefined;
+			// A current record for another head is stale evidence, and a base head
+			// that contradicts the subject kind (an Issue has none; a PR has one) is
+			// contradictory evidence; neither is ever a guessed state.
+			const contradicts = ({ record }: { record: { subjectHead: unknown; baseHead: unknown } }) =>
+				record.subjectHead !== head || (head === null ? record.baseHead !== null : typeof record.baseHead !== "string");
+			if (current.some(contradicts)) return undefined;
 			if (current.length > 0) states.push(state);
 		}
 		if (!(await unchanged())) return undefined;

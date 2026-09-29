@@ -275,6 +275,16 @@ describe("#347 lifecycle projection", () => {
 		const cases: Array<[string, World, "issue" | "pull"]> = [
 			["stale PR head", { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(OTHER)) }] }, "pull"],
 			[
+				"Issue record naming a base head",
+				{ comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, { ...blocked(null), baseHead: BASE }) }] },
+				"issue",
+			],
+			[
+				"PR record without a base head",
+				{ comments: [{ id: 1, user: user("writer"), body: marked(HANDOFF, { ...handoff(HEAD), baseHead: null }) }] },
+				"pull",
+			],
+			[
 				"Issue record naming a head",
 				{ comments: [{ id: 1, user: user("writer"), body: marked(HANDOFF, handoff(HEAD)) }] },
 				"issue",

@@ -144,6 +144,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
 		'attested: comment.body.startsWith(engine.RECORD_MARKERS.blockedTerminal) ? (await permissionOf(comment))?.toUpperCase() === "WRITE" && (await authorizedUser(engine, comment, repositoryId, permissionOf)) : await authorizedUser(engine, comment, repositoryId, permissionOf) });',
 	],
+	[
+		"issue-base-head-unchecked",
+		PROJECTION,
+		'head === null ? record.baseHead !== null : typeof record.baseHead !== "string"',
+		'head === null ? false : typeof record.baseHead !== "string"',
+	],
+	[
+		"pull-base-head-unchecked",
+		PROJECTION,
+		'head === null ? record.baseHead !== null : typeof record.baseHead !== "string"',
+		"head === null ? record.baseHead !== null : false",
+	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],
