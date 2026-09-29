@@ -85,6 +85,16 @@ const mutations = [
 		"return { id, url: result.details.url };",
 	],
 	[
+		"locator-parse-throws",
+		"return Number.isSafeInteger(id) ? { id, url: result.details.url } : undefined;\n\t} catch {\n\t\treturn undefined;",
+		'return Number.isSafeInteger(id) ? { id, url: result.details.url } : undefined;\n\t} catch {\n\t\tthrow new Error("malformed published locator");',
+	],
+	[
+		"field-null-guard",
+		'\tvalue !== null &&\n\t\t!Array.isArray(value) &&\n\t\ttypeof (value as Record<string, unknown>)[key] === "string"',
+		'\t!Array.isArray(value) &&\n\t\ttypeof (value as Record<string, unknown>)[key] === "string"',
+	],
+	[
 		"second-send",
 		"const locator = publishedCommentLocator(published, context);",
 		"await publishReviewRecord(body, context, repoRoot, stateRoot, publish);\n\tconst locator = publishedCommentLocator(published, context);",

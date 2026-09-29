@@ -69,6 +69,7 @@ const REFUSALS: Array<[string, string]> = [
 	["typed-html", payload({ html_url: COMMENT_ID })],
 	["wrong-body", payload({ body: `${BODY}changed` })],
 	["typed-body", payload({ body: 7 })],
+	["null-user", payload({ user: null })],
 	["missing-user", payload({ user: undefined })],
 	["array-user", payload({ user: [] })],
 	["wrong-author", payload({ user: { node_id: "OTHER" } })],
@@ -198,6 +199,7 @@ describe("#381 targeted legacy review publication receipt", () => {
 			["wrong-surface", published(`https://github.com/owner/repo/commits/7#issuecomment-${COMMENT_ID}`)],
 			["non-comment-fragment", published("https://github.com/owner/repo/pull/7#discussion_r5")],
 			["leading-zero-id", published("https://github.com/owner/repo/pull/7#issuecomment-0123")],
+			["unparseable-locator", published("not a url")],
 			["unsafe-id", published("https://github.com/owner/repo/pull/7#issuecomment-99999999999999999999")],
 		] as const) {
 			let reads = 0;
