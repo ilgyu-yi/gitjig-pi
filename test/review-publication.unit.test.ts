@@ -139,6 +139,7 @@ describe("#381 targeted legacy review publication receipt", () => {
 				}),
 			],
 			["wrong-pr", published(`https://github.com/owner/repo/pull/8#issuecomment-${COMMENT_ID}`)],
+			["wrong-host", published(`https://example.com/owner/repo/pull/7#issuecomment-${COMMENT_ID}`)],
 			["wrong-repository", published(`https://github.com/other/repo/pull/7#issuecomment-${COMMENT_ID}`)],
 			["query", published(`${COMMENT_URL}?changed=1`)],
 		] as const) {

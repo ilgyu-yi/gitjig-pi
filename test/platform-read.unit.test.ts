@@ -36,6 +36,17 @@ setTimeout(() => {
 		assert.equal(await runPlatformRead([], root, { timeoutMs: 2_000, graceMs: 200, maxBytes: 1024 }), "café");
 	});
 
+	it("refuses malformed or truncated UTF-8 instead of manufacturing replacement characters", async () => {
+		for (const source of [
+			"process.stdout.write(Buffer.from([0x7b, 0xff, 0x7d]));",
+			"process.stdout.write(Buffer.from([0x7b, 0xe2, 0x82]));",
+		]) {
+			const root = installGh(source);
+			assert.equal(await runPlatformRead([], root, { timeoutMs: 2_000, graceMs: 200, maxBytes: 1024 }), undefined);
+			process.env.PATH = originalPath;
+		}
+	});
+
 	it("refuses output beyond the byte cap", async () => {
 		const root = installGh('process.stdout.write("12345");');
 		assert.equal(await runPlatformRead([], root, { timeoutMs: 2_000, graceMs: 200, maxBytes: 4 }), undefined);

@@ -11,6 +11,7 @@ const root = mkdtempSync(join(tmpdir(), "gitjig-381-mutants-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 
 const mutations = [
+	["locator-host", "url.hostname !== context.repository.host ||", ""],
 	[
 		"collection-route",
 		"`repos/${context.repository.nameWithOwner}/issues/comments/${String(locator.id)}`",
@@ -37,7 +38,11 @@ const mutations = [
 	],
 ] as const;
 
-function run(name: string, mutation?: (typeof mutations)[number]): ReturnType<typeof spawnSync> {
+function run(
+	name: string,
+	mutation?: (typeof mutations)[number] | readonly [string, string, string],
+	targetRelative = ".pi/extensions/gitjig/review/publication.ts",
+): ReturnType<typeof spawnSync> {
 	const box = mkdtempSync(join(root, `${name}-`));
 	cpSync(join(repository, ".pi/extensions/gitjig"), join(box, ".pi/extensions/gitjig"), { recursive: true });
 	const workflow = join(box, ".github/workflows/ac-closeout.mjs");
@@ -45,9 +50,10 @@ function run(name: string, mutation?: (typeof mutations)[number]): ReturnType<ty
 	cpSync(join(repository, ".github/workflows/ac-closeout.mjs"), workflow);
 	mkdirSync(join(box, "test"), { recursive: true });
 	cpSync(join(repository, "test/review-publication.unit.test.ts"), join(box, "test/review-publication.unit.test.ts"));
+	cpSync(join(repository, "test/platform-read.unit.test.ts"), join(box, "test/platform-read.unit.test.ts"));
 	symlinkSync(join(repository, "node_modules"), join(box, "node_modules"), "dir");
 	if (mutation !== undefined) {
-		const target = join(box, ".pi/extensions/gitjig/review/publication.ts");
+		const target = join(box, targetRelative);
 		const source = readFileSync(target, "utf8");
 		assert.notEqual(source.indexOf(mutation[1]), -1, `${mutation[0]}: mutation target must exist`);
 		assert.equal(source.indexOf(mutation[1]), source.lastIndexOf(mutation[1]), `${mutation[0]}: target must be unique`);
@@ -55,12 +61,16 @@ function run(name: string, mutation?: (typeof mutations)[number]): ReturnType<ty
 	}
 	const env = { ...process.env };
 	delete env.NODE_TEST_CONTEXT;
-	return spawnSync(process.execPath, ["--test", "test/review-publication.unit.test.ts"], {
-		cwd: box,
-		encoding: "utf8",
-		timeout: 30_000,
-		env,
-	});
+	return spawnSync(
+		process.execPath,
+		["--test", "test/review-publication.unit.test.ts", "test/platform-read.unit.test.ts"],
+		{
+			cwd: box,
+			encoding: "utf8",
+			timeout: 30_000,
+			env,
+		},
+	);
 }
 
 describe("#381 baseline-first targeted receipt mutants", () => {
@@ -75,4 +85,10 @@ describe("#381 baseline-first targeted receipt mutants", () => {
 			assert.notEqual(result.status, 0, `${mutation[0]} survived\n${result.stdout}\n${result.stderr}`);
 		});
 	}
+
+	it("kills nonfatal UTF-8 decoding", () => {
+		const mutation = ["strict-utf8", 'new TextDecoder("utf-8", { fatal: true })', 'new TextDecoder("utf-8")'] as const;
+		const result = run(mutation[0], mutation, ".pi/extensions/gitjig/platform/read.ts");
+		assert.notEqual(result.status, 0, `strict-utf8 survived\n${result.stdout}\n${result.stderr}`);
+	});
 });
