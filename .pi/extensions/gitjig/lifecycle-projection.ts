@@ -46,6 +46,8 @@ export const LIFECYCLE_TTL_MS = 5 * 60 * 1_000;
 
 export type LifecycleTarget = { kind: "issue" | "pull"; number: number };
 
+type Computed = { segment: LifecycleSegment; freshKey?: string };
+
 type Read = (argv: string[], repoRoot: string, bounds: PlatformReadBounds) => Promise<string | undefined>;
 
 export interface LifecycleProjectionSeams {
@@ -130,14 +132,18 @@ export class LifecycleProjection {
 		const epoch = this.surface.epoch;
 		// The previous subject stops being shown the moment a new one is addressed.
 		this.surface.setLifecycle(undefined);
-		let segment: LifecycleSegment | undefined;
+		let computed: Computed | undefined;
 		try {
-			segment = await this.compute(target);
+			computed = await this.compute(target);
 		} catch {
-			segment = undefined;
+			computed = undefined;
 		}
-		// A newer request, or a new session attach, makes this result stale.
+		// A newer request, or a new session attach, makes this result stale:
+		// it neither renders nor reaches the cache.
 		if (generation !== this.generation || epoch !== this.surface.epoch) return "superseded";
+		if (computed?.freshKey !== undefined)
+			this.cache.set(computed.freshKey, { at: this.seams.now(), segment: computed.segment });
+		const segment = computed?.segment;
 		if (segment !== undefined) this.surface.setLifecycle(segment);
 		return segment === undefined ? "silent" : "displayed";
 	}
@@ -146,7 +152,8 @@ export class LifecycleProjection {
 		return this.seams.read(argv, this.repoRoot, LIFECYCLE_READ_BOUNDS);
 	}
 
-	private async compute(target: LifecycleTarget): Promise<LifecycleSegment | undefined> {
+	/** A fresh computation carries its cache key; the caller caches it only if still current. */
+	private async compute(target: LifecycleTarget): Promise<Computed | undefined> {
 		if ((target.kind !== "issue" && target.kind !== "pull") || !Number.isSafeInteger(target.number)) return undefined;
 		if (target.number <= 0) return undefined;
 		const repository = this.seams.repository(this.repoRoot);
@@ -189,7 +196,7 @@ export class LifecycleProjection {
 
 		const cached = this.cache.get(key);
 		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS)
-			return (await unchanged()) ? cached.segment : undefined;
+			return (await unchanged()) ? { segment: cached.segment } : undefined;
 
 		const engine = await this.seams.engine();
 		if (engine === undefined) return undefined;
@@ -252,7 +259,6 @@ export class LifecycleProjection {
 			shortHead: head === null ? null : head.slice(0, 7),
 			states,
 		};
-		this.cache.set(key, { at: this.seams.now(), segment });
-		return segment;
+		return { segment, freshKey: key };
 	}
 }

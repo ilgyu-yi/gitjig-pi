@@ -27,6 +27,20 @@ const REBIND_BEFORE_TRANSITION_ATTESTATION = ((): readonly [string, string, stri
 	return ["rebind-before-transition-attestation", PROJECTION, span, check + source.slice(start, end)];
 })();
 
+/** Moves the cache write ahead of the staleness check, so superseded results reach the cache. */
+const CACHE_BEFORE_STALENESS = ((): readonly [string, string, string, string] => {
+	const source = readFileSync(join(repository, PROJECTION), "utf8");
+	const check = 'if (generation !== this.generation || epoch !== this.surface.epoch) return "superseded";\n';
+	const start = source.indexOf(check);
+	const write = source.indexOf("\t\tif (computed?.freshKey !== undefined)", start);
+	const writeEnd = source.indexOf("\n", source.indexOf("this.cache.set(", write)) + 1;
+	assert.ok(start >= 0 && write > start && writeEnd > write, "cache-order mutant anchors must exist");
+	const span = source.slice(start, writeEnd);
+	const between = source.slice(start + check.length, write);
+	const cacheWrite = source.slice(write, writeEnd);
+	return ["cache-before-staleness", PROJECTION, span, `${cacheWrite.trimStart()}\t\t${check}${between}`];
+})();
+
 /** [name, file, exact unique source span, replacement]; each weakens one implemented guard. */
 const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	["read-bound", PROJECTION, "timeoutMs: 2_000,", "timeoutMs: 10_000,"],
@@ -78,8 +92,8 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"cache-hit-not-rebound",
 		PROJECTION,
-		"return (await unchanged()) ? cached.segment : undefined;",
-		"return cached.segment;",
+		"return (await unchanged()) ? { segment: cached.segment } : undefined;",
+		"return { segment: cached.segment };",
 	],
 	[
 		"rebind-ignores-head",
@@ -162,6 +176,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
 		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, head])",
 	],
+	CACHE_BEFORE_STALENESS,
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],

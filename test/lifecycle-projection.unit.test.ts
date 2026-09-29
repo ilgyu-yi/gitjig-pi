@@ -735,6 +735,35 @@ describe("#347 lifecycle projection", () => {
 		assert.equal(h.lifecycle(), undefined);
 	});
 
+	it("never lets a superseded same-subject result reach the cache", async () => {
+		const world: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] };
+		const h = harness(world);
+		const inner = h.projection as unknown as { seams: LifecycleProjectionSeams };
+		const read = inner.seams.read;
+		let release: (() => void) | undefined;
+		let paused = false;
+		inner.seams.read = async (argv, root, bounds) => {
+			const value = await read(argv, root, bounds);
+			if (!paused && argv.includes("--paginate")) {
+				paused = true;
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+			}
+			return value;
+		};
+		const first = h.projection.request({ kind: "issue", number: 7 });
+		while (release === undefined) await new Promise((resolve) => setImmediate(resolve));
+		world.comments = [];
+		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
+		release();
+		assert.equal(await first, "superseded");
+		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
+		assert.equal(h.commentReads(), 2, "the third request is a cache hit");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record", "the cache holds the newer result");
+	});
+
 	it("never lets an earlier subject's late result land over a later request", async () => {
 		const h = harness({ comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] });
 		const inner = h.projection as unknown as { seams: LifecycleProjectionSeams };
