@@ -68,45 +68,111 @@ const OBLIGATIONS = [
 /*
  * Two scans guard against contradicting permissions OUTSIDE the owned text.
  * (1) Vocabulary this contract coins may appear in SPEC only inside the owned
- *     paragraphs, apart from the pinned settled lines below.
+ *     paragraphs, apart from the settled lines pinned below.
  * (2) Inside §§1.4/1.7/1.9, a line carrying both a Judge/Resolver/bundle topic
- *     term and a permission term must be one of the pinned settled lines.
- * Settled lines are pinned by SHA-256, so editing one also fails and forces a
- * deliberate re-review. Residual, stated exactly: a contradiction outside
- * §§1.4/1.7/1.9 that avoids every coined term; a line inside those sections
- * that lacks either the topic set or the permission set; and a contradiction
- * split across lines, are not detected by these scans.
+ *     term and a permission term must be a settled line pinned below.
+ * For each scan, the complete document-order sequence of matching lines must
+ * EQUAL its pinned list of [section, SHA-256]. So each settled line must stay
+ * present, byte-identical, unique, in its section and in its order; editing,
+ * deleting, duplicating, moving or reordering one fails and forces a
+ * deliberate re-review, as does adding any new matching line.
+ * Residual, stated exactly: a new or replacement line inside §§1.4/1.7/1.9
+ * that avoids every coined term and lacks the topic set or the permission set
+ * (while every pinned line stays in place); any contradiction outside
+ * §§1.4/1.7/1.9 that avoids every coined term; a contradiction split across
+ * lines; and reordering of lines that match neither scan, are not detected.
  */
 const COINED =
 	/rawOrdinals?|rulingIndex|judgeAttempts|schemaVersion:2|version-2|re-request|semantic (?:re-?request|dispatch|call)|admitted-incomplete|ruling envelope/i;
 const TOPIC = /\bJudge\b|\bruling|\bResolver\b|\bbundle\b|review record|adjudicat/i;
 const PERMISSION = /\bmay\b|\boptional|need not|\bpermitted\b|\ballowed\b|\bcontinu|\binfer|\bpartial|\bskip|\bomit/i;
 const SCANNED_SECTIONS = new Set(["1.4", "1.7", "1.9"]);
-/** [SHA-256, locator prefix] of settled lines matching scan (1). */
-const SETTLED_COINED = new Map<string, string>([
+/** Document-order [section, SHA-256, locator prefix] of every settled line matching scan (1). */
+const SETTLED_COINED: ReadonlyArray<readonly [string, string, string]> = [
 	[
+		"5.5",
 		"89f07d393e8527377a43cba330ad434da46dbc02a8c47d488e06de94529157d4",
-		"The final allowance leaf is an effective-uid-own",
+		"The final allowance leaf is an effective",
 	],
-]);
-/** [SHA-256, locator prefix] of settled lines matching scan (2). */
-const SETTLED_SCAN = new Map<string, string>([
-	["ad5750e9df5f9c904704dbc0d366b8a2dbe3c5fcc5f4be805836014201f4a389", "§1.4 Repeated repair at a review gate must ca"],
-	["c45ef51f81d0bfffe47a4707d1043477697024b6e85be0b3c4b998617548ce59", "§1.4 **A count triggers inspection, never esc"],
-	["f9c296fcc680b7037d3c525968adbc13c5732cad846648ef5a9c21c889d3785c", "§1.4 **The diagnosis.** Inspecting the repair"],
-	["2945ed7bee0dc031056a8a72aff660706f1f752682ce4522c514d5971575500d", "§1.4 The closed recovery record carries the d"],
-	["b024d49c311c52021b88c0447e17e5f88c055f8ab26b0cbfcaec3ef52a04bf82", "§1.4 The history-diagnosis route is bounded b"],
-	["ec171c706d987c40c6d42dc7edd106db996590ea469e29ca517a2cf3a940101a", "§1.4 **The planning boundary.** **Which gate*"],
-	["c4bff12c10a2e1a8308d8fc28c21b15aaf44d4f742335963047cd8540d9d3030", "§1.7 Majority vote is the **rejected design**"],
-	["96f9603dd92c4a181a2421e208b1854d598831aa554e500f34e278edab9eba8a", "§1.7 **Routing coverage.** Every reviewable c"],
-	["b00d11ef4392630fed9dbfaca8b6cfc13f93dde013405dd9bdd87c250b2c54e4", "§1.9 - **Severity** — **SUBSTANTIVE** or **NI"],
-	["d97ac468756aa98077df66456007a02771713d41ea8059de00e318f24de8c166", "§1.9 **The author's non-role.** The author of"],
-	["61c8148bd34deaf640af3ba9f6cc66c0cd9490c55162fa8872e68415727dfdc9", "§1.9 **Reconsideration.** A Judge ruling is d"],
-	["f31918fdfbb5f0d665c9811f9a2223b3591ea5e515773203065378803ec8049d", "§1.9 - **measure-escalate** — INDETERMINATE o"],
-	["2cf1afcd1a2ce16a366b068e5e28b8e038dad36abc23837bf248dcc3b0999bb5", "§1.9 **The never-list.** The Resolver never c"],
-	["7a72a77216558f29b3ee55093e6d95e7120cfb956650e46df3ab69d0b494d6c2", "§1.9 **The Judge dispatch.** The instrument i"],
-	["a399470e8d57141ab2f7874aed7858f356db453259b7a7a35135588712dd60c4", "§1.9 The norm is **procedural today**, enforc"],
-]);
+];
+/** Document-order [section, SHA-256, locator prefix] of every settled line matching scan (2). */
+const SETTLED_SCAN: ReadonlyArray<readonly [string, string, string]> = [
+	[
+		"1.4",
+		"ad5750e9df5f9c904704dbc0d366b8a2dbe3c5fcc5f4be805836014201f4a389",
+		"Repeated repair at a review gate must ca",
+	],
+	[
+		"1.4",
+		"c45ef51f81d0bfffe47a4707d1043477697024b6e85be0b3c4b998617548ce59",
+		"**A count triggers inspection, never esc",
+	],
+	[
+		"1.4",
+		"f9c296fcc680b7037d3c525968adbc13c5732cad846648ef5a9c21c889d3785c",
+		"**The diagnosis.** Inspecting the repair",
+	],
+	[
+		"1.4",
+		"2945ed7bee0dc031056a8a72aff660706f1f752682ce4522c514d5971575500d",
+		"The closed recovery record carries the d",
+	],
+	[
+		"1.4",
+		"b024d49c311c52021b88c0447e17e5f88c055f8ab26b0cbfcaec3ef52a04bf82",
+		"The history-diagnosis route is bounded b",
+	],
+	[
+		"1.4",
+		"ec171c706d987c40c6d42dc7edd106db996590ea469e29ca517a2cf3a940101a",
+		"**The planning boundary.** **Which gate*",
+	],
+	[
+		"1.7",
+		"c4bff12c10a2e1a8308d8fc28c21b15aaf44d4f742335963047cd8540d9d3030",
+		"Majority vote is the **rejected design**",
+	],
+	[
+		"1.7",
+		"96f9603dd92c4a181a2421e208b1854d598831aa554e500f34e278edab9eba8a",
+		"**Routing coverage.** Every reviewable c",
+	],
+	[
+		"1.9",
+		"b00d11ef4392630fed9dbfaca8b6cfc13f93dde013405dd9bdd87c250b2c54e4",
+		"- **Severity** — **SUBSTANTIVE** or **NI",
+	],
+	[
+		"1.9",
+		"d97ac468756aa98077df66456007a02771713d41ea8059de00e318f24de8c166",
+		"**The author's non-role.** The author of",
+	],
+	[
+		"1.9",
+		"61c8148bd34deaf640af3ba9f6cc66c0cd9490c55162fa8872e68415727dfdc9",
+		"**Reconsideration.** A Judge ruling is d",
+	],
+	[
+		"1.9",
+		"f31918fdfbb5f0d665c9811f9a2223b3591ea5e515773203065378803ec8049d",
+		"- **measure-escalate** — INDETERMINATE o",
+	],
+	[
+		"1.9",
+		"2cf1afcd1a2ce16a366b068e5e28b8e038dad36abc23837bf248dcc3b0999bb5",
+		"**The never-list.** The Resolver never c",
+	],
+	[
+		"1.9",
+		"7a72a77216558f29b3ee55093e6d95e7120cfb956650e46df3ab69d0b494d6c2",
+		"**The Judge dispatch.** The instrument i",
+	],
+	[
+		"1.9",
+		"a399470e8d57141ab2f7874aed7858f356db453259b7a7a35135588712dd60c4",
+		"The norm is **procedural today**, enforc",
+	],
+];
 
 const digest = (line: string): string => createHash("sha256").update(line).digest("hex");
 
@@ -134,18 +200,19 @@ function violations(text: string, prose: string): string[] {
 		if (OWNED.filter((entry) => entry.text.includes(clause)).length !== 1)
 			found.push(`obligation not owned once: ${clause}`);
 	}
+	const coinedSeen: string[] = [];
+	const scanSeen: string[] = [];
 	lines.forEach((line, index) => {
 		if (owned.has(line)) return;
-		if (COINED.test(line) && !SETTLED_COINED.has(digest(line)))
-			found.push(`coined term outside owned text at line ${index + 1}`);
-		if (
-			SCANNED_SECTIONS.has(sections[index]) &&
-			TOPIC.test(line) &&
-			PERMISSION.test(line) &&
-			!SETTLED_SCAN.has(digest(line))
-		)
-			found.push(`unpinned topic+permission line in §${sections[index]} at line ${index + 1}`);
+		if (COINED.test(line)) coinedSeen.push(`${sections[index]}:${digest(line)}`);
+		if (SCANNED_SECTIONS.has(sections[index]) && TOPIC.test(line) && PERMISSION.test(line))
+			scanSeen.push(`${sections[index]}:${digest(line)}`);
 	});
+	const expected = (rows: typeof SETTLED_SCAN) => rows.map(([section, hash]) => `${section}:${hash}`);
+	if (JSON.stringify(coinedSeen) !== JSON.stringify(expected(SETTLED_COINED)))
+		found.push("coined-term lines differ from the pinned settled sequence");
+	if (JSON.stringify(scanSeen) !== JSON.stringify(expected(SETTLED_SCAN)))
+		found.push("topic+permission lines differ from the pinned settled sequence");
 	const proseLines = prose.split("\n");
 	if (proseLines.filter((line) => line === README_POINTER).length !== 1)
 		found.push("README pointer changed or duplicated");
@@ -252,16 +319,40 @@ describe("#379 prospective Judge completeness settlement", () => {
 			],
 		];
 		for (const [name, text] of cases) assert.notDeepEqual(violations(text, readme), [], `survived: ${name}`);
-		for (const line of spec.split("\n")) {
-			if (SETTLED_SCAN.has(digest(line))) {
-				assert.notDeepEqual(
-					violations(mutate(line, `${line} The Judge may omit findings.`), readme),
-					[],
-					"survived: edited settled line",
-				);
-				break;
-			}
-		}
+	});
+
+	it("baseline-first: kills replacement, deletion, duplication, relocation and reordering of settled lines", () => {
+		const settled = (row: readonly [string, string, string]): string => {
+			const hits = spec.split("\n").filter((line) => digest(line) === row[1]);
+			assert.equal(hits.length, 1, `settled line present once: ${row[2]}`);
+			return hits[0];
+		};
+		const author = settled(
+			SETTLED_SCAN.find((row) => row[2].startsWith("**The author's non-role.**")) ?? SETTLED_SCAN[0],
+		);
+		const first14 = settled(SETTLED_SCAN[0]);
+		const last14 = settled([...SETTLED_SCAN].reverse().find((row) => row[0] === "1.4") ?? SETTLED_SCAN[0]);
+		const coined = settled(SETTLED_COINED[0]);
+		const swapped = spec.replace(first14, "\u0000A").replace(last14, first14).replace("\u0000A", last14);
+		const cases: Array<[string, string]> = [
+			[
+				"permission-evading reversal",
+				mutate(
+					author,
+					"**The author's new role.** The author performs the initial adjudication and controls each ruling.",
+				),
+			],
+			["settled line appended to", mutate(author, `${author} The Judge may omit findings.`)],
+			["settled line deleted", mutate(`${author}\n`, "")],
+			["settled §1.4 paragraphs swapped", swapped],
+			["settled coined line duplicated", `${spec}\n${coined}\n`],
+			[
+				"settled coined line moved into §1.9",
+				mutate(`${coined}\n`, "").replace("### 1.9 Finding judgment\n", `### 1.9 Finding judgment\n\n${coined}\n`),
+			],
+		];
+		assert.notEqual(swapped, spec, "swap mutant must change the text");
+		for (const [name, text] of cases) assert.notDeepEqual(violations(text, readme), [], `survived: ${name}`);
 	});
 
 	it("baseline-first: kills README pointer drift", () => {
