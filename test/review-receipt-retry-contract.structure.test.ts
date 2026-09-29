@@ -21,6 +21,10 @@ const obligations = [
 	"A present response, including malformed JSON or any identity/body mismatch, is observed evidence and fails immediately without delay or retry",
 	"independently passing the complete exact receipt admission",
 	"There is no zero-delay retry, third read, changed route or operand, collection fallback, second send, body edit, locator substitution, inferred or retroactive success, or review-history mutation",
+	"This settlement grants no runtime authority: #381 remains the implementation owner",
+	"its current body must be revised and independently reactivated to depend on this merged contract before deriving the delayed read",
+	"PR #382 remains blocked meanwhile",
+	"No merge of this paragraph clears or reclassifies any historical publication receipt or §1.4 handoff",
 ] as const;
 
 function contractHolds(source: string): boolean {
