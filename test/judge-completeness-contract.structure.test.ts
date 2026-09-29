@@ -24,18 +24,23 @@ const owned = {
 		"`rawOrdinal`, its zero-based position in the original ordered bundle",
 		"even two equal strings from one slot get separate ordinals",
 		"the caller must make exactly one fresh, bounded same-round semantic Judge dispatch",
+		"in particular a well-formed subset of rulings omitting one or more raw occurrences",
 		"never edited or continued",
 		"whole original indexed bundle",
 		"the same sealed reviewed head",
 		"Both semantic calls use the same consumer-owned Judge profile, delegate argv, immutable expected-ref and deadline/options",
 		"no third semantic dispatch is allowed",
-		"A missing/invalid first return is not an admitted-incomplete result",
+		"A missing/invalid first **return or ruling envelope** (as distinct from a valid envelope missing an occurrence) is not an admitted-incomplete result",
 	],
 	"1.9": [
-		"partition every caller-assigned bundle ordinal",
-		"the **multiset** of the referenced raw slots",
+		"A preliminary ruling-envelope check accepts only well-formed rulings with required axes",
+		"whose union omits one or more original ordinals is **admitted-incomplete only for §1.7's bounded whole-bundle re-request**",
+		"absent arrays, repeated, unknown, noninteger, or out-of-order identities instead invalidate the envelope",
+		"exactly and disjointly partition every caller-assigned bundle ordinal",
+		"slot `provenance` equals the **multiset** of the referenced raw slots",
 		"The caller checks total coverage and provenance, not semantic equivalence",
 		"dispositions carry `rulingIndex`",
+		"must exactly match the indexed ruling's text and deterministic disposition",
 		"text equality alone is insufficient when wordings repeat",
 		"ordered bounded `judgeAttempts` for at most two semantic calls",
 		"The existing unversioned parser and bytes remain valid historical input",
@@ -73,6 +78,18 @@ describe("#379 prospective Judge completeness settlement", () => {
 			}
 		}
 		const semanticMutants = [
+			[
+				"exactly and disjointly partition every caller-assigned bundle ordinal",
+				"approximately cover original ordinals with overlaps allowed",
+			],
+			[
+				"slot `provenance` equals the **multiset** of the referenced raw slots",
+				"slot `provenance` merely names the **multiset** of slots",
+			],
+			[
+				"must exactly match the indexed ruling's text and deterministic disposition",
+				"need not match the indexed ruling's text or deterministic disposition",
+			],
 			["the caller must make exactly one", "the caller may make exactly one"],
 			[
 				"even two equal strings from one slot get separate ordinals",
