@@ -189,7 +189,16 @@ describe("#381 targeted legacy review publication receipt", () => {
 			["wrong-pr", published(`https://github.com/owner/repo/pull/8#issuecomment-${COMMENT_ID}`)],
 			["wrong-host", published(`https://example.com/owner/repo/pull/7#issuecomment-${COMMENT_ID}`)],
 			["wrong-repository", published(`https://github.com/other/repo/pull/7#issuecomment-${COMMENT_ID}`)],
-			["query", published(`${COMMENT_URL}?changed=1`)],
+			["query", published(`https://github.com/owner/repo/pull/7?changed=1#issuecomment-${COMMENT_ID}`)],
+			["http-scheme", published(`http://github.com/owner/repo/pull/7#issuecomment-${COMMENT_ID}`)],
+			["explicit-port", published(`https://github.com:8443/owner/repo/pull/7#issuecomment-${COMMENT_ID}`)],
+			["username", published(`https://user@github.com/owner/repo/pull/7#issuecomment-${COMMENT_ID}`)],
+			["password-only", published(`https://:secret@github.com/owner/repo/pull/7#issuecomment-${COMMENT_ID}`)],
+			["extra-path", published(`https://github.com/owner/repo/pull/7/files#issuecomment-${COMMENT_ID}`)],
+			["wrong-surface", published(`https://github.com/owner/repo/commits/7#issuecomment-${COMMENT_ID}`)],
+			["non-comment-fragment", published("https://github.com/owner/repo/pull/7#discussion_r5")],
+			["leading-zero-id", published("https://github.com/owner/repo/pull/7#issuecomment-0123")],
+			["unsafe-id", published("https://github.com/owner/repo/pull/7#issuecomment-99999999999999999999")],
 		] as const) {
 			let reads = 0;
 			const outcome = await publishAndRefetchReviewRecord(
