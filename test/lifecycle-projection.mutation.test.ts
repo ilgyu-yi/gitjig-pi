@@ -156,6 +156,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'head === null ? record.baseHead !== null : typeof record.baseHead !== "string"',
 		"head === null ? record.baseHead !== null : false",
 	],
+	[
+		"key-without-number",
+		PROJECTION,
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, head])",
+	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],

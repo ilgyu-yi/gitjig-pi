@@ -77,6 +77,8 @@ type World = {
 	permissionNodes?: Record<string, string>;
 	/** The login the permission endpoint reports for a requested login; defaults to the same login. */
 	permissionLogins?: Record<string, string>;
+	/** Comment populations for Issues other than #7, which are otherwise empty. */
+	commentsByNumber?: Record<number, Comment[]>;
 	/** Runs once, immediately after the comment population is read. */
 	afterComments?: () => void;
 	/** Runs once, immediately after the Issue or PR subject is read. */
@@ -136,6 +138,13 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 				once("afterComments");
 				return population;
 			}
+			const otherIssue = /^repos\/o\/r\/issues\/([1-9][0-9]*)(\/comments)?$/.exec(path);
+			if (otherIssue) {
+				const number = Number(otherIssue[1]);
+				return otherIssue[2] === undefined
+					? JSON.stringify({ number, labels: [] })
+					: JSON.stringify([world.commentsByNumber?.[number] ?? []]);
+			}
 			const permission = /^repos\/o\/r\/collaborators\/(.+)\/permission$/.exec(path ?? "");
 			if (permission) {
 				const login = decodeURIComponent(permission[1]);
@@ -175,7 +184,7 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 /** Every projection call is one of three GET-only argv shapes over this subject's own routes. */
 function assertReadOnly(reads: Array<{ argv: string[] }>, host = "github.com", name = "o/r"): void {
 	const route = new RegExp(
-		`^repos/${name.replace("/", "\\/")}(?:/pulls/7|/issues/7(?:/comments)?|/collaborators/[^/]+/permission)?$`,
+		`^repos/${name.replace("/", "\\/")}(?:/pulls/7|/issues/[1-9][0-9]*(?:/comments)?|/collaborators/[^/]+/permission)?$`,
 	);
 	for (const { argv } of reads) {
 		const path = argv.at(-1) ?? "";
@@ -554,6 +563,19 @@ describe("#347 lifecycle projection", () => {
 			assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
 			assertReadOnly(h.reads.slice(-4), next.host, next.nameWithOwner);
 		}
+	});
+
+	it("keys the cache by subject number within one repository", async () => {
+		const h = harness({
+			comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }],
+			commentsByNumber: { 8: [] },
+		});
+		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
+		assert.equal(h.lifecycle(), "[warning]issue #7 blocked");
+		assert.equal(await h.projection.request({ kind: "issue", number: 8 }), "displayed");
+		assert.equal(h.commentReads(), 2, "Issue #8 is a different key from Issue #7");
+		assert.equal(h.lifecycle(), "[dim]issue #8 no lifecycle record");
+		assertReadOnly(h.reads);
 	});
 
 	it("keys the cache by repository identity as well as subject and head", async () => {
