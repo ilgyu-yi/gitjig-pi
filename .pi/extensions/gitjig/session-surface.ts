@@ -31,12 +31,14 @@ export class SessionSurface {
 	private mergeMode: MergeMode = "off";
 	private mergeSource: ModeSource = "default";
 	private lifecycle: LifecycleSegment | undefined;
+	private attachments = 0;
 
 	attach(ctx: Pick<ExtensionContext, "hasUI" | "ui">): void {
 		// A resumed/reloaded session starts with no act owned by this instance.
 		this.activeDispatches = 0;
 		this.lastTerminal = undefined;
 		this.lifecycle = undefined;
+		this.attachments += 1;
 		this.ui = undefined;
 		// Pi's JSON/print implementations are no-ops, but the explicit guard is
 		// the aid-direction contract: a headless run never depends on a UI call.
@@ -49,6 +51,11 @@ export class SessionSurface {
 			return;
 		}
 		this.refresh();
+	}
+
+	/** Increments on every attach, so work begun for an earlier session can tell it is stale. */
+	get epoch(): number {
+		return this.attachments;
 	}
 
 	/** Whether a status call can happen at all; a UI-less session makes none. */

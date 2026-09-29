@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { parseLifecycleTarget, registerLifecycleCommand } from "../.pi/extensions/gitjig/commands/lifecycle.ts";
@@ -231,6 +234,18 @@ describe("#347 lifecycle projection", () => {
 					{ id: 1, user: user("carrier"), body: marked(BLOCKED, blocked(null)) },
 					{ id: 2, user: user("carrier"), body: marked(HANDOFF, handoff(null)) },
 					{ id: 3, user: user("carrier"), body: marked(HANDOFF, handoff(null)) },
+					{ id: 5, user: user("carrier"), body: marked(BLOCKED, blocked(null)) },
+					{
+						id: 6,
+						user: user("carrier"),
+						body: marked(BLOCKED_TERMINAL, {
+							recordCommentId: 5,
+							transition: "blocked-clear",
+							observedAt: NOW,
+							subjectHead: null,
+							baseHead: null,
+						}),
+					},
 					{
 						id: 4,
 						user: user("carrier"),
@@ -663,6 +678,31 @@ describe("#347 lifecycle projection", () => {
 		await next;
 	});
 
+	it("drops a request that was in flight when a new session attached", async () => {
+		const h = harness({ comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] });
+		const inner = h.projection as unknown as { seams: LifecycleProjectionSeams };
+		const read = inner.seams.read;
+		let release: (() => void) | undefined;
+		inner.seams.read = async (argv, root, bounds) => {
+			if (argv.includes("--paginate"))
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+			return read(argv, root, bounds);
+		};
+		const pending = h.projection.request({ kind: "issue", number: 7 });
+		while (release === undefined) await new Promise((resolve) => setImmediate(resolve));
+		h.surface.attach({
+			hasUI: true,
+			ui: { setStatus: (_key: string, text?: string) => h.statuses.push(text), theme },
+		} as never);
+		const afterAttach = h.statuses.length;
+		release();
+		assert.equal(await pending, "superseded");
+		assert.equal(h.statuses.length, afterAttach, "the prior session's result made no status call");
+		assert.equal(h.lifecycle(), undefined);
+	});
+
 	it("never lets an earlier subject's late result land over a later request", async () => {
 		const h = harness({ comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] });
 		const inner = h.projection as unknown as { seams: LifecycleProjectionSeams };
@@ -743,6 +783,34 @@ describe("#347 /lifecycle command", () => {
 			"branch=main",
 		])
 			assert.equal(parseLifecycleTarget(bad), undefined, bad);
+	});
+
+	it("registers the production command with a live default projection", async () => {
+		const outside = mkdtempSync(join(tmpdir(), "gitjig-347-not-a-repository-"));
+		try {
+			let handler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+			const pi = {
+				registerCommand: (_name: string, options: { handler: typeof handler }) => {
+					handler = options.handler;
+				},
+			} as unknown as ExtensionAPI;
+			const statuses: Array<string | undefined> = [];
+			const ui = { setStatus: (_key: string, text?: string) => statuses.push(text), theme };
+			const surface = new SessionSurface();
+			surface.attach({ hasUI: true, ui } as never);
+			registerLifecycleCommand(pi, outside, surface);
+			assert.ok(handler);
+			const notes: Array<[string, string]> = [];
+			const before = statuses.length;
+			await handler("issue=1", {
+				hasUI: true,
+				ui: { ...ui, notify: (text: string, level: string) => notes.push([text, level]) },
+			});
+			assert.ok(statuses.length > before, "the default projection reached the session surface");
+			assert.equal(notes.at(-1)?.[1], "info", "an unresolvable repository is silent, not an error");
+		} finally {
+			rmSync(outside, { recursive: true, force: true });
+		}
 	});
 
 	it("refuses bad arguments, is inert without a UI, and never sends a message or session entry", async () => {

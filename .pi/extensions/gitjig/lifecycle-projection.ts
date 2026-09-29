@@ -127,6 +127,7 @@ export class LifecycleProjection {
 	async request(target: LifecycleTarget): Promise<"displayed" | "silent" | "superseded"> {
 		if (!this.surface.visible) return "silent";
 		const generation = ++this.generation;
+		const epoch = this.surface.epoch;
 		// The previous subject stops being shown the moment a new one is addressed.
 		this.surface.setLifecycle(undefined);
 		let segment: LifecycleSegment | undefined;
@@ -135,7 +136,8 @@ export class LifecycleProjection {
 		} catch {
 			segment = undefined;
 		}
-		if (generation !== this.generation) return "superseded";
+		// A newer request, or a new session attach, makes this result stale.
+		if (generation !== this.generation || epoch !== this.surface.epoch) return "superseded";
 		if (segment !== undefined) this.surface.setLifecycle(segment);
 		return segment === undefined ? "silent" : "displayed";
 	}

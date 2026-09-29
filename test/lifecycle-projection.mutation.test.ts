@@ -56,7 +56,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (comments === undefined) return undefined;",
 		"if (comments === undefined) {\n\t\t\tthis.cache.set(key, { at: this.seams.now(), segment: { subject: target.kind, number: target.number, shortHead: null, states: [] } });\n\t\t\treturn undefined;\n\t\t}",
 	],
-	["superseded-renders", PROJECTION, 'if (generation !== this.generation) return "superseded";', ""],
+	["superseded-renders", PROJECTION, "generation !== this.generation || ", ""],
 	["stale-head-admitted", PROJECTION, "record.subjectHead !== head", "false"],
 	["no-ui-reads", PROJECTION, 'if (!this.surface.visible) return "silent";', ""],
 	["issue-may-be-pull", PROJECTION, ' || Object.hasOwn(issue, "pull_request")', ""],
@@ -130,6 +130,20 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"authorId: bot ? (comment.authorLogin ?? comment.authorId) : comment.authorId,",
 		"authorId: comment.authorId,",
 	],
+	["attach-epoch-unchecked", PROJECTION, " || epoch !== this.surface.epoch", ""],
+	["attach-epoch-frozen", SURFACE, "\t\tthis.attachments += 1;\n", ""],
+	[
+		"command-without-default-projection",
+		COMMAND,
+		"projection: LifecycleProjection | undefined = surface === undefined\n\t\t? undefined\n\t\t: new LifecycleProjection(repoRoot, surface),",
+		"projection: LifecycleProjection | undefined = undefined,",
+	],
+	[
+		"blocked-terminal-write-only",
+		ATTESTATION,
+		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+		'attested: comment.body.startsWith(engine.RECORD_MARKERS.blockedTerminal) ? (await permissionOf(comment))?.toUpperCase() === "WRITE" && (await authorizedUser(engine, comment, repositoryId, permissionOf)) : await authorizedUser(engine, comment, repositoryId, permissionOf) });',
+	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],
@@ -175,12 +189,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (projection === undefined) return;",
 	],
 	["command-extra-tokens", COMMAND, "if (tokens.length !== 1) return undefined;", ""],
-	[
-		"attach-keeps-segment",
-		SURFACE,
-		"\t\tthis.lifecycle = undefined;\n\t\tthis.ui = undefined;",
-		"\t\tthis.ui = undefined;",
-	],
+	["attach-keeps-segment", SURFACE, "\t\tthis.lifecycle = undefined;\n\t\tthis.attachments", "\t\tthis.attachments"],
 ];
 
 function run(name: string, mutation?: (typeof mutations)[number]): ReturnType<typeof spawnSync> {
