@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 181 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 193 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 207 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 233 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 245 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 286 |
-| §2 | Artifact hierarchy and lifecycle | 294 |
-| &nbsp;&nbsp;§2.1 | Issue types | 298 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 311 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 338 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 342 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 359 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 399 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 413 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 423 |
-| §3 | Enforcement-layer architecture | 435 |
-| &nbsp;&nbsp;§3.1 | The constraint | 439 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 446 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 454 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 577 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 587 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 591 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 603 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 619 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 755 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 769 |
-| &nbsp;&nbsp;§3.11 | Gate design | 783 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 805 |
-| §4 | Substrate and install contract | 815 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 819 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 831 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 839 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 845 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 849 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 853 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 865 |
-| &nbsp;&nbsp;§4.8 | The command layer | 875 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 932 |
-| §5 | Cross-cutting contracts | 1051 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1055 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1061 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1065 |
-| &nbsp;&nbsp;§5.4 | Work language | 1069 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1073 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1091 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1103 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1113 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1121 |
-| §6 | Self-governance milestone | 1137 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1148 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 183 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 195 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 209 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 237 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 249 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 292 |
+| §2 | Artifact hierarchy and lifecycle | 300 |
+| &nbsp;&nbsp;§2.1 | Issue types | 304 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 317 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 344 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 348 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 365 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 405 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 419 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 429 |
+| §3 | Enforcement-layer architecture | 441 |
+| &nbsp;&nbsp;§3.1 | The constraint | 445 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 452 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 460 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 583 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 593 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 597 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 609 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 625 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 761 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 775 |
+| &nbsp;&nbsp;§3.11 | Gate design | 789 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 811 |
+| §4 | Substrate and install contract | 821 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 825 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 837 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 845 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 851 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 855 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 859 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 871 |
+| &nbsp;&nbsp;§4.8 | The command layer | 881 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 938 |
+| §5 | Cross-cutting contracts | 1057 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1061 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1067 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1071 |
+| &nbsp;&nbsp;§5.4 | Work language | 1075 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1079 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1097 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1109 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1119 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1127 |
+| §6 | Self-governance milestone | 1143 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1154 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -133,6 +133,8 @@ Repeated repair at a review gate must carry method-level information: resubmitti
 **A count triggers inspection, never escalation.** How many times a change has been repaired is not evidence that its method has failed — a change reviewed by stronger methods finds more, and a backstop indexed on the count alone hands off work for reviewing well, which trains operators to route around review. A count therefore has exactly one workflow role: a **coarse deterministic trigger** for the diagnosis below. Past the trigger the history is inspected, and what the inspection finds — never the count that occasioned it — decides what happens next. **The default trigger is every consecutive review state the Resolver resolved to `repair` after the first** (§1.9) — so it fires at the second and at each one beyond it, never once per run: a NONE ruling grants nothing and least of all exemption from the next inspection, and a trigger that fired once would let a change ruled NONE repair indefinitely, which is what this section's opening forbids. It is keyed on that disposition because it is already defined, already caller-readable, and owned only by the Resolver repair disposition; eligible-human review state never contributes to this count. A review resolving to anything else is not a repair state: it does not feed the count and, being interposed, **resets** it. That is what keeps the trigger from indexing on having been reviewed well, and the coarseness it costs is the coarseness this clause chose. A more authoritative and equally simple trigger may substitute for it, with the ground recorded where the substitution is made; a trigger that is merely more elaborate may not — the coarseness is the point, since a trigger with judgment in it is a second diagnosis nobody adjudicated. The trigger never fires on the findings-free path: a complete panel with an empty bundle ends review for that head (§1.7, §1.9).
 
 The caller derives a narrower **repair-basis projection** from that complete record. It contains exactly the current trailing consecutive run of review states whose Resolver outcome is `repair` — beginning after the latest non-`repair` reset and never reconnecting states across one — and within each state only effective findings whose joined ruling is `CONFIRMED`, severity is `SUBSTANTIVE`, and deterministic disposition is `repair`. N projected states carry exactly N−1 complete author-authored correction intervals between adjacent states in that run, oldest first: each interval is keyed by the exact unique reviewed-head endpoints of one state and the immediately following state, while the terminal state remains intentionally unmatched until a later state closes its outgoing interval. Several included findings in one state share that whole interval; the caller never slices edits or attributes an edit to a finding. NIT/remedy, refuted/`none`, `defer`, `measure-escalate`, and Nit carry-forward findings and deltas remain in the complete record but never enter this projection. Missing, duplicate, reordered, noncontiguous, cardinality-misaligned, or ambiguous finding/ruling/disposition/endpoint/delta data withholds diagnosis rather than narrowing or guessing.
+
+**Prospective incomplete adjudication and legacy history (§1.7, §1.9).** An indexed version-2 review that never reaches a fully admitted Judge partition and exact Resolver join is incomplete: it contributes no review state and cannot reset or add to this section's repair count. Previously published unversioned review records retain their original bytes and recorded outcomes; they are not retroactively reclassified by the new producer. Where an old resolved repair lacks a derivable raw-to-effective relation, the repair-basis projection remains unavailable and hands off — it never guesses a relation, edits history, or grants a new current-head panel. The §1.7/§1.9 version-2 enforcement and this prospective history consequence activate only with their implementing derivation, never from a contract-only PR alone (§5.3). Separately authorized current-head re-entry is still required for PR #376's already-published record.
 
 **The diagnosis.** Inspecting the repair-basis projection is a **Judge** ruling (§1.9), in that actor's second capacity: it is the semantic reading of recurring problem, author method, and correction effect, and §1.9's rule admits no separate adjudicator for it. The ruling returns **two** things, both semantic and both the Judge's, so that what consumes them can be deterministic: the taxonomy value below, which classifies the history as ordinary continuation or interruption, and the **invalidation** finding — exactly one of nothing, the selected plan, or the authorization — which answers where the change re-enters the flow. **The two answer different questions and never compete**: the value never authorizes an act, the invalidation never selects who decides it, and decision mode alone selects the recipient of an interruption. Where the history shows both plan and authorization invalidated, the finding is authorization, the wider route. The caller derives the trigger, supplies the repair-basis projection, and consumes the pair; the acting agent rules nothing here and no substitute fills the seat. The diagnosis **does** gate ordinary continuation — NONE releases that interruption and every other value holds it — but autonomous progress requires §5.6's independently produced recovery evidence, never the value itself. The gate takes the same closed direction §1.9 states for the Judge's other capacity, and §3.9's keying rule allocates the postures below.
 
@@ -216,7 +218,7 @@ Majority vote is the **rejected design**, recorded here so it is not re-proposed
 
 **Mutual blindness.** Every slot runs in its own isolated execution context (§1.5) and sees no other slot's result until the panel completes. Independence covers the execution environment, not only the conversation.
 
-**Mechanical aggregation.** The panel's output is the **bundle**: the concatenation of the raw findings returned by every valid slot, constructed by the caller. No vote, no threshold, no semantic deduplication, no severity, no filtering, no reordering that loses provenance — the bundle is transport, and a bundle that dropped a finding is a defective bundle, not a strict one. Every semantic operation over the findings is the Judge's (§1.9).
+**Mechanical aggregation.** The panel's output is the **bundle**: the concatenation of the raw findings returned by every valid slot, constructed by the caller. No vote, no threshold, no semantic deduplication, no severity, no filtering, no reordering that loses provenance — the bundle is transport, and a bundle that dropped a finding is a defective bundle, not a strict one. Every semantic operation over the findings is the Judge's (§1.9). **For new version-2 reviews**, the caller attaches `rawOrdinal`, its zero-based position in the original ordered bundle, to every raw occurrence — even two equal strings from one slot get separate ordinals. The caller carries the exact indexed bundle into both the Judge brief and retained review record; neither the Judge nor a later reader can assign or renumber it. The rule is prospective and does not rewrite existing unversioned records.
 
 **Panel completeness.** A panel is **complete** when every required slot has returned a valid result — validity being the caller's fact (§1.6). Completeness is the panel's whole contract: there is no threshold below it and no quorum above it.
 
@@ -225,6 +227,8 @@ Majority vote is the **rejected design**, recorded here so it is not re-proposed
 **The automatic return-protocol redispatch.** One mechanical subcase of that caller act is fixed rather than discretionary: when the dispatcher's first result records a numeric exit and a missing return, the review orchestrator retries exactly once. Every dispatcher call made by the review orchestrator — a required panel slot, a Judge or history-diagnosis call, or a discretionary same-round or later-round redispatch — owns its own boolean retry state, initially `available`, and changes it to `spent` before its one retry; sibling calls never share or replenish it, and it is unrelated to §1.4's per-lineage recovery allowance. The standing brief contract for each such call instructs the delegate to write a short, complete provisional closed-schema return early and overwrite it with the final return before its bound. The retry repeats the same options and pin and the same semantic brief with exactly this suffix: `\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.` Here each written `\n` denotes one U+000A byte sequence in the composed string, so the suffix begins with exactly two newlines. The reminder intentionally repeats that standing instruction because absence of the required file is the sole trigger; the suffix is the only brief change. A second missing return, spent retry state, or any other lifecycle or return class leaves that call without a result, and no third send occurs for that call. A separate discretionary redispatch is a new call with its own one-retry bound, so the caller's existing authority to re-dispatch is neither removed nor converted into an unbounded retry inside one call. This automatic act neither supplies a result nor creates a verdict: only the retry's independently valid return can satisfy the consuming panel, Judge, or diagnosis role.
 
 Immediately before the second send, the review orchestrator emits `retry-return-protocol` through the optional in-process event callback it owns. The review-orchestrator fixture consumes that callback to prove one event corresponds to exactly one authorized second send; no production persistence consumer is owed. The event is exactly that fixed literal with no delegate field or prose; it is not a delegate JSON event, audit record, operator trace, tool content, details, or session message. An absent callback is the normal no-instrumentation case. A throwing callback is swallowed and cannot alter either dispatch or its returned outcome. This fixture-only assertion seam is not best-effort operational automation: no production capability degrades, no session surface exists, and §5.2's surfaced-signal obligation does not attach.
+
+**One bounded completeness re-request.** After the first independent Judge dispatch returns an admitted, compare-confirmed but *incomplete* adjudication of a nonempty identified bundle, the caller may make exactly one fresh, bounded same-round semantic Judge dispatch. The previous delegate has ended; it is never edited or continued. The re-request includes the **whole original indexed bundle**, the same sealed reviewed head, caller-derived criterion manifest and source facts, and the caller's deterministic completeness gaps — never only the unruled findings or a changed author brief. Both semantic calls use the same consumer-owned Judge profile, delegate argv, immutable expected-ref and deadline/options; only the second semantic brief adds the deterministic gaps and whole-bundle re-request instruction. Each dispatch retains its separate one numeric-exit/missing-return transport retry above; that retry does not replenish the one semantic re-request, and no third semantic dispatch is allowed. No new §1.4 recovery allowance is claimed. A missing/invalid first return is not an admitted-incomplete result and does not activate this semantic request; no manifest, invalid compare, an unavailable actor, or an incomplete/unavailable second return leaves the review INCOMPLETE, with no Resolver consequence. Preserve bounded observed evidence of both semantic calls even where neither yields a terminal review.
 
 **One semantic adjudication point.** With the vote retired, review carries exactly **one** semantic adjudication point for discovered findings: the Judge (§1.9). This is stated rather than left implicit because the retired design distributed judgment across the voters, and a successor that re-adds a semantic step anywhere — a reviewer ruling its own finding valid, a caller filtering the bundle, a second adjudicator after the Judge — reintroduces the multiplicity without the vote that once bounded it.
 
@@ -256,6 +260,8 @@ An adversarial reviewer's success condition is "find something" — a structural
 - **AC impact** — whether the finding sits on an acceptance criterion of the change under review, judged against **the criterion set as a whole**: a whole-set read, distinct from AC closeout (§2.2), which is a separate gate run against the criteria one by one at a different moment; naming both is what keeps them from being conflated into one pass. The set the Judge reads is fixed against drift in one direction: it is the **union** of the criteria as activation — or a re-activation through the same gate (§2.2) — adjudicated them and the criteria as they stand when the panel opens, so a criterion present in either set counts, and drift under §1.2's rule can narrow the relief the Resolver's defer rule grants and never widen it. The drift record is executor-authored, and a set the relieved party could shrink would hand that party its own relief.
 
 **Judge availability is review completeness.** Where the bundle is non-empty and no valid Judge adjudication exists — the Judge was not dispatched, was dispatched without an input its rulings need such as the criterion manifest above, returned invalid under the same compare the panel rides (§1.6), or is unavailable — the **review is incomplete**, and an incomplete review passes no gate. Two paths are named as closed rather than left to be rediscovered: proceeding on the raw findings, which acts on unadjudicated false positives and is exactly the bias the layer exists to remove; and the author filling the Judge's slot, which returns to the adjudicator something of its own to grade. This layer fails **closed** on its own evidence — it is an evidence gate, not a best-effort aid, and §5.2's fail-open direction does not reach it.
+
+**Preterminal admission and indexed record.** For version-2 review records, the Judge return's every effective ruling supplies a nonempty ascending `rawOrdinals` array. Across rulings the arrays must exactly and disjointly partition every caller-assigned bundle ordinal; missing, repeated, unknown, sparse, noninteger, or out-of-order identities fail admission before a Resolver call or a resolved record. A ruling's slot `provenance` equals the **multiset** of the referenced raw slots; a slot name or a matching count cannot substitute for occurrence identity. Rephrasing never changes a raw ordinal; the Judge alone may group several raw ordinals as semantically one effective finding, with original texts/grouping retained for audit. The caller checks total coverage and provenance, not semantic equivalence; a Judge that falsely attests equivalence remains an honest residual on the retained evidence, never a caller-implemented second Judge. A complete admitted ruling keeps §1.9's owed axes. Resolver dispositions carry `rulingIndex` (the zero-based effective-ruling index) and must exactly match the indexed ruling's text and deterministic disposition; text equality alone is insufficient when wordings repeat. The caller admits this exact join before publishing a version-2 `resolved` record. A separately admitted record shape under the same existing marker has `schemaVersion:2`, indexed raw bundle, indexed Judge rulings and Resolver dispositions, and ordered bounded `judgeAttempts` for at most two semantic calls (observed run/return/compare class, result digest and admitted payload if present); its `resolved` state requires the complete partition and Resolver join, while `incomplete` has no Resolver outcome. Attempts are retained even on an incomplete terminal; publication failure, missing/unreadable attempt evidence, or ambiguous relation fails closed. The existing unversioned parser and bytes remain valid historical input without fabricated indexes or migration. This rule activates when its version-2 producer and consumer derive; until then §1.9's existing completeness and no-partial-Resolver obligations remain fully in force.
 
 **The author's non-role.** The author of the artifact under review performs no part of the initial adjudication — not validity, not dedup, not severity, not direction, not AC impact. The author may contest a ruling on new evidence (below) and owes the repair the Resolver derives; it holds no seat in the ruling itself.
 
