@@ -76,12 +76,11 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"!admitTransitionTerminal(record) ||\n\t\t\t\trecord.transition !== transition",
 		"!admitTransitionTerminal(record)",
 	],
-	["repository-name-unchecked", PROJECTION, "if (repo.full_name !== nameWithOwner) return undefined;", ""],
 	[
-		"cache-hit-not-rebound",
+		"repository-name-unchecked",
 		PROJECTION,
-		"return (await unchanged()) ? { segment: cached.segment } : undefined;",
-		"return { segment: cached.segment };",
+		"return repo.full_name === nameWithOwner ? repo.node_id : undefined;",
+		"return repo.node_id;",
 	],
 	[
 		"rebind-ignores-head",
@@ -176,6 +175,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"permission = bracketed(`repos/${nameWithOwner}/collaborators/",
 		"permission = api(`repos/${nameWithOwner}/collaborators/",
 	],
+	["subject-not-enclosed", PROJECTION, "\t\t\tif ((await repositoryNode()) !== repositoryId) return undefined;\n", ""],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],

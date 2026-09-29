@@ -85,6 +85,8 @@ type World = {
 	afterSubject?: () => void;
 	/** Runs once, immediately after a collaborator permission is read. */
 	afterPermission?: () => void;
+	/** Run in order, one per Issue or PR subject read. */
+	subjectHooks?: Array<() => void>;
 	/** Run in order, one per collaborator permission read. */
 	permissionHooks?: Array<() => void>;
 };
@@ -125,11 +127,13 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 					world.pull ?? { number: 7, head: { sha: HEAD }, base: { repo: { full_name: "o/r", node_id: "R" } } },
 				);
 				once("afterSubject");
+				world.subjectHooks?.shift()?.();
 				return subject;
 			}
 			if (path === "repos/o/r/issues/7") {
 				const subject = JSON.stringify(world.issue ?? { number: 7, labels: [] });
 				once("afterSubject");
+				world.subjectHooks?.shift()?.();
 				return subject;
 			}
 			if (path === "repos/o/r/issues/7/comments") {
@@ -553,6 +557,24 @@ describe("#347 lifecycle projection", () => {
 			"silent",
 			"R→R2 at the comment read, back to R later",
 		);
+	});
+
+	it("encloses each subject read between equal repository reads", async () => {
+		for (const kind of ["issue", "pull"] as const) {
+			const world: World = { comments: [] };
+			world.subjectHooks = [
+				() => {},
+				() => {
+					world.repo = { node_id: "R2", full_name: "o/r" };
+				},
+			];
+			const h = harness(world);
+			assert.equal(
+				await h.projection.request({ kind, number: 7 }),
+				"silent",
+				`${kind}: replaced during the last subject read`,
+			);
+		}
 	});
 
 	it("clears a record through an authorized terminal of its own transition", async () => {

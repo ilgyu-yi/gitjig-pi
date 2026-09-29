@@ -6,12 +6,15 @@
  *
  * - Identity: the repository and subject are re-read from the platform; the
  *   operator supplies only a kind and a number. A PR key carries its head, an
- *   Issue key an explicit null head. The complete identity is read before any
- *   evidence, again immediately after the comment read and after every
- *   permission read (so the last check follows the last evidence read), and
- *   again before a cache hit is returned; any difference is silence.
- *   Residual, stated: platform reads are not transactional, so a replacement
- *   and restoration that both complete between two adjacent reads cannot be
+ *   Issue key an explicit null head. One identity snapshot reads
+ *   repository, subject, repository, and needs the two repository reads to
+ *   agree. A snapshot is taken before any evidence (a cache hit is returned
+ *   right after it) and again immediately after the comment read and after
+ *   every permission read, so the last read before display is always a
+ *   repository read; any difference is silence. Residual, stated: the
+ *   projection is a point-in-time observation over non-transactional reads,
+ *   so a change that completes after the last read, or a replacement and
+ *   restoration that both complete between two adjacent reads, cannot be
  *   detected by any read-only sequence.
  * - Admission: the handed-over #276 engine inspects each marker population;
  *   `lifecycle-attestation.ts` decides which carrying comments are attested.
@@ -171,11 +174,17 @@ export class LifecycleProjection {
 		// read before and again after every other read, including on a cache
 		// hit. Both snapshots must be equal, so nothing read across a repository
 		// replacement or a PR head change is displayed or cached.
-		const identity = async (): Promise<{ key: string; repositoryId: string; head: string | null } | undefined> => {
+		const repositoryNode = async (): Promise<string | undefined> => {
 			const repo = json(await api(`repos/${nameWithOwner}`));
 			if (!object(repo) || typeof repo.node_id !== "string" || repo.node_id.length === 0) return undefined;
-			if (repo.full_name !== nameWithOwner) return undefined;
-			const repositoryId = repo.node_id;
+			return repo.full_name === nameWithOwner ? repo.node_id : undefined;
+		};
+		// One snapshot reads repository, subject, repository: the subject read is
+		// enclosed by two equal repository reads, since an Issue response carries
+		// no repository node id of its own.
+		const identity = async (): Promise<{ key: string; repositoryId: string; head: string | null } | undefined> => {
+			const repositoryId = await repositoryNode();
+			if (repositoryId === undefined) return undefined;
 			let head: string | null = null;
 			if (target.kind === "pull") {
 				const pull = json(await api(`repos/${nameWithOwner}/pulls/${String(target.number)}`));
@@ -189,6 +198,7 @@ export class LifecycleProjection {
 				const issue = json(await api(`repos/${nameWithOwner}/issues/${String(target.number)}`));
 				if (!object(issue) || issue.number !== target.number || Object.hasOwn(issue, "pull_request")) return undefined;
 			}
+			if ((await repositoryNode()) !== repositoryId) return undefined;
 			return {
 				key: JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head]),
 				repositoryId,
@@ -201,8 +211,7 @@ export class LifecycleProjection {
 		const unchanged = async (): Promise<boolean> => (await identity())?.key === key;
 
 		const cached = this.cache.get(key);
-		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS)
-			return (await unchanged()) ? { segment: cached.segment } : undefined;
+		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS) return { segment: cached.segment };
 
 		// Evidence counts only if the identity still holds right after it was read.
 		const bracketed = async (path: string, ...rest: string[]): Promise<string | undefined> => {
