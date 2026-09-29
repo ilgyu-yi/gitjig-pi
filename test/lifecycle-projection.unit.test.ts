@@ -52,6 +52,10 @@ type World = {
 	engine?: "unavailable";
 	/** Runs once, immediately after the comment population is read. */
 	afterComments?: () => void;
+	/** Runs once, immediately after the Issue or PR subject is read. */
+	afterSubject?: () => void;
+	/** Runs once, immediately after a collaborator permission is read. */
+	afterPermission?: () => void;
 };
 
 const theme = { fg: (color: string, text: string) => `[${color}]${text}` } as never;
@@ -75,22 +79,33 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 			reads.push({ argv, bounds });
 			const path = argv[argv.length - 1] === ".role_name" ? argv[argv.length - 3] : argv[argv.length - 1];
 			if (path === "repos/o/r") return JSON.stringify(world.repo ?? { node_id: "R", full_name: "o/r" });
-			if (path === "repos/o/r/pulls/7")
-				return JSON.stringify(
+			const once = (hook: "afterComments" | "afterSubject" | "afterPermission") => {
+				const run = world[hook];
+				world[hook] = undefined;
+				run?.();
+			};
+			if (path === "repos/o/r/pulls/7") {
+				const subject = JSON.stringify(
 					world.pull ?? { number: 7, head: { sha: HEAD }, base: { repo: { full_name: "o/r", node_id: "R" } } },
 				);
-			if (path === "repos/o/r/issues/7") return JSON.stringify(world.issue ?? { number: 7, labels: [] });
+				once("afterSubject");
+				return subject;
+			}
+			if (path === "repos/o/r/issues/7") {
+				const subject = JSON.stringify(world.issue ?? { number: 7, labels: [] });
+				once("afterSubject");
+				return subject;
+			}
 			if (path === "repos/o/r/issues/7/comments") {
 				const population =
 					world.comments === "unavailable" ? undefined : JSON.stringify(world.pages ?? [world.comments ?? []]);
-				const after = world.afterComments;
-				world.afterComments = undefined;
-				after?.();
+				once("afterComments");
 				return population;
 			}
 			const permission = /^repos\/o\/r\/collaborators\/(.+)\/permission$/.exec(path ?? "");
 			if (permission) {
 				const role = (world.permissions ?? { writer: "write" })[decodeURIComponent(permission[1])];
+				once("afterPermission");
 				return role === undefined ? undefined : `${role}\n`;
 			}
 			throw new Error(`unexpected read ${argv.join(" ")}`);
@@ -367,6 +382,71 @@ describe("#347 lifecycle projection", () => {
 			],
 		});
 		assert.equal(await duplicated.projection.request({ kind: "issue", number: 7 }), "silent");
+	});
+
+	it("rebinds the whole identity after every read, including a cache hit", async () => {
+		const pr: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(HEAD)) }] };
+		pr.afterComments = () => {
+			pr.pull = { number: 7, head: { sha: OTHER }, base: { repo: { full_name: "o/r", node_id: "R" } } };
+		};
+		const moved = harness(pr);
+		assert.equal(await moved.projection.request({ kind: "pull", number: 7 }), "silent", "head moved during the read");
+		pr.pull = undefined;
+		assert.equal(await moved.projection.request({ kind: "pull", number: 7 }), "displayed");
+		assert.equal(moved.commentReads(), 2, "the moved-head attempt left no cache stamp");
+
+		const issue: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] };
+		const cached = harness(issue);
+		assert.equal(await cached.projection.request({ kind: "issue", number: 7 }), "displayed");
+		issue.afterSubject = () => {
+			issue.repo = { node_id: "R_replacement", full_name: "o/r" };
+		};
+		assert.equal(
+			await cached.projection.request({ kind: "issue", number: 7 }),
+			"silent",
+			"cache hit across a replacement",
+		);
+		assert.equal(cached.commentReads(), 1);
+
+		const late: World = {
+			comments: [{ id: 1, user: user("carrier"), body: marked(HANDOFF, handoff(null)) }],
+			permissions: { carrier: "write" },
+		};
+		late.afterPermission = () => {
+			late.repo = { node_id: "R_replacement", full_name: "o/r" };
+		};
+		const permission = harness(late);
+		assert.equal(
+			await permission.projection.request({ kind: "issue", number: 7 }),
+			"silent",
+			"replacement during a permission read",
+		);
+	});
+
+	it("clears a record through an authorized terminal of its own transition", async () => {
+		for (const [marker, terminalMarker, transition, record] of [
+			[BLOCKED, BLOCKED_TERMINAL, "blocked-clear", blocked(null)],
+			[HANDOFF, HANDOFF_TERMINAL, "handoff-reentry", handoff(null)],
+		] as const) {
+			const h = harness({
+				comments: [
+					{ id: 1, user: user("writer"), body: marked(marker, record) },
+					{
+						id: 2,
+						user: user("writer"),
+						body: marked(terminalMarker, {
+							recordCommentId: 1,
+							transition,
+							observedAt: NOW,
+							subjectHead: null,
+							baseHead: null,
+						}),
+					},
+				],
+			});
+			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed", transition);
+			assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record", transition);
+		}
 	});
 
 	it("keys the cache by repository identity as well as subject and head", async () => {

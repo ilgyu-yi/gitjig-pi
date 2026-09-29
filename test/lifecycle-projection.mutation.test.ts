@@ -16,6 +16,17 @@ const COMMAND = ".pi/extensions/gitjig/commands/lifecycle.ts";
 const SURFACE = ".pi/extensions/gitjig/session-surface.ts";
 const ENGINE = ".github/workflows/gitjig-lifecycle.mjs";
 
+/** Moves the final identity rebind ahead of transition attestation and its permission reads. */
+const REBIND_BEFORE_TRANSITION_ATTESTATION = ((): readonly [string, string, string, string] => {
+	const source = readFileSync(join(repository, PROJECTION), "utf8");
+	const check = "\t\tif (!(await unchanged())) return undefined;\n";
+	const start = source.indexOf("\t\tconst transitions = await attestTransitionComments(");
+	const end = source.indexOf(check, start);
+	assert.ok(start >= 0 && end > start, "rebind-order mutant anchors must exist");
+	const span = source.slice(start, end + check.length);
+	return ["rebind-before-transition-attestation", PROJECTION, span, check + source.slice(start, end)];
+})();
+
 /** [name, file, exact unique source span, replacement]; each weakens one implemented guard. */
 const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	["read-bound", PROJECTION, "timeoutMs: 2_000,", "timeoutMs: 10_000,"],
@@ -48,12 +59,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	["superseded-renders", PROJECTION, 'if (generation !== this.generation) return "superseded";', ""],
 	["stale-head-admitted", PROJECTION, "record.subjectHead !== head", "false"],
 	["no-ui-reads", PROJECTION, 'if (!this.surface.visible) return "silent";', ""],
-	[
-		"repository-name-unchecked",
-		PROJECTION,
-		"return repo.full_name === nameWithOwner ? repo.node_id : undefined;",
-		"return repo.node_id;",
-	],
 	["issue-may-be-pull", PROJECTION, ' || Object.hasOwn(issue, "pull_request")', ""],
 	["population-refusal-ignored", PROJECTION, "if (!population.ok) return undefined;", ""],
 	[
@@ -75,8 +80,28 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"!admitTransitionTerminal(record) ||\n\t\t\t\trecord.transition !== transition",
 		"!admitTransitionTerminal(record)",
 	],
+	["repository-name-unchecked", PROJECTION, "if (repo.full_name !== nameWithOwner) return undefined;", ""],
+	["final-rebind-removed", PROJECTION, "if (!(await unchanged())) return undefined;", ""],
+	[
+		"cache-hit-not-rebound",
+		PROJECTION,
+		"return (await unchanged()) ? cached.segment : undefined;",
+		"return cached.segment;",
+	],
+	[
+		"rebind-ignores-head",
+		PROJECTION,
+		"(await identity())?.key === key",
+		"(await identity())?.repositoryId === repositoryId",
+	],
+	REBIND_BEFORE_TRANSITION_ATTESTATION,
+	[
+		"blocked-terminal-carrier-refused",
+		ATTESTATION,
+		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+		"attested: !comment.body.startsWith(engine.RECORD_MARKERS.blockedTerminal) && (await authorizedUser(engine, comment, repositoryId, permissionOf)) });",
+	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
-	["repository-not-rebound", PROJECTION, "if ((await repositoryIdentity()) !== repositoryId) return undefined;", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],
 	["pull-number-unchecked", PROJECTION, " || pull.number !== target.number", ""],

@@ -150,33 +150,38 @@ export class LifecycleProjection {
 		const { host, nameWithOwner } = repository;
 		const api = (path: string, ...rest: string[]) => this.read(["api", "--hostname", host, ...rest, path]);
 
-		// The repository identity is read first and again after every other read;
-		// both must match, so no population is admitted across a replacement.
-		const repositoryIdentity = async (): Promise<string | undefined> => {
+		// The complete identity (repository node id and, for a PR, its head) is
+		// read before and again after every other read, including on a cache
+		// hit. Both snapshots must be equal, so nothing read across a repository
+		// replacement or a PR head change is displayed or cached.
+		const identity = async (): Promise<{ key: string; repositoryId: string; head: string | null } | undefined> => {
 			const repo = json(await api(`repos/${nameWithOwner}`));
 			if (!object(repo) || typeof repo.node_id !== "string" || repo.node_id.length === 0) return undefined;
-			return repo.full_name === nameWithOwner ? repo.node_id : undefined;
+			if (repo.full_name !== nameWithOwner) return undefined;
+			const repositoryId = repo.node_id;
+			let head: string | null = null;
+			if (target.kind === "pull") {
+				const pull = json(await api(`repos/${nameWithOwner}/pulls/${String(target.number)}`));
+				const base = object(pull) && object(pull.base) && object(pull.base.repo) ? pull.base.repo : undefined;
+				const pullHead = object(pull) && object(pull.head) ? pull.head.sha : undefined;
+				if (!object(pull) || pull.number !== target.number) return undefined;
+				if (base?.node_id !== repositoryId) return undefined;
+				if (typeof pullHead !== "string" || !OID.test(pullHead)) return undefined;
+				head = pullHead;
+			} else {
+				const issue = json(await api(`repos/${nameWithOwner}/issues/${String(target.number)}`));
+				if (!object(issue) || issue.number !== target.number || Object.hasOwn(issue, "pull_request")) return undefined;
+			}
+			return { key: JSON.stringify([repositoryId, target.kind, target.number, head]), repositoryId, head };
 		};
-		const repositoryId = await repositoryIdentity();
-		if (repositoryId === undefined) return undefined;
+		const before = await identity();
+		if (before === undefined) return undefined;
+		const { key, repositoryId, head } = before;
+		const unchanged = async (): Promise<boolean> => (await identity())?.key === key;
 
-		let head: string | null = null;
-		if (target.kind === "pull") {
-			const pull = json(await api(`repos/${nameWithOwner}/pulls/${String(target.number)}`));
-			const base = object(pull) && object(pull.base) && object(pull.base.repo) ? pull.base.repo : undefined;
-			const pullHead = object(pull) && object(pull.head) ? pull.head.sha : undefined;
-			if (!object(pull) || pull.number !== target.number) return undefined;
-			if (base?.node_id !== repositoryId) return undefined;
-			if (typeof pullHead !== "string" || !OID.test(pullHead)) return undefined;
-			head = pullHead;
-		} else {
-			const issue = json(await api(`repos/${nameWithOwner}/issues/${String(target.number)}`));
-			if (!object(issue) || issue.number !== target.number || Object.hasOwn(issue, "pull_request")) return undefined;
-		}
-
-		const key = JSON.stringify([repositoryId, target.kind, target.number, head]);
 		const cached = this.cache.get(key);
-		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS) return cached.segment;
+		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS)
+			return (await unchanged()) ? cached.segment : undefined;
 
 		const engine = await this.seams.engine();
 		if (engine === undefined) return undefined;
@@ -220,7 +225,7 @@ export class LifecycleProjection {
 			if (current.some(({ record }) => record.subjectHead !== head)) return undefined;
 			if (current.length > 0) states.push(state);
 		}
-		if ((await repositoryIdentity()) !== repositoryId) return undefined;
+		if (!(await unchanged())) return undefined;
 		const segment: LifecycleSegment = {
 			subject: target.kind,
 			number: target.number,
