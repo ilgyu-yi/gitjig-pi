@@ -9,7 +9,7 @@
 import { runPlatformRead } from "../platform/read.ts";
 import { addPlatformIssueLabel } from "../platform/write.ts";
 import { type PublishResult, performPublish } from "../publish/service.ts";
-import { type AttestedCommentPopulation, fetchAttestedReviewComments } from "./comments.ts";
+import { fetchAttestedReviewComments } from "./comments.ts";
 import {
 	admitPlatformReviewContext,
 	admitReviewSubject,
@@ -20,6 +20,13 @@ import {
 
 type Publish = typeof performPublish;
 type FetchComments = typeof fetchAttestedReviewComments;
+type Read = typeof runPlatformRead;
+type Delay = (ms: number) => Promise<void>;
+
+/** SPEC §3.3's one fixed wait before the single identical receipt reread. */
+export const RECEIPT_REREAD_DELAY_MS = 5_000;
+
+const waitFor: Delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function admitPublicationSubject(
 	source: ReviewSubject,
@@ -223,7 +230,12 @@ export async function publishReviewRecord(
 	);
 }
 
-function publishedCommentId(result: PublishResult, context: PlatformReviewContext): number | undefined {
+type PublishedCommentLocator = { id: number; url: string };
+
+function publishedCommentLocator(
+	result: PublishResult,
+	context: PlatformReviewContext,
+): PublishedCommentLocator | undefined {
 	if (result.details.disposition !== "published" || typeof result.details.url !== "string") return undefined;
 	try {
 		const url = new URL(result.details.url);
@@ -244,37 +256,73 @@ function publishedCommentId(result: PublishResult, context: PlatformReviewContex
 		)
 			return undefined;
 		const id = Number(url.hash.slice("#issuecomment-".length));
-		return Number.isSafeInteger(id) ? id : undefined;
+		return Number.isSafeInteger(id) ? { id, url: result.details.url } : undefined;
 	} catch {
 		return undefined;
 	}
 }
 
-function admitReceipt(
+function stringField(value: unknown, key: string): string | undefined {
+	return typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		typeof (value as Record<string, unknown>)[key] === "string"
+		? ((value as Record<string, unknown>)[key] as string)
+		: undefined;
+}
+
+function numberField(value: unknown, key: string): number | undefined {
+	return typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		Number.isSafeInteger((value as Record<string, unknown>)[key])
+		? ((value as Record<string, unknown>)[key] as number)
+		: undefined;
+}
+
+function admitTargetedReceipt(
 	subject: ReviewSubject,
 	body: string,
-	commentId: number,
-	population: AttestedCommentPopulation,
+	locator: PublishedCommentLocator,
+	output: string | undefined,
 ): ReviewPublicationReceipt | undefined {
-	if (!population.ok) return undefined;
-	const matches = population.comments.filter(
-		(comment) => comment.id === commentId && comment.body === body && comment.authorId === subject.writerId,
-	);
-	if (matches.length !== 1) return undefined;
+	if (output === undefined) return undefined;
+	let payload: unknown;
+	try {
+		payload = JSON.parse(output);
+	} catch {
+		return undefined;
+	}
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return undefined;
 	const context = subject.context;
+	const apiRoot =
+		context.repository.host === "github.com" ? "https://api.github.com" : `https://${context.repository.host}/api/v3`;
+	const user = (payload as { user?: unknown }).user;
+	if (
+		numberField(payload, "id") !== locator.id ||
+		stringField(payload, "issue_url") !==
+			`${apiRoot}/repos/${context.repository.nameWithOwner}/issues/${String(context.pullRequest.number)}` ||
+		stringField(payload, "html_url") !== locator.url ||
+		stringField(payload, "body") !== body ||
+		stringField(user, "node_id") !== subject.writerId
+	)
+		return undefined;
 	return {
 		repositoryId: context.repository.id,
 		pullRequestId: context.pullRequest.id,
 		headOid: context.pullRequest.head.oid,
-		commentId,
-		authorId: matches[0].authorId,
-		body: matches[0].body,
+		commentId: locator.id,
+		authorId: subject.writerId,
+		body,
 	};
 }
 
 /**
  * A send is usable only after the exact comment is re-fetched from its bound
- * subject and attributed to that subject's sealed writer.
+ * subject and attributed to that subject's sealed writer. Per SPEC §3.3, only
+ * a first read with no admitted output earns one fixed delay and one
+ * byte-identical second read; a present response is evidence and is never
+ * retried.
  */
 export async function publishAndRefetchReviewRecord(
 	body: string,
@@ -282,7 +330,8 @@ export async function publishAndRefetchReviewRecord(
 	repoRoot: string,
 	stateRoot: string,
 	publish: Publish = performPublish,
-	fetchComments: FetchComments = fetchAttestedReviewComments,
+	read: Read = runPlatformRead,
+	delay: Delay = waitFor,
 ): Promise<ReviewPublicationOutcome> {
 	const subject = await admitPublicationSubject(source);
 	if (subject === "criterion-owner-unavailable")
@@ -290,11 +339,21 @@ export async function publishAndRefetchReviewRecord(
 	if (subject === undefined) return { ok: false, cause: "the platform subject was not admissible" };
 	const context = subject.context;
 	const published = await publishReviewRecord(body, context, repoRoot, stateRoot, publish);
-	const commentId = publishedCommentId(published, context);
-	if (commentId === undefined) return { ok: false, cause: "the review publication was not confirmed" };
-	for (let attempt = 0; attempt < 2; attempt += 1) {
-		const receipt = admitReceipt(subject, body, commentId, await fetchComments(repoRoot, context));
-		if (receipt !== undefined) return { ok: true, receipt };
+	const locator = publishedCommentLocator(published, context);
+	if (locator === undefined) return { ok: false, cause: "the review publication was not confirmed" };
+	const argv = [
+		"api",
+		"--hostname",
+		context.repository.host,
+		`repos/${context.repository.nameWithOwner}/issues/comments/${String(locator.id)}`,
+	] as const;
+	let output = await read([...argv], repoRoot);
+	if (output === undefined) {
+		await delay(RECEIPT_REREAD_DELAY_MS);
+		output = await read([...argv], repoRoot);
 	}
-	return { ok: false, cause: "the published review record did not refetch exactly" };
+	const receipt = admitTargetedReceipt(subject, body, locator, output);
+	return receipt === undefined
+		? { ok: false, cause: "the published review record did not refetch exactly" }
+		: { ok: true, receipt };
 }
