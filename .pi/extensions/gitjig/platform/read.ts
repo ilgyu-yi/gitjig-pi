@@ -48,7 +48,9 @@ export function runPlatformRead(
 		// streaming fatal decoder both carries a partial code point across chunks
 		// and refuses malformed UTF-8 instead of silently manufacturing U+FFFD,
 		// which could equal an expected platform body byte-for-byte after decode.
-		const decoder = new TextDecoder("utf-8", { fatal: true });
+		// `ignoreBOM` keeps a leading U+FEFF as text, as the previous decoder did,
+		// so valid stdout is never silently rewritten before a closed parser.
+		const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 		let decodeFailed = false;
 		const child = spawn("gh", argv, {
 			cwd: repoRoot,

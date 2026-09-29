@@ -47,6 +47,11 @@ setTimeout(() => {
 		}
 	});
 
+	it("preserves a leading UTF-8 BOM instead of silently stripping it", async () => {
+		const root = installGh("process.stdout.write(Buffer.from([0xef, 0xbb, 0xbf, 0x7b, 0x7d]));");
+		assert.equal(await runPlatformRead([], root, { timeoutMs: 2_000, graceMs: 200, maxBytes: 1024 }), "\u{feff}{}");
+	});
+
 	it("refuses output beyond the byte cap", async () => {
 		const root = installGh('process.stdout.write("12345");');
 		assert.equal(await runPlatformRead([], root, { timeoutMs: 2_000, graceMs: 200, maxBytes: 4 }), undefined);

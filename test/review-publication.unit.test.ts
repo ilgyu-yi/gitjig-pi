@@ -50,6 +50,29 @@ function published(url = COMMENT_URL) {
 	});
 }
 
+const REFUSALS: Array<[string, string]> = [
+	["malformed-json", "{"],
+	["bom-prefixed", `\u{feff}${payload()}`],
+	["array", "[]"],
+	["wrong-id", payload({ id: COMMENT_ID + 1 })],
+	["typed-id", payload({ id: String(COMMENT_ID) })],
+	[
+		"missing-id",
+		JSON.stringify({ issue_url: ISSUE_URL, html_url: COMMENT_URL, body: BODY, user: { node_id: "WRITER" } }),
+	],
+	["wrong-repository", payload({ issue_url: "https://api.github.com/repos/other/repo/issues/7" })],
+	["wrong-parent", payload({ issue_url: "https://api.github.com/repos/owner/repo/issues/8" })],
+	["typed-parent", payload({ issue_url: 7 })],
+	["wrong-html", payload({ html_url: `https://github.com/owner/repo/pull/8#issuecomment-${COMMENT_ID}` })],
+	["typed-html", payload({ html_url: COMMENT_ID })],
+	["wrong-body", payload({ body: `${BODY}changed` })],
+	["typed-body", payload({ body: 7 })],
+	["missing-user", payload({ user: undefined })],
+	["array-user", payload({ user: [] })],
+	["wrong-author", payload({ user: { node_id: "OTHER" } })],
+	["typed-author", payload({ user: { node_id: 7 } })],
+];
+
 type Event = "read" | "delay";
 
 /** One publish with scripted reads; every read and delay is recorded in order. */
@@ -57,14 +80,16 @@ async function receipt(responses: Array<string | undefined>) {
 	const events: Event[] = [];
 	const reads: string[][] = [];
 	const delays: number[] = [];
+	const sent: unknown[] = [];
 	let sends = 0;
 	const outcome = await publishAndRefetchReviewRecord(
 		BODY,
 		subject(),
 		"/repo",
 		"/state",
-		async () => {
+		async (params) => {
 			sends += 1;
+			sent.push(params);
 			return published()();
 		},
 		async (argv) => {
@@ -78,7 +103,7 @@ async function receipt(responses: Array<string | undefined>) {
 			delays.push(ms);
 		},
 	);
-	return { outcome, events, reads, delays, sends };
+	return { outcome, events, reads, delays, sends, sent };
 }
 
 const ARGV = ["api", "--hostname", "github.com", `repos/owner/repo/issues/comments/${COMMENT_ID}`];
@@ -99,6 +124,7 @@ describe("#381 targeted legacy review publication receipt", () => {
 	it("binds one send and one targeted GET to the exact comment, writer and bytes", async () => {
 		const run = await receipt([payload({ unrelated_platform_field: { retained: true } })]);
 		assert.equal(run.sends, 1);
+		assert.deepEqual(run.sent, [{ body: BODY, destination: { kind: "pr-comment", number: 7 } }]);
 		assert.deepEqual(run.reads, [ARGV]);
 		assert.deepEqual(run.delays, []);
 		assert.deepEqual(run.outcome, ADMITTED);
@@ -111,6 +137,15 @@ describe("#381 targeted legacy review publication receipt", () => {
 		assert.deepEqual(run.reads, [ARGV, ARGV]);
 		assert.equal(run.sends, 1);
 		assert.deepEqual(run.outcome, ADMITTED);
+	});
+
+	it("applies the complete exact admission independently to the second read", async () => {
+		for (const [name, response] of REFUSALS) {
+			const run = await receipt([undefined, response]);
+			assert.deepEqual(run.outcome, REFUSED, `second read ${name}`);
+			assert.deepEqual(run.events, ["read", "delay", "read"], `second read ${name}`);
+			assert.equal(run.sends, 1, `second read ${name}`);
+		}
 	});
 
 	it("stays unconfirmed after two unavailable reads or an unavailable then mismatched read, with no third read", async () => {
@@ -128,28 +163,7 @@ describe("#381 targeted legacy review publication receipt", () => {
 	});
 
 	it("fails immediately, with no delay or retry, on every present malformed or mismatched response", async () => {
-		const refusals: Array<[string, string]> = [
-			["malformed-json", "{"],
-			["array", "[]"],
-			["wrong-id", payload({ id: COMMENT_ID + 1 })],
-			["typed-id", payload({ id: String(COMMENT_ID) })],
-			[
-				"missing-id",
-				JSON.stringify({ issue_url: ISSUE_URL, html_url: COMMENT_URL, body: BODY, user: { node_id: "WRITER" } }),
-			],
-			["wrong-repository", payload({ issue_url: "https://api.github.com/repos/other/repo/issues/7" })],
-			["wrong-parent", payload({ issue_url: "https://api.github.com/repos/owner/repo/issues/8" })],
-			["typed-parent", payload({ issue_url: 7 })],
-			["wrong-html", payload({ html_url: `https://github.com/owner/repo/pull/8#issuecomment-${COMMENT_ID}` })],
-			["typed-html", payload({ html_url: COMMENT_ID })],
-			["wrong-body", payload({ body: `${BODY}changed` })],
-			["typed-body", payload({ body: 7 })],
-			["missing-user", payload({ user: undefined })],
-			["array-user", payload({ user: [] })],
-			["wrong-author", payload({ user: { node_id: "OTHER" } })],
-			["typed-author", payload({ user: { node_id: 7 } })],
-		];
-		for (const [name, response] of refusals) {
+		for (const [name, response] of REFUSALS) {
 			const run = await receipt([response]);
 			assert.deepEqual(run.outcome, REFUSED, name);
 			assert.equal(run.sends, 1, `${name}: send count`);

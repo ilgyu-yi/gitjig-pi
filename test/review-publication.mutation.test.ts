@@ -55,6 +55,16 @@ const mutations = [
 		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv.slice(0, 3), `repos/${context.repository.nameWithOwner}/issues/${String(context.pullRequest.number)}/comments`], repoRoot);",
 	],
 	[
+		"body-edit",
+		'\t\t{\n\t\t\tbody,\n\t\t\tdestination: { kind: "pr-comment"',
+		'\t\t{\n\t\t\tbody: `${body}changed`,\n\t\t\tdestination: { kind: "pr-comment"',
+	],
+	[
+		"second-read-writer-rewrite",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);",
+		'await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);\n\t\ttry {\n\t\t\tconst second = JSON.parse(output ?? "");\n\t\t\tsecond.user = { node_id: subject.writerId };\n\t\t\toutput = JSON.stringify(second);\n\t\t} catch {}',
+	],
+	[
 		"second-send",
 		"const locator = publishedCommentLocator(published, context);",
 		"await publishReviewRecord(body, context, repoRoot, stateRoot, publish);\n\tconst locator = publishedCommentLocator(published, context);",
@@ -109,9 +119,13 @@ describe("#381 baseline-first targeted receipt mutants", () => {
 		});
 	}
 
-	it("kills nonfatal UTF-8 decoding", () => {
-		const mutation = ["strict-utf8", 'new TextDecoder("utf-8", { fatal: true })', 'new TextDecoder("utf-8")'] as const;
-		const result = run(mutation[0], mutation, ".pi/extensions/gitjig/platform/read.ts");
-		assert.notEqual(result.status, 0, `strict-utf8 survived\n${result.stdout}\n${result.stderr}`);
+	it("kills nonfatal UTF-8 decoding and BOM stripping", () => {
+		for (const mutation of [
+			["strict-utf8", "{ fatal: true, ignoreBOM: true }", "{ ignoreBOM: true }"],
+			["keep-bom", "{ fatal: true, ignoreBOM: true }", "{ fatal: true }"],
+		] as const) {
+			const result = run(mutation[0], mutation, ".pi/extensions/gitjig/platform/read.ts");
+			assert.notEqual(result.status, 0, `${mutation[0]} survived\n${result.stdout}\n${result.stderr}`);
+		}
 	});
 });
