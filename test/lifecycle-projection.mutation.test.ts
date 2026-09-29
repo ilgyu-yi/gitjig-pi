@@ -48,9 +48,13 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	["superseded-renders", PROJECTION, 'if (generation !== this.generation) return "superseded";', ""],
 	["stale-head-admitted", PROJECTION, "record.subjectHead !== head", "false"],
 	["no-ui-reads", PROJECTION, 'if (!this.surface.visible) return "silent";', ""],
-	["repository-name-unchecked", PROJECTION, "if (repo.full_name !== nameWithOwner) return undefined;", ""],
+	[
+		"repository-name-unchecked",
+		PROJECTION,
+		"return repo.full_name === nameWithOwner ? repo.node_id : undefined;",
+		"return repo.node_id;",
+	],
 	["issue-may-be-pull", PROJECTION, ' || Object.hasOwn(issue, "pull_request")', ""],
-	["pull-base-unchecked", PROJECTION, " || base?.full_name !== nameWithOwner", ""],
 	["population-refusal-ignored", PROJECTION, "if (!population.ok) return undefined;", ""],
 	[
 		"failure-keeps-old-segment",
@@ -72,6 +76,30 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"!admitTransitionTerminal(record)",
 	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
+	["repository-not-rebound", PROJECTION, "if ((await repositoryIdentity()) !== repositoryId) return undefined;", ""],
+	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
+	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],
+	["pull-number-unchecked", PROJECTION, " || pull.number !== target.number", ""],
+	[
+		"maintain-excluded",
+		ATTESTATION,
+		"permission: permission?.toUpperCase(),",
+		'permission: permission?.toUpperCase() === "MAINTAIN" ? undefined : permission?.toUpperCase(),',
+	],
+	[
+		"admin-excluded",
+		ATTESTATION,
+		"permission: permission?.toUpperCase(),",
+		'permission: permission?.toUpperCase() === "ADMIN" ? undefined : permission?.toUpperCase(),',
+	],
+	...(["blockedTerminal", "handoff", "handoffTerminal"] as const).map(
+		(marker): readonly [string, string, string, string] => [
+			`${marker}-carrier-auto-attested`,
+			ATTESTATION,
+			"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+			`attested: comment.body.startsWith(engine.RECORD_MARKERS.${marker}) || (await authorizedUser(engine, comment, repositoryId, permissionOf)) });`,
+		],
+	),
 	["engine-terminal-subject-head", ENGINE, "\t\t\treferenced.subjectHead !== terminal.subjectHead ||\n", ""],
 	["engine-terminal-base-head", ENGINE, " ||\n\t\t\treferenced.baseHead !== terminal.baseHead", ""],
 	[

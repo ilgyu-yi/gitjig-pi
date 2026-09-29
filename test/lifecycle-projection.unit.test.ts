@@ -19,6 +19,7 @@ const BLOCKED = "<!-- lifecycle-blocked-record: v1 -->";
 const BLOCKED_TERMINAL = "<!-- lifecycle-blocked-terminal: v1 -->";
 const HANDOFF = "<!-- lifecycle-handoff-record: v1 -->";
 const AWAITING = "<!-- lifecycle-awaiting-author-record: v1 -->";
+const HANDOFF_TERMINAL = "<!-- lifecycle-handoff-terminal: v1 -->";
 
 const marked = (marker: string, record: unknown) => `${marker}\n\n\`\`\`json\n${JSON.stringify(record)}\n\`\`\``;
 const user = (login: string) => ({ node_id: `U_${login}`, login, type: "User" });
@@ -49,6 +50,8 @@ type World = {
 	pages?: Comment[][];
 	permissions?: Record<string, string | undefined>;
 	engine?: "unavailable";
+	/** Runs once, immediately after the comment population is read. */
+	afterComments?: () => void;
 };
 
 const theme = { fg: (color: string, text: string) => `[${color}]${text}` } as never;
@@ -73,10 +76,18 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 			const path = argv[argv.length - 1] === ".role_name" ? argv[argv.length - 3] : argv[argv.length - 1];
 			if (path === "repos/o/r") return JSON.stringify(world.repo ?? { node_id: "R", full_name: "o/r" });
 			if (path === "repos/o/r/pulls/7")
-				return JSON.stringify(world.pull ?? { number: 7, head: { sha: HEAD }, base: { repo: { full_name: "o/r" } } });
+				return JSON.stringify(
+					world.pull ?? { number: 7, head: { sha: HEAD }, base: { repo: { full_name: "o/r", node_id: "R" } } },
+				);
 			if (path === "repos/o/r/issues/7") return JSON.stringify(world.issue ?? { number: 7, labels: [] });
-			if (path === "repos/o/r/issues/7/comments")
-				return world.comments === "unavailable" ? undefined : JSON.stringify(world.pages ?? [world.comments ?? []]);
+			if (path === "repos/o/r/issues/7/comments") {
+				const population =
+					world.comments === "unavailable" ? undefined : JSON.stringify(world.pages ?? [world.comments ?? []]);
+				const after = world.afterComments;
+				world.afterComments = undefined;
+				after?.();
+				return population;
+			}
 			const permission = /^repos\/o\/r\/collaborators\/(.+)\/permission$/.exec(path ?? "");
 			if (permission) {
 				const role = (world.permissions ?? { writer: "write" })[decodeURIComponent(permission[1])];
@@ -136,6 +147,32 @@ describe("#347 lifecycle projection", () => {
 		});
 		assert.equal(await h.projection.request({ kind: "pull", number: 7 }), "displayed");
 		assert.equal(h.lifecycle(), "[warning]PR #7@aaaaaaa awaiting-author, handoff");
+	});
+
+	it("accepts WRITE, MAINTAIN and ADMIN carriers for blocked and handoff records and terminals", async () => {
+		for (const role of ["write", "maintain", "admin"]) {
+			const h = harness({
+				comments: [
+					{ id: 1, user: user("carrier"), body: marked(BLOCKED, blocked(null)) },
+					{ id: 2, user: user("carrier"), body: marked(HANDOFF, handoff(null)) },
+					{ id: 3, user: user("carrier"), body: marked(HANDOFF, handoff(null)) },
+					{
+						id: 4,
+						user: user("carrier"),
+						body: marked(HANDOFF_TERMINAL, {
+							recordCommentId: 3,
+							transition: "handoff-reentry",
+							observedAt: NOW,
+							subjectHead: null,
+							baseHead: null,
+						}),
+					},
+				],
+				permissions: { carrier: role },
+			});
+			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed", role);
+			assert.equal(h.lifecycle(), "[warning]issue #7 blocked, handoff", role);
+		}
 	});
 
 	it("shows an explicit empty result, and a lifecycle label alone asserts nothing", async () => {
@@ -220,6 +257,74 @@ describe("#347 lifecycle projection", () => {
 				},
 				"pull",
 			],
+			[
+				"unauthorized blocked terminal carrier",
+				{
+					comments: [
+						{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) },
+						{
+							id: 2,
+							user: user("reader"),
+							body: marked(BLOCKED_TERMINAL, {
+								recordCommentId: 1,
+								transition: "blocked-clear",
+								observedAt: NOW,
+								subjectHead: null,
+								baseHead: null,
+							}),
+						},
+					],
+					permissions: { writer: "write", reader: "read" },
+				},
+				"issue",
+			],
+			[
+				"unauthorized handoff record carrier",
+				{
+					comments: [{ id: 1, user: user("reader"), body: marked(HANDOFF, handoff(null)) }],
+					permissions: { reader: "triage" },
+				},
+				"issue",
+			],
+			[
+				"unauthorized handoff terminal carrier",
+				{
+					comments: [
+						{ id: 1, user: user("writer"), body: marked(HANDOFF, handoff(null)) },
+						{
+							id: 2,
+							user: user("reader"),
+							body: marked(HANDOFF_TERMINAL, {
+								recordCommentId: 1,
+								transition: "handoff-reentry",
+								observedAt: NOW,
+								subjectHead: null,
+								baseHead: null,
+							}),
+						},
+					],
+					permissions: { writer: "write", reader: "read" },
+				},
+				"issue",
+			],
+			["Issue number mismatch", { issue: { number: 8 } }, "issue"],
+			[
+				"PR number mismatch",
+				{ pull: { number: 8, head: { sha: HEAD }, base: { repo: { full_name: "o/r", node_id: "R" } } } },
+				"pull",
+			],
+			[
+				"PR base repository identity mismatch",
+				{ pull: { number: 7, head: { sha: HEAD }, base: { repo: { full_name: "o/r", node_id: "R_other" } } } },
+				"pull",
+			],
+			[
+				"repository replaced while the population was read",
+				{
+					comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }],
+				},
+				"issue",
+			],
 			["unavailable comments", { comments: "unavailable" }, "issue"],
 			["repository identity mismatch", { repo: { node_id: "R", full_name: "x/y" } }, "issue"],
 			["Issue number resolving to a PR", { issue: { number: 7, pull_request: {} } }, "issue"],
@@ -230,12 +335,16 @@ describe("#347 lifecycle projection", () => {
 			],
 			[
 				"PR without a full head",
-				{ pull: { number: 7, head: { sha: "abc" }, base: { repo: { full_name: "o/r" } } } },
+				{ pull: { number: 7, head: { sha: "abc" }, base: { repo: { full_name: "o/r", node_id: "R" } } } },
 				"pull",
 			],
 			["engine unavailable", { engine: "unavailable" }, "issue"],
 		];
 		for (const [name, world, kind] of cases) {
+			if (name === "repository replaced while the population was read")
+				world.afterComments = () => {
+					world.repo = { node_id: "R_replacement", full_name: "o/r" };
+				};
 			const h = harness(world);
 			assert.equal(await h.projection.request({ kind, number: 7 }), "silent", name);
 			assert.equal(h.lifecycle(), undefined, name);
@@ -282,7 +391,7 @@ describe("#347 lifecycle projection", () => {
 		h.clock.now = LIFECYCLE_TTL_MS;
 		await h.projection.request({ kind: "pull", number: 7 });
 		assert.equal(h.commentReads(), 2, "expired cache is recomputed");
-		world.pull = { number: 7, head: { sha: OTHER }, base: { repo: { full_name: "o/r" } } };
+		world.pull = { number: 7, head: { sha: OTHER }, base: { repo: { full_name: "o/r", node_id: "R" } } };
 		assert.equal(
 			await h.projection.request({ kind: "pull", number: 7 }),
 			"silent",

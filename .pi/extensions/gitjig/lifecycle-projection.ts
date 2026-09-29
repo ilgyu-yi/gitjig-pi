@@ -150,17 +150,23 @@ export class LifecycleProjection {
 		const { host, nameWithOwner } = repository;
 		const api = (path: string, ...rest: string[]) => this.read(["api", "--hostname", host, ...rest, path]);
 
-		const repo = json(await api(`repos/${nameWithOwner}`));
-		if (!object(repo) || typeof repo.node_id !== "string" || repo.node_id.length === 0) return undefined;
-		if (repo.full_name !== nameWithOwner) return undefined;
-		const repositoryId = repo.node_id;
+		// The repository identity is read first and again after every other read;
+		// both must match, so no population is admitted across a replacement.
+		const repositoryIdentity = async (): Promise<string | undefined> => {
+			const repo = json(await api(`repos/${nameWithOwner}`));
+			if (!object(repo) || typeof repo.node_id !== "string" || repo.node_id.length === 0) return undefined;
+			return repo.full_name === nameWithOwner ? repo.node_id : undefined;
+		};
+		const repositoryId = await repositoryIdentity();
+		if (repositoryId === undefined) return undefined;
 
 		let head: string | null = null;
 		if (target.kind === "pull") {
 			const pull = json(await api(`repos/${nameWithOwner}/pulls/${String(target.number)}`));
 			const base = object(pull) && object(pull.base) && object(pull.base.repo) ? pull.base.repo : undefined;
 			const pullHead = object(pull) && object(pull.head) ? pull.head.sha : undefined;
-			if (!object(pull) || pull.number !== target.number || base?.full_name !== nameWithOwner) return undefined;
+			if (!object(pull) || pull.number !== target.number) return undefined;
+			if (base?.node_id !== repositoryId) return undefined;
 			if (typeof pullHead !== "string" || !OID.test(pullHead)) return undefined;
 			head = pullHead;
 		} else {
@@ -214,6 +220,7 @@ export class LifecycleProjection {
 			if (current.some(({ record }) => record.subjectHead !== head)) return undefined;
 			if (current.length > 0) states.push(state);
 		}
+		if ((await repositoryIdentity()) !== repositoryId) return undefined;
 		const segment: LifecycleSegment = {
 			subject: target.kind,
 			number: target.number,
