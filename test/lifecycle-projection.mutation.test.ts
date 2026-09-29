@@ -35,14 +35,14 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"key-without-head",
 		PROJECTION,
-		"[repositoryId, target.kind, target.number, head]",
-		"[repositoryId, target.kind, target.number]",
+		"[host, nameWithOwner, repositoryId, target.kind, target.number, head]",
+		"[host, nameWithOwner, repositoryId, target.kind, target.number]",
 	],
 	[
 		"key-without-repository",
 		PROJECTION,
-		"[repositoryId, target.kind, target.number, head]",
-		"[target.kind, target.number, head]",
+		"[host, nameWithOwner, repositoryId, target.kind, target.number, head]",
+		"[host, nameWithOwner, target.kind, target.number, head]",
 	],
 	[
 		"first-page-only",
@@ -100,6 +100,24 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		ATTESTATION,
 		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
 		"attested: !comment.body.startsWith(engine.RECORD_MARKERS.blockedTerminal) && (await authorizedUser(engine, comment, repositoryId, permissionOf)) });",
+	],
+	[
+		"key-without-host",
+		PROJECTION,
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
+		"JSON.stringify([nameWithOwner, repositoryId, target.kind, target.number, head])",
+	],
+	[
+		"key-without-name",
+		PROJECTION,
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
+		"JSON.stringify([host, repositoryId, target.kind, target.number, head])",
+	],
+	[
+		"write-method",
+		PROJECTION,
+		'this.read(["api", "--hostname", host, ...rest, path])',
+		'this.read(["api", "--hostname", host, "--method", "POST", ...rest, path])',
 	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],

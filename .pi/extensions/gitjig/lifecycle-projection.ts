@@ -172,7 +172,11 @@ export class LifecycleProjection {
 				const issue = json(await api(`repos/${nameWithOwner}/issues/${String(target.number)}`));
 				if (!object(issue) || issue.number !== target.number || Object.hasOwn(issue, "pull_request")) return undefined;
 			}
-			return { key: JSON.stringify([repositoryId, target.kind, target.number, head]), repositoryId, head };
+			return {
+				key: JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head]),
+				repositoryId,
+				head,
+			};
 		};
 		const before = await identity();
 		if (before === undefined) return undefined;

@@ -50,6 +50,10 @@ type World = {
 	pages?: Comment[][];
 	permissions?: Record<string, string | undefined>;
 	engine?: "unavailable";
+	/** The locally resolved platform repository; defaults to github.com o/r. */
+	location?: { host: string; nameWithOwner: string };
+	/** Per-host comment populations, overriding `comments` for that host. */
+	commentsByHost?: Record<string, Comment[]>;
 	/** Runs once, immediately after the comment population is read. */
 	afterComments?: () => void;
 	/** Runs once, immediately after the Issue or PR subject is read. */
@@ -71,14 +75,19 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 	const reads: Array<{ argv: string[]; bounds: PlatformReadBounds }> = [];
 	const clock = options.clock ?? { now: 0 };
 	const seams: LifecycleProjectionSeams = {
-		repository: () => ({ host: "github.com", nameWithOwner: "o/r" }),
+		repository: () => world.location ?? { host: "github.com", nameWithOwner: "o/r" },
 		now: () => clock.now,
 		engine: async () =>
 			world.engine === "unavailable" ? undefined : await import("../.github/workflows/gitjig-lifecycle.mjs"),
 		read: async (argv, _root, bounds) => {
 			reads.push({ argv, bounds });
-			const path = argv[argv.length - 1] === ".role_name" ? argv[argv.length - 3] : argv[argv.length - 1];
-			if (path === "repos/o/r") return JSON.stringify(world.repo ?? { node_id: "R", full_name: "o/r" });
+			const location = world.location ?? { host: "github.com", nameWithOwner: "o/r" };
+			const requested = argv[argv.length - 1] ?? "";
+			const path = requested.startsWith(`repos/${location.nameWithOwner}`)
+				? `repos/o/r${requested.slice(`repos/${location.nameWithOwner}`.length)}`
+				: requested;
+			if (path === "repos/o/r")
+				return JSON.stringify(world.repo ?? { node_id: "R", full_name: location.nameWithOwner });
 			const once = (hook: "afterComments" | "afterSubject" | "afterPermission") => {
 				const run = world[hook];
 				world[hook] = undefined;
@@ -98,7 +107,9 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 			}
 			if (path === "repos/o/r/issues/7/comments") {
 				const population =
-					world.comments === "unavailable" ? undefined : JSON.stringify(world.pages ?? [world.comments ?? []]);
+					world.comments === "unavailable"
+						? undefined
+						: JSON.stringify(world.pages ?? [world.commentsByHost?.[argv[2]] ?? world.comments ?? []]);
 				once("afterComments");
 				return population;
 			}
@@ -128,6 +139,25 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 	};
 }
 
+/** Every projection call is one of three GET-only argv shapes over this subject's own routes. */
+function assertReadOnly(reads: Array<{ argv: string[] }>, host = "github.com", name = "o/r"): void {
+	const route = new RegExp(
+		`^repos/${name.replace("/", "\\/")}(?:/pulls/7|/issues/7(?:/comments)?|/collaborators/[^/]+/permission)?$`,
+	);
+	for (const { argv } of reads) {
+		const path = argv.at(-1) ?? "";
+		const middle = JSON.stringify(argv.slice(3, -1));
+		assert.deepEqual(argv.slice(0, 3), ["api", "--hostname", host], JSON.stringify(argv));
+		assert.ok(route.test(path), `unexpected route: ${JSON.stringify(argv)}`);
+		assert.ok(
+			[JSON.stringify([]), JSON.stringify(["--paginate", "--slurp"]), JSON.stringify(["--jq", ".role_name"])].includes(
+				middle,
+			),
+			`not a read-only argv shape: ${JSON.stringify(argv)}`,
+		);
+	}
+}
+
 describe("#347 lifecycle projection", () => {
 	it("projects a User-attested blocked Issue record with the two-second bound on every read and no label read", async () => {
 		const h = harness({ comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] });
@@ -138,6 +168,7 @@ describe("#347 lifecycle projection", () => {
 			assert.deepEqual(bounds, LIFECYCLE_READ_BOUNDS);
 			assert.ok(!argv.some((part) => part.includes("labels")), "labels are never read");
 		}
+		assertReadOnly(h.reads);
 		assert.equal(LIFECYCLE_READ_BOUNDS.timeoutMs, 2_000);
 		assert.equal(LIFECYCLE_TTL_MS, 300_000);
 	});
@@ -162,6 +193,7 @@ describe("#347 lifecycle projection", () => {
 		});
 		assert.equal(await h.projection.request({ kind: "pull", number: 7 }), "displayed");
 		assert.equal(h.lifecycle(), "[warning]PR #7@aaaaaaa awaiting-author, handoff");
+		assertReadOnly(h.reads);
 	});
 
 	it("accepts WRITE, MAINTAIN and ADMIN carriers for blocked and handoff records and terminals", async () => {
@@ -446,6 +478,28 @@ describe("#347 lifecycle projection", () => {
 			});
 			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed", transition);
 			assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record", transition);
+		}
+	});
+
+	it("keys the cache by platform host and repository name as well as node id", async () => {
+		for (const next of [
+			{ host: "ghe.example", nameWithOwner: "o/r" },
+			{ host: "github.com", nameWithOwner: "o/renamed" },
+		]) {
+			const world: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] };
+			const h = harness(world);
+			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
+			world.location = next;
+			world.commentsByHost = { [next.host]: [] };
+			world.comments = [];
+			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed", next.host);
+			assert.equal(
+				h.commentReads(),
+				2,
+				`${next.host} ${next.nameWithOwner} is a different key despite the same node id`,
+			);
+			assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
+			assertReadOnly(h.reads.slice(-4), next.host, next.nameWithOwner);
 		}
 	});
 
