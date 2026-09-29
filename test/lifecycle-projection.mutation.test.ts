@@ -28,6 +28,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"[repositoryId, target.kind, target.number]",
 	],
 	[
+		"key-without-repository",
+		PROJECTION,
+		"[repositoryId, target.kind, target.number, head]",
+		"[target.kind, target.number, head]",
+	],
+	[
+		"first-page-only",
+		PROJECTION,
+		"for (const page of pages as unknown[][]) {",
+		"for (const page of (pages as unknown[][]).slice(0, 1)) {",
+	],
+	[
 		"stamp-on-failure",
 		PROJECTION,
 		"if (comments === undefined) return undefined;",
@@ -60,6 +72,8 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"!admitTransitionTerminal(record)",
 	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
+	["engine-terminal-subject-head", ENGINE, "\t\t\treferenced.subjectHead !== terminal.subjectHead ||\n", ""],
+	["engine-terminal-base-head", ENGINE, " ||\n\t\t\treferenced.baseHead !== terminal.baseHead", ""],
 	[
 		"engine-transition-attestation",
 		ENGINE,

@@ -45,6 +45,8 @@ type World = {
 	pull?: unknown;
 	issue?: unknown;
 	comments?: Comment[] | "unavailable";
+	/** When set, the comment read returns these pages instead of one page of `comments`. */
+	pages?: Comment[][];
 	permissions?: Record<string, string | undefined>;
 	engine?: "unavailable";
 };
@@ -74,7 +76,7 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 				return JSON.stringify(world.pull ?? { number: 7, head: { sha: HEAD }, base: { repo: { full_name: "o/r" } } });
 			if (path === "repos/o/r/issues/7") return JSON.stringify(world.issue ?? { number: 7, labels: [] });
 			if (path === "repos/o/r/issues/7/comments")
-				return world.comments === "unavailable" ? undefined : JSON.stringify([world.comments ?? []]);
+				return world.comments === "unavailable" ? undefined : JSON.stringify(world.pages ?? [world.comments ?? []]);
 			const permission = /^repos\/o\/r\/collaborators\/(.+)\/permission$/.exec(path ?? "");
 			if (permission) {
 				const role = (world.permissions ?? { writer: "write" })[decodeURIComponent(permission[1])];
@@ -198,6 +200,26 @@ describe("#347 lifecycle projection", () => {
 				},
 				"issue",
 			],
+			[
+				"terminal contradicting its record's head",
+				{
+					comments: [
+						{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(HEAD)) },
+						{
+							id: 2,
+							user: user("writer"),
+							body: marked(BLOCKED_TERMINAL, {
+								recordCommentId: 1,
+								transition: "blocked-clear",
+								observedAt: NOW,
+								subjectHead: OTHER,
+								baseHead: BASE,
+							}),
+						},
+					],
+				},
+				"pull",
+			],
 			["unavailable comments", { comments: "unavailable" }, "issue"],
 			["repository identity mismatch", { repo: { node_id: "R", full_name: "x/y" } }, "issue"],
 			["Issue number resolving to a PR", { issue: { number: 7, pull_request: {} } }, "issue"],
@@ -218,6 +240,35 @@ describe("#347 lifecycle projection", () => {
 			assert.equal(await h.projection.request({ kind, number: 7 }), "silent", name);
 			assert.equal(h.lifecycle(), undefined, name);
 		}
+	});
+
+	it("reads the complete paginated comment population", async () => {
+		const h = harness({
+			pages: [
+				[{ id: 1, user: user("writer"), body: "ordinary prose" }],
+				[{ id: 2, user: user("writer"), body: marked(HANDOFF, handoff(null)) }],
+			],
+		});
+		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
+		assert.equal(h.lifecycle(), "[warning]issue #7 handoff");
+		const duplicated = harness({
+			pages: [
+				[{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }],
+				[{ id: 1, user: user("writer"), body: "same id on a later page" }],
+			],
+		});
+		assert.equal(await duplicated.projection.request({ kind: "issue", number: 7 }), "silent");
+	});
+
+	it("keys the cache by repository identity as well as subject and head", async () => {
+		const world: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] };
+		const h = harness(world);
+		await h.projection.request({ kind: "issue", number: 7 });
+		world.repo = { node_id: "R_other", full_name: "o/r" };
+		world.comments = [];
+		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
+		assert.equal(h.commentReads(), 2, "a different repository identity is a different key");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
 	});
 
 	it("caches only success for five minutes under repository/subject/head", async () => {

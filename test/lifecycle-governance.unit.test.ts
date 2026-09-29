@@ -122,13 +122,17 @@ describe("settled lifecycle ownership", () => {
 				"blocked-clear",
 			],
 		] as const) {
-			const terminalFor = (id: number, recordCommentId: number, kind: string = transition) =>
+			const terminalFor = (
+				id: number,
+				recordCommentId: number,
+				kind: string = transition,
+				heads: { subjectHead: string | null; baseHead: string | null } = { subjectHead: A, baseHead: B },
+			) =>
 				comment(id, terminalMarker, {
 					recordCommentId,
 					transition: kind,
 					observedAt: NOW,
-					subjectHead: A,
-					baseHead: B,
+					...heads,
 				});
 			const current = comment(1, marker, record);
 			assertRefusal(inspect(null as never), "population-unmeasurable");
@@ -142,6 +146,14 @@ describe("settled lifecycle ownership", () => {
 			assertRefusal(inspect([current, comment(2, terminalMarker, {})]), "terminal-unparseable");
 			assertRefusal(inspect([current, terminalFor(2, 99)]), "terminal-ambiguous");
 			assertRefusal(inspect([current, terminalFor(1, 1)]), "terminal-ambiguous");
+			assertRefusal(
+				inspect([current, terminalFor(2, 1, transition, { subjectHead: B, baseHead: B })]),
+				"terminal-ambiguous",
+			);
+			assertRefusal(
+				inspect([current, terminalFor(2, 1, transition, { subjectHead: A, baseHead: null })]),
+				"terminal-ambiguous",
+			);
 			assertRefusal(inspect([current, terminalFor(2, 1), terminalFor(3, 1)]), "terminal-ambiguous");
 			const second = comment(2, marker, record);
 			assertRefusal(inspect([current, second]), "record-ambiguous", {

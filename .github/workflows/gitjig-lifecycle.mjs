@@ -249,7 +249,8 @@ export function inspectAwaitingAuthorPopulation(comments, subjectKind) {
  * true` only after binding each carrying comment's platform author and live
  * same-repository permission through `authorizedResolver`. A terminal must
  * name its own transition, reference a record of this population, follow it,
- * and be unique; more than one current record is ambiguous.
+ * carry that record's exact subject and base heads, and be unique; more than
+ * one current record is ambiguous.
  * @param {any[]} comments @param {string} recordMarker @param {string} terminalMarker
  * @param {(value:any)=>boolean} admitRecord @param {"blocked-clear"|"handoff-reentry"} transition
  */
@@ -283,12 +284,19 @@ function inspectTransitionPopulation(comments, recordMarker, terminalMarker, adm
 			terminals.push({ comment, record });
 		}
 	}
-	const recordIds = new Set(records.map(({ comment }) => comment.id));
+	const recordsById = new Map(records.map(({ comment, record }) => [comment.id, record]));
 	const terminalIds = terminals.map(({ record }) => record.recordCommentId);
+	/** @param {any} terminal */
+	const contradicts = (terminal) => {
+		const referenced = recordsById.get(terminal.recordCommentId);
+		return (
+			referenced === undefined ||
+			referenced.subjectHead !== terminal.subjectHead ||
+			referenced.baseHead !== terminal.baseHead
+		);
+	};
 	if (
-		terminals.some(
-			({ comment, record }) => !recordIds.has(record.recordCommentId) || comment.id <= record.recordCommentId,
-		) ||
+		terminals.some(({ comment, record }) => contradicts(record) || comment.id <= record.recordCommentId) ||
 		new Set(terminalIds).size !== terminalIds.length
 	)
 		return { ok: false, arm: "terminal-ambiguous" };
