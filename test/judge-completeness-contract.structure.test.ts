@@ -35,6 +35,25 @@ const OWNED = [
 const README_POINTER =
 	"The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed, including an incomplete record when a required return was unavailable; `recovery` reports the bounded recovery route's terminal, next gate, and route, and a content-free record reference where one exists, not an approval or landing decision. The terminal line reports the disposition and, when present, the review state and diagnosis. SPEC §§1.7 and 1.9 settle the **future** indexed-bundle completeness and one bounded full-bundle Judge re-request before a resolved review; §1.4 keeps ambiguous legacy history fail-closed. This contract-only settlement does not claim that the current `/review-round` implements the new re-request or releases any existing handoff.";
 
+/**
+ * Every other README line carrying a review/Judge/completeness topic term, in
+ * document order, as [SHA-256, locator prefix]. The README's topical lines
+ * must equal the pointer plus exactly this sequence, so a README sentence that
+ * contradicts the pointer while naming the topic fails.
+ */
+const README_TOPIC =
+	/\bJudge\b|\bResolver\b|\bbundle\b|review[- ]round|review record|adjudicat|re-?request|completeness|\bretry|full-bundle|\bindexed/i;
+const SETTLED_README: ReadonlyArray<readonly [string, string]> = [
+	["ee995c8797a0f64c4334bd21e2a55b518bb29008d2381f52a6c29a42f24d17f5", "## Driving a review round"],
+	["55e4c158e0bab28f9ed46a411bdf9388e1043a205fc1acce0ea188045846e523", "Run the composed panel, Judge, Resolver,"],
+	["46fa2b872c272e19a0ca2a9b4fd09953989b605559661361c95f0a8b5a3db6f1", "/review-round review-round.json"],
+	["0eb97762ca1a13f5603394a462a082a20fa4ae53b3f0b14a6a0a0b23ae08b7b4", '    "priorFindings": [{"label": "F1", "t'],
+	["e9f9ac87382ab133a5f519240737fc75f82d21ce384a0bd04bd9cbdbfe34ab77", '  "changeDescription": "Add the review-r'],
+	["06d8faf183324bd6936fea16fd02f30889fe525c0f79f300049cd9216b89cc59", "Use ordinary `body` publication for pros"],
+	["4619fc4f7cff0f89053cd2c3e4c7bdbe54b2822c1bb0ba74cd8728fc22710f19", "Tier 1 always tries ordinary landing fir"],
+	["662de89b6062fc7aa669989a92db2854e10179502d8e2e918a322ad75c6a71e0", "A current operator may instead direct Ti"],
+];
+
 /** Named obligations, so a failure points at the meaning that moved; each lives in exactly one owned paragraph. */
 const OBLIGATIONS = [
 	"An indexed version-2 review that never reaches a fully admitted Judge partition",
@@ -75,15 +94,20 @@ const OBLIGATIONS = [
  * EQUAL its pinned list of [section, SHA-256]. So each settled line must stay
  * present, byte-identical, unique, in its section and in its order; editing,
  * deleting, duplicating, moving or reordering one fails and forces a
- * deliberate re-review, as does adding any new matching line.
+ * deliberate re-review, as does adding any new matching line. Coined terms
+ * are matched across hyphen, space, underscore and joined spellings.
+ * README: the pointer is byte-pinned, coined terms may appear only in it, and
+ * every other README line matching README_TOPIC must equal its pinned
+ * sequence.
  * Residual, stated exactly: a new or replacement line inside §§1.4/1.7/1.9
  * that avoids every coined term and lacks the topic set or the permission set
  * (while every pinned line stays in place); any contradiction outside
- * §§1.4/1.7/1.9 that avoids every coined term; a contradiction split across
- * lines; and reordering of lines that match neither scan, are not detected.
+ * §§1.4/1.7/1.9 that avoids every coined term; a README line that matches
+ * neither COINED nor README_TOPIC; a contradiction split across lines; and
+ * reordering of lines that match no scan, are not detected.
  */
 const COINED =
-	/rawOrdinals?|rulingIndex|judgeAttempts|schemaVersion:2|version-2|re-request|semantic (?:re-?request|dispatch|call)|admitted-incomplete|ruling envelope/i;
+	/raw[ _-]?ordinals?|ruling[ _-]?index|judge[ _-]?attempts|schema[ _-]?version\s*:?\s*2|version[ _-]?2\b|re-?request|semantic[ _-]+(?:re-?request|dispatch|call)|admitted[ _-]+incomplete|ruling[ _-]+envelope/i;
 const TOPIC = /\bJudge\b|\bruling|\bResolver\b|\bbundle\b|review record|adjudicat/i;
 const PERMISSION = /\bmay\b|\boptional|need not|\bpermitted\b|\ballowed\b|\bcontinu|\binfer|\bpartial|\bskip|\bomit/i;
 const SCANNED_SECTIONS = new Set(["1.4", "1.7", "1.9"]);
@@ -218,6 +242,9 @@ function violations(text: string, prose: string): string[] {
 		found.push("README pointer changed or duplicated");
 	if (proseLines.some((line) => line !== README_POINTER && COINED.test(line)))
 		found.push("coined term elsewhere in README");
+	const readmeSeen = proseLines.filter((line) => line !== README_POINTER && README_TOPIC.test(line)).map(digest);
+	if (JSON.stringify(readmeSeen) !== JSON.stringify(SETTLED_README.map(([hash]) => hash)))
+		found.push("README topical lines differ from the pinned settled sequence");
 	return found;
 }
 
@@ -231,7 +258,7 @@ describe("#379 prospective Judge completeness settlement", () => {
 		assert.deepEqual(violations(spec, readme), []);
 	});
 
-	it("baseline-first: kills deletion and meaning reversal of each obligation", () => {
+	it("baseline-first: kills deletion of each obligation and eight named meaning reversals", () => {
 		assert.deepEqual(violations(spec, readme), []);
 		for (const clause of OBLIGATIONS) {
 			assert.notDeepEqual(
@@ -300,6 +327,14 @@ describe("#379 prospective Judge completeness settlement", () => {
 				mutate("### 1.8 Plan contest\n", "### 1.8 Plan contest\n\nA rawOrdinal may be reused across rulings.\n"),
 			],
 			[
+				"hyphenated ruling-envelope in §1.8",
+				mutate("### 1.8 Plan contest\n", "### 1.8 Plan contest\n\nA ruling-envelope may omit any unresolved input.\n"),
+			],
+			[
+				"underscored ruling_index in §3.3",
+				mutate("### 3.3 Gate classes\n", "### 3.3 Gate classes\n\nA ruling_index may repeat.\n"),
+			],
+			[
 				"coined term in §3.3",
 				mutate("### 3.3 Gate classes\n", "### 3.3 Gate classes\n\nThe semantic re-request is optional.\n"),
 			],
@@ -357,6 +392,11 @@ describe("#379 prospective Judge completeness settlement", () => {
 
 	it("baseline-first: kills README pointer drift", () => {
 		const cases = [
+			`${readme}\nThe current command implements the full-bundle Judge retry.\n`,
+			readme.replace(
+				"## Driving a review round\n",
+				"## Driving a review round\n\nThe Resolver already rejects partial Judge rulings.\n",
+			),
 			readme.replace("**future** indexed-bundle completeness", "current indexed-bundle completeness"),
 			readme.replace(README_POINTER, `${README_POINTER} The runtime now implements the re-request.`),
 			readme.replace(README_POINTER, `${README_POINTER}\n\nThe rawOrdinal partition is live.`),
