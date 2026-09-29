@@ -34,11 +34,22 @@ const obligations = [
 	"No merge of this paragraph clears or reclassifies any historical publication receipt or §1.4 handoff",
 ] as const;
 
-// Outside the owned paragraph, no SPEC line may speak about a review receipt
-// in retry vocabulary. Residual, stated: a contradiction elsewhere that avoids
-// both word sets is not detected by this scan.
-const RECEIPT_TOPIC = /receipt|refetch/i;
-const RETRY_TERMS = /retry|re-?read|second targeted GET|third read|fall ?back|resend|delay/i;
+// Outside the owned paragraph, no SPEC line may name a review receipt or
+// review-round record in retry vocabulary. Residual, stated exactly: a line is
+// rejected only when it carries BOTH a topic term and a retry term, so a
+// contradicting sentence that lacks either set, or is split across lines,
+// is not detected by this scan.
+const RECEIPT_TOPIC = /receipt|refetch|review-round|review[- ]record/i;
+const RETRY_TERMS = /retry|re-?read|second (?:targeted )?GET|third read|fall ?back|resend|delay/i;
+
+/**
+ * The one settled SPEC line outside the paragraph that matches both sets: the
+ * machine-record implementation-evidence roster. It grants no permission; it
+ * is pinned byte for byte so an inserted permission there still fails.
+ */
+const SETTLED_EXCEPTIONS = [
+	"The derived implementation proves both/neither/unknown arms; descriptor/prototype/getter/symbol/container/alias attacks; key order, number and marker boundaries; all escapes plus exact wire-body and both raw and decoded semantic secret/actionable-reference views with content-free diagnostics; both body bounds and body/title counts; exact stdout framing/overflow; every pre/post-spawn terminal arm with and without a locator; successful exact reread for all six destinations plus every identity/type/parent/body/value/title mismatch; one-send, valid-locator-one-GET, invalid-locator-zero-GET and no-retry mutants; and byte-identical review-round and lifecycle awaiting-author legacy records. This amendment grants no governance-application authority: #314 remains blocked until that separate implementation lands and is independently verified. Clearing that blocker starts a wholly fresh UUID, plan record, persisted-TUI presentation, human confirmation and administration window; no failed chain operand is reused.",
+] as const;
 
 function section33(text: string): string {
 	const start = text.indexOf("### 3.3 Gate classes");
@@ -52,7 +63,12 @@ function contractHolds(text: string): boolean {
 	if (owned.length !== 1 || owned[0] !== PARAGRAPH) return false;
 	if (!section33(text).split("\n").includes(PARAGRAPH)) return false;
 	if (!obligations.every((clause) => owned[0].includes(clause))) return false;
-	return lines.every((line) => line === PARAGRAPH || !(RECEIPT_TOPIC.test(line) && RETRY_TERMS.test(line)));
+	return lines.every(
+		(line) =>
+			line === PARAGRAPH ||
+			(SETTLED_EXCEPTIONS as readonly string[]).includes(line) ||
+			!(RECEIPT_TOPIC.test(line) && RETRY_TERMS.test(line)),
+	);
 }
 
 function mutate(from: string, to: string): string {
@@ -115,7 +131,7 @@ describe("#383 legacy review receipt retry contract", () => {
 		}
 	});
 
-	it("baseline-first: kills duplicated, relocated and out-of-paragraph permissions", () => {
+	it("baseline-first: kills duplicated, relocated and out-of-paragraph permissions naming both term sets", () => {
 		assert.ok(contractHolds(spec));
 		const altered = PARAGRAPH.replace("exactly **5,000 ms**", "exactly **0 ms**");
 		assert.equal(
@@ -143,6 +159,21 @@ describe("#383 legacy review receipt retry contract", () => {
 			),
 			false,
 			"survived: out-of-section fallback permission",
+		);
+		assert.equal(
+			contractHolds(
+				mutate(
+					"### 1.7 The reviewer panel\n",
+					"### 1.7 The reviewer panel\n\nReview-round records may perform a third read after the second GET fails.\n",
+				),
+			),
+			false,
+			"survived: review-round third read without receipt vocabulary",
+		);
+		assert.equal(
+			contractHolds(mutate(SETTLED_EXCEPTIONS[0], `${SETTLED_EXCEPTIONS[0]} A review-round receipt may resend once.`)),
+			false,
+			"survived: permission appended to the settled exception line",
 		);
 	});
 });
