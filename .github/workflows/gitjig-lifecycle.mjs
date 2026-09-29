@@ -242,6 +242,84 @@ export function inspectAwaitingAuthorPopulation(comments, subjectKind) {
 	return { ok: true, current, terminals };
 }
 
+/**
+ * Inspect one fully attested blocked or handoff population (#347). Read-only:
+ * no record/terminal schema, writer, clearer or authority predicate changes.
+ * These markers carry no producer/clearer field, so adapters set `attested:
+ * true` only after binding each carrying comment's platform author and live
+ * same-repository permission through `authorizedResolver`. A terminal must
+ * name its own transition, reference a record of this population, follow it,
+ * and be unique; more than one current record is ambiguous.
+ * @param {any[]} comments @param {string} recordMarker @param {string} terminalMarker
+ * @param {(value:any)=>boolean} admitRecord @param {"blocked-clear"|"handoff-reentry"} transition
+ */
+function inspectTransitionPopulation(comments, recordMarker, terminalMarker, admitRecord, transition) {
+	if (!Array.isArray(comments)) return { ok: false, arm: "population-unmeasurable" };
+	const records = [];
+	const terminals = [];
+	for (const comment of comments) {
+		if (typeof comment?.body !== "string") continue;
+		if (comment.body.startsWith(recordMarker)) {
+			const record = parseMarkedRecord(comment.body, recordMarker);
+			if (
+				comment.attested !== true ||
+				!Number.isSafeInteger(comment.id) ||
+				record === undefined ||
+				!admitRecord(record)
+			)
+				return { ok: false, arm: "record-unparseable" };
+			records.push({ comment, record });
+		}
+		if (comment.body.startsWith(terminalMarker)) {
+			const record = parseMarkedRecord(comment.body, terminalMarker);
+			if (
+				comment.attested !== true ||
+				!Number.isSafeInteger(comment.id) ||
+				record === undefined ||
+				!admitTransitionTerminal(record) ||
+				record.transition !== transition
+			)
+				return { ok: false, arm: "terminal-unparseable" };
+			terminals.push({ comment, record });
+		}
+	}
+	const recordIds = new Set(records.map(({ comment }) => comment.id));
+	const terminalIds = terminals.map(({ record }) => record.recordCommentId);
+	if (
+		terminals.some(
+			({ comment, record }) => !recordIds.has(record.recordCommentId) || comment.id <= record.recordCommentId,
+		) ||
+		new Set(terminalIds).size !== terminalIds.length
+	)
+		return { ok: false, arm: "terminal-ambiguous" };
+	const terminalized = new Set(terminalIds);
+	const current = records.filter(({ comment }) => !terminalized.has(comment.id));
+	if (current.length > 1) return { ok: false, arm: "record-ambiguous", current, terminals };
+	return { ok: true, current, terminals };
+}
+
+/** @param {any[]} comments */
+export function inspectBlockedPopulation(comments) {
+	return inspectTransitionPopulation(
+		comments,
+		RECORD_MARKERS.blocked,
+		RECORD_MARKERS.blockedTerminal,
+		admitBlockedRecord,
+		"blocked-clear",
+	);
+}
+
+/** @param {any[]} comments */
+export function inspectHandoffPopulation(comments) {
+	return inspectTransitionPopulation(
+		comments,
+		RECORD_MARKERS.handoff,
+		RECORD_MARKERS.handoffTerminal,
+		admitHandoffRecord,
+		"handoff-reentry",
+	);
+}
+
 /** Compatibility helper for callers that require exactly one current record. */
 /** @param {any[]} comments @param {"issue"|"pull"} subjectKind */
 export function admitCurrentAwaitingAuthor(comments, subjectKind) {
