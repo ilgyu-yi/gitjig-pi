@@ -107,7 +107,7 @@ const OBLIGATIONS = [
  * reordering of lines that match no scan, are not detected.
  */
 const COINED =
-	/raw[ _-]?ordinals?|ruling[ _-]?index|judge[ _-]?attempts|schema[ _-]?version\s*:?\s*2|version[ _-]?2\b|re-?request|semantic[ _-]+(?:re-?request|dispatch|call)|admitted[ _-]+incomplete|ruling[ _-]+envelope/i;
+	/raw[ _-]?ordinals?|ruling[ _-]?index|judge[ _-]?attempts|schema[ _-]?version\s*:?\s*2|version[ _-]?2\b|re-?request|semantic[ _-]?(?:re-?request|dispatch|call)|admitted[ _-]?incomplete|ruling[ _-]?envelope/i;
 const TOPIC = /\bJudge\b|\bruling|\bResolver\b|\bbundle\b|review record|adjudicat/i;
 const PERMISSION = /\bmay\b|\boptional|need not|\bpermitted\b|\ballowed\b|\bcontinu|\binfer|\bpartial|\bskip|\bomit/i;
 const SCANNED_SECTIONS = new Set(["1.4", "1.7", "1.9"]);
