@@ -16,17 +16,6 @@ const COMMAND = ".pi/extensions/gitjig/commands/lifecycle.ts";
 const SURFACE = ".pi/extensions/gitjig/session-surface.ts";
 const ENGINE = ".github/workflows/gitjig-lifecycle.mjs";
 
-/** Moves the final identity rebind ahead of transition attestation and its permission reads. */
-const REBIND_BEFORE_TRANSITION_ATTESTATION = ((): readonly [string, string, string, string] => {
-	const source = readFileSync(join(repository, PROJECTION), "utf8");
-	const check = "\t\tif (!(await unchanged())) return undefined;\n";
-	const start = source.indexOf("\t\tconst transitions = await attestTransitionComments(");
-	const end = source.indexOf(check, start);
-	assert.ok(start >= 0 && end > start, "rebind-order mutant anchors must exist");
-	const span = source.slice(start, end + check.length);
-	return ["rebind-before-transition-attestation", PROJECTION, span, check + source.slice(start, end)];
-})();
-
 /** Moves the cache write ahead of the staleness check, so superseded results reach the cache. */
 const CACHE_BEFORE_STALENESS = ((): readonly [string, string, string, string] => {
 	const source = readFileSync(join(repository, PROJECTION), "utf8");
@@ -88,7 +77,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"!admitTransitionTerminal(record)",
 	],
 	["repository-name-unchecked", PROJECTION, "if (repo.full_name !== nameWithOwner) return undefined;", ""],
-	["final-rebind-removed", PROJECTION, "if (!(await unchanged())) return undefined;", ""],
 	[
 		"cache-hit-not-rebound",
 		PROJECTION,
@@ -101,7 +89,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"(await identity())?.key === key",
 		"(await identity())?.repositoryId === repositoryId",
 	],
-	REBIND_BEFORE_TRANSITION_ATTESTATION,
 	[
 		"blocked-terminal-carrier-refused",
 		ATTESTATION,
@@ -177,6 +164,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, head])",
 	],
 	CACHE_BEFORE_STALENESS,
+	[
+		"comments-not-bracketed",
+		PROJECTION,
+		'await bracketed(`repos/${nameWithOwner}/issues/${String(target.number)}/comments`, "--paginate", "--slurp")',
+		'await api(`repos/${nameWithOwner}/issues/${String(target.number)}/comments`, "--paginate", "--slurp")',
+	],
+	[
+		"permission-not-bracketed",
+		PROJECTION,
+		"permission = bracketed(`repos/${nameWithOwner}/collaborators/",
+		"permission = api(`repos/${nameWithOwner}/collaborators/",
+	],
 	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
 	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
 	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],

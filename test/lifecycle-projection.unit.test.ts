@@ -85,6 +85,8 @@ type World = {
 	afterSubject?: () => void;
 	/** Runs once, immediately after a collaborator permission is read. */
 	afterPermission?: () => void;
+	/** Run in order, one per collaborator permission read. */
+	permissionHooks?: Array<() => void>;
 };
 
 const theme = { fg: (color: string, text: string) => `[${color}]${text}` } as never;
@@ -150,6 +152,7 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 				const login = decodeURIComponent(permission[1]);
 				const role = (world.permissions ?? { writer: "write" })[login];
 				once("afterPermission");
+				world.permissionHooks?.shift()?.();
 				return role === undefined
 					? undefined
 					: JSON.stringify({
@@ -514,6 +517,41 @@ describe("#347 lifecycle projection", () => {
 			await permission.projection.request({ kind: "issue", number: 7 }),
 			"silent",
 			"replacement during a permission read",
+		);
+	});
+
+	it("rebinds identity right after each evidence read, so an ABA replacement is silent", async () => {
+		const toR2 = (world: World) => () => {
+			world.repo = { node_id: "R2", full_name: "o/r" };
+		};
+		const toR = (world: World) => () => {
+			world.repo = { node_id: "R", full_name: "o/r" };
+		};
+		const across: World = {
+			comments: [
+				{ id: 1, user: user("first"), body: marked(BLOCKED, blocked(null)) },
+				{ id: 2, user: user("second"), body: marked(HANDOFF, handoff(null)) },
+			],
+			permissions: { first: "write", second: "write" },
+		};
+		across.permissionHooks = [toR2(across), toR(across)];
+		const permissions = harness(across);
+		assert.equal(
+			await permissions.projection.request({ kind: "issue", number: 7 }),
+			"silent",
+			"R→R2→R across permission reads",
+		);
+
+		const aroundComments: World = {
+			comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }],
+		};
+		aroundComments.afterComments = toR2(aroundComments);
+		aroundComments.permissionHooks = [toR(aroundComments)];
+		const comments = harness(aroundComments);
+		assert.equal(
+			await comments.projection.request({ kind: "issue", number: 7 }),
+			"silent",
+			"R→R2 at the comment read, back to R later",
 		);
 	});
 

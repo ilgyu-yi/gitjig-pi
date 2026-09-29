@@ -6,7 +6,13 @@
  *
  * - Identity: the repository and subject are re-read from the platform; the
  *   operator supplies only a kind and a number. A PR key carries its head, an
- *   Issue key an explicit null head.
+ *   Issue key an explicit null head. The complete identity is read before any
+ *   evidence, again immediately after the comment read and after every
+ *   permission read (so the last check follows the last evidence read), and
+ *   again before a cache hit is returned; any difference is silence.
+ *   Residual, stated: platform reads are not transactional, so a replacement
+ *   and restoration that both complete between two adjacent reads cannot be
+ *   detected by any read-only sequence.
  * - Admission: the handed-over #276 engine inspects each marker population;
  *   `lifecycle-attestation.ts` decides which carrying comments are attested.
  *   Labels are never read, so no label asserts a state.
@@ -198,10 +204,16 @@ export class LifecycleProjection {
 		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS)
 			return (await unchanged()) ? { segment: cached.segment } : undefined;
 
+		// Evidence counts only if the identity still holds right after it was read.
+		const bracketed = async (path: string, ...rest: string[]): Promise<string | undefined> => {
+			const value = await api(path, ...rest);
+			return (await unchanged()) ? value : undefined;
+		};
+
 		const engine = await this.seams.engine();
 		if (engine === undefined) return undefined;
 		const comments = commentPopulation(
-			await api(`repos/${nameWithOwner}/issues/${String(target.number)}/comments`, "--paginate", "--slurp"),
+			await bracketed(`repos/${nameWithOwner}/issues/${String(target.number)}/comments`, "--paginate", "--slurp"),
 		);
 		if (comments === undefined) return undefined;
 
@@ -213,7 +225,7 @@ export class LifecycleProjection {
 			const memo = JSON.stringify([login, comment.authorId]);
 			let permission = permissions.get(memo);
 			if (permission === undefined) {
-				permission = api(`repos/${nameWithOwner}/collaborators/${encodeURIComponent(login)}/permission`).then(
+				permission = bracketed(`repos/${nameWithOwner}/collaborators/${encodeURIComponent(login)}/permission`).then(
 					(output) => {
 						const response = json(output);
 						const account = object(response) && object(response.user) ? response.user : undefined;
@@ -252,7 +264,6 @@ export class LifecycleProjection {
 			if (current.some(contradicts)) return undefined;
 			if (current.length > 0) states.push(state);
 		}
-		if (!(await unchanged())) return undefined;
 		const segment: LifecycleSegment = {
 			subject: target.kind,
 			number: target.number,
