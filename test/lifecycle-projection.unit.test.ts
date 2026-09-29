@@ -40,6 +40,22 @@ const handoff = (subjectHead: string | null) => ({
 	baseHead: subjectHead === null ? null : BASE,
 });
 
+const awaitingRecord = (producer: string, producerKind: string) => ({
+	producer,
+	producerKind,
+	observedAt: NOW,
+	subjectHead: HEAD,
+	baseHead: BASE,
+});
+const awaitingTerminal = (clearerId: string) => ({
+	recordCommentId: 1,
+	clearerId,
+	clearedAt: NOW,
+	cause: "pull-synchronize",
+	subjectHead: HEAD,
+	baseHead: BASE,
+});
+const AWAITING_TERMINAL = "<!-- lifecycle-awaiting-author-terminal: v1 -->";
 type Comment = { id: number; user: unknown; body: string };
 type World = {
 	repo?: unknown;
@@ -54,6 +70,10 @@ type World = {
 	location?: { host: string; nameWithOwner: string };
 	/** Per-host comment populations, overriding `comments` for that host. */
 	commentsByHost?: Record<string, Comment[]>;
+	/** The node id the permission endpoint reports for a login; defaults to `U_<login>`. */
+	permissionNodes?: Record<string, string>;
+	/** The login the permission endpoint reports for a requested login; defaults to the same login. */
+	permissionLogins?: Record<string, string>;
 	/** Runs once, immediately after the comment population is read. */
 	afterComments?: () => void;
 	/** Runs once, immediately after the Issue or PR subject is read. */
@@ -115,9 +135,19 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 			}
 			const permission = /^repos\/o\/r\/collaborators\/(.+)\/permission$/.exec(path ?? "");
 			if (permission) {
-				const role = (world.permissions ?? { writer: "write" })[decodeURIComponent(permission[1])];
+				const login = decodeURIComponent(permission[1]);
+				const role = (world.permissions ?? { writer: "write" })[login];
 				once("afterPermission");
-				return role === undefined ? undefined : `${role}\n`;
+				return role === undefined
+					? undefined
+					: JSON.stringify({
+							permission: role,
+							role_name: role,
+							user: {
+								login: world.permissionLogins?.[login] ?? login,
+								node_id: world.permissionNodes?.[login] ?? `U_${login}`,
+							},
+						});
 			}
 			throw new Error(`unexpected read ${argv.join(" ")}`);
 		},
@@ -150,9 +180,7 @@ function assertReadOnly(reads: Array<{ argv: string[] }>, host = "github.com", n
 		assert.deepEqual(argv.slice(0, 3), ["api", "--hostname", host], JSON.stringify(argv));
 		assert.ok(route.test(path), `unexpected route: ${JSON.stringify(argv)}`);
 		assert.ok(
-			[JSON.stringify([]), JSON.stringify(["--paginate", "--slurp"]), JSON.stringify(["--jq", ".role_name"])].includes(
-				middle,
-			),
+			[JSON.stringify([]), JSON.stringify(["--paginate", "--slurp"])].includes(middle),
 			`not a read-only argv shape: ${JSON.stringify(argv)}`,
 		);
 	}
@@ -539,6 +567,100 @@ describe("#347 lifecycle projection", () => {
 		failing.comments = [];
 		assert.equal(await f.projection.request({ kind: "issue", number: 7 }), "displayed");
 		assert.equal(f.commentReads(), 2, "a failure leaves no TTL stamp");
+	});
+
+	it("binds a permission to the carrying comment's own node id and login", async () => {
+		const cases: Array<[string, World]> = [
+			[
+				"login reassigned to another node",
+				{
+					comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }],
+					permissionNodes: { writer: "U_someone_else" },
+				},
+			],
+			[
+				"permission response for another login",
+				{
+					comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }],
+					permissionLogins: { writer: "renamed" },
+				},
+			],
+		];
+		for (const [name, world] of cases) {
+			const h = harness(world);
+			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "silent", name);
+		}
+	});
+
+	it("keeps #276's awaiting-author attestation rules for every carrier kind", async () => {
+		const pull = { kind: "pull" as const, number: 7 };
+		const cleared = harness({
+			comments: [
+				{ id: 1, user: bot, body: marked(AWAITING, awaitingRecord("BOT_actions", "human-changes-requested")) },
+				{ id: 2, user: bot, body: marked(AWAITING_TERMINAL, awaitingTerminal("github-actions[bot]")) },
+			],
+		});
+		assert.equal(await cleared.projection.request(pull), "displayed", "first-party bot terminal clears");
+		assert.equal(cleared.lifecycle(), "[dim]PR #7@aaaaaaa no lifecycle record");
+		const resolver = harness({
+			comments: [
+				{ id: 1, user: user("writer"), body: marked(AWAITING, awaitingRecord("U_writer", "resolver-repair")) },
+			],
+		});
+		assert.equal(await resolver.projection.request(pull), "displayed", "authorized Resolver producer");
+		assert.equal(resolver.lifecycle(), "[warning]PR #7@aaaaaaa awaiting-author");
+		for (const [name, comments] of [
+			[
+				"User-carried terminal",
+				[
+					{ id: 1, user: bot, body: marked(AWAITING, awaitingRecord("BOT_actions", "human-changes-requested")) },
+					{ id: 2, user: user("writer"), body: marked(AWAITING_TERMINAL, awaitingTerminal("U_writer")) },
+				],
+			],
+			[
+				"User-carried human-review record",
+				[
+					{
+						id: 1,
+						user: user("writer"),
+						body: marked(AWAITING, awaitingRecord("U_writer", "human-changes-requested")),
+					},
+				],
+			],
+			[
+				"Resolver record carried by another user",
+				[{ id: 1, user: user("writer"), body: marked(AWAITING, awaitingRecord("U_other", "resolver-repair")) }],
+			],
+			[
+				"Resolver record carried by the bot",
+				[{ id: 1, user: bot, body: marked(AWAITING, awaitingRecord("BOT_actions", "resolver-repair")) }],
+			],
+		] as const) {
+			const h = harness({ comments: [...comments] as Comment[] });
+			assert.equal(await h.projection.request(pull), "silent", name);
+		}
+	});
+
+	it("stops showing the previous subject as soon as a new one is addressed", async () => {
+		const world: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(null)) }] };
+		const h = harness(world);
+		await h.projection.request({ kind: "issue", number: 7 });
+		assert.equal(h.lifecycle(), "[warning]issue #7 blocked");
+		const inner = h.projection as unknown as { seams: LifecycleProjectionSeams };
+		const read = inner.seams.read;
+		let release: (() => void) | undefined;
+		inner.seams.read = async (argv, root, bounds) => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			inner.seams.read = read;
+			return read(argv, root, bounds);
+		};
+		const next = h.projection.request({ kind: "pull", number: 7 });
+		while (release === undefined) await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(h.lifecycle(), undefined, "no stale subject while the new request is pending");
+		release();
+		await next;
 	});
 
 	it("never lets an earlier subject's late result land over a later request", async () => {

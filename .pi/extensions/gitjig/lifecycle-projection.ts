@@ -127,6 +127,8 @@ export class LifecycleProjection {
 	async request(target: LifecycleTarget): Promise<"displayed" | "silent" | "superseded"> {
 		if (!this.surface.visible) return "silent";
 		const generation = ++this.generation;
+		// The previous subject stops being shown the moment a new one is addressed.
+		this.surface.setLifecycle(undefined);
 		let segment: LifecycleSegment | undefined;
 		try {
 			segment = await this.compute(target);
@@ -134,7 +136,7 @@ export class LifecycleProjection {
 			segment = undefined;
 		}
 		if (generation !== this.generation) return "superseded";
-		this.surface.setLifecycle(segment);
+		if (segment !== undefined) this.surface.setLifecycle(segment);
 		return segment === undefined ? "silent" : "displayed";
 	}
 
@@ -194,17 +196,23 @@ export class LifecycleProjection {
 		);
 		if (comments === undefined) return undefined;
 
+		// A role counts only for the user the platform reports for that login,
+		// which must be the carrying comment's own node id and login.
 		const permissions = new Map<string, Promise<string | undefined>>();
 		const permissionOf = (comment: LifecycleComment): Promise<string | undefined> => {
 			const login = comment.authorLogin ?? "";
-			let permission = permissions.get(login);
+			const memo = JSON.stringify([login, comment.authorId]);
+			let permission = permissions.get(memo);
 			if (permission === undefined) {
-				permission = api(
-					`repos/${nameWithOwner}/collaborators/${encodeURIComponent(login)}/permission`,
-					"--jq",
-					".role_name",
-				).then((value) => value?.trim());
-				permissions.set(login, permission);
+				permission = api(`repos/${nameWithOwner}/collaborators/${encodeURIComponent(login)}/permission`).then(
+					(output) => {
+						const response = json(output);
+						const account = object(response) && object(response.user) ? response.user : undefined;
+						if (account?.node_id !== comment.authorId || account?.login !== login) return undefined;
+						return object(response) && typeof response.role_name === "string" ? response.role_name : undefined;
+					},
+				);
+				permissions.set(memo, permission);
 			}
 			return permission;
 		};
