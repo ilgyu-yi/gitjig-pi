@@ -21,6 +21,12 @@ import {
 type Publish = typeof performPublish;
 type FetchComments = typeof fetchAttestedReviewComments;
 type Read = typeof runPlatformRead;
+type Delay = (ms: number) => Promise<void>;
+
+/** SPEC §3.3's one fixed wait before the single identical receipt reread. */
+export const RECEIPT_REREAD_DELAY_MS = 5_000;
+
+const waitFor: Delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function admitPublicationSubject(
 	source: ReviewSubject,
@@ -313,7 +319,10 @@ function admitTargetedReceipt(
 
 /**
  * A send is usable only after the exact comment is re-fetched from its bound
- * subject and attributed to that subject's sealed writer.
+ * subject and attributed to that subject's sealed writer. Per SPEC §3.3, only
+ * a first read with no admitted output earns one fixed delay and one
+ * byte-identical second read; a present response is evidence and is never
+ * retried.
  */
 export async function publishAndRefetchReviewRecord(
 	body: string,
@@ -322,6 +331,7 @@ export async function publishAndRefetchReviewRecord(
 	stateRoot: string,
 	publish: Publish = performPublish,
 	read: Read = runPlatformRead,
+	delay: Delay = waitFor,
 ): Promise<ReviewPublicationOutcome> {
 	const subject = await admitPublicationSubject(source);
 	if (subject === "criterion-owner-unavailable")
@@ -331,15 +341,17 @@ export async function publishAndRefetchReviewRecord(
 	const published = await publishReviewRecord(body, context, repoRoot, stateRoot, publish);
 	const locator = publishedCommentLocator(published, context);
 	if (locator === undefined) return { ok: false, cause: "the review publication was not confirmed" };
-	const output = await read(
-		[
-			"api",
-			"--hostname",
-			context.repository.host,
-			`repos/${context.repository.nameWithOwner}/issues/comments/${String(locator.id)}`,
-		],
-		repoRoot,
-	);
+	const argv = [
+		"api",
+		"--hostname",
+		context.repository.host,
+		`repos/${context.repository.nameWithOwner}/issues/comments/${String(locator.id)}`,
+	] as const;
+	let output = await read([...argv], repoRoot);
+	if (output === undefined) {
+		await delay(RECEIPT_REREAD_DELAY_MS);
+		output = await read([...argv], repoRoot);
+	}
 	const receipt = admitTargetedReceipt(subject, body, locator, output);
 	return receipt === undefined
 		? { ok: false, cause: "the published review record did not refetch exactly" }

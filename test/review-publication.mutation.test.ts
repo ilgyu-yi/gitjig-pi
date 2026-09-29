@@ -31,6 +31,29 @@ const mutations = [
 		"const receipt = admitTargetedReceipt(subject, body, locator, output);",
 		"await read([], repoRoot);\n\tconst receipt = admitTargetedReceipt(subject, body, locator, output);",
 	],
+	["zero-delay", "export const RECEIPT_REREAD_DELAY_MS = 5_000;", "export const RECEIPT_REREAD_DELAY_MS = 0;"],
+	["no-reread", "if (output === undefined) {", "if (false) {"],
+	[
+		"reread-on-mismatch",
+		"if (output === undefined) {",
+		"if (admitTargetedReceipt(subject, body, locator, output) === undefined) {",
+	],
+	["dropped-delay", "\t\tawait delay(RECEIPT_REREAD_DELAY_MS);\n", ""],
+	[
+		"delay-after-reread",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);",
+		"output = await read([...argv], repoRoot);\n\t\tawait delay(RECEIPT_REREAD_DELAY_MS);",
+	],
+	[
+		"third-read",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);\n\t\tif (output === undefined) output = await read([...argv], repoRoot);",
+	],
+	[
+		"reread-route-drift",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv], repoRoot);",
+		"await delay(RECEIPT_REREAD_DELAY_MS);\n\t\toutput = await read([...argv.slice(0, 3), `repos/${context.repository.nameWithOwner}/issues/${String(context.pullRequest.number)}/comments`], repoRoot);",
+	],
 	[
 		"second-send",
 		"const locator = publishedCommentLocator(published, context);",
