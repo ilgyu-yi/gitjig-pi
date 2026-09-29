@@ -13,7 +13,7 @@ function section(source: string, number: string): string {
 	return source.slice(start, end < 0 ? undefined : end);
 }
 
-/** Every obligation belongs to its owning clause, not an arbitrary substring elsewhere. */
+/** Selected contract obligations belong to their owning clauses, not arbitrary substrings elsewhere. */
 const owned = {
 	"1.4": [
 		"An indexed version-2 review that never reaches a fully admitted Judge partition",
@@ -29,6 +29,7 @@ const owned = {
 		"whole original indexed bundle",
 		"the same sealed reviewed head",
 		"Both semantic calls use the same consumer-owned Judge profile, delegate argv, immutable expected-ref and deadline/options",
+		"Each dispatch retains its separate one numeric-exit/missing-return transport retry above; that retry does not replenish the one semantic re-request",
 		"no third semantic dispatch is allowed",
 		"A missing/invalid first **return or ruling envelope** (as distinct from a valid envelope missing an occurrence) is not an admitted-incomplete result",
 	],
@@ -43,6 +44,7 @@ const owned = {
 		"must exactly match the indexed ruling's text and deterministic disposition",
 		"text equality alone is insufficient when wordings repeat",
 		"ordered bounded `judgeAttempts` for at most two semantic calls",
+		"Attempts are retained even on an incomplete terminal; publication failure, missing/unreadable attempt evidence, or ambiguous relation fails closed",
 		"The existing unversioned parser and bytes remain valid historical input",
 	],
 } as const;
@@ -60,7 +62,7 @@ function contractHolds(source: string, prose: string): boolean {
 }
 
 describe("#379 prospective Judge completeness settlement", () => {
-	it("pins each obligation in its owning clause without claiming runtime exists", () => {
+	it("pins selected indexed-admission and retry obligations in their owning clauses", () => {
 		assert.equal(contractHolds(spec, readme), true);
 		for (const [number, clauses] of Object.entries(owned)) {
 			for (const clause of clauses) {
@@ -69,7 +71,7 @@ describe("#379 prospective Judge completeness settlement", () => {
 		}
 	});
 
-	it("baseline-first reversals kill deletions, relocation and three semantic mutants", () => {
+	it("baseline-first reversals kill deletions, relocation and six semantic mutants", () => {
 		assert.ok(contractHolds(spec, readme));
 		for (const [number, clauses] of Object.entries(owned)) {
 			for (const clause of clauses) {
