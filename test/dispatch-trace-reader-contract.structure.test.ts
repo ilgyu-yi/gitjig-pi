@@ -16,6 +16,9 @@ const DETAILS =
 	"Persisted `details` is exactly `{disposition,ok?,compare?,diagnostic,traceId?}` and never carries summary, payload, or raw trace; `traceId` is the sanctioned reader's retained-trace identifier below, present only when the writer returned one.";
 const STATE =
 	"The trace has no runtime read-back path into tool results, session messages, or model context. Its one runtime read path is §4.9's TUI-only operator viewer, which reads one record by its identifier and renders it only in a terminal component; that path never reaches tool results, session messages, or model context either.";
+/** Pinned by literal as well as by fixture, so a coordinated SPEC-and-fixture edit of this clause still fails (#395). */
+const PRUNE =
+	"a concurrent prune yields **missing** when the unlink precedes the open, and when the unlink follows the open it yields **rendered** if the reader's sink check observed the record before the unlink and the record is complete, and **unavailable** otherwise, because a record whose last name is gone fails the shared sink rule's one-name check;";
 const ROW =
 	"Every expanded dispatch terminal row may also show §4.9's retained-trace identifier as `trace <id>`, or `trace unavailable` when `details` carries none.";
 
@@ -26,6 +29,10 @@ function section(source: string, start: string, end: string): string {
 }
 
 function contractHolds(source: string): boolean {
+	return contractHoldsWith(source, READER);
+}
+
+function contractHoldsWith(source: string, reader: string): boolean {
 	const delegation = section(source, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts");
 	const opening = "**The sanctioned retained-trace reader.**";
 	if (delegation.split(opening).length !== 2 || source.indexOf(opening) !== source.lastIndexOf(opening)) return false;
@@ -33,7 +40,8 @@ function contractHolds(source: string): boolean {
 	const end = delegation.indexOf("\n\n", start);
 	const paragraph = delegation.slice(start, end < 0 ? undefined : end).trim();
 	return (
-		paragraph === READER &&
+		paragraph === reader &&
+		paragraph.includes(PRUNE) &&
 		delegation.includes(DETAILS) &&
 		section(source, "### 5.5 State boundary", "### 5.6").includes(STATE) &&
 		section(source, "### 5.9 Session surfaces", "## 6. Self-governance milestone").includes(ROW)
@@ -79,6 +87,11 @@ describe("#393 retained-trace reader contract", () => {
 				"the already-open file is read in full, **rendered** if complete and **unavailable** if not",
 			],
 			[
+				"post-open branch inverted",
+				"when the unlink follows the open it yields",
+				"when the unlink precedes the open it yields",
+			],
+			[
 				"one-name reason dropped",
 				", because a record whose last name is gone fails the shared sink rule's one-name check",
 				"",
@@ -119,6 +132,15 @@ describe("#393 retained-trace reader contract", () => {
 		for (const [name, from, to] of mutants) {
 			assert.equal(SPEC.split(from).length, 2, `${name}: mutation operand must be unique`);
 			assert.equal(contractHolds(SPEC.replace(from, () => to)), false, `${name} survived`);
+			if (PRUNE.includes(from))
+				assert.equal(
+					contractHoldsWith(
+						SPEC.replace(from, () => to),
+						READER.replace(from, () => to),
+					),
+					false,
+					`${name} survived a coordinated SPEC-and-fixture edit`,
+				);
 		}
 	});
 });
