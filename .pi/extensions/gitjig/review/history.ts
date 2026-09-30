@@ -242,14 +242,92 @@ function uniqueByFinding<T extends { finding: string }>(entries: readonly T[]): 
 	return joined;
 }
 
+/**
+ * The raw-to-effective relation of one unversioned repair record, from that
+ * record's own bytes alone, or undefined when a record-local check refuses.
+ * These are exactly the eight checks SPEC §1.4 names for limb (a) of a
+ * review-history handoff (#402): it is their one home, read by the
+ * projection below and by `legacyUnderivable`.
+ */
+function unversionedRepairFindings(record: ReviewRecord): RepairBasisFinding[] | undefined {
+	const adjudication = record.adjudication;
+	if (adjudication === null || record.review.state !== "resolved") return undefined;
+	// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
+	// Retain that bundle in the complete source record; never invent a raw-text
+	// or positional pairing between it and the Judge's rulings.
+	if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length > record.bundle.length)
+		return undefined;
+	// Preserve the raw provenance MULTISET, not merely the set of slots:
+	// two findings from one slot still contribute two provenance entries.
+	// This checks counts without guessing a raw-to-effective finding pairing.
+	const remaining = new Map<string, number>();
+	for (const { slot } of record.bundle) {
+		const key = JSON.stringify([slot.lens, slot.surface]);
+		remaining.set(key, (remaining.get(key) ?? 0) + 1);
+	}
+	const rulings = uniqueByFinding(adjudication.rulings);
+	const dispositions = uniqueByFinding(record.review.resolution.dispositions);
+	if (rulings === undefined || dispositions === undefined || rulings.size !== dispositions.size) return undefined;
+	const findings: RepairBasisFinding[] = [];
+	for (let index = 0; index < adjudication.rulings.length; index += 1) {
+		const ruling = adjudication.rulings[index];
+		// Read-time presence mirror of admitAdjudication's owed axes (§1.9):
+		// the durable record lacks the original manifest, so it cannot re-mint
+		// that branded adjudication. This only withholds incomplete data; it
+		// never rules validity, direction, or criterion impact on the Judge's behalf.
+		if (ruling.provenance.length === 0 || !ruling.evidence) return undefined;
+		if (
+			ruling.validity === "CONFIRMED" &&
+			(ruling.severity === undefined ||
+				ruling.direction === undefined ||
+				ruling.onCriterion === undefined ||
+				(ruling.severity === "NIT" && !ruling.remedy))
+		)
+			return undefined;
+		for (const slot of ruling.provenance) {
+			// record.ts already admits only slots with string lens/surface; do not
+			// duplicate its wire predicate in this read-time relation.
+			const key = JSON.stringify([slot.lens, slot.surface]);
+			const count = remaining.get(key);
+			if (count === undefined || count === 0) return undefined;
+			remaining.set(key, count - 1);
+		}
+		const disposition = record.review.resolution.dispositions[index];
+		if (disposition?.finding !== ruling.finding) return undefined;
+		if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
+			findings.push({ finding: ruling.finding, ruling, disposition });
+	}
+	// Every raw contribution is retained, even when a slot recurs. Judge
+	// attestation remains the semantic authority for the dedup itself.
+	if ([...remaining.values()].some((count) => count !== 0)) return undefined;
+	return findings;
+}
+
+/**
+ * SPEC §1.4 limb (a): some state in the trailing repair run is an unversioned
+ * record on which a record-local check refuses. It reads no platform or git
+ * state, so it is deterministic and persistent; no other cause of an
+ * unavailable projection qualifies (#402).
+ */
+export function legacyUnderivable(history: readonly StateSummary[]): boolean {
+	return trailingRepairRun(history).some(
+		(state) => state.record.schemaVersion !== 2 && unversionedRepairFindings(state.record) === undefined,
+	);
+}
+
+/** The current trailing consecutive run of `repair` states (§1.4). */
+function trailingRepairRun(history: readonly StateSummary[]): readonly StateSummary[] {
+	let start = history.length;
+	while (start > 0 && history[start - 1].outcome === "repair") start -= 1;
+	return history.slice(start);
+}
+
 /** Derive §1.4's opaque, all-or-nothing diagnosis operand. */
 export async function deriveRepairBasis(
 	repoRoot: string,
 	history: readonly StateSummary[],
 ): Promise<RepairBasis | undefined> {
-	let start = history.length;
-	while (start > 0 && history[start - 1].outcome === "repair") start -= 1;
-	const run = history.slice(start);
+	const run = trailingRepairRun(history);
 	if (run.length < 2 || new Set(run.map((state) => state.head)).size !== run.length) return undefined;
 	const states: RepairBasisState[] = [];
 	for (const state of run) {
@@ -268,54 +346,8 @@ export async function deriveRepairBasis(
 			states.push({ head: state.head, findings });
 			continue;
 		}
-		// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
-		// Retain that bundle in the complete source record; never invent a raw-text
-		// or positional pairing between it and the Judge's rulings.
-		if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length > record.bundle.length)
-			return undefined;
-		// Preserve the raw provenance MULTISET, not merely the set of slots:
-		// two findings from one slot still contribute two provenance entries.
-		// This checks counts without guessing a raw-to-effective finding pairing.
-		const remaining = new Map<string, number>();
-		for (const { slot } of record.bundle) {
-			const key = JSON.stringify([slot.lens, slot.surface]);
-			remaining.set(key, (remaining.get(key) ?? 0) + 1);
-		}
-		const rulings = uniqueByFinding(adjudication.rulings);
-		const dispositions = uniqueByFinding(record.review.resolution.dispositions);
-		if (rulings === undefined || dispositions === undefined || rulings.size !== dispositions.size) return undefined;
-		const findings: RepairBasisFinding[] = [];
-		for (let index = 0; index < adjudication.rulings.length; index += 1) {
-			const ruling = adjudication.rulings[index];
-			// Read-time presence mirror of admitAdjudication's owed axes (§1.9):
-			// the durable record lacks the original manifest, so it cannot re-mint
-			// that branded adjudication. This only withholds incomplete data; it
-			// never rules validity, direction, or criterion impact on the Judge's behalf.
-			if (ruling.provenance.length === 0 || !ruling.evidence) return undefined;
-			if (
-				ruling.validity === "CONFIRMED" &&
-				(ruling.severity === undefined ||
-					ruling.direction === undefined ||
-					ruling.onCriterion === undefined ||
-					(ruling.severity === "NIT" && !ruling.remedy))
-			)
-				return undefined;
-			for (const slot of ruling.provenance) {
-				// record.ts already admits only slots with string lens/surface; do not
-				// duplicate its wire predicate in this read-time relation.
-				const key = JSON.stringify([slot.lens, slot.surface]);
-				const count = remaining.get(key);
-				if (count === undefined || count === 0) return undefined;
-				remaining.set(key, count - 1);
-			}
-			const disposition = record.review.resolution.dispositions[index];
-			if (disposition?.finding !== ruling.finding) return undefined;
-			if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")
-				findings.push({ finding: ruling.finding, ruling, disposition });
-		}
-		// Every raw contribution is retained, even when a slot recurs. Judge
-		// attestation remains the semantic authority for the dedup itself.
-		if ([...remaining.values()].some((count) => count !== 0)) return undefined;
+		const findings = unversionedRepairFindings(record);
+		if (findings === undefined) return undefined;
 		states.push({ head: state.head, findings });
 	}
 	const intervals = await readCorrectionIntervals(
