@@ -74,6 +74,16 @@ describe("#393 retained-trace reader contract", () => {
 			],
 			["size bound widened", "at most 256 KiB", "at most 1 MiB"],
 			[
+				"every post-open prune rendered",
+				"it yields **rendered** if the reader's sink check observed the record before the unlink and the record is complete, and **unavailable** otherwise",
+				"the already-open file is read in full, **rendered** if complete and **unavailable** if not",
+			],
+			[
+				"one-name reason dropped",
+				", because a record whose last name is gone fails the shared sink rule's one-name check",
+				"",
+			],
+			[
 				"a retention fact claimed",
 				"never whether a record exists or retention was attempted",
 				"that retention was not attempted",
