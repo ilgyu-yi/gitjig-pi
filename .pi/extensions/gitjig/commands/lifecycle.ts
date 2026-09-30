@@ -41,7 +41,7 @@ export function registerLifecycleCommand(
 ): void {
 	pi.registerCommand("lifecycle", {
 		description:
-			"Show awaiting-author, blocked and handoff lifecycle records for one explicitly addressed subject in the " +
+			"Show awaiting-author, blocked and handoff lifecycle states for one explicitly addressed subject in the " +
 			"operator status line: /lifecycle issue=<n> or /lifecycle pr=<n>. Read-only; it never changes any record or act.",
 		handler: async (args: string, ctx) => {
 			if (!ctx.hasUI || projection === undefined) return;
