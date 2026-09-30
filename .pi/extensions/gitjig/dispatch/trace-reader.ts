@@ -77,6 +77,16 @@ function safeDirectory(stats: Stats): boolean {
 	return stats.isDirectory() && !stats.isSymbolicLink() && (stats.mode & 0o077) === 0;
 }
 
+/** The inode a path names now, or undefined when nothing is there; any other failure throws. */
+function namedAt(path: string): Stats | undefined {
+	try {
+		return lstatSync(path);
+	} catch (error) {
+		if (errorCode(error) === "ENOENT") return undefined;
+		throw error;
+	}
+}
+
 function errorCode(error: unknown): unknown {
 	return error instanceof Error && "code" in error ? error.code : undefined;
 }
@@ -106,7 +116,7 @@ export function readRetainedTrace(
 	 * Test seams at the two interleavings the contract names: between the
 	 * directory check and the open, and between the open and the sink check.
 	 */
-	hooks: { beforeOpen?: () => void; afterOpen?: () => void } = {},
+	hooks: { beforeOpen?: () => void; afterOpen?: () => void; afterSink?: () => void } = {},
 ): TraceRead {
 	if (!canonicalTraceId(id)) return { outcome: "unavailable" };
 	// Expiry is decided before any state read, even for an unpruned record.
@@ -134,6 +144,7 @@ export function readRetainedTrace(
 		// shared sink rule's one-name check then makes it unavailable (§4.9, #395).
 		const stats = fstatSync(fd);
 		if (sinkRefusal(stats, path) !== undefined) return { outcome: "unavailable" };
+		hooks.afterSink?.();
 		// O_NOFOLLOW guards only the last component. The checked directory and
 		// the opened record must still be what the paths name after the open, so
 		// a directory swapped for a symlink between the check and the open, which
@@ -142,10 +153,13 @@ export function readRetainedTrace(
 		// path reads. This reader draws no sandbox line inside one account (#263
 		// non-goal; SPEC §5.5's same-account boundary).
 		const after = lstatSync(directory);
-		const named = lstatSync(path);
 		if (!safeDirectory(after) || after.dev !== checked.dev || after.ino !== checked.ino)
 			return { outcome: "unavailable" };
-		if (named.dev !== stats.dev || named.ino !== stats.ino) return { outcome: "unavailable" };
+		// A path that no longer names anything is a prune that followed the sink
+		// check's one-name observation, which still renders (§4.9, #395); a path
+		// that names another inode is a substitution, which never does.
+		const named = namedAt(path);
+		if (named !== undefined && (named.dev !== stats.dev || named.ino !== stats.ino)) return { outcome: "unavailable" };
 		// Bounded by bytes actually read, so a file that grows after the stat is still refused.
 		const bytes = readBounded(fd, TRACE_READ_BYTES);
 		if (bytes.length > TRACE_READ_BYTES) return { outcome: "unavailable" };

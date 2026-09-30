@@ -2054,6 +2054,11 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 			!JSON.stringify(result).includes("123"),
 			"expectedref-type: the refusal names the rejected value — the cause is a fixed content-free literal (§3.9)",
 		);
+		assert.deepEqual(
+			Object.keys(result.details),
+			["disposition", "diagnostic"],
+			"expectedref-type: a refusal before retention carries exactly the closed details and no traceId (#263)",
+		);
 		assert.ok(
 			dispatchAuditLines(sink).some((line) => line.includes('"action":"refuse-expected-ref"')),
 			'expectedref-type: no "category":"dispatch" refuse-expected-ref audit record landed — every refusal ' +

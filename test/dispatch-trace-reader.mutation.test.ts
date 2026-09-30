@@ -23,7 +23,7 @@ const TESTS = [
 /** The real-dispatch arm that owns the tool's details write. */
 const DISPATCH_ARM = [
 	"test/dispatch-module.integration.test.ts",
-	"an absent expectedRef stays legal|a refused dispatch that ran persists",
+	"an absent expectedRef stays legal|a refused dispatch that ran persists|expectedRef: 123 refuses",
 ] as const;
 
 /** [name, file, exact unique source span, replacement, owner arm?]; each weakens one selected guard. */
@@ -94,9 +94,18 @@ const mutations: ReadonlyArray<
 	[
 		"record-rebind-unchecked",
 		READER,
-		'if (named.dev !== stats.dev || named.ino !== stats.ino) return { outcome: "unavailable" };',
-		"",
+		" && (named.dev !== stats.dev || named.ino !== stats.ino)) return",
+		" && false) return",
 	],
+	[
+		"pre-retention-refusal-gains-trace-id",
+		TOOL,
+		'\t\t\t\t\t\tresult(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic }),',
+		'\t\t\t\t\t\tresult(serializeDiagnostic(diagnostic), { disposition: "refused", diagnostic, traceId: "1700000000000-0f8fad5b-d9cb-469f-a165-70867728950e" }),',
+		DISPATCH_ARM,
+	],
+	["post-sink-prune-unavailable", READER, "if (named !== undefined && (", "if (named === undefined || ("],
+	["terminal-aborted-dropped", READER, '"failed", "aborted", "timed-out"', '"failed", "timed-out"'],
 	[
 		"indication-unchecked",
 		TOOL,

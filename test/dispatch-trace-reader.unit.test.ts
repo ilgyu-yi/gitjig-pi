@@ -263,6 +263,22 @@ describe("#263 reader against the direct-written store", () => {
 		);
 	});
 
+	it("a prune landing after the sink check still renders the observed record", () => {
+		const root = stateRoot();
+		const path = plant(root, valid());
+		assert.equal(readRetainedTrace(root, ID, NOW, { afterSink: () => unlinkSync(path) }).outcome, "rendered");
+	});
+
+	it("renders each of the five terminal lifecycle classes", () => {
+		for (const lifecycle of ["completed", "failed", "aborted", "timed-out", "spawn-failed"]) {
+			const root = stateRoot();
+			plant(root, JSON.stringify({ ...JSON.parse(valid()), lifecycle }));
+			const read = readRetainedTrace(root, ID, NOW);
+			assert.equal(read.outcome, "rendered", lifecycle);
+			assert.ok(read.outcome === "rendered" && read.text.includes(`delegate ${lifecycle}`), lifecycle);
+		}
+	});
+
 	it("a directory swapped for a symlink between its check and the open reads unavailable", () => {
 		const root = stateRoot();
 		plant(root, valid());
@@ -316,6 +332,10 @@ describe("#263 reader against the direct-written store", () => {
 		assert.ok(
 			body.indexOf("lstatSync(directory)") < body.indexOf("openSync("),
 			"the directory check precedes the open",
+		);
+		assert.ok(
+			body.indexOf("sinkRefusal(") < body.indexOf("readBounded(fd"),
+			"the sink verdict precedes the bounded read",
 		);
 	});
 
