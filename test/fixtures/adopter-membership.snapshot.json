@@ -214,6 +214,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/commands/dispatch-trace.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/commands/governance.ts",
 			"disposition": "carried"
 		},
@@ -263,6 +267,10 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/dispatch/provision.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/trace-reader.ts",
 			"disposition": "carried"
 		},
 		{
@@ -579,6 +587,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/25.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/263.md",
 			"disposition": "instance-state"
 		},
 		{

@@ -353,6 +353,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{ file: "gitjig/commands/ship.ts", allow: [] },
 	// #347: both operator notices are fixed module constants with no interpolation.
 	{ file: "gitjig/commands/lifecycle.ts", allow: [] },
+	// #263: every notice is a fixed module constant; the rendered trace is
+	// passed whole to one terminal component, never interpolated.
+	{ file: "gitjig/commands/dispatch-trace.ts", allow: [] },
 	// Admission and the delegate child compose no interpolated text; every
 	// refusal they surface is a fixed content-free literal.
 	{ file: "gitjig/dispatch/admit.ts", allow: [] },
@@ -376,6 +379,14 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			"counters.decodeReplacements",
 			// Closed lifecycle union produced by the local executor.
 			"trace.lifecycle",
+			// #263 expanded terminal row: `traceId` renders only after it passes
+			// the canonical digits-hyphen-lowercase-UUID grammar; `first.text` is
+			// the refusal content, the compact serialized dispatcher diagnostic of
+			// fixed literals and numbers; the other two compose those.
+			"traceId",
+			"first.text",
+			"refusal",
+			"dispatchTraceIndication(result.details)",
 			// `outcome.summary` is NOT here: it is externally written text —
 			// a delegate controls it byte for byte — and it now crosses the
 			// composition through quoted() (issue #97). The behavioural
@@ -399,6 +410,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			'line.truncated ? " [truncated]" : ""',
 			"now",
 			"randomUUID()",
+			// The filename stem composed from the two above (#263).
+			"stem",
 			// Closed lifecycle union and its fixed local-map projection.
 			"snapshot.lifecycle",
 			"heading",

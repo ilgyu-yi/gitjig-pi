@@ -186,7 +186,7 @@ describe("#131 collapsed operator-visible acts", () => {
 					{ isError: false },
 				),
 			),
-			"[warning]! refusal\n[dim]dispatch refused: fixed cause",
+			"[warning]! refusal\n[dim]dispatch refused: fixed cause\ntrace unavailable",
 		);
 		const secret = "delegate-secret-payload";
 		const admitted = rendered(
@@ -194,8 +194,30 @@ describe("#131 collapsed operator-visible acts", () => {
 				isError: false,
 			}),
 		);
-		assert.equal(admitted, "[success]✓ success");
+		assert.equal(admitted, "[success]✓ success\n[dim]trace unavailable");
 		assert.ok(!admitted.includes(secret));
+	});
+
+	it("#263 renders the retained trace identifier only on the expanded terminal row", () => {
+		const tool = capture((pi) => registerDispatchTool(pi, "/repo", "/state"));
+		const id = "1700000000000-0f8fad5b-d9cb-469f-a165-70867728950e";
+		const row = (details: Record<string, unknown>, expanded: boolean) =>
+			rendered(tool.renderResult(result(details, "text"), { expanded }, theme, { isError: false }));
+		assert.equal(row({ disposition: "admitted", ok: true, traceId: id }, true), `[success]✓ success\n[dim]trace ${id}`);
+		assert.equal(row({ disposition: "admitted", ok: true, traceId: id }, false), "[success]✓ success");
+		assert.equal(row({ disposition: "refused", traceId: id }, true), `[warning]! refusal\n[dim]text\ntrace ${id}`);
+		for (const traceId of [
+			"../etc/passwd",
+			`${id}\nforged`,
+			id.toUpperCase(),
+			7,
+			"01-0f8fad5b-d9cb-469f-a165-70867728950e",
+		])
+			assert.equal(
+				row({ disposition: "admitted", ok: true, traceId }, true),
+				"[success]✓ success\n[dim]trace unavailable",
+				String(traceId),
+			);
 	});
 
 	it("publish renders only its structured destination and withholds operands and raw success URLs", () => {
