@@ -62,6 +62,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (omitted === undefined || omitted.length === 0) return undefined;",
 		"if (omitted?.length === 0) return undefined;",
 	],
+	[
+		"re-request-skipped-on-empty-manifest",
+		RECORD,
+		"if (omitted === undefined || omitted.length === 0) return undefined;",
+		'if (omitted === undefined || omitted.length === 0 || (manifest.state === "present" && manifest.criteria.length === 0)) return undefined;',
+	],
 	["re-request-skipped", ORCHESTRATE, "if (gaps !== undefined) {", "if (false) {"],
 	[
 		"third-semantic-call",

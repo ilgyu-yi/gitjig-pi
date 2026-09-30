@@ -163,7 +163,13 @@ function withoutReRequest(brief: string): string {
 }
 
 describe("#378 one bounded whole-bundle Judge re-request", () => {
-	it("PR #376's two different same-slot findings: a one-ruling first adjudication draws exactly one whole-bundle re-request that resolves", async () => {
+	it("PR #376's two different same-slot findings: a one-ruling first adjudication draws exactly one whole-bundle re-request that resolves, under a non-empty and an empty manifest", async () => {
+		for (const manifest of [MANIFEST, { state: "present", criteria: [] }] as Manifest[]) {
+			await pr376(manifest);
+		}
+	});
+
+	async function pr376(manifest: Manifest) {
 		const s = seam({ suite: () => findings(MISSING_TEST, README_POINTER) }, [
 			() => judgeReturn([ruling({ finding: MISSING_TEST, rawOrdinals: [0], provenance: [SUITE] })]),
 			() =>
@@ -172,7 +178,7 @@ describe("#378 one bounded whole-bundle Judge re-request", () => {
 					ruling({ finding: README_POINTER, rawOrdinals: [1], provenance: [SUITE] }),
 				]),
 		]);
-		const result = await round(SUITE_ONLY, s);
+		const result = await round(SUITE_ONLY, s, manifest);
 		assert.equal(s.judgeBriefs.length, 2, "an incomplete first adjudication must draw exactly one re-request");
 		assert.ok(
 			s.pins.every((pin) => pin === result.head),
@@ -200,7 +206,7 @@ describe("#378 one bounded whole-bundle Judge re-request", () => {
 			"both semantic attempts are retained in order",
 		);
 		assert.deepEqual(parseReviewRecord(result.recordBody), JSON.parse(JSON.stringify(result.record)));
-	});
+	}
 
 	it("a genuine dedup of two raw ordinals keeps both raw texts and the slot multiplicity, with one Judge call", async () => {
 		const s = seam({ suite: () => findings("same defect", "same defect") }, [
