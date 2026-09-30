@@ -617,6 +617,25 @@ function isManifest(value: unknown): value is Manifest {
 	);
 }
 
+/**
+ * The only class triple the dispatcher emits for an admitted dispatch
+ * (`dispatch/diagnostics.ts`'s `coherent`): an exited run, an admitted
+ * return, and a compare that was not requested, confirmed or invalid. An
+ * admitted attempt claiming anything else is contradictory evidence.
+ *
+ * RESIDUAL, stated: a refused attempt's classes are carried as evidence
+ * without re-enumerating the dispatcher's class domains here (that would
+ * be a second home for them). A refused attempt never yields an
+ * adjudication, so no class it claims can derive a terminal.
+ */
+function coherentAdmitted(value: Record<string, unknown>): boolean {
+	return (
+		value.run === "exited" &&
+		value.return === "admitted" &&
+		(value.compare === "not-requested" || value.compare === "confirmed" || value.compare === "invalid")
+	);
+}
+
 function isAttempt(value: unknown): value is JudgeAttempt {
 	if (!isObject(value) || !exactKeys(value, ATTEMPT_KEYS)) return false;
 	const strings = ["head", "manifestDigest", "bundleDigest", "run", "return", "compare", "resultDigest"];
@@ -624,7 +643,9 @@ function isAttempt(value: unknown): value is JudgeAttempt {
 		(value.attempt === 1 || value.attempt === 2) &&
 		strings.every((key) => typeof value[key] === "string" && (value[key] as string).length > 0) &&
 		(value.disposition === "admitted" || value.disposition === "refused") &&
-		(value.disposition === "admitted" ? typeof value.ok === "boolean" : value.ok === null && value.payload === null) &&
+		(value.disposition === "admitted"
+			? typeof value.ok === "boolean" && coherentAdmitted(value)
+			: value.ok === null && value.payload === null) &&
 		(value.payload === null || typeof value.payload === "string")
 	);
 }

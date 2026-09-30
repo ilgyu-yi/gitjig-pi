@@ -185,6 +185,10 @@ describe("#378 one bounded whole-bundle Judge re-request", () => {
 			"the re-request does not carry the caller's deterministic gap",
 		);
 		assert.equal(withoutReRequest(s.judgeBriefs[1]), s.judgeBriefs[0], "the re-request changed more than the gaps");
+		assert.ok(
+			s.judgeBriefs[0].includes('"rulings": [{"finding": string, "rawOrdinals": [integer, ...], "provenance":'),
+			"the Judge brief does not advertise the closed payload's exact rawOrdinals key",
+		);
 		assert.ok(result.review.state === "resolved" && result.review.resolution.outcome === "repair");
 		assert.deepEqual(result.review.state === "resolved" && result.review.resolution.dispositions, [
 			{ rulingIndex: 0, finding: MISSING_TEST, disposition: "repair" },
@@ -547,6 +551,29 @@ describe("#378 version-2 review record", () => {
 		);
 	}
 	const clone = (record: ReviewRecord): ReviewRecord => JSON.parse(JSON.stringify(record));
+	/** An attempt whose recorded classes differ, with its digest recomputed so only the classes are wrong. */
+	const reclass = (
+		attempt: JudgeAttempt,
+		classes: Partial<Pick<JudgeAttempt, "run" | "return" | "compare">>,
+		record: ReviewRecord,
+	) => {
+		const outcome = admitted(attempt.payload ?? undefined, { ok: attempt.ok === true });
+		const diagnosticWith = {
+			...outcome.diagnostic,
+			run: { ...outcome.diagnostic.run, class: classes.run ?? attempt.run },
+			return: { class: classes.return ?? attempt.return },
+		} as DispatchOutcome["diagnostic"];
+		const base = { ...outcome, diagnostic: diagnosticWith } as DispatchOutcome;
+		const shaped =
+			classes.compare === undefined ? base : ({ ...base, compare: classes.compare } as unknown as DispatchOutcome);
+		return judgeAttempt(
+			shaped,
+			attempt.attempt,
+			attempt.head,
+			record.manifest as Manifest,
+			record.bundle as IndexedBundleEntry[],
+		);
+	};
 	/** Replace a record's second attempt. */
 	const second = (record: ReviewRecord, attempt: JudgeAttempt): void => {
 		(record.judgeAttempts as JudgeAttempt[])[1] = attempt;
@@ -602,6 +629,16 @@ describe("#378 version-2 review record", () => {
 				},
 			],
 			["a dropped effective ruling", (r) => r.adjudication?.rulings.splice(1, 1)],
+			...(
+				[
+					["a timed-out run", { run: "timed-out" }],
+					["a missing return", { return: "missing" }],
+					["an unreached compare", { compare: "not-reached" }],
+				] as const
+			).map(([name, classes]): [string, (r: ReviewRecord) => void] => [
+				`an admitted attempt claiming ${name}`,
+				(r) => second(r, reclass(attempts()[1], classes, record)),
+			]),
 			[
 				"an incomplete terminal over a complete adjudication",
 				(r) => Object.assign(r, { review: { state: "incomplete", cause: "adjudication-missing" }, adjudication: null }),
@@ -639,6 +676,27 @@ describe("#378 version-2 review record", () => {
 			parseReviewRecord(composeReviewRecord(truncated)),
 			undefined,
 			"an admitted-incomplete first attempt without its re-request",
+		);
+	});
+
+	it("refuses an admitted attempt whose compare class the dispatcher never emits, on an incomplete record", async () => {
+		const payload = JSON.stringify({
+			dedupAttested: true,
+			rulings: [ruling({ finding: MISSING_TEST, rawOrdinals: [0], provenance: [SUITE] })],
+		});
+		const s = seam({ suite: () => findings(MISSING_TEST) }, [() => admitted(payload, { compare: "invalid" })]);
+		const record = (await round(SUITE_ONLY, s)).record;
+		assert.ok(parseReviewRecord(composeReviewRecord(record)) !== undefined, "the coherent record must parse");
+		const copy = clone(record);
+		(copy.judgeAttempts as JudgeAttempt[])[0] = reclass(
+			(record.judgeAttempts as JudgeAttempt[])[0],
+			{ compare: "not-reached" },
+			record,
+		);
+		assert.equal(
+			parseReviewRecord(composeReviewRecord(copy)),
+			undefined,
+			"an incoherent admitted compare was admitted",
 		);
 	});
 
