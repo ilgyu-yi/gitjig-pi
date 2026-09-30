@@ -454,6 +454,14 @@ interface RawChildResult {
 	stdout: Buffer;
 }
 
+/**
+ * Test seam (#399): observes each stdout chunk of a machine-record send as it
+ * reaches this process, so a test can abort after the locator has crossed
+ * rather than after a guessed delay. Inert when unset; a throwing observer
+ * cannot change the send.
+ */
+export const machineSendObserver: { onStdout?: (chunk: Buffer) => void } = {};
+
 /** One bounded child, retaining only bounded stdout for strict protocol admission. */
 function runRawChild(
 	argv: string[],
@@ -461,6 +469,7 @@ function runRawChild(
 	repoRoot: string,
 	maxStdoutBytes = 4096,
 	abortSignal?: AbortSignal,
+	onStdout?: (chunk: Buffer) => void,
 ): Promise<RawChildResult> {
 	return new Promise((resolve) => {
 		let settled = false;
@@ -524,6 +533,11 @@ function runRawChild(
 			bytes += chunk.length;
 			if (bytes > maxStdoutBytes) overflow = true;
 			else chunks.push(chunk);
+			try {
+				onStdout?.(chunk);
+			} catch {
+				// Observation only; it never decides the send.
+			}
 		});
 		child.stderr.resume();
 		child.stdin.on("error", () => {});
@@ -665,7 +679,14 @@ export async function runMachinePublish(
 ): Promise<MachinePublishOutcome> {
 	if (abortSignal?.aborted)
 		return { outcome: "refused", cause: "the request was aborted before the publishing child could start" };
-	const send = await runRawChild(ghPublishArgv(destination, repository), wireBody, repoRoot, 4096, abortSignal);
+	const send = await runRawChild(
+		ghPublishArgv(destination, repository),
+		wireBody,
+		repoRoot,
+		4096,
+		abortSignal,
+		machineSendObserver.onStdout,
+	);
 	if (!send.spawned)
 		return {
 			outcome: "refused",

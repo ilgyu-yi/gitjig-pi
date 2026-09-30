@@ -3,7 +3,11 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { isPublishRepository, runMachinePublish } from "../.pi/extensions/gitjig/publish/executor.ts";
+import {
+	isPublishRepository,
+	machineSendObserver,
+	runMachinePublish,
+} from "../.pi/extensions/gitjig/publish/executor.ts";
 import {
 	admitMachineRecord,
 	canonicalJson,
@@ -133,7 +137,7 @@ if(args[0]==="api"){
  const path=noun==="issue"?"issues":"pull",url="https://github.com/o/r/"+path+"/"+number+(comment?"#issuecomment-8":"");
  if(process.env.SIGNAL_NO_LOC)process.kill(process.pid,"SIGTERM");if(process.env.SIGNAL_LOC){process.stdout.write(url+"\\n");process.kill(process.pid,"SIGTERM");}
  if(process.env.STDIN_NO_LOC){process.stdin.destroy();setTimeout(()=>process.exit(0),50);}if(process.env.STDIN_LOC){fs.writeFileSync(process.env.BODY,process.env.EXPECTED_BODY);fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));process.stdout.write(url+"\\n");process.stdin.destroy();setTimeout(()=>process.exit(0),50);}
- const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.INVALID_UTF8){process.stdout.write(Buffer.from([0xff,0x0a]));return;}if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));if(process.env.FAIL_NO_LOC){process.exitCode=1;return;}process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.TIMEOUT_LOC){done();setInterval(()=>{},60000);}else if(process.env.TIMEOUT_NO_LOC)setInterval(()=>{},60000);else if(process.env.HOLD){done();setTimeout(()=>{},5000);}else if(process.env.DELAY)setTimeout(done,5000);else done();});
+ const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>{fs.writeFileSync(process.env.BODY,Buffer.concat(chunks));fs.writeFileSync(process.env.META,JSON.stringify({noun,verb,comment,number,title,url}));const done=()=>{if(process.env.INVALID_UTF8){process.stdout.write(Buffer.from([0xff,0x0a]));return;}if(process.env.BOM)process.stdout.write(Buffer.from([0xef,0xbb,0xbf]));if(process.env.FAIL_NO_LOC){process.exitCode=1;return;}process.stdout.write((process.env.LOCATOR||url)+(process.env.NO_LF?"":"\\n"));if(process.env.FAIL)process.exitCode=1;};if(process.env.TIMEOUT_LOC){done();setInterval(()=>{},60000);}else if(process.env.TIMEOUT_NO_LOC)setInterval(()=>{},60000);else if(process.env.HOLD){setTimeout(()=>{done();process.stdout.write("",()=>{if(process.env.LOCATED)fs.writeFileSync(process.env.LOCATED,"located");});setTimeout(()=>{},5000);},Number(process.env.LOCATOR_DELAY_MS||0));}else if(process.env.DELAY)setTimeout(done,5000);else done();});
 }
 `,
 		);
@@ -165,6 +169,8 @@ if(args[0]==="api"){
 			OMIT_REPO: process.env.OMIT_REPO,
 			DELAY: process.env.DELAY,
 			HOLD: process.env.HOLD,
+			LOCATOR_DELAY_MS: process.env.LOCATOR_DELAY_MS,
+			LOCATED: process.env.LOCATED,
 			NO_LF: process.env.NO_LF,
 			BOM: process.env.BOM,
 			EXPECTED_BODY: process.env.EXPECTED_BODY,
@@ -588,6 +594,20 @@ if(args[0]==="api"){
 
 			await writeFile(callsFile, "");
 			process.env.HOLD = "1";
+			// #399: the fake writes its locator well after `send`, and the abort
+			// waits for the parent to have received it, never for a guessed delay.
+			process.env.LOCATOR_DELAY_MS = "200";
+			const locatedFile = join(root, "located");
+			process.env.LOCATED = locatedFile;
+			let received: () => void = () => {};
+			const receipt = new Promise<void>((resolve) => {
+				received = resolve;
+			});
+			let seen = "";
+			machineSendObserver.onStdout = (chunk) => {
+				seen += chunk.toString("utf8");
+				if (seen.includes("\n")) received();
+			};
 			const controller = new AbortController();
 			const pending = performPublish(
 				{ machineRecord: { marker: MARKER, value: null }, destination: { kind: "issue-comment", number: 7 } },
@@ -596,14 +616,31 @@ if(args[0]==="api"){
 				{ host: "github.com", nameWithOwner: "o/r" },
 				controller.signal,
 			);
-			for (let attempt = 0; attempt < 100 && !(await readFile(callsFile, "utf8")).includes("send"); attempt += 1)
-				await new Promise((resolve) => setTimeout(resolve, 10));
-			await new Promise((resolve) => setTimeout(resolve, 30));
+			let bound: ReturnType<typeof setTimeout> | undefined;
+			const crossed = await Promise.race([
+				receipt.then(() => true),
+				new Promise<boolean>((resolve) => {
+					bound = setTimeout(() => resolve(false), 10_000);
+				}),
+			]);
+			clearTimeout(bound);
+			delete machineSendObserver.onStdout;
+			assert.equal(crossed, true, "the locator never reached the parent before the bound");
+			// The fake marks its flushed write on its own side; wait for that mark
+			// rather than race it, bounded.
+			let located = "";
+			for (let attempt = 0; attempt < 500 && located !== "located"; attempt += 1) {
+				located = await readFile(locatedFile, "utf8").catch(() => "");
+				if (located !== "located") await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			assert.equal(located, "located", "the fake had flushed its locator");
 			controller.abort();
 			const aborted = await pending;
 			assert.equal(aborted.details.disposition, "published", "a captured strict locator compels one GET after abort");
 			assert.deepEqual((await readFile(callsFile, "utf8")).trim().split("\n"), ["send", "get"]);
 			delete process.env.HOLD;
+			delete process.env.LOCATOR_DELAY_MS;
+			delete process.env.LOCATED;
 
 			await writeFile(callsFile, "");
 			const oversizedTitle = await performPublish(
