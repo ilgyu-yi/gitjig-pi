@@ -2108,6 +2108,39 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 		assert.equal(read.outcome, "rendered", "expectedref-absent: the retained record did not render");
 		assert.ok(read.outcome === "rendered" && read.text.startsWith(`trace ${traceId}\ndelegate completed`));
 	});
+
+	it("#263: a refused dispatch that ran persists its retained identifier too", async () => {
+		const index = await requireModule<IndexModule>("index.ts", "refused-trace-id");
+		const repo = mintRepo(PAYLOADS);
+		const sink = mintStateRoot();
+		let registered: RegisteredTool | undefined;
+		index.registerDispatchTool(
+			{
+				registerTool: (spec: unknown) => {
+					registered = spec as RegisteredTool;
+				},
+			},
+			repo,
+			sink.stateRoot,
+		);
+		assert.ok(
+			registered !== undefined,
+			"refused-trace-id: registerDispatchTool registered no tool — the arm is vacuous",
+		);
+		const result = await registered.execute("zq-toolcall", {
+			brief: BRIEF,
+			delegateArgv: ["sh", "-c", "echo zq-refused-trace; exit 0"],
+		});
+		assert.equal(result.details.disposition, "refused", `refused-trace-id: ${JSON.stringify(result)}`);
+		assert.deepEqual(Object.keys(result.details), ["disposition", "diagnostic", "traceId"]);
+		const traceId = String(result.details.traceId);
+		const reader = await import("../.pi/extensions/gitjig/dispatch/trace-reader.ts");
+		const read = reader.readRetainedTrace(sink.stateRoot, traceId);
+		assert.ok(
+			read.outcome === "rendered" && read.text.includes('out> "zq-refused-trace"'),
+			`refused-trace-id: the refused run's retained record did not render: ${JSON.stringify(read)}`,
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------

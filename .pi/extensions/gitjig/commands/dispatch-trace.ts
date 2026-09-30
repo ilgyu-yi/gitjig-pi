@@ -35,7 +35,7 @@ export function registerDispatchTraceCommand(
 ): void {
 	pi.registerCommand("dispatch-trace", {
 		description:
-			"Show one retained delegate trace in the terminal UI by the identifier on an expanded dispatch row: " +
+			"Show one retained delegate trace in the terminal UI by the identifier on an expanded terminal dispatch row: " +
 			"/dispatch-trace <trace id>. Operator-only and read-only.",
 		handler: async (args: string, ctx) => {
 			if (ctx.mode !== "tui") {

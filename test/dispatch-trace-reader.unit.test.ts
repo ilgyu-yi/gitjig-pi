@@ -12,6 +12,8 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	openSync,
+	readFileSync,
+	renameSync,
 	rmSync,
 	symlinkSync,
 	unlinkSync,
@@ -165,6 +167,10 @@ describe("#263 reader outcomes", () => {
 		const real = plant(link, valid(), "1700000000001-0f8fad5b-d9cb-469f-a165-70867728950e");
 		symlinkSync(real, join(link, "dispatch-traces", `${ID}.json`));
 		assert.equal(read(link), "unavailable", "symlinked record");
+		const dangling = stateRoot();
+		plant(dangling, valid(), "1700000000001-0f8fad5b-d9cb-469f-a165-70867728950e");
+		symlinkSync(join(dangling, "nowhere.json"), join(dangling, "dispatch-traces", `${ID}.json`));
+		assert.equal(read(dangling), "unavailable", "a dangling symlink is refused, never followed to missing");
 		const hard = stateRoot();
 		const original = plant(hard, valid(), "1700000000001-0f8fad5b-d9cb-469f-a165-70867728950e");
 		linkSync(original, join(hard, "dispatch-traces", `${ID}.json`));
@@ -247,10 +253,70 @@ describe("#263 reader against the direct-written store", () => {
 	it("a prune landing after the open makes the record unavailable under the one-name sink check", () => {
 		const root = stateRoot();
 		const path = plant(root, valid());
-		assert.equal(readRetainedTrace(root, ID, NOW, () => unlinkSync(path)).outcome, "unavailable");
+		assert.equal(readRetainedTrace(root, ID, NOW, { afterOpen: () => unlinkSync(path) }).outcome, "unavailable");
 		const kept = stateRoot();
 		plant(kept, valid());
-		assert.equal(readRetainedTrace(kept, ID, NOW, () => {}).outcome, "rendered", "the seam alone changes nothing");
+		assert.equal(
+			readRetainedTrace(kept, ID, NOW, { beforeOpen: () => {}, afterOpen: () => {} }).outcome,
+			"rendered",
+			"the seams alone change nothing",
+		);
+	});
+
+	it("a directory swapped for a symlink between its check and the open reads unavailable", () => {
+		const root = stateRoot();
+		plant(root, valid());
+		const outside = stateRoot();
+		plant(outside, valid());
+		const directory = join(root, "dispatch-traces");
+		const swap = () => {
+			renameSync(directory, join(root, "moved"));
+			symlinkSync(join(outside, "dispatch-traces"), directory);
+		};
+		assert.equal(readRetainedTrace(root, ID, NOW, { beforeOpen: swap }).outcome, "unavailable");
+		const rebuilt = stateRoot();
+		plant(rebuilt, valid());
+		const rebuild = () => {
+			renameSync(join(rebuilt, "dispatch-traces"), join(rebuilt, "old"));
+			plant(rebuilt, valid());
+		};
+		assert.equal(
+			readRetainedTrace(rebuilt, ID, NOW, { beforeOpen: rebuild }).outcome,
+			"unavailable",
+			"a safe directory replaced by another safe directory is not the directory that was checked",
+		);
+		const replaced = stateRoot();
+		const path = plant(replaced, valid());
+		const other = join(replaced, "other.json");
+		writeFileSync(other, valid(), { mode: 0o600 });
+		assert.equal(
+			readRetainedTrace(replaced, ID, NOW, { afterOpen: () => renameSync(other, path) }).outcome,
+			"unavailable",
+			"a record renamed over after the open is not the record the path names",
+		);
+		const moved = stateRoot();
+		const movedPath = plant(moved, valid());
+		const substitute = join(moved, "substitute.json");
+		writeFileSync(substitute, valid(), { mode: 0o600 });
+		const shuffle = () => {
+			renameSync(movedPath, join(moved, "dispatch-traces", "kept.json"));
+			renameSync(substitute, movedPath);
+		};
+		assert.equal(
+			readRetainedTrace(moved, ID, NOW, { afterOpen: shuffle }).outcome,
+			"unavailable",
+			"the opened record kept its one name elsewhere while another took its path",
+		);
+	});
+
+	it("checks the directory before its one open of the record", () => {
+		const source = readFileSync(new URL("../.pi/extensions/gitjig/dispatch/trace-reader.ts", import.meta.url), "utf8");
+		const body = source.slice(source.indexOf("export function readRetainedTrace("));
+		assert.equal(body.split("openSync(").length - 1, 1, "exactly one open of the record");
+		assert.ok(
+			body.indexOf("lstatSync(directory)") < body.indexOf("openSync("),
+			"the directory check precedes the open",
+		);
 	});
 
 	it("a pruned record reads missing, and a crashed one reads unavailable until it expires", () => {

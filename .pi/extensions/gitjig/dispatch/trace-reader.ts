@@ -10,7 +10,7 @@
  * Warning-surface roster: EXEMPT — the rendered text reaches only the
  * `/dispatch-trace` terminal component; the notices are fixed literals.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { STATE_PATH_GUARD_FLAGS, sinkRefusal } from "../audit.ts";
 import {
@@ -72,6 +72,11 @@ function terminalSnapshot(value: unknown): TraceSnapshot | undefined {
 	return value as unknown as TraceSnapshot;
 }
 
+/** The writer's own directory rule: a real directory, not a symlink, with no group or other bits. */
+function safeDirectory(stats: Stats): boolean {
+	return stats.isDirectory() && !stats.isSymbolicLink() && (stats.mode & 0o077) === 0;
+}
+
 function errorCode(error: unknown): unknown {
 	return error instanceof Error && "code" in error ? error.code : undefined;
 }
@@ -97,16 +102,20 @@ export function readRetainedTrace(
 	stateRoot: string,
 	id: string,
 	now: number = Date.now(),
-	/** Test seam: runs once between the open and the sink check, where a concurrent prune can land. */
-	afterOpen?: () => void,
+	/**
+	 * Test seams at the two interleavings the contract names: between the
+	 * directory check and the open, and between the open and the sink check.
+	 */
+	hooks: { beforeOpen?: () => void; afterOpen?: () => void } = {},
 ): TraceRead {
 	if (!canonicalTraceId(id)) return { outcome: "unavailable" };
 	// Expiry is decided before any state read, even for an unpruned record.
 	if (now - Number(id.slice(0, id.indexOf("-"))) > TRACE_RETAIN_MS) return { outcome: "missing" };
 	const directory = join(stateRoot, TRACE_DIRECTORY);
+	let checked: Stats;
 	try {
-		const stats = lstatSync(directory);
-		if (!stats.isDirectory() || stats.isSymbolicLink() || (stats.mode & 0o077) !== 0) return { outcome: "unavailable" };
+		checked = lstatSync(directory);
+		if (!safeDirectory(checked)) return { outcome: "unavailable" };
 	} catch (error) {
 		// The writer creates the directory only on its first retention.
 		return errorCode(error) === "ENOENT" ? { outcome: "missing" } : { outcome: "unavailable" };
@@ -114,16 +123,29 @@ export function readRetainedTrace(
 	const path = join(directory, `${id}.json`);
 	let fd: number;
 	try {
+		hooks.beforeOpen?.();
 		fd = openSync(path, constants.O_RDONLY | STATE_PATH_GUARD_FLAGS);
 	} catch (error) {
 		return errorCode(error) === "ENOENT" ? { outcome: "missing" } : { outcome: "unavailable" };
 	}
 	try {
-		afterOpen?.();
+		hooks.afterOpen?.();
 		// A prune that unlinked the record after the open leaves it no name; the
 		// shared sink rule's one-name check then makes it unavailable (§4.9, #395).
 		const stats = fstatSync(fd);
 		if (sinkRefusal(stats, path) !== undefined) return { outcome: "unavailable" };
+		// O_NOFOLLOW guards only the last component. The checked directory and
+		// the opened record must still be what the paths name after the open, so
+		// a directory swapped for a symlink between the check and the open, which
+		// the open would follow, reads unavailable. RESIDUAL, stated: a swap and a
+		// restore that both complete between these reads are not observable by
+		// path reads. This reader draws no sandbox line inside one account (#263
+		// non-goal; SPEC §5.5's same-account boundary).
+		const after = lstatSync(directory);
+		const named = lstatSync(path);
+		if (!safeDirectory(after) || after.dev !== checked.dev || after.ino !== checked.ino)
+			return { outcome: "unavailable" };
+		if (named.dev !== stats.dev || named.ino !== stats.ino) return { outcome: "unavailable" };
 		// Bounded by bytes actually read, so a file that grows after the stat is still refused.
 		const bytes = readBounded(fd, TRACE_READ_BYTES);
 		if (bytes.length > TRACE_READ_BYTES) return { outcome: "unavailable" };

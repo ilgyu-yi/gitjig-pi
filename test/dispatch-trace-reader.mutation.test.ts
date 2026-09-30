@@ -21,7 +21,10 @@ const TESTS = [
 ];
 
 /** The real-dispatch arm that owns the tool's details write. */
-const DISPATCH_ARM = ["test/dispatch-module.integration.test.ts", "an absent expectedRef stays legal"] as const;
+const DISPATCH_ARM = [
+	"test/dispatch-module.integration.test.ts",
+	"an absent expectedRef stays legal|a refused dispatch that ran persists",
+] as const;
 
 /** [name, file, exact unique source span, replacement, owner arm?]; each weakens one selected guard. */
 const mutations: ReadonlyArray<
@@ -45,13 +48,8 @@ const mutations: ReadonlyArray<
 		'\t} catch (error) {\n\t\treturn errorCode(error) === "ENOENT" ? { outcome: "missing" } : { outcome: "unavailable" };\n\t}\n\ttry {',
 		'\t} catch {\n\t\treturn { outcome: "unavailable" };\n\t}\n\ttry {',
 	],
-	[
-		"directory-mode-unchecked",
-		READER,
-		' || (stats.mode & 0o077) !== 0) return { outcome: "unavailable" };',
-		') return { outcome: "unavailable" };',
-	],
-	["directory-symlink-followed", READER, "const stats = lstatSync(directory);", "const stats = statSync(directory);"],
+	["directory-mode-unchecked", READER, " && (stats.mode & 0o077) === 0;", ";"],
+	["directory-symlink-followed", READER, "checked = lstatSync(directory);", "checked = statSync(directory);"],
 	[
 		"record-follows-symlink",
 		READER,
@@ -85,6 +83,20 @@ const mutations: ReadonlyArray<
 	["grammar-uppercase", READER, "[0-9a-f]{8}-[0-9a-f]{4}-4", "[0-9a-fA-F]{8}-[0-9a-f]{4}-4"],
 	["writer-returns-no-stem", WRITER, "\t\treturn stem;\n", "\t\treturn undefined;\n"],
 	["details-without-trace-id", TOOL, "(traceId === undefined ? {} : { traceId })", "({})", DISPATCH_ARM],
+	[
+		"refused-details-without-trace-id",
+		TOOL,
+		"\t\t\t\t\t\t\t\tdiagnostic: outcome.diagnostic,\n\t\t\t\t\t\t\t\t...traceDetails(),\n\t\t\t\t\t\t\t}),\n\t\t\t\t\t\t\tfalse,",
+		"\t\t\t\t\t\t\t\tdiagnostic: outcome.diagnostic,\n\t\t\t\t\t\t\t}),\n\t\t\t\t\t\t\tfalse,",
+		DISPATCH_ARM,
+	],
+	["directory-rebind-unchecked", READER, " || after.dev !== checked.dev || after.ino !== checked.ino)", ")"],
+	[
+		"record-rebind-unchecked",
+		READER,
+		'if (named.dev !== stats.dev || named.ino !== stats.ino) return { outcome: "unavailable" };',
+		"",
+	],
 	[
 		"indication-unchecked",
 		TOOL,
