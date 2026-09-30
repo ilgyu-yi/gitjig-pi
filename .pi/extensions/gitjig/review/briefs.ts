@@ -77,7 +77,7 @@
  * the verbatim-embedding contract the round's arms pin.
  */
 
-import type { BundleEntry, Slot } from "./panel.ts";
+import type { IndexedBundleEntry, Slot } from "./panel.ts";
 import type { Manifest } from "./resolve.ts";
 
 /** The self-enforced deadlines a brief states, in seconds from T0. */
@@ -300,16 +300,17 @@ export function composeReviewerBrief(
  * module's contract.
  */
 export function composeJudgeBrief(
-	bundle: readonly BundleEntry[],
+	bundle: readonly IndexedBundleEntry[],
 	manifest: Manifest,
 	context: BriefContext,
 	fences: ReviewFences,
 	timing: BriefTiming = DEFAULT_TIMING,
+	reRequest?: { gaps: readonly string[] },
 ): string {
 	const findings = bundle.map(
-		(entry, index) =>
-			"Finding " +
-			String(index + 1) +
+		(entry) =>
+			"Raw ordinal " +
+			String(entry.rawOrdinal) +
 			" (slot lens " +
 			JSON.stringify(entry.slot.lens) +
 			", surface " +
@@ -336,9 +337,21 @@ export function composeJudgeBrief(
 		`CHANGE UNDER REVIEW: ${context.changeDescription}`,
 		"",
 		"THE BUNDLE — embedded verbatim, LABELLED UNVERIFIED (§1.5's third form): re-verify every claim with",
-		"your own commands; never rule on a slot's say-so.",
+		"your own commands; never rule on a slot's say-so. Each raw occurrence carries the caller's zero-based",
+		"raw ordinal; equal texts from one slot are separate occurrences with separate ordinals.",
 		...findings,
 		"",
+		// §1.7's one bounded completeness re-request: the whole original
+		// bundle, the same manifest and facts, plus the caller's gaps.
+		...(reRequest === undefined
+			? []
+			: [
+					"COMPLETENESS RE-REQUEST — an earlier independent Judge's adjudication of this same round was",
+					"admitted but incomplete. Adjudicate the WHOLE bundle above afresh, covering every raw ordinal; the",
+					"caller's deterministic gaps in that adjudication were:",
+					...reRequest.gaps.map((gap) => `- ${gap}`),
+					"",
+				]),
 		manifestBlock,
 		"",
 		ADMISSION_BURDEN,
@@ -354,7 +367,10 @@ export function composeJudgeBrief(
 		"",
 		"YOUR OBLIGATIONS, all owed (§1.9):",
 		"1. DEDUP over the whole bundle — semantically-one raw findings merge into one effective finding with",
-		"   EVERY raw finding's provenance preserved; attest the dedup was performed.",
+		"   EVERY raw finding's provenance preserved; attest the dedup was performed. Every ruling names the",
+		"   raw occurrences it rules in a nonempty ascending `rawOrdinals`; across rulings they must cover every",
+		"   raw ordinal exactly once, and a ruling's provenance lists one slot per referenced raw ordinal (a",
+		"   slot appears as many times as it contributed). A finding you refute is still ruled, never omitted.",
 		"2. Rule each effective finding on FOUR axes and no others: Validity (CONFIRMED / REFUTED /",
 		"   INDETERMINATE); Severity (SUBSTANTIVE or NIT — a NIT requires an exact mechanical remedy stated",
 		"   as part of the ruling: verbatim, local to the flagged span, leaving every commitment",
@@ -377,7 +393,7 @@ export function composeJudgeBrief(
 		PROVISIONED_TREE_FACTS,
 		"",
 		'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
-		'{"dedupAttested": boolean, "rulings": [{"finding": string, "provenance": [{"lens": string,',
+		'{"dedupAttested": boolean, "rulings": [{"finding": string, "rawOrdinals": [integer, ...], "provenance": [{"lens": string,',
 		'"surface": string}], "validity": "CONFIRMED" | "REFUTED" | "INDETERMINATE", "severity"?:',
 		'"SUBSTANTIVE" | "NIT", "remedy"?: string, "direction"?: "fail-closed" | "live-harm",',
 		'"onCriterion"?: boolean, "evidence": string}]} — the optional axes owed exactly when §1.9 owes',

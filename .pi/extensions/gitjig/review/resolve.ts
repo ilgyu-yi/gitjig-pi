@@ -41,7 +41,7 @@
  * carry those semantics, the caller performs them.
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
-import type { PanelOutcome, Slot } from "./panel.ts";
+import type { IndexedBundleEntry, PanelOutcome, Slot } from "./panel.ts";
 // The resolution outcomes have ONE home and it is record.ts's `OUTCOMES`
 // (§3.11). This is a TYPE-ONLY import, erased before the
 // module runs, so the cycle it completes — record.ts imports this file's
@@ -105,6 +105,15 @@ export type Manifest = { state: "absent" } | { state: "present"; criteria: reado
 /** The Judge return's parsed shape, before completeness has been ruled. */
 export type AdjudicationInput = { dedupAttested: boolean; rulings: Ruling[] };
 
+/**
+ * A version-2 ruling (§1.9's preterminal admission): `rawOrdinals` names
+ * the caller-assigned raw occurrences this effective finding rules.
+ */
+export type IndexedRuling = Ruling & { rawOrdinals: number[] };
+
+/** A version-2 Judge return, before completeness and the partition are ruled. */
+export type IndexedAdjudicationInput = { dedupAttested: boolean; rulings: IndexedRuling[] };
+
 declare const adjudicated: unique symbol;
 
 /**
@@ -148,7 +157,12 @@ export type AdmitResult = { complete: true; adjudication: Adjudication } | { com
 export type Disposition = (typeof DISPOSITIONS)[number];
 
 export type Resolution = {
-	dispositions: { finding: string; disposition: Disposition; remedy?: string }[];
+	/**
+	 * `rulingIndex` is the zero-based effective-ruling index (§1.9); every
+	 * disposition the Resolver produces carries it, and only historical
+	 * unversioned records lack it.
+	 */
+	dispositions: { rulingIndex?: number; finding: string; disposition: Disposition; remedy?: string }[];
 	/**
 	 * DERIVED from record.ts's `OUTCOMES`, never re-spelled here: this
 	 * field is what TYPES the value §1.4's assembler reads, so a
@@ -255,6 +269,44 @@ export function adjudicationFromPayload(payload: string | undefined): Adjudicati
 	return { dedupAttested, rulings: rulings as Ruling[] };
 }
 
+const INDEXED_RULING_KEYS = new Set([...RULING_KEYS, "rawOrdinals"]);
+
+/**
+ * Parse a version-2 Judge return: the closed shape plus a `rawOrdinals`
+ * array of safe integers on every ruling. Structure only — order, range
+ * and the partition are admission's (`admitIndexedAdjudication`), so a
+ * malformed identity reaches a named gap rather than a silent refusal.
+ */
+export function indexedAdjudicationFromPayload(payload: string | undefined): IndexedAdjudicationInput | undefined {
+	if (typeof payload !== "string") {
+		return undefined;
+	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(payload);
+	} catch {
+		return undefined;
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		return undefined;
+	}
+	const keys = Object.keys(parsed);
+	if (keys.length !== TOP_KEYS.size || !keys.every((key) => TOP_KEYS.has(key))) {
+		return undefined;
+	}
+	const { dedupAttested, rulings } = parsed as { dedupAttested: unknown; rulings: unknown };
+	if (typeof dedupAttested !== "boolean" || !Array.isArray(rulings)) {
+		return undefined;
+	}
+	for (const ruling of rulings) {
+		if (typeof ruling !== "object" || ruling === null || Array.isArray(ruling)) return undefined;
+		if (!Object.keys(ruling).every((key) => INDEXED_RULING_KEYS.has(key))) return undefined;
+		const { rawOrdinals, ...rest } = ruling as Record<string, unknown>;
+		if (!isRuling(rest) || !Array.isArray(rawOrdinals) || !rawOrdinals.every(Number.isSafeInteger)) return undefined;
+	}
+	return { dedupAttested, rulings: rulings as IndexedRuling[] };
+}
+
 /**
  * A Judge return counts only off the caller's own confirmed compare —
  * "returned invalid under the same compare the panel rides" is §1.9's
@@ -266,6 +318,42 @@ export function adjudicationFromDispatch(outcome: DispatchOutcome): Adjudication
 		return undefined;
 	}
 	return adjudicationFromPayload(outcome.payload);
+}
+
+/** One ruling's owed axes (§1.9), as named gaps; empty when the ruling is well formed. */
+function rulingGaps(ruling: Ruling, index: number): string[] {
+	const gaps: string[] = [];
+	if (ruling.provenance.length === 0) {
+		gaps.push(`ruling ${index}: provenance is empty — dedup merges and never discards (§1.9)`);
+	}
+	// Presence alone, owed on every validity like provenance — the parse
+	// rules the field's type, this checks only that a ruling says what it
+	// rests on, and nothing here reads what it says (issue #179's ruling:
+	// admission checks presence, never evaluates).
+	if (!ruling.evidence) {
+		gaps.push(
+			`ruling ${index}: validity evidence is empty — each ruling records the command it ran or the citation it rests on (§1.9)`,
+		);
+	}
+	if (ruling.validity !== "CONFIRMED") {
+		// REFUTED and INDETERMINATE owe validity and its evidence alone (§1.9).
+		return gaps;
+	}
+	if (ruling.severity === undefined) {
+		gaps.push(`ruling ${index}: severity is unruled`);
+	}
+	if (ruling.severity === "NIT" && (typeof ruling.remedy !== "string" || ruling.remedy.length === 0)) {
+		gaps.push(
+			`ruling ${index}: a NIT ruling carries no exact mechanical remedy — the remedy is part of the ruling (§1.9)`,
+		);
+	}
+	if (ruling.direction === undefined) {
+		gaps.push(`ruling ${index}: harm direction is unruled — there is no silence default (§1.9)`);
+	}
+	if (ruling.onCriterion === undefined) {
+		gaps.push(`ruling ${index}: AC impact is unruled`);
+	}
+	return gaps;
 }
 
 /**
@@ -292,36 +380,7 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 		);
 	}
 	input.rulings.forEach((ruling, index) => {
-		if (ruling.provenance.length === 0) {
-			gaps.push(`ruling ${index}: provenance is empty — dedup merges and never discards (§1.9)`);
-		}
-		// Presence alone, owed on every validity like provenance — the parse
-		// rules the field's type, this checks only that a ruling says what it
-		// rests on, and nothing here reads what it says (issue #179's ruling:
-		// admission checks presence, never evaluates).
-		if (!ruling.evidence) {
-			gaps.push(
-				`ruling ${index}: validity evidence is empty — each ruling records the command it ran or the citation it rests on (§1.9)`,
-			);
-		}
-		if (ruling.validity !== "CONFIRMED") {
-			// REFUTED and INDETERMINATE owe validity and its evidence alone (§1.9).
-			return;
-		}
-		if (ruling.severity === undefined) {
-			gaps.push(`ruling ${index}: severity is unruled`);
-		}
-		if (ruling.severity === "NIT" && (typeof ruling.remedy !== "string" || ruling.remedy.length === 0)) {
-			gaps.push(
-				`ruling ${index}: a NIT ruling carries no exact mechanical remedy — the remedy is part of the ruling (§1.9)`,
-			);
-		}
-		if (ruling.direction === undefined) {
-			gaps.push(`ruling ${index}: harm direction is unruled — there is no silence default (§1.9)`);
-		}
-		if (ruling.onCriterion === undefined) {
-			gaps.push(`ruling ${index}: AC impact is unruled`);
-		}
+		gaps.push(...rulingGaps(ruling, index));
 	});
 	if (gaps.length > 0) {
 		return { complete: false, gaps };
@@ -342,28 +401,135 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 }
 
 /**
+ * §1.9's preliminary ruling-envelope check. The envelope is valid only
+ * when every ruling is well formed with its owed axes and a nonempty,
+ * strictly ascending array of in-range ordinals, and no ordinal appears in
+ * two rulings. A valid envelope yields the original ordinals its union
+ * omits — admitted-incomplete for §1.7's one re-request exactly when that
+ * list is nonempty. An invalid envelope (absent, repeated, unknown or
+ * out-of-order identities, or a missing axis) yields undefined and earns
+ * no re-request.
+ */
+export function envelopeOmissions(
+	input: IndexedAdjudicationInput,
+	bundle: readonly IndexedBundleEntry[],
+): number[] | undefined {
+	const ruled = new Set<number>();
+	for (const [index, ruling] of input.rulings.entries()) {
+		const ordinals = ruling.rawOrdinals;
+		if (rulingGaps(ruling, index).length > 0 || ordinals.length === 0) return undefined;
+		for (const [at, ordinal] of ordinals.entries()) {
+			if (at > 0 && ordinal <= ordinals[at - 1]) return undefined;
+			if (ordinal < 0 || ordinal >= bundle.length || ruled.has(ordinal)) return undefined;
+			ruled.add(ordinal);
+		}
+	}
+	return bundle.map((entry) => entry.rawOrdinal).filter((ordinal) => !ruled.has(ordinal));
+}
+
+/**
+ * §1.9's version-2 preterminal admission: every owed axis as
+ * `admitAdjudication` rules it, plus the raw-to-effective relation. Each
+ * ruling's `rawOrdinals` is nonempty and ascending; across rulings they
+ * exactly and disjointly partition the bundle's ordinals; and a ruling's
+ * provenance equals the MULTISET of its referenced raw slots. The caller
+ * checks coverage and provenance only — never semantic equivalence,
+ * which stays the Judge's. The gaps are deterministic, so they are the
+ * one re-request's brief as they stand.
+ */
+export function admitIndexedAdjudication(
+	input: IndexedAdjudicationInput,
+	manifest: Manifest,
+	bundle: readonly IndexedBundleEntry[],
+): AdmitResult {
+	const axes = admitAdjudication(input, manifest);
+	const gaps = axes.complete ? [] : [...axes.gaps];
+	const owner = new Map<number, number>();
+	input.rulings.forEach((ruling, index) => {
+		const ordinals = ruling.rawOrdinals;
+		if (ordinals.length === 0) {
+			gaps.push(
+				`ruling ${index}: rawOrdinals is empty — every effective finding names the raw occurrences it rules (§1.9)`,
+			);
+			return;
+		}
+		if (ordinals.some((ordinal, at) => at > 0 && ordinal <= ordinals[at - 1])) {
+			gaps.push(`ruling ${index}: rawOrdinals is not strictly ascending (§1.9)`);
+		}
+		const referenced: Slot[] = [];
+		for (const ordinal of ordinals) {
+			const entry = bundle[ordinal];
+			if (entry === undefined || entry.rawOrdinal !== ordinal) {
+				gaps.push(`ruling ${index}: raw ordinal ${ordinal} is not in the bundle (§1.9)`);
+				continue;
+			}
+			const earlier = owner.get(ordinal);
+			if (earlier !== undefined && earlier !== index) {
+				gaps.push(
+					`raw ordinal ${ordinal} is ruled by both ruling ${earlier} and ruling ${index} — the partition is disjoint (§1.9)`,
+				);
+			}
+			owner.set(ordinal, earlier ?? index);
+			referenced.push(entry.slot);
+		}
+		const key = (slot: Slot) => JSON.stringify([slot.lens, slot.surface]);
+		const expected = referenced.map(key).sort();
+		const actual = ruling.provenance.map(key).sort();
+		if (expected.length !== actual.length || expected.some((value, at) => value !== actual[at])) {
+			gaps.push(
+				`ruling ${index}: provenance is not the multiset of its raw ordinals' slots — a slot name or count cannot stand in for occurrence identity (§1.9)`,
+			);
+		}
+	});
+	for (const entry of bundle) {
+		if (!owner.has(entry.rawOrdinal)) {
+			gaps.push(`raw ordinal ${entry.rawOrdinal} is ruled by no effective finding (§1.9)`);
+		}
+	}
+	if (gaps.length > 0) {
+		return { complete: false, gaps };
+	}
+	const rulings = input.rulings.map((ruling) => ({
+		...ruling,
+		rawOrdinals: [...ruling.rawOrdinals],
+		provenance: ruling.provenance.map((slot) => ({ lens: slot.lens, surface: slot.surface })),
+	}));
+	return {
+		complete: true,
+		adjudication: {
+			manifestNonEmpty: manifest.state === "present" && manifest.criteria.length > 0,
+			rulings,
+		} as unknown as Adjudication,
+	};
+}
+
+/**
  * The Resolver (§1.9): a function, not a role. The five dispositions and
  * the fixed precedence, verbatim from the clause; nothing here reads a
  * finding's text, a remedy's content, or a criterion — see the header for
  * how the never-list is made structural rather than behavioural.
  */
 export function resolve(adjudication: Adjudication): Resolution {
-	const dispositions = adjudication.rulings.map((ruling) => {
+	const dispositions = adjudication.rulings.map((ruling, rulingIndex) => {
 		if (ruling.validity === "REFUTED") {
-			return { finding: ruling.finding, disposition: "none" as const };
+			return { rulingIndex, finding: ruling.finding, disposition: "none" as const };
 		}
 		if (ruling.validity === "INDETERMINATE") {
-			return { finding: ruling.finding, disposition: "measure-escalate" as const };
+			return { rulingIndex, finding: ruling.finding, disposition: "measure-escalate" as const };
 		}
 		if (ruling.severity === "NIT") {
-			return { finding: ruling.finding, disposition: "remedy" as const, remedy: ruling.remedy };
+			return { rulingIndex, finding: ruling.finding, disposition: "remedy" as const, remedy: ruling.remedy };
 		}
 		// Defer requires all three at once: the safe direction, off every
 		// manifest criterion, and a manifest with criteria to be off — an
 		// empty manifest makes nothing deferrable (§1.9's defer disposition).
 		const deferrable =
 			ruling.direction === "fail-closed" && ruling.onCriterion === false && adjudication.manifestNonEmpty;
-		return { finding: ruling.finding, disposition: deferrable ? ("defer" as const) : ("repair" as const) };
+		return {
+			rulingIndex,
+			finding: ruling.finding,
+			disposition: deferrable ? ("defer" as const) : ("repair" as const),
+		};
 	});
 	const outcome = dispositions.some((entry) => entry.disposition === "repair")
 		? ("repair" as const)

@@ -262,6 +262,12 @@ export async function deriveRepairBasis(
 			return undefined;
 		const adjudication = record.adjudication;
 		if (adjudication === null) return undefined;
+		if (record.schemaVersion === 2) {
+			const findings = version2RepairFindings(adjudication.rulings, record.review.resolution.dispositions);
+			if (findings === undefined) return undefined;
+			states.push({ head: state.head, findings });
+			continue;
+		}
 		// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
 		// Retain that bundle in the complete source record; never invent a raw-text
 		// or positional pairing between it and the Judge's rulings.
@@ -318,6 +324,29 @@ export async function deriveRepairBasis(
 	);
 	if (intervals === undefined) return undefined;
 	return { [REPAIR_BASIS]: true, states, intervals };
+}
+
+/**
+ * A version-2 record carries the raw-to-effective relation itself: the
+ * parser readmits it only when its attempts derive the complete partition,
+ * every owed axis and the Resolver join exactly (§1.9). Rulings may repeat
+ * a wording, so the join is by ruling index, never by text.
+ */
+function version2RepairFindings(
+	rulings: readonly RecordRuling[],
+	dispositions: readonly RecordDisposition[],
+): RepairBasisFinding[] | undefined {
+	if (dispositions.length !== rulings.length) return undefined;
+	const findings: RepairBasisFinding[] = [];
+	for (let index = 0; index < rulings.length; index += 1) {
+		const ruling = rulings[index];
+		const disposition = dispositions[index];
+		if (disposition?.rulingIndex !== index || disposition.finding !== ruling.finding) return undefined;
+		const substantiveRepair =
+			ruling.validity === "CONFIRMED" && disposition.disposition === "repair" && ruling.severity === "SUBSTANTIVE";
+		if (substantiveRepair) findings.push({ finding: ruling.finding, ruling, disposition });
+	}
+	return findings;
 }
 
 /**

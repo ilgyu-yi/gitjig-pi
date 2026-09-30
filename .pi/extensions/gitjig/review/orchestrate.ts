@@ -3,8 +3,9 @@
  * round of §1.7/§1.9's pipeline at one head:
  *
  *   policy → coverage → panel dispatch (composed briefs) → join →
- *   bundle → findings-free fast path | Judge dispatch (manifest) →
- *   admission → Resolver → the durable review record.
+ *   indexed bundle → findings-free fast path | Judge dispatch (manifest) →
+ *   indexed admission → [one whole-bundle re-request if admitted but
+ *   incomplete] → Resolver → the durable version-2 review record.
  *
  * What is deliberately NOT here: the repair (the author's act, §1.9);
  * driving successive rounds (the caller's loop — a fresh head draws a
@@ -43,19 +44,22 @@ import {
 	changedPathsFromRepo,
 	decideValidity,
 	deriveRequiredSlots,
+	indexBundle,
 	loadPolicy,
 	panelOutcome,
 	type SlotResult,
 } from "./panel.ts";
-import { composeReviewRecord, type ReviewRecord, type RoundSummary, type SlotRecord } from "./record.ts";
 import {
-	type AdjudicationInput,
-	adjudicationFromDispatch,
-	admitAdjudication,
-	type Manifest,
-	type ReviewState,
-	reviewOutcome,
-} from "./resolve.ts";
+	composeReviewRecord,
+	type JudgeAttempt,
+	judgeAttempt,
+	judgeTerminal,
+	type ReviewRecord,
+	type RoundSummary,
+	reRequestGaps,
+	type SlotRecord,
+} from "./record.ts";
+import { type IndexedAdjudicationInput, type Manifest, type ReviewState, reviewOutcome } from "./resolve.ts";
 
 export type RoundOptions = {
 	repoRoot: string;
@@ -325,24 +329,43 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 	});
 	const panel = panelOutcome(results, required);
 
-	let adjudication: AdjudicationInput | null = null;
+	// From every VALID slot, whatever the panel outcome — §1.7 builds the
+	// bundle from valid slots, not from complete panels, and a record that
+	// understates what was discovered misleads the history reader (§1.4).
+	// The caller mints the raw ordinals once; the Judge and the record
+	// carry the same indexed bundle.
+	const bundle = indexBundle(buildBundle(results, required));
+	const judgeAttempts: JudgeAttempt[] = [];
+	let adjudication: IndexedAdjudicationInput | null = null;
 	let review: ReviewState;
 	if (panel.outcome === "bundle" && options.manifest.state !== "absent") {
-		const judgeBrief = composeJudgeBrief(
-			panel.bundle,
-			options.manifest,
-			{ changeDescription: options.changeDescription },
-			options.fences,
-			options.timing,
-		);
-		const outcome = await options.dispatch(judgeBrief, head);
-		if (outcome.disposition === "admitted") {
-			collect({ from: "judge", text: outcome.summary });
+		const manifest = options.manifest;
+		// One semantic Judge call through the same seam, head, manifest and
+		// options every time; only the re-request's brief adds the gaps.
+		const judge = async (attempt: 1 | 2, gaps?: readonly string[]) => {
+			const judgeBrief = composeJudgeBrief(
+				bundle,
+				manifest,
+				{ changeDescription: options.changeDescription },
+				options.fences,
+				options.timing,
+				gaps === undefined ? undefined : { gaps },
+			);
+			const outcome = await options.dispatch(judgeBrief, head);
+			if (outcome.disposition === "admitted") {
+				collect({ from: "judge", text: outcome.summary });
+			}
+			judgeAttempts.push(judgeAttempt(outcome, attempt, head, manifest, bundle));
+		};
+		await judge(1);
+		// §1.7's one bounded completeness re-request: only an admitted,
+		// compare-confirmed but incomplete first adjudication earns it, and
+		// nothing earns a third semantic call.
+		const gaps = reRequestGaps(judgeAttempts[0], manifest, bundle);
+		if (gaps !== undefined) {
+			await judge(2, gaps);
 		}
-		const input = adjudicationFromDispatch(outcome);
-		adjudication = input ?? null;
-		const admission = input === undefined ? undefined : admitAdjudication(input, options.manifest);
-		review = reviewOutcome(panel, admission);
+		({ review, adjudication } = judgeTerminal(judgeAttempts, manifest, bundle));
 	} else {
 		// The findings-free fast path and the incomplete panel: the Judge
 		// never runs — nothing to adjudicate on the first, completeness
@@ -354,13 +377,12 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 	}
 
 	const record: ReviewRecord = {
+		schemaVersion: 2,
 		head,
 		slots,
-		// From every VALID slot, whatever the panel outcome — §1.7 builds
-		// the bundle from valid slots, not from complete panels, and a
-		// record that understates what was discovered misleads the history
-		// reader (§1.4).
-		bundle: buildBundle(results, required),
+		bundle,
+		manifest: options.manifest,
+		judgeAttempts,
 		adjudication,
 		review,
 		// Always present on this path, empty where no admitted return wrote

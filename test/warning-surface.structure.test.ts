@@ -234,6 +234,14 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// the rulings where the caller reads them, so no delegate-authored
 			// byte reaches these carriers at all.
 			"index",
+			// The version-2 partition gaps (#378): `earlier` is another such local
+			// ruling index and `entry.rawOrdinal` the caller-minted raw ordinal.
+			// `ordinal` comes from the Judge's payload, but the parse admits only
+			// a safe integer, so its rendering is digits and a sign, never a path
+			// or control byte.
+			"ordinal",
+			"earlier",
+			"entry.rawOrdinal",
 		],
 	},
 	{
