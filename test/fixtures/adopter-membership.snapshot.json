@@ -226,6 +226,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/commands/lifecycle.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/commands/review-round-input.ts",
 			"disposition": "carried"
 		},
@@ -311,6 +315,14 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/landing/service.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/lifecycle-attestation.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/lifecycle-projection.ts",
 			"disposition": "carried"
 		},
 		{
@@ -627,6 +639,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/332.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/347.md",
 			"disposition": "instance-state"
 		},
 		{

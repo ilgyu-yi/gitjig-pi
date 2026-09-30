@@ -6,6 +6,8 @@ import {
 	createHandoffTransition,
 	eligibleApprovalCount,
 	inspectAwaitingAuthorPopulation,
+	inspectBlockedPopulation,
+	inspectHandoffPopulation,
 	invalidatesLandingAdvisory,
 	RECORD_MARKERS,
 	reenterHandoffTransition,
@@ -99,6 +101,80 @@ describe("settled lifecycle ownership", () => {
 			current: [{ comment: current, record: awaiting }],
 			terminals: [],
 		});
+	});
+
+	it("returns complete blocked and handoff population refusal and success results", () => {
+		for (const [inspect, marker, terminalMarker, record, transition, other] of [
+			[
+				inspectBlockedPopulation,
+				RECORD_MARKERS.blocked,
+				RECORD_MARKERS.blockedTerminal,
+				blocked,
+				"blocked-clear",
+				"handoff-reentry",
+			],
+			[
+				inspectHandoffPopulation,
+				RECORD_MARKERS.handoff,
+				RECORD_MARKERS.handoffTerminal,
+				handoff,
+				"handoff-reentry",
+				"blocked-clear",
+			],
+		] as const) {
+			const terminalFor = (
+				id: number,
+				recordCommentId: number,
+				kind: string = transition,
+				heads: { subjectHead: string | null; baseHead: string | null } = { subjectHead: A, baseHead: B },
+			) =>
+				comment(id, terminalMarker, {
+					recordCommentId,
+					transition: kind,
+					observedAt: NOW,
+					...heads,
+				});
+			const current = comment(1, marker, record);
+			assertRefusal(inspect(null as never), "population-unmeasurable");
+			assertRefusal(inspect([{ ...current, attested: false }]), "record-unparseable");
+			assertRefusal(inspect([{ ...current, id: 1.5 }]), "record-unparseable");
+			assertRefusal(inspect([comment(1, marker, { ...record, observedAt: "never" })]), "record-unparseable");
+			assertRefusal(inspect([{ ...current, body: `${marker}\nmalformed` }]), "record-unparseable");
+			assertRefusal(inspect([current, { ...terminalFor(2, 1), attested: false }]), "terminal-unparseable");
+			assertRefusal(inspect([current, { ...terminalFor(2, 1), id: -Infinity }]), "terminal-unparseable");
+			assertRefusal(inspect([current, terminalFor(2, 1, other)]), "terminal-unparseable");
+			assertRefusal(inspect([current, comment(2, terminalMarker, {})]), "terminal-unparseable");
+			assertRefusal(inspect([current, terminalFor(2, 99)]), "terminal-ambiguous");
+			assertRefusal(inspect([current, terminalFor(1, 1)]), "terminal-ambiguous");
+			assertRefusal(
+				inspect([current, terminalFor(2, 1, transition, { subjectHead: B, baseHead: B })]),
+				"terminal-ambiguous",
+			);
+			assertRefusal(
+				inspect([current, terminalFor(2, 1, transition, { subjectHead: A, baseHead: null })]),
+				"terminal-ambiguous",
+			);
+			assertRefusal(inspect([current, terminalFor(2, 1), terminalFor(3, 1)]), "terminal-ambiguous");
+			const second = comment(2, marker, record);
+			assertRefusal(inspect([current, second]), "record-ambiguous", {
+				current: [
+					{ comment: current, record },
+					{ comment: second, record },
+				],
+				terminals: [],
+			});
+			const cleared = terminalFor(3, 1);
+			assert.deepEqual(inspect([current, second, cleared]), {
+				ok: true,
+				current: [{ comment: second, record }],
+				terminals: [{ comment: cleared, record: JSON.parse(cleared.body.split("\n")[3]) }],
+			});
+			assert.deepEqual(inspect([{ id: 9, attested: false, authorId: "X", body: "unrelated" }]), {
+				ok: true,
+				current: [],
+				terminals: [],
+			});
+		}
 	});
 
 	it("returns complete blocked and handoff transition decisions", () => {

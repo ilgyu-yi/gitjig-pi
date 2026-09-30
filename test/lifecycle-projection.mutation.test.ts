@@ -1,0 +1,286 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const repository = fileURLToPath(new URL("..", import.meta.url));
+const root = mkdtempSync(join(tmpdir(), "gitjig-347-mutants-"));
+after(() => rmSync(root, { recursive: true, force: true }));
+
+const PROJECTION = ".pi/extensions/gitjig/lifecycle-projection.ts";
+const ATTESTATION = ".pi/extensions/gitjig/lifecycle-attestation.ts";
+const COMMAND = ".pi/extensions/gitjig/commands/lifecycle.ts";
+const SURFACE = ".pi/extensions/gitjig/session-surface.ts";
+const ENGINE = ".github/workflows/gitjig-lifecycle.mjs";
+
+/** Moves the cache write ahead of the staleness check, so superseded results reach the cache. */
+const CACHE_BEFORE_STALENESS = ((): readonly [string, string, string, string] => {
+	const source = readFileSync(join(repository, PROJECTION), "utf8");
+	const check = 'if (generation !== this.generation || epoch !== this.surface.epoch) return "superseded";\n';
+	const start = source.indexOf(check);
+	const write = source.indexOf("\t\tif (computed?.freshKey !== undefined)", start);
+	const writeEnd = source.indexOf("\n", source.indexOf("this.cache.set(", write)) + 1;
+	assert.ok(start >= 0 && write > start && writeEnd > write, "cache-order mutant anchors must exist");
+	const span = source.slice(start, writeEnd);
+	const between = source.slice(start + check.length, write);
+	const cacheWrite = source.slice(write, writeEnd);
+	return ["cache-before-staleness", PROJECTION, span, `${cacheWrite.trimStart()}\t\t${check}${between}`];
+})();
+
+/** [name, file, exact unique source span, replacement]; each weakens one implemented guard. */
+const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
+	["read-bound", PROJECTION, "timeoutMs: 2_000,", "timeoutMs: 10_000,"],
+	["ttl-length", PROJECTION, "5 * 60 * 1_000;", "50 * 60 * 1_000;"],
+	["ttl-boundary", PROJECTION, "< LIFECYCLE_TTL_MS", "<= LIFECYCLE_TTL_MS"],
+	[
+		"key-without-head",
+		PROJECTION,
+		"[host, nameWithOwner, repositoryId, target.kind, target.number, head]",
+		"[host, nameWithOwner, repositoryId, target.kind, target.number]",
+	],
+	[
+		"key-without-repository",
+		PROJECTION,
+		"[host, nameWithOwner, repositoryId, target.kind, target.number, head]",
+		"[host, nameWithOwner, target.kind, target.number, head]",
+	],
+	[
+		"first-page-only",
+		PROJECTION,
+		"for (const page of pages as unknown[][]) {",
+		"for (const page of (pages as unknown[][]).slice(0, 1)) {",
+	],
+	[
+		"stamp-on-failure",
+		PROJECTION,
+		"if (comments === undefined) return undefined;",
+		"if (comments === undefined) {\n\t\t\tthis.cache.set(key, { at: this.seams.now(), segment: { subject: target.kind, number: target.number, shortHead: null, states: [] } });\n\t\t\treturn undefined;\n\t\t}",
+	],
+	["superseded-renders", PROJECTION, "generation !== this.generation || ", ""],
+	["stale-head-admitted", PROJECTION, "record?.subjectHead !== head", "false"],
+	["no-ui-reads", PROJECTION, 'if (!this.surface.visible) return "silent";', ""],
+	["issue-may-be-pull", PROJECTION, ' || Object.hasOwn(issue, "pull_request")', ""],
+	["population-refusal-ignored", PROJECTION, "if (!population.ok) return undefined;", ""],
+	[
+		"transition-carrier-unchecked",
+		ATTESTATION,
+		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+		"attested: true });",
+	],
+	[
+		"engine-terminal-kind",
+		ENGINE,
+		"!admitTransitionTerminal(record) ||\n\t\t\t\trecord.transition !== transition",
+		"!admitTransitionTerminal(record)",
+	],
+	[
+		"repository-name-unchecked",
+		PROJECTION,
+		"return repo.full_name === nameWithOwner ? repo.node_id : undefined;",
+		"return repo.node_id;",
+	],
+	[
+		"rebind-ignores-head",
+		PROJECTION,
+		"(await identity())?.key === key",
+		"(await identity())?.repositoryId === repositoryId",
+	],
+	[
+		"blocked-terminal-carrier-refused",
+		ATTESTATION,
+		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+		"attested: !comment.body.startsWith(engine.RECORD_MARKERS.blockedTerminal) && (await authorizedUser(engine, comment, repositoryId, permissionOf)) });",
+	],
+	[
+		"key-without-host",
+		PROJECTION,
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
+		"JSON.stringify([nameWithOwner, repositoryId, target.kind, target.number, head])",
+	],
+	[
+		"key-without-name",
+		PROJECTION,
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
+		"JSON.stringify([host, repositoryId, target.kind, target.number, head])",
+	],
+	[
+		"write-method",
+		PROJECTION,
+		'this.read(["api", "--hostname", host, ...rest, path])',
+		'this.read(["api", "--hostname", host, "--method", "POST", ...rest, path])',
+	],
+	["permission-node-unbound", PROJECTION, "account?.node_id !== comment.authorId || ", ""],
+	["permission-login-unbound", PROJECTION, " || account?.login !== login", ""],
+	["previous-subject-kept", PROJECTION, "this.surface.setLifecycle(undefined);", ""],
+	["bot-terminal-refused", ATTESTATION, "let attested = terminal ? bot : false;", "let attested = false;"],
+	["terminal-any-carrier", ATTESTATION, "let attested = terminal ? bot : false;", "let attested = terminal;"],
+	[
+		"human-review-any-carrier",
+		ATTESTATION,
+		'if (record?.producerKind === "human-changes-requested") attested = bot;',
+		'if (record?.producerKind === "human-changes-requested") attested = true;',
+	],
+	["resolver-producer-unbound", ATTESTATION, " && record.producer === comment.authorId", ""],
+	[
+		"bot-author-login-unmapped",
+		ATTESTATION,
+		"authorId: bot ? (comment.authorLogin ?? comment.authorId) : comment.authorId,",
+		"authorId: comment.authorId,",
+	],
+	["attach-epoch-unchecked", PROJECTION, " || epoch !== this.surface.epoch", ""],
+	["attach-epoch-frozen", SURFACE, "\t\tthis.attachments += 1;\n", ""],
+	[
+		"command-without-default-projection",
+		COMMAND,
+		"projection: LifecycleProjection | undefined = surface === undefined\n\t\t? undefined\n\t\t: new LifecycleProjection(repoRoot, surface),",
+		"projection: LifecycleProjection | undefined = undefined,",
+	],
+	[
+		"blocked-terminal-write-only",
+		ATTESTATION,
+		"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+		'attested: comment.body.startsWith(engine.RECORD_MARKERS.blockedTerminal) ? (await permissionOf(comment))?.toUpperCase() === "WRITE" && (await authorizedUser(engine, comment, repositoryId, permissionOf)) : await authorizedUser(engine, comment, repositoryId, permissionOf) });',
+	],
+	[
+		"issue-base-head-unchecked",
+		PROJECTION,
+		'head === null ? record.baseHead !== null : typeof record.baseHead !== "string"',
+		'head === null ? false : typeof record.baseHead !== "string"',
+	],
+	[
+		"pull-base-head-unchecked",
+		PROJECTION,
+		'head === null ? record.baseHead !== null : typeof record.baseHead !== "string"',
+		"head === null ? record.baseHead !== null : false",
+	],
+	[
+		"key-without-number",
+		PROJECTION,
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, target.number, head])",
+		"JSON.stringify([host, nameWithOwner, repositoryId, target.kind, head])",
+	],
+	CACHE_BEFORE_STALENESS,
+	[
+		"comments-not-bracketed",
+		PROJECTION,
+		'await bracketed(`repos/${nameWithOwner}/issues/${String(target.number)}/comments`, "--paginate", "--slurp")',
+		'await api(`repos/${nameWithOwner}/issues/${String(target.number)}/comments`, "--paginate", "--slurp")',
+	],
+	[
+		"permission-not-bracketed",
+		PROJECTION,
+		"permission = bracketed(`repos/${nameWithOwner}/collaborators/",
+		"permission = api(`repos/${nameWithOwner}/collaborators/",
+	],
+	["subject-not-enclosed", PROJECTION, "\t\t\tif ((await repositoryNode()) !== repositoryId) return undefined;\n", ""],
+	["engine-terminal-order", ENGINE, " || comment.id <= record.recordCommentId", ""],
+	["pull-base-identity-unchecked", PROJECTION, "if (base?.node_id !== repositoryId) return undefined;", ""],
+	["issue-number-unchecked", PROJECTION, " || issue.number !== target.number", ""],
+	["pull-number-unchecked", PROJECTION, " || pull.number !== target.number", ""],
+	[
+		"maintain-excluded",
+		ATTESTATION,
+		"permission: permission?.toUpperCase(),",
+		'permission: permission?.toUpperCase() === "MAINTAIN" ? undefined : permission?.toUpperCase(),',
+	],
+	[
+		"admin-excluded",
+		ATTESTATION,
+		"permission: permission?.toUpperCase(),",
+		'permission: permission?.toUpperCase() === "ADMIN" ? undefined : permission?.toUpperCase(),',
+	],
+	...(["blockedTerminal", "handoff", "handoffTerminal"] as const).map(
+		(marker): readonly [string, string, string, string] => [
+			`${marker}-carrier-auto-attested`,
+			ATTESTATION,
+			"attested: await authorizedUser(engine, comment, repositoryId, permissionOf) });",
+			`attested: comment.body.startsWith(engine.RECORD_MARKERS.${marker}) || (await authorizedUser(engine, comment, repositoryId, permissionOf)) });`,
+		],
+	),
+	["engine-terminal-subject-head", ENGINE, "\t\t\treferenced.subjectHead !== terminal.subjectHead ||\n", ""],
+	["engine-terminal-base-head", ENGINE, " ||\n\t\t\treferenced.baseHead !== terminal.baseHead", ""],
+	[
+		"engine-transition-attestation",
+		ENGINE,
+		"\t\t\tconst record = parseMarkedRecord(comment.body, recordMarker);\n\t\t\tif (\n\t\t\t\tcomment.attested !== true ||\n",
+		"\t\t\tconst record = parseMarkedRecord(comment.body, recordMarker);\n\t\t\tif (\n",
+	],
+	[
+		"engine-single-current",
+		ENGINE,
+		'if (current.length > 1) return { ok: false, arm: "record-ambiguous", current, terminals };',
+		"",
+	],
+	[
+		"command-without-ui",
+		COMMAND,
+		"if (!ctx.hasUI || projection === undefined) return;",
+		"if (projection === undefined) return;",
+	],
+	["command-extra-tokens", COMMAND, "if (tokens.length !== 1) return undefined;", ""],
+	["request-rethrows", PROJECTION, "\t\t\tcomputed = undefined;\n", '\t\t\tthrow new Error("escaped");\n'],
+	["negative-age-fresh", PROJECTION, "age >= 0 && ", ""],
+	["engine-user-gate", ENGINE, '\t\tsnapshot.actorType === "User" &&\n', ""],
+	[
+		"terminals-unchecked",
+		PROJECTION,
+		"const markers = Object.values(engine.RECORD_MARKERS);",
+		"const markers = [engine.RECORD_MARKERS.awaitingAuthor, engine.RECORD_MARKERS.blocked, engine.RECORD_MARKERS.handoff];",
+	],
+	[
+		"records-unchecked",
+		PROJECTION,
+		"const markers = Object.values(engine.RECORD_MARKERS);",
+		"const markers = [engine.RECORD_MARKERS.awaitingAuthorTerminal, engine.RECORD_MARKERS.blockedTerminal, engine.RECORD_MARKERS.handoffTerminal];",
+	],
+	["attach-keeps-segment", SURFACE, "\t\tthis.lifecycle = undefined;\n\t\tthis.attachments", "\t\tthis.attachments"],
+];
+
+function run(name: string, mutation?: (typeof mutations)[number]): ReturnType<typeof spawnSync> {
+	const box = mkdtempSync(join(root, `${name}-`));
+	cpSync(join(repository, ".pi/extensions/gitjig"), join(box, ".pi/extensions/gitjig"), { recursive: true });
+	mkdirSync(join(box, ".github/workflows"), { recursive: true });
+	for (const file of ["gitjig-lifecycle.mjs", "ac-closeout.mjs"])
+		cpSync(join(repository, ".github/workflows", file), join(box, ".github/workflows", file));
+	mkdirSync(join(box, "test"), { recursive: true });
+	for (const file of ["lifecycle-projection.unit.test.ts", "lifecycle-governance.unit.test.ts"])
+		cpSync(join(repository, "test", file), join(box, "test", file));
+	symlinkSync(join(repository, "node_modules"), join(box, "node_modules"), "dir");
+	if (mutation !== undefined) {
+		const [label, file, from, to] = mutation;
+		const target = join(box, file);
+		const source = readFileSync(target, "utf8");
+		assert.notEqual(source.indexOf(from), -1, `${label}: mutation target must exist`);
+		assert.equal(source.indexOf(from), source.lastIndexOf(from), `${label}: mutation target must be unique`);
+		writeFileSync(target, source.replace(from, to));
+	}
+	const env = { ...process.env };
+	delete env.NODE_TEST_CONTEXT;
+	return spawnSync(
+		process.execPath,
+		["--test", "test/lifecycle-projection.unit.test.ts", "test/lifecycle-governance.unit.test.ts"],
+		{ cwd: box, encoding: "utf8", timeout: 60_000, env },
+	);
+}
+
+describe("#347 baseline-first isolated lifecycle projection mutants", () => {
+	it("passes the isolated baseline", () => {
+		const result = run("baseline");
+		assert.equal(result.status, 0, `${String(result.stdout)}\n${String(result.stderr)}`);
+	});
+
+	for (const mutation of mutations) {
+		it(`kills ${mutation[0]} on an assertion`, () => {
+			const result = run(mutation[0], mutation);
+			assert.notEqual(result.status, 0, `${mutation[0]} survived`);
+			assert.match(
+				`${String(result.stdout)}${String(result.stderr)}`,
+				/ERR_ASSERTION|AssertionError/,
+				`${mutation[0]} died without an assertion`,
+			);
+		});
+	}
+});

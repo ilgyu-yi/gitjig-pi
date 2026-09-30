@@ -249,6 +249,17 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			// Already-themed composition of the same closed state.
 			"delegate",
 			"mode",
+			// #347 lifecycle segment. Its only operands are a safe-integer subject
+			// number parsed by the closed /lifecycle grammar, a seven-character prefix
+			// of a platform head already validated as 40 lowercase hex digits, and
+			// the closed LifecycleState union; `subject`, `lifecycle` and the
+			// function call compose only those. None carries a path or actor byte.
+			"lifecycleText(this.lifecycle, theme)",
+			"lifecycle",
+			"String(segment.number)",
+			'segment.shortHead ?? ""',
+			"subject",
+			'segment.states.join(", ")',
 		],
 	},
 	{
@@ -332,6 +343,8 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		allow: ["ref"],
 	},
 	{ file: "gitjig/commands/ship.ts", allow: [] },
+	// #347: both operator notices are fixed module constants with no interpolation.
+	{ file: "gitjig/commands/lifecycle.ts", allow: [] },
 	// Admission and the delegate child compose no interpolated text; every
 	// refusal they surface is a fixed content-free literal.
 	{ file: "gitjig/dispatch/admit.ts", allow: [] },
