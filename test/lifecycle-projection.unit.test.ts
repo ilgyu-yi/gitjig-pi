@@ -284,7 +284,7 @@ describe("#347 lifecycle projection", () => {
 	it("shows an explicit empty result, and a lifecycle label alone asserts nothing", async () => {
 		const h = harness({ issue: { number: 7, labels: [{ name: "blocked" }, { name: "awaiting-author" }] } });
 		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
-		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no active lifecycle state");
 	});
 
 	it("is silent on every inadmissible population instead of guessing a state", async () => {
@@ -642,7 +642,7 @@ describe("#347 lifecycle projection", () => {
 				],
 			});
 			assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed", transition);
-			assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record", transition);
+			assert.equal(h.lifecycle(), "[dim]issue #7 no active lifecycle state", transition);
 		}
 	});
 
@@ -663,7 +663,7 @@ describe("#347 lifecycle projection", () => {
 				2,
 				`${next.host} ${next.nameWithOwner} is a different key despite the same node id`,
 			);
-			assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
+			assert.equal(h.lifecycle(), "[dim]issue #7 no active lifecycle state");
 			assertReadOnly(h.reads.slice(-4), next.host, next.nameWithOwner);
 		}
 	});
@@ -677,7 +677,7 @@ describe("#347 lifecycle projection", () => {
 		assert.equal(h.lifecycle(), "[warning]issue #7 blocked");
 		assert.equal(await h.projection.request({ kind: "issue", number: 8 }), "displayed");
 		assert.equal(h.commentReads(), 2, "Issue #8 is a different key from Issue #7");
-		assert.equal(h.lifecycle(), "[dim]issue #8 no lifecycle record");
+		assert.equal(h.lifecycle(), "[dim]issue #8 no active lifecycle state");
 		assertReadOnly(h.reads);
 	});
 
@@ -689,7 +689,7 @@ describe("#347 lifecycle projection", () => {
 		world.comments = [];
 		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
 		assert.equal(h.commentReads(), 2, "a different repository identity is a different key");
-		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no active lifecycle state");
 	});
 
 	it("caches only success for five minutes under repository/subject/head", async () => {
@@ -728,7 +728,7 @@ describe("#347 lifecycle projection", () => {
 		world.comments = [];
 		assert.equal(await h.projection.request({ kind: "pull", number: 7 }), "displayed");
 		assert.equal(h.commentReads(), 2, "a clock moved back does not keep the old entry fresh");
-		assert.equal(h.lifecycle(), "[dim]PR #7@aaaaaaa no lifecycle record");
+		assert.equal(h.lifecycle(), "[dim]PR #7@aaaaaaa no active lifecycle state");
 	});
 
 	it("binds a permission to the carrying comment's own node id and login", async () => {
@@ -763,7 +763,7 @@ describe("#347 lifecycle projection", () => {
 			],
 		});
 		assert.equal(await cleared.projection.request(pull), "displayed", "first-party bot terminal clears");
-		assert.equal(cleared.lifecycle(), "[dim]PR #7@aaaaaaa no lifecycle record");
+		assert.equal(cleared.lifecycle(), "[dim]PR #7@aaaaaaa no active lifecycle state");
 		const resolver = harness({
 			comments: [
 				{ id: 1, user: user("writer"), body: marked(AWAITING, awaitingRecord("U_writer", "resolver-repair")) },
@@ -871,12 +871,12 @@ describe("#347 lifecycle projection", () => {
 		while (release === undefined) await new Promise((resolve) => setImmediate(resolve));
 		world.comments = [];
 		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
-		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no active lifecycle state");
 		release();
 		assert.equal(await first, "superseded");
 		assert.equal(await h.projection.request({ kind: "issue", number: 7 }), "displayed");
 		assert.equal(h.commentReads(), 2, "the third request is a cache hit");
-		assert.equal(h.lifecycle(), "[dim]issue #7 no lifecycle record", "the cache holds the newer result");
+		assert.equal(h.lifecycle(), "[dim]issue #7 no active lifecycle state", "the cache holds the newer result");
 	});
 
 	it("never lets an earlier subject's late result land over a later request", async () => {

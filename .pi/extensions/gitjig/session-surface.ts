@@ -119,6 +119,6 @@ function lifecycleText(segment: LifecycleSegment, theme: StatusUI["theme"]): str
 			? `issue #${String(segment.number)}`
 			: `PR #${String(segment.number)}@${segment.shortHead ?? ""}`;
 	return segment.states.length === 0
-		? theme.fg("dim", `${subject} no lifecycle record`)
+		? theme.fg("dim", `${subject} no active lifecycle state`)
 		: theme.fg("warning", `${subject} ${segment.states.join(", ")}`);
 }
