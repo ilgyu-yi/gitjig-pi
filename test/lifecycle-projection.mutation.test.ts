@@ -74,10 +74,16 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"const contradicts = (record: { subjectHead?: unknown; baseHead: unknown } | undefined) =>\n\t\t\trecord?.subjectHead !== head || head === null",
 	],
 	[
-		"history-base-head-unchecked",
+		"base-head-unchecked",
 		PROJECTION,
 		"if (comment.body.startsWith(marker) && contradicts(engine.parseMarkedRecord(comment.body, marker)))",
 		"if (false)",
+	],
+	[
+		"history-base-head-unchecked",
+		PROJECTION,
+		"if (comment.body.startsWith(marker) && contradicts(engine.parseMarkedRecord(comment.body, marker)))",
+		"if (comment.body.startsWith(marker) && populations.some(([, p]) => (p.current ?? []).some((c: any) => c.comment.id === comment.id)) && contradicts(engine.parseMarkedRecord(comment.body, marker)))",
 	],
 	["wall-clock-age", PROJECTION, "now: () => performance.now(),", "now: Date.now,"],
 	["no-ui-reads", PROJECTION, 'if (!this.surface.visible) return "silent";', ""],
