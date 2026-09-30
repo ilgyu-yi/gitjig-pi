@@ -61,6 +61,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	],
 	["superseded-renders", PROJECTION, "generation !== this.generation || ", ""],
 	["stale-head-admitted", PROJECTION, "current.some(({ record }) => record.subjectHead !== head)", "false"],
+	...(["awaiting-author", "blocked", "handoff"] as const).map((state): readonly [string, string, string, string] => [
+		`stale-head-only-${state}`,
+		PROJECTION,
+		"if (current.some(({ record }) => record.subjectHead !== head)) return undefined;",
+		`if (state === "${state}" && current.some(({ record }) => record.subjectHead !== head)) return undefined;`,
+	]),
 	[
 		"history-head-compared",
 		PROJECTION,
