@@ -206,7 +206,7 @@ function layerContract(source: string): void {
 		"Any constructor request outside these combinations becomes `INTERNAL_FAILED`",
 		'{disposition:"admitted",ok,summary,payload?,compare?,diagnostic}',
 		'{disposition:"refused",cause,diagnostic}',
-		"Persisted `details` is exactly `{disposition,ok?,compare?,diagnostic}`",
+		"Persisted `details` is exactly `{disposition,ok?,compare?,diagnostic,traceId?}`",
 		"never carries summary, payload, or raw trace",
 		"Model-visible final `content` is exactly one text item",
 		"refusal is exactly the compact JSON serialization of the diagnostic",
