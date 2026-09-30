@@ -311,6 +311,49 @@ describe("#347 lifecycle projection", () => {
 				"issue",
 			],
 			[
+				"Bot carrier holding WRITE",
+				{
+					comments: [{ id: 1, user: bot, body: marked(BLOCKED, blocked(null)) }],
+					permissions: { "github-actions[bot]": "write" },
+					permissionNodes: { "github-actions[bot]": bot.node_id },
+				},
+				"issue",
+			],
+			[
+				"stale terminalized blocked pair",
+				{
+					comments: [
+						{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(OTHER)) },
+						{
+							id: 2,
+							user: user("writer"),
+							body: marked(BLOCKED_TERMINAL, {
+								recordCommentId: 1,
+								transition: "blocked-clear",
+								observedAt: NOW,
+								subjectHead: OTHER,
+								baseHead: BASE,
+							}),
+						},
+					],
+				},
+				"pull",
+			],
+			[
+				"awaiting-author terminal on another head",
+				{
+					comments: [
+						{ id: 1, user: user("writer"), body: marked(AWAITING, awaitingRecord("U_writer", "resolver-repair")) },
+						{
+							id: 2,
+							user: bot,
+							body: marked(AWAITING_TERMINAL, { ...awaitingTerminal(bot.login), subjectHead: OTHER }),
+						},
+					],
+				},
+				"pull",
+			],
+			[
 				"read-only carrier",
 				{
 					comments: [{ id: 1, user: user("reader"), body: marked(BLOCKED, blocked(null)) }],
@@ -674,6 +717,18 @@ describe("#347 lifecycle projection", () => {
 		failing.comments = [];
 		assert.equal(await f.projection.request({ kind: "issue", number: 7 }), "displayed");
 		assert.equal(f.commentReads(), 2, "a failure leaves no TTL stamp");
+	});
+
+	it("treats a negative cache age as a miss", async () => {
+		const world: World = { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(HEAD)) }] };
+		const h = harness(world, { clock: { now: LIFECYCLE_TTL_MS } });
+		assert.equal(await h.projection.request({ kind: "pull", number: 7 }), "displayed");
+		assert.equal(h.commentReads(), 1);
+		h.clock.now = 0;
+		world.comments = [];
+		assert.equal(await h.projection.request({ kind: "pull", number: 7 }), "displayed");
+		assert.equal(h.commentReads(), 2, "a clock moved back does not keep the old entry fresh");
+		assert.equal(h.lifecycle(), "[dim]PR #7@aaaaaaa no lifecycle record");
 	});
 
 	it("binds a permission to the carrying comment's own node id and login", async () => {

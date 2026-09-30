@@ -34,7 +34,8 @@ async function authorizedUser(
 	repositoryId: string,
 	permissionOf: PermissionOf,
 ): Promise<boolean> {
-	if (comment.authorType !== "User" || typeof comment.authorLogin !== "string") return false;
+	// The engine's predicate owns the User-only gate; a Bot reaches it and fails there.
+	if (typeof comment.authorLogin !== "string") return false;
 	const permission = await permissionOf(comment);
 	return engine.authorizedResolver({
 		actorId: comment.authorId,

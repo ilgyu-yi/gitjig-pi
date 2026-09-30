@@ -22,7 +22,8 @@
  * - Bounds: every platform read at this call site passes LIFECYCLE_READ_BOUNDS
  *   (two seconds); the shared reader's default is untouched.
  * - Cache: only a successful computation is cached, for LIFECYCLE_TTL_MS,
- *   under repository/subject/head. Failure leaves no stamp.
+ *   under repository/subject/head. Failure leaves no stamp, and a negative
+ *   age (the clock moved back) is a miss rather than a fresh entry.
  * - Ordering: only the latest request may render, so one subject's result
  *   never lands over another's.
  *
@@ -211,7 +212,8 @@ export class LifecycleProjection {
 		const unchanged = async (): Promise<boolean> => (await identity())?.key === key;
 
 		const cached = this.cache.get(key);
-		if (cached !== undefined && this.seams.now() - cached.at < LIFECYCLE_TTL_MS) return { segment: cached.segment };
+		const age = cached === undefined ? -1 : this.seams.now() - cached.at;
+		if (cached !== undefined && age >= 0 && age < LIFECYCLE_TTL_MS) return { segment: cached.segment };
 
 		// Evidence counts only if the identity still holds right after it was read.
 		const bracketed = async (path: string, ...rest: string[]): Promise<string | undefined> => {
@@ -264,15 +266,19 @@ export class LifecycleProjection {
 		const states: LifecycleState[] = [];
 		for (const [state, population] of populations) {
 			if (!population.ok) return undefined;
-			const current = population.current ?? [];
-			// A current record for another head is stale evidence, and a base head
-			// that contradicts the subject kind (an Issue has none; a PR has one) is
-			// contradictory evidence; neither is ever a guessed state.
-			const contradicts = ({ record }: { record: { subjectHead: unknown; baseHead: unknown } }) =>
-				record.subjectHead !== head || (head === null ? record.baseHead !== null : typeof record.baseHead !== "string");
-			if (current.some(contradicts)) return undefined;
-			if (current.length > 0) states.push(state);
+			if ((population.current ?? []).length > 0) states.push(state);
 		}
+		// Every marker and terminal is checked, current or terminalized: one for
+		// another head is stale evidence, and a base head that contradicts the
+		// subject kind (an Issue has none; a PR has one) is contradictory
+		// evidence; either makes the whole population silent.
+		const contradicts = (record: { subjectHead: unknown; baseHead: unknown } | undefined) =>
+			record?.subjectHead !== head || (head === null ? record.baseHead !== null : typeof record.baseHead !== "string");
+		const markers = Object.values(engine.RECORD_MARKERS);
+		for (const comment of comments)
+			for (const marker of markers)
+				if (comment.body.startsWith(marker) && contradicts(engine.parseMarkedRecord(comment.body, marker)))
+					return undefined;
 		const segment: LifecycleSegment = {
 			subject: target.kind,
 			number: target.number,

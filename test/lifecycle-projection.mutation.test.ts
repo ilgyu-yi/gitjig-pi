@@ -60,7 +60,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (comments === undefined) {\n\t\t\tthis.cache.set(key, { at: this.seams.now(), segment: { subject: target.kind, number: target.number, shortHead: null, states: [] } });\n\t\t\treturn undefined;\n\t\t}",
 	],
 	["superseded-renders", PROJECTION, "generation !== this.generation || ", ""],
-	["stale-head-admitted", PROJECTION, "record.subjectHead !== head", "false"],
+	["stale-head-admitted", PROJECTION, "record?.subjectHead !== head", "false"],
 	["no-ui-reads", PROJECTION, 'if (!this.surface.visible) return "silent";', ""],
 	["issue-may-be-pull", PROJECTION, ' || Object.hasOwn(issue, "pull_request")', ""],
 	["population-refusal-ignored", PROJECTION, "if (!population.ok) return undefined;", ""],
@@ -221,6 +221,20 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (projection === undefined) return;",
 	],
 	["command-extra-tokens", COMMAND, "if (tokens.length !== 1) return undefined;", ""],
+	["negative-age-fresh", PROJECTION, "age >= 0 && ", ""],
+	["engine-user-gate", ENGINE, '\t\tsnapshot.actorType === "User" &&\n', ""],
+	[
+		"terminals-unchecked",
+		PROJECTION,
+		"const markers = Object.values(engine.RECORD_MARKERS);",
+		"const markers = [engine.RECORD_MARKERS.awaitingAuthor, engine.RECORD_MARKERS.blocked, engine.RECORD_MARKERS.handoff];",
+	],
+	[
+		"records-unchecked",
+		PROJECTION,
+		"const markers = Object.values(engine.RECORD_MARKERS);",
+		"const markers = [engine.RECORD_MARKERS.awaitingAuthorTerminal, engine.RECORD_MARKERS.blockedTerminal, engine.RECORD_MARKERS.handoffTerminal];",
+	],
 	["attach-keeps-segment", SURFACE, "\t\tthis.lifecycle = undefined;\n\t\tthis.attachments", "\t\tthis.attachments"],
 ];
 
