@@ -45,6 +45,23 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (expected.length !== actual.length || expected.some((value, at) => value !== actual[at])) {",
 		"if (false) {",
 	],
+	["envelope-axes-ignored", RESOLVE, "rulingGaps(ruling, index).length > 0 || ", ""],
+	["envelope-empty-admitted", RESOLVE, " || ordinals.length === 0) return undefined;", ") return undefined;"],
+	["envelope-order-ignored", RESOLVE, "if (at > 0 && ordinal <= ordinals[at - 1]) return undefined;", ""],
+	["envelope-range-ignored", RESOLVE, "ordinal < 0 || ordinal >= bundle.length || ", ""],
+	["envelope-duplicates-ignored", RESOLVE, " || ruled.has(ordinal)) return undefined;", ") return undefined;"],
+	[
+		"re-request-without-omission",
+		RECORD,
+		"if (omitted === undefined || omitted.length === 0) return undefined;",
+		"if (omitted === undefined) return undefined;",
+	],
+	[
+		"re-request-on-invalid-envelope",
+		RECORD,
+		"if (omitted === undefined || omitted.length === 0) return undefined;",
+		"if (omitted?.length === 0) return undefined;",
+	],
 	["re-request-skipped", ORCHESTRATE, "if (gaps !== undefined) {", "if (false) {"],
 	[
 		"third-semantic-call",

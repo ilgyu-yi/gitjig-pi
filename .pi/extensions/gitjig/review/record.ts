@@ -27,6 +27,7 @@ import type { IndexedBundleEntry, Slot } from "./panel.ts";
 import {
 	type AdjudicationInput,
 	admitIndexedAdjudication,
+	envelopeOmissions,
 	type IndexedAdjudicationInput,
 	indexedAdjudicationFromPayload,
 	type Manifest,
@@ -530,9 +531,10 @@ export function attemptAdjudication(attempt: JudgeAttempt): IndexedAdjudicationI
 }
 
 /**
- * The deterministic completeness gaps of an attempt that yielded an
- * admitted but incomplete adjudication — exactly the case that earns the
- * one re-request (§1.7). Undefined for every other attempt.
+ * The deterministic completeness gaps of an attempt whose valid ruling
+ * envelope omits one or more raw occurrences — exactly the case that earns
+ * the one re-request (§1.7, §1.9). Undefined for every other attempt: no
+ * adjudication, an invalid envelope, or one that omits nothing.
  */
 export function reRequestGaps(
 	attempt: JudgeAttempt,
@@ -541,6 +543,10 @@ export function reRequestGaps(
 ): string[] | undefined {
 	const input = attemptAdjudication(attempt);
 	if (input === undefined) return undefined;
+	const omitted = envelopeOmissions(input, bundle);
+	if (omitted === undefined || omitted.length === 0) return undefined;
+	// A valid envelope that omits an ordinal never admits, so this is always
+	// the full deterministic gap list the re-request brief carries.
 	const admission = admitIndexedAdjudication(input, manifest, bundle);
 	return admission.complete ? undefined : admission.gaps;
 }

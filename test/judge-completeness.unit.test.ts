@@ -23,6 +23,7 @@ import {
 } from "../.pi/extensions/gitjig/review/record.ts";
 import {
 	admitIndexedAdjudication,
+	envelopeOmissions,
 	type IndexedRuling,
 	indexedAdjudicationFromPayload,
 	type Manifest,
@@ -273,6 +274,33 @@ describe("#378 one bounded whole-bundle Judge re-request", () => {
 		}
 	});
 
+	it("an invalid ruling envelope, or a valid one omitting nothing, earns no semantic re-request", async () => {
+		const at = (rawOrdinals: number[], spec: Partial<IndexedRuling> = {}) =>
+			ruling({ finding: MISSING_TEST, rawOrdinals, provenance: rawOrdinals.map(() => SUITE), ...spec });
+		const complete = () =>
+			judgeReturn([at([0]), ruling({ finding: README_POINTER, rawOrdinals: [1], provenance: [SUITE] })]);
+		const cases: Array<[string, IndexedRuling[]]> = [
+			["an ordinal repeated within a ruling", [at([0, 0])]],
+			["out-of-order ordinals", [at([1, 0])]],
+			["empty ordinals", [at([], { provenance: [SUITE] }), at([0])]],
+			["an unknown ordinal", [at([0, 5])]],
+			["a negative ordinal", [at([-1, 0])]],
+			["an ordinal repeated across rulings", [at([0]), at([0])]],
+			["a missing owed axis", [at([0], { severity: undefined })]],
+			["a complete union with the wrong provenance", [at([0, 1], { provenance: [SUITE] })]],
+		];
+		for (const [name, rulings] of cases) {
+			const s = seam({ suite: () => findings(MISSING_TEST, README_POINTER) }, [() => judgeReturn(rulings), complete]);
+			const result = await round(SUITE_ONLY, s);
+			assert.equal(s.judgeBriefs.length, 1, `${name}: a re-request was made`);
+			assert.ok(
+				result.review.state === "incomplete" && result.review.cause === "adjudication-incomplete",
+				`${name}: ${JSON.stringify(result.review)}`,
+			);
+			assert.ok(parseReviewRecord(result.recordBody) !== undefined, name);
+		}
+	});
+
 	it("a second incomplete, invalid or unavailable return stops INCOMPLETE with no third semantic call", async () => {
 		const incomplete = () => judgeReturn([ruling({ finding: MISSING_TEST, rawOrdinals: [0], provenance: [SUITE] })]);
 		const cases: Array<[string, () => DispatchOutcome, string]> = [
@@ -450,6 +478,27 @@ describe("#378 indexed admission", () => {
 				[2, "repair"],
 			],
 		);
+	});
+
+	it("reports what a valid envelope omits, and nothing for an invalid one", () => {
+		const input = (rulings: IndexedRuling[]) => ({ dedupAttested: true, rulings });
+		assert.deepEqual(envelopeOmissions(input(complete), bundle), []);
+		assert.deepEqual(envelopeOmissions(input([complete[1]]), bundle), [0, 1]);
+		assert.deepEqual(
+			envelopeOmissions(input([ruling({ rawOrdinals: [1], provenance: [RUNTIME] })]), bundle),
+			[0, 2],
+			"a valid envelope's provenance is terminal admission's concern, not the envelope's",
+		);
+		const invalid: Array<[string, IndexedRuling[]]> = [
+			["empty", [ruling({ rawOrdinals: [], provenance: [SUITE] })]],
+			["descending", [ruling({ rawOrdinals: [1, 0], provenance: [SUITE, SUITE] })]],
+			["repeated within", [ruling({ rawOrdinals: [0, 0], provenance: [SUITE, SUITE] })]],
+			["repeated across", [complete[0], ruling({ rawOrdinals: [1], provenance: [SUITE] })]],
+			["past the bundle", [ruling({ rawOrdinals: [3], provenance: [SUITE] })]],
+			["negative", [ruling({ rawOrdinals: [-1], provenance: [SUITE] })]],
+			["missing axis", [{ ...complete[1], direction: undefined }]],
+		];
+		for (const [name, rulings] of invalid) assert.equal(envelopeOmissions(input(rulings), bundle), undefined, name);
 	});
 
 	it("parses raw ordinals as safe integers on a closed ruling shape", () => {

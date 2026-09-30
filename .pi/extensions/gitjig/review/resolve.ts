@@ -320,6 +320,42 @@ export function adjudicationFromDispatch(outcome: DispatchOutcome): Adjudication
 	return adjudicationFromPayload(outcome.payload);
 }
 
+/** One ruling's owed axes (§1.9), as named gaps; empty when the ruling is well formed. */
+function rulingGaps(ruling: Ruling, index: number): string[] {
+	const gaps: string[] = [];
+	if (ruling.provenance.length === 0) {
+		gaps.push(`ruling ${index}: provenance is empty — dedup merges and never discards (§1.9)`);
+	}
+	// Presence alone, owed on every validity like provenance — the parse
+	// rules the field's type, this checks only that a ruling says what it
+	// rests on, and nothing here reads what it says (issue #179's ruling:
+	// admission checks presence, never evaluates).
+	if (!ruling.evidence) {
+		gaps.push(
+			`ruling ${index}: validity evidence is empty — each ruling records the command it ran or the citation it rests on (§1.9)`,
+		);
+	}
+	if (ruling.validity !== "CONFIRMED") {
+		// REFUTED and INDETERMINATE owe validity and its evidence alone (§1.9).
+		return gaps;
+	}
+	if (ruling.severity === undefined) {
+		gaps.push(`ruling ${index}: severity is unruled`);
+	}
+	if (ruling.severity === "NIT" && (typeof ruling.remedy !== "string" || ruling.remedy.length === 0)) {
+		gaps.push(
+			`ruling ${index}: a NIT ruling carries no exact mechanical remedy — the remedy is part of the ruling (§1.9)`,
+		);
+	}
+	if (ruling.direction === undefined) {
+		gaps.push(`ruling ${index}: harm direction is unruled — there is no silence default (§1.9)`);
+	}
+	if (ruling.onCriterion === undefined) {
+		gaps.push(`ruling ${index}: AC impact is unruled`);
+	}
+	return gaps;
+}
+
 /**
  * §1.9's completeness test — one test for every disposition, run once.
  * Where it fails, the named gaps are the caller's re-dispatch brief; where
@@ -344,36 +380,7 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 		);
 	}
 	input.rulings.forEach((ruling, index) => {
-		if (ruling.provenance.length === 0) {
-			gaps.push(`ruling ${index}: provenance is empty — dedup merges and never discards (§1.9)`);
-		}
-		// Presence alone, owed on every validity like provenance — the parse
-		// rules the field's type, this checks only that a ruling says what it
-		// rests on, and nothing here reads what it says (issue #179's ruling:
-		// admission checks presence, never evaluates).
-		if (!ruling.evidence) {
-			gaps.push(
-				`ruling ${index}: validity evidence is empty — each ruling records the command it ran or the citation it rests on (§1.9)`,
-			);
-		}
-		if (ruling.validity !== "CONFIRMED") {
-			// REFUTED and INDETERMINATE owe validity and its evidence alone (§1.9).
-			return;
-		}
-		if (ruling.severity === undefined) {
-			gaps.push(`ruling ${index}: severity is unruled`);
-		}
-		if (ruling.severity === "NIT" && (typeof ruling.remedy !== "string" || ruling.remedy.length === 0)) {
-			gaps.push(
-				`ruling ${index}: a NIT ruling carries no exact mechanical remedy — the remedy is part of the ruling (§1.9)`,
-			);
-		}
-		if (ruling.direction === undefined) {
-			gaps.push(`ruling ${index}: harm direction is unruled — there is no silence default (§1.9)`);
-		}
-		if (ruling.onCriterion === undefined) {
-			gaps.push(`ruling ${index}: AC impact is unruled`);
-		}
+		gaps.push(...rulingGaps(ruling, index));
 	});
 	if (gaps.length > 0) {
 		return { complete: false, gaps };
@@ -391,6 +398,33 @@ export function admitAdjudication(input: AdjudicationInput, manifest: Manifest):
 			rulings,
 		} as unknown as Adjudication,
 	};
+}
+
+/**
+ * §1.9's preliminary ruling-envelope check. The envelope is valid only
+ * when every ruling is well formed with its owed axes and a nonempty,
+ * strictly ascending array of in-range ordinals, and no ordinal appears in
+ * two rulings. A valid envelope yields the original ordinals its union
+ * omits — admitted-incomplete for §1.7's one re-request exactly when that
+ * list is nonempty. An invalid envelope (absent, repeated, unknown or
+ * out-of-order identities, or a missing axis) yields undefined and earns
+ * no re-request.
+ */
+export function envelopeOmissions(
+	input: IndexedAdjudicationInput,
+	bundle: readonly IndexedBundleEntry[],
+): number[] | undefined {
+	const ruled = new Set<number>();
+	for (const [index, ruling] of input.rulings.entries()) {
+		const ordinals = ruling.rawOrdinals;
+		if (rulingGaps(ruling, index).length > 0 || ordinals.length === 0) return undefined;
+		for (const [at, ordinal] of ordinals.entries()) {
+			if (at > 0 && ordinal <= ordinals[at - 1]) return undefined;
+			if (ordinal < 0 || ordinal >= bundle.length || ruled.has(ordinal)) return undefined;
+			ruled.add(ordinal);
+		}
+	}
+	return bundle.map((entry) => entry.rawOrdinal).filter((ordinal) => !ruled.has(ordinal));
 }
 
 /**
