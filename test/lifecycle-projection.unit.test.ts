@@ -68,7 +68,9 @@ type World = {
 	/** When set, the comment read returns these pages instead of one page of `comments`. */
 	pages?: Comment[][];
 	permissions?: Record<string, string | undefined>;
-	engine?: "unavailable";
+	engine?: "unavailable" | "throws";
+	/** When set, every platform read rejects instead of answering. */
+	readThrows?: boolean;
 	/** The locally resolved platform repository; defaults to github.com o/r. */
 	location?: { host: string; nameWithOwner: string };
 	/** Per-host comment populations, overriding `comments` for that host. */
@@ -106,10 +108,13 @@ function harness(world: World, options: { ui?: boolean; clock?: { now: number } 
 	const seams: LifecycleProjectionSeams = {
 		repository: () => world.location ?? { host: "github.com", nameWithOwner: "o/r" },
 		now: () => clock.now,
-		engine: async () =>
-			world.engine === "unavailable" ? undefined : await import("../.github/workflows/gitjig-lifecycle.mjs"),
+		engine: async () => {
+			if (world.engine === "throws") throw new Error("engine load failure");
+			return world.engine === "unavailable" ? undefined : await import("../.github/workflows/gitjig-lifecycle.mjs");
+		},
 		read: async (argv, _root, bounds) => {
 			reads.push({ argv, bounds });
+			if (world.readThrows === true) throw new Error("platform read failure");
 			const location = world.location ?? { host: "github.com", nameWithOwner: "o/r" };
 			const requested = argv[argv.length - 1] ?? "";
 			const path = requested.startsWith(`repos/${location.nameWithOwner}`)
@@ -913,6 +918,18 @@ describe("#347 lifecycle projection", () => {
 		h.clock.now = LIFECYCLE_TTL_MS;
 		await h.projection.request({ kind: "issue", number: 7 });
 		assert.equal(h.lifecycle(), undefined);
+	});
+
+	it("contains a rejected platform read or engine load as silence", async () => {
+		for (const [name, world] of [
+			["read", { readThrows: true, comments: [] }],
+			["engine", { engine: "throws", comments: [] }],
+		] as Array<[string, World]>) {
+			const h = harness(world);
+			const outcome = await h.projection.request({ kind: "issue", number: 7 }).catch(() => "rejected");
+			assert.equal(outcome, "silent", name);
+			assert.equal(h.lifecycle(), undefined, name);
+		}
 	});
 
 	it("makes no read and no status call without a UI", async () => {

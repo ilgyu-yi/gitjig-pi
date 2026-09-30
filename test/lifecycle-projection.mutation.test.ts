@@ -221,6 +221,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"if (projection === undefined) return;",
 	],
 	["command-extra-tokens", COMMAND, "if (tokens.length !== 1) return undefined;", ""],
+	["request-rethrows", PROJECTION, "\t\t\tcomputed = undefined;\n", '\t\t\tthrow new Error("escaped");\n'],
 	["negative-age-fresh", PROJECTION, "age >= 0 && ", ""],
 	["engine-user-gate", ENGINE, '\t\tsnapshot.actorType === "User" &&\n', ""],
 	[
