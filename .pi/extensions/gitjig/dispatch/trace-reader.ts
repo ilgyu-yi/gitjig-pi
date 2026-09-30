@@ -93,7 +93,13 @@ function readBounded(fd: number, limit: number): Buffer {
  * already checked the mode and the token; this re-validates the token so
  * no path is ever derived from a non-canonical value.
  */
-export function readRetainedTrace(stateRoot: string, id: string, now: number = Date.now()): TraceRead {
+export function readRetainedTrace(
+	stateRoot: string,
+	id: string,
+	now: number = Date.now(),
+	/** Test seam: runs once between the open and the sink check, where a concurrent prune can land. */
+	afterOpen?: () => void,
+): TraceRead {
 	if (!canonicalTraceId(id)) return { outcome: "unavailable" };
 	// Expiry is decided before any state read, even for an unpruned record.
 	if (now - Number(id.slice(0, id.indexOf("-"))) > TRACE_RETAIN_MS) return { outcome: "missing" };
@@ -113,6 +119,9 @@ export function readRetainedTrace(stateRoot: string, id: string, now: number = D
 		return errorCode(error) === "ENOENT" ? { outcome: "missing" } : { outcome: "unavailable" };
 	}
 	try {
+		afterOpen?.();
+		// A prune that unlinked the record after the open leaves it no name; the
+		// shared sink rule's one-name check then makes it unavailable (§4.9, #395).
 		const stats = fstatSync(fd);
 		if (sinkRefusal(stats, path) !== undefined) return { outcome: "unavailable" };
 		// Bounded by bytes actually read, so a file that grows after the stat is still refused.

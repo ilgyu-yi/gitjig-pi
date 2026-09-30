@@ -244,6 +244,15 @@ describe("#263 reader against the direct-written store", () => {
 		assert.equal(readRetainedTrace(root, ID, NOW).outcome, "rendered", "complete");
 	});
 
+	it("a prune landing after the open makes the record unavailable under the one-name sink check", () => {
+		const root = stateRoot();
+		const path = plant(root, valid());
+		assert.equal(readRetainedTrace(root, ID, NOW, () => unlinkSync(path)).outcome, "unavailable");
+		const kept = stateRoot();
+		plant(kept, valid());
+		assert.equal(readRetainedTrace(kept, ID, NOW, () => {}).outcome, "rendered", "the seam alone changes nothing");
+	});
+
 	it("a pruned record reads missing, and a crashed one reads unavailable until it expires", () => {
 		const root = stateRoot();
 		const path = plant(root, valid());
