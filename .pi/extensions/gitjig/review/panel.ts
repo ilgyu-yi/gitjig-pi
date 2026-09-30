@@ -123,6 +123,26 @@ export type SlotResult = {
  */
 export type BundleEntry = { finding: string; slot: Slot };
 
+/**
+ * One raw occurrence of a version-2 bundle (§1.7): `rawOrdinal` is its
+ * zero-based position in the original ordered bundle. Two equal strings
+ * from one slot are two occurrences with two ordinals.
+ */
+export type IndexedBundleEntry = { rawOrdinal: number; finding: string; slot: Slot };
+
+/**
+ * Mint the caller's dense raw ordinals over the ordered bundle (§1.7).
+ * Only the caller assigns them; neither the Judge nor a later reader can
+ * renumber them. Each entry is a copy, never an alias of the input.
+ */
+export function indexBundle(bundle: readonly BundleEntry[]): IndexedBundleEntry[] {
+	return bundle.map((entry, rawOrdinal) => ({
+		rawOrdinal,
+		finding: entry.finding,
+		slot: { lens: entry.slot.lens, surface: entry.slot.surface },
+	}));
+}
+
 export type PanelOutcome =
 	| { outcome: "incomplete"; missing: Slot[] }
 	| { outcome: "approved" }

@@ -32,17 +32,27 @@ import { repoRoot } from "./harness/run-pi.ts";
 const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
 
 type Slot = { lens: string; surface: string };
-type BundleEntry = { finding: string; slot: Slot };
+type BundleEntry = { rawOrdinal?: number; finding: string; slot: Slot };
 type DispatchDiagnostic = {
 	run: { class: RunClass; exitCode: number | null; signal: string | null };
 	return: { class: ReturnClass };
+	compare?: { class: string };
 };
 type DispatchOutcome =
-	| { disposition: "admitted"; ok: boolean; summary: string; payload?: string; compare?: "confirmed" | "invalid" }
+	| {
+			disposition: "admitted";
+			ok: boolean;
+			summary: string;
+			payload?: string;
+			compare?: "confirmed" | "invalid";
+			diagnostic?: DispatchDiagnostic;
+	  }
 	| { disposition: "refused"; cause: string; diagnostic?: DispatchDiagnostic };
 type Manifest = { state: "absent" } | { state: "present"; criteria: readonly string[] };
 type Ruling = {
 	finding: string;
+	/** Version-2 rulings name the caller's raw ordinals they rule (§1.9). */
+	rawOrdinals?: number[];
 	provenance: Slot[];
 	validity: "CONFIRMED" | "REFUTED" | "INDETERMINATE";
 	severity?: "SUBSTANTIVE" | "NIT";
@@ -225,12 +235,25 @@ const FENCES: Fences = {
 
 const approvedPayload = JSON.stringify({ token: "APPROVED", findings: [] });
 const findingsPayload = (...findings: string[]) => JSON.stringify({ token: "FINDINGS", findings });
+/** The diagnostic a real admitted, compare-confirmed dispatch carries. */
+const ADMITTED_DIAGNOSTIC: DispatchDiagnostic = {
+	run: { class: "exited", exitCode: 0, signal: null },
+	return: { class: "admitted" },
+	compare: { class: "confirmed" },
+};
+/** The diagnostic a real refused dispatch carries. */
+const REFUSED_DIAGNOSTIC: DispatchDiagnostic = {
+	run: { class: "exited", exitCode: 1, signal: null },
+	return: { class: "missing" },
+	compare: { class: "not-reached" },
+};
 const admitted = (payload: string): DispatchOutcome => ({
 	disposition: "admitted",
 	ok: true,
 	summary: "RESULT",
 	payload,
 	compare: "confirmed",
+	diagnostic: ADMITTED_DIAGNOSTIC,
 });
 const judgePayload = (rulings: Ruling[]): string => JSON.stringify({ dedupAttested: true, rulings });
 
@@ -1009,6 +1032,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 				summary: slotText(brief),
 				payload: findingsPayload("zq a real finding"),
 				compare: "confirmed",
+				diagnostic: ADMITTED_DIAGNOSTIC,
 			}),
 			() => ({
 				disposition: "admitted",
@@ -1017,12 +1041,17 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 				payload: judgePayload([
 					{
 						finding: "zq a real finding",
-						provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
+						rawOrdinals: [0, 1],
+						provenance: [
+							{ lens: "runtime", surface: "the shell's runtime extensions" },
+							{ lens: "suite", surface: "the test suite" },
+						],
 						validity: "REFUTED",
 						evidence: "zq the refuting command",
 					},
 				]),
 				compare: "confirmed",
+				diagnostic: ADMITTED_DIAGNOSTIC,
 			}),
 		);
 		const result = await o.reviewRound({
@@ -1086,6 +1115,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 					summary,
 					payload: findingsPayload("zq a real finding"),
 					compare: "confirmed",
+					diagnostic: ADMITTED_DIAGNOSTIC,
 				}),
 				() => ({
 					disposition: "admitted",
@@ -1094,7 +1124,11 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 					payload: judgePayload([
 						{
 							finding: "zq a real finding",
-							provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
+							rawOrdinals: [0, 1],
+							provenance: [
+								{ lens: "runtime", surface: "the shell's runtime extensions" },
+								{ lens: "suite", surface: "the test suite" },
+							],
 							validity: "CONFIRMED",
 							severity: "SUBSTANTIVE",
 							direction: "live-harm",
@@ -1103,6 +1137,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 						},
 					]),
 					compare: "confirmed",
+					diagnostic: ADMITTED_DIAGNOSTIC,
 				}),
 			);
 			return o.reviewRound({
@@ -1473,6 +1508,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		const finding = "zq deferrable finding";
 		const ruling: Ruling = {
 			finding,
+			rawOrdinals: [0],
 			provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
 			validity: "CONFIRMED",
 			severity: "SUBSTANTIVE",
@@ -1510,6 +1546,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		const finding = "zq the dispatched finding";
 		const ruling: Ruling = {
 			finding,
+			rawOrdinals: [0],
 			provenance: [{ lens: "runtime", surface: "the shell's runtime extensions" }],
 			validity: "REFUTED",
 			evidence: "zq the refuting command and its output",
@@ -1552,7 +1589,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		);
 		assert.deepEqual(
 			result.record.bundle,
-			[{ finding, slot: { lens: "runtime", surface: "the shell's runtime extensions" } }],
+			[{ rawOrdinal: 0, finding, slot: { lens: "runtime", surface: "the shell's runtime extensions" } }],
 			"the record's bundle is not the panel's — what the history reader consumes must be what was discovered",
 		);
 		assert.ok(
@@ -1566,7 +1603,7 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 		const repo = fixtureRepo({ ".pi/x.ts": "x\n" });
 		const fake = fakeDispatch(
 			() => admitted(findingsPayload("f")),
-			() => ({ disposition: "refused", cause: "any" }),
+			() => ({ disposition: "refused", cause: "any", diagnostic: REFUSED_DIAGNOSTIC }),
 		);
 		const result = await o.reviewRound({
 			repoRoot: repo,

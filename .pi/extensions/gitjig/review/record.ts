@@ -21,8 +21,18 @@
  * body whose JSON does not parse, or parses to anything but the closed
  * shape, is no record — a guessed record is worse than a missing one.
  */
-import type { Slot } from "./panel.ts";
-import type { AdjudicationInput, ReviewState } from "./resolve.ts";
+import { createHash } from "node:crypto";
+import type { DispatchOutcome } from "../dispatch/index.ts";
+import type { IndexedBundleEntry, Slot } from "./panel.ts";
+import {
+	type AdjudicationInput,
+	admitIndexedAdjudication,
+	type IndexedAdjudicationInput,
+	indexedAdjudicationFromPayload,
+	type Manifest,
+	type ReviewState,
+	resolve,
+} from "./resolve.ts";
 
 export const REVIEW_RECORD_MARKER = "gitjig-review-record";
 
@@ -60,11 +70,38 @@ export type SlotRecord = { slot: Slot; valid: boolean; reason?: string };
  */
 export type RoundSummary = { from: "slot" | "judge"; slot?: Slot; text: string };
 
+/**
+ * One bounded semantic Judge call of a version-2 round (§1.7/§1.9): the
+ * observed dispatch classes, the round operands it was sent (as digests),
+ * the admitted payload when there was one, and a digest over all of it.
+ */
+export type JudgeAttempt = {
+	attempt: 1 | 2;
+	head: string;
+	manifestDigest: string;
+	bundleDigest: string;
+	disposition: "admitted" | "refused";
+	/** The delegate's own `ok`; null when the dispatch was refused. */
+	ok: boolean | null;
+	run: string;
+	return: string;
+	compare: string;
+	payload: string | null;
+	resultDigest: string;
+};
+
 export type ReviewRecord = {
+	/** Present, and exactly 2, only on a version-2 record (§1.9). */
+	schemaVersion?: 2;
 	/** The full hash of the head this review state is pinned to (§1.6). */
 	head: string;
 	slots: SlotRecord[];
-	bundle: { finding: string; slot: Slot }[];
+	/** `rawOrdinal` is present on every entry of a version-2 record and on none of a historical one. */
+	bundle: { rawOrdinal?: number; finding: string; slot: Slot }[];
+	/** Version 2 only: the caller-derived criterion manifest the Judge was sent. */
+	manifest?: Manifest;
+	/** Version 2 only: every semantic Judge call made, in order (at most two). */
+	judgeAttempts?: JudgeAttempt[];
 	/** The admitted Judge input, evidence verbatim — null where no Judge ran. */
 	adjudication: AdjudicationInput | null;
 	review: ReviewState;
@@ -363,6 +400,12 @@ export function parseReviewRecord(body: string): ReviewRecord | undefined {
 	if (!isObject(parsed)) {
 		return undefined;
 	}
+	// A version-2 record is a separately admitted shape under the same
+	// marker (§1.9); a historical record never carries the key and keeps
+	// the parse below, unchanged.
+	if (Object.hasOwn(parsed, "schemaVersion")) {
+		return parseVersion2(parsed, marker[1]);
+	}
 	const keys = Object.keys(parsed);
 	// An optional key costs the exact-count test, which stated two things at
 	// once: no unknown key, and no missing one. What replaces it is this
@@ -404,4 +447,245 @@ export function parseReviewRecord(body: string): ReviewRecord | undefined {
 		}
 	}
 	return candidate;
+}
+
+function sha256(domain: string, value: unknown): string {
+	return createHash("sha256").update(domain, "ascii").update(JSON.stringify(value), "utf8").digest("hex");
+}
+
+/** Deterministic JSON with sorted keys, so equality never rests on key order. */
+function canonical(value: unknown): string {
+	if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "undefined";
+	// biome-ignore lint/style/useTemplate: matches the orchestrator's canonical form.
+	if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+	const entries = Object.entries(value as Record<string, unknown>)
+		.filter(([, child]) => child !== undefined)
+		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+	// biome-ignore lint/style/useTemplate: matches the orchestrator's canonical form.
+	return "{" + entries.map(([key, child]) => JSON.stringify(key) + ":" + canonical(child)).join(",") + "}";
+}
+
+/** The digest a version-2 attempt carries for the manifest it was sent. */
+export function manifestDigest(manifest: Manifest): string {
+	return sha256("gitjig-review-manifest:v2\n", manifest.state === "absent" ? null : manifest.criteria);
+}
+
+/** The digest a version-2 attempt carries for the indexed bundle it was sent. */
+export function bundleDigest(bundle: readonly IndexedBundleEntry[]): string {
+	return sha256(
+		"gitjig-review-bundle:v2\n",
+		bundle.map((entry) => [entry.rawOrdinal, entry.finding, entry.slot.lens, entry.slot.surface]),
+	);
+}
+
+function attemptDigest(attempt: Omit<JudgeAttempt, "resultDigest">): string {
+	return sha256("gitjig-judge-attempt:v2\n", [
+		attempt.attempt,
+		attempt.head,
+		attempt.manifestDigest,
+		attempt.bundleDigest,
+		attempt.disposition,
+		attempt.ok,
+		attempt.run,
+		attempt.return,
+		attempt.compare,
+		attempt.payload,
+	]);
+}
+
+/** Record one semantic Judge dispatch as bounded attempt evidence. */
+export function judgeAttempt(
+	outcome: DispatchOutcome,
+	attempt: 1 | 2,
+	head: string,
+	manifest: Manifest,
+	bundle: readonly IndexedBundleEntry[],
+): JudgeAttempt {
+	const admitted = outcome.disposition === "admitted";
+	const evidence: Omit<JudgeAttempt, "resultDigest"> = {
+		attempt,
+		head,
+		manifestDigest: manifestDigest(manifest),
+		bundleDigest: bundleDigest(bundle),
+		disposition: outcome.disposition,
+		ok: admitted ? outcome.ok : null,
+		run: outcome.diagnostic.run.class,
+		return: outcome.diagnostic.return.class,
+		compare: admitted ? (outcome.compare ?? "not-requested") : outcome.diagnostic.compare.class,
+		payload: admitted && typeof outcome.payload === "string" ? outcome.payload : null,
+	};
+	return { ...evidence, resultDigest: attemptDigest(evidence) };
+}
+
+/**
+ * The adjudication one attempt yields: an admitted, self-reported-complete,
+ * compare-confirmed return whose payload parses. Anything else is no
+ * adjudication — §1.9's Judge-unavailability limb.
+ */
+export function attemptAdjudication(attempt: JudgeAttempt): IndexedAdjudicationInput | undefined {
+	if (attempt.disposition !== "admitted" || attempt.ok !== true || attempt.compare !== "confirmed") {
+		return undefined;
+	}
+	return indexedAdjudicationFromPayload(attempt.payload ?? undefined);
+}
+
+/**
+ * The deterministic completeness gaps of an attempt that yielded an
+ * admitted but incomplete adjudication — exactly the case that earns the
+ * one re-request (§1.7). Undefined for every other attempt.
+ */
+export function reRequestGaps(
+	attempt: JudgeAttempt,
+	manifest: Manifest,
+	bundle: readonly IndexedBundleEntry[],
+): string[] | undefined {
+	const input = attemptAdjudication(attempt);
+	if (input === undefined) return undefined;
+	const admission = admitIndexedAdjudication(input, manifest, bundle);
+	return admission.complete ? undefined : admission.gaps;
+}
+
+/**
+ * The review terminal a version-2 round's attempts determine. The round
+ * driver and the record parser both call it, so a stored terminal is
+ * readmitted only when the retained attempts derive it exactly.
+ */
+export function judgeTerminal(
+	attempts: readonly JudgeAttempt[],
+	manifest: Manifest,
+	bundle: readonly IndexedBundleEntry[],
+): { review: ReviewState; adjudication: IndexedAdjudicationInput | null } {
+	const last = attempts.at(-1);
+	const input = last === undefined ? undefined : attemptAdjudication(last);
+	if (input === undefined) {
+		return { review: { state: "incomplete", cause: "adjudication-missing" }, adjudication: null };
+	}
+	const admission = admitIndexedAdjudication(input, manifest, bundle);
+	if (!admission.complete) {
+		return {
+			review: { state: "incomplete", cause: "adjudication-incomplete", gaps: admission.gaps },
+			adjudication: null,
+		};
+	}
+	return { review: { state: "resolved", resolution: resolve(admission.adjudication) }, adjudication: input };
+}
+
+const VERSION2_KEYS = [
+	"schemaVersion",
+	"head",
+	"slots",
+	"bundle",
+	"manifest",
+	"judgeAttempts",
+	"adjudication",
+	"review",
+	"summaries",
+];
+const ATTEMPT_KEYS = [
+	"attempt",
+	"head",
+	"manifestDigest",
+	"bundleDigest",
+	"disposition",
+	"ok",
+	"run",
+	"return",
+	"compare",
+	"payload",
+	"resultDigest",
+];
+
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+	const own = Object.keys(value);
+	return own.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function isManifest(value: unknown): value is Manifest {
+	if (!isObject(value)) return false;
+	if (value.state === "absent") return exactKeys(value, ["state"]);
+	return (
+		value.state === "present" &&
+		exactKeys(value, ["state", "criteria"]) &&
+		Array.isArray(value.criteria) &&
+		value.criteria.every((criterion) => typeof criterion === "string")
+	);
+}
+
+function isAttempt(value: unknown): value is JudgeAttempt {
+	if (!isObject(value) || !exactKeys(value, ATTEMPT_KEYS)) return false;
+	const strings = ["head", "manifestDigest", "bundleDigest", "run", "return", "compare", "resultDigest"];
+	return (
+		(value.attempt === 1 || value.attempt === 2) &&
+		strings.every((key) => typeof value[key] === "string" && (value[key] as string).length > 0) &&
+		(value.disposition === "admitted" || value.disposition === "refused") &&
+		(value.disposition === "admitted" ? typeof value.ok === "boolean" : value.ok === null && value.payload === null) &&
+		(value.payload === null || typeof value.payload === "string")
+	);
+}
+
+/**
+ * The version-2 parse (§1.9), fail-closed: the exact key set; a dense
+ * indexed bundle; a manifest; at most two attempts (numbered 1 and 2 in
+ * order, so a third can never be admitted), each pinned to this
+ * head, manifest and bundle and carrying its own recomputed digest; a
+ * second attempt only after an admitted-incomplete first and never a
+ * missing one; and a review and adjudication that the attempts derive
+ * exactly (`judgeTerminal`), so a resolved record carries the complete
+ * partition, every owed axis and the one-to-one indexed Resolver join.
+ */
+function parseVersion2(parsed: Record<string, unknown>, markerHead: string): ReviewRecord | undefined {
+	if (parsed.schemaVersion !== 2 || !exactKeys(parsed, VERSION2_KEYS)) return undefined;
+	const { head, slots, bundle, manifest, judgeAttempts, adjudication, review, summaries } = parsed;
+	if (typeof head !== "string" || head.length === 0 || head !== markerHead) return undefined;
+	if (!Array.isArray(slots) || !slots.every(isSlotRecord)) return undefined;
+	if (!Array.isArray(summaries) || !summaries.every(isRoundSummary)) return undefined;
+	if (!isManifest(manifest)) return undefined;
+	if (
+		!Array.isArray(bundle) ||
+		!bundle.every(
+			(entry, index) =>
+				isObject(entry) &&
+				exactKeys(entry, ["rawOrdinal", "finding", "slot"]) &&
+				entry.rawOrdinal === index &&
+				typeof entry.finding === "string" &&
+				isSlot(entry.slot),
+		)
+	)
+		return undefined;
+	const indexed = bundle as IndexedBundleEntry[];
+	if (!Array.isArray(judgeAttempts) || !judgeAttempts.every(isAttempt)) return undefined;
+	const attempts = judgeAttempts as JudgeAttempt[];
+	for (const [index, attempt] of attempts.entries()) {
+		const { resultDigest, ...evidence } = attempt;
+		if (
+			attempt.attempt !== index + 1 ||
+			attempt.head !== head ||
+			attempt.manifestDigest !== manifestDigest(manifest) ||
+			attempt.bundleDigest !== bundleDigest(indexed) ||
+			resultDigest !== attemptDigest(evidence)
+		)
+			return undefined;
+	}
+	if (attempts.length === 0) {
+		// No Judge ran: the findings-free path, an incomplete panel, or an
+		// absent manifest — never a resolved review.
+		if (adjudication !== null || !isReviewState(review)) return undefined;
+		const state = review as ReviewState;
+		const noJudge =
+			(state.state === "approved" && indexed.length === 0) ||
+			(state.state === "incomplete" && state.cause === "panel") ||
+			(state.state === "incomplete" && state.cause === "adjudication-missing" && manifest.state === "absent");
+		return noJudge ? (parsed as unknown as ReviewRecord) : undefined;
+	}
+	// A Judge ran only over a nonempty bundle with a present manifest; a
+	// second call exists exactly when the first was admitted-incomplete.
+	// The review and adjudication are then compared with what the attempts
+	// derive, which is also what shapes them.
+	if (indexed.length === 0 || manifest.state === "absent") return undefined;
+	const firstGaps = reRequestGaps(attempts[0], manifest, indexed);
+	if ((attempts.length === 2) !== (firstGaps !== undefined)) return undefined;
+	const derived = judgeTerminal(attempts, manifest, indexed);
+	if (canonical(derived.review) !== canonical(review) || canonical(derived.adjudication) !== canonical(adjudication))
+		return undefined;
+	return parsed as unknown as ReviewRecord;
 }
