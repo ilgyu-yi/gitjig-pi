@@ -28,7 +28,7 @@ function section(source: string, start: string, end: string): string {
 function contractHolds(source: string): boolean {
 	const delegation = section(source, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts");
 	const opening = "**The sanctioned retained-trace reader.**";
-	if (delegation.split(opening).length !== 2 || source.split(opening).length !== 2) return false;
+	if (delegation.split(opening).length !== 2 || source.indexOf(opening) !== source.lastIndexOf(opening)) return false;
 	const start = delegation.indexOf(opening);
 	const end = delegation.indexOf("\n\n", start);
 	const paragraph = delegation.slice(start, end < 0 ? undefined : end).trim();
@@ -73,6 +73,21 @@ describe("#393 retained-trace reader contract", () => {
 				"(any landed lifecycle class)",
 			],
 			["size bound widened", "at most 256 KiB", "at most 1 MiB"],
+			[
+				"absent directory left unclassified",
+				"is **missing** when absent, since the writer creates it only on its first retention; when present it",
+				"",
+			],
+			[
+				"persisted member names dropped",
+				"with exactly the members `lifecycle`, `lines`, and `counters`",
+				"of the trace-snapshot shape",
+			],
+			[
+				"counter keys dropped",
+				"exactly the members `stdoutBytes`, `stderrBytes`, `stdoutLines`, `stderrLines`, `truncatedLines`, `evictedLines`, and `decodeReplacements`",
+				"the seven counters",
+			],
 			["details shape without the identifier", "diagnostic,traceId?}`", "diagnostic}`"],
 			[
 				"state-boundary read path dropped",
