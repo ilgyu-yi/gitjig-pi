@@ -113,6 +113,19 @@ describe("#131 collapsed operator-visible acts", () => {
 			],
 			["Every marker and terminal is checked:", "Some markers and terminals are checked:"],
 			["populations result in silence", "populations may result in silence"],
+			["Stale-head is measured on current records only", "Stale-head is measured on every marker and terminal"],
+			[
+				"a current (unterminalized) record whose subject head differs from the addressed subject's attested head is stale. ",
+				"",
+			],
+			[
+				", and every marker and terminal still carries a base head consistent with the subject kind (an Issue has none; a PR has one)",
+				"",
+			],
+			[
+				"but their subject heads are not compared with the current head",
+				"and their subject heads are compared with the current head",
+			],
 		] as const) {
 			assert.ok(spec.includes(from), `mutation operand absent: ${from}`);
 			assert.notEqual(extract(spec.replace(from, to)), expected, `projection mutant survived: ${from}`);
