@@ -16,6 +16,8 @@ const FIXTURE = readFileSync(new URL("./fixtures/review-history-reentry.contract
 /** Clauses pinned by literal: each is load-bearing for one AC3 mutant. */
 const LITERALS = [
 	"a projection unavailable for any other reason is not limb (a)",
+	"on which one of exactly these record-local checks, and no others, refuses from that record's own bytes",
+	"It is decided without any platform or git read",
 	"a later stop writes no second record and hands off citing the standing one",
 	"it is not a disposition and never resets the trailing run",
 	"references the standing admitted record of one of those two causes",
@@ -95,6 +97,16 @@ describe("#402 review-history handoff record and re-entry contract", () => {
 				"re-entry that satisfies a plan or authorization gate",
 				"it never satisfies a plan or authorization invalidation, which re-enters its own gate on that gate's terms",
 				"it satisfies any plan or authorization invalidation",
+			],
+			[
+				"limb (a) made non-exclusive",
+				"one of exactly these record-local checks, and no others, refuses",
+				"one of these record-local checks refuses",
+			],
+			[
+				"limb (a) allowed a platform or git read",
+				"It is decided without any platform or git read",
+				"It may use a platform or git read",
 			],
 			["cause literals changed", "`review-history-unmeasured` respectively", "`review-history-transient` respectively"],
 			[
