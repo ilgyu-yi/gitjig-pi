@@ -22,8 +22,9 @@
  * - Bounds: every platform read at this call site passes LIFECYCLE_READ_BOUNDS
  *   (two seconds); the shared reader's default is untouched.
  * - Cache: only a successful computation is cached, for LIFECYCLE_TTL_MS,
- *   under repository/subject/head. Failure leaves no stamp, and a negative
- *   age (the clock moved back) is a miss rather than a fresh entry.
+ *   under repository/subject/head, with its age measured on a monotonic
+ *   clock so a wall-clock change neither extends nor shortens reuse. Failure
+ *   leaves no stamp.
  * - Ordering: only the latest request may render, so one subject's result
  *   never lands over another's.
  *
@@ -77,12 +78,13 @@ async function loadEngine(): Promise<Engine | undefined> {
 	}
 }
 
-const DEFAULT_SEAMS: LifecycleProjectionSeams = {
+/** Production seams; `now` is monotonic, never the wall clock. */
+export const LIFECYCLE_DEFAULT_SEAMS: LifecycleProjectionSeams = Object.freeze({
 	read: runPlatformRead,
-	now: Date.now,
+	now: () => performance.now(),
 	repository: resolvePublishRepository,
 	engine: loadEngine,
-};
+});
 
 function object(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -129,7 +131,7 @@ export class LifecycleProjection {
 	private readonly surface: SessionSurface;
 	private readonly seams: LifecycleProjectionSeams;
 
-	constructor(repoRoot: string, surface: SessionSurface, seams: LifecycleProjectionSeams = DEFAULT_SEAMS) {
+	constructor(repoRoot: string, surface: SessionSurface, seams: LifecycleProjectionSeams = LIFECYCLE_DEFAULT_SEAMS) {
 		this.repoRoot = repoRoot;
 		this.surface = surface;
 		this.seams = seams;
@@ -263,17 +265,22 @@ export class LifecycleProjection {
 			["blocked", blocked],
 			["handoff", handoff],
 		];
+		// SPEC §5.9: stale-head is measured on current records only. A
+		// terminalized record and its terminal are history, and a terminal may
+		// name the head at which it cleared (a pull-synchronize terminal names
+		// the new head), so history's subject heads are never compared.
 		const states: LifecycleState[] = [];
 		for (const [state, population] of populations) {
 			if (!population.ok) return undefined;
-			if ((population.current ?? []).length > 0) states.push(state);
+			const current = population.current ?? [];
+			if (current.some(({ record }) => record.subjectHead !== head)) return undefined;
+			if (current.length > 0) states.push(state);
 		}
-		// Every marker and terminal is checked, current or terminalized: one for
-		// another head is stale evidence, and a base head that contradicts the
-		// subject kind (an Issue has none; a PR has one) is contradictory
-		// evidence; either makes the whole population silent.
-		const contradicts = (record: { subjectHead: unknown; baseHead: unknown } | undefined) =>
-			record?.subjectHead !== head || (head === null ? record.baseHead !== null : typeof record.baseHead !== "string");
+		// Every marker and terminal, current or history, carries a base head
+		// consistent with the subject kind (an Issue has none; a PR has one);
+		// a contradiction makes the whole population silent.
+		const contradicts = (record: { baseHead: unknown } | undefined) =>
+			head === null ? record?.baseHead !== null : typeof record?.baseHead !== "string";
 		const markers = Object.values(engine.RECORD_MARKERS);
 		for (const comment of comments)
 			for (const marker of markers)

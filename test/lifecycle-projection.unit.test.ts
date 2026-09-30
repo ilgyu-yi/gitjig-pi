@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { parseLifecycleTarget, registerLifecycleCommand } from "../.pi/extensions/gitjig/commands/lifecycle.ts";
 import {
+	LIFECYCLE_DEFAULT_SEAMS,
 	LIFECYCLE_READ_BOUNDS,
 	LIFECYCLE_TTL_MS,
 	LifecycleProjection,
@@ -296,6 +297,24 @@ describe("#347 lifecycle projection", () => {
 		const cases: Array<[string, World, "issue" | "pull"]> = [
 			["stale PR head", { comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(OTHER)) }] }, "pull"],
 			[
+				"stale current awaiting-author record",
+				{
+					comments: [
+						{
+							id: 1,
+							user: user("writer"),
+							body: marked(AWAITING, { ...awaitingRecord("U_writer", "resolver-repair"), subjectHead: OTHER }),
+						},
+					],
+				},
+				"pull",
+			],
+			[
+				"stale current handoff record",
+				{ comments: [{ id: 1, user: user("writer"), body: marked(HANDOFF, handoff(OTHER)) }] },
+				"pull",
+			],
+			[
 				"Issue record naming a base head",
 				{ comments: [{ id: 1, user: user("writer"), body: marked(BLOCKED, { ...blocked(null), baseHead: BASE }) }] },
 				"issue",
@@ -325,10 +344,24 @@ describe("#347 lifecycle projection", () => {
 				"issue",
 			],
 			[
-				"stale terminalized blocked pair",
+				"history terminal whose base head contradicts the PR kind",
 				{
 					comments: [
-						{ id: 1, user: user("writer"), body: marked(BLOCKED, blocked(OTHER)) },
+						{
+							id: 1,
+							user: user("writer"),
+							body: marked(AWAITING, { ...awaitingRecord("U_writer", "resolver-repair"), subjectHead: OTHER }),
+						},
+						{ id: 2, user: bot, body: marked(AWAITING_TERMINAL, { ...awaitingTerminal(bot.login), baseHead: null }) },
+					],
+				},
+				"pull",
+			],
+			[
+				"Issue history naming a base head",
+				{
+					comments: [
+						{ id: 1, user: user("writer"), body: marked(BLOCKED, { ...blocked(null), baseHead: BASE }) },
 						{
 							id: 2,
 							user: user("writer"),
@@ -336,27 +369,13 @@ describe("#347 lifecycle projection", () => {
 								recordCommentId: 1,
 								transition: "blocked-clear",
 								observedAt: NOW,
-								subjectHead: OTHER,
+								subjectHead: null,
 								baseHead: BASE,
 							}),
 						},
 					],
 				},
-				"pull",
-			],
-			[
-				"awaiting-author terminal on another head",
-				{
-					comments: [
-						{ id: 1, user: user("writer"), body: marked(AWAITING, awaitingRecord("U_writer", "resolver-repair")) },
-						{
-							id: 2,
-							user: bot,
-							body: marked(AWAITING_TERMINAL, { ...awaitingTerminal(bot.login), subjectHead: OTHER }),
-						},
-					],
-				},
-				"pull",
+				"issue",
 			],
 			[
 				"read-only carrier",
@@ -722,6 +741,56 @@ describe("#347 lifecycle projection", () => {
 		failing.comments = [];
 		assert.equal(await f.projection.request({ kind: "issue", number: 7 }), "displayed");
 		assert.equal(f.commentReads(), 2, "a failure leaves no TTL stamp");
+	});
+
+	it("shows no active state when only history names an earlier head", async () => {
+		const transitionPair = (marker: string, terminal: string, record: unknown, transition: string) => [
+			{ id: 1, user: user("writer"), body: marked(marker, record) },
+			{
+				id: 2,
+				user: user("writer"),
+				body: marked(terminal, { recordCommentId: 1, transition, observedAt: NOW, subjectHead: OTHER, baseHead: BASE }),
+			},
+		];
+		const cases: Array<[string, Comment[]]> = [
+			[
+				"awaiting-author cleared by pull-synchronize at the current head",
+				[
+					{
+						id: 1,
+						user: user("writer"),
+						body: marked(AWAITING, { ...awaitingRecord("U_writer", "resolver-repair"), subjectHead: OTHER }),
+					},
+					{ id: 2, user: bot, body: marked(AWAITING_TERMINAL, awaitingTerminal(bot.login)) },
+				],
+			],
+			[
+				"blocked pair cleared at an earlier head",
+				transitionPair(BLOCKED, BLOCKED_TERMINAL, blocked(OTHER), "blocked-clear"),
+			],
+			[
+				"handoff pair cleared at an earlier head",
+				transitionPair(HANDOFF, HANDOFF_TERMINAL, handoff(OTHER), "handoff-reentry"),
+			],
+		];
+		for (const [name, comments] of cases) {
+			const h = harness({ comments });
+			assert.equal(await h.projection.request({ kind: "pull", number: 7 }), "displayed", name);
+			assert.equal(h.lifecycle(), "[dim]PR #7@aaaaaaa no active lifecycle state", name);
+		}
+	});
+
+	it("measures production cache age on the monotonic clock, never the wall clock", () => {
+		const wall = Date.now;
+		const monotonic = performance.now;
+		Date.now = () => 1;
+		performance.now = () => 12_345;
+		try {
+			assert.equal(LIFECYCLE_DEFAULT_SEAMS.now(), 12_345);
+		} finally {
+			Date.now = wall;
+			performance.now = monotonic;
+		}
 	});
 
 	it("treats a negative cache age as a miss", async () => {
