@@ -2096,9 +2096,17 @@ describe("the tool surface refuses a present-but-non-string expectedRef (issue #
 		);
 		assert.deepEqual(
 			Object.keys(result.details),
-			["disposition", "ok", "diagnostic"],
+			["disposition", "ok", "diagnostic", "traceId"],
 			"expectedref-absent: persisted admitted details carried summary, payload, or another non-contract field",
 		);
+		// #263: the retained identifier rides in details and the sanctioned
+		// reader renders that very record from the real state root.
+		const traceId = String(result.details.traceId);
+		const reader = await import("../.pi/extensions/gitjig/dispatch/trace-reader.ts");
+		assert.ok(reader.canonicalTraceId(traceId), `expectedref-absent: non-canonical traceId ${traceId}`);
+		const read = reader.readRetainedTrace(sink.stateRoot, traceId);
+		assert.equal(read.outcome, "rendered", "expectedref-absent: the retained record did not render");
+		assert.ok(read.outcome === "rendered" && read.text.startsWith(`trace ${traceId}\ndelegate completed`));
 	});
 });
 

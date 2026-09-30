@@ -56,14 +56,14 @@ describe("#132 named isolated observability mutants", () => {
 			"trace.ts",
 			"export const TRACE_RETAIN_MS = 7 * 24 * 60 * 60 * 1000;",
 			"export const TRACE_RETAIN_MS = 70 * 24 * 60 * 60 * 1000;",
-			`${retentionImport} assert.equal(retainTrace(state,snapshot,1),true); assert.equal(retainTrace(state,snapshot,604800002),true); assert.equal(readdirSync(join(state,TRACE_DIRECTORY)).length,1);`,
+			`${retentionImport} assert.equal(typeof retainTrace(state,snapshot,1),"string"); assert.equal(typeof retainTrace(state,snapshot,604800002),"string"); assert.equal(readdirSync(join(state,TRACE_DIRECTORY)).length,1);`,
 		);
 		kill(
 			"retention-count-bound",
 			"trace.ts",
 			"export const TRACE_RETAIN_COUNT = 50;",
 			"export const TRACE_RETAIN_COUNT = 5;",
-			`${retentionImport} for(let i=0;i<6;i++)assert.equal(retainTrace(state,snapshot,i),true); assert.equal(readdirSync(join(state,TRACE_DIRECTORY)).length,6);`,
+			`${retentionImport} for(let i=0;i<6;i++)assert.equal(typeof retainTrace(state,snapshot,i),"string"); assert.equal(readdirSync(join(state,TRACE_DIRECTORY)).length,6);`,
 		);
 		kill(
 			"stderr-attribution",

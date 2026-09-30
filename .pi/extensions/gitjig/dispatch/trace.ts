@@ -146,10 +146,16 @@ export function renderTraceSnapshot(snapshot: TraceSnapshot): string {
 	return lines.length === 0 ? `${heading} · no output observed` : `${heading}\n${lines.join("\n")}`;
 }
 
-export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Date.now()): boolean {
+/**
+ * Retain one completed trace and return its identifier, the filename stem
+ * (SPEC §4.9's sanctioned reader), on the success path; otherwise undefined.
+ * Undefined never establishes that nothing was written: a close or a
+ * pruning unlink can fail after the bytes exist.
+ */
+export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Date.now()): string | undefined {
 	let fd: number | undefined;
 	try {
-		if (!isAbsolute(stateRoot)) return false;
+		if (!isAbsolute(stateRoot)) return undefined;
 		const directory = join(stateRoot, TRACE_DIRECTORY);
 		try {
 			// The state root is owned and created by its resolver. This writer
@@ -157,12 +163,13 @@ export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Da
 			// or mint an ancestor on its behalf.
 			mkdirSync(directory, { mode: STATE_DIR_MODE });
 		} catch (error) {
-			if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) return false;
+			if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) return undefined;
 		}
 		const directoryStats = lstatSync(directory);
 		if (!directoryStats.isDirectory() || directoryStats.isSymbolicLink() || (directoryStats.mode & 0o077) !== 0)
-			return false;
-		const path = join(directory, `${now}-${randomUUID()}.json`);
+			return undefined;
+		const stem = `${now}-${randomUUID()}`;
+		const path = join(directory, `${stem}.json`);
 		fd = openSync(
 			path,
 			constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | STATE_PATH_GUARD_FLAGS,
@@ -174,7 +181,7 @@ export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Da
 			try {
 				unlinkSync(path);
 			} catch {}
-			return false;
+			return undefined;
 		}
 		writeFileSync(fd, `${stringifyInertJson(snapshot)}\n`);
 		closeSync(fd);
@@ -186,9 +193,9 @@ export function retainTrace(stateRoot: string, snapshot: TraceSnapshot, now = Da
 		for (const [index, entry] of entries.entries()) {
 			if (index >= TRACE_RETAIN_COUNT || now - entry.time > TRACE_RETAIN_MS) unlinkSync(join(directory, entry.name));
 		}
-		return true;
+		return stem;
 	} catch {
-		return false;
+		return undefined;
 	} finally {
 		if (fd !== undefined) {
 			try {

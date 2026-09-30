@@ -64,7 +64,7 @@ describe("#132 bounded delegate trace", () => {
 		const state = root();
 		const snapshot = new BoundedDelegateTrace().snapshot("completed");
 		for (let index = 0; index < TRACE_RETAIN_COUNT + 3; index++)
-			assert.equal(retainTrace(state, snapshot, index), true);
+			assert.equal(typeof retainTrace(state, snapshot, index), "string");
 		const directory = join(state, TRACE_DIRECTORY);
 		const files = readdirSync(directory);
 		assert.equal(files.length, TRACE_RETAIN_COUNT);
@@ -80,8 +80,8 @@ describe("#132 bounded delegate trace", () => {
 	it("prunes by age below the count bound", () => {
 		const state = root();
 		const snapshot = new BoundedDelegateTrace().snapshot("completed");
-		assert.equal(retainTrace(state, snapshot, 1), true);
-		assert.equal(retainTrace(state, snapshot, TRACE_RETAIN_MS + 2), true);
+		assert.equal(typeof retainTrace(state, snapshot, 1), "string");
+		assert.equal(typeof retainTrace(state, snapshot, TRACE_RETAIN_MS + 2), "string");
 		const files = readdirSync(join(state, TRACE_DIRECTORY));
 		assert.equal(files.length, 1);
 		assert.equal(files[0].startsWith(`${TRACE_RETAIN_MS + 2}-`), true);
@@ -95,22 +95,22 @@ describe("#132 bounded delegate trace", () => {
 		trace.finish();
 		const snapshot = trace.snapshot("failed");
 		assert.equal(snapshot.counters.decodeReplacements, 1);
-		assert.equal(retainTrace(state, snapshot), true);
+		assert.equal(typeof retainTrace(state, snapshot), "string");
 		const raw = readFileSync(join(state, TRACE_DIRECTORY, readdirSync(join(state, TRACE_DIRECTORY))[0]), "utf8");
 		for (const rawControl of ["\u007f", "\u009b", "\u2028"]) assert.equal(raw.includes(rawControl), false);
 		assert.equal(JSON.parse(raw).lines[0].text, `${text}�`);
 	});
 
 	it("refuses an absent state root and a linked trace directory without creating or following either", () => {
-		assert.equal(retainTrace("relative-state", new BoundedDelegateTrace().snapshot()), false);
+		assert.equal(retainTrace("relative-state", new BoundedDelegateTrace().snapshot()), undefined);
 		const absent = join(root(), "missing-state-root");
-		assert.equal(retainTrace(absent, new BoundedDelegateTrace().snapshot()), false);
+		assert.equal(retainTrace(absent, new BoundedDelegateTrace().snapshot()), undefined);
 		assert.equal(existsSync(absent), false);
 		const state = root();
 		const outside = root();
 		mkdirSync(state, { recursive: true });
 		symlinkSync(outside, join(state, TRACE_DIRECTORY));
-		assert.equal(retainTrace(state, new BoundedDelegateTrace().snapshot()), false);
+		assert.equal(retainTrace(state, new BoundedDelegateTrace().snapshot()), undefined);
 		assert.deepEqual(readdirSync(outside), []);
 	});
 

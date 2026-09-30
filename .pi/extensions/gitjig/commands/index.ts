@@ -6,8 +6,8 @@
  * seams rather than re-resolving them. Registration is load-legal — every
  * act runs inside a handler.
  *
- * Seven command implementations register here (`authoring-brief`, `review`,
- * `review-round`, `ship`, `land`, `governance`, `lifecycle`). Phase 6 removed the superseded command and its runtime assets.
+ * Eight command implementations register here (`authoring-brief`, `review`,
+ * `review-round`, `ship`, `land`, `governance`, `lifecycle`, `dispatch-trace`). Phase 6 removed the superseded command and its runtime assets.
  * The `work-on` case answers no-no-yes and homes on the prompt-template
  * surface at `.pi/prompts/work-on.md`, registered by the substrate's own
  * discovery — no call for it belongs in any extension.
@@ -16,6 +16,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ResolvedModes } from "../modes.ts";
 import type { SessionSurface } from "../session-surface.ts";
 import { registerAuthoringBriefCommand } from "./authoring-brief.ts";
+import { registerDispatchTraceCommand } from "./dispatch-trace.ts";
 import { registerGovernanceCommand } from "./governance.ts";
 import { registerLandCommand } from "./land.ts";
 import { registerLifecycleCommand } from "./lifecycle.ts";
@@ -37,4 +38,5 @@ export function registerSpineCommands(
 	registerLandCommand(pi, repoRoot, modes);
 	registerGovernanceCommand(pi, repoRoot);
 	registerLifecycleCommand(pi, repoRoot, surface);
+	registerDispatchTraceCommand(pi, stateRoot);
 }

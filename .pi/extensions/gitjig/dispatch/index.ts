@@ -93,6 +93,7 @@ import {
 import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import { cleanupDispatchContext, type DispatchContext, provisionDispatchContext } from "./provision.ts";
 import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
+import { canonicalTraceId } from "./trace-reader.ts";
 
 /** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
@@ -253,6 +254,12 @@ export interface RunDispatchOptions {
 	enteredAt?: number;
 	/** Transient operator-only trace; callers must never serialize it as a final result. */
 	onTrace?: (snapshot: TraceSnapshot) => void;
+	/**
+	 * Receives the retained trace identifier once, when the writer returned
+	 * one (SPEC §4.9). It rides beside the outcome, never inside it, so the
+	 * in-process outcome keeps its exact shape.
+	 */
+	onRetained?: (traceId: string) => void;
 	/** Recovery-only absolute monotonic deadline; omitted callers retain existing behavior. */
 	operationDeadline?: number;
 }
@@ -412,8 +419,15 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		if (traceUpdateDegraded) {
 			record("trace-update-degraded", "dispatch trace update degraded: operator progress was not presented");
 		}
-		if (!retainTrace(options.stateRoot, trace)) {
+		const traceId = retainTrace(options.stateRoot, trace);
+		if (traceId === undefined) {
 			record("trace-degraded", "dispatch trace retention degraded: bounded operator evidence was not retained");
+		} else {
+			try {
+				options.onRetained?.(traceId);
+			} catch {
+				// The identifier is an operator aid; a throwing observer cannot decide the dispatch.
+			}
 		}
 		if (run.spawnFailed) return refuse("refuse-delegate-absent", "SPAWN_FAILED", "spawn", "not-started");
 		if (run.timedOut) return refuse("refuse-bound-exceeded", "TIMED_OUT", "run", "timed-out");
@@ -698,6 +712,17 @@ export function dispatchTarget(args: unknown): string {
 	return expectedRef === undefined ? "isolated clone" : "isolated clone · blind compare";
 }
 
+/**
+ * The expanded terminal row's trace indication (SPEC §4.9, §5.9): the
+ * identifier when `details` carries a canonical one, otherwise `trace
+ * unavailable`, which claims only that no identifier is available.
+ */
+export function dispatchTraceIndication(details: unknown): string {
+	const traceId =
+		typeof details === "object" && details !== null ? (details as { traceId?: unknown }).traceId : undefined;
+	return typeof traceId === "string" && canonicalTraceId(traceId) ? `trace ${traceId}` : "trace unavailable";
+}
+
 export function dispatchTerminal(details: unknown, isError = false): TerminalClass {
 	if (isError) return "failure";
 	if (typeof details !== "object" || details === null) return "failure";
@@ -740,6 +765,8 @@ export function registerDispatchTool(
 				}
 			};
 			let lastDiagnostic: DispatcherDiagnostic | undefined;
+			let traceId: string | undefined;
+			const traceDetails = (): { traceId?: string } => (traceId === undefined ? {} : { traceId });
 			const finish = (value: DispatchToolResult): DispatchToolResult => {
 				updateSurface(() => surface?.dispatchFinished(dispatchTerminal(value.details)));
 				return value;
@@ -822,6 +849,9 @@ export function registerDispatchTool(
 					onTrace: (snapshot) => {
 						onUpdate?.({ content: [{ type: "text", text: renderTraceSnapshot(snapshot) }], details: {} });
 					},
+					onRetained: (id) => {
+						traceId = id;
+					},
 				});
 				lastDiagnostic = outcome.diagnostic;
 				if (outcome.disposition === "refused") {
@@ -830,6 +860,7 @@ export function registerDispatchTool(
 							result(serializeDiagnostic(outcome.diagnostic), {
 								disposition: "refused",
 								diagnostic: outcome.diagnostic,
+								...traceDetails(),
 							}),
 							false,
 							outcome.diagnostic,
@@ -844,6 +875,7 @@ export function registerDispatchTool(
 							ok: outcome.ok,
 							...(outcome.compare === undefined ? {} : { compare: outcome.compare }),
 							diagnostic: outcome.diagnostic,
+							...traceDetails(),
 						}),
 						true,
 						outcome.diagnostic,
@@ -873,9 +905,10 @@ export function registerDispatchTool(
 				return new Text(first?.type === "text" ? theme.fg("toolOutput", first.text) : "", 0, 0);
 			}
 			const terminal = dispatchTerminal(result.details, context.isError);
+			if (!options.expanded) return renderActTerminal(terminal, theme);
 			const first = result.content[0];
-			const detail = options.expanded && terminal === "refusal" && first?.type === "text" ? first.text : undefined;
-			return renderActTerminal(terminal, theme, detail);
+			const refusal = terminal === "refusal" && first?.type === "text" ? `${first.text}\n` : "";
+			return renderActTerminal(terminal, theme, `${refusal}${dispatchTraceIndication(result.details)}`);
 		},
 	});
 }
