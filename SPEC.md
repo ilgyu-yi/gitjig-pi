@@ -16,56 +16,56 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.2 | Authorization, evidence, and synchronization | 103 |
 | &nbsp;&nbsp;§1.3 | Changelog-fragment discipline | 125 |
 | &nbsp;&nbsp;§1.4 | Cross-review repair | 129 |
-| &nbsp;&nbsp;§1.5 | Delegated work | 183 |
-| &nbsp;&nbsp;§1.6 | Review integrity | 195 |
-| &nbsp;&nbsp;§1.7 | The reviewer panel | 209 |
-| &nbsp;&nbsp;§1.8 | Plan contest | 237 |
-| &nbsp;&nbsp;§1.9 | Finding judgment | 249 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 292 |
-| §2 | Artifact hierarchy and lifecycle | 300 |
-| &nbsp;&nbsp;§2.1 | Issue types | 304 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 317 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 344 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 348 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 365 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 405 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 419 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 429 |
-| §3 | Enforcement-layer architecture | 441 |
-| &nbsp;&nbsp;§3.1 | The constraint | 445 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 452 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 460 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 583 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 593 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 597 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 609 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 625 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 761 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 775 |
-| &nbsp;&nbsp;§3.11 | Gate design | 789 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 811 |
-| §4 | Substrate and install contract | 821 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 825 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 837 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 845 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 851 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 855 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 859 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 871 |
-| &nbsp;&nbsp;§4.8 | The command layer | 881 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 938 |
-| §5 | Cross-cutting contracts | 1059 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1063 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1069 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1073 |
-| &nbsp;&nbsp;§5.4 | Work language | 1077 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1081 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1099 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1111 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1121 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1129 |
-| §6 | Self-governance milestone | 1145 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1156 |
+| &nbsp;&nbsp;§1.5 | Delegated work | 187 |
+| &nbsp;&nbsp;§1.6 | Review integrity | 199 |
+| &nbsp;&nbsp;§1.7 | The reviewer panel | 213 |
+| &nbsp;&nbsp;§1.8 | Plan contest | 241 |
+| &nbsp;&nbsp;§1.9 | Finding judgment | 253 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 296 |
+| §2 | Artifact hierarchy and lifecycle | 304 |
+| &nbsp;&nbsp;§2.1 | Issue types | 308 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 321 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 348 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 352 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 369 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 409 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 423 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 433 |
+| §3 | Enforcement-layer architecture | 445 |
+| &nbsp;&nbsp;§3.1 | The constraint | 449 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 456 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 464 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 587 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 597 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 601 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 613 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 629 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 765 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 779 |
+| &nbsp;&nbsp;§3.11 | Gate design | 793 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 815 |
+| §4 | Substrate and install contract | 825 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 829 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 841 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 849 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 855 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 859 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 863 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 875 |
+| &nbsp;&nbsp;§4.8 | The command layer | 885 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 942 |
+| §5 | Cross-cutting contracts | 1063 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1067 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1073 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1077 |
+| &nbsp;&nbsp;§5.4 | Work language | 1081 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1085 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1103 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1115 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1125 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1133 |
+| §6 | Self-governance milestone | 1149 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1160 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -177,6 +177,10 @@ Plan invalidation is deliberately **not** a value of this taxonomy — it is the
 The closed limb covers a diagnosis **attempted** against an installed record substrate; the open limb covers that substrate not installed. In its absence, no diagnosis is attempted, and the open limb's posture governs, as §5.2 states. The installed review-round instrument derives the history record, trigger, and diagnosis before the history-diagnosis route; a failed attempted ruling takes the closed limb, not the open one.
 
 Neither limb is silent. The state is recorded through a channel that does not depend on the failed substrate — the principle §3.8's accountable-and-observable norm applies to escapes — and the announcement is an obligation rather than a courtesy: on the open limb because §5.2's open direction rests on it, on the closed limb because the handoff's recipient must know why it received the change.
+
+**Handoff record and re-entry for this gate (§2.2).** Every stop of `/review-round` on a history handoff falls in exactly one of three limbs. **(a) Legacy-underivable projection:** some state in the trailing run is an unversioned review record on which one of exactly these record-local checks, and no others, refuses from that record's own bytes — the adjudication is null; dedup is not attested; the raw bundle is empty; there are more effective rulings than raw findings; ruling or disposition findings repeat, or their counts differ; a ruling has empty provenance or empty evidence, or a CONFIRMED ruling lacks severity, direction or AC impact, or is a NIT without a remedy; the rulings' provenance slots are not exactly the multiset of the raw bundle's slots; or the disposition at a ruling's index names a different finding. It is decided without any platform or git read, so it is persistent; a projection unavailable for any other reason is not limb (a). **(b) Disposed diagnosis:** a valid admitted diagnosis's consequence hands the change off, in any decision mode and with any invalidation, including the autonomous route's `handoff` terminal. **(c) Unmeasured:** every other history handoff — an unreadable history record, an environmental projection failure, or a Judge not dispatched, unavailable, invalid or incomplete. Before stopping, the command writes one handoff record through the #276 transition service at the exact PR subject and base heads, with `cause` `review-history-legacy-underivable`, `review-history-diagnosis-handoff` or `review-history-unmeasured` respectively, `recipient` `maintainer`, and `reentry` equal, for limb (b), to the invalidation (`nothing`, `plan` or `authorization`) of the most recent valid admitted history diagnosis in that round — the autonomous route's fresh ruling when one was admitted, otherwise the initial diagnosis — and `none` for limbs (a) and (c). While any unterminated handoff record of any cause or owner stands on the PR, a later stop writes no second record and hands off citing the standing one, which keeps the engine's population to at most one current record; a standing record of another owner blocks this route until that owner re-enters it on its own terms. A repeated identical observation is idempotent, and a failed write keeps the handoff and names the failure.
+
+A limb-(c) record stands until the owning gate reaches a determinate outcome: a later `/review-round` may run its projection and diagnosis while it stands, and on a limb-(a) refusal of the projection or a valid admitted diagnosis the round itself first writes the `handoff-reentry` terminal for that record, with the record's heads and the engine's rules, then writes the limb-(a) record, the limb-(b) record when the diagnosis hands off, or nothing more when it continues. That terminal replaces a failed attempt with a later determinate outcome; it is not a disposition and never resets the trailing run. Where the round's account cannot pass `authorizedResolver`, the record stays standing and the round hands off — a stated residual. A limb-(a) or limb-(b) gate is re-entered only by a `handoff-reentry` terminal that references the standing admitted record of one of those two causes, carries that record's exact subject and base heads, follows it, and whose carrying comment's author passes `authorizedResolver` for the repository (a User with `WRITE`, `MAINTAIN` or `ADMIN`), attested exactly as `inspectHandoffPopulation` attests carriers; until then the command hands off citing the standing record without a new diagnosis. A Bot or an account without that permission cannot re-enter. The authority is a platform permission and an ordering, not an account-separation claim: where the PR's author and the maintainer operate one account — the capability-and-ordering same-account operation this SPEC already accepts — the platform cannot tell the maintainer's disposition from an author's act, and the terminal claims no more than a permitted account's disposition. For the trigger and the repair-basis projection only, an honored limb-(a) or limb-(b) terminal starts a new trailing run: review states recorded before the terminal's comment do not join a run after it, as a non-`repair` state resets the run; the complete repair history keeps every record, and nothing is edited, deleted or reclassified. Re-entry claims no recovery allowance and never resets a consumed one; it never satisfies a plan or authorization invalidation, which re-enters its own gate on that gate's terms (§1.2, §2.2); it grants no review verdict, ready state, merge or AC closeout, and the next current-head panel still runs in full. A limb-(a) handoff recorded only in prose before this rule is re-entered the same way once an authorized resolver writes the limb-(a) record at the PR's current heads, honored only if the record-local check refuses on the PR's own history at re-entry time; a prose handoff of any other kind is recomputed by the next round, which writes its own record. Every refusal — an unreadable or ambiguous handoff population, an unattested carrier, a terminal whose heads differ from its record's, a terminal without an admitted record, a limb-(a) record whose record-local check does not refuse, or a limb-(c) record offered for disposition — fails closed to the existing hand-off.
 
 The review-round command now performs the installed history record, trigger, and diagnosis, and the history-diagnosis route runs only where the fresh diagnosis value is not NONE, its invalidation is nothing, and decision mode is resolved to autonomous. This clause remains **explicitly advisory** as a governance norm (§3.1 rule 1): a command asset cannot be its only enforcement (§4.8), and no §3.3 gate-class row independently enforces the diagnosis or recovery route. Within the installed command, an attempted ruling or recovery still obeys the fail-closed postures above; advisory status never converts an invalid ruling into NONE. Review (§2.3) enforces this section's authorship: the record is not authored by the acting agent, the four values keep their durable names §2.7 binds them to, no taxonomy value becomes progress authority, and only the three stated planning-boundary routes select re-entry, never a re-plan authored inside a repair. Later recovery phases are not implied by these installed instruments. Each dependency's failure is keyed on its own terms where the instrument exists, and this section asserts no standing state of its own.
 
@@ -320,7 +324,7 @@ Four canonical actor-neutral states and records govern interruption and landing 
 
 - **`awaiting-author` is an Issue/PR handoff.** Exactly two producers exist: a Resolver `repair` disposition and an eligible-human PR `CHANGES_REQUESTED` review. Human review never contributes to §1.4's Resolver-repair count. The recorded producer kind and producer identity determine the clearer: PR synchronization to any new head clears a PR record; only an Issue body edit by that Issue's author clears an Issue record. A comment, label event, edit by another actor, dismissal, approval, or reopening never clears it. The replacement predicate and identity-aware transition writer are the landed #276 service at `.github/workflows/gitjig-lifecycle.mjs`; the former any-actor comment clearer remains retired and no label-only substitute is authoritative.
 - **`blocked` is an Issue/PR condition record.** A valid block carries exactly `{condition,recovery,observedAt,subjectHead,baseHead}`; `condition` states a presently true objective condition and `recovery` states how it becomes false. #276 and `.github/workflows/gitjig-lifecycle.mjs` own writers and clearers. Clearing a blocker never activates proposed work: an Active item resumes Active, a Proposed item remains Proposed, and changed directives re-enter their existing activation gate before work resumes.
-- **A handoff is an interruption record, not a durable stop state.** It carries exactly `{cause,recipient,reentry,observedAt,subjectHead,baseHead}`. The component that cannot continue writes it before stopping; repeated observation of the same cause, recipient, re-entry, and heads is idempotent. Re-entry consumes the interruption on the owning gate's terms while the record remains durable history.
+- **A handoff is an interruption record, not a durable stop state.** It carries exactly `{cause,recipient,reentry,observedAt,subjectHead,baseHead}`. The component that cannot continue writes it before stopping; repeated observation of the same cause, recipient, re-entry, and heads is idempotent. Re-entry consumes the interruption on the owning gate's terms while the record remains durable history; §1.4 states those terms, and the record values, for its review-history gate.
 - **`merge:bypass-permitted` is PR-only advisory intent.** It is neither approval nor authority. §3.8 defines its label-only semantics, invalidators, and exact Tier-1 uses; no other lifecycle label can substitute for it.
 
 Exactly two Issue workflow states govern whether work may begin: **Proposed** (`status:proposed`, auto-stamped at filing) and **Active** (no status label). Every new Issue enters Proposed. Work begins only after a trusted maintainer account has performed a substantive review of the Issue's content and the repository's committed activation rule has accepted that review's passing verdict marker. The marker grammar is closed and occupies the comment's first line: exactly `<!-- activation-verdict: pass -->` or `<!-- activation-verdict: reject -->`. The first is the only passing token; the second records rejection and leaves the Issue Proposed with findings. The substantive review adjudicates the body's claimed authorization case (§1.2): it rules whether the change's contract is normative, checks the precedence rule, confirms a pre-satisfying citation where one is claimed, and, for a new normative contract, confirms the reach-derived settlement mode and records the adjudicated reach in the verdict; any deviation's ground is recorded there too. A new adjudication mechanism collapses into the marker grammar rather than minting a third token (§1.6). The Issue author may perform the activation review when their platform-attested authority satisfies the gate; author/activator separation is not required. No label event, project-field edit, or untrusted comment substitutes for the verdict. Activation may be performed through the repository's operator tooling, but the tooling is only the call site; the predicate remains actor and evidence based.
