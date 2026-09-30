@@ -70,11 +70,11 @@ const SECTION_SHA256: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "989f91156c41b631b5453ddb1f3b301ad6dd1d3719e0eadaa4280fe032f553cb"],
 ];
 
-/** The adopter pointer, byte for byte: it must stay a future-tense, contract-only claim. */
+/** The adopter pointer, byte for byte: a present-tense claim now that #378's runtime has landed (#398). */
 const README_POINTER =
-	"The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed, including an incomplete record when a required return was unavailable; `recovery` reports the bounded recovery route's terminal, next gate, and route, and a content-free record reference where one exists, not an approval or landing decision. The terminal line reports the disposition and, when present, the review state and diagnosis. SPEC §§1.7 and 1.9 settle the **future** indexed-bundle completeness and one bounded full-bundle Judge re-request before a resolved review; §1.4 keeps ambiguous legacy history fail-closed. This contract-only settlement does not claim that the current `/review-round` implements the new re-request or releases any existing handoff.";
+	"The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed, including an incomplete record when a required return was unavailable; `recovery` reports the bounded recovery route's terminal, next gate, and route, and a content-free record reference where one exists, not an approval or landing decision. The terminal line reports the disposition and, when present, the review state and diagnosis. `/review-round` applies SPEC §§1.7 and 1.9's indexed-bundle completeness and one bounded full-bundle Judge re-request before a resolved review, writing version-2 records; historical unversioned records stay readable, §1.4 keeps ambiguous legacy history fail-closed, and no existing handoff is released.";
 const README_SECTION_HEADING = "## Driving a review round";
-const README_SECTION_SHA256 = "390e9e9796b4b32421d65419cffc2edbb0b1a537bbca5d54a740980397ac7433";
+const README_SECTION_SHA256 = "e8df5bc51915dcb66542941a71d10feba63419452d0cfee11f7176e12492803a";
 
 /** Named obligations, so a failure points at the meaning that moved; each lives in exactly one owned paragraph. */
 const OBLIGATIONS = [
@@ -139,7 +139,7 @@ const SETTLED_README: ReadonlyArray<readonly [string, string]> = [
 	["46fa2b872c272e19a0ca2a9b4fd09953989b605559661361c95f0a8b5a3db6f1", "/review-round review-round.json"],
 	["0eb97762ca1a13f5603394a462a082a20fa4ae53b3f0b14a6a0a0b23ae08b7b4", '    "priorFindings": [{"label": "F1", "t'],
 	["e9f9ac87382ab133a5f519240737fc75f82d21ce384a0bd04bd9cbdbfe34ab77", '  "changeDescription": "Add the review-r'],
-	["228ebd548da1c49b942672ce4edba9ddf1ff2060b009873b84c6a3c227b95b2d", "The command appends one structured `gitj"],
+	["ec1c53c7996c1db28e319ae2e1fb75fc8f730d7ec5d13104873759023e29a9b1", "The command appends one structured `gitj"],
 	["06d8faf183324bd6936fea16fd02f30889fe525c0f79f300049cd9216b89cc59", "Use ordinary `body` publication for pros"],
 	["4619fc4f7cff0f89053cd2c3e4c7bdbe54b2822c1bb0ba74cd8728fc22710f19", "Tier 1 always tries ordinary landing fir"],
 	["662de89b6062fc7aa669989a92db2854e10179502d8e2e918a322ad75c6a71e0", "A current operator may instead direct Ti"],
@@ -370,7 +370,11 @@ describe("#379 prospective Judge completeness settlement", () => {
 				"## Driving a review round\n",
 				"## Driving a review round\n\nThe Resolver already rejects partial Judge rulings.\n",
 			),
-			readme.replace("**future** indexed-bundle completeness", "current indexed-bundle completeness"),
+			readme.replace(
+				"`/review-round` applies SPEC",
+				"SPEC §§1.7 and 1.9 settle the **future**; `/review-round` does not yet apply SPEC",
+			),
+			readme.replace("and no existing handoff is released", "and every existing handoff is released"),
 			readme.replace(README_POINTER, `${README_POINTER} The runtime now implements the re-request.`),
 			readme.replace(README_POINTER, `${README_POINTER}\n\nThe rawOrdinal partition is live.`),
 			`${readme.replace(`${README_POINTER}\n`, "")}\n${README_POINTER}\n`,
