@@ -17,7 +17,7 @@ const DETAILS =
 const STATE =
 	"The trace has no runtime read-back path into tool results, session messages, or model context. Its one runtime read path is §4.9's TUI-only operator viewer, which reads one record by its identifier and renders it only in a terminal component; that path never reaches tool results, session messages, or model context either.";
 const ROW =
-	"The expanded terminal row of a dispatch that ran may also show §4.9's retained-trace identifier as `trace <id>`, or `trace unavailable` when the writer returned none; a dispatch refused before its run shows no trace indication.";
+	"The expanded terminal row of a dispatch that reached §4.9's retention step, a spawn failure included, may also show its retained-trace identifier as `trace <id>`, or `trace unavailable` when the writer returned none; a dispatch refused before retention shows no trace indication.";
 
 function section(source: string, start: string, end: string): string {
 	const from = source.indexOf(start);
@@ -73,6 +73,11 @@ describe("#393 retained-trace reader contract", () => {
 				"(any landed lifecycle class)",
 			],
 			["size bound widened", "at most 256 KiB", "at most 1 MiB"],
+			[
+				"spawn failure left ambiguous",
+				"— including a spawn failure, which is retained as a `spawn-failed` record before its refusal —",
+				"",
+			],
 			[
 				"absent directory left unclassified",
 				"is **missing** when absent, since the writer creates it only on its first retention; when present it",
