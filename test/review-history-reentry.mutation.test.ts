@@ -14,6 +14,7 @@ after(() => rmSync(root, { recursive: true, force: true }));
 const ROUND = ".pi/extensions/gitjig/commands/review-round.ts";
 const HANDOFF = ".pi/extensions/gitjig/review/history-handoff.ts";
 const HISTORY = ".pi/extensions/gitjig/review/history.ts";
+const READ = ".pi/extensions/gitjig/platform/read.ts";
 const TEST = "test/review-history-reentry.unit.test.ts";
 
 const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
@@ -134,7 +135,9 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'\t} catch {\n\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.failed };',
 		"\t} catch (error) {\n\t\tthrow error;",
 	],
-	["gh-scalar-unstripped", ROUND, 'return output?.endsWith("\\n") ? output.slice(0, -1) : output;', "return output;"],
+	// #406 moved the single terminator owner to the shared platform reader; this
+	// seam's own stripping is still what the killing arm measures.
+	["gh-scalar-unstripped", READ, 'return output?.endsWith("\\n") ? output.slice(0, -1) : output;', "return output;"],
 	[
 		"settle-without-authority",
 		ROUND,

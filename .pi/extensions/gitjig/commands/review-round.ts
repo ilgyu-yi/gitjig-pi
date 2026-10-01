@@ -12,7 +12,7 @@ import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import type { ResolvedModes } from "../modes.ts";
-import { runPlatformRead } from "../platform/read.ts";
+import { platformScalarValue, runPlatformRead } from "../platform/read.ts";
 import { quoted } from "../quote.ts";
 import {
 	coordinateHistoryRecovery,
@@ -185,10 +185,9 @@ export type HistoryHandoffSeams = {
 	now: () => string;
 };
 
-/** One `gh --jq` scalar: the value without the single line terminator `gh` appends. */
+/** One `gh --jq` scalar read through the shared terminator owner. */
 async function platformScalar(argv: string[], repoRoot: string): Promise<string | undefined> {
-	const output = await runPlatformRead(argv, repoRoot);
-	return output?.endsWith("\n") ? output.slice(0, -1) : output;
+	return platformScalarValue(await runPlatformRead(argv, repoRoot));
 }
 
 /** Production seams: the handed-over engine and live platform permission reads. */

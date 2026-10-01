@@ -8,7 +8,7 @@
  */
 
 import { attestAwaitingAuthorComments } from "../lifecycle-attestation.ts";
-import { runPlatformRead } from "../platform/read.ts";
+import { platformScalarValue, runPlatformRead } from "../platform/read.ts";
 import { addPlatformIssueLabel } from "../platform/write.ts";
 import { type PublishResult, performPublish } from "../publish/service.ts";
 import { fetchAttestedReviewComments } from "./comments.ts";
@@ -84,20 +84,21 @@ export async function publishResolverRepairHandoff(
 	}
 	const host = subject.context.repository.host;
 	const repositoryName = subject.context.repository.nameWithOwner;
-	const writerLogin = await seams.read(["api", "--hostname", host, "user", "--jq", ".login"], repoRoot);
+	// Every read below is a `gh --jq` scalar, so each one passes through the
+	// shared terminator owner before its closed check sees it.
+	const scalar = async (argv: string[]): Promise<string | undefined> =>
+		platformScalarValue(await seams.read(argv, repoRoot));
+	const writerLogin = await scalar(["api", "--hostname", host, "user", "--jq", ".login"]);
 	if (writerLogin === undefined || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(writerLogin))
 		return { ok: false, cause: "the Resolver writer identity was unavailable" };
-	const role = await seams.read(
-		[
-			"api",
-			"--hostname",
-			host,
-			`repos/${repositoryName}/collaborators/${encodeURIComponent(writerLogin)}/permission`,
-			"--jq",
-			".role_name",
-		],
-		repoRoot,
-	);
+	const role = await scalar([
+		"api",
+		"--hostname",
+		host,
+		`repos/${repositoryName}/collaborators/${encodeURIComponent(writerLogin)}/permission`,
+		"--jq",
+		".role_name",
+	]);
 	if (
 		!engine.authorizedResolver({
 			actorId: subject.writerId,
@@ -117,17 +118,14 @@ export async function publishResolverRepairHandoff(
 		async (comment) =>
 			comment.authorId === subject.writerId
 				? role
-				: await seams.read(
-						[
-							"api",
-							"--hostname",
-							host,
-							`repos/${repositoryName}/collaborators/${encodeURIComponent(comment.authorLogin ?? "")}/permission`,
-							"--jq",
-							".role_name",
-						],
-						repoRoot,
-					),
+				: await scalar([
+						"api",
+						"--hostname",
+						host,
+						`repos/${repositoryName}/collaborators/${encodeURIComponent(comment.authorLogin ?? "")}/permission`,
+						"--jq",
+						".role_name",
+					]),
 	);
 	const inspected = engine.inspectAwaitingAuthorPopulation(trusted, "pull");
 	if (!inspected.ok) return { ok: false, cause: "the current lifecycle record population was ambiguous" };

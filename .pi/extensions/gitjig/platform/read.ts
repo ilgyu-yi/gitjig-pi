@@ -17,6 +17,17 @@ export interface PlatformReadBounds {
 	maxBytes: number;
 }
 
+/**
+ * One `gh --jq` scalar: the read value without the single line terminator `gh`
+ * appends to a scalar result. Exactly one trailing U+000A is removed, so a
+ * second terminator or any other surrounding whitespace survives for the
+ * caller's own closed check to refuse. JSON bodies keep `runPlatformRead`'s
+ * verbatim contract and never pass through here.
+ */
+export function platformScalarValue(output: string | undefined): string | undefined {
+	return output?.endsWith("\n") ? output.slice(0, -1) : output;
+}
+
 function killGroup(child: ReturnType<typeof spawn>): void {
 	if (typeof child.pid === "number") {
 		try {
