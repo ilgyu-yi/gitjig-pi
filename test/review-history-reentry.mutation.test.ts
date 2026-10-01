@@ -21,8 +21,8 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"second-record-while-standing",
 		ROUND,
-		"if (write === undefined || standing !== undefined) return undefined;",
-		"if (write === undefined) return undefined;",
+		'if (standing !== undefined) return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };',
+		"",
 	],
 	["standing-ab-not-blocking", ROUND, 'if (view.standing !== undefined && view.standing.limb !== "c")', "if (false)"],
 	[
@@ -156,13 +156,13 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"settle-terminal-unchecked",
 		ROUND,
-		"const terminalBlocked = await settleBlocked();",
+		"const terminalBlocked = await settleBlocked(standing.commentId);",
 		"const terminalBlocked = undefined as TerminalSeed | undefined;",
 	],
 	[
 		"settle-record-unchecked",
 		ROUND,
-		"const recordBlocked = await settleBlocked();",
+		"const recordBlocked = await settleBlocked(undefined);",
 		"const recordBlocked = undefined as TerminalSeed | undefined;",
 	],
 	[
@@ -197,6 +197,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	],
 	["reenter-unsafe-pr", ROUND, "if (!Number.isSafeInteger(pr) || pr < 1) return", "if (false) return"],
 	["reenter-population-not-reread", ROUND, "if (reread.standing?.commentId !== expected) return", "if (false) return"],
+	[
+		"settle-population-not-reread",
+		ROUND,
+		'\t\t\t\tif (reread.standing?.commentId !== expected)\n\t\t\t\t\treturn { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };\n',
+		"",
+	],
+	[
+		"settle-reread-unreadable",
+		ROUND,
+		'\t\t\t\tif (!reread.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };\n',
+		"",
+	],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,

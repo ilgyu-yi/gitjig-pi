@@ -428,14 +428,16 @@ export async function driveReviewRound(
 			// while this round ran is the standing one and no second record is
 			// written. RESIDUAL, stated: the read and the write are not one
 			// transaction; a record posted between them is not observable here.
-			const fresh = await readHistoryHandoffs(
-				handoffEngine,
-				await seams.readComments(repoRoot, subject),
-				subject.context.repository.id,
-				subject.writerId,
-				async (comment) =>
-					comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
-			);
+			const readHandoffs = async () =>
+				readHistoryHandoffs(
+					handoffEngine,
+					await seams.readComments(repoRoot, subject),
+					subject.context.repository.id,
+					subject.writerId,
+					async (comment) =>
+						comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
+				);
+			const fresh = await readHandoffs();
 			if (!fresh.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };
 			// A limb-(a)/(b) or foreign record that appeared while this round ran
 			// now stands: the round writes nothing and hands off citing it.
@@ -443,26 +445,35 @@ export async function driveReviewRound(
 				return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
 			standing = fresh.standing;
 			// Immediately before each write: a record or terminal is admitted only
-			// from an authorized carrier (§1.4's residual), and none binds heads that
-			// moved while this round ran. Each write re-reads both facts.
-			const settleBlocked = async (): Promise<TerminalSeed | undefined> => {
+			// from an authorized carrier (§1.4's residual), none binds heads that
+			// moved while this round ran, and the standing record is still exactly
+			// the one this write expects (none, before a new record), so no record or
+			// terminal appearing between this round's writes is followed by a second.
+			// Each write re-reads all three facts.
+			const settleBlocked = async (expected: number | undefined): Promise<TerminalSeed | undefined> => {
 				if (!(await handoffSeams.writerAuthorized(subject)))
 					return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
 				if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
 					return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+				const reread = await readHandoffs();
+				if (!reread.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };
+				if (reread.standing?.commentId !== expected)
+					return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
 				return undefined;
 			};
 			if (standing !== undefined && standing.limb === "c" && wasDeterminate) {
-				const terminalBlocked = await settleBlocked();
+				const terminalBlocked = await settleBlocked(standing.commentId);
 				if (terminalBlocked !== undefined) return terminalBlocked;
 				const body = historyReentryBody(handoffEngine, standing, handoffSeams.now());
 				if (body === undefined || !(await seams.publishRecord(body, subject)).ok)
 					return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
 				standing = undefined;
 			}
-			// While any record stands, a later stop writes no second one (§1.4).
-			if (write === undefined || standing !== undefined) return undefined;
-			const recordBlocked = await settleBlocked();
+			if (write === undefined) return undefined;
+			// While any record stands, a later stop writes no second one and hands
+			// off citing the standing record (§1.4).
+			if (standing !== undefined) return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
+			const recordBlocked = await settleBlocked(undefined);
 			if (recordBlocked !== undefined) return recordBlocked;
 			const pull = subject.context.pullRequest;
 			const body = historyHandoffBody(

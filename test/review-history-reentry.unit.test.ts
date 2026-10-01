@@ -713,6 +713,119 @@ describe("#404 round-4 paths", () => {
 		assert.equal(fetched, 0);
 	});
 
+	it("writes no record when another appears between ending limb (c) and writing limb (a)", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+		]);
+		const publish = h.seams.publishRecord;
+		h.seams.publishRecord = async (body, subject) => {
+			const receipt = await publish(body, subject);
+			if (isTerminal(body)) h.comments.push(writer(70, handoffBody("another-owner-stop", r.second, r.base)));
+			return receipt;
+		};
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 1);
+		assert.ok(isTerminal(h.published[0]));
+	});
+
+	it("refuses the round's handoff write when the population becomes unreadable before it", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+		]);
+		const handoff = h.seams.historyHandoff;
+		assert.ok(handoff);
+		let atWrite = false;
+		h.seams.historyHandoff = {
+			...handoff,
+			writerAuthorized: async (subject) => {
+				atWrite = true;
+				return handoff.writerAuthorized(subject);
+			},
+		};
+		const read = h.seams.readComments;
+		h.seams.readComments = async (root, subject) => (atWrite ? { ok: false, cause: "gone" } : read(root, subject));
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(
+			outcome.disposition === "hand-off" && outcome.cause.includes("unreadable or ambiguous"),
+			JSON.stringify(outcome),
+		);
+		assert.equal(h.published.length, 0);
+	});
+
+	it("cites a standing limb-(c) record on a later unmeasured stop, before any authority read", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[
+				writer(1, composeReviewRecord(repair(r.first))),
+				writer(2, composeReviewRecord(repair(r.second))),
+				writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+			],
+			{ dispatchUnavailable: true, writerAuthorized: false },
+		);
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 0);
+	});
+
+	it("hands off citing a record that appeared during the round even when the round would continue", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))],
+			{ diagnosis: { value: "NONE", invalidation: "nothing", evidence: "advancing" } },
+		);
+		const dispatch = h.seams.makeDispatch;
+		h.seams.makeDispatch = (input) => {
+			const inner = dispatch(input);
+			return async (brief, head) => {
+				if (!h.comments.some((comment) => comment.id === 90))
+					h.comments.push(writer(90, handoffBody("another-owner-stop", r.second, r.base)));
+				return inner(brief, head);
+			};
+		};
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
+		assert.equal(h.rounds(), 0);
+		assert.equal(h.published.length, 0);
+	});
+
+	it("ends a limb-(c) record that appeared during the round when the round becomes determinate", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))],
+			{ diagnosis: STAGNATION },
+		);
+		const dispatch = h.seams.makeDispatch;
+		h.seams.makeDispatch = (input) => {
+			const inner = dispatch(input);
+			return async (brief, head) => {
+				if (!h.comments.some((comment) => comment.id === 80))
+					h.comments.push(writer(80, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)));
+				return inner(brief, head);
+			};
+		};
+		await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(h.published.length, 2);
+		assert.ok(isTerminal(h.published[0]));
+		assert.equal(
+			(engine.parseMarkedRecord(h.published[0], engine.RECORD_MARKERS.handoffTerminal) as { recordCommentId: number })
+				.recordCommentId,
+			80,
+		);
+		assert.equal(causeOf(h.published[1]), HISTORY_HANDOFF_CAUSE.b);
+	});
+
 	it("reads the production login and permission as gh scalars, without the line terminator", async () => {
 		const bin = mkdtempSync(join(tmpdir(), "gitjig-404-gh-"));
 		dirs.push(bin);
