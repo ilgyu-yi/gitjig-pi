@@ -13,6 +13,7 @@ after(() => rmSync(root, { recursive: true, force: true }));
 
 const ROUND = ".pi/extensions/gitjig/commands/review-round.ts";
 const HANDOFF = ".pi/extensions/gitjig/review/history-handoff.ts";
+const HISTORY = ".pi/extensions/gitjig/review/history.ts";
 const TEST = "test/review-history-reentry.unit.test.ts";
 
 const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
@@ -81,6 +82,49 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };',
 		"",
 	],
+	["check-adjudication-null", HISTORY, "if (adjudication === null || record.review", "if (record.review"],
+	[
+		"check-dedup",
+		HISTORY,
+		"if (!adjudication.dedupAttested || record.bundle.length === 0)",
+		"if (record.bundle.length === 0)",
+	],
+	[
+		"check-empty-bundle",
+		HISTORY,
+		"if (!adjudication.dedupAttested || record.bundle.length === 0)",
+		"if (!adjudication.dedupAttested)",
+	],
+	[
+		"check-count-difference",
+		HISTORY,
+		" || rulings.size !== dispositions.size) return undefined;",
+		") return undefined;",
+	],
+	[
+		"check-empty-provenance",
+		HISTORY,
+		"if (ruling.provenance.length === 0 || !ruling.evidence)",
+		"if (!ruling.evidence)",
+	],
+	[
+		"check-empty-evidence",
+		HISTORY,
+		"if (ruling.provenance.length === 0 || !ruling.evidence)",
+		"if (ruling.provenance.length === 0)",
+	],
+	["check-severity", HISTORY, "(ruling.severity === undefined ||", "("],
+	["check-direction", HISTORY, "\t\t\t\truling.direction === undefined ||\n", ""],
+	["check-ac-impact", HISTORY, "\t\t\t\truling.onCriterion === undefined ||\n", ""],
+	["check-nit-remedy", HISTORY, ' ||\n\t\t\t\t(ruling.severity === "NIT" && !ruling.remedy))', ")"],
+	["check-unknown-slot", HISTORY, "(remaining.get(key) ?? Number.NaN) - 1", "(remaining.get(key) ?? 1) - 1"],
+	[
+		"check-multiset-leftover",
+		HISTORY,
+		"if ([...remaining.values()].some((count) => count !== 0)) return undefined;",
+		"",
+	],
+	["check-index-finding", HISTORY, "if (disposition?.finding !== ruling.finding) return undefined;", ""],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,

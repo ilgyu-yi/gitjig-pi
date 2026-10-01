@@ -255,8 +255,12 @@ function unversionedRepairFindings(record: ReviewRecord): RepairBasisFinding[] |
 	// The Judge's effective findings may rephrase or merge the raw bundle (§1.9).
 	// Retain that bundle in the complete source record; never invent a raw-text
 	// or positional pairing between it and the Judge's rulings.
-	if (!adjudication.dedupAttested || record.bundle.length === 0 || adjudication.rulings.length > record.bundle.length)
-		return undefined;
+	// SPEC §1.4's "more effective rulings than raw findings" needs no predicate
+	// of its own: every ruling must carry non-empty provenance and each entry
+	// consumes one raw contribution below, so more rulings than raw findings
+	// always leaves a negative count, which the closing multiset check refuses
+	// (#404).
+	if (!adjudication.dedupAttested || record.bundle.length === 0) return undefined;
 	// Preserve the raw provenance MULTISET, not merely the set of slots:
 	// two findings from one slot still contribute two provenance entries.
 	// This checks counts without guessing a raw-to-effective finding pairing.
@@ -287,10 +291,10 @@ function unversionedRepairFindings(record: ReviewRecord): RepairBasisFinding[] |
 		for (const slot of ruling.provenance) {
 			// record.ts already admits only slots with string lens/surface; do not
 			// duplicate its wire predicate in this read-time relation.
+			// Counts only decrease, so an unknown or overused slot leaves NaN or a
+			// negative count that the closing multiset check refuses (#404).
 			const key = JSON.stringify([slot.lens, slot.surface]);
-			const count = remaining.get(key);
-			if (count === undefined || count === 0) return undefined;
-			remaining.set(key, count - 1);
+			remaining.set(key, (remaining.get(key) ?? Number.NaN) - 1);
 		}
 		const disposition = record.review.resolution.dispositions[index];
 		if (disposition?.finding !== ruling.finding) return undefined;

@@ -612,45 +612,93 @@ describe("#404 re-entry", () => {
 		assert.equal(h.dispatches(), 1, "the false limb-(a) terminal did not reset the run");
 	});
 
-	it("classifies limb (a) by each of the eight record-local checks", () => {
+	it("classifies limb (a) by each record-local check, each shape tripping only its own predicate", () => {
 		const good = () => repair("2".repeat(40));
 		const first = repair("1".repeat(40));
+		const ruling0 = (record: ReviewRecord) => {
+			const ruling = record.adjudication?.rulings[0];
+			assert.ok(ruling);
+			return ruling;
+		};
+		const dispositions = (record: ReviewRecord) => {
+			assert.ok(record.review.state === "resolved");
+			return record.review.resolution.dispositions;
+		};
 		const shapes: Array<[string, (record: ReviewRecord) => void]> = [
 			["adjudication null", (record) => Object.assign(record, { adjudication: null })],
 			["dedup not attested", (record) => Object.assign(record.adjudication ?? {}, { dedupAttested: false })],
-			["empty raw bundle", (record) => Object.assign(record, { bundle: [] })],
 			[
-				"more rulings than raw findings",
-				(record) => record.adjudication?.rulings.push({ ...record.adjudication.rulings[0], finding: "another" }),
-			],
-			[
-				"repeated disposition finding",
+				"empty raw bundle",
 				(record) => {
-					if (record.review.state === "resolved")
-						record.review.resolution.dispositions.push({ ...record.review.resolution.dispositions[0] });
+					record.bundle = [];
+					if (record.adjudication !== null) record.adjudication.rulings = [];
+					dispositions(record).length = 0;
 				},
 			],
-			["empty evidence", (record) => Object.assign(record.adjudication?.rulings[0] ?? {}, { evidence: "" })],
 			[
-				"a CONFIRMED ruling without direction",
-				(record) => Object.assign(record.adjudication?.rulings[0] ?? {}, { direction: undefined }),
+				// Implied, not a separate predicate: the extra ruling's provenance
+				// exhausts the raw multiset (see unversionedRepairFindings).
+				"more effective rulings than raw findings",
+				(record) => {
+					record.adjudication?.rulings.push({ ...ruling0(record), finding: "another" });
+					dispositions(record).push({ finding: "another", disposition: "repair" });
+				},
 			],
 			[
-				"provenance slots not the raw multiset",
-				(record) => Object.assign(record.adjudication?.rulings[0] ?? {}, { provenance: [SUITE] }),
+				"repeated ruling and disposition finding",
+				(record) => {
+					record.bundle.push({ finding: "raw two", slot: SLOT });
+					record.adjudication?.rulings.push({ ...ruling0(record) });
+					dispositions(record).push({ ...dispositions(record)[0] });
+				},
 			],
+			[
+				"disposition count differs from ruling count",
+				(record) => dispositions(record).push({ finding: "extra", disposition: "repair" }),
+			],
+			[
+				"empty provenance while another ruling carries both raw slots",
+				(record) => {
+					record.bundle.push({ finding: "raw two", slot: SLOT });
+					ruling0(record).provenance = [SLOT, SLOT];
+					record.adjudication?.rulings.push({ ...ruling0(record), finding: "another", provenance: [] });
+					dispositions(record).push({ finding: "another", disposition: "repair" });
+				},
+			],
+			["empty evidence", (record) => Object.assign(ruling0(record), { evidence: "" })],
+			["CONFIRMED without severity", (record) => Object.assign(ruling0(record), { severity: undefined })],
+			["CONFIRMED without direction", (record) => Object.assign(ruling0(record), { direction: undefined })],
+			["CONFIRMED without AC impact", (record) => Object.assign(ruling0(record), { onCriterion: undefined })],
+			["CONFIRMED NIT without remedy", (record) => Object.assign(ruling0(record), { severity: "NIT" })],
+			["unknown slot beside every raw slot", (record) => Object.assign(ruling0(record), { provenance: [SLOT, SUITE] })],
+			["overused raw slot", (record) => Object.assign(ruling0(record), { provenance: [SLOT, SLOT] })],
+			["provenance slots not the raw multiset", (record) => Object.assign(ruling0(record), { provenance: [SUITE] })],
+			["raw contribution left unconsumed", (record) => record.bundle.push({ finding: "raw two", slot: SLOT })],
 			[
 				"disposition at the ruling's index names another finding",
 				(record) => {
-					if (record.review.state === "resolved")
-						record.review.resolution.dispositions[0] = { finding: "different", disposition: "repair" };
+					dispositions(record)[0] = { finding: "different", disposition: "repair" };
 				},
 			],
 		];
+		// Baseline: the unmodified shape is derivable, so each refusal is the shape's.
+		assert.equal(legacyUnderivable(repairHistory([first, good()])), false);
+		// A NIT that carries its remedy stays derivable (the remedy clause is the trigger).
+		const nit = good();
+		Object.assign(ruling0(nit), { severity: "NIT", remedy: "replace x with y" });
+		assert.equal(legacyUnderivable(repairHistory([first, nit])), false);
+		// A throw is never a classification: it fails this assertion too.
+		const classify = (record: ReviewRecord): boolean | string => {
+			try {
+				return legacyUnderivable(repairHistory([first, record]));
+			} catch (error) {
+				return `threw: ${String(error)}`;
+			}
+		};
 		for (const [name, shape] of shapes) {
 			const record = good();
 			shape(record);
-			assert.equal(legacyUnderivable(repairHistory([first, record])), true, name);
+			assert.equal(classify(record), true, name);
 		}
 	});
 
