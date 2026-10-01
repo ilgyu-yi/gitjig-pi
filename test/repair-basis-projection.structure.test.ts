@@ -31,11 +31,12 @@ function contractHolds(interval: string, history: string, caller: string): boole
 			'if (ruling.validity === "CONFIRMED" && ruling.severity === "SUBSTANTIVE" && disposition.disposition === "repair")',
 		) &&
 		history.includes("!adjudication.dedupAttested ||") &&
-		history.includes("record.bundle.length === 0 ||") &&
-		history.includes("adjudication.rulings.length > record.bundle.length") &&
+		history.includes("|| record.bundle.length === 0)") &&
 		history.includes("const remaining = new Map<string, number>()") &&
 		history.includes("remaining.set(key, (remaining.get(key) ?? 0) + 1)") &&
-		history.includes("remaining.set(key, count - 1)") &&
+		// #404: an unknown or overused slot leaves NaN or a negative count that the
+		// closing multiset check refuses, so it carries the slot-presence check.
+		history.includes("remaining.set(key, (remaining.get(key) ?? Number.NaN) - 1)") &&
 		history.includes("[...remaining.values()].some((count) => count !== 0)") &&
 		history.includes("if (joined.has(entry.finding)) return undefined") &&
 		history.includes("rulings.size !== dispositions.size") &&
@@ -44,7 +45,6 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("ruling.direction === undefined ||") &&
 		history.includes("ruling.onCriterion === undefined ||") &&
 		history.includes('ruling.severity === "NIT" && !ruling.remedy') &&
-		history.includes("if (count === undefined || count === 0) return undefined") &&
 		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes(
@@ -111,9 +111,13 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace('ruling.severity === "SUBSTANTIVE"', 'ruling.severity !== "NIT"'), CALLER],
 			[INTERVAL, HISTORY.replace('disposition.disposition === "repair"', 'disposition.disposition !== "none"'), CALLER],
 			[INTERVAL, HISTORY.replace("!adjudication.dedupAttested ||", "false ||"), CALLER],
-			[INTERVAL, HISTORY.replace("record.bundle.length === 0 ||", "false ||"), CALLER],
-			[INTERVAL, HISTORY.replace("adjudication.rulings.length > record.bundle.length", "false"), CALLER],
-			[INTERVAL, HISTORY.replace("remaining.set(key, count - 1)", "remaining.set(key, count)"), CALLER],
+			[INTERVAL, HISTORY.replace("|| record.bundle.length === 0)", "|| false)"), CALLER],
+			[
+				INTERVAL,
+				HISTORY.replace("remaining.set(key, (remaining.get(key) ?? Number.NaN) - 1)", "remaining.set(key, 0)"),
+				CALLER,
+			],
+			[INTERVAL, HISTORY.replace("(remaining.get(key) ?? Number.NaN) - 1", "(remaining.get(key) ?? 1) - 1"), CALLER],
 			[INTERVAL, HISTORY.replace("disposition?.finding !== ruling.finding", "false"), CALLER],
 			[INTERVAL, HISTORY.replace("[...remaining.values()].some((count) => count !== 0)", "false"), CALLER],
 			[
@@ -127,11 +131,6 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL, HISTORY.replace("ruling.direction === undefined ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace("ruling.onCriterion === undefined ||", "false ||"), CALLER],
 			[INTERVAL, HISTORY.replace('ruling.severity === "NIT" && !ruling.remedy', "false"), CALLER],
-			[
-				INTERVAL,
-				HISTORY.replace("if (count === undefined || count === 0) return undefined", "if (false) return undefined"),
-				CALLER,
-			],
 			[INTERVAL, HISTORY.replace("await readCorrectionIntervals(", "await Promise.all("), CALLER],
 			[
 				INTERVAL,

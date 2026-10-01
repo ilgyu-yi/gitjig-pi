@@ -422,6 +422,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/review/history-handoff.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/review/history.ts",
 			"disposition": "carried"
 		},
@@ -663,6 +667,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/360.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/404.md",
 			"disposition": "instance-state"
 		},
 		{

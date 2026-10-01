@@ -347,8 +347,18 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{ file: "gitjig/commands/review.ts", allow: [] },
 	{
 		file: "gitjig/commands/review-round.ts",
-		// Git revision operand passed to execFileSync, never rendered.
-		allow: ["ref"],
+		allow: [
+			// Git revision operand passed to execFileSync, never rendered.
+			"ref",
+			// #404 permission read: the platform-attested repository name and a
+			// URI-encoded login, forming a gh argv route that is never rendered.
+			"subject.context.repository.nameWithOwner",
+			"encodeURIComponent(login)",
+			// #404 re-entry terminal: a closed limb token and one of the fixed
+			// REENTRY_REFUSED literals; neither carries an actor byte.
+			"result.limb",
+			"result.cause",
+		],
 	},
 	{ file: "gitjig/commands/ship.ts", allow: [] },
 	// #347: both operator notices are fixed module constants with no interpolation.

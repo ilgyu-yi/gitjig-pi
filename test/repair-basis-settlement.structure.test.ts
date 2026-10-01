@@ -125,7 +125,8 @@ describe("issue #236 repair-basis settlement", () => {
 		assert.ok(derive >= 0 && guard > derive && compose > guard);
 		assert.match(
 			CALLER_SOURCE.slice(guard, compose),
-			/return \{ disposition: "hand-off", cause: HANDOFF_DIAGNOSIS, reentry: "none" \}/,
+			// #404: the same hand-off, now recorded in its §1.4 limb through stopAs.
+			/return stopAs\(legacyUnderivable\(history\) \? "a" : "c", "none", \{\s*disposition: "hand-off",\s*cause: HANDOFF_DIAGNOSIS,\s*reentry: "none",\s*\}\);/,
 		);
 	});
 });
