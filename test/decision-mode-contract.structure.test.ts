@@ -97,6 +97,8 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 }
 
 const COORDINATOR_RUNTIME_EXPORTS = [
+	// Read-only parser parity; claimAllowance and finalizeAllowance stay private.
+	"acceptsRecoveryPiPayload",
 	"coordinateHistoryRecovery",
 	"hasRecoveryRetryReserve",
 	"makeRecoveryProfileDispatcher",

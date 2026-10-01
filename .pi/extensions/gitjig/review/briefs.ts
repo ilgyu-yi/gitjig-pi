@@ -91,6 +91,8 @@ export const DEFAULT_TIMING: BriefTiming = { firstReturnSeconds: 900, finalRetur
 
 export const RETURN_PROTOCOL_RETRY_SUFFIX =
 	"\n\nReturn protocol reminder: write a complete provisional ../return.json early and overwrite it with the final closed-schema return.";
+export const PI_RETURN_PROTOCOL_RETRY_SUFFIX =
+	"\n\nPi return protocol reminder: use only submit_result to send your final typed fields; do not write ../return.json directly.";
 
 /** The caller's fences — what a slot may not raise or propose. */
 export type ReviewFences = {
@@ -203,6 +205,24 @@ export const DELEGATE_RETURN_CONTRACT = [
 	"position labels, never by hash.",
 ].join("\n");
 
+export const PI_RETURN_CONTRACT = [
+	"PI RESULT: use only the trusted submit_result tool for your final typed result. Do NOT write",
+	"../return.json directly, choose a role, supply a commit hash, or encode an outer return envelope.",
+	"The caller owns the role, default summary, payload encoding and clone HEAD. The optional",
+	"summary tool argument carries final observations/claim limits, never a commit hash.",
+	"Your parameters must satisfy the current role's closed schema; errors may be corrected",
+	"before the deadline. Once the tool accepts a result, the slot is final and cannot be overwritten.",
+].join("\n");
+
+export function composePiDeadlines(timing: BriefTiming): string {
+	return (
+		"DEADLINES (self-enforced): investigate within the run bound, then call submit_result once with " +
+		"your complete final typed result by T0+" +
+		String(timing.finalReturnSeconds) +
+		" seconds. An absent or late submission is refused; a settled agent is not a result."
+	);
+}
+
 export function composeDelegateDeadlines(timing: BriefTiming): string {
 	return (
 		"DEADLINES (self-enforced): write a SHORT, COMPLETE provisional ../return.json early, then improve " +
@@ -251,6 +271,7 @@ export function composeReviewerBrief(
 	context: BriefContext,
 	fences: ReviewFences,
 	timing: BriefTiming = DEFAULT_TIMING,
+	transport: "generic" | "pi" = "generic",
 ): string {
 	return [
 		"You are one reviewer slot of a mutually blind review panel.",
@@ -265,7 +286,9 @@ export function composeReviewerBrief(
 		"workflow consequence; every consequence derives downstream. A clean review is allowed to be clean —",
 		"do not manufacture findings.",
 		"",
-		'Your structured result rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+		transport === "pi"
+			? "Submit the following closed object as typed submit_result tool arguments:"
+			: 'Your structured result rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"token": "APPROVED" | "FINDINGS", "findings": string[]} — findings empty exactly when the token',
 		"is APPROVED. Each finding states what you observed, where, and the command whose output shows it.",
 		"",
@@ -286,9 +309,9 @@ export function composeReviewerBrief(
 		"",
 		PROVISIONED_TREE_FACTS,
 		"",
-		DELEGATE_RETURN_CONTRACT,
+		transport === "pi" ? PI_RETURN_CONTRACT : DELEGATE_RETURN_CONTRACT,
 		"",
-		composeDelegateDeadlines(timing),
+		transport === "pi" ? composePiDeadlines(timing) : composeDelegateDeadlines(timing),
 	].join("\n");
 }
 
@@ -306,6 +329,7 @@ export function composeJudgeBrief(
 	fences: ReviewFences,
 	timing: BriefTiming = DEFAULT_TIMING,
 	reRequest?: { gaps: readonly string[] },
+	transport: "generic" | "pi" = "generic",
 ): string {
 	const findings = bundle.map(
 		(entry) =>
@@ -392,15 +416,17 @@ export function composeJudgeBrief(
 		"",
 		PROVISIONED_TREE_FACTS,
 		"",
-		'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+		transport === "pi"
+			? "Submit the following closed object as typed submit_result tool arguments:"
+			: 'Your adjudication rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"dedupAttested": boolean, "rulings": [{"finding": string, "rawOrdinals": [integer, ...], "provenance": [{"lens": string,',
 		'"surface": string}], "validity": "CONFIRMED" | "REFUTED" | "INDETERMINATE", "severity"?:',
 		'"SUBSTANTIVE" | "NIT", "remedy"?: string, "direction"?: "fail-closed" | "live-harm",',
 		'"onCriterion"?: boolean, "evidence": string}]} — the optional axes owed exactly when §1.9 owes',
 		"them: all four on a CONFIRMED finding, validity plus evidence otherwise.",
 		"",
-		DELEGATE_RETURN_CONTRACT,
+		transport === "pi" ? PI_RETURN_CONTRACT : DELEGATE_RETURN_CONTRACT,
 		"",
-		composeDelegateDeadlines(timing),
+		transport === "pi" ? composePiDeadlines(timing) : composeDelegateDeadlines(timing),
 	].join("\n");
 }

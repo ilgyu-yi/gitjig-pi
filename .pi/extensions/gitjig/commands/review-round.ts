@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MAX_RUN_BOUND_MS } from "../dispatch/executor.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
+import type { PiInvocation } from "../dispatch/pi-run.ts";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import type { ResolvedModes } from "../modes.ts";
 import { platformScalarValue, runPlatformRead } from "../platform/read.ts";
@@ -88,7 +89,9 @@ export type ReviewRoundSpec = {
 	pr: number;
 	fences: ReviewFences;
 	changeDescription: string;
-	delegateArgv: string[];
+	delegateArgv?: string[];
+	/** Explicit operator-owned Pi mode. Consumer dispatch fixes reviewer/Judge/history roles. */
+	pi?: { piExecutable: string; provider: string; model: string };
 	timeoutMs?: number;
 	timing?: BriefTiming;
 };
@@ -161,7 +164,9 @@ export type ReviewRoundSeams = {
 	refetchSubject: (repoRoot: string, subject: ReviewSubject) => Promise<ReviewSubject | undefined>;
 	readComments: (repoRoot: string, subject: ReviewSubject) => Promise<AttestedCommentPopulation>;
 	recordsFromComments: (population: AttestedCommentPopulation, writerId: string) => ReviewRecord[] | undefined;
-	makeDispatch: (spec: ReviewRoundSpec) => (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
+	makeDispatch: (
+		spec: ReviewRoundSpec,
+	) => (brief: string, expectedHead: string, role?: PiInvocation["role"]) => Promise<DispatchOutcome>;
 	runRound: typeof reviewRound;
 	publishRecord: (body: string, subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
 	publishAwaitingAuthor: (subject: ReviewSubject) => Promise<ReviewPublicationOutcome>;
@@ -275,17 +280,32 @@ function timing(value: unknown): value is BriefTiming {
 }
 
 export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefined {
-	const keys = ["pr", "fences", "changeDescription", "delegateArgv", "timeoutMs", "timing"];
+	const keys = ["pr", "fences", "changeDescription", "delegateArgv", "pi", "timeoutMs", "timing"];
 	if (!exactObject(value, keys)) return undefined;
 	if (!Number.isSafeInteger(value.pr) || (value.pr as number) <= 0) return undefined;
 	if (!fences(value.fences) || typeof value.changeDescription !== "string" || value.changeDescription.length === 0)
 		return undefined;
-	if (
-		!stringList(value.delegateArgv) ||
-		value.delegateArgv.length === 0 ||
-		value.delegateArgv.some((entry) => entry.length === 0)
-	)
-		return undefined;
+	if (value.pi === undefined) {
+		if (
+			!stringList(value.delegateArgv) ||
+			value.delegateArgv.length === 0 ||
+			value.delegateArgv.some((entry) => entry.length === 0)
+		)
+			return undefined;
+	} else {
+		if (
+			value.delegateArgv !== undefined ||
+			!exactObject(value.pi, ["piExecutable", "provider", "model"]) ||
+			Object.keys(value.pi).length !== 3 ||
+			typeof value.pi.piExecutable !== "string" ||
+			value.pi.piExecutable.length === 0 ||
+			typeof value.pi.provider !== "string" ||
+			typeof value.pi.model !== "string" ||
+			!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.pi.provider) ||
+			!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.pi.model)
+		)
+			return undefined;
+	}
 	if (
 		value.timeoutMs !== undefined &&
 		(typeof value.timeoutMs !== "number" ||
@@ -519,8 +539,10 @@ export async function driveReviewRound(
 						changeDescription: spec.changeDescription,
 						withheldHead: head,
 						timing: briefTiming,
+						transport: spec.pi === undefined ? "generic" : "pi",
 					}),
 					head,
+					"history",
 				),
 			);
 			if (!admitted.available)
@@ -599,6 +621,7 @@ export async function driveReviewRound(
 			fences: spec.fences,
 			changeDescription: spec.changeDescription,
 			timing: briefTiming,
+			transport: spec.pi === undefined ? "generic" : "pi",
 			dispatch,
 		});
 		if (!(await currentSubject()))
@@ -847,6 +870,10 @@ export function registerReviewRoundCommand(
 			"in the caller's trust domain and inherits its environment, credentials included: remote reach through " +
 			"inherited credentials is not confined.",
 		handler: async (args: string, ctx) => {
+			// The spec is read first because the Pi transport's seams are keyed
+			// by it; `reenter pr=<n>` carries no spec and leaves it undefined,
+			// which the re-entry path below never reads.
+			const spec = readRepositorySpec(repoRoot, args.trim());
 			const defaults: ReviewRoundSeams = {
 				fetchSubject: fetchReviewSubject,
 				refetchSubject: refetchReviewSubject,
@@ -856,7 +883,8 @@ export function registerReviewRoundCommand(
 					makeDispatcher({
 						callerRepoRoot: repoRoot,
 						stateRoot,
-						delegateArgv: input.delegateArgv,
+						delegateArgv: input.delegateArgv ?? [],
+						...(input.pi === undefined ? {} : { pi: { ...input.pi, role: "reviewer" as const } }),
 						timeoutMs: input.timeoutMs,
 						surface,
 					}),
@@ -865,7 +893,12 @@ export function registerReviewRoundCommand(
 				publishAwaitingAuthor: (current) => publishResolverRepairHandoff(current, repoRoot, stateRoot),
 				resolveHead: resolveLocalHead,
 				coordinateRecovery: coordinateHistoryRecovery,
-				recoveryDispatch: makeRecoveryProfileDispatcher({ repoRoot, stateRoot, surface }),
+				recoveryDispatch: makeRecoveryProfileDispatcher({
+					repoRoot,
+					stateRoot,
+					surface,
+					...(spec?.pi === undefined ? {} : { pi: spec.pi }),
+				}),
 				historyHandoff: platformHistoryHandoffSeams(repoRoot),
 			};
 			// `/review-round reenter pr=<n>`: the §1.4 maintainer re-entry (#404).
@@ -892,7 +925,6 @@ export function registerReviewRoundCommand(
 				await ctx.waitForIdle();
 				return;
 			}
-			const spec = readRepositorySpec(repoRoot, args.trim());
 			const outcome: CommandDisposition =
 				spec === undefined
 					? { disposition: "refused", cause: REFUSE_SPEC }

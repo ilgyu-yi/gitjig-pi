@@ -21,6 +21,7 @@ import { appendAuditRecord } from "./gitjig/audit.ts";
 import { maybeAdviseBindState } from "./gitjig/bind-state.ts";
 import { registerSpineCommands } from "./gitjig/commands/index.ts";
 import { registerDispatchTool } from "./gitjig/dispatch/index.ts";
+import { registerPiOperatorCommand } from "./gitjig/dispatch/pi-operator.ts";
 import { locateRepoRoot } from "./gitjig/locate.ts";
 import { recordModeRun, resolveModes } from "./gitjig/modes.ts";
 import { registerPublishTool } from "./gitjig/publish/index.ts";
@@ -45,6 +46,7 @@ export default function gitjig(pi: ExtensionAPI) {
 	const sessionSurface = new SessionSurface();
 	sessionSurface.setMergeMode(modes.mergeMode, modes.mergeSource);
 	registerDispatchTool(pi, repoRoot, stateRoot, sessionSurface);
+	registerPiOperatorCommand(pi);
 
 	// The command spine (§4.8): rung-1 review, review-round, and ship
 	// extension commands; every act they take runs inside a handler.

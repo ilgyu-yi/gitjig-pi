@@ -91,6 +91,7 @@ import {
 	serializeDiagnostic,
 } from "./diagnostics.ts";
 import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
+import { type PiInvocation, runPiDelegate } from "./pi-run.ts";
 import { cleanupDispatchContext, type DispatchContext, provisionDispatchContext } from "./provision.ts";
 import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 import { canonicalTraceId } from "./trace-reader.ts";
@@ -244,6 +245,8 @@ export interface RunDispatchOptions {
 	stateRoot: string;
 	brief: string;
 	delegateArgv: string[];
+	/** Internal consumer-selected Pi mode; not exposed on the generic model tool. */
+	pi?: PiInvocation;
 	expectedRef?: string;
 	timeoutMs?: number;
 	/** Optional operator projection for non-tool callers such as the command spine. */
@@ -316,7 +319,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 
 	if (
 		!Array.isArray(options.delegateArgv) ||
-		options.delegateArgv.length === 0 ||
+		(options.pi === undefined && options.delegateArgv.length === 0) ||
 		options.delegateArgv.some((entry) => typeof entry !== "string") ||
 		typeof options.brief !== "string" ||
 		(options.expectedRef !== undefined && typeof options.expectedRef !== "string") ||
@@ -377,18 +380,25 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		}
 		let run: Awaited<ReturnType<typeof runDelegate>>;
 		try {
-			run = await runDelegate(context, options.delegateArgv, {
-				timeoutMs:
-					remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining),
-				signal: checkpointAbort?.signal ?? options.signal,
-				onTrace: (snapshot) => {
-					terminalTrace = snapshot;
-					options.onTrace?.(snapshot);
-				},
-				onTraceError: () => {
-					traceUpdateDegraded = true;
-				},
-			});
+			const runBound =
+				remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining);
+			run =
+				options.pi === undefined
+					? await runDelegate(context, options.delegateArgv, {
+							timeoutMs: runBound,
+							signal: checkpointAbort?.signal ?? options.signal,
+							onTrace: (snapshot) => {
+								terminalTrace = snapshot;
+								options.onTrace?.(snapshot);
+							},
+							onTraceError: () => {
+								traceUpdateDegraded = true;
+							},
+						})
+					: await runPiDelegate(context, options.pi, {
+							timeoutMs: runBound,
+							signal: checkpointAbort?.signal ?? options.signal,
+						});
 		} finally {
 			for (const timer of checkpointTimers) clearTimeout(timer);
 			options.signal?.removeEventListener("abort", relayAbort);
@@ -430,6 +440,7 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			}
 		}
 		if (run.spawnFailed) return refuse("refuse-delegate-absent", "SPAWN_FAILED", "spawn", "not-started");
+		if (run.protocolInvalid) return refuse("refuse-rpc-protocol", "INTERNAL_FAILED", "run", "internal-failed");
 		if (run.timedOut) return refuse("refuse-bound-exceeded", "TIMED_OUT", "run", "timed-out");
 		if (run.aborted) return refuse("refuse-aborted", "ABORTED", "run", "aborted");
 		if (run.signal !== null) {

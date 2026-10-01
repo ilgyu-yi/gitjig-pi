@@ -3,7 +3,10 @@ import { lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync } from "
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
-import { RETURN_PROTOCOL_RETRY_SUFFIX } from "../.pi/extensions/gitjig/review/briefs.ts";
+import {
+	PI_RETURN_PROTOCOL_RETRY_SUFFIX,
+	RETURN_PROTOCOL_RETRY_SUFFIX,
+} from "../.pi/extensions/gitjig/review/briefs.ts";
 import { repoRoot } from "./harness/run-pi.ts";
 
 const root = repoRoot();
@@ -293,6 +296,29 @@ describe("Execution #264 contract settlement", () => {
 			written.replaceAll("\\n", "\n"),
 			RETURN_PROTOCOL_RETRY_SUFFIX,
 			"the shipped retry suffix drifted from SPEC §1.7's byte sequence",
+		);
+	});
+	// #370 consumes #375's landed §1.7 text unchanged, so the Pi suffix is
+	// locked to the same section's bytes exactly as the generic one is, and the
+	// transport-selected clause may not acquire a Pi-side second send.
+	it("locks the shipped Pi retry suffix to §1.7's byte sequence and keeps the send bound shared", () => {
+		const panel = section(spec, "### 1.7 The reviewer panel", "### 1.8 Plan contest");
+		const written = /Explicitly selected Pi RPC uses exactly this suffix instead: `([^`]*)`/.exec(panel)?.[1];
+		assert.ok(written, "SPEC §1.7 has no written Pi retry suffix to lock");
+		assert.equal(
+			written.replaceAll("\\n", "\n"),
+			PI_RETURN_PROTOCOL_RETRY_SUFFIX,
+			"the shipped Pi retry suffix drifted from SPEC §1.7's byte sequence",
+		);
+		assert.notEqual(PI_RETURN_PROTOCOL_RETRY_SUFFIX, RETURN_PROTOCOL_RETRY_SUFFIX);
+		assert.ok(panel.includes("The Pi subprocess itself adds no second missing-submission continuation"));
+		// §4.9's opt-in Pi clause agrees with it rather than granting its own send.
+		const layer = section(spec, "### 4.9 The delegation layer", "## 5. Cross-cutting contracts");
+		assert.ok(
+			layer.includes(
+				"A missing submission receives no continuation from this transport and is never a result by inference",
+			),
+			"§4.9's Pi clause must deny this transport a continuation of its own",
 		);
 	});
 	it("pins §3.10's dispatcher scope, gate-reaching residual, and non-dispatch boundary", () => delegatedContract(spec));

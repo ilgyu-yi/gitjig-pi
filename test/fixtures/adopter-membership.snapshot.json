@@ -266,7 +266,31 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-operator.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-rpc.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-run.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-submit-extension.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-submit.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/dispatch/provision.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/rpc-jsonl.ts",
 			"disposition": "carried"
 		},
 		{
@@ -394,6 +418,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/recovery/pi-profile.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/recovery/profiles.json",
 			"disposition": "carried"
 		},
@@ -447,6 +475,10 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/review/panel.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/pi-profile.ts",
 			"disposition": "carried"
 		},
 		{
@@ -667,6 +699,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/360.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/370.md",
 			"disposition": "instance-state"
 		},
 		{
