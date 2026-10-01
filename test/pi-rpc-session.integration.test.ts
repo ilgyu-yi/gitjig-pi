@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -80,29 +89,76 @@ test(
 	},
 );
 
-test("malformed protocol kills a child group and returns no child-authored content", { timeout: 10000 }, async () => {
-	const scratch = mkdtempSync(join(tmpdir(), "gitjig-370-malformed-"));
+/**
+ * A fake Pi that puts a grandchild in its own process group and records that
+ * grandchild's pid. The grandchild outlives its parent unless the supervisor
+ * signals the whole group, so its death is the only direct evidence that the
+ * group kill ran — awaiting the supervisor's outcome alone proves nothing.
+ */
+function fakePiWithGrandchild(path: string, pidFile: string, stdout: string): void {
+	writeFileSync(
+		path,
+		"#!/usr/bin/env node\n" +
+			'const cp = require("node:child_process"), fs = require("node:fs");\n' +
+			'const kid = cp.spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });\n' +
+			`fs.writeFileSync(${JSON.stringify(pidFile)}, String(kid.pid));\n` +
+			(stdout === "" ? "" : `process.stdout.write(${JSON.stringify(stdout)});\n`) +
+			"setInterval(() => {}, 1000);\n",
+		{ mode: 0o700 },
+	);
+}
+
+/** Wait, bounded, for one pid to stop existing; returns whether it is gone. */
+async function reaped(pid: number): Promise<boolean> {
+	for (let attempt = 0; attempt < 120; attempt++) {
+		try {
+			process.kill(pid, 0);
+		} catch {
+			return true;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	return false;
+}
+
+function grandchildScratch(stdout: string): {
+	scratch: string;
+	context: DispatchContext;
+	fake: string;
+	pidFile: string;
+} {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-370-group-"));
 	const tree = join(scratch, "tree");
 	const state = join(scratch, "state");
 	const extension = join(scratch, "trusted.ts");
 	const fake = join(scratch, "fake-pi");
-	try {
-		mkdirSync(tree);
-		mkdirSync(state);
-		writeFileSync(extension, "// trusted scratch placeholder\n");
-		writeFileSync(fake, '#!/usr/bin/env node\nprocess.stdout.write("{invalid\\n"); setInterval(()=>{},1000);\n');
-		chmodSync(fake, 0o700);
-		const context: DispatchContext = {
+	const pidFile = join(scratch, "grandchild.pid");
+	mkdirSync(tree);
+	mkdirSync(state);
+	writeFileSync(extension, "// trusted scratch placeholder\n");
+	fakePiWithGrandchild(fake, pidFile, stdout);
+	chmodSync(fake, 0o700);
+	return {
+		scratch,
+		fake,
+		pidFile,
+		context: {
 			scratchRoot: scratch,
 			treeDir: tree,
 			stateDir: state,
 			briefPath: join(scratch, "brief.md"),
 			returnPath: join(scratch, "return.json"),
 			heldHash: "a".repeat(40),
-		};
+		},
+	};
+}
+
+test("malformed protocol kills the child group and returns no child-authored content", { timeout: 20000 }, async () => {
+	const { scratch, context, fake, pidFile } = grandchildScratch("{invalid\n");
+	try {
 		const session = startPiRpc({
 			context,
-			extensionPath: extension,
+			extensionPath: join(scratch, "trusted.ts"),
 			piExecutable: fake,
 			provider: "scripted",
 			model: "scripted-model",
@@ -111,6 +167,32 @@ test("malformed protocol kills a child group and returns no child-authored conte
 		});
 		assert.equal(await session.done, "protocol-invalid");
 		assert.equal(existsSync(context.returnPath), false);
+		const pid = Number(readFileSync(pidFile, "utf8"));
+		assert.ok(Number.isInteger(pid) && pid > 1, `no grandchild pid recorded: ${pid}`);
+		assert.equal(await reaped(pid), true, "the grandchild outlived the protocol refusal, so no group was killed");
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+});
+
+test("an exhausted bound kills the child group, not only the child", { timeout: 20000 }, async () => {
+	// Silent and never exiting: the bound is the only terminal available.
+	const { scratch, context, fake, pidFile } = grandchildScratch("");
+	try {
+		const session = startPiRpc({
+			context,
+			extensionPath: join(scratch, "trusted.ts"),
+			piExecutable: fake,
+			provider: "scripted",
+			model: "scripted-model",
+			prompt: "test",
+			timeoutMs: 1500,
+		});
+		assert.equal(await session.done, "timeout");
+		assert.equal(existsSync(context.returnPath), false);
+		const pid = Number(readFileSync(pidFile, "utf8"));
+		assert.ok(Number.isInteger(pid) && pid > 1, `no grandchild pid recorded: ${pid}`);
+		assert.equal(await reaped(pid), true, "the grandchild outlived the bound, so no group was killed");
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
