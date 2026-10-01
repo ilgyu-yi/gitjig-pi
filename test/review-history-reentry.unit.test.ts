@@ -504,10 +504,12 @@ describe("#404 the registered command", () => {
 			writer(2, composeReviewRecord(unruledRepair(r.second))),
 		]);
 		let handler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+		let description = "";
 		const entries: unknown[] = [];
 		const pi = {
-			registerCommand: (_name: string, spec: { handler: typeof handler }) => {
+			registerCommand: (_name: string, spec: { handler: typeof handler; description: string }) => {
 				handler = spec.handler;
+				description = spec.description;
 			},
 			appendEntry: (_type: string, data: unknown) => entries.push(data),
 			sendMessage: () => {},
@@ -520,6 +522,12 @@ describe("#404 the registered command", () => {
 			h.seams,
 		);
 		assert.ok(handler);
+		assert.ok(
+			description.includes(
+				"/review-round reenter pr=<n> re-enters a standing §1.4 limb-(a)/(b) review-history handoff or a refusing limb-(a) legacy-prose history (SPEC §1.4).",
+			),
+			description,
+		);
 		await handler("reenter pr=212", { waitForIdle: async () => {} });
 		assert.deepEqual(entries, [{ disposition: "re-entered", limb: "a" }]);
 		assert.equal(h.rounds() + h.dispatches(), 0);
@@ -608,8 +616,37 @@ describe("#404 re-entry", () => {
 			],
 			{ dispatchUnavailable: true },
 		);
-		await driveReviewRound(spec(), r.root, h.seams);
-		assert.equal(h.dispatches(), 1, "the false limb-(a) terminal did not reset the run");
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		// The refused terminal neither resets the run nor ends the record: the
+		// round fails closed to the standing limb-(a) hand-off.
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 0);
+		assert.equal(h.dispatches() + h.rounds(), 0);
+	});
+
+	it("refuses a population where a refused limb-(a) terminal and a later record both stand", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(repair(r.second))),
+			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.a, r.second, r.base)),
+			writer(4, terminalBody(3, r.second, r.base)),
+			writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+		]);
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("population"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 0);
+	});
+
+	it("writes the contract's exact cause bytes", () => {
+		assert.deepEqual(
+			{ ...HISTORY_HANDOFF_CAUSE },
+			{
+				a: "review-history-legacy-underivable",
+				b: "review-history-diagnosis-handoff",
+				c: "review-history-unmeasured",
+			},
+		);
 	});
 
 	it("classifies limb (a) by each record-local check, each shape tripping only its own predicate", () => {

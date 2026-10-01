@@ -38,7 +38,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'if (limb !== "a" && limb !== "b") continue;',
 		"if (limb === undefined) continue;",
 	],
-	["limb-a-honor-unchecked", HANDOFF, "if (!legacyUnderivable(repairHistory(before))) continue;", ""],
+	["limb-a-honor-unchecked", HANDOFF, "if (!legacyUnderivable(repairHistory(before))) {", "if (false) {"],
 	["reentry-encoding-dropped", HANDOFF, 'reentry: limb === "b" ? reentry : "none",', 'reentry: "none",'],
 	[
 		"limb-c-never-ended",
@@ -125,6 +125,15 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"",
 	],
 	["check-index-finding", HISTORY, "if (disposition?.finding !== ruling.finding) return undefined;", ""],
+	[
+		"dishonored-limb-a-released",
+		HANDOFF,
+		"\t\t\t\trefuse();\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t}\n\t\tresetAfter",
+		"\t\t\t\tcontinue;\n\t\t\t}\n\t\t}\n\t\tresetAfter",
+	],
+	["two-standing-accepted", HANDOFF, "if (standingRecords.length > 1) return", "if (false) return"],
+	["cause-literal-c", HANDOFF, 'c: "review-history-unmeasured",', 'c: "review-history-transient",'],
+	["help-legacy-route", ROUND, " or a refusing limb-(a) legacy-prose history", ""],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,

@@ -106,6 +106,10 @@ export async function readHistoryHandoffs(
 		if (record !== undefined) records.set(comment.id, record);
 	}
 	let resetAfter: number | undefined;
+	// A limb-(a) terminal the classifier no longer supports is a refusal (§1.4):
+	// the engine counts its record as terminalized, but the hand-off it ended
+	// still stands, so the round fails closed to it (#404).
+	const dishonored: Array<{ commentId: number; record: HandoffRecord }> = [];
 	const terminals = [...(inspected.terminals ?? [])].sort(
 		(left, right) => (position.get(left.comment.id) ?? 0) - (position.get(right.comment.id) ?? 0),
 	);
@@ -114,7 +118,13 @@ export async function readHistoryHandoffs(
 		const limb = referenced === undefined ? undefined : limbOf(referenced.cause);
 		if (limb !== "a" && limb !== "b") continue;
 		if (limb === "a") {
-			if (reviews === undefined) continue;
+			const refuse = () => {
+				if (referenced !== undefined) dishonored.push({ commentId: record.recordCommentId, record: referenced });
+			};
+			if (reviews === undefined) {
+				refuse();
+				continue;
+			}
 			const at = position.get(comment.id) ?? -1;
 			const from = resetAfter === undefined ? -1 : (position.get(resetAfter) ?? -1);
 			const before = reviews
@@ -123,15 +133,24 @@ export async function readHistoryHandoffs(
 					return index > from && index < at;
 				})
 				.map(({ record: review }) => review);
-			if (!legacyUnderivable(repairHistory(before))) continue;
+			if (!legacyUnderivable(repairHistory(before))) {
+				refuse();
+				continue;
+			}
 		}
 		resetAfter = comment.id;
 	}
-	const current = inspected.current?.[0];
-	const standing =
-		current === undefined
-			? undefined
-			: { commentId: current.comment.id, record: current.record as HandoffRecord, limb: limbOf(current.record.cause) };
+	const standingRecords = [
+		...(inspected.current ?? []).map((current) => ({
+			commentId: current.comment.id,
+			record: current.record as HandoffRecord,
+		})),
+		...dishonored,
+	];
+	// More than one standing record is the ambiguity the engine itself refuses.
+	if (standingRecords.length > 1) return { ok: false, cause: "more than one handoff record stands" };
+	const only = standingRecords[0];
+	const standing = only === undefined ? undefined : { ...only, limb: limbOf(only.record.cause) };
 	return { ok: true, standing, resetAfter };
 }
 
