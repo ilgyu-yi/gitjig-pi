@@ -75,6 +75,11 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		{ dedupAttested: true, rulings: [{ ...ruling, onCriterion: "yes" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [1.5] }] },
+		// The safe-integer boundary: the consumer admits exactly the safe
+		// integers, so a validator loosened to every integer must fail parity.
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [Number.MAX_SAFE_INTEGER] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [Number.MAX_SAFE_INTEGER + 2] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [-(Number.MAX_SAFE_INTEGER + 2)] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: ["1"] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: 1 }] },
 		{ dedupAttested: true, rulings: [{ finding: "F", provenance: [], validity: "CONFIRMED", evidence: "E" }] },
