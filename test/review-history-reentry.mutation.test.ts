@@ -18,7 +18,6 @@ const TEST = "test/review-history-reentry.unit.test.ts";
 
 const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	["environmental-failure-as-limb-a", ROUND, 'legacyUnderivable(history) ? "a" : "c"', '"a"'],
-	["write-without-authority", ROUND, "if (writes && !(await handoffSeams.writerAuthorized(subject)))", "if (false)"],
 	[
 		"second-record-while-standing",
 		ROUND,
@@ -63,12 +62,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		ROUND,
 		"const before = await durableState(repoRoot, subject, seams, undefined, resetAfter);",
 		"const before = await durableState(repoRoot, subject, seams, undefined, undefined);",
-	],
-	[
-		"reenter-without-authority",
-		ROUND,
-		'\tif (!(await handoffSeams.writerAuthorized(subject)))\n\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.authority };\n',
-		"",
 	],
 	[
 		"reenter-limb-c-accepted",
@@ -142,18 +135,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'reentry: limb === "b" ? (reentry === "authorization" ? "plan" : reentry) : "none",',
 	],
 	[
-		"reenter-record-unattested",
-		ROUND,
-		'if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };\n\t\tif (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };',
-		'if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };',
-	],
-	[
-		"reenter-terminal-unattested",
-		ROUND,
-		'\tif (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };\n\tconst terminal',
-		"\tconst terminal",
-	],
-	[
 		"reenter-throw-escapes",
 		ROUND,
 		'\t} catch {\n\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.failed };',
@@ -161,16 +142,52 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	],
 	["gh-scalar-unstripped", ROUND, 'return output?.endsWith("\\n") ? output.slice(0, -1) : output;', "return output;"],
 	[
-		"settle-terminal-unattested",
+		"settle-without-authority",
 		ROUND,
-		'\t\t\t\tif (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };\n\t\t\t\tconst body',
-		"\t\t\t\tconst body",
+		'\t\t\t\tif (!(await handoffSeams.writerAuthorized(subject)))\n\t\t\t\t\treturn { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };\n',
+		"",
 	],
 	[
-		"settle-record-unattested",
+		"settle-unattested",
 		ROUND,
-		'\t\t\tif (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };\n\t\t\tconst pull',
-		"\t\t\tconst pull",
+		'\t\t\t\tif ((await seams.refetchSubject(repoRoot, subject)) === undefined)\n\t\t\t\t\treturn { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };\n',
+		"",
+	],
+	[
+		"settle-terminal-unchecked",
+		ROUND,
+		"const terminalBlocked = await settleBlocked();",
+		"const terminalBlocked = undefined as TerminalSeed | undefined;",
+	],
+	[
+		"settle-record-unchecked",
+		ROUND,
+		"const recordBlocked = await settleBlocked();",
+		"const recordBlocked = undefined as TerminalSeed | undefined;",
+	],
+	[
+		"reenter-without-authority",
+		ROUND,
+		'\t\tif (!(await handoffSeams.writerAuthorized(subject)))\n\t\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.authority };\n',
+		"",
+	],
+	[
+		"reenter-unattested",
+		ROUND,
+		'\t\tif ((await seams.refetchSubject(repoRoot, subject)) === undefined)\n\t\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.stale };\n',
+		"",
+	],
+	[
+		"reenter-record-unchecked",
+		ROUND,
+		"const legacyBlocked = await reentryBlocked();",
+		"const legacyBlocked = undefined as ReentryDisposition | undefined;",
+	],
+	[
+		"reenter-terminal-unchecked",
+		ROUND,
+		"const terminalBlocked = await reentryBlocked();",
+		"const terminalBlocked = undefined as ReentryDisposition | undefined;",
 	],
 	[
 		"unreadable-review-refuses-population",

@@ -442,16 +442,19 @@ export async function driveReviewRound(
 			if (fresh.standing !== undefined && fresh.standing.limb !== "c")
 				return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
 			standing = fresh.standing;
-			const writes = (standing?.limb === "c" && wasDeterminate) || (write !== undefined && standing === undefined);
-			// A record or terminal is admitted only from an authorized carrier, so an
-			// unauthorized account writes nothing and hands off (§1.4's residual).
-			if (writes && !(await handoffSeams.writerAuthorized(subject)))
-				return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
-			// Re-attest the exact PR subject immediately before each write, so no
-			// record or terminal binds heads that moved while this round ran.
-			const moved = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) === undefined;
+			// Immediately before each write: a record or terminal is admitted only
+			// from an authorized carrier (§1.4's residual), and none binds heads that
+			// moved while this round ran. Each write re-reads both facts.
+			const settleBlocked = async (): Promise<TerminalSeed | undefined> => {
+				if (!(await handoffSeams.writerAuthorized(subject)))
+					return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
+				if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
+					return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+				return undefined;
+			};
 			if (standing !== undefined && standing.limb === "c" && wasDeterminate) {
-				if (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+				const terminalBlocked = await settleBlocked();
+				if (terminalBlocked !== undefined) return terminalBlocked;
 				const body = historyReentryBody(handoffEngine, standing, handoffSeams.now());
 				if (body === undefined || !(await seams.publishRecord(body, subject)).ok)
 					return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
@@ -459,7 +462,8 @@ export async function driveReviewRound(
 			}
 			// While any record stands, a later stop writes no second one (§1.4).
 			if (write === undefined || standing !== undefined) return undefined;
-			if (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
+			const recordBlocked = await settleBlocked();
+			if (recordBlocked !== undefined) return recordBlocked;
 			const pull = subject.context.pullRequest;
 			const body = historyHandoffBody(
 				handoffEngine,
@@ -672,8 +676,6 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 			comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
 	);
 	if (!view.ok) return { disposition: "refused", cause: REENTRY_REFUSED.population };
-	if (!(await handoffSeams.writerAuthorized(subject)))
-		return { disposition: "refused", cause: REENTRY_REFUSED.authority };
 	const legacyRefuses = (): boolean => {
 		const records = recordsAfterReset(
 			population,
@@ -685,14 +687,22 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 		const availability = historyAvailability(true, records);
 		return availability.available && legacyUnderivable(repairHistory(availability.records));
 	};
-	// Re-attest the exact PR subject immediately before each write, so neither
-	// the record nor the terminal binds heads that have since moved.
-	const current = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) !== undefined;
+	// Immediately before each write, re-read this account's authority and
+	// re-attest the exact PR subject, so neither the record nor the terminal is
+	// written by a revoked account or binds heads that have since moved.
+	const reentryBlocked = async (): Promise<ReentryDisposition | undefined> => {
+		if (!(await handoffSeams.writerAuthorized(subject)))
+			return { disposition: "refused", cause: REENTRY_REFUSED.authority };
+		if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
+			return { disposition: "refused", cause: REENTRY_REFUSED.stale };
+		return undefined;
+	};
 	let target = view.standing;
 	if (target === undefined) {
 		// The limb-(a) legacy-prose route; no other limb is re-entered from prose.
 		if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
-		if (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };
+		const legacyBlocked = await reentryBlocked();
+		if (legacyBlocked !== undefined) return legacyBlocked;
 		const pull = subject.context.pullRequest;
 		const observedAt = handoffSeams.now();
 		const body = historyHandoffBody(engine, "a", "none", pull.head.oid, pull.base.oid, observedAt);
@@ -715,7 +725,8 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 	} else if (target.limb === "a" && !legacyRefuses()) {
 		return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
 	}
-	if (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };
+	const terminalBlocked = await reentryBlocked();
+	if (terminalBlocked !== undefined) return terminalBlocked;
 	const terminal = historyReentryBody(engine, target, handoffSeams.now());
 	const written = terminal === undefined ? undefined : await seams.publishRecord(terminal, subject);
 	if (written === undefined || !written.ok) return { disposition: "refused", cause: REENTRY_REFUSED.write };

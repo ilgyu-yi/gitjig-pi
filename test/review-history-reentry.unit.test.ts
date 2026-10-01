@@ -600,6 +600,57 @@ describe("#404 round-4 paths", () => {
 		}
 	});
 
+	it("re-reads authority before every write, so a revocation after the first write stops the second", async () => {
+		const r = repository();
+		const revokeAfterFirst = (h: Harness) => {
+			const handoff = h.seams.historyHandoff;
+			assert.ok(handoff);
+			h.seams.historyHandoff = { ...handoff, writerAuthorized: async () => h.published.length === 0 };
+		};
+		const settle = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+		]);
+		revokeAfterFirst(settle);
+		const outcome = await driveReviewRound(spec(), r.root, settle.seams);
+		assert.ok(
+			outcome.disposition === "hand-off" && outcome.cause.includes("could not be written"),
+			JSON.stringify(outcome),
+		);
+		assert.equal(settle.published.length, 1);
+		assert.ok(isTerminal(settle.published[0]));
+		const legacy = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+		]);
+		revokeAfterFirst(legacy);
+		const result = await reenterReviewHistory(212, r.root, legacy.seams);
+		assert.ok(result.disposition === "refused" && result.cause.includes("authorizedResolver"), JSON.stringify(result));
+		assert.equal(legacy.published.length, 1);
+		assert.equal(causeOf(legacy.published[0]), HISTORY_HANDOFF_CAUSE.a);
+	});
+
+	it("writes nothing when the account cannot pass authorizedResolver before ending a standing limb-(c) record", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[
+				writer(1, composeReviewRecord(repair(r.first))),
+				writer(2, composeReviewRecord(unruledRepair(r.second))),
+				writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+			],
+			{ writerAuthorized: false },
+		);
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(
+			outcome.disposition === "hand-off" && outcome.cause.includes("could not be written"),
+			JSON.stringify(outcome),
+		);
+		assert.equal(h.published.length, 0);
+	});
+
 	it("reads the production login and permission as gh scalars, without the line terminator", async () => {
 		const bin = mkdtempSync(join(tmpdir(), "gitjig-404-gh-"));
 		dirs.push(bin);
