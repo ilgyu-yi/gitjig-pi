@@ -830,7 +830,7 @@ const ROUTE_TERMINAL_MS = 3_840_000;
 const MAX_RETAINED_RECORD_BYTES = 192 * 1024;
 
 type RecoveryDispatchResult = ObservedDispatchOutcome;
-export type RecoveryProfileDispatcher = (
+export type RecoveryProfileDispatcher = ((
 	ledger: HostAttemptLedger,
 	profileId: PhaseAProfileId,
 	semanticBrief: RecoverySemanticBrief,
@@ -838,7 +838,16 @@ export type RecoveryProfileDispatcher = (
 	operationDeadline: number,
 	role?: RecoveryPiRole,
 	specDigest?: string,
-) => Promise<RecoveryDispatchResult>;
+) => Promise<RecoveryDispatchResult>) & {
+	/**
+	 * The transport the caller selected for this dispatcher, declared by its
+	 * own producer. The coordinator reads it for one purpose: the ambient
+	 * generic-executable preflight is the generic profile argv's gate, and an
+	 * explicitly selected Pi dispatcher carries its own executable. An absent
+	 * marker is the generic transport.
+	 */
+	readonly transport?: "generic" | "pi";
+};
 
 export type CoordinateRecoveryInput = {
 	repoRoot: string;
@@ -864,7 +873,15 @@ export function makeRecoveryProfileDispatcher(input: {
 	/** Explicit caller-selected Pi mode. The coordinator fixes the route role. */
 	pi?: Omit<PiInvocation, "role" | "specDigest">;
 }): RecoveryProfileDispatcher {
-	return async (ledger, profileId, semanticBrief, expectedHead, operationDeadline, role, specDigest) => {
+	const dispatcher = async (
+		ledger: HostAttemptLedger,
+		profileId: PhaseAProfileId,
+		semanticBrief: RecoverySemanticBrief,
+		expectedHead: string,
+		operationDeadline: number,
+		role?: RecoveryPiRole,
+		specDigest?: string,
+	): Promise<RecoveryDispatchResult> => {
 		if (input.pi !== undefined && role === undefined) throw Error("recovery Pi role unavailable from consumer");
 		const loaded = loadRecoveryProfiles();
 		const materialized = loaded === undefined ? undefined : materializeRecoveryProfile(loaded, profileId);
@@ -889,6 +906,8 @@ export function makeRecoveryProfileDispatcher(input: {
 		);
 		return dispatch(input.pi === undefined ? semanticBrief : piRecoveryBrief(semanticBrief), expectedHead, role);
 	};
+	// The producer declares its own transport; the coordinator never infers it.
+	return Object.assign(dispatcher, { transport: input.pi === undefined ? ("generic" as const) : ("pi" as const) });
 }
 
 function sameFreshness(
@@ -1177,7 +1196,13 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 	const stateDomain = resolveRecoveryStateDomain();
 	if (stateDomain === undefined) return handoff("state-domain", "nothing", null);
 	const loaded = loadRecoveryProfiles();
-	if (loaded === undefined || !preflightRecoveryExecutable()) return handoff("profile-preflight", "nothing", null);
+	// The preflight measures the ambient generic profile executable. Under an
+	// explicitly selected Pi transport that executable is not the one the route
+	// will run, so its absence or different help text must not hand this route
+	// off; the Pi dispatcher's own parameters are refused at its own gate.
+	const ambientPreflight = input.dispatchProfile.transport !== "pi";
+	if (loaded === undefined || (ambientPreflight && !preflightRecoveryExecutable()))
+		return handoff("profile-preflight", "nothing", null);
 	if (resolveRecoveryStateDomain() !== stateDomain) return handoff("state-domain", "nothing", null);
 	const fresh = await input.refreshPreclaim();
 	if (fresh === undefined || !sameFreshness(fresh, input.subject, input.history, input.basis))

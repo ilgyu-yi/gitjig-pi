@@ -29,6 +29,7 @@ import {
 } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import type { PhaseAProfileId, RecoveryFreshness } from "../.pi/extensions/gitjig/recovery/types.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
+import type { HostAttemptLedger } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { createRecoveryAttemptLedger, makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
@@ -276,6 +277,58 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(precontinue, 1);
 		if (result.terminal === "continue" && result.route === "stagnation")
 			assert.equal(result.selectedIntervention.method, "new root method");
+	});
+
+	// #370: that preflight measures the ambient generic profile executable. An
+	// explicitly selected Pi dispatcher carries its own, so the same unavailable
+	// ambient executable must not hand the Pi route off.
+	it("does not gate an explicitly selected Pi route on the ambient generic executable", async () => {
+		const saved = process.env.PATH;
+		const seen: PhaseAProfileId[] = [];
+		try {
+			process.env.PATH = stateRoot;
+			const generic: RecoveryProfileDispatcher = async () => {
+				throw new Error("no dispatch");
+			};
+			assert.equal(generic.transport, undefined);
+			const piSubject = {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_PI_PREFLIGHT" } },
+			};
+			const piDispatch: RecoveryProfileDispatcher = Object.assign(
+				async (ledger: HostAttemptLedger, profileId: PhaseAProfileId) => {
+					seen.push(profileId);
+					return observed(
+						ledger,
+						admitted(
+							profileId === "recovery-selector"
+								? { selected: "root", materiallyDifferent: true, evidence: "selection evidence" }
+								: profileId === "stagnation-root"
+									? { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" }
+									: { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+						),
+					);
+				},
+				{ transport: "pi" as const },
+			);
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: piSubject,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(piSubject) }),
+				refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(piSubject) }),
+				dispatchProfile: piDispatch,
+			});
+			// It reached its dispatches instead of handing off at the preflight.
+			assert.deepEqual(seen, ["stagnation-root", "stagnation-blast-radius", "recovery-selector"]);
+			assert.notEqual(result.terminal === "handoff" && result.cause, "profile-preflight");
+			assert.equal(result.terminal, "continue");
+		} finally {
+			process.env.PATH = saved;
+		}
 	});
 
 	// #370: the Pi transport's role is the consumer's, fixed per phase before

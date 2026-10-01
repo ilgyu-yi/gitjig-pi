@@ -151,6 +151,10 @@ test("every recovery role is installed into the Pi invocation, and a missing one
 		stateRoot: "/state",
 		pi: { piExecutable: "/bin/pi", provider: "scripted", model: "scripted-model" },
 	});
+	// Each producer declares its own transport, which is what spares an
+	// explicitly selected Pi route the ambient generic executable's preflight.
+	assert.equal(profileDispatch.transport, "pi");
+	assert.equal(makeRecoveryProfileDispatcher({ repoRoot: process.cwd(), stateRoot: "/state" }).transport, "generic");
 	await assert.rejects(
 		profileDispatch(
 			createRecoveryAttemptLedger(performance.now()),

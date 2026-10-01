@@ -8,6 +8,7 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -268,3 +269,68 @@ test(
 		}
 	},
 );
+
+/**
+ * The trusted-extension confinement gate, measured. Every other Pi fixture
+ * passes a valid scratch-local regular file, so an unconditional acceptance
+ * survived the whole Pi suite. These arms supply each shape the gate exists to
+ * refuse and require the refusal before any child is spawned.
+ */
+test("the trusted submission extension must be a scratch-local regular file outside the clone", () => {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-370-trusted-"));
+	const tree = join(scratch, "tree");
+	const state = join(scratch, "state");
+	const outside = mkdtempSync(join(tmpdir(), "gitjig-370-outside-"));
+	try {
+		mkdirSync(tree, { recursive: true });
+		mkdirSync(state, { recursive: true });
+		const good = join(scratch, "trusted.ts");
+		writeFileSync(good, "// trusted scratch placeholder\n");
+		const context: DispatchContext = {
+			scratchRoot: scratch,
+			treeDir: tree,
+			stateDir: state,
+			briefPath: join(scratch, "brief.md"),
+			returnPath: join(scratch, "return.json"),
+			heldHash: "a".repeat(40),
+		};
+		// Each of these is an extension path the gate must refuse.
+		const cloneOwned = join(tree, "clone-extension.ts");
+		writeFileSync(cloneOwned, "// the reviewed clone's own file\n");
+		const outsideFile = join(outside, "outside-extension.ts");
+		writeFileSync(outsideFile, "// outside the scratch\n");
+		const directory = join(scratch, "extension-directory");
+		mkdirSync(directory);
+		const link = join(scratch, "link-to-clone.ts");
+		symlinkSync(cloneOwned, link);
+		const escaping = join(scratch, "link-to-outside.ts");
+		symlinkSync(outsideFile, escaping);
+		const refused = [cloneOwned, outsideFile, directory, link, escaping, join(scratch, "absent.ts")];
+		const start = (extensionPath: string, providerExtensionPath?: string) =>
+			startPiRpc({
+				context,
+				extensionPath,
+				...(providerExtensionPath === undefined ? {} : { providerExtensionPath }),
+				piExecutable: join(scratch, "never-spawned"),
+				provider: "scripted",
+				model: "scripted-model",
+				prompt: "test",
+				timeoutMs: 1000,
+			});
+		for (const path of refused) {
+			assert.throws(() => start(path), /Pi RPC parameters refused/, `accepted extension path ${path}`);
+			// The provider extension rides the same gate.
+			assert.throws(() => start(good, path), /Pi RPC parameters refused/, `accepted provider path ${path}`);
+		}
+		// The sanctioned shape is accepted, so the arms above fail for their own
+		// reason rather than because nothing can start at all. The fake
+		// executable does not exist, which the session reports as a refusal
+		// terminal rather than a parameter throw.
+		const session = start(good);
+		assert.equal(typeof session.done.then, "function");
+		session.abort();
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+		rmSync(outside, { recursive: true, force: true });
+	}
+});
