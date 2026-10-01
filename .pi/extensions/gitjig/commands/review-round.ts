@@ -419,7 +419,7 @@ export async function driveReviewRound(
 		};
 		/** Write this gate's terminal and record after a diagnosis, before the round acts on it. */
 		const settleHandoff = async (): Promise<TerminalSeed | undefined> => {
-			const write = pending;
+			let write = pending;
 			pending = undefined;
 			const wasDeterminate = determinate;
 			determinate = false;
@@ -428,15 +428,18 @@ export async function driveReviewRound(
 			// while this round ran is the standing one and no second record is
 			// written. RESIDUAL, stated: the read and the write are not one
 			// transaction; a record posted between them is not observable here.
-			const readHandoffs = async () =>
-				readHistoryHandoffs(
+			let latest: AttestedCommentPopulation = { ok: false, cause: "unread" };
+			const readHandoffs = async () => {
+				latest = await seams.readComments(repoRoot, subject);
+				return readHistoryHandoffs(
 					handoffEngine,
-					await seams.readComments(repoRoot, subject),
+					latest,
 					subject.context.repository.id,
 					subject.writerId,
 					async (comment) =>
 						comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
 				);
+			};
 			const fresh = await readHandoffs();
 			if (!fresh.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };
 			// A limb-(a)/(b) or foreign record that appeared while this round ran
@@ -459,6 +462,11 @@ export async function driveReviewRound(
 				if (!reread.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };
 				if (reread.standing?.commentId !== expected)
 					return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
+				// A limb-(a) record is written only while the record-local check still
+				// refuses on the fresh history; otherwise the stop is no longer
+				// persistent and is recorded as limb (c), never as an un-re-enterable (a).
+				if (write?.limb === "a" && !legacyRefusesOn(seams, latest, subject.writerId, reread.resetAfter))
+					write = { limb: "c", reentry: "none" };
 				return undefined;
 			};
 			if (standing !== undefined && standing.limb === "c" && wasDeterminate) {
@@ -645,6 +653,19 @@ const REENTRY_REFUSED = {
 	changed: "review-round re-entry refused: the handoff population changed before the write",
 } as const;
 
+/** Whether the record-local limb-(a) check refuses on this population's run after the honored reset. */
+function legacyRefusesOn(
+	seams: ReviewRoundSeams,
+	population: AttestedCommentPopulation,
+	writerId: string,
+	resetAfter: number | undefined,
+): boolean {
+	const records = recordsAfterReset(population, seams.recordsFromComments(population, writerId), writerId, resetAfter);
+	if (records === undefined) return false;
+	const availability = historyAvailability(true, records);
+	return availability.available && legacyUnderivable(repairHistory(availability.records));
+}
+
 /**
  * The maintainer's re-entry of a limb-(a) or limb-(b) review-history handoff
  * (SPEC §1.4, #402/#404): the engine's `handoff-reentry` terminal for the
@@ -692,32 +713,27 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 			comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
 	);
 	if (!view.ok) return { disposition: "refused", cause: REENTRY_REFUSED.population };
-	const legacyRefuses = (): boolean => {
-		const records = recordsAfterReset(
-			population,
-			seams.recordsFromComments(population, subject.writerId),
-			subject.writerId,
-			view.resetAfter,
-		);
-		if (records === undefined) return false;
-		const availability = historyAvailability(true, records);
-		return availability.available && legacyUnderivable(repairHistory(availability.records));
-	};
 	// Immediately before each write, re-read this account's authority and
 	// re-attest the exact PR subject, so neither the record nor the terminal is
 	// written by a revoked account or binds heads that have since moved.
 	// It also re-reads the handoff population: the standing record must still be
 	// exactly the one this write expects (none, before the legacy-prose record),
 	// so a concurrent record or terminal is never followed by a second one.
+	// A limb-(a) write also recomputes the record-local check on that fresh
+	// history, so no terminal is written that the next reader would refuse.
 	// RESIDUAL, stated: the read and the write are not one transaction.
-	const reentryBlocked = async (expected: number | undefined): Promise<ReentryDisposition | undefined> => {
+	const reentryBlocked = async (
+		expected: number | undefined,
+		limb: "a" | "b",
+	): Promise<ReentryDisposition | undefined> => {
 		if (!(await handoffSeams.writerAuthorized(subject)))
 			return { disposition: "refused", cause: REENTRY_REFUSED.authority };
 		if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
 			return { disposition: "refused", cause: REENTRY_REFUSED.stale };
+		const rereadPopulation = await seams.readComments(repoRoot, subject);
 		const reread = await readHistoryHandoffs(
 			engine,
-			await seams.readComments(repoRoot, subject),
+			rereadPopulation,
 			subject.context.repository.id,
 			subject.writerId,
 			async (comment) =>
@@ -725,13 +741,15 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 		);
 		if (!reread.ok) return { disposition: "refused", cause: REENTRY_REFUSED.population };
 		if (reread.standing?.commentId !== expected) return { disposition: "refused", cause: REENTRY_REFUSED.changed };
+		if (limb === "a" && !legacyRefusesOn(seams, rereadPopulation, subject.writerId, reread.resetAfter))
+			return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
 		return undefined;
 	};
 	let target = view.standing;
 	if (target === undefined) {
 		// The limb-(a) legacy-prose route; no other limb is re-entered from prose.
-		if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
-		const legacyBlocked = await reentryBlocked(undefined);
+		// Its record-local check runs on the fresh history inside reentryBlocked.
+		const legacyBlocked = await reentryBlocked(undefined, "a");
 		if (legacyBlocked !== undefined) return legacyBlocked;
 		const pull = subject.context.pullRequest;
 		const observedAt = handoffSeams.now();
@@ -752,10 +770,8 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 		};
 	} else if (target.limb !== "a" && target.limb !== "b") {
 		return { disposition: "refused", cause: REENTRY_REFUSED.limb };
-	} else if (target.limb === "a" && !legacyRefuses()) {
-		return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
 	}
-	const terminalBlocked = await reentryBlocked(target.commentId);
+	const terminalBlocked = await reentryBlocked(target.commentId, target.limb === "a" ? "a" : "b");
 	if (terminalBlocked !== undefined) return terminalBlocked;
 	const terminal = historyReentryBody(engine, target, handoffSeams.now());
 	const written = terminal === undefined ? undefined : await seams.publishRecord(terminal, subject);

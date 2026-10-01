@@ -69,12 +69,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'} else if (target.limb !== "a" && target.limb !== "b") {',
 		"} else if (target.limb === undefined) {",
 	],
-	[
-		"reenter-prose-unchecked",
-		ROUND,
-		'if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };',
-		"",
-	],
 	["check-adjudication-null", HISTORY, "if (adjudication === null || record.review", "if (record.review"],
 	[
 		"check-dedup",
@@ -180,13 +174,13 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"reenter-record-unchecked",
 		ROUND,
-		"const legacyBlocked = await reentryBlocked(undefined);",
+		'const legacyBlocked = await reentryBlocked(undefined, "a");',
 		"const legacyBlocked = undefined as ReentryDisposition | undefined;",
 	],
 	[
 		"reenter-terminal-unchecked",
 		ROUND,
-		"const terminalBlocked = await reentryBlocked(target.commentId);",
+		'const terminalBlocked = await reentryBlocked(target.commentId, target.limb === "a" ? "a" : "b");',
 		"const terminalBlocked = undefined as ReentryDisposition | undefined;",
 	],
 	[
@@ -210,6 +204,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"",
 	],
 	[
+		"reenter-legacy-stale",
+		ROUND,
+		'if (limb === "a" && !legacyRefusesOn(seams, rereadPopulation, subject.writerId, reread.resetAfter))',
+		"if (false)",
+	],
+	[
+		"settle-legacy-stale",
+		ROUND,
+		'if (write?.limb === "a" && !legacyRefusesOn(seams, latest, subject.writerId, reread.resetAfter))',
+		"if (false)",
+	],
+	[
 		"unreadable-review-refuses-population",
 		HANDOFF,
 		"	const reviews = orderedReviewRecords(comments, writerId);\n",
@@ -227,12 +233,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		ROUND,
 		"const reentry = /^\\s*reenter\\s+pr=([1-9][0-9]{0,15})\\s*$/.exec(args);",
 		"const reentry = /(?!)/.exec(args);",
-	],
-	[
-		"reenter-standing-a-unchecked",
-		ROUND,
-		'} else if (target.limb === "a" && !legacyRefuses()) {',
-		"} else if (false) {",
 	],
 ];
 

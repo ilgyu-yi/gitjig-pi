@@ -382,6 +382,18 @@ describe("#404 standing records", () => {
 		assert.equal(h.published.length, 0);
 	});
 
+	it("keeps a standing limb-(c) record on an environmental projection failure", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair("f".repeat(40)))),
+			writer(2, composeReviewRecord(repair(r.second))),
+			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+		]);
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 0);
+	});
+
 	it("ends a standing limb-(c) record on a valid ruling, then writes the limb-(b) record", async () => {
 		const r = repository();
 		const h = harness(
@@ -824,6 +836,82 @@ describe("#404 round-4 paths", () => {
 			80,
 		);
 		assert.equal(causeOf(h.published[1]), HISTORY_HANDOFF_CAUSE.b);
+	});
+
+	it("recomputes the legacy check on the fresh history before each limb-(a) write", async () => {
+		const r = repository();
+		const legacy = () => [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+		];
+		// A derivable approved state arrives after the initial read: the trailing run is gone.
+		const resolve = (h: Harness) => {
+			const refetch = h.seams.refetchSubject;
+			h.seams.refetchSubject = async (root, current) => {
+				if (!h.comments.some((comment) => comment.id === 95))
+					h.comments.push(
+						writer(95, composeReviewRecord({ ...repair(r.second), review: { state: "approved" } } as ReviewRecord)),
+					);
+				return refetch(root, current);
+			};
+		};
+		const prose = harness(r.root, subjectAt(r.base, r.second), legacy());
+		resolve(prose);
+		const result = await reenterReviewHistory(212, r.root, prose.seams);
+		assert.ok(result.disposition === "refused" && result.cause.includes("legacy check"), JSON.stringify(result));
+		assert.equal(prose.published.length, 0);
+		const standing = harness(r.root, subjectAt(r.base, r.second), [
+			...legacy(),
+			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.a, r.second, r.base)),
+		]);
+		resolve(standing);
+		const second = await reenterReviewHistory(212, r.root, standing.seams);
+		assert.ok(second.disposition === "refused" && second.cause.includes("legacy check"), JSON.stringify(second));
+		assert.equal(standing.published.length, 0);
+		const round = harness(r.root, subjectAt(r.base, r.second), legacy());
+		const handoff = round.seams.historyHandoff;
+		assert.ok(handoff);
+		round.seams.historyHandoff = {
+			...handoff,
+			writerAuthorized: async (subject) => {
+				if (!round.comments.some((comment) => comment.id === 95))
+					round.comments.push(
+						writer(95, composeReviewRecord({ ...repair(r.second), review: { state: "approved" } } as ReviewRecord)),
+					);
+				return handoff.writerAuthorized(subject);
+			},
+		};
+		await driveReviewRound(spec(), r.root, round.seams);
+		assert.deepEqual(round.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
+	});
+
+	it("passes a matched sixteen-digit safe pr to the subject read exactly", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), []);
+		const asked: number[] = [];
+		h.seams.fetchSubject = async (_root, pr) => {
+			asked.push(pr);
+			return undefined;
+		};
+		let handler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+		const pi = {
+			registerCommand: (_name: string, command: { handler: typeof handler }) => {
+				handler = command.handler;
+			},
+			appendEntry: () => {},
+			sendMessage: () => {},
+		} as never;
+		registerReviewRoundCommand(
+			pi,
+			r.root,
+			r.root,
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "handoff", decisionSource: "default", refusals: [] },
+			h.seams,
+		);
+		assert.ok(handler);
+		await handler("reenter pr=1234567890123456", { waitForIdle: async () => {} });
+		await handler("reenter pr=9007199254740993", { waitForIdle: async () => {} });
+		assert.deepEqual(asked, [1234567890123456]);
 	});
 
 	it("reads the production login and permission as gh scalars, without the line terminator", async () => {
