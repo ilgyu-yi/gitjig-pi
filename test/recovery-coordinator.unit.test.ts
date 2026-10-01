@@ -278,6 +278,98 @@ describe("Phase-A history recovery coordinator", () => {
 			assert.equal(result.selectedIntervention.method, "new root method");
 	});
 
+	// #370: the Pi transport's role is the consumer's, fixed per phase before
+	// each dispatch. Only this seam observes which role each phase asks for, so
+	// a constant role substituted inside the coordinator is caught here.
+	it("fixes one Pi role per recovery phase, on both routes, before any dispatch", async () => {
+		const seen: Array<[PhaseAProfileId, string | undefined]> = [];
+		const record =
+			(outputs: Partial<Record<PhaseAProfileId, unknown>>): RecoveryProfileDispatcher =>
+			async (ledger, profileId, _brief, _head, _deadline, role) => {
+				seen.push([profileId, role]);
+				return observed(ledger, admitted(outputs[profileId]));
+			};
+		const stagnation = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+			},
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+			refreshPreclaim: async () => ({
+				...freshness(),
+				subject: {
+					...subject,
+					context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+				},
+			}),
+			refreshPrecontinue: async () => ({
+				...freshness(),
+				subject: {
+					...subject,
+					context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+				},
+			}),
+			dispatchProfile: record({
+				"stagnation-root": { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" },
+				"stagnation-blast-radius": { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+				"recovery-selector": { selected: "root", materiallyDifferent: true, evidence: "selection evidence" },
+			}),
+		});
+		assert.equal(stagnation.terminal, "continue");
+		assert.deepEqual(seen, [
+			["stagnation-root", "challenger"],
+			["stagnation-blast-radius", "challenger"],
+			["recovery-selector", "selector-contest"],
+		]);
+
+		seen.length = 0;
+		const spec = {
+			kind: "measurement",
+			question: "Which invariant differs?",
+			method: "Read one bounded artifact",
+			expectedDiscriminator: "A unique state",
+			evidence: "Selector evidence",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+		const specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+		const measurementSubject = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_MEASUREMENT" } },
+		};
+		const measurement = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: measurementSubject,
+			history,
+			basis,
+			diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(measurementSubject) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(measurementSubject) }),
+			dispatchProfile: record({
+				"recovery-selector": spec,
+				"recovery-measurement": {
+					kind: "measurement-result",
+					specDigest,
+					result: "unique result",
+					evidence: "new result evidence",
+				},
+				"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+			}),
+		});
+		assert.equal(measurement.terminal, "continue");
+		assert.deepEqual(seen, [
+			["recovery-selector", "selector-measurement"],
+			["recovery-measurement", "measurement"],
+			["recovery-diagnosis", "diagnosis"],
+		]);
+	});
+
 	it("refuses a second recovery request at the consumed-allowance guard", async () => {
 		const current = {
 			...subject,

@@ -12,7 +12,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const here = dirname(fileURLToPath(import.meta.url));
 const MAX_RETURN_BYTES = 65_536;
 export type JsonSchema = {
-	type: "object" | "array" | "string" | "boolean";
+	type: "object" | "array" | "string" | "boolean" | "integer";
 	properties?: Record<string, JsonSchema>;
 	required?: string[];
 	additionalProperties?: false;
@@ -61,6 +61,11 @@ export function matchesProfile(schema: JsonSchema, value: unknown, depth = 0): b
 		);
 	if (schema.type === "boolean")
 		return typeof value === "boolean" && (schema.const === undefined || value === schema.const);
+	// A safe integer only, exactly as the indexed Judge consumer admits one: a
+	// float, an unsafe magnitude or NaN is not one. Nonemptiness, ascent and
+	// in-range identity stay §1.7's envelope check at admission, so the tool
+	// accepts precisely what that consumer parses and refuses nothing it takes.
+	if (schema.type === "integer") return typeof value === "number" && Number.isSafeInteger(value);
 	if (schema.type === "array")
 		return (
 			Array.isArray(value) &&

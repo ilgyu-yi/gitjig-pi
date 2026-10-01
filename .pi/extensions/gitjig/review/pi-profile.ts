@@ -18,6 +18,11 @@ const ruling: JsonSchema = {
 	additionalProperties: false,
 	properties: {
 		finding: string,
+		// §1.7's indexed bundle: an effective ruling names the raw ordinals it
+		// groups, and the indexed consumer requires them, so the tool must accept
+		// them. Order and disjointness stay the consumer's checks, not the
+		// schema's.
+		rawOrdinals: { type: "array", items: { type: "integer" } },
 		provenance: { type: "array", items: slot },
 		validity: { type: "string", enum: ["CONFIRMED", "REFUTED", "INDETERMINATE"] },
 		severity: { type: "string", enum: ["SUBSTANTIVE", "NIT"] },
@@ -26,7 +31,7 @@ const ruling: JsonSchema = {
 		onCriterion: boolean,
 		evidence: string,
 	},
-	required: ["finding", "provenance", "validity", "evidence"],
+	required: ["finding", "rawOrdinals", "provenance", "validity", "evidence"],
 };
 export const REVIEW_PI_PROFILES = {
 	reviewer: {

@@ -6,7 +6,7 @@ import { recoveryPiProfile } from "../.pi/extensions/gitjig/recovery/pi-profile.
 import { admitDiagnosis } from "../.pi/extensions/gitjig/review/history.ts";
 import { reviewerReturnFromPayload } from "../.pi/extensions/gitjig/review/join.ts";
 import { REVIEW_PI_PROFILES } from "../.pi/extensions/gitjig/review/pi-profile.ts";
-import { adjudicationFromPayload } from "../.pi/extensions/gitjig/review/resolve.ts";
+import { indexedAdjudicationFromPayload } from "../.pi/extensions/gitjig/review/resolve.ts";
 
 const diagnosis = (value: unknown) =>
 	admitDiagnosis({
@@ -36,11 +36,28 @@ test("reviewer Pi profile and owning parser agree on closed structural shapes", 
 	}
 });
 
-test("Judge Pi profile and owning parser agree on optional ruling keys, slot and domain", () => {
-	const ruling = { finding: "F", provenance: [{ lens: "L", surface: "S" }], validity: "CONFIRMED", evidence: "E" };
+test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordinals, slot and domain", () => {
+	// The round's consumer is the INDEXED parser (§1.7's version-2 bundle), so
+	// the tool must accept a ruling carrying rawOrdinals and refuse nothing that
+	// parser takes. Nonemptiness, ascent and in-range identity are the envelope
+	// check's at admission, not this schema's.
+	const ruling = {
+		finding: "F",
+		rawOrdinals: [1],
+		provenance: [{ lens: "L", surface: "S" }],
+		validity: "CONFIRMED",
+		evidence: "E",
+	};
 	const values = [
 		{ dedupAttested: true, rulings: [] },
+		{ dedupAttested: true, rulings: [ruling] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [0, 2, 5] }] },
 		{ dedupAttested: false, rulings: [{ ...ruling, severity: "SUBSTANTIVE", onCriterion: false }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [1.5] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: ["1"] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: 1 }] },
+		{ dedupAttested: true, rulings: [{ finding: "F", provenance: [], validity: "CONFIRMED", evidence: "E" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, validity: "INVALID" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ lens: "L", surface: "S", extra: true }] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, unknown: true }] },
@@ -49,9 +66,13 @@ test("Judge Pi profile and owning parser agree on optional ruling keys, slot and
 	for (const value of values) {
 		assert.equal(
 			matchesProfile(REVIEW_PI_PROFILES.judge.schema, value),
-			adjudicationFromPayload(JSON.stringify(value)) !== undefined,
+			indexedAdjudicationFromPayload(JSON.stringify(value)) !== undefined,
+			`profile and indexed parser disagree on ${JSON.stringify(value)}`,
 		);
 	}
+	// The one that regressed: an indexed ruling the consumer accepts must be
+	// submittable through the tool.
+	assert.equal(matchesProfile(REVIEW_PI_PROFILES.judge.schema, { dedupAttested: true, rulings: [ruling] }), true);
 });
 
 test("history diagnosis Pi profile agrees with current consumer domain and nonempty evidence", () => {
