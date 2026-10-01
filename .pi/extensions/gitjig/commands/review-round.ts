@@ -77,6 +77,7 @@ const HANDOFF_ROUND = "review-round handed off: the composed round could not pro
 const HANDOFF_STANDING = "review-round handed off: a standing review-history handoff awaits its re-entry";
 const HANDOFF_POPULATION = "review-round handed off: the handoff record population was unreadable or ambiguous";
 const HANDOFF_RECORD = "review-round handed off: the review-history handoff record could not be written";
+const HANDOFF_RESET = "review-round handed off: a review-history re-entry landed while the round ran";
 const REVIEW_ROUND_RUN_BOUND_MS = 30 * 60 * 1_000;
 
 function alignedTiming(timeoutMs: number): BriefTiming {
@@ -462,6 +463,9 @@ export async function driveReviewRound(
 				if (!reread.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };
 				if (reread.standing?.commentId !== expected)
 					return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
+				// A re-entry honored while this round ran starts a new trailing run, so
+				// this round's history and diagnosis no longer describe the gate.
+				if (reread.resetAfter !== resetAfter) return { disposition: "hand-off", cause: HANDOFF_RESET, reentry: "none" };
 				// A limb-(a) record is written only while the record-local check still
 				// refuses on the fresh history; otherwise the stop is no longer
 				// persistent and is recorded as limb (c), never as an un-re-enterable (a).

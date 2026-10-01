@@ -810,6 +810,30 @@ describe("#404 round-4 paths", () => {
 		assert.equal(h.published.length, 0);
 	});
 
+	it("writes nothing when a re-entry lands while the round diagnoses", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))],
+			{ diagnosis: STAGNATION },
+		);
+		const dispatch = h.seams.makeDispatch;
+		h.seams.makeDispatch = (input) => {
+			const inner = dispatch(input);
+			return async (brief, head) => {
+				if (!h.comments.some((comment) => comment.id === 96)) {
+					h.comments.push(writer(96, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base)));
+					h.comments.push(writer(97, terminalBody(96, r.second, r.base)));
+				}
+				return inner(brief, head);
+			};
+		};
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("re-entry landed"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 0);
+	});
+
 	it("ends a limb-(c) record that appeared during the round when the round becomes determinate", async () => {
 		const r = repository();
 		const h = harness(

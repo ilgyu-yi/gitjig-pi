@@ -215,6 +215,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'if (write?.limb === "a" && !legacyRefusesOn(seams, latest, subject.writerId, reread.resetAfter))',
 		"if (false)",
 	],
+	["settle-reset-ignored", ROUND, "if (reread.resetAfter !== resetAfter) return", "if (false) return"],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,
