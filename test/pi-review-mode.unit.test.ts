@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { parseReviewRoundSpec } from "../.pi/extensions/gitjig/commands/review-round.ts";
-import type { RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import { provisionalCheckpointApplies, type RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import { contestSelectorBrief, piRecoveryBrief } from "../.pi/extensions/gitjig/recovery/briefs.ts";
 import { makeRecoveryProfileDispatcher } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import { composeJudgeBrief, composeReviewerBrief } from "../.pi/extensions/gitjig/review/briefs.ts";
@@ -161,4 +161,22 @@ test("every recovery role is installed into the Pi invocation, and a missing one
 		),
 		/recovery Pi role unavailable from consumer/,
 	);
+});
+
+// #370: the mid-run provisional checkpoint is the generic argv contract's. A
+// Pi child owes no provisional ../return.json under SPEC §1.7 and submits once
+// through its trusted tool, so arming that abort under Pi mode would cancel a
+// conforming child before its permitted submission.
+test("the provisional-return checkpoint governs generic argv dispatch only", () => {
+	const pi = { piExecutable: "/bin/pi", provider: "scripted", model: "scripted-model", role: "challenger" } as const;
+	assert.equal(provisionalCheckpointApplies({ operationDeadline: 1_000 }), true);
+	assert.equal(provisionalCheckpointApplies({ operationDeadline: 1_000, pi }), false);
+	// No bounded operation, no checkpoint, on either transport.
+	assert.equal(provisionalCheckpointApplies({}), false);
+	assert.equal(provisionalCheckpointApplies({ pi }), false);
+	// The production call site is the one that must consult it.
+	const source = readFileSync(new URL("../.pi/extensions/gitjig/dispatch/index.ts", import.meta.url), "utf8");
+	const armed = source.slice(source.indexOf("if (checkpointAbort !== undefined) {"));
+	const provisional = armed.slice(0, armed.indexOf("360_000"));
+	assert.match(provisional, /if \(provisionalCheckpointApplies\(options\)\)/);
 });

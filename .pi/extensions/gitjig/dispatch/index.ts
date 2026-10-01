@@ -195,6 +195,18 @@ export const MIN_CONTAINED_RUN = 6;
  * not hex at large (an over-blocking scan makes every hash-adjacent
  * summary undeliverable, and a refusal here discards the whole return).
  */
+/**
+ * Whether the mid-run provisional-return checkpoint applies to one dispatch.
+ * It applies exactly when the caller bounded the operation and the transport is
+ * the generic argv one, whose standing brief owes an early provisional return
+ * (SPEC §1.7). An explicitly selected Pi child owes no such file and submits
+ * once through its trusted tool, so this checkpoint never governs it; its own
+ * final-submission checkpoint and the run bound still do.
+ */
+export function provisionalCheckpointApplies(options: { operationDeadline?: number; pi?: unknown }): boolean {
+	return options.operationDeadline !== undefined && options.pi === undefined;
+}
+
 export function namesHeldOperand(text: string, heldHash: string): boolean {
 	const runs = text.match(/[0-9a-fA-F]{4,}/g) ?? [];
 	const prefix = heldHash.slice(0, 7);
@@ -360,11 +372,17 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const checkpointTimers: ReturnType<typeof setTimeout>[] = [];
 		let finalCheckpointBytes: Buffer | undefined;
 		if (checkpointAbort !== undefined) {
-			checkpointTimers.push(
-				setTimeout(() => {
-					if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
-				}, 360_000),
-			);
+			// The provisional checkpoint belongs to the generic argv contract
+			// alone. SPEC §1.7 requires no provisional `../return.json` from an
+			// explicitly selected Pi child and instructs it to submit once through
+			// `submit_result`, so arming this abort under Pi mode would cancel a
+			// conforming child before its permitted final submission.
+			if (provisionalCheckpointApplies(options))
+				checkpointTimers.push(
+					setTimeout(() => {
+						if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
+					}, 360_000),
+				);
 			checkpointTimers.push(
 				setTimeout(() => {
 					const before = checkpointSnapshot(context.returnPath);
