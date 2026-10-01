@@ -630,6 +630,8 @@ const REENTRY_REFUSED = {
 	write: "review-round re-entry refused: the handoff record or terminal was not confirmed published",
 	stale: "review-round re-entry refused: the PR subject changed or could not be re-attested before writing",
 	failed: "review-round re-entry refused: a platform read or write failed before re-entry completed",
+	number: "review-round re-entry refused: pr is not a positive safe integer",
+	changed: "review-round re-entry refused: the handoff population changed before the write",
 } as const;
 
 /**
@@ -656,6 +658,9 @@ export async function reenterReviewHistory(
 }
 
 async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundSeams): Promise<ReentryDisposition> {
+	// A grammar-valid decimal beyond 2^53 converts lossily to another number;
+	// only an exact positive safe integer names the PR the operator typed.
+	if (!Number.isSafeInteger(pr) || pr < 1) return { disposition: "refused", cause: REENTRY_REFUSED.number };
 	const subject = await seams.fetchSubject(repoRoot, pr);
 	if (subject === undefined) return { disposition: "refused", cause: REENTRY_REFUSED.subject };
 	const handoffSeams = seams.historyHandoff;
@@ -690,18 +695,32 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 	// Immediately before each write, re-read this account's authority and
 	// re-attest the exact PR subject, so neither the record nor the terminal is
 	// written by a revoked account or binds heads that have since moved.
-	const reentryBlocked = async (): Promise<ReentryDisposition | undefined> => {
+	// It also re-reads the handoff population: the standing record must still be
+	// exactly the one this write expects (none, before the legacy-prose record),
+	// so a concurrent record or terminal is never followed by a second one.
+	// RESIDUAL, stated: the read and the write are not one transaction.
+	const reentryBlocked = async (expected: number | undefined): Promise<ReentryDisposition | undefined> => {
 		if (!(await handoffSeams.writerAuthorized(subject)))
 			return { disposition: "refused", cause: REENTRY_REFUSED.authority };
 		if ((await seams.refetchSubject(repoRoot, subject)) === undefined)
 			return { disposition: "refused", cause: REENTRY_REFUSED.stale };
+		const reread = await readHistoryHandoffs(
+			engine,
+			await seams.readComments(repoRoot, subject),
+			subject.context.repository.id,
+			subject.writerId,
+			async (comment) =>
+				comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
+		);
+		if (!reread.ok) return { disposition: "refused", cause: REENTRY_REFUSED.population };
+		if (reread.standing?.commentId !== expected) return { disposition: "refused", cause: REENTRY_REFUSED.changed };
 		return undefined;
 	};
 	let target = view.standing;
 	if (target === undefined) {
 		// The limb-(a) legacy-prose route; no other limb is re-entered from prose.
 		if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
-		const legacyBlocked = await reentryBlocked();
+		const legacyBlocked = await reentryBlocked(undefined);
 		if (legacyBlocked !== undefined) return legacyBlocked;
 		const pull = subject.context.pullRequest;
 		const observedAt = handoffSeams.now();
@@ -725,7 +744,7 @@ async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundS
 	} else if (target.limb === "a" && !legacyRefuses()) {
 		return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
 	}
-	const terminalBlocked = await reentryBlocked();
+	const terminalBlocked = await reentryBlocked(target.commentId);
 	if (terminalBlocked !== undefined) return terminalBlocked;
 	const terminal = historyReentryBody(engine, target, handoffSeams.now());
 	const written = terminal === undefined ? undefined : await seams.publishRecord(terminal, subject);

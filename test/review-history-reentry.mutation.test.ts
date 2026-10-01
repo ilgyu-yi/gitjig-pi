@@ -180,15 +180,23 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"reenter-record-unchecked",
 		ROUND,
-		"const legacyBlocked = await reentryBlocked();",
+		"const legacyBlocked = await reentryBlocked(undefined);",
 		"const legacyBlocked = undefined as ReentryDisposition | undefined;",
 	],
 	[
 		"reenter-terminal-unchecked",
 		ROUND,
-		"const terminalBlocked = await reentryBlocked();",
+		"const terminalBlocked = await reentryBlocked(target.commentId);",
 		"const terminalBlocked = undefined as ReentryDisposition | undefined;",
 	],
+	[
+		"reenter-reread-unreadable",
+		ROUND,
+		'if (!reread.ok) return { disposition: "refused", cause: REENTRY_REFUSED.population };',
+		"",
+	],
+	["reenter-unsafe-pr", ROUND, "if (!Number.isSafeInteger(pr) || pr < 1) return", "if (false) return"],
+	["reenter-population-not-reread", ROUND, "if (reread.standing?.commentId !== expected) return", "if (false) return"],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,

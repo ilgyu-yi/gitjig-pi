@@ -651,6 +651,68 @@ describe("#404 round-4 paths", () => {
 		assert.equal(h.published.length, 0);
 	});
 
+	it("re-reads the population before each re-entry write and refuses when it changed", async () => {
+		const r = repository();
+		const standing = harness(r.root, subjectAt(r.base, r.second), [
+			writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base)),
+		]);
+		// A concurrent re-entry terminalizes the record after the initial read.
+		const refetch = standing.seams.refetchSubject;
+		standing.seams.refetchSubject = async (root, current) => {
+			if (!standing.comments.some((comment) => comment.id === 60))
+				standing.comments.push(writer(60, terminalBody(5, r.second, r.base)));
+			return refetch(root, current);
+		};
+		const result = await reenterReviewHistory(212, r.root, standing.seams);
+		assert.ok(result.disposition === "refused" && result.cause.includes("changed"), JSON.stringify(result));
+		assert.equal(standing.published.length, 0);
+		const legacy = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+		]);
+		// Another account writes the limb-(a) record after the initial read.
+		legacy.seams.refetchSubject = async (_root, current) => {
+			if (!legacy.comments.some((comment) => comment.id === 61))
+				legacy.comments.push(writer(61, handoffBody(HISTORY_HANDOFF_CAUSE.a, r.second, r.base)));
+			return current;
+		};
+		const second = await reenterReviewHistory(212, r.root, legacy.seams);
+		assert.ok(second.disposition === "refused" && second.cause.includes("changed"), JSON.stringify(second));
+		assert.equal(legacy.published.length, 0);
+	});
+
+	it("refuses when the population becomes unreadable before a re-entry write", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base)),
+		]);
+		let reads = 0;
+		const read = h.seams.readComments;
+		h.seams.readComments = async (root, subject) =>
+			reads++ === 0 ? read(root, subject) : { ok: false, cause: "gone" };
+		const result = await reenterReviewHistory(212, r.root, h.seams);
+		assert.ok(
+			result.disposition === "refused" && result.cause.includes("unreadable or ambiguous"),
+			JSON.stringify(result),
+		);
+		assert.equal(h.published.length, 0);
+	});
+
+	it("refuses a pr beyond the safe-integer range before any read", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), []);
+		let fetched = 0;
+		h.seams.fetchSubject = async () => {
+			fetched += 1;
+			return undefined;
+		};
+		for (const pr of [Number("9999999999999999"), 2 ** 53, 0, 1.5]) {
+			const result = await reenterReviewHistory(pr, r.root, h.seams);
+			assert.ok(result.disposition === "refused" && result.cause.includes("safe integer"), String(pr));
+		}
+		assert.equal(fetched, 0);
+	});
+
 	it("reads the production login and permission as gh scalars, without the line terminator", async () => {
 		const bin = mkdtempSync(join(tmpdir(), "gitjig-404-gh-"));
 		dirs.push(bin);
