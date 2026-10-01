@@ -17,6 +17,7 @@ import {
 	type ReviewRoundSeams,
 	type ReviewRoundSpec,
 	reenterReviewHistory,
+	registerReviewRoundCommand,
 } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import {
 	type AttestedCommentPopulation,
@@ -440,6 +441,96 @@ describe("#404 standing records", () => {
 	});
 });
 
+describe("#404 unreadable and concurrent populations", () => {
+	it("records an unreadable review record as limb (c) rather than refusing the population", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, `<!-- gitjig-review-record: ${r.second} -->\n\n\`\`\`json\n{not json\n\`\`\`\n`),
+		]);
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.deepEqual(h.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
+	});
+
+	it("writes no second record when another record appears while the round runs", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))],
+			{ diagnosis: STAGNATION },
+		);
+		const dispatch = h.seams.makeDispatch;
+		h.seams.makeDispatch = (input) => {
+			const inner = dispatch(input);
+			return async (brief, head) => {
+				h.comments.push(writer(50, handoffBody("another-owner-stop", r.second, r.base)));
+				return inner(brief, head);
+			};
+		};
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
+		assert.equal(h.published.length, 0);
+	});
+
+	it("writes no second limb-(c) record when one appears while the round runs", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))],
+			{ dispatchUnavailable: true },
+		);
+		const dispatch = h.seams.makeDispatch;
+		h.seams.makeDispatch = (input) => {
+			const inner = dispatch(input);
+			return async (brief, head) => {
+				h.comments.push(writer(50, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)));
+				return inner(brief, head);
+			};
+		};
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(h.published.length, 0);
+	});
+});
+
+describe("#404 the registered command", () => {
+	it("routes `/review-round reenter pr=<n>` to the re-entry and nothing else", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+		]);
+		let handler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+		const entries: unknown[] = [];
+		const pi = {
+			registerCommand: (_name: string, spec: { handler: typeof handler }) => {
+				handler = spec.handler;
+			},
+			appendEntry: (_type: string, data: unknown) => entries.push(data),
+			sendMessage: () => {},
+		} as never;
+		registerReviewRoundCommand(
+			pi,
+			r.root,
+			r.root,
+			{ mergeMode: "off", mergeSource: "default", decisionMode: "handoff", decisionSource: "default", refusals: [] },
+			h.seams,
+		);
+		assert.ok(handler);
+		await handler("reenter pr=212", { waitForIdle: async () => {} });
+		assert.deepEqual(entries, [{ disposition: "re-entered", limb: "a" }]);
+		assert.equal(h.rounds() + h.dispatches(), 0);
+		for (const args of ["reenter pr=0", "reenter 212", "reenter pr=212 extra"]) {
+			entries.length = 0;
+			await handler(args, { waitForIdle: async () => {} });
+			assert.equal((entries[0] as { disposition?: string }).disposition, "refused", args);
+		}
+	});
+});
+
 describe("#404 re-entry", () => {
 	it("re-enters PR #376's legacy prose handoff: limb-(a) record, terminal, then a full panel with history intact", async () => {
 		const r = repository();
@@ -519,6 +610,48 @@ describe("#404 re-entry", () => {
 		);
 		await driveReviewRound(spec(), r.root, h.seams);
 		assert.equal(h.dispatches(), 1, "the false limb-(a) terminal did not reset the run");
+	});
+
+	it("classifies limb (a) by each of the eight record-local checks", () => {
+		const good = () => repair("2".repeat(40));
+		const first = repair("1".repeat(40));
+		const shapes: Array<[string, (record: ReviewRecord) => void]> = [
+			["adjudication null", (record) => Object.assign(record, { adjudication: null })],
+			["dedup not attested", (record) => Object.assign(record.adjudication ?? {}, { dedupAttested: false })],
+			["empty raw bundle", (record) => Object.assign(record, { bundle: [] })],
+			[
+				"more rulings than raw findings",
+				(record) => record.adjudication?.rulings.push({ ...record.adjudication.rulings[0], finding: "another" }),
+			],
+			[
+				"repeated disposition finding",
+				(record) => {
+					if (record.review.state === "resolved")
+						record.review.resolution.dispositions.push({ ...record.review.resolution.dispositions[0] });
+				},
+			],
+			["empty evidence", (record) => Object.assign(record.adjudication?.rulings[0] ?? {}, { evidence: "" })],
+			[
+				"a CONFIRMED ruling without direction",
+				(record) => Object.assign(record.adjudication?.rulings[0] ?? {}, { direction: undefined }),
+			],
+			[
+				"provenance slots not the raw multiset",
+				(record) => Object.assign(record.adjudication?.rulings[0] ?? {}, { provenance: [SUITE] }),
+			],
+			[
+				"disposition at the ruling's index names another finding",
+				(record) => {
+					if (record.review.state === "resolved")
+						record.review.resolution.dispositions[0] = { finding: "different", disposition: "repair" };
+				},
+			],
+		];
+		for (const [name, shape] of shapes) {
+			const record = good();
+			shape(record);
+			assert.equal(legacyUnderivable(repairHistory([first, record])), true, name);
+		}
 	});
 
 	it("classifies limb (a) only by the record-local checks", () => {

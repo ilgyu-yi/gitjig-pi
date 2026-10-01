@@ -82,6 +82,25 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"",
 	],
 	[
+		"unreadable-review-refuses-population",
+		HANDOFF,
+		"	const reviews = orderedReviewRecords(comments, writerId);\n",
+		'	const reviews = orderedReviewRecords(comments, writerId);\n	if (reviews === undefined) return { ok: false, cause: "unreadable" };\n',
+	],
+	[
+		"concurrent-ab-record-ignored",
+		ROUND,
+		'if (fresh.standing !== undefined && fresh.standing.limb !== "c")',
+		"if (false)",
+	],
+	["concurrent-c-record-ignored", ROUND, "\t\t\tstanding = fresh.standing;\n", ""],
+	[
+		"reenter-command-unrouted",
+		ROUND,
+		"const reentry = /^\\s*reenter\\s+pr=([1-9][0-9]{0,15})\\s*$/.exec(args);",
+		"const reentry = /(?!)/.exec(args);",
+	],
+	[
 		"reenter-standing-a-unchecked",
 		ROUND,
 		'} else if (target.limb === "a" && !legacyRefuses()) {',

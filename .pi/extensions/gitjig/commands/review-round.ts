@@ -418,6 +418,24 @@ export async function driveReviewRound(
 			const wasDeterminate = determinate;
 			determinate = false;
 			if (handoffSeams === undefined || handoffEngine === undefined) return undefined;
+			// Re-read the population right before writing, so a record that appeared
+			// while this round ran is the standing one and no second record is
+			// written. RESIDUAL, stated: the read and the write are not one
+			// transaction; a record posted between them is not observable here.
+			const fresh = await readHistoryHandoffs(
+				handoffEngine,
+				await seams.readComments(repoRoot, subject),
+				subject.context.repository.id,
+				subject.writerId,
+				async (comment) =>
+					comment.authorLogin === undefined ? undefined : handoffSeams.permissionOf(subject, comment.authorLogin),
+			);
+			if (!fresh.ok) return { disposition: "hand-off", cause: HANDOFF_POPULATION, reentry: "none" };
+			// A limb-(a)/(b) or foreign record that appeared while this round ran
+			// now stands: the round writes nothing and hands off citing it.
+			if (fresh.standing !== undefined && fresh.standing.limb !== "c")
+				return { disposition: "hand-off", cause: HANDOFF_STANDING, reentry: "none" };
+			standing = fresh.standing;
 			const writes = (standing?.limb === "c" && wasDeterminate) || (write !== undefined && standing === undefined);
 			// A record or terminal is admitted only from an authorized carrier, so an
 			// unauthorized account writes nothing and hands off (§1.4's residual).
@@ -737,7 +755,7 @@ export function registerReviewRoundCommand(
 		description:
 			"Drive panel, Judge, Resolver, durable record, and §1.4 history from one closed JSON spec: " +
 			"/review-round <spec-file>. Schema and example: README.md, Driving a review round. " +
-			"/review-round reenter pr=<n> re-enters a standing §1.4 limb-(a)/(b) review-history handoff (SPEC §1.4). The delegate runs " +
+			"/review-round reenter pr=<n> re-enters a standing §1.4 limb-(a)/(b) review-history handoff or a refusing limb-(a) legacy-prose history (SPEC §1.4). The delegate runs " +
 			"in the caller's trust domain and inherits its environment, credentials included: remote reach through " +
 			"inherited credentials is not confined.",
 		handler: async (args: string, ctx) => {

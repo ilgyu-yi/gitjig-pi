@@ -95,8 +95,10 @@ export async function readHistoryHandoffs(
 	const attested = await attestTransitionComments(engine, comments, repositoryId, permissionOf);
 	const inspected = engine.inspectHandoffPopulation(attested);
 	if (!inspected.ok) return { ok: false, cause: "the handoff population was ambiguous or unattested" };
+	// An unreadable review record never refuses the handoff population: it only
+	// withholds every limb-(a) honor below, so the round still reaches its own
+	// history read and records that stop as limb (c) (#404).
 	const reviews = orderedReviewRecords(comments, writerId);
-	if (reviews === undefined) return { ok: false, cause: "a review record in the population was unreadable" };
 	const position = new Map(comments.map((comment, index) => [comment.id, index]));
 	const records = new Map<number, HandoffRecord>();
 	for (const comment of attested) {
@@ -112,6 +114,7 @@ export async function readHistoryHandoffs(
 		const limb = referenced === undefined ? undefined : limbOf(referenced.cause);
 		if (limb !== "a" && limb !== "b") continue;
 		if (limb === "a") {
+			if (reviews === undefined) continue;
 			const at = position.get(comment.id) ?? -1;
 			const from = resetAfter === undefined ? -1 : (position.get(resetAfter) ?? -1);
 			const before = reviews
