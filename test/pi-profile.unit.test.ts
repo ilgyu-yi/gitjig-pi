@@ -53,6 +53,26 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		{ dedupAttested: true, rulings: [ruling] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [0, 2, 5] }] },
 		{ dedupAttested: false, rulings: [{ ...ruling, severity: "SUBSTANTIVE", onCriterion: false }] },
+		// Every optional ruling field, valid: a profile that becomes stricter than
+		// the consumer for any of them makes a lawful ruling unsubmittable.
+		{
+			dedupAttested: false,
+			rulings: [
+				{
+					...ruling,
+					severity: "NIT",
+					remedy: "exact remedy prose",
+					direction: "fail-closed",
+					onCriterion: true,
+				},
+			],
+		},
+		{ dedupAttested: true, rulings: [{ ...ruling, remedy: "" }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, direction: "live-harm" }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, direction: "fail-open" }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, severity: "MINOR" }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, remedy: 1 }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, onCriterion: "yes" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [1.5] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: ["1"] }] },
