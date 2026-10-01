@@ -14,6 +14,7 @@ import * as engine from "../.github/workflows/gitjig-lifecycle.mjs";
 import {
 	driveReviewRound,
 	type HistoryHandoffSeams,
+	platformHistoryHandoffSeams,
 	type ReviewRoundSeams,
 	type ReviewRoundSpec,
 	reenterReviewHistory,
@@ -548,16 +549,75 @@ describe("#404 round-4 paths", () => {
 
 	it("turns a thrown subject read or write into a refusal", async () => {
 		const r = repository();
-		const h = harness(r.root, subjectAt(r.base, r.second), [
-			writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base)),
-		]);
-		h.seams.fetchSubject = async () => {
-			throw new Error("criterion owner unavailable");
-		};
-		const result = await reenterReviewHistory(212, r.root, h.seams).catch((error: unknown) =>
-			assert.fail(`the re-entry threw instead of refusing: ${String(error)}`),
+		for (const seam of ["fetchSubject", "publishRecord"] as const) {
+			const h = harness(r.root, subjectAt(r.base, r.second), [
+				writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base)),
+			]);
+			h.seams[seam] = async () => {
+				throw new Error(`${seam} exploded`);
+			};
+			const result = await reenterReviewHistory(212, r.root, h.seams).catch((error: unknown) =>
+				assert.fail(`the re-entry threw instead of refusing: ${String(error)}`),
+			);
+			assert.ok(result.disposition === "refused" && result.cause.includes("failed"), seam);
+		}
+	});
+
+	it("re-attests the subject before the round's own handoff writes", async () => {
+		const r = repository();
+		const cases: Array<[string, Comment[]]> = [
+			[
+				"limb (a) record",
+				[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(unruledRepair(r.second)))],
+			],
+			[
+				"limb (c) terminal",
+				[
+					writer(1, composeReviewRecord(repair(r.first))),
+					writer(2, composeReviewRecord(unruledRepair(r.second))),
+					writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+				],
+			],
+		];
+		for (const [name, comments] of cases) {
+			const h = harness(r.root, subjectAt(r.base, r.second), comments);
+			// The subject moves only after the authority check that immediately
+			// precedes the handoff writes, so earlier drift checks still pass.
+			let atWrite = false;
+			const handoff = h.seams.historyHandoff;
+			assert.ok(handoff);
+			h.seams.historyHandoff = {
+				...handoff,
+				writerAuthorized: async (subject) => {
+					atWrite = true;
+					return handoff.writerAuthorized(subject);
+				},
+			};
+			h.seams.refetchSubject = async (_root, current) => (atWrite ? undefined : current);
+			const outcome = await driveReviewRound(spec(), r.root, h.seams);
+			assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("changed"), name);
+			assert.equal(h.published.length, 0, name);
+		}
+	});
+
+	it("reads the production login and permission as gh scalars, without the line terminator", async () => {
+		const bin = mkdtempSync(join(tmpdir(), "gitjig-404-gh-"));
+		dirs.push(bin);
+		writeFileSync(
+			join(bin, "gh"),
+			'#!/bin/sh\ncase "$*" in *" user "*) printf "writer\\n" ;; *permission*) printf "admin\\n" ;; *) exit 1 ;; esac\n',
+			{ mode: 0o755 },
 		);
-		assert.ok(result.disposition === "refused" && result.cause.includes("failed"), JSON.stringify(result));
+		const path = process.env.PATH;
+		process.env.PATH = `${bin}:${path ?? ""}`;
+		try {
+			const seams = platformHistoryHandoffSeams(bin);
+			const subject = subjectAt("1".repeat(40), "2".repeat(40));
+			assert.equal(await seams.permissionOf(subject, "writer"), "admin");
+			assert.equal(await seams.writerAuthorized(subject), true);
+		} finally {
+			process.env.PATH = path;
+		}
 	});
 });
 

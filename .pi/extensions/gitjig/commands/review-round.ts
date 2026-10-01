@@ -184,11 +184,17 @@ export type HistoryHandoffSeams = {
 	now: () => string;
 };
 
+/** One `gh --jq` scalar: the value without the single line terminator `gh` appends. */
+async function platformScalar(argv: string[], repoRoot: string): Promise<string | undefined> {
+	const output = await runPlatformRead(argv, repoRoot);
+	return output?.endsWith("\n") ? output.slice(0, -1) : output;
+}
+
 /** Production seams: the handed-over engine and live platform permission reads. */
 export function platformHistoryHandoffSeams(repoRoot: string): HistoryHandoffSeams {
 	const engine = () => import("../../../../.github/workflows/gitjig-lifecycle.mjs");
 	const permissionOf = (subject: ReviewSubject, login: string): Promise<string | undefined> =>
-		runPlatformRead(
+		platformScalar(
 			[
 				"api",
 				"--hostname",
@@ -203,7 +209,7 @@ export function platformHistoryHandoffSeams(repoRoot: string): HistoryHandoffSea
 		engine,
 		permissionOf,
 		writerAuthorized: async (subject) => {
-			const login = await runPlatformRead(
+			const login = await platformScalar(
 				["api", "--hostname", subject.context.repository.host, "user", "--jq", ".login"],
 				repoRoot,
 			);
@@ -441,7 +447,11 @@ export async function driveReviewRound(
 			// unauthorized account writes nothing and hands off (§1.4's residual).
 			if (writes && !(await handoffSeams.writerAuthorized(subject)))
 				return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
+			// Re-attest the exact PR subject immediately before each write, so no
+			// record or terminal binds heads that moved while this round ran.
+			const moved = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) === undefined;
 			if (standing !== undefined && standing.limb === "c" && wasDeterminate) {
+				if (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 				const body = historyReentryBody(handoffEngine, standing, handoffSeams.now());
 				if (body === undefined || !(await seams.publishRecord(body, subject)).ok)
 					return { disposition: "hand-off", cause: HANDOFF_RECORD, reentry: "none" };
@@ -449,6 +459,7 @@ export async function driveReviewRound(
 			}
 			// While any record stands, a later stop writes no second one (§1.4).
 			if (write === undefined || standing !== undefined) return undefined;
+			if (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };
 			const pull = subject.context.pullRequest;
 			const body = historyHandoffBody(
 				handoffEngine,

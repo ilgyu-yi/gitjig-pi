@@ -159,6 +159,19 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'\t} catch {\n\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.failed };',
 		"\t} catch (error) {\n\t\tthrow error;",
 	],
+	["gh-scalar-unstripped", ROUND, 'return output?.endsWith("\\n") ? output.slice(0, -1) : output;', "return output;"],
+	[
+		"settle-terminal-unattested",
+		ROUND,
+		'\t\t\t\tif (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };\n\t\t\t\tconst body',
+		"\t\t\t\tconst body",
+	],
+	[
+		"settle-record-unattested",
+		ROUND,
+		'\t\t\tif (await moved()) return { disposition: "hand-off", cause: HANDOFF_DRIFT, reentry: "none" };\n\t\t\tconst pull',
+		"\t\t\tconst pull",
+	],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,
