@@ -496,6 +496,71 @@ describe("#404 unreadable and concurrent populations", () => {
 	});
 });
 
+describe("#404 round-4 paths", () => {
+	it("ends a standing limb-(c) record and then writes limb (a) when the projection refuses record-locally", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
+		]);
+		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(h.published.length, 2);
+		assert.ok(isTerminal(h.published[0]));
+		assert.equal(causeOf(h.published[1]), HISTORY_HANDOFF_CAUSE.a);
+	});
+
+	it("encodes a handed-off authorization diagnosis as reentry authorization", async () => {
+		const r = repository();
+		const h = harness(
+			r.root,
+			subjectAt(r.base, r.second),
+			[writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))],
+			{ diagnosis: { value: "STAGNATION", invalidation: "authorization", evidence: "the grant no longer fits" } },
+		);
+		await driveReviewRound(spec(), r.root, h.seams);
+		assert.deepEqual(h.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.b]);
+		const record = engine.parseMarkedRecord(h.published[0], engine.RECORD_MARKERS.handoff) as { reentry: string };
+		assert.equal(record.reentry, "authorization");
+	});
+
+	it("re-attests the subject before each re-entry write and refuses on a moved subject", async () => {
+		const r = repository();
+		const legacy = [
+			writer(1, composeReviewRecord(repair(r.first))),
+			writer(2, composeReviewRecord(unruledRepair(r.second))),
+		];
+		const standing = [writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base))];
+		for (const [name, comments, staleAfter] of [
+			["legacy route, before the record", legacy, 0],
+			["legacy route, before the terminal", legacy, 1],
+			["standing record, before the terminal", standing, 0],
+		] as const) {
+			const h = harness(r.root, subjectAt(r.base, r.second), [...comments]);
+			let refetches = 0;
+			h.seams.refetchSubject = async (_root, current) => (refetches++ < staleAfter ? current : undefined);
+			const result = await reenterReviewHistory(212, r.root, h.seams);
+			assert.ok(result.disposition === "refused" && result.cause.includes("re-attested"), name);
+			assert.equal(h.published.length, staleAfter, name);
+		}
+	});
+
+	it("turns a thrown subject read or write into a refusal", async () => {
+		const r = repository();
+		const h = harness(r.root, subjectAt(r.base, r.second), [
+			writer(5, handoffBody(HISTORY_HANDOFF_CAUSE.b, r.second, r.base)),
+		]);
+		h.seams.fetchSubject = async () => {
+			throw new Error("criterion owner unavailable");
+		};
+		const result = await reenterReviewHistory(212, r.root, h.seams).catch((error: unknown) =>
+			assert.fail(`the re-entry threw instead of refusing: ${String(error)}`),
+		);
+		assert.ok(result.disposition === "refused" && result.cause.includes("failed"), JSON.stringify(result));
+	});
+});
+
 describe("#404 the registered command", () => {
 	it("routes `/review-round reenter pr=<n>` to the re-entry and nothing else", async () => {
 		const r = repository();

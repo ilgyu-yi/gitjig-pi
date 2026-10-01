@@ -134,6 +134,31 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	["two-standing-accepted", HANDOFF, "if (standingRecords.length > 1) return", "if (false) return"],
 	["cause-literal-c", HANDOFF, 'c: "review-history-unmeasured",', 'c: "review-history-transient",'],
 	["help-legacy-route", ROUND, " or a refusing limb-(a) legacy-prose history", ""],
+	["limb-a-not-determinate", ROUND, 'if (limb === "a") determinate = true;', ""],
+	[
+		"authorization-encoded-as-plan",
+		HANDOFF,
+		'reentry: limb === "b" ? reentry : "none",',
+		'reentry: limb === "b" ? (reentry === "authorization" ? "plan" : reentry) : "none",',
+	],
+	[
+		"reenter-record-unattested",
+		ROUND,
+		'if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };\n\t\tif (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };',
+		'if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };',
+	],
+	[
+		"reenter-terminal-unattested",
+		ROUND,
+		'\tif (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };\n\tconst terminal',
+		"\tconst terminal",
+	],
+	[
+		"reenter-throw-escapes",
+		ROUND,
+		'\t} catch {\n\t\treturn { disposition: "refused", cause: REENTRY_REFUSED.failed };',
+		"\t} catch (error) {\n\t\tthrow error;",
+	],
 	[
 		"unreadable-review-refuses-population",
 		HANDOFF,

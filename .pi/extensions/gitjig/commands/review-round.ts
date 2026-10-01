@@ -613,6 +613,8 @@ const REENTRY_REFUSED = {
 	limb: "review-round re-entry refused: the standing record is not a limb-(a) or limb-(b) review-history handoff",
 	legacy: "review-round re-entry refused: the record-local legacy check does not refuse on this PR's history",
 	write: "review-round re-entry refused: the handoff record or terminal was not confirmed published",
+	stale: "review-round re-entry refused: the PR subject changed or could not be re-attested before writing",
+	failed: "review-round re-entry refused: a platform read or write failed before re-entry completed",
 } as const;
 
 /**
@@ -629,6 +631,16 @@ export async function reenterReviewHistory(
 	repoRoot: string,
 	seams: ReviewRoundSeams,
 ): Promise<ReentryDisposition> {
+	// Every refusal fails closed to the existing hand-off (§1.4): a thrown read
+	// or write is a refusal with a terminal, never an escaped exception.
+	try {
+		return await reenterAttested(pr, repoRoot, seams);
+	} catch {
+		return { disposition: "refused", cause: REENTRY_REFUSED.failed };
+	}
+}
+
+async function reenterAttested(pr: number, repoRoot: string, seams: ReviewRoundSeams): Promise<ReentryDisposition> {
 	const subject = await seams.fetchSubject(repoRoot, pr);
 	if (subject === undefined) return { disposition: "refused", cause: REENTRY_REFUSED.subject };
 	const handoffSeams = seams.historyHandoff;
@@ -662,10 +674,14 @@ export async function reenterReviewHistory(
 		const availability = historyAvailability(true, records);
 		return availability.available && legacyUnderivable(repairHistory(availability.records));
 	};
+	// Re-attest the exact PR subject immediately before each write, so neither
+	// the record nor the terminal binds heads that have since moved.
+	const current = async (): Promise<boolean> => (await seams.refetchSubject(repoRoot, subject)) !== undefined;
 	let target = view.standing;
 	if (target === undefined) {
 		// The limb-(a) legacy-prose route; no other limb is re-entered from prose.
 		if (!legacyRefuses()) return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
+		if (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };
 		const pull = subject.context.pullRequest;
 		const observedAt = handoffSeams.now();
 		const body = historyHandoffBody(engine, "a", "none", pull.head.oid, pull.base.oid, observedAt);
@@ -688,6 +704,7 @@ export async function reenterReviewHistory(
 	} else if (target.limb === "a" && !legacyRefuses()) {
 		return { disposition: "refused", cause: REENTRY_REFUSED.legacy };
 	}
+	if (!(await current())) return { disposition: "refused", cause: REENTRY_REFUSED.stale };
 	const terminal = historyReentryBody(engine, target, handoffSeams.now());
 	const written = terminal === undefined ? undefined : await seams.publishRecord(terminal, subject);
 	if (written === undefined || !written.ok) return { disposition: "refused", cause: REENTRY_REFUSED.write };
