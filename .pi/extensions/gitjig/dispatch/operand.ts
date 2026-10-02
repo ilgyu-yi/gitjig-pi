@@ -1,6 +1,9 @@
 /* The single ruled held-operand scan, owned here so that the dispatcher and the
  * Pi runner consume one predicate rather than two spellings of it (SPEC §3.11).
  * `dispatch/index.ts` re-exports both names for its existing consumers.
+ *
+ * Warning-surface roster: EXEMPT — this module returns one boolean and composes
+ * no text at all, so no warning or operator-facing string can originate here.
  */
 
 /**
