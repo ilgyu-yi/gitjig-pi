@@ -94,6 +94,12 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		}),
 		{ dedupAttested: true, rulings: [{ ...ruling, validity: "INVALID" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ lens: "L", surface: "S", extra: true }] }] },
+		// The nested slot's own required keys: a profile that stopped requiring
+		// one would accept provenance the consumer rejects.
+		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ surface: "S" }] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ lens: "L" }] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{}] }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ lens: 1, surface: "S" }] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, unknown: true }] },
 		{ dedupAttested: true },
 		{ rulings: [ruling] },

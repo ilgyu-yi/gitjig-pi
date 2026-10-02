@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { type RecoveryPiRole, recoveryPiProfile } from "../recovery/pi-profile.ts";
 import { REVIEW_PI_PROFILES, type ReviewPiRole } from "../review/pi-profile.ts";
 import { DEFAULT_RUN_BOUND_MS, type DelegateRunOutcome } from "./executor.ts";
+import { namesHeldOperand } from "./operand.ts";
 import { beginPiOperatorSession } from "./pi-operator.ts";
 import { startPiRpc } from "./pi-rpc.ts";
 import { provisionPiSubmitTool } from "./pi-submit.ts";
@@ -47,7 +48,12 @@ export async function runPiDelegate(
 		if (!/^[0-9a-f]{40}$/.test(context.heldHash)) return refusal("invalid");
 		const original = readFileSync(context.briefPath, "utf8");
 		const redacted = original.replaceAll(new RegExp(context.heldHash, "gi"), "[clone head withheld]");
-		if (redacted.toLowerCase().includes(context.heldHash.slice(0, 7))) return refusal("invalid");
+		// The brief is held to the dispatcher's own ruled scan, not to a second
+		// spelling of it: a run this predicate says names the held operand must not
+		// reach the child, including a contained run shorter than the 7-prefix
+		// (MIN_CONTAINED_RUN, issue #104). Checking only the prefix let a
+		// six-character contained run through while the return side refused it.
+		if (namesHeldOperand(redacted, context.heldHash)) return refusal("invalid");
 		if (redacted !== original) writeFileSync(context.briefPath, redacted);
 	} catch {
 		return refusal("invalid");

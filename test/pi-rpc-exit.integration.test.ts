@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { namesHeldOperand } from "../.pi/extensions/gitjig/dispatch/operand.ts";
 import { startPiRpc } from "../.pi/extensions/gitjig/dispatch/pi-rpc.ts";
 import { runPiDelegate } from "../.pi/extensions/gitjig/dispatch/pi-run.ts";
 import type { DispatchContext } from "../.pi/extensions/gitjig/dispatch/provision.ts";
@@ -151,6 +152,56 @@ process.stdin.on('data',v=>{
 		} finally {
 			clearTimeout(laterAbort);
 		}
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+});
+
+/**
+ * The Pi brief rides the dispatcher's own ruled held-operand scan, not a second
+ * spelling of it. A contained run at MIN_CONTAINED_RUN (issue #104) names the
+ * held operand, so such a brief must refuse before any child starts even though
+ * it carries no full hash and no 7-character prefix.
+ */
+test("a contained held-operand run shorter than the 7-prefix refuses the Pi brief", async () => {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-370-operand-"));
+	try {
+		const tree = join(scratch, "tree");
+		const state = join(scratch, "state");
+		mkdirSync(tree);
+		mkdirSync(state);
+		const held = "0123456789abcdef0123456789abcdef01234567";
+		const context: DispatchContext = {
+			scratchRoot: scratch,
+			treeDir: tree,
+			stateDir: state,
+			briefPath: join(scratch, "brief.md"),
+			returnPath: join(scratch, "return.json"),
+			heldHash: held,
+		};
+		// Six hex characters contained in the held hash, with no full hash and no
+		// 7-character prefix anywhere in the text.
+		const contained = held.slice(10, 16);
+		assert.equal(contained.length, 6);
+		assert.equal(held.includes(contained), true);
+		assert.equal(contained.includes(held.slice(0, 7)), false);
+		const brief = `Earlier state landed at ${contained}; independently resolve clone HEAD.`;
+		assert.equal(brief.includes(held), false);
+		assert.equal(brief.toLowerCase().includes(held.slice(0, 7)), false);
+		// The ruled predicate the return side uses says this names the operand.
+		assert.equal(namesHeldOperand(brief, held), true);
+		writeFileSync(context.briefPath, brief);
+		const run = await runPiDelegate(
+			context,
+			// An executable that does not exist: reaching a spawn at all would mean
+			// the brief had already been handed over.
+			{ piExecutable: join(scratch, "never-spawned"), provider: "scripted", model: "scripted-model", role: "reviewer" },
+			{ timeoutMs: 4000 },
+		);
+		assert.equal(run.protocolInvalid, true, JSON.stringify(run));
+		assert.equal(run.spawnFailed, false, "the brief must refuse before any child is started");
+		// The refused brief is left exactly as the caller wrote it.
+		assert.equal(readFileSync(context.briefPath, "utf8"), brief);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
