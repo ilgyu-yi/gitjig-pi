@@ -308,8 +308,9 @@ test("the provisioned summary bound is measured in characters, as the briefs sta
 		assert.equal(matchesProfile(summary, "x".repeat(6001)), false);
 		assert.equal(matchesProfile(summary, ""), false);
 		// The role's own payload keys survive the exposure unchanged.
-		for (const key of Object.keys(REVIEW_PI_PROFILES[role].schema.properties ?? {}))
-			assert.deepEqual(exposed.schema.properties?.[key], REVIEW_PI_PROFILES[role].schema.properties?.[key]);
+		const owned: Record<string, unknown> = REVIEW_PI_PROFILES[role].schema.properties ?? {};
+		const after: Record<string, unknown> = exposed.schema.properties ?? {};
+		for (const key of Object.keys(owned)) assert.deepEqual(after[key], owned[key]);
 	}
 	// The recovery roles are exposed through the same one definition.
 	const recovery = recoveryPiProfile("challenger");
