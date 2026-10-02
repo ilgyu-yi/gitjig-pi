@@ -8,6 +8,43 @@ import { reviewerReturnFromPayload } from "../.pi/extensions/gitjig/review/join.
 import { REVIEW_PI_PROFILES } from "../.pi/extensions/gitjig/review/pi-profile.ts";
 import { indexedAdjudicationFromPayload } from "../.pi/extensions/gitjig/review/resolve.ts";
 
+/**
+ * Derived parity cases, generated from one valid payload rather than listed by
+ * hand. Walking the payload yields, at every nesting level: each key omitted
+ * alone; each string leaf replaced by a long value the consumer still accepts,
+ * which catches a producer cap narrower than its consumer's; and each boolean
+ * leaf wrongly typed. An example-based list kept leaving one field unmeasured
+ * per round, so the arms below enumerate the fields mechanically and only the
+ * domain cases stay hand-written.
+ *
+ * `longLength` differs per profile because the consumers differ: the review
+ * parsers bound the whole return rather than each string, while recoveryText
+ * bounds each field at 4096 bytes, so a value above that is correctly refused
+ * by both and would measure nothing.
+ */
+function derivedCases(value: unknown, longLength: number): unknown[] {
+	const cases: unknown[] = [];
+	const walk = (node: unknown, rebuild: (replacement: unknown) => unknown): void => {
+		if (Array.isArray(node)) {
+			if (node.length > 0) walk(node[0], (replacement) => rebuild([replacement, ...node.slice(1)]));
+			return;
+		}
+		if (typeof node === "object" && node !== null) {
+			const fields = node as Record<string, unknown>;
+			for (const key of Object.keys(fields)) {
+				const { [key]: _omitted, ...rest } = fields;
+				cases.push(rebuild(rest));
+				walk(fields[key], (replacement) => rebuild({ ...fields, [key]: replacement }));
+			}
+			return;
+		}
+		if (typeof node === "string") cases.push(rebuild("x".repeat(longLength)));
+		if (typeof node === "boolean") cases.push(rebuild("not a boolean"));
+	};
+	walk(value, (replacement) => replacement);
+	return cases;
+}
+
 const diagnosis = (value: unknown) =>
 	admitDiagnosis({
 		disposition: "admitted",
@@ -34,10 +71,11 @@ test("reviewer Pi profile and owning parser agree on closed structural shapes", 
 		{ findings: [] },
 		{},
 	];
-	for (const value of values) {
+	for (const value of [...values, ...derivedCases({ token: "APPROVED", findings: ["candidate"] }, 5000)]) {
 		assert.equal(
 			matchesProfile(REVIEW_PI_PROFILES.reviewer.schema, value),
 			!("failure" in reviewerReturnFromPayload(JSON.stringify(value))),
+			`reviewer profile and parser disagree on ${JSON.stringify(value).slice(0, 160)}`,
 		);
 	}
 });
@@ -118,11 +156,11 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		{ rulings: [] },
 		{},
 	];
-	for (const value of values) {
+	for (const value of [...values, ...derivedCases({ dedupAttested: true, rulings: [ruling] }, 5000)]) {
 		assert.equal(
 			matchesProfile(REVIEW_PI_PROFILES.judge.schema, value),
 			indexedAdjudicationFromPayload(JSON.stringify(value)) !== undefined,
-			`profile and indexed parser disagree on ${JSON.stringify(value)}`,
+			`profile and indexed parser disagree on ${JSON.stringify(value).slice(0, 200)}`,
 		);
 	}
 	// The one that regressed: an indexed ruling the consumer accepts must be
@@ -145,7 +183,18 @@ test("history diagnosis Pi profile agrees with current consumer domain and nonem
 		{ value: "NONE", invalidation: "nothing" },
 		{},
 	]) {
-		assert.equal(matchesProfile(REVIEW_PI_PROFILES.history.schema, value), diagnosis(value).available);
+		assert.equal(
+			matchesProfile(REVIEW_PI_PROFILES.history.schema, value),
+			diagnosis(value).available,
+			`history profile and consumer disagree on ${JSON.stringify(value).slice(0, 160)}`,
+		);
+	}
+	for (const value of derivedCases({ value: "NONE", invalidation: "nothing", evidence: "fact" }, 5000)) {
+		assert.equal(
+			matchesProfile(REVIEW_PI_PROFILES.history.schema, value),
+			diagnosis(value).available,
+			`history profile and consumer disagree on ${JSON.stringify(value).slice(0, 160)}`,
+		);
 	}
 });
 
@@ -200,7 +249,13 @@ test("recovery Pi profiles agree with owning consumer on normalization, bounds a
 			const { [key]: _omitted, ...rest } = complete;
 			return rest;
 		});
-		for (const args of [...cases, ...(longer[role] ?? []), ...absent, {}]) {
+		for (const args of [
+			...cases,
+			...(longer[role] ?? []),
+			...absent,
+			{},
+			...(derivedCases(complete, 1000) as Record<string, unknown>[]),
+		]) {
 			const candidate: Record<string, unknown> = { ...profile.fixed, ...args };
 			const producerAccepts: boolean =
 				matchesProfile(profile.schema, args) && matchesConsumerPolicy(profile, candidate);
