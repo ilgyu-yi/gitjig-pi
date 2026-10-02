@@ -299,7 +299,9 @@ function diagnostics(run: PiRunResult): string {
  */
 const MIN_CONTAINED_RUN = Number(
 	/export const MIN_CONTAINED_RUN = (\d+);/.exec(
-		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "index.ts"), "utf8"),
+		// The constant's declaring owner is dispatch/operand.ts; dispatch/index.ts
+		// only re-exports it, so the declaration is read where it is written.
+		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "operand.ts"), "utf8"),
 	)?.[1] ?? Number.NaN,
 );
 assert.ok(
