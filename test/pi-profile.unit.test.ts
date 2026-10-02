@@ -25,6 +25,10 @@ test("reviewer Pi profile and owning parser agree on closed structural shapes", 
 		{ token: "APPROVED", findings: ["contradiction belongs to panel"] },
 		{ token: "BAD", findings: [] },
 		{ token: "APPROVED", findings: [], role: "judge" },
+		// Above any plausible producer cap and accepted by the consumer, which
+		// bounds the whole return rather than each string: a profile that capped a
+		// review string would reject this while the consumer takes it.
+		{ token: "FINDINGS", findings: ["f".repeat(5000)] },
 		{ token: "APPROVED", findings: [1] },
 		{ token: "APPROVED" },
 		{ findings: [] },
@@ -58,6 +62,8 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		// one-character example alone could never show it.
 		{ dedupAttested: true, rulings: [{ ...ruling, evidence: "measured by running the arm twice" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, evidence: "e".repeat(4096) }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, evidence: "e".repeat(5000) }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, finding: "f".repeat(5000) }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, finding: "f".repeat(2048), remedy: "r".repeat(2048) }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [0, 2, 5] }] },
 		{ dedupAttested: false, rulings: [{ ...ruling, severity: "SUBSTANTIVE", onCriterion: false }] },
@@ -131,6 +137,7 @@ test("history diagnosis Pi profile agrees with current consumer domain and nonem
 		{ value: "OSCILLATION", invalidation: "authorization", evidence: "E" },
 		{ value: "INDETERMINATE", invalidation: "nothing", evidence: "E" },
 		{ value: "OTHER", invalidation: "nothing", evidence: "E" },
+		{ value: "NONE", invalidation: "nothing", evidence: "e".repeat(5000) },
 		{ value: "NONE", invalidation: "nothing", evidence: "" },
 		{ value: "NONE", invalidation: "else", evidence: "E" },
 		{ invalidation: "nothing", evidence: "E" },
@@ -171,6 +178,17 @@ test("recovery Pi profiles agree with owning consumer on normalization, bounds a
 			{ value: "UNKNOWN", invalidation: "nothing", evidence: "fact" },
 		],
 	} as const;
+	// A field long enough to catch a producer cap below the consumer's own bound:
+	// recoveryText admits up to 4096 bytes per field, so 1000 ASCII characters is
+	// valid for every role and stays inside each role's total-bytes rule.
+	const long = "e".repeat(1000);
+	const longer: Record<string, readonly Record<string, unknown>[]> = {
+		challenger: [{ outcome: "ALTERNATIVE", method: "way", evidence: long }],
+		"selector-contest": [{ selected: "root", materiallyDifferent: true, evidence: long }],
+		"selector-measurement": [{ question: "what", method: "read", expectedDiscriminator: "outcome", evidence: long }],
+		measurement: [{ result: "observed", evidence: long }],
+		diagnosis: [{ value: "NONE", invalidation: "nothing", evidence: long }],
+	};
 	for (const [role, cases] of Object.entries(examples)) {
 		const profile = recoveryPiProfile(role as keyof typeof examples, role === "measurement" ? digest : undefined);
 		assert.ok(profile);
@@ -182,7 +200,7 @@ test("recovery Pi profiles agree with owning consumer on normalization, bounds a
 			const { [key]: _omitted, ...rest } = complete;
 			return rest;
 		});
-		for (const args of [...cases, ...absent, {}]) {
+		for (const args of [...cases, ...(longer[role] ?? []), ...absent, {}]) {
 			const candidate: Record<string, unknown> = { ...profile.fixed, ...args };
 			const producerAccepts: boolean =
 				matchesProfile(profile.schema, args) && matchesConsumerPolicy(profile, candidate);
