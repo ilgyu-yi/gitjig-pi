@@ -42,7 +42,14 @@
  * consumer is the dispatcher's brief slot.
  */
 import type { DispatchOutcome } from "../dispatch/index.ts";
-import { type BriefTiming, composeDelegateDeadlines, DEFAULT_TIMING, DELEGATE_RETURN_CONTRACT } from "./briefs.ts";
+import {
+	type BriefTiming,
+	composeDelegateDeadlines,
+	composePiDeadlines,
+	DEFAULT_TIMING,
+	DELEGATE_RETURN_CONTRACT,
+	PI_RETURN_CONTRACT,
+} from "./briefs.ts";
 import { type CorrectionInterval, readCorrectionIntervals } from "./interval.ts";
 // RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
 // type-only import of an absent or renamed module reds `tsc` with the
@@ -423,7 +430,7 @@ function utf8OrBase64(value: string): string {
 /** Compose §1.4's Judge brief from the admitted repair basis only. */
 export function composeDiagnosisBrief(
 	basis: RepairBasis,
-	context: { changeDescription: string; withheldHead?: string; timing?: BriefTiming },
+	context: { changeDescription: string; withheldHead?: string; timing?: BriefTiming; transport?: "generic" | "pi" },
 ): string {
 	const lines = basis.states.flatMap((state, index) => {
 		const renderedHead = state.head === context.withheldHead ? "(current operand withheld)" : state.head;
@@ -464,13 +471,17 @@ export function composeDiagnosisBrief(
 		"   INDETERMINATE: the basis supports none of the three (a ruled outcome, never a default).",
 		"2. the INVALIDATION finding, exactly one of nothing / plan / authorization.",
 		"",
-		'Your ruling rides the return\'s "payload" slot as a JSON STRING of the closed shape',
+		context.transport === "pi"
+			? "Submit the following closed object as typed submit_result tool arguments:"
+			: 'Your ruling rides the return\'s "payload" slot as a JSON STRING of the closed shape',
 		'{"value": <one of the four>, "invalidation": <one of the three>, "evidence": <non-empty command or citation>}.',
 		"An unstated value is never inferred; absence is not NONE.",
 		"",
-		DELEGATE_RETURN_CONTRACT,
+		context.transport === "pi" ? PI_RETURN_CONTRACT : DELEGATE_RETURN_CONTRACT,
 		"",
-		composeDelegateDeadlines(context.timing ?? DEFAULT_TIMING),
+		context.transport === "pi"
+			? composePiDeadlines(context.timing ?? DEFAULT_TIMING)
+			: composeDelegateDeadlines(context.timing ?? DEFAULT_TIMING),
 	].join("\n");
 }
 

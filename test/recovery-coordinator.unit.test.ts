@@ -29,6 +29,7 @@ import {
 } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import type { PhaseAProfileId, RecoveryFreshness } from "../.pi/extensions/gitjig/recovery/types.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
+import type { HostAttemptLedger } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { createRecoveryAttemptLedger, makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
@@ -276,6 +277,150 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(precontinue, 1);
 		if (result.terminal === "continue" && result.route === "stagnation")
 			assert.equal(result.selectedIntervention.method, "new root method");
+	});
+
+	// #370: that preflight measures the ambient generic profile executable. An
+	// explicitly selected Pi dispatcher carries its own, so the same unavailable
+	// ambient executable must not hand the Pi route off.
+	it("does not gate an explicitly selected Pi route on the ambient generic executable", async () => {
+		const saved = process.env.PATH;
+		const seen: PhaseAProfileId[] = [];
+		try {
+			process.env.PATH = stateRoot;
+			const generic: RecoveryProfileDispatcher = async () => {
+				throw new Error("no dispatch");
+			};
+			assert.equal(generic.transport, undefined);
+			const piSubject = {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_PI_PREFLIGHT" } },
+			};
+			const piDispatch: RecoveryProfileDispatcher = Object.assign(
+				async (ledger: HostAttemptLedger, profileId: PhaseAProfileId) => {
+					seen.push(profileId);
+					return observed(
+						ledger,
+						admitted(
+							profileId === "recovery-selector"
+								? { selected: "root", materiallyDifferent: true, evidence: "selection evidence" }
+								: profileId === "stagnation-root"
+									? { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" }
+									: { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+						),
+					);
+				},
+				{ transport: "pi" as const },
+			);
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: piSubject,
+				history,
+				basis,
+				diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(piSubject) }),
+				refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(piSubject) }),
+				dispatchProfile: piDispatch,
+			});
+			// It reached its dispatches instead of handing off at the preflight.
+			assert.deepEqual(seen, ["stagnation-root", "stagnation-blast-radius", "recovery-selector"]);
+			assert.notEqual(result.terminal === "handoff" && result.cause, "profile-preflight");
+			assert.equal(result.terminal, "continue");
+		} finally {
+			process.env.PATH = saved;
+		}
+	});
+
+	// #370: the Pi transport's role is the consumer's, fixed per phase before
+	// each dispatch. Only this seam observes which role each phase asks for, so
+	// a constant role substituted inside the coordinator is caught here.
+	it("fixes one Pi role per recovery phase, on both routes, before any dispatch", async () => {
+		const seen: Array<[PhaseAProfileId, string | undefined]> = [];
+		const record =
+			(outputs: Partial<Record<PhaseAProfileId, unknown>>): RecoveryProfileDispatcher =>
+			async (ledger, profileId, _brief, _head, _deadline, role) => {
+				seen.push([profileId, role]);
+				return observed(ledger, admitted(outputs[profileId]));
+			};
+		const stagnation = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+			},
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+			refreshPreclaim: async () => ({
+				...freshness(),
+				subject: {
+					...subject,
+					context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+				},
+			}),
+			refreshPrecontinue: async () => ({
+				...freshness(),
+				subject: {
+					...subject,
+					context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+				},
+			}),
+			dispatchProfile: record({
+				"stagnation-root": { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" },
+				"stagnation-blast-radius": { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+				"recovery-selector": { selected: "root", materiallyDifferent: true, evidence: "selection evidence" },
+			}),
+		});
+		assert.equal(stagnation.terminal, "continue");
+		assert.deepEqual(seen, [
+			["stagnation-root", "challenger"],
+			["stagnation-blast-radius", "challenger"],
+			["recovery-selector", "selector-contest"],
+		]);
+
+		seen.length = 0;
+		const spec = {
+			kind: "measurement",
+			question: "Which invariant differs?",
+			method: "Read one bounded artifact",
+			expectedDiscriminator: "A unique state",
+			evidence: "Selector evidence",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+		const specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+		const measurementSubject = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_MEASUREMENT" } },
+		};
+		const measurement = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: measurementSubject,
+			history,
+			basis,
+			diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(measurementSubject) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(measurementSubject) }),
+			dispatchProfile: record({
+				"recovery-selector": spec,
+				"recovery-measurement": {
+					kind: "measurement-result",
+					specDigest,
+					result: "unique result",
+					evidence: "new result evidence",
+				},
+				"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+			}),
+		});
+		assert.equal(measurement.terminal, "continue");
+		assert.deepEqual(seen, [
+			["recovery-selector", "selector-measurement"],
+			["recovery-measurement", "measurement"],
+			["recovery-diagnosis", "diagnosis"],
+		]);
 	});
 
 	it("refuses a second recovery request at the consumed-allowance guard", async () => {

@@ -456,6 +456,14 @@
 		"reason": "test mutation harness uses JavaScript String.split; unrelated to governance authority"
 	},
 	{
+		"pathBase64": "dGVzdC9waS1ycGMtanNvbmwudW5pdC50ZXN0LnRz",
+		"tokenBase64": "c291cmNlLnNwbGl0",
+		"lineBase64": "CWFzc2VydC5lcXVhbChzb3VyY2Uuc3BsaXQoYW5jaG9yKS5sZW5ndGgsIDIpOw==",
+		"ordinal": 0,
+		"disposition": "homonym",
+		"reason": "String.split is only a parser-mutant test assertion, not retired authority"
+	},
+	{
 		"pathBase64": "dGVzdC9yZXZpZXctcmV0cnkubXV0YXRpb24udGVzdC50cw==",
 		"tokenBase64": "c291cmNlLnNwbGl0",
 		"lineBase64": "CQlhc3NlcnQuZXF1YWwoc291cmNlLnNwbGl0KGZyb20pLmxlbmd0aCwgMiwgYCR7bmFtZX06IG11dGF0aW9uIHRhcmdldCBtdXN0IGJlIHVuaXF1ZWApOw==",

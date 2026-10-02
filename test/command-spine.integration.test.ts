@@ -118,6 +118,7 @@ const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 /** The expected governed-home multiset — governed commands on their ruled surfaces. */
 const EXPECTED_GOVERNED_ROWS = [
 	"authoring-brief|extension",
+	"delegate|extension",
 	"dispatch-trace|extension",
 	"governance|extension",
 	"land|extension",
@@ -299,7 +300,9 @@ function diagnostics(run: PiRunResult): string {
  */
 const MIN_CONTAINED_RUN = Number(
 	/export const MIN_CONTAINED_RUN = (\d+);/.exec(
-		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "index.ts"), "utf8"),
+		// The constant's declaring owner is dispatch/operand.ts, which both the
+		// dispatcher and the Pi runner consume; dispatch/index.ts re-exports it.
+		readFileSync(join(repoRoot(), ".pi", "extensions", "gitjig", "dispatch", "operand.ts"), "utf8"),
 	)?.[1] ?? Number.NaN,
 );
 assert.ok(

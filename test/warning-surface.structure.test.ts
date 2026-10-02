@@ -126,6 +126,34 @@ const EXTENSIONS_DIR = join(repoRoot(), ".pi", "extensions");
  * stays enumerated here rather than accreting inline (§3.10).
  */
 const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorReads?: readonly string[] }[] = [
+	// New Pi adapter files join the structural walk explicitly: their result,
+	// control and operator projections must not grow raw warning text.
+	{
+		file: "gitjig/dispatch/pi-operator.ts",
+		// Operator-only select view: every delegate field is clipped to 512
+		// code points with control bytes removed before composition. The
+		// event type is a fixed local branch, not delegate-selected text.
+		allow: [
+			"clip(text)",
+			'event.type === "tool_execution_start" ? "tool started" : "tool ended"',
+			"name",
+			"item.partial",
+			"line",
+		],
+	},
+	{
+		file: "gitjig/dispatch/pi-rpc.ts",
+		// Platform path separator only occurs in a containment predicate;
+		// sequence is a numeric RPC request identifier.
+		allow: ["sep", "++sequence"],
+	},
+	{ file: "gitjig/dispatch/pi-run.ts", allow: [] },
+	// PID only appears in a private scratch return-file temporary name.
+	{ file: "gitjig/dispatch/pi-submit-extension.ts", allow: ["process.pid"] },
+	{ file: "gitjig/dispatch/pi-submit.ts", allow: [] },
+	{ file: "gitjig/dispatch/rpc-jsonl.ts", allow: [] },
+	{ file: "gitjig/recovery/pi-profile.ts", allow: [] },
+	{ file: "gitjig/review/pi-profile.ts", allow: [] },
 	{
 		file: "gitjig/audit.ts",
 		allow: [
