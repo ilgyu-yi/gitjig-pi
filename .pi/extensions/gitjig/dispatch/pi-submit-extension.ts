@@ -53,14 +53,21 @@ function exact(value: unknown, keys: readonly string[]): value is Record<string,
 /** Validate again inside the tool, before any candidate file is created. */
 export function matchesProfile(schema: JsonSchema, value: unknown, depth = 0): boolean {
 	if (depth > 8) return false;
-	if (schema.type === "string")
+	if (schema.type === "string") {
+		// Lengths are counted in CHARACTERS, as the briefs state the bound: a
+		// UTF-16 count would refuse a summary of 3,001 astral characters that the
+		// brief permits and the dispatcher's own admission accepts, so the tool
+		// would be stricter than its consumer for exactly the text an operator is
+		// most likely to quote.
+		const characters = typeof value === "string" ? [...value].length : 0;
 		return (
 			typeof value === "string" &&
-			(schema.minLength === undefined || value.length >= schema.minLength) &&
-			(schema.maxLength === undefined || value.length <= schema.maxLength) &&
+			(schema.minLength === undefined || characters >= schema.minLength) &&
+			(schema.maxLength === undefined || characters <= schema.maxLength) &&
 			(schema.enum === undefined || schema.enum.includes(value)) &&
 			(schema.const === undefined || value === schema.const)
 		);
+	}
 	if (schema.type === "boolean")
 		return typeof value === "boolean" && (schema.const === undefined || value === schema.const);
 	// A safe integer only, exactly as the indexed Judge consumer admits one: a

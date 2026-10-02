@@ -7,6 +7,26 @@ import { fileURLToPath } from "node:url";
 import type { Profile } from "./pi-submit-extension.ts";
 import type { DispatchContext } from "./provision.ts";
 
+/**
+ * The invocation-bound tool's exposed schema: the consumer's closed payload plus
+ * the common final summary, which the caller adds and the delegate never
+ * chooses. Exported so what the tool actually validates is readable without
+ * provisioning a scratch, and so one definition serves both. The 6,000 bound is
+ * stated in characters, matching the briefs and `matchesProfile`'s count.
+ */
+export function exposedPiProfile(profile: Profile): Profile {
+	return {
+		...profile,
+		schema: {
+			...profile.schema,
+			properties: {
+				...profile.schema.properties,
+				summary: { type: "string", minLength: 1, maxLength: 6000 },
+			},
+		},
+	};
+}
+
 export function provisionPiSubmitTool(context: DispatchContext, profile: Profile): string {
 	const base = join(context.scratchRoot, "trusted-pi");
 	mkdirSync(base, { mode: 0o700 });
@@ -27,19 +47,7 @@ export function provisionPiSubmitTool(context: DispatchContext, profile: Profile
 	chmodSync(operandDestination, 0o600);
 	if (dirname(operandDestination) !== base) throw Error("trusted Pi operand path refused");
 	const profilePath = join(base, "profile.json");
-	// Common final summary is separate from the consumer's closed payload.
-	// The caller, never the delegate, adds it to the invocation-bound tool.
-	const exposed: Profile = {
-		...profile,
-		schema: {
-			...profile.schema,
-			properties: {
-				...profile.schema.properties,
-				summary: { type: "string", minLength: 1, maxLength: 6000 },
-			},
-		},
-	};
-	writeFileSync(profilePath, JSON.stringify(exposed), { flag: "wx", mode: 0o600 });
+	writeFileSync(profilePath, JSON.stringify(exposedPiProfile(profile)), { flag: "wx", mode: 0o600 });
 	if (dirname(destination) !== base) throw Error("trusted Pi tool path refused");
 	return destination;
 }

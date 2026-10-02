@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { exposedPiProfile } from "../.pi/extensions/gitjig/dispatch/pi-submit.ts";
 import { matchesConsumerPolicy, matchesProfile } from "../.pi/extensions/gitjig/dispatch/pi-submit-extension.ts";
 import { acceptsRecoveryPiPayload } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import { recoveryPiProfile } from "../.pi/extensions/gitjig/recovery/pi-profile.ts";
@@ -278,4 +279,40 @@ test("recovery profiles never delegate the role or caller's measurement digest",
 		assert.equal("role" in (profile.schema.properties ?? {}), false);
 		assert.equal("expectedRef" in (profile.schema.properties ?? {}), false);
 	}
+});
+
+/**
+ * What the tool actually validates is the PROVISIONED schema, which adds the
+ * common final summary. Deriving only from the role schemas could not reach that
+ * field, so the summary is measured here against the bound the briefs state —
+ * 6,000 CHARACTERS — and against the dispatcher's own admission, which accepts
+ * any string summary. A UTF-16 count would refuse astral text the brief permits.
+ */
+test("the provisioned summary bound is measured in characters, as the briefs state it", () => {
+	for (const role of ["reviewer", "judge", "history"] as const) {
+		const exposed = exposedPiProfile(REVIEW_PI_PROFILES[role]);
+		const summary = exposed.schema.properties?.summary;
+		assert.ok(summary);
+		assert.equal(summary.maxLength, 6000);
+		assert.equal(summary.minLength, 1);
+		// An astral character is one character, not two: 3,001 of them are far
+		// inside the bound although they occupy 6,002 UTF-16 code units.
+		const astral = "\u{1F600}".repeat(3001);
+		assert.equal([...astral].length, 3001);
+		assert.equal(astral.length, 6002);
+		assert.equal(matchesProfile(summary, astral), true, "an astral summary inside the bound must be admitted");
+		// The bound itself, exactly, and one character past it.
+		assert.equal(matchesProfile(summary, "\u{1F600}".repeat(6000)), true);
+		assert.equal(matchesProfile(summary, "\u{1F600}".repeat(6001)), false);
+		assert.equal(matchesProfile(summary, "x".repeat(6000)), true);
+		assert.equal(matchesProfile(summary, "x".repeat(6001)), false);
+		assert.equal(matchesProfile(summary, ""), false);
+		// The role's own payload keys survive the exposure unchanged.
+		for (const key of Object.keys(REVIEW_PI_PROFILES[role].schema.properties ?? {}))
+			assert.deepEqual(exposed.schema.properties?.[key], REVIEW_PI_PROFILES[role].schema.properties?.[key]);
+	}
+	// The recovery roles are exposed through the same one definition.
+	const recovery = recoveryPiProfile("challenger");
+	assert.ok(recovery);
+	assert.equal(exposedPiProfile(recovery).schema.properties?.summary?.maxLength, 6000);
 });
