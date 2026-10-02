@@ -27,6 +27,8 @@ test("reviewer Pi profile and owning parser agree on closed structural shapes", 
 		{ token: "APPROVED", findings: [], role: "judge" },
 		{ token: "APPROVED", findings: [1] },
 		{ token: "APPROVED" },
+		{ findings: [] },
+		{},
 	];
 	for (const value of values) {
 		assert.equal(
@@ -94,6 +96,9 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ lens: "L", surface: "S", extra: true }] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, unknown: true }] },
 		{ dedupAttested: true },
+		{ rulings: [ruling] },
+		{ rulings: [] },
+		{},
 	];
 	for (const value of values) {
 		assert.equal(
@@ -116,6 +121,10 @@ test("history diagnosis Pi profile agrees with current consumer domain and nonem
 		{ value: "OTHER", invalidation: "nothing", evidence: "E" },
 		{ value: "NONE", invalidation: "nothing", evidence: "" },
 		{ value: "NONE", invalidation: "else", evidence: "E" },
+		{ invalidation: "nothing", evidence: "E" },
+		{ value: "NONE", evidence: "E" },
+		{ value: "NONE", invalidation: "nothing" },
+		{},
 	]) {
 		assert.equal(matchesProfile(REVIEW_PI_PROFILES.history.schema, value), diagnosis(value).available);
 	}
@@ -153,7 +162,15 @@ test("recovery Pi profiles agree with owning consumer on normalization, bounds a
 	for (const [role, cases] of Object.entries(examples)) {
 		const profile = recoveryPiProfile(role as keyof typeof examples, role === "measurement" ? digest : undefined);
 		assert.ok(profile);
-		for (const args of cases) {
+		// Each role's first example with one required key absent, so a profile
+		// that stopped requiring that key — accepting what its consumer rejects —
+		// fails here rather than passing on complete payloads alone.
+		const complete = cases[0] as Record<string, unknown>;
+		const absent = Object.keys(complete).map((key) => {
+			const { [key]: _omitted, ...rest } = complete;
+			return rest;
+		});
+		for (const args of [...cases, ...absent, {}]) {
 			const candidate: Record<string, unknown> = { ...profile.fixed, ...args };
 			const producerAccepts: boolean =
 				matchesProfile(profile.schema, args) && matchesConsumerPolicy(profile, candidate);
