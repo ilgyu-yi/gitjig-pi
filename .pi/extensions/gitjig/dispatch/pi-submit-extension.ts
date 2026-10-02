@@ -3,11 +3,13 @@
  * parent still admits return.json and blind-compares the independently
  * resolved HEAD; this writer's preflight is defense in depth, not authority.
  */
+
 import { execFileSync } from "node:child_process";
 import { closeSync, constants, fsyncSync, linkSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { namesHeldOperand } from "./operand.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MAX_RETURN_BYTES = 65_536;
@@ -93,13 +95,6 @@ export function matchesProfile(schema: JsonSchema, value: unknown, depth = 0): b
 	);
 }
 
-function namesHead(text: string, head: string): boolean {
-	return (text.match(/[0-9a-fA-F]{4,}/g) ?? []).some((run) => {
-		const lower = run.toLowerCase();
-		return (lower.length >= 6 && head.includes(lower)) || lower.includes(head.slice(0, 7));
-	});
-}
-
 function recoveryText(value: unknown, empty = false): value is string {
 	if (
 		typeof value !== "string" ||
@@ -173,7 +168,7 @@ function submit(profile: Profile, args: unknown): void {
 		encoding: "utf8",
 		timeout: 2000,
 	}).trim();
-	if (!/^[0-9a-f]{40}$/.test(head) || namesHead(JSON.stringify({ summary, payload }), head))
+	if (!/^[0-9a-f]{40}$/.test(head) || namesHeldOperand(JSON.stringify({ summary, payload }), head))
 		throw Error("submit_result operand rejected");
 	const bytes = Buffer.from(JSON.stringify({ ok: true, summary, reviewedHead: head, payload }), "utf8");
 	if (bytes.length > MAX_RETURN_BYTES) throw Error("submit_result return too large");

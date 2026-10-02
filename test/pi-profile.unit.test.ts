@@ -53,6 +53,12 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 	const values = [
 		{ dedupAttested: true, rulings: [] },
 		{ dedupAttested: true, rulings: [ruling] },
+		// Evidence the consumer accepts at ordinary and long lengths: a producer
+		// that restricted its length would reject consumer-valid rulings, and a
+		// one-character example alone could never show it.
+		{ dedupAttested: true, rulings: [{ ...ruling, evidence: "measured by running the arm twice" }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, evidence: "e".repeat(4096) }] },
+		{ dedupAttested: true, rulings: [{ ...ruling, finding: "f".repeat(2048), remedy: "r".repeat(2048) }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: [0, 2, 5] }] },
 		{ dedupAttested: false, rulings: [{ ...ruling, severity: "SUBSTANTIVE", onCriterion: false }] },
 		// Every optional ruling field, valid: a profile that becomes stricter than

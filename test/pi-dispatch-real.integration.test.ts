@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	copyFileSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runDispatch } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import { provisionPiSubmitTool } from "../.pi/extensions/gitjig/dispatch/pi-submit.ts";
 import { reviewerReturnFromPayload } from "../.pi/extensions/gitjig/review/join.ts";
+import { REVIEW_PI_PROFILES } from "../.pi/extensions/gitjig/review/pi-profile.ts";
 
 const project = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const MARKER = "PRIVATE_DELEGATE_TEXT_370";
@@ -146,6 +157,63 @@ test("trusted tool rejects HEAD leaked through final summary or encoded payload"
 		});
 		assert.equal(result.disposition, "refused", field);
 		assert.equal(result.diagnostic.return.class, "missing", field);
+	}
+});
+
+/**
+ * The trusted tool consumes the dispatcher's ruled scan, so a run shorter than
+ * the 7-prefix but at or above MIN_CONTAINED_RUN is rejected too. A second
+ * hand-rolled predicate with its own thresholds would drift from this.
+ */
+test("trusted tool rejects a six-character contained run of the clone head", { timeout: 20000 }, async () => {
+	const result = await realRound((root) => {
+		const target = JSON.stringify(join(root, "script.json"));
+		// The delegate resolves its own clone HEAD and names six of its characters
+		// — no full hash and no 7-character prefix anywhere in the submission.
+		const command = `node -e 'const fs=require("fs"),cp=require("child_process"),p=${target};const turns=JSON.parse(fs.readFileSync(p,"utf8"));const head=cp.execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();const run=head.slice(10,16);turns[1]={kind:"toolCall",name:"submit_result",arguments:{token:"APPROVED",findings:[],summary:"review near "+run}};fs.writeFileSync(p,JSON.stringify(turns))'`;
+		return [
+			{ kind: "toolCall", name: "bash", arguments: { command } },
+			{ kind: "text", text: "placeholder" },
+			{ kind: "text", text: "final" },
+		];
+	});
+	assert.equal(result.disposition, "refused", JSON.stringify(result.diagnostic));
+	assert.equal(result.diagnostic.return.class, "missing");
+});
+
+test("the provisioned trusted tool carries the ruled operand owner and hand-rolls no threshold", () => {
+	const extension = readFileSync(
+		new URL("../.pi/extensions/gitjig/dispatch/pi-submit-extension.ts", import.meta.url),
+		"utf8",
+	);
+	// It consumes the one owner instead of restating the rule (SPEC §3.11).
+	assert.match(extension, /import \{ namesHeldOperand \} from "\.\/operand\.ts";/);
+	assert.match(extension, /namesHeldOperand\(JSON\.stringify\(\{ summary, payload \}\), head\)/);
+	assert.equal(/function namesHead\b/.test(extension), false);
+	for (const literal of [">= 6", "slice(0, 7)", "{4,}"])
+		assert.equal(extension.includes(literal), false, `the tool restates the ruled scan: ${literal}`);
+	// And the provisioner puts that owner beside the copied tool, parent-owned
+	// and read-only, so the copied `./operand.ts` import resolves in the scratch.
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-370-provision-"));
+	try {
+		const context = {
+			scratchRoot: scratch,
+			treeDir: join(scratch, "tree"),
+			stateDir: join(scratch, "state"),
+			briefPath: join(scratch, "brief.md"),
+			returnPath: join(scratch, "return.json"),
+			heldHash: "a".repeat(40),
+		};
+		const installed = provisionPiSubmitTool(context, REVIEW_PI_PROFILES.reviewer);
+		const owner = join(dirname(installed), "operand.ts");
+		assert.equal(lstatSync(owner).isFile(), true);
+		assert.equal(lstatSync(owner).mode & 0o777, 0o600);
+		assert.equal(
+			readFileSync(owner, "utf8"),
+			readFileSync(new URL("../.pi/extensions/gitjig/dispatch/operand.ts", import.meta.url), "utf8"),
+		);
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
 	}
 });
 

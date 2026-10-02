@@ -16,6 +16,16 @@ export function provisionPiSubmitTool(context: DispatchContext, profile: Profile
 	const destination = join(base, "submit.ts");
 	copyFileSync(source, destination);
 	chmodSync(destination, 0o600);
+	// The tool consumes the ruled held-operand predicate rather than carrying a
+	// second spelling of it (SPEC §3.11), so its one owner is provisioned beside
+	// it, parent-owned and read-only like the tool itself. The copied tool's
+	// `./operand.ts` import resolves to this file inside the scratch.
+	const operandSource = fileURLToPath(new URL("./operand.ts", import.meta.url));
+	if (!lstatSync(operandSource).isFile()) throw Error("trusted Pi operand source refused");
+	const operandDestination = join(base, "operand.ts");
+	copyFileSync(operandSource, operandDestination);
+	chmodSync(operandDestination, 0o600);
+	if (dirname(operandDestination) !== base) throw Error("trusted Pi operand path refused");
 	const profilePath = join(base, "profile.json");
 	// Common final summary is separate from the consumer's closed payload.
 	// The caller, never the delegate, adds it to the invocation-bound tool.

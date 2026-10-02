@@ -74,7 +74,7 @@ const SECTION_SHA256: ReadonlyArray<readonly [string, string]> = [
 const README_POINTER =
 	"The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed, including an incomplete record when a required return was unavailable; `recovery` reports the bounded recovery route's terminal, next gate, and route, and a content-free record reference where one exists, not an approval or landing decision. The terminal line reports the disposition and, when present, the review state and diagnosis. `/review-round` applies SPEC §§1.7 and 1.9's indexed-bundle completeness and one bounded full-bundle Judge re-request before a resolved review, writing version-2 records; historical unversioned records stay readable, §1.4 keeps ambiguous legacy history fail-closed, and no existing handoff is released.";
 const README_SECTION_HEADING = "## Driving a review round";
-const README_SECTION_SHA256 = "bff51baab05b2a2a3d43b3cb9f1bc97ac264056a6decde3718cfee579ecc43d4";
+const README_SECTION_SHA256 = "9aedb09224b238324430e1d56cd30f74de884f779e43cb7835f5bfe58575e747";
 
 /** Named obligations, so a failure points at the meaning that moved; each lives in exactly one owned paragraph. */
 const OBLIGATIONS = [
@@ -140,7 +140,7 @@ const SETTLED_README: ReadonlyArray<readonly [string, string]> = [
 	["0eb97762ca1a13f5603394a462a082a20fa4ae53b3f0b14a6a0a0b23ae08b7b4", '    "priorFindings": [{"label": "F1", "t'],
 	["e9f9ac87382ab133a5f519240737fc75f82d21ce384a0bd04bd9cbdbfe34ab77", '  "changeDescription": "Add the review-r'],
 	["592dc3233b2c0c545afc665e27891c129de15599b5fb441c758b6e6b83edb88b", "This example is for generic argv dispatc"],
-	["bff680d951f794a208a26e0234be93d54fc37ce1369fcbfbe5644b6a677ae389", "Exactly one transport is selected per sp"],
+	["b17128871821e318643d6c48537275a02965c4ba4c6d4bac0627e43d6d17c754", "Exactly one transport is selected per sp"],
 	["ec1c53c7996c1db28e319ae2e1fb75fc8f730d7ec5d13104873759023e29a9b1", "The command appends one structured `gitj"],
 	["06d8faf183324bd6936fea16fd02f30889fe525c0f79f300049cd9216b89cc59", "Use ordinary `body` publication for pros"],
 	["4619fc4f7cff0f89053cd2c3e4c7bdbe54b2822c1bb0ba74cd8728fc22710f19", "Tier 1 always tries ordinary landing fir"],
