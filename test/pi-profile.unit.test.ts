@@ -83,6 +83,13 @@ test("Judge Pi profile and the indexed owning parser agree on ruling keys, ordin
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: ["1"] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, rawOrdinals: 1 }] },
 		{ dedupAttested: true, rulings: [{ finding: "F", provenance: [], validity: "CONFIRMED", evidence: "E" }] },
+		// Each required ruling key omitted alone: the consumer rejects every one,
+		// so a profile that stopped requiring it would accept a payload the
+		// consumer refuses, which is the drift this parity claim is about.
+		...(["finding", "rawOrdinals", "provenance", "validity", "evidence"] as const).map((key) => {
+			const { [key]: _omitted, ...rest } = ruling;
+			return { dedupAttested: true, rulings: [rest] };
+		}),
 		{ dedupAttested: true, rulings: [{ ...ruling, validity: "INVALID" }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, provenance: [{ lens: "L", surface: "S", extra: true }] }] },
 		{ dedupAttested: true, rulings: [{ ...ruling, unknown: true }] },
