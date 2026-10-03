@@ -50,9 +50,34 @@ function exact(value: unknown, keys: readonly string[]): value is Record<string,
 	);
 }
 
+const SCHEMA_TYPES = ["object", "array", "string", "boolean", "integer"];
+
+/**
+ * Whether a schema is one this validator can close over. It is checked before
+ * any value is read, because a malformed schema otherwise admits whatever it
+ * happens not to visit: a property whose own type is unknown is never reached
+ * by an empty payload, which would then install a slot the consumer refuses
+ * (#418). A tool whose profile carries such a schema refuses every submission.
+ */
+function closedSchema(schema: JsonSchema, depth = 0): boolean {
+	if (depth > 8 || typeof schema !== "object" || schema === null || !SCHEMA_TYPES.includes(schema.type)) return false;
+	if (schema.type === "array") return schema.items !== undefined && closedSchema(schema.items, depth + 1);
+	if (schema.type !== "object") return true;
+	return (
+		typeof schema.properties === "object" &&
+		schema.properties !== null &&
+		!Array.isArray(schema.properties) &&
+		Array.isArray(schema.required) &&
+		schema.required.every((key) => typeof key === "string") &&
+		schema.additionalProperties === false &&
+		Object.values(schema.properties).every((property) => closedSchema(property, depth + 1))
+	);
+}
+
 /** Validate again inside the tool, before any candidate file is created. */
 export function matchesProfile(schema: JsonSchema, value: unknown, depth = 0): boolean {
 	if (depth > 8) return false;
+	if (depth === 0 && !closedSchema(schema)) return false;
 	if (schema.type === "string") {
 		// Lengths are counted in CHARACTERS, as the briefs state the bound: a
 		// UTF-16 count would refuse a summary of 3,001 astral characters that the
@@ -82,10 +107,17 @@ export function matchesProfile(schema: JsonSchema, value: unknown, depth = 0): b
 			schema.items !== undefined &&
 			value.every((item) => matchesProfile(schema.items as JsonSchema, item, depth + 1))
 		);
+	// Each component is checked for the SHAPE it must have, not merely for
+	// being present: `properties: null` or a `required` that is not an array
+	// would otherwise make the object branch vacuously true, admitting an
+	// empty payload the consumer refuses (#418). A malformed schema fails
+	// closed here, so such a profile registers a tool that refuses everything.
 	if (
 		schema.type !== "object" ||
-		schema.properties === undefined ||
-		schema.required === undefined ||
+		typeof schema.properties !== "object" ||
+		schema.properties === null ||
+		Array.isArray(schema.properties) ||
+		!Array.isArray(schema.required) ||
 		schema.additionalProperties !== false ||
 		typeof value !== "object" ||
 		value === null ||
@@ -218,6 +250,16 @@ export default function registerSubmitResult(pi: ExtensionAPI): void {
 		typeof config.schema !== "object" ||
 		config.schema === null ||
 		(config.schema as JsonSchema).type !== "object" ||
+		// The top-level components are checked for SHAPE here, because the
+		// exposure that adds the summary property spreads them: a `properties`
+		// of null would spread to an empty object and mask itself, leaving a
+		// tool that admits an empty payload its consumer refuses (#418).
+		typeof (config.schema as JsonSchema).properties !== "object" ||
+		(config.schema as JsonSchema).properties === null ||
+		Array.isArray((config.schema as JsonSchema).properties) ||
+		!Array.isArray((config.schema as JsonSchema).required) ||
+		((config.schema as JsonSchema).required ?? []).some((key) => typeof key !== "string") ||
+		(config.schema as JsonSchema).additionalProperties !== false ||
 		typeof config.fixed !== "object" ||
 		config.fixed === null ||
 		Array.isArray(config.fixed) ||

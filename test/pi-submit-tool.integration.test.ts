@@ -322,6 +322,27 @@ test("registration refuses every profile shape outside the closed one", async ()
 		["an unknown role", valid.replace('"reviewer"', '"auditor"')],
 		["an empty summary", JSON.stringify({ ...REVIEW_PI_PROFILES.reviewer, summary: "" })],
 		["a non-object schema", JSON.stringify({ ...REVIEW_PI_PROFILES.reviewer, schema: { type: "string" } })],
+		// A top-level component of the wrong SHAPE, not merely absent. The
+		// exposure that adds the summary property spreads these, so a null
+		// `properties` would spread to an empty object and mask itself.
+		...(
+			[
+				["a null properties map", { type: "object", properties: null, required: [], additionalProperties: false }],
+				["an array properties map", { type: "object", properties: [], required: [], additionalProperties: false }],
+				[
+					"a required that is not an array",
+					{ type: "object", properties: {}, required: "token", additionalProperties: false },
+				],
+				[
+					"a required naming something that is not a string",
+					{ type: "object", properties: {}, required: [1], additionalProperties: false },
+				],
+				["a schema that admits extra properties", { type: "object", properties: {}, required: [] }],
+			] as ReadonlyArray<readonly [string, unknown]>
+		).map(
+			([label, schema]) =>
+				[label, JSON.stringify({ ...REVIEW_PI_PROFILES.reviewer, schema })] as readonly [string, string],
+		),
 		["a fixed value that is a number", JSON.stringify({ ...REVIEW_PI_PROFILES.reviewer, fixed: { kind: 1 } })],
 		["a fixed value that is null", JSON.stringify({ ...REVIEW_PI_PROFILES.reviewer, fixed: { kind: null } })],
 		["a fixed value that is an object", JSON.stringify({ ...REVIEW_PI_PROFILES.reviewer, fixed: { kind: {} } })],
@@ -359,18 +380,26 @@ test("a schema that is an object but not a closed one registers a tool that refu
 	// refuses every value against a schema missing `properties`, `required` or
 	// `additionalProperties: false`. The fail-closed composition is what holds
 	// here, so it is measured rather than assumed.
+	// The top level is checked at registration; what stays unchecked there is a
+	// NESTED schema, and that is where the fail-closed composition carries the
+	// weight: such a profile registers, and then refuses everything.
 	for (const loose of [
-		{ type: "object" },
-		{ type: "object", properties: { token: { type: "string" } } },
-		{ type: "object", properties: { token: { type: "string" } }, required: ["token"] },
+		{ type: "object", properties: { token: { type: "nonsense" } }, required: [], additionalProperties: false },
+		{ type: "object", properties: { token: { type: "array" } }, required: [], additionalProperties: false },
+		{
+			type: "object",
+			properties: { token: { type: "object", properties: null, required: [], additionalProperties: false } },
+			required: [],
+			additionalProperties: false,
+		},
 	] as const) {
 		await withCopy([], async (root, context) => {
 			const { tool } = await registerFromCopy(root, context, {
 				...REVIEW_PI_PROFILES.reviewer,
-				schema: loose as Profile["schema"],
+				schema: loose as unknown as Profile["schema"],
 			});
 			assert.equal(tool.name, "submit_result");
-			for (const args of [{}, { token: "APPROVED" }, { token: "APPROVED", summary: "s" }])
+			for (const args of [{}, { token: "APPROVED" }, { token: "APPROVED", summary: "s" }, { token: [] }])
 				assert.equal(await refuses(tool, args), "submit_result parameters rejected", JSON.stringify(loose));
 			assert.equal(existsSync(context.returnPath), false, "a refused submission installed a slot");
 		});
@@ -655,6 +684,89 @@ test("baseline-first private-copy mutants: every scrubbed variable that can redi
 		assert.equal(baseline.installed, baseline.real, `${name}: the baseline did not install the clone's head`);
 		const mutant = await redirectedHeadScenario([[TOOL_RELATIVE, `\t\t"${name}",\n`, ""]], only);
 		assert.notEqual(mutant.installed, mutant.real, `${name}: dropping it from the scrub changed nothing`);
+	}
+});
+
+test("every member of an array is checked, not only the first", async () => {
+	// A payload whose first array member is valid and whose second is not: a
+	// producer that checked only the first would admit it, and the owning
+	// consumer would refuse the installed slot.
+	const cases: ReadonlyArray<{ name: string; profile: Profile; value: Record<string, unknown> }> = [
+		{
+			name: "reviewer findings",
+			profile: REVIEW_PI_PROFILES.reviewer,
+			value: { token: "FINDINGS", findings: ["a real finding", 1] },
+		},
+		{
+			name: "judge rulings",
+			profile: REVIEW_PI_PROFILES.judge,
+			value: {
+				dedupAttested: true,
+				rulings: [
+					{
+						finding: "one finding",
+						rawOrdinals: [0],
+						provenance: [{ lens: "suite", surface: "the test suite" }],
+						validity: "CONFIRMED",
+						evidence: "measured",
+					},
+					{ finding: "a second ruling missing its evidence", rawOrdinals: [1], provenance: [] },
+				],
+			},
+		},
+		{
+			name: "judge ruling ordinals",
+			profile: REVIEW_PI_PROFILES.judge,
+			value: {
+				dedupAttested: true,
+				rulings: [
+					{
+						finding: "one finding",
+						rawOrdinals: [0, "1"],
+						provenance: [{ lens: "suite", surface: "the test suite" }],
+						validity: "CONFIRMED",
+						evidence: "measured",
+					},
+				],
+			},
+		},
+	];
+	for (const { name, profile, value } of cases)
+		await withCopy([], async (root, context) => {
+			const { tool } = await registerFromCopy(root, context, profile);
+			assert.equal(await refuses(tool, value), "submit_result parameters rejected", name);
+			assert.equal(existsSync(context.returnPath), false, name);
+		});
+
+	// The isolated mutant: checking only the first member admits each of them.
+	for (const { name, profile, value } of cases) {
+		const admitted = await withCopy(
+			[
+				[
+					TOOL_RELATIVE,
+					"value.every((item) => matchesProfile(schema.items as JsonSchema, item, depth + 1))",
+					"(value.length === 0 || matchesProfile(schema.items as JsonSchema, value[0], depth + 1))",
+				],
+			],
+			async (root, context) => {
+				const { tool } = await registerFromCopy(root, context, profile);
+				await refuses(tool, value);
+				return admitReturn(context.returnPath);
+			},
+		);
+		assert.equal(admitted.admitted, true, `${name}: the mutant still refused it, so the arm measures nothing`);
+		// The dispatcher admits those bytes; only the owning parser refuses them,
+		// which is what the producer is here to prevent reaching.
+		if (admitted.admitted) {
+			const parsed = profile === REVIEW_PI_PROFILES.reviewer ? reviewerReturnFromPayload(admitted.payload) : undefined;
+			assert.equal(
+				profile === REVIEW_PI_PROFILES.reviewer
+					? "failure" in (parsed as object)
+					: indexedAdjudicationFromPayload(admitted.payload) === undefined,
+				true,
+				`${name}: the consumer accepted it, so the producer bound measures nothing`,
+			);
+		}
 	}
 });
 
