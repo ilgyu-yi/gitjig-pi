@@ -342,9 +342,34 @@ async function pendingSettleScenario(start: Start): Promise<{ resolution: boolea
 	}
 }
 
-test("the child is spawned detached in the clone with a scrubbed env and no project extension discovery", async () => {
+/**
+ * Every repository-locating variable `withoutRepoLocatingGitEnv` removes. The
+ * arm injects all of them and the child reports all of them, so a scrub that
+ * drops only the obvious one is not admitted.
+ */
+const REPOSITORY_LOCATING = [
+	"GIT_DIR",
+	"GIT_WORK_TREE",
+	"GIT_INDEX_FILE",
+	"GIT_OBJECT_DIRECTORY",
+	"GIT_COMMON_DIR",
+	"GIT_CONFIG_PARAMETERS",
+	"GIT_CONFIG_COUNT",
+] as const;
+
+async function spawnShapeScenario(start: Start): Promise<{
+	argv: string[];
+	cwd: string;
+	pid: number;
+	pgid: number;
+	stateRoot?: string;
+	git: Record<string, string>;
+	extension: string;
+	treeDir: string;
+	stateDir: string;
+}> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-spawn-"));
-	const before = process.env.GIT_DIR;
+	const before = Object.fromEntries(REPOSITORY_LOCATING.map((name) => [name, process.env[name]]));
 	try {
 		const context = supervisorContext(scratch);
 		const report = join(scratch, "spawn.json");
@@ -359,14 +384,14 @@ test("the child is spawned detached in the clone with a scrubbed env and no proj
 				// group id; a detached child is the leader of its own group.
 				'	pgid: Number(require("node:child_process").execFileSync("ps", ["-o", "pgid=", "-p", String(process.pid)], { encoding: "utf8" }).trim()),\n' +
 				"	stateRoot: process.env.GITJIG_TEST_STATE_ROOT,\n" +
-				'	gitDir: process.env.GIT_DIR ?? "absent",\n' +
+				`	git: Object.fromEntries(${JSON.stringify(REPOSITORY_LOCATING)}.map((name) => [name, process.env[name] ?? "absent"])),\n` +
 				"}));\n" +
 				"process.exit(0);\n",
 		);
-		// An ambient repository-locating variable the scrub must not pass on.
-		process.env.GIT_DIR = join(scratch, "ambient-git-dir");
+		// Every ambient repository-locating variable the scrub must not pass on.
+		for (const name of REPOSITORY_LOCATING) process.env[name] = `ambient-${name}`;
 		const extension = trustedExtensionFile(scratch);
-		const session = startPiRpc({ ...parameters(context, extension, executable), timeoutMs: 6000 });
+		const session = start({ ...parameters(context, extension, executable), timeoutMs: 6000 });
 		await session.done;
 		await settled(() => existsSync(report));
 		const observed = JSON.parse(readFileSync(report, "utf8")) as {
@@ -375,37 +400,76 @@ test("the child is spawned detached in the clone with a scrubbed env and no proj
 			pid: number;
 			pgid: number;
 			stateRoot?: string;
-			gitDir: string;
+			git: Record<string, string>;
 		};
-		assert.deepEqual(observed.argv, [
-			"--mode",
-			"rpc",
-			"--no-session",
-			"--no-extensions",
-			"--no-skills",
-			"--no-prompt-templates",
-			"--no-context-files",
-			"--no-approve",
-			"--extension",
+		// Resolved here, before the scratch is removed below: a scratch under
+		// /tmp reaches the child through a symlink on this platform, so the two
+		// spellings are compared after realpath on both sides.
+		return {
+			...observed,
+			cwd: realpathSync(observed.cwd),
 			extension,
-			"--provider",
-			"scripted",
-			"--model",
-			"scripted-model",
-		]);
-		// realpath on both sides: a scratch under /tmp resolves through a symlink
-		// on this platform, and the child reports the resolved spelling.
-		assert.equal(realpathSync(observed.cwd), realpathSync(context.treeDir), "the child did not run in the clone");
-		// Detached: the child leads its own group, which is what makes the
-		// group signals in the abort and bound arms reach its descendants.
-		assert.equal(observed.pgid, observed.pid, "the child did not lead its own process group");
-		assert.equal(observed.stateRoot, context.stateDir, "the state seam was not set for the child");
-		assert.equal(observed.gitDir, "absent", "an ambient GIT_DIR reached the child");
+			treeDir: realpathSync(context.treeDir),
+			stateDir: context.stateDir,
+		};
 	} finally {
-		if (before === undefined) delete process.env.GIT_DIR;
-		else process.env.GIT_DIR = before;
+		for (const [name, value] of Object.entries(before))
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
 		rmSync(scratch, { recursive: true, force: true });
 	}
+}
+
+test("the child is spawned detached in the clone with a scrubbed env and no project extension discovery", async () => {
+	const observed = await spawnShapeScenario(startPiRpc);
+	assert.deepEqual(observed.argv, [
+		"--mode",
+		"rpc",
+		"--no-session",
+		"--no-extensions",
+		"--no-skills",
+		"--no-prompt-templates",
+		"--no-context-files",
+		"--no-approve",
+		"--extension",
+		observed.extension,
+		"--provider",
+		"scripted",
+		"--model",
+		"scripted-model",
+	]);
+	assert.equal(observed.cwd, observed.treeDir, "the child did not run in the clone");
+	// Detached: the child leads its own group, which is what makes the
+	// group signals in the abort and bound arms reach its descendants.
+	assert.equal(observed.pgid, observed.pid, "the child did not lead its own process group");
+	assert.equal(observed.stateRoot, observed.stateDir, "the state seam was not set for the child");
+	// Not one of them reaches the child, not just the obvious one.
+	assert.deepEqual(
+		observed.git,
+		Object.fromEntries(REPOSITORY_LOCATING.map((name) => [name, "absent"])),
+		"an ambient repository-locating variable reached the child",
+	);
+});
+
+test("baseline-first private-copy mutant: a partial environment scrub passes one of them through", async () => {
+	const baseline = await spawnShapeScenario(startPiRpc);
+	assert.equal(
+		Object.values(baseline.git).every((value) => value === "absent"),
+		true,
+	);
+	// The scrub replaced by a copy that deletes only the obvious variable: the
+	// arm must see the other six arrive.
+	const mutant = await withMutant(
+		[["const env = withoutRepoLocatingGitEnv(process.env);", "const env = { ...process.env };\n\tdelete env.GIT_DIR;"]],
+		spawnShapeScenario,
+	);
+	assert.deepEqual(
+		Object.entries(mutant.git)
+			.filter(([, value]) => value !== "absent")
+			.map(([name]) => name),
+		REPOSITORY_LOCATING.filter((name) => name !== "GIT_DIR"),
+		"the mutant scrubbed more than GIT_DIR, so the arm measures nothing",
+	);
 });
 
 test("the parameter preflight throws before any child exists for every refused shape", () => {
@@ -840,6 +904,116 @@ test("baseline-first private-copy mutant: collapsing the signal branch hides an 
 		naturalSignalScenario,
 	);
 	assert.deepEqual(control, baseline, "a behaviour-preserving control changed the observation");
+});
+
+/**
+ * A child group that refuses to stop on SIGTERM, with an orphan holding its
+ * stdout open long after. Two bounds are measured at once, and both are
+ * finite by design rather than by the child's cooperation: the abort escalates
+ * to SIGKILL when SIGTERM is ignored, and the run ends on its own flush bound
+ * rather than waiting for a pipe nobody will close.
+ */
+async function stubbornAbortScenario(
+	start: Start,
+): Promise<{ outcome: string; elapsedMs: number; childGone: boolean; sawSigterm: boolean }> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-stubborn-"));
+	const pidFile = join(scratch, "child.pid");
+	const termFile = join(scratch, "child.sigterm");
+	const readyFile = join(scratch, "child.ready");
+	const orphanPidFile = join(scratch, "orphan.pid");
+	let orphanPid = 0;
+	try {
+		const context = supervisorContext(scratch);
+		const executable = fakePi(
+			join(scratch, "fake-pi"),
+			'const cp = require("node:child_process"), fs = require("node:fs");\n' +
+				// An orphan in its own group, holding this child's stdout far past
+				// any bound here, so stdout never ends on its own.
+				`const orphan = cp.spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 30000)"], { detached: true, stdio: ["ignore", 1, "ignore"] });\n` +
+				"orphan.unref();\n" +
+				`fs.writeFileSync(${JSON.stringify(orphanPidFile)}, String(orphan.pid));\n` +
+				`fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\n` +
+				// SIGTERM is recorded and refused: only an escalation can end this.
+				`process.on("SIGTERM", () => fs.writeFileSync(${JSON.stringify(termFile)}, "sigterm"));\n` +
+				`fs.writeFileSync(${JSON.stringify(readyFile)}, "ready");\n` +
+				"setInterval(() => {}, 1000);\n",
+		);
+		const controller = new AbortController();
+		const session = start({
+			...parameters(context, trustedExtensionFile(scratch), executable),
+			timeoutMs: 120_000,
+			signal: controller.signal,
+		});
+		await settled(() => existsSync(readyFile) && existsSync(pidFile) && existsSync(orphanPidFile));
+		const childPid = Number(readFileSync(pidFile, "utf8"));
+		orphanPid = Number(readFileSync(orphanPidFile, "utf8"));
+		assert.ok(Number.isInteger(childPid) && childPid > 1, `no child pid recorded: ${childPid}`);
+		const startedAt = Date.now();
+		controller.abort();
+		const outcome = await session.done;
+		return {
+			outcome,
+			elapsedMs: Date.now() - startedAt,
+			childGone: await reaped(childPid),
+			sawSigterm: existsSync(termFile),
+		};
+	} finally {
+		if (orphanPid > 1) kill(orphanPid);
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+test("abort escalates to SIGKILL and ends on its own flush bound, whatever the child does", async () => {
+	const observed = await stubbornAbortScenario(startPiRpc);
+	assert.equal(observed.outcome, "abort");
+	assert.equal(observed.sawSigterm, true, "the child was never sent SIGTERM first");
+	// SIGTERM was refused, so only the escalation can have ended it.
+	assert.equal(observed.childGone, true, "a child that ignored SIGTERM survived the abort");
+	// The orphan holds stdout for 30 s and the deadline is 120 s, so anything
+	// near either would mean the run waited on the child rather than on its own
+	// bound. The flush fallback is twice the 2 s grace.
+	assert.ok(observed.elapsedMs < 15_000, `the run waited past its own flush bound: ${observed.elapsedMs} ms`);
+});
+
+test("baseline-first private-copy mutants: without escalation or a finite flush the run waits on the child", async () => {
+	const baseline = await stubbornAbortScenario(startPiRpc);
+	assert.equal(baseline.childGone, true);
+
+	// No escalation: SIGTERM is ignored, so the child outlives the abort, while
+	// the outcome the caller sees is unchanged.
+	const unescalated = await withMutant(
+		[['escalate = setTimeout(() => group("SIGKILL"), FLUSH_GRACE_MS);', "void 0;"]],
+		stubbornAbortScenario,
+	);
+	assert.equal(unescalated.outcome, "abort", "the mutant changed what the caller was told");
+	assert.equal(unescalated.childGone, false, "the mutant still killed the stubborn child");
+
+	// No finite flush: the run waits on a pipe the orphan holds for 30 s.
+	const unbounded = await withMutant(
+		[
+			[
+				"flush = setTimeout(() => end(outcome), FLUSH_GRACE_MS * 2);",
+				"flush = setTimeout(() => end(outcome), 60_000);",
+			],
+		],
+		stubbornAbortScenario,
+	);
+	assert.ok(
+		unbounded.elapsedMs > 15_000,
+		`the mutant still ended within the baseline bound: ${unbounded.elapsedMs} ms`,
+	);
+
+	const control = await withMutant(
+		[
+			[
+				"flush = setTimeout(() => end(outcome), FLUSH_GRACE_MS * 2);",
+				"flush = setTimeout(() => end(outcome), 2 * FLUSH_GRACE_MS);",
+			],
+		],
+		stubbornAbortScenario,
+	);
+	assert.equal(control.outcome, baseline.outcome, "a behaviour-preserving control changed the observation");
+	assert.equal(control.childGone, true, "a behaviour-preserving control changed the observation");
 });
 
 test("an unfinished frame held to the end refuses the run even after a numeric exit", async () => {
