@@ -155,6 +155,23 @@ test("the stream bound fails closed on the crossing chunk and delivers nothing f
 	assert.equal(stream.recordCount, accepted);
 	assert.ok(stream.recordCount < RPC_MAX_RECORDS);
 	assertSealed(stream, records);
+
+	// The same bound, crossed by a buffer that also carries a later record: the
+	// whole crossing buffer is refused, so neither record in it is delivered.
+	const shared = reader();
+	let below = 0;
+	while ((below + 1) * record.length <= RPC_MAX_STREAM_BYTES) {
+		assert.equal(shared.stream.push(record), "reading");
+		below++;
+	}
+	const later = Buffer.from('{"type":"later"}\n');
+	assert.equal(shared.stream.push(Buffer.concat([record, later])), "invalid");
+	assert.equal(shared.records.length, below, "a record from the cap-crossing buffer was delivered");
+	assert.equal(
+		shared.records.some((delivered) => delivered.type === "later"),
+		false,
+		"the later record sharing the cap-crossing buffer was delivered",
+	);
 });
 
 test("baseline-first private-copy delimiter mutant fails on a real Unicode separator", async () => {
