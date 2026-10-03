@@ -67,6 +67,8 @@ export interface DelegateRunOutcome {
 	aborted: boolean;
 	/** True iff the child never started — §3.10's delegate-absent class. */
 	spawnFailed: boolean;
+	/** Pi RPC-only terminal refusal; the generic argv executor never sets it. */
+	protocolInvalid?: boolean;
 }
 
 export interface DelegateRunOptions {

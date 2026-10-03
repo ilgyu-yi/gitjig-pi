@@ -444,6 +444,25 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// #414: the Pi RPC frame reader composes no text; a decoded record goes
 	// only to its consumer, never into a message.
 	{ file: "gitjig/dispatch/rpc-jsonl.ts", allow: [] },
+	{
+		// #420: the operator event hub's rows are operator-only and never leave
+		// this module, but they are composed text, so each interpolation is named.
+		// `PARTIAL_PREFIX` and the start/end branch are fixed local literals of
+		// this module; `item.partial` and `text` are delegate text that the hub
+		// has already stripped of control characters and clipped to the rendered
+		// row's bound, which is what this surface's rule asks of composed text;
+		// `name` is a tool name, the same delegate text under the same clip.
+		file: "gitjig/dispatch/pi-operator.ts",
+		allow: [
+			"PARTIAL_PREFIX",
+			"item.partial",
+			"text",
+			"name",
+			'event.type === "tool_execution_start" ? "tool started" : "tool ended"',
+		],
+	},
+	// #420: the Pi runner composes no operator-facing text at all.
+	{ file: "gitjig/dispatch/pi-run.ts", allow: [] },
 	// #418: the trusted submission tool and its provisioner compose no
 	// operator-facing text. The tool's one interpolation is the writing
 	// process's own pid, in the name of a private scratch temporary file that

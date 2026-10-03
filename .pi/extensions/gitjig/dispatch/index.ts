@@ -92,6 +92,7 @@ import {
 } from "./diagnostics.ts";
 import { lifecycleOf, MAX_RUN_BOUND_MS, runDelegate } from "./executor.ts";
 import { MIN_CONTAINED_RUN, namesHeldOperand } from "./operand.ts";
+import { type PiInvocation, runPiDelegate } from "./pi-run.ts";
 import { cleanupDispatchContext, type DispatchContext, provisionDispatchContext } from "./provision.ts";
 import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 import { canonicalTraceId } from "./trace-reader.ts";
@@ -201,6 +202,20 @@ export interface RunDispatchOptions {
 	onRetained?: (traceId: string) => void;
 	/** Recovery-only absolute monotonic deadline; omitted callers retain existing behavior. */
 	operationDeadline?: number;
+	/** Internal consumer-selected Pi mode; not exposed on the generic model tool. */
+	pi?: PiInvocation;
+}
+
+/**
+ * Whether the mid-run provisional-return checkpoint applies to one dispatch.
+ * It applies exactly when the caller bounded the operation and the transport is
+ * the generic argv one, whose standing brief owes an early provisional return
+ * (SPEC §1.7). An explicitly selected Pi child owes no such file and submits
+ * once through its trusted tool, so this checkpoint never governs it; its own
+ * final-submission checkpoint and the run bound still do.
+ */
+export function provisionalCheckpointApplies(options: { operationDeadline?: number; pi?: unknown }): boolean {
+	return options.operationDeadline !== undefined && options.pi === undefined;
 }
 
 async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOutcome> {
@@ -255,7 +270,9 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 
 	if (
 		!Array.isArray(options.delegateArgv) ||
-		options.delegateArgv.length === 0 ||
+		// An empty argv is admitted only under an explicit Pi selection, which
+		// brings its own executable; the generic transport still requires one.
+		(options.pi === undefined && options.delegateArgv.length === 0) ||
 		options.delegateArgv.some((entry) => typeof entry !== "string") ||
 		typeof options.brief !== "string" ||
 		(options.expectedRef !== undefined && typeof options.expectedRef !== "string") ||
@@ -296,11 +313,17 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		const checkpointTimers: ReturnType<typeof setTimeout>[] = [];
 		let finalCheckpointBytes: Buffer | undefined;
 		if (checkpointAbort !== undefined) {
-			checkpointTimers.push(
-				setTimeout(() => {
-					if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
-				}, 360_000),
-			);
+			// The provisional checkpoint belongs to the generic argv contract
+			// alone. SPEC §1.7 requires no provisional `../return.json` from an
+			// explicitly selected Pi child and instructs it to submit once through
+			// `submit_result`, so arming this abort under Pi mode would cancel a
+			// conforming child before its permitted final submission.
+			if (provisionalCheckpointApplies(options))
+				checkpointTimers.push(
+					setTimeout(() => {
+						if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();
+					}, 360_000),
+				);
 			checkpointTimers.push(
 				setTimeout(() => {
 					const before = checkpointSnapshot(context.returnPath);
@@ -316,18 +339,25 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 		}
 		let run: Awaited<ReturnType<typeof runDelegate>>;
 		try {
-			run = await runDelegate(context, options.delegateArgv, {
-				timeoutMs:
-					remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining),
-				signal: checkpointAbort?.signal ?? options.signal,
-				onTrace: (snapshot) => {
-					terminalTrace = snapshot;
-					options.onTrace?.(snapshot);
-				},
-				onTraceError: () => {
-					traceUpdateDegraded = true;
-				},
-			});
+			const runBound =
+				remaining === undefined ? options.timeoutMs : Math.min(options.timeoutMs ?? MAX_RUN_BOUND_MS, remaining);
+			run =
+				options.pi === undefined
+					? await runDelegate(context, options.delegateArgv, {
+							timeoutMs: runBound,
+							signal: checkpointAbort?.signal ?? options.signal,
+							onTrace: (snapshot) => {
+								terminalTrace = snapshot;
+								options.onTrace?.(snapshot);
+							},
+							onTraceError: () => {
+								traceUpdateDegraded = true;
+							},
+						})
+					: await runPiDelegate(context, options.pi, {
+							timeoutMs: runBound,
+							signal: checkpointAbort?.signal ?? options.signal,
+						});
 		} finally {
 			for (const timer of checkpointTimers) clearTimeout(timer);
 			options.signal?.removeEventListener("abort", relayAbort);
@@ -369,6 +399,9 @@ async function runDispatchCore(options: RunDispatchOptions): Promise<DispatchOut
 			}
 		}
 		if (run.spawnFailed) return refuse("refuse-delegate-absent", "SPAWN_FAILED", "spawn", "not-started");
+		// Only the Pi transport can report this; it joins the existing
+		// internal-failure class rather than minting a cause of its own.
+		if (run.protocolInvalid) return refuse("refuse-rpc-protocol", "INTERNAL_FAILED", "run", "internal-failed");
 		if (run.timedOut) return refuse("refuse-bound-exceeded", "TIMED_OUT", "run", "timed-out");
 		if (run.aborted) return refuse("refuse-aborted", "ABORTED", "run", "aborted");
 		if (run.signal !== null) {

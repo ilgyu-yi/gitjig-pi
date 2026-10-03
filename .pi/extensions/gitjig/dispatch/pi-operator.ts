@@ -1,0 +1,116 @@
+/* Operator-only Pi session event hub. This in-memory hub has no session
+ * entry, audit, result, or model-visible tool-update writer. Draining never
+ * depends on anyone observing it: events are reduced here for the lifetime of
+ * the child whether or not a view is attached, and a view's departure
+ * discards only what it was rendering.
+ *
+ * The bounds below are stated over what an operator would SEE, which is the
+ * only thing a bound on a view can mean: the partial row counts against the
+ * row cap because it is rendered beside the others, and the code-point cap
+ * applies to the composed row including this module's own prefix, not to the
+ * delegate text before one is added (#420).
+ */
+import { randomUUID } from "node:crypto";
+import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
+
+/** Rendered rows an operator may see at once, the partial row included. */
+export const MAX_VIEW_ROWS = 20;
+/** Code points in one rendered row, this module's own prefix included. */
+export const MAX_ROW_POINTS = 512;
+
+/** The view's own prefix for the one uncompleted row, counted in its bound. */
+const PARTIAL_PREFIX = "partial: ";
+
+/** Replace control characters and clip the WHOLE row to its bound. */
+function clip(value: string): string {
+	return [...value]
+		.slice(-MAX_ROW_POINTS)
+		.map((character) => {
+			const point = character.codePointAt(0) ?? 0;
+			return point < 32 || (point >= 127 && point <= 159) ? " " : character;
+		})
+		.join("");
+}
+interface Active {
+	id: string;
+	lines: string[];
+	partial: string;
+	session?: PiRpcSession;
+}
+const active = new Map<string, Active>();
+
+/**
+ * How many sessions are live. Read-only, and the only thing this module tells
+ * anyone about its registry: it is what makes a runner's teardown observable
+ * from outside without exposing a session or its text.
+ */
+export function livePiOperatorSessions(): number {
+	return active.size;
+}
+
+/**
+ * The rows an attached view would render, in order, bounded as a whole: the
+ * partial row is one of them, so the cap counts it rather than letting a
+ * twenty-first row ride beside twenty.
+ */
+export function piOperatorView(id: string): string[] {
+	const item = active.get(id);
+	if (item === undefined) return [];
+	const rows = [...item.lines, ...(item.partial.length > 0 ? [`${PARTIAL_PREFIX}${item.partial}`] : [])];
+	return rows.slice(-MAX_VIEW_ROWS);
+}
+
+export function beginPiOperatorSession() {
+	const item: Active = { id: randomUUID(), lines: [], partial: "" };
+	active.set(item.id, item);
+	return {
+		/** This session's own identity, so a caller's teardown is its own. */
+		id: item.id,
+		onEvent(event: PiRpcEvent): void {
+			if (!active.has(item.id)) return;
+			if (event.type === "message_update") {
+				const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
+				// Clipped to leave room for the `partial: ` prefix the view adds,
+				// so the rendered row stays inside the same bound as any other.
+				if (delta?.type === "text_delta" && typeof delta.delta === "string")
+					item.partial = [...clip(item.partial + delta.delta)]
+						.slice(-(MAX_ROW_POINTS - PARTIAL_PREFIX.length))
+						.join("");
+				return;
+			}
+			let line: string | undefined;
+			if (event.type === "message_end") {
+				const message = event.message as { role?: unknown; content?: unknown } | undefined;
+				if (message?.role === "assistant" && Array.isArray(message.content)) {
+					const text = message.content
+						.flatMap((block: unknown) =>
+							typeof block === "object" && block !== null && "text" in block && typeof block.text === "string"
+								? [block.text]
+								: [],
+						)
+						.join(" ");
+					line = `assistant: ${text}`;
+					item.partial = ""; // completion supersedes deltas
+				}
+			} else if (event.type === "tool_execution_start" || event.type === "tool_execution_end") {
+				const name = typeof event.toolName === "string" ? event.toolName : "tool";
+				line = `${event.type === "tool_execution_start" ? "tool started" : "tool ended"}: ${name}`;
+			}
+			if (line !== undefined) {
+				// Clipped after composition: the bound is on the row an operator
+				// sees, and this module's own prefix is part of that row.
+				item.lines.push(clip(line));
+				if (item.lines.length > MAX_VIEW_ROWS) item.lines.shift();
+			}
+		},
+		bind(session: PiRpcSession): void {
+			item.session = session;
+		},
+		end(): void {
+			active.delete(item.id);
+			item.lines.length = 0;
+			item.partial = "";
+			item.session = undefined;
+		},
+	};
+}
