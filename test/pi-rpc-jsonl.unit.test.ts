@@ -1,9 +1,13 @@
 /**
  * #414 (part 3 of #370): the bounded LF-framed JSONL reader SPEC §4.9's Pi
- * clause requires. Every failing-closed arm asserts by value that neither the
- * offending record nor any later record is delivered, because a reader that
- * reports "invalid" while still handing a record to its consumer would carry
- * child text across exactly the boundary it exists to hold.
+ * clause requires. Every arm in which the READER refuses a record asserts by
+ * value that neither that record nor any later one is delivered — later in the
+ * same push buffer as well as in a later push — because a reader that reports
+ * "invalid" while still handing records to its consumer would carry child text
+ * across exactly the boundary it exists to hold. Consumer rejection is the one
+ * different case: a consumer can only reject a record it has received, so that
+ * one record reaches it; the reader then contains the thrown error and delivers
+ * nothing after it.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,7 +27,7 @@ function reader() {
 	return { stream: new BoundedRpcJsonl((record) => records.push(record)), records };
 }
 
-/** Once invalid, a further well-formed record must change nothing a consumer sees. */
+/** Once invalid, a further well-formed record in a later push must change nothing a consumer sees. */
 function assertSealed(stream: BoundedRpcJsonl, records: readonly unknown[]): void {
 	const before = records.length;
 	assert.equal(stream.push(Buffer.from('{"type":"after"}\n')), "invalid");
@@ -66,6 +70,26 @@ test("invalid UTF-8 invalidates without delivering the record or any later one",
 	assert.deepEqual(records, []);
 });
 
+test("a refused record suppresses a valid later record that shares its push buffer", () => {
+	const later = Buffer.from('{"type":"later"}\n');
+	const refusals: ReadonlyArray<readonly [string, Buffer]> = [
+		["malformed", Buffer.from("{bad}\n")],
+		["empty", Buffer.from("\n")],
+		["array", Buffer.from("[]\n")],
+		["scalar", Buffer.from('"text"\n')],
+		["invalid UTF-8", Buffer.from([0x7b, 0x22, 0xff, 0x22, 0x7d, 0x0a])],
+		["oversized", Buffer.concat([Buffer.alloc(RPC_MAX_RECORD_BYTES + 1, 65), Buffer.from("\n")])],
+	];
+	for (const [label, refused] of refusals) {
+		const { stream, records } = reader();
+		// A valid record first, so the arm also shows earlier delivery is untouched.
+		const buffer = Buffer.concat([Buffer.from('{"type":"before"}\n'), refused, later]);
+		assert.equal(stream.push(buffer), "invalid", label);
+		assert.deepEqual(records, [{ type: "before" }], `${label}: a record after the refused one was delivered`);
+		assertSealed(stream, records);
+	}
+});
+
 test("the record-size bound fails closed without delivering the oversized record or any later one", () => {
 	const unfinished = reader();
 	assert.equal(unfinished.stream.push(Buffer.alloc(RPC_MAX_RECORD_BYTES + 1, 65)), "invalid");
@@ -99,6 +123,13 @@ test("the record-count bound trips at exactly its cap and delivers nothing past 
 	assert.equal(stream.recordCount, RPC_MAX_RECORDS);
 	assert.equal(records.length, RPC_MAX_RECORDS, "the record past the cap was delivered");
 	assertSealed(stream, records);
+
+	// The same cap, met with the record past it and a later one in one buffer.
+	const shared = reader();
+	for (let i = 0; i < RPC_MAX_RECORDS - 1; i++) shared.stream.push(record);
+	assert.equal(shared.stream.status, "reading");
+	assert.equal(shared.stream.push(Buffer.concat([record, record, Buffer.from('{"type":"later"}\n')])), "invalid");
+	assert.equal(shared.records.length, RPC_MAX_RECORDS, "a record sharing the buffer past the cap was delivered");
 });
 
 test("the stream bound fails closed on the crossing chunk and delivers nothing from it or later", () => {
@@ -153,16 +184,18 @@ test("baseline-first private-copy delimiter mutant fails on a real Unicode separ
 	}
 });
 
-test("consumer rejection is an invalid transport, never an exception to leak child data", () => {
+test("consumer rejection invalidates the transport, contains the thrown error and delivers nothing after it", () => {
 	const delivered: unknown[] = [];
 	const stream = new BoundedRpcJsonl((record) => {
 		delivered.push(record);
 		throw Error("private child content");
 	});
-	assert.doesNotThrow(() => stream.push(Buffer.from('{"type":"event"}\n')));
+	// The rejected record and a valid one after it, in one buffer.
+	assert.doesNotThrow(() => stream.push(Buffer.from('{"type":"event"}\n{"type":"later"}\n')));
 	assert.equal(stream.status, "invalid");
 	assert.equal(stream.finish(), "invalid");
-	// The rejecting consumer saw the record it refused, and nothing after it.
-	assert.equal(delivered.length, 1);
+	// The rejecting consumer necessarily saw the one record it refused, and
+	// nothing after it — not the later record that shared its buffer.
+	assert.deepEqual(delivered, [{ type: "event" }]);
 	assertSealed(stream, delivered);
 });
