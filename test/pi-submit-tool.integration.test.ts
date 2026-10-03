@@ -658,18 +658,54 @@ test("baseline-first private-copy mutants: every scrubbed variable that can redi
 	}
 });
 
-test("a composed return above the byte bound refuses before any candidate file exists", async () => {
+test("the return byte bound is measured at its own boundary, not somewhere past it", async () => {
+	// The composed return is `{ok, summary, reviewedHead, payload}` with the
+	// payload encoded once, and every byte here is ASCII that JSON does not
+	// escape, so the finding's length moves the total one byte at a time. That
+	// makes the exact boundary computable rather than approximated: an arm that
+	// overshoots by thousands of bytes cannot tell 65,536 from 65,537.
+	const composed = (finding: string) => {
+		const payload = JSON.stringify({ token: "FINDINGS", findings: [finding] });
+		return Buffer.byteLength(
+			JSON.stringify({
+				ok: true,
+				summary: REVIEW_PI_PROFILES.reviewer.summary,
+				reviewedHead: headHere(),
+				payload,
+			}),
+			"utf8",
+		);
+	};
+	const atBound = "f".repeat(65_536 - composed(""));
+	assert.equal(composed(atBound), 65_536, "the boundary payload is not exactly at the bound");
+	assert.equal(composed(`${atBound}f`), 65_537);
+
+	await withCopy([], async (root, context) => {
+		const { tool } = await registerFromCopy(root, context, REVIEW_PI_PROFILES.reviewer);
+		// Exactly at the bound: admitted, and the installed file is that size.
+		await tool.execute("call", { token: "FINDINGS", findings: [atBound] });
+		assert.equal(readFileSync(context.returnPath).byteLength, 65_536);
+		assert.equal(admitReturn(context.returnPath).admitted, true);
+	});
 	await withCopy([], async (root, context) => {
 		const { tool, base } = await registerFromCopy(root, context, REVIEW_PI_PROFILES.reviewer);
-		// Under the schema's own bounds — findings are unbounded strings — but
-		// past the 65,536-byte return bound once composed.
+		// One byte past it: refused, with nothing written or left behind.
 		assert.equal(
-			await refuses(tool, { token: "FINDINGS", findings: ["f".repeat(70_000)] }),
+			await refuses(tool, { token: "FINDINGS", findings: [`${atBound}f`] }),
 			"submit_result return too large",
 		);
 		assert.equal(existsSync(context.returnPath), false);
 		assert.deepEqual(readdirSync(base).sort(), ["operand.ts", "profile.json", "submit.ts"]);
 	});
+	// The bound itself is load-bearing: one byte of slack admits the arm above.
+	const widened = await withCopy(
+		[[TOOL_RELATIVE, "const MAX_RETURN_BYTES = 65_536;", "const MAX_RETURN_BYTES = 65_537;"]],
+		async (root, context) => {
+			const { tool } = await registerFromCopy(root, context, REVIEW_PI_PROFILES.reviewer);
+			return refuses(tool, { token: "FINDINGS", findings: [`${atBound}f`] });
+		},
+	);
+	assert.equal(widened, undefined, "widening the bound by one byte changed nothing, so the arm measures nothing");
 });
 
 /**
