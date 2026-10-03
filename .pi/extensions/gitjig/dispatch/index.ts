@@ -96,12 +96,12 @@ import { cleanupDispatchContext, type DispatchContext, provisionDispatchContext 
 import { renderTraceSnapshot, retainTrace, type TraceSnapshot } from "./trace.ts";
 import { canonicalTraceId } from "./trace-reader.ts";
 
-/** The tool name §4.9's Home statement records, verbatim — one name. */
 // The ruled held-operand scan is owned by ./operand.ts so that every consumer
 // of the rule imports one predicate (SPEC §3.11); its public names stay here,
 // where every existing consumer reads them.
 export { MIN_CONTAINED_RUN, namesHeldOperand };
 
+/** The tool name §4.9's Home statement records, verbatim — one name. */
 export const DISPATCH_TOOL_NAME = "gitjig_dispatch";
 
 /** Inadmissible argv from the tool surface — refused before any spawn. */
