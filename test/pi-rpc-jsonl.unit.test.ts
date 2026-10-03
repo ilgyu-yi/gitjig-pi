@@ -46,7 +46,21 @@ test("LF framing preserves U+2028 and handles split UTF-8, CRLF and fast adjacen
 });
 
 test("malformed, empty, scalar and incomplete records invalidate without delivering text", () => {
-	for (const wire of ["{bad}\n", "\n", "[]\n", '"text"\n', "null\n", "\ufeff{}\n", '{"type":"incomplete"']) {
+	// The last two are unframed rather than malformed: the first is both, while
+	// `{"type":"unframed"}` is syntactically valid JSON that no LF ever framed.
+	// Only that one separates "refused for want of a terminator" from "refused
+	// for want of valid JSON", so a finish that parsed its pending buffer and
+	// delivered the record would be caught here and nowhere else.
+	for (const wire of [
+		"{bad}\n",
+		"\n",
+		"[]\n",
+		'"text"\n',
+		"null\n",
+		"\ufeff{}\n",
+		'{"type":"incomplete"',
+		'{"type":"unframed"}',
+	]) {
 		const { stream, records } = reader();
 		stream.push(Buffer.from(wire));
 		assert.equal(stream.finish(), "invalid", JSON.stringify(wire));
@@ -63,12 +77,17 @@ test("malformed, empty, scalar and incomplete records invalidate without deliver
 
 test("finish is terminal: an unfinished record stays refused and a completed stream accepts nothing more", () => {
 	// Unfinished at finish: refused, and nothing after it is ever delivered.
-	const unfinished = reader();
-	assert.equal(unfinished.stream.push(Buffer.from('{"type":"before"}\n{"type":"incomplete"')), "reading");
-	assert.equal(unfinished.stream.finish(), "invalid");
-	assert.deepEqual(unfinished.records, [{ type: "before" }]);
-	assertSealed(unfinished.stream, unfinished.records);
-	assert.deepEqual(unfinished.records, [{ type: "before" }]);
+	// Both shapes of unfinished tail are exercised — one that is also malformed
+	// JSON and one that is valid JSON lacking only its terminator — because the
+	// terminator, not the parse, is what refuses the second.
+	for (const tail of ['{"type":"incomplete"', '{"type":"unframed"}']) {
+		const unfinished = reader();
+		assert.equal(unfinished.stream.push(Buffer.from(`{"type":"before"}\n${tail}`)), "reading", tail);
+		assert.equal(unfinished.stream.finish(), "invalid", tail);
+		assert.deepEqual(unfinished.records, [{ type: "before" }], tail);
+		assertSealed(unfinished.stream, unfinished.records);
+		assert.deepEqual(unfinished.records, [{ type: "before" }], tail);
+	}
 
 	// Completed at finish: still terminal, so a record arriving afterwards is not
 	// delivered and does not reopen the stream.
@@ -246,6 +265,43 @@ test("baseline-first private-copy delimiter mutant fails on a real Unicode separ
 		const mutant = new Mutant((record: Record<string, unknown>) => records.push(record));
 		assert.equal(mutant.push(wire), "invalid");
 		assert.deepEqual(records, []);
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+});
+
+test("baseline-first private-copy finish mutant delivers a valid record that no LF framed", async () => {
+	const path = fileURLToPath(new URL("../.pi/extensions/gitjig/dispatch/rpc-jsonl.ts", import.meta.url));
+	const source = readFileSync(path, "utf8");
+	const anchor = 'this.pending.length === 0 ? "complete" : "invalid"';
+	assert.notEqual(source.indexOf(anchor), -1, "mutation anchor must exist");
+	assert.equal(source.indexOf(anchor), source.lastIndexOf(anchor), "mutation anchor must be unique");
+	// A whole record with no terminator: the only input that tells the missing-LF
+	// refusal apart from a parse refusal, since this text parses.
+	const unframed = Buffer.from('{"type":"unframed"}');
+	assert.deepEqual(JSON.parse(unframed.toString("utf8")), { type: "unframed" });
+	const baseline = reader();
+	assert.equal(baseline.stream.push(unframed), "reading");
+	assert.equal(baseline.stream.finish(), "invalid");
+	assert.deepEqual(baseline.records, []);
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-rpc-finish-mutant-"));
+	try {
+		const mutantPath = join(scratch, "rpc-jsonl.ts");
+		// The mutant frames on end-of-stream instead of on an LF, so an unfinished
+		// record that happens to parse completes the stream and is delivered.
+		writeFileSync(
+			mutantPath,
+			source.replace(
+				anchor,
+				() => 'this.pending.length === 0 || this.acceptLine(this.pending) ? "complete" : "invalid"',
+			),
+		);
+		const { BoundedRpcJsonl: Mutant } = await import(pathToFileURL(mutantPath).href);
+		const records: Record<string, unknown>[] = [];
+		const mutant = new Mutant((record: Record<string, unknown>) => records.push(record));
+		assert.equal(mutant.push(unframed), "reading");
+		assert.equal(mutant.finish(), "complete", "the mutant must differ from the baseline here");
+		assert.deepEqual(records, [{ type: "unframed" }], "the mutant must deliver the unframed record");
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
