@@ -65,23 +65,38 @@ test("baseline-first isolated SPEC mutants kill each named weakening of the clau
 		const path = join(scratch, "SPEC.md");
 		writeFileSync(path, source);
 		assert.deepEqual(settled(readFileSync(path, "utf8")), [], "baseline must be green in the same copy");
+		// Moved past the next heading, into §5: the confinement arm, not the
+		// ordering arm, must be what refuses it.
 		const outsideSection = source
 			.replace(`${OPT_IN}\n\n`, () => "")
-			.replace("## 5. Cross-cutting contracts", () => `${OPT_IN}\n\n## 5. Cross-cutting contracts`);
-		const mutants: ReadonlyArray<readonly [string, string]> = [
-			["opt-in paragraph deleted", source.replace(`${OPT_IN}\n\n`, () => "")],
-			["planes paragraph deleted", source.replace(`${PLANES}\n\n`, () => "")],
-			["opt-in paragraph moved out of §4.9", outsideSection],
+			.replace("## 5. Cross-cutting contracts\n\n", () => `## 5. Cross-cutting contracts\n\n${OPT_IN}\n\n`);
+		// Each mutant names the check that must refuse it, so a mutant killed only
+		// by a neighbouring arm is caught rather than counted.
+		const mutants: ReadonlyArray<readonly [string, string, string]> = [
+			["opt-in paragraph deleted", source.replace(`${OPT_IN}\n\n`, () => ""), "opt-in paragraph is not exactly once"],
+			["planes paragraph deleted", source.replace(`${PLANES}\n\n`, () => ""), "planes paragraph is not exactly once"],
+			["opt-in paragraph moved out of §4.9", outsideSection, "opt-in paragraph is not exactly once"],
 			[
 				"no-continuation sentence inverted",
 				source.replace(NO_CONTINUATION, () => "A missing submission may receive one bounded continuation"),
+				"planes paragraph is not exactly once",
 			],
-			["activation sentence dropped", source.replace(` ${ACTIVATION}`, () => "")],
+			[
+				"activation sentence dropped",
+				source.replace(` ${ACTIVATION}`, () => ""),
+				"planes paragraph is not exactly once",
+			],
 		];
-		for (const [label, mutated] of mutants) {
+		assert.equal(delegationLayer(outsideSection).includes(OPT_IN), false, "the moved paragraph must leave §4.9");
+		assert.equal(outsideSection.includes(OPT_IN), true, "the moved paragraph must still exist elsewhere");
+		for (const [label, mutated, refusedBy] of mutants) {
 			assert.notEqual(mutated, source, `${label}: the mutant must change the text`);
 			writeFileSync(path, mutated);
-			assert.notDeepEqual(settled(readFileSync(path, "utf8")), [], `surviving mutant: ${label}`);
+			const found = settled(readFileSync(path, "utf8"));
+			assert.ok(
+				found.some((message) => message.startsWith(refusedBy)),
+				`${label}: expected refusal by "${refusedBy}", got ${JSON.stringify(found)}`,
+			);
 		}
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
