@@ -150,17 +150,25 @@ export function startPiRpc(options: PiRpcOptions): PiRpcSession {
 		escalate = setTimeout(() => group("SIGKILL"), FLUSH_GRACE_MS);
 		flush = setTimeout(() => end(outcome), FLUSH_GRACE_MS * 2);
 	};
+	// A deliberate stop keeps its own cause. Otherwise framing validity is read
+	// first: §4.9 refuses malformed OR UNFINISHED framing, and malformed data
+	// already refuses as it is read, so an unfinished tail discovered here must
+	// reach the same outcome rather than being reported as the signal that
+	// truncated it. Only a stream that finished complete can be classified by
+	// how the child ended.
 	const completed = (): PiRpcOutcome => {
 		const valid = parser.finish() === "complete";
 		return (
 			stopping ??
-			(exitedSignal !== null
-				? "signaled"
-				: valid && exitedCode !== null
-					? settleCount > 0
-						? "settled"
-						: "exited"
-					: "protocol-invalid")
+			(!valid
+				? "protocol-invalid"
+				: exitedSignal !== null
+					? "signaled"
+					: exitedCode !== null
+						? settleCount > 0
+							? "settled"
+							: "exited"
+						: "protocol-invalid")
 		);
 	};
 	// The first observed numeric/signal exit owns the lifecycle. Later

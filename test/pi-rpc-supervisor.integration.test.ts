@@ -850,10 +850,15 @@ test("baseline-first private-copy mutants: either start-failure path could repor
  */
 async function naturalSignalScenario(
 	start: Start,
-): Promise<{ outcome: string; exitCode: number | null; exitSignal: string | null }> {
+	framing: "complete" | "unfinished" = "complete",
+): Promise<{ outcome: string; exitCode: number | null; exitSignal: string | null; settleCount: number }> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-signal-"));
 	try {
 		const context = supervisorContext(scratch);
+		// The unfinished variant adds a whole parseable record that no terminator
+		// ever framed before killing itself, composing the two states.
+		const trailing =
+			framing === "complete" ? "" : `process.stdout.write(JSON.stringify({type:'agent_settled'}));\n    `;
 		const executable = fakePi(
 			join(scratch, "fake-pi"),
 			`let received='';
@@ -862,7 +867,7 @@ process.stdin.on('data',chunk=>{
   const item=JSON.parse(received.slice(0,at));received=received.slice(at+1);
   if(item.type==='prompt'){
    process.stdout.write(JSON.stringify({type:'response',id:item.id,success:true})+'\\n',()=>{
-    // Its own end, by signal: no bound expired and no operator aborted.
+    ${trailing}// Its own end, by signal: no bound expired and no operator aborted.
     process.kill(process.pid,'SIGKILL');
    });
   }
@@ -875,7 +880,13 @@ setInterval(() => {}, 1000);
 			...parameters(context, trustedExtensionFile(scratch), executable),
 			timeoutMs: 15_000,
 		});
-		return { outcome: await session.done, exitCode: session.exitCode, exitSignal: session.exitSignal };
+		const outcome = await session.done;
+		return {
+			outcome,
+			exitCode: session.exitCode,
+			exitSignal: session.exitSignal,
+			settleCount: session.settleCount,
+		};
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
@@ -886,7 +897,62 @@ test("a child that ends by signal reports signaled, with a null exit code and th
 		outcome: "signaled",
 		exitCode: null,
 		exitSignal: "SIGKILL",
+		settleCount: 0,
 	});
+});
+
+test("an unfinished frame outranks the signal that truncated it", async () => {
+	// §4.9 refuses malformed or unfinished framing, and malformed data already
+	// refuses as it is read, so the two halves must reach the same outcome
+	// however the stream ended. Only how a COMPLETE stream ended classifies a
+	// run; the signal is still reported alongside.
+	assert.deepEqual(await naturalSignalScenario(startPiRpc, "unfinished"), {
+		outcome: "protocol-invalid",
+		exitCode: null,
+		exitSignal: "SIGKILL",
+		settleCount: 0,
+	});
+});
+
+test("baseline-first private-copy mutant: classifying by how the child ended before reading validity", async () => {
+	const baseline = await naturalSignalScenario(startPiRpc, "unfinished");
+	assert.equal(baseline.outcome, "protocol-invalid");
+	// The order this module had before #416: the signal branch read first, so an
+	// unfinished tail was reported as the death that truncated it.
+	const mutant = await withMutant(
+		[
+			[
+				'(!valid\n\t\t\t\t? "protocol-invalid"\n\t\t\t\t: exitedSignal !== null',
+				'(exitedSignal !== null\n\t\t\t\t? "signaled"\n\t\t\t\t: !valid',
+			],
+			[
+				'\t\t\t\t\t? "signaled"\n\t\t\t\t\t: exitedCode !== null',
+				'\t\t\t\t\t? "protocol-invalid"\n\t\t\t\t\t: exitedCode !== null',
+			],
+		],
+		(start) => naturalSignalScenario(start, "unfinished"),
+	);
+	assert.equal(mutant.outcome, "signaled", "the mutant kept the order, so the arm measures nothing");
+	// The same mutant leaves a COMPLETE stream's signal classification alone,
+	// which is why only the composed arm above can measure this.
+	assert.equal(
+		(
+			await withMutant(
+				[
+					[
+						'(!valid\n\t\t\t\t? "protocol-invalid"\n\t\t\t\t: exitedSignal !== null',
+						'(exitedSignal !== null\n\t\t\t\t? "signaled"\n\t\t\t\t: !valid',
+					],
+					[
+						'\t\t\t\t\t? "signaled"\n\t\t\t\t\t: exitedCode !== null',
+						'\t\t\t\t\t? "protocol-invalid"\n\t\t\t\t\t: exitedCode !== null',
+					],
+				],
+				(start) => naturalSignalScenario(start, "complete"),
+			)
+		).outcome,
+		"signaled",
+	);
 });
 
 test("baseline-first private-copy mutant: collapsing the signal branch hides an unasked-for death", async () => {
@@ -895,12 +961,12 @@ test("baseline-first private-copy mutant: collapsing the signal branch hides an 
 	// The stream is complete and nothing refused it, so without this branch the
 	// run reports a protocol refusal for a child that simply died.
 	const mutant = await withMutant(
-		[['exitedSignal !== null\n\t\t\t\t? "signaled"', 'exitedSignal !== null\n\t\t\t\t? "protocol-invalid"']],
+		[['exitedSignal !== null\n\t\t\t\t\t? "signaled"', 'exitedSignal !== null\n\t\t\t\t\t? "protocol-invalid"']],
 		naturalSignalScenario,
 	);
 	assert.equal(mutant.outcome, "protocol-invalid", "the mutant kept the signal branch, so the arm measures nothing");
 	const control = await withMutant(
-		[['exitedSignal !== null\n\t\t\t\t? "signaled"', 'exitedSignal != null\n\t\t\t\t? "signaled"']],
+		[['exitedSignal !== null\n\t\t\t\t\t? "signaled"', 'exitedSignal != null\n\t\t\t\t\t? "signaled"']],
 		naturalSignalScenario,
 	);
 	assert.deepEqual(control, baseline, "a behaviour-preserving control changed the observation");
@@ -922,6 +988,9 @@ async function stubbornAbortScenario(
 	const readyFile = join(scratch, "child.ready");
 	const orphanPidFile = join(scratch, "orphan.pid");
 	let orphanPid = 0;
+	// Declared out here because a mutant that drops the escalation deliberately
+	// leaves this child alive: the finally below must still be able to kill it.
+	let childPid = 0;
 	try {
 		const context = supervisorContext(scratch);
 		const executable = fakePi(
@@ -945,7 +1014,7 @@ async function stubbornAbortScenario(
 			signal: controller.signal,
 		});
 		await settled(() => existsSync(readyFile) && existsSync(pidFile) && existsSync(orphanPidFile));
-		const childPid = Number(readFileSync(pidFile, "utf8"));
+		childPid = Number(readFileSync(pidFile, "utf8"));
 		orphanPid = Number(readFileSync(orphanPidFile, "utf8"));
 		assert.ok(Number.isInteger(childPid) && childPid > 1, `no child pid recorded: ${childPid}`);
 		const startedAt = Date.now();
@@ -958,7 +1027,7 @@ async function stubbornAbortScenario(
 			sawSigterm: existsSync(termFile),
 		};
 	} finally {
-		if (orphanPid > 1) kill(orphanPid);
+		for (const pid of [orphanPid, childPid]) if (pid > 1) kill(pid);
 		rmSync(scratch, { recursive: true, force: true });
 	}
 }
@@ -1237,12 +1306,12 @@ test("baseline-first private-copy mutant: a settled run collapsed into an ordina
 	const baseline = await settledScenario(startPiRpc);
 	assert.equal(baseline.outcome, "settled");
 	const mutant = await withMutant(
-		[['settleCount > 0\n\t\t\t\t\t\t? "settled"', 'settleCount > 0\n\t\t\t\t\t\t? "exited"']],
+		[['settleCount > 0\n\t\t\t\t\t\t\t? "settled"', 'settleCount > 0\n\t\t\t\t\t\t\t? "exited"']],
 		settledScenario,
 	);
 	assert.equal(mutant.outcome, "exited", "the mutant kept the branch, so the arm measures nothing");
 	const control = await withMutant(
-		[['settleCount > 0\n\t\t\t\t\t\t? "settled"', 'settleCount >= 1\n\t\t\t\t\t\t? "settled"']],
+		[['settleCount > 0\n\t\t\t\t\t\t\t? "settled"', 'settleCount >= 1\n\t\t\t\t\t\t\t? "settled"']],
 		settledScenario,
 	);
 	assert.deepEqual(control, baseline, "a behaviour-preserving control changed the observation");
@@ -1293,13 +1362,82 @@ process.stdin.on('data',chunk=>{data+=chunk;let at;
 			settleCount: session.settleCount,
 		});
 		assert.equal(readable.includes(marker), false, `a caller-readable value carried child text: ${readable}`);
-		// A sink attached to a terminal session is refused; before the terminal
-		// attach and detach both take effect, which the counts above show.
+		// A sink attached to a terminal session is refused.
 		session.attach(() => assert.fail("a sink attached after the terminal received a record"));
 		session.detach();
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
+});
+
+/**
+ * Attach, detach and reattach while the session is live. The arm above cannot
+ * establish this: its sink is dropped by its own throw, and a session that has
+ * reached its terminal refuses every sink anyway, so detaching there changes
+ * nothing. Here each step is separated by a record the child sends on demand.
+ */
+async function liveAttachmentScenario(start: Start): Promise<{ first: number[]; second: number[]; outcome: string }> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-attach-"));
+	try {
+		const context = supervisorContext(scratch);
+		// One event per steer, numbered, so each sink's record set is exact.
+		const executable = fakePi(
+			join(scratch, "fake-pi"),
+			`let data='',index=0;
+process.stdin.on('data',chunk=>{data+=chunk;let at;
+ while((at=data.indexOf('\\n'))!==-1){
+  const command=JSON.parse(data.slice(0,at));data=data.slice(at+1);
+  if(command.type==='steer') process.stdout.write(JSON.stringify({type:'event',index:++index})+'\\n');
+  process.stdout.write(JSON.stringify({type:'response',id:command.id,success:true})+'\\n');
+ }
+});
+process.stdin.on('end',()=>process.exit(0));
+setInterval(() => {}, 1000);
+`,
+		);
+		const first: number[] = [];
+		const second: number[] = [];
+		const record = (into: number[]) => (event: Readonly<Record<string, unknown>>) => {
+			if (event.type === "event") into.push(Number(event.index));
+		};
+		const session = start({
+			...parameters(context, trustedExtensionFile(scratch), executable),
+			timeoutMs: 15_000,
+			onOperatorEvent: record(first),
+		});
+		await session.command("steer", "one");
+		await settled(() => first.length === 1);
+		// Detached: the next event reaches nobody, and draining continues.
+		session.detach();
+		await session.command("steer", "two");
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		// Reattached, to a different sink.
+		session.attach(record(second));
+		await session.command("steer", "three");
+		await settled(() => second.length === 1);
+		session.close();
+		return { first: [...first], second: [...second], outcome: await session.done };
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+test("a live sink can be detached and another attached, without interrupting the drain", async () => {
+	// The second event is drained while nobody is attached: it reaches neither
+	// sink, and the third still arrives, so detaching stopped delivery and not
+	// the reader.
+	assert.deepEqual(await liveAttachmentScenario(startPiRpc), { first: [1], second: [3], outcome: "exited" });
+});
+
+test("baseline-first private-copy mutant: a detach that keeps delivering", async () => {
+	const baseline = await liveAttachmentScenario(startPiRpc);
+	assert.deepEqual(baseline.first, [1]);
+	const mutant = await withMutant(
+		[["\t\tdetach: () => {\n\t\t\tobserver = undefined;\n\t\t},", "\t\tdetach: () => {\n\t\t\tvoid 0;\n\t\t},"]],
+		liveAttachmentScenario,
+	);
+	// The detached sink keeps receiving until the reattach replaces it.
+	assert.deepEqual(mutant.first, [1, 2], "the mutant still detached, so the arm measures nothing");
 });
 
 test("baseline-first private-copy mutant: signalling the child alone leaves its group running", async () => {
