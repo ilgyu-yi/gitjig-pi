@@ -251,6 +251,25 @@ test("baseline-first private-copy delimiter mutant fails on a real Unicode separ
 	}
 });
 
+test("a consumer that pushes into its own reader is refused and stops the outer scan", () => {
+	for (const nested of ["{bad}\n", '{"type":"nested"}\n']) {
+		const delivered: string[] = [];
+		let nestedStatus: string | undefined;
+		const stream: BoundedRpcJsonl = new BoundedRpcJsonl((record) => {
+			delivered.push(String(record.type));
+			if (record.type === "first") nestedStatus = stream.push(Buffer.from(nested));
+		});
+		const outer = stream.push(Buffer.from('{"type":"first"}\n{"type":"later"}\n'));
+		// The re-entrant push is refused whatever it carries, the reader is
+		// terminally invalid, and the outer scan delivers nothing after the
+		// record whose consumer re-entered.
+		assert.equal(nestedStatus, "invalid", JSON.stringify(nested));
+		assert.equal(outer, "invalid", JSON.stringify(nested));
+		assert.deepEqual(delivered, ["first"], JSON.stringify(nested));
+		assertSealed(stream, delivered);
+	}
+});
+
 test("consumer rejection invalidates the transport, contains the thrown error and delivers nothing after it", () => {
 	const delivered: unknown[] = [];
 	const stream = new BoundedRpcJsonl((record) => {

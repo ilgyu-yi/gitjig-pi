@@ -15,6 +15,7 @@ export class BoundedRpcJsonl {
 	private total = 0;
 	private count = 0;
 	private state: RpcFrameState = "reading";
+	private receiving = false;
 	// `ignoreBOM: true` keeps a U+FEFF as text instead of silently stripping it,
 	// so a BOM-prefixed record — at the stream's start or a later record's —
 	// reaches JSON.parse intact and is refused there, never rewritten into a
@@ -36,6 +37,9 @@ export class BoundedRpcJsonl {
 
 	/** Caller keeps draining after invalid; no child bytes escape in the status. */
 	push(bytes: Buffer): RpcFrameState {
+		// A consumer pushing into the reader that is delivering to it would
+		// interleave its bytes with the outer scan's; refuse it, terminally.
+		if (this.receiving) return this.invalidate();
 		if (this.state !== "reading") return this.state;
 		this.total += bytes.length;
 		if (this.total > RPC_MAX_STREAM_BYTES) return this.invalidate();
@@ -48,6 +52,9 @@ export class BoundedRpcJsonl {
 			const line = Buffer.concat([this.pending, segment], length);
 			this.pending = Buffer.alloc(0);
 			if (!this.acceptLine(line)) return this.invalidate();
+			// The consumer ran in between: whatever it did to this reader is
+			// final, so a later record in this same buffer is never delivered.
+			if (this.state !== "reading") return this.state;
 			start = i + 1;
 		}
 		const suffix = bytes.subarray(start);
@@ -71,7 +78,12 @@ export class BoundedRpcJsonl {
 			const record: unknown = JSON.parse(this.decoder.decode(final));
 			if (record === null || typeof record !== "object" || Array.isArray(record)) return false;
 			this.count++;
-			this.receive(record as Record<string, unknown>);
+			this.receiving = true;
+			try {
+				this.receive(record as Record<string, unknown>);
+			} finally {
+				this.receiving = false;
+			}
 			return true;
 		} catch {
 			return false;
