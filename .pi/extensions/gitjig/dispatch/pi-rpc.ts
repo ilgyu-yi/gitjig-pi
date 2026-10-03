@@ -7,7 +7,7 @@
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { lstatSync, realpathSync } from "node:fs";
-import { relative, sep } from "node:path";
+import { isAbsolute, relative, sep } from "node:path";
 import { type DispatchContext, withoutRepoLocatingGitEnv } from "./provision.ts";
 import { BoundedRpcJsonl } from "./rpc-jsonl.ts";
 
@@ -57,30 +57,43 @@ const STDERR_LIMIT = 8192;
 const FLUSH_GRACE_MS = 2000;
 const COMMAND_WAIT_MS = 5000;
 
-/** `extensionPath` must be an existing regular file in scratch, not clone data. */
-function trustedExtension(context: DispatchContext, path: string): boolean {
+/**
+ * `extensionPath` must be an existing regular file in scratch, not clone data.
+ * It returns the resolved spelling, which is what the child is given: this
+ * function resolves from the supervisor's own working directory, while the
+ * child runs in the clone, so handing on the caller's spelling would let a
+ * relative path be checked against one file and loaded from another. A
+ * relative spelling is refused outright for the same reason; the parameters
+ * here are caller-owned and never delegate-supplied.
+ */
+function trustedExtension(context: DispatchContext, path: string): string | undefined {
 	try {
+		if (!isAbsolute(path)) return undefined;
 		const scratch = realpathSync(context.scratchRoot);
 		const extension = realpathSync(path);
 		const inside = relative(scratch, extension);
 		const clone = relative(realpathSync(context.treeDir), extension);
-		return (
-			inside.length > 0 &&
+		return inside.length > 0 &&
 			inside !== ".." &&
 			!inside.startsWith(`..${sep}`) &&
 			!(clone === "" || (clone !== ".." && !clone.startsWith(`..${sep}`))) &&
 			lstatSync(path).isFile()
-		);
+			? extension
+			: undefined;
 	} catch {
-		return false;
+		return undefined;
 	}
 }
 
 export function startPiRpc(options: PiRpcOptions): PiRpcSession {
+	const extension = trustedExtension(options.context, options.extensionPath);
+	const providerExtension =
+		options.providerExtensionPath === undefined
+			? undefined
+			: trustedExtension(options.context, options.providerExtensionPath);
 	if (
-		!trustedExtension(options.context, options.extensionPath) ||
-		(options.providerExtensionPath !== undefined &&
-			!trustedExtension(options.context, options.providerExtensionPath)) ||
+		extension === undefined ||
+		(options.providerExtensionPath !== undefined && providerExtension === undefined) ||
 		!Number.isFinite(options.timeoutMs) ||
 		options.timeoutMs <= 0 ||
 		options.timeoutMs > 2_147_483_647 ||
@@ -240,9 +253,11 @@ export function startPiRpc(options: PiRpcOptions): PiRpcSession {
 				"--no-prompt-templates",
 				"--no-context-files",
 				"--no-approve",
+				// The resolved spellings, not the caller's: the child resolves a
+				// relative path against the clone, where this gate never looked.
 				"--extension",
-				options.extensionPath,
-				...(options.providerExtensionPath === undefined ? [] : ["--extension", options.providerExtensionPath]),
+				extension,
+				...(providerExtension === undefined ? [] : ["--extension", providerExtension]),
 				"--provider",
 				options.provider,
 				"--model",

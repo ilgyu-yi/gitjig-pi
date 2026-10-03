@@ -20,6 +20,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -27,7 +28,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { startPiRpc } from "../.pi/extensions/gitjig/dispatch/pi-rpc.ts";
@@ -62,10 +63,32 @@ function trustedExtensionFile(scratch: string): string {
 	return path;
 }
 
+/**
+ * Every fake records its own pid beside itself, so a scenario can kill a child
+ * its own mutant deliberately left running. A mutant that ends the session
+ * early never signals the child, and a leaked fake outlives the whole suite.
+ */
 function fakePi(path: string, body: string): string {
-	writeFileSync(path, `#!/usr/bin/env node\n${body}`, { mode: 0o700 });
+	writeFileSync(
+		path,
+		`#!/usr/bin/env node\nrequire("node:fs").writeFileSync(${JSON.stringify(`${path}.pid`)}, String(process.pid));\n${body}`,
+		{ mode: 0o700 },
+	);
 	chmodSync(path, 0o700);
 	return path;
+}
+
+/**
+ * Kill every pid the fakes in this scratch recorded, then remove it. Each
+ * scenario ends here, so no arm has to remember which of its own mutants
+ * leaves a child behind.
+ */
+function cleanup(scratch: string): void {
+	try {
+		for (const entry of readdirSync(scratch))
+			if (entry.endsWith(".pid")) kill(Number(readFileSync(join(scratch, entry), "utf8")));
+	} catch {}
+	rmSync(scratch, { recursive: true, force: true });
 }
 
 /** The parameter set every arm starts from; each arm overrides what it tests. */
@@ -104,7 +127,7 @@ async function reaped(pid: number): Promise<boolean> {
 
 function kill(pid: number): void {
 	try {
-		process.kill(pid, "SIGKILL");
+		if (pid > 1) process.kill(pid, "SIGKILL");
 	} catch {}
 }
 
@@ -135,7 +158,7 @@ async function withMutant<T>(
 		const imported: { startPiRpc: Start } = await import(pathToFileURL(mutant).href);
 		return await scenario(imported.startPiRpc);
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -205,7 +228,7 @@ async function abortGroupScenario(
 		return { outcome, grandchildGone: await reaped(pid), grandchildSawSigterm: existsSync(termFile) };
 	} finally {
 		if (pid > 1) kill(pid);
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -248,7 +271,7 @@ process.stdin.on('data',chunk=>{
 			clearTimeout(laterAbort);
 		}
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -274,7 +297,27 @@ async function extensionGateScenario(
 		symlinkSync(cloneOwned, link);
 		const escaping = join(scratch, "link-to-outside.ts");
 		symlinkSync(outsideFile, escaping);
-		const refused = [cloneOwned, outsideFile, directory, link, escaping, join(scratch, "absent.ts")];
+		// A symlink whose target is a regular file inside the scratch: it passes
+		// containment on both ends, so only the regular-file rule can refuse it.
+		// Without it, the two links above are refused for containment and the
+		// regular-file rule is never the reason for any refusal here.
+		const contained = join(scratch, "link-to-scratch.ts");
+		symlinkSync(good, contained);
+		// A relative spelling of a file that is genuinely scratch-local: this gate
+		// resolves from the supervisor's cwd while the child resolves from the
+		// clone, so a relative path is refused rather than checked here and
+		// loaded there.
+		const relativeSpelling = relative(process.cwd(), good);
+		const refused = [
+			cloneOwned,
+			outsideFile,
+			directory,
+			link,
+			escaping,
+			contained,
+			relativeSpelling,
+			join(scratch, "absent.ts"),
+		];
 		const refuses = (extension: string, provider?: string): boolean => {
 			try {
 				start({
@@ -303,7 +346,7 @@ async function extensionGateScenario(
 		}
 		return { refusedPaths, refusedProviderPaths, candidates: refused.length, sanctionedStarted };
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 		rmSync(outside, { recursive: true, force: true });
 	}
 }
@@ -338,7 +381,7 @@ async function pendingSettleScenario(start: Start): Promise<{ resolution: boolea
 		if (timer !== undefined) clearTimeout(timer);
 		return { resolution, outcome: await session.done };
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -365,6 +408,7 @@ async function spawnShapeScenario(start: Start): Promise<{
 	stateRoot?: string;
 	git: Record<string, string>;
 	extension: string;
+	providerExtension: string;
 	treeDir: string;
 	stateDir: string;
 }> {
@@ -391,7 +435,15 @@ async function spawnShapeScenario(start: Start): Promise<{
 		// Every ambient repository-locating variable the scrub must not pass on.
 		for (const name of REPOSITORY_LOCATING) process.env[name] = `ambient-${name}`;
 		const extension = trustedExtensionFile(scratch);
-		const session = start({ ...parameters(context, extension, executable), timeoutMs: 6000 });
+		// The caller-owned provider extension rides the same gate and must reach
+		// the child as its own --extension, after the trusted one.
+		const providerExtension = join(scratch, "scripted-provider.ts");
+		writeFileSync(providerExtension, "// caller-provisioned provider extension\n");
+		const session = start({
+			...parameters(context, extension, executable),
+			providerExtensionPath: providerExtension,
+			timeoutMs: 6000,
+		});
 		await session.done;
 		await settled(() => existsSync(report));
 		const observed = JSON.parse(readFileSync(report, "utf8")) as {
@@ -408,7 +460,10 @@ async function spawnShapeScenario(start: Start): Promise<{
 		return {
 			...observed,
 			cwd: realpathSync(observed.cwd),
-			extension,
+			// The resolved spellings: the gate hands the child what it checked,
+			// never the caller's spelling, because the child resolves from the clone.
+			extension: realpathSync(extension),
+			providerExtension: realpathSync(providerExtension),
 			treeDir: realpathSync(context.treeDir),
 			stateDir: context.stateDir,
 		};
@@ -416,7 +471,7 @@ async function spawnShapeScenario(start: Start): Promise<{
 		for (const [name, value] of Object.entries(before))
 			if (value === undefined) delete process.env[name];
 			else process.env[name] = value;
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -433,6 +488,8 @@ test("the child is spawned detached in the clone with a scrubbed env and no proj
 		"--no-approve",
 		"--extension",
 		observed.extension,
+		"--extension",
+		observed.providerExtension,
 		"--provider",
 		"scripted",
 		"--model",
@@ -509,7 +566,7 @@ test("the parameter preflight throws before any child exists for every refused s
 			session.abort();
 		}
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 });
 
@@ -562,7 +619,7 @@ process.stdin.on('data',chunk=>{
 		// The exit itself is still reported; what the frame changes is the outcome.
 		assert.equal(session.exitCode, 17);
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 });
 
@@ -597,7 +654,7 @@ process.stdin.on('data',chunk=>{
 		});
 		return { outcome: await session.done, exitCode: session.exitCode };
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -650,7 +707,7 @@ setInterval(() => {}, 1000);
 		await session.done;
 		return observed;
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -700,7 +757,7 @@ setInterval(() => {}, 1000);
 		await session.done;
 		return { frames, accepted };
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -812,7 +869,7 @@ async function startFailureScenario(
 		});
 		return { outcome: await session.done, exitCode: session.exitCode, exitSignal: session.exitSignal };
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -888,7 +945,7 @@ setInterval(() => {}, 1000);
 			settleCount: session.settleCount,
 		};
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -1028,7 +1085,7 @@ async function stubbornAbortScenario(
 		};
 	} finally {
 		for (const pid of [orphanPid, childPid]) if (pid > 1) kill(pid);
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -1146,7 +1203,7 @@ test("malformed framing and an exhausted bound each kill the child group and ins
 			assert.equal(await reaped(pid), true, `${label}: the grandchild outlived it, so no group was killed`);
 		} finally {
 			if (pid > 1) kill(pid);
-			rmSync(scratch, { recursive: true, force: true });
+			cleanup(scratch);
 		}
 	}
 });
@@ -1172,7 +1229,7 @@ test("an asynchronously reported stdin EPIPE ends protocol-invalid without crash
 		);
 		assert.equal(await session.done, "protocol-invalid");
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 });
 
@@ -1208,7 +1265,7 @@ test("every terminal settles each pending correlated request, and sooner than it
 			assert.equal(resolution, false, label);
 			assert.equal(await session.done, expected, label);
 		} finally {
-			rmSync(scratch, { recursive: true, force: true });
+			cleanup(scratch);
 		}
 	}
 });
@@ -1227,6 +1284,7 @@ async function settledScenario(start: Start): Promise<{
 	afterClosePrompt: boolean;
 	outcome: string;
 	wakeAfterTerminal: number | undefined;
+	returnInstalled: boolean;
 }> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-settled-"));
 	try {
@@ -1278,9 +1336,11 @@ setInterval(() => {}, 1000);
 			afterClosePrompt: await session.prompt("after close"),
 			outcome: await session.done,
 			wakeAfterTerminal: await session.waitForSettle(99),
+			// A settle is not a result: no return slot exists at any point here.
+			returnInstalled: existsSync(context.returnPath),
 		};
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
 
@@ -1299,7 +1359,29 @@ test("agent_settled counts and wakes waiters without authorizing a result or sto
 		outcome: "settled",
 		// A terminal session reports no further settle to a new waiter.
 		wakeAfterTerminal: undefined,
+		// §4.9: a settled agent is not a return, so no slot was installed.
+		returnInstalled: false,
 	});
+});
+
+test("baseline-first private-copy mutant: a settle that installs a return slot", async () => {
+	const baseline = await settledScenario(startPiRpc);
+	assert.equal(baseline.returnInstalled, false);
+	// A settle treated as a result: the arm must see the slot appear.
+	const mutant = await withMutant(
+		[
+			[
+				'\t\t} else if (record.type === "agent_settled") {\n\t\t\tsettleCount++;',
+				'\t\t} else if (record.type === "agent_settled") {\n\t\t\twriteFileSync(options.context.returnPath, "invented return");\n\t\t\tsettleCount++;',
+			],
+			[
+				'import { lstatSync, realpathSync } from "node:fs";',
+				'import { lstatSync, realpathSync, writeFileSync } from "node:fs";',
+			],
+		],
+		settledScenario,
+	);
+	assert.equal(mutant.returnInstalled, true, "the mutant installed no slot, so the arm measures nothing");
 });
 
 test("baseline-first private-copy mutant: a settled run collapsed into an ordinary exit", async () => {
@@ -1366,7 +1448,7 @@ process.stdin.on('data',chunk=>{data+=chunk;let at;
 		session.attach(() => assert.fail("a sink attached after the terminal received a record"));
 		session.detach();
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 });
 
@@ -1418,9 +1500,58 @@ setInterval(() => {}, 1000);
 		session.close();
 		return { first: [...first], second: [...second], outcome: await session.done };
 	} finally {
-		rmSync(scratch, { recursive: true, force: true });
+		cleanup(scratch);
 	}
 }
+
+/**
+ * Continuous draining, measured where it is measurable: a child that writes
+ * far more to stderr than the OS pipe will hold. A finite write a pipe can
+ * absorb proves nothing — the child finishes whether or not anyone reads —
+ * so this one writes until it would block, and only a reader lets it exit.
+ */
+async function stderrDrainScenario(start: Start): Promise<{ outcome: string; exitCode: number | null }> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-stderr-"));
+	try {
+		const context = supervisorContext(scratch);
+		const executable = fakePi(
+			join(scratch, "fake-pi"),
+			// 8 MiB, written synchronously: far past any pipe buffer.
+			'const block = "stderr noise ".repeat(4096);\n' +
+				"for (let written = 0; written < 128; written++) process.stderr.write(block);\n" +
+				"process.stderr.end(() => process.exit(0));\n",
+		);
+		const session = start({
+			...parameters(context, trustedExtensionFile(scratch), executable),
+			timeoutMs: 5000,
+		});
+		return { outcome: await session.done, exitCode: session.exitCode };
+	} finally {
+		cleanup(scratch);
+	}
+}
+
+test("stderr is drained continuously, so a child writing past the pipe buffer still finishes", async () => {
+	// `exited` rather than `timeout`: the child got to the end of its writes.
+	assert.deepEqual(await stderrDrainScenario(startPiRpc), { outcome: "exited", exitCode: 0 });
+});
+
+test("baseline-first private-copy mutant: an undrained stderr blocks the child until the bound", async () => {
+	const baseline = await stderrDrainScenario(startPiRpc);
+	assert.equal(baseline.outcome, "exited");
+	const mutant = await withMutant(
+		[
+			[
+				'\t\tchild.stderr.on("data", (bytes: Buffer) => {\n\t\t\tstderrCount = Math.min(STDERR_LIMIT, stderrCount + bytes.length);\n\t\t});',
+				"\t\tvoid 0;",
+			],
+		],
+		stderrDrainScenario,
+	);
+	// Nobody reads, the pipe fills, the child blocks mid-write, and only the
+	// deadline ends the run.
+	assert.equal(mutant.outcome, "timeout", "the mutant's child still finished, so the arm measures nothing");
+});
 
 test("a live sink can be detached and another attached, without interrupting the drain", async () => {
 	// The second event is drained while nobody is attached: it reaches neither
@@ -1524,8 +1655,8 @@ test("baseline-first private-copy mutant: a trusting extension gate accepts ever
 	const mutant = await withMutant(
 		[
 			[
-				"function trustedExtension(context: DispatchContext, path: string): boolean {",
-				"function trustedExtension(context: DispatchContext, path: string): boolean {\n\tif (path.length > 0) return true;",
+				"function trustedExtension(context: DispatchContext, path: string): string | undefined {",
+				"function trustedExtension(context: DispatchContext, path: string): string | undefined {\n\tif (path.length > 0) return path;",
 			],
 		],
 		extensionGateScenario,
