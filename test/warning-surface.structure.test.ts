@@ -444,6 +444,15 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// #414: the Pi RPC frame reader composes no text; a decoded record goes
 	// only to its consumer, never into a message.
 	{ file: "gitjig/dispatch/rpc-jsonl.ts", allow: [] },
+	// #418: the trusted submission tool and its provisioner compose no
+	// operator-facing text. The tool's one interpolation is the writing
+	// process's own pid, in the name of a private scratch temporary file that
+	// no message ever carries; the provisioner and both profile modules
+	// interpolate nothing at all, and a profile is data the caller wrote.
+	{ file: "gitjig/dispatch/pi-submit-extension.ts", allow: ["process.pid"] },
+	{ file: "gitjig/dispatch/pi-submit.ts", allow: [] },
+	{ file: "gitjig/recovery/pi-profile.ts", allow: [] },
+	{ file: "gitjig/review/pi-profile.ts", allow: [] },
 	{
 		// #416: the Pi RPC supervisor emits no operator-facing text at all. Its
 		// two interpolations carry no externally written value: `sep` is
