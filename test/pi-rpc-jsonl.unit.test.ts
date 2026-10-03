@@ -61,6 +61,25 @@ test("malformed, empty, scalar and incomplete records invalidate without deliver
 	}
 });
 
+test("finish is terminal: an unfinished record stays refused and a completed stream accepts nothing more", () => {
+	// Unfinished at finish: refused, and nothing after it is ever delivered.
+	const unfinished = reader();
+	assert.equal(unfinished.stream.push(Buffer.from('{"type":"before"}\n{"type":"incomplete"')), "reading");
+	assert.equal(unfinished.stream.finish(), "invalid");
+	assert.deepEqual(unfinished.records, [{ type: "before" }]);
+	assertSealed(unfinished.stream, unfinished.records);
+	assert.deepEqual(unfinished.records, [{ type: "before" }]);
+
+	// Completed at finish: still terminal, so a record arriving afterwards is not
+	// delivered and does not reopen the stream.
+	const completed = reader();
+	assert.equal(completed.stream.push(Buffer.from('{"type":"before"}\n')), "reading");
+	assert.equal(completed.stream.finish(), "complete");
+	assert.equal(completed.stream.push(Buffer.from('{"type":"after"}\n')), "complete");
+	assert.equal(completed.stream.finish(), "complete");
+	assert.deepEqual(completed.records, [{ type: "before" }]);
+});
+
 test("invalid UTF-8 invalidates without delivering the record or any later one", () => {
 	const { stream, records } = reader();
 	// {"<0xff>"} — well-formed JSON shape around a byte no UTF-8 decoder admits.
@@ -109,6 +128,33 @@ test("the record-size bound fails closed without delivering the oversized record
 	// Only the record before the bound was delivered; the oversized one was not.
 	assert.deepEqual(whole.records, [{ type: "before" }]);
 	assertSealed(whole.stream, whole.records);
+});
+
+test("an oversized record assembled across pushes is refused at either bound, delivering nothing", () => {
+	// Accumulation bound: an unterminated record grows past the cap across
+	// pushes and is refused before any LF arrives.
+	const growing = reader();
+	const half = Math.floor(RPC_MAX_RECORD_BYTES / 2);
+	assert.equal(growing.stream.push(Buffer.alloc(half, 65)), "reading");
+	assert.equal(growing.stream.push(Buffer.alloc(RPC_MAX_RECORD_BYTES - half, 65)), "reading");
+	assert.equal(growing.stream.push(Buffer.from("A")), "invalid");
+	assert.deepEqual(growing.records, []);
+	assertSealed(growing.stream, growing.records);
+
+	// Framing bound: a record held at exactly the cap is completed by a push
+	// that adds its terminator and one more byte. Each part alone passes the
+	// accumulation bound, and the whole line is valid JSON, so only the
+	// framing-time bound can refuse it — and the later record in that buffer
+	// must not be delivered either.
+	const framed = reader();
+	const head = '{"type":"x","body":"';
+	const tail = '"}';
+	const body = "a".repeat(RPC_MAX_RECORD_BYTES - head.length);
+	assert.equal(Buffer.byteLength(head + body), RPC_MAX_RECORD_BYTES);
+	assert.equal(framed.stream.push(Buffer.from(head + body)), "reading");
+	assert.equal(framed.stream.push(Buffer.from(`${tail}\n{"type":"later"}\n`)), "invalid");
+	assert.deepEqual(framed.records, []);
+	assertSealed(framed.stream, framed.records);
 });
 
 test("the record-count bound trips at exactly its cap and delivers nothing past it", () => {
