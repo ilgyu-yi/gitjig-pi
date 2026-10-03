@@ -45,6 +45,16 @@ import { REVIEW_PI_PROFILES } from "../.pi/extensions/gitjig/review/pi-profile.t
 import { indexedAdjudicationFromPayload } from "../.pi/extensions/gitjig/review/resolve.ts";
 
 const extensionsRoot = fileURLToPath(new URL("../.pi", import.meta.url));
+/** Every repository-locating variable the tool removes before asking git. */
+const REPOSITORY_LOCATING = [
+	"GIT_DIR",
+	"GIT_WORK_TREE",
+	"GIT_INDEX_FILE",
+	"GIT_OBJECT_DIRECTORY",
+	"GIT_COMMON_DIR",
+	"GIT_CONFIG_PARAMETERS",
+	"GIT_CONFIG_COUNT",
+] as const;
 const SUBMIT_RELATIVE = "extensions/gitjig/dispatch/pi-submit.ts";
 const TOOL_RELATIVE = "extensions/gitjig/dispatch/pi-submit-extension.ts";
 
@@ -503,6 +513,79 @@ test("the tool resolves the clone's HEAD itself, and refuses what it cannot reso
 			assert.equal(existsSync(context.returnPath), false, field);
 		});
 	}
+});
+
+/**
+ * The tool resolves the clone's HEAD with git, and an inherited environment
+ * can point git at another repository entirely. The scrub it makes before that
+ * call is therefore part of "resolves the clone's HEAD itself": without it the
+ * installed slot would carry a head the caller's environment chose.
+ */
+function repositoryWithOneCommit(path: string): string {
+	mkdirSync(path, { recursive: true });
+	const git = (...args: string[]) => {
+		// This helper builds the decoy, so it must not itself inherit whatever
+		// redirection an arm has already put in the environment.
+		const env = { ...process.env };
+		for (const name of REPOSITORY_LOCATING) delete env[name];
+		return execFileSync("git", ["-C", path, ...args], { encoding: "utf8", env });
+	};
+	git("init", "-q");
+	git("config", "user.email", "decoy@example.invalid");
+	git("config", "user.name", "decoy");
+	// A developer's global `commit.gpgsign` would otherwise fail this commit.
+	git("config", "commit.gpgsign", "false");
+	writeFileSync(join(path, "file.txt"), "a decoy repository\n");
+	git("add", "file.txt");
+	git("commit", "-q", "-m", "decoy");
+	return git("rev-parse", "--verify", "HEAD").trim();
+}
+
+async function redirectedHeadScenario(
+	edits: ReadonlyArray<readonly [string, string, string]>,
+): Promise<{ installed: string | undefined; decoy: string; real: string }> {
+	const previous = Object.fromEntries(REPOSITORY_LOCATING.map((name) => [name, process.env[name]]));
+	try {
+		return await withCopy(edits, async (root, context, scratch) => {
+			const decoyPath = join(scratch, "decoy");
+			const decoy = repositoryWithOneCommit(decoyPath);
+			const real = headHere();
+			assert.notEqual(decoy, real, "the decoy repository shares the real HEAD");
+			const { tool } = await registerFromCopy(root, context, REVIEW_PI_PROFILES.reviewer);
+			// An inherited environment pointing git at the decoy, the way a caller's
+			// ambient shell can: every variable the scrub removes is set.
+			process.env.GIT_DIR = join(decoyPath, ".git");
+			process.env.GIT_WORK_TREE = decoyPath;
+			process.env.GIT_INDEX_FILE = join(decoyPath, ".git", "index");
+			process.env.GIT_OBJECT_DIRECTORY = join(decoyPath, ".git", "objects");
+			process.env.GIT_COMMON_DIR = join(decoyPath, ".git");
+			await refuses(tool, { token: "APPROVED", findings: [] });
+			const admitted = admitReturn(context.returnPath);
+			return { installed: admitted.admitted ? admitted.reviewedHead : undefined, decoy, real };
+		});
+	} finally {
+		for (const [name, value] of Object.entries(previous))
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
+	}
+}
+
+test("an inherited environment cannot redirect the HEAD the tool resolves", async () => {
+	const observed = await redirectedHeadScenario([]);
+	assert.equal(observed.installed, observed.real, "the slot carries a head the environment chose");
+});
+
+test("baseline-first private-copy mutant: without the scrub the environment chooses the head", async () => {
+	const baseline = await redirectedHeadScenario([]);
+	assert.equal(baseline.installed, baseline.real);
+	const mutant = await redirectedHeadScenario([
+		[
+			TOOL_RELATIVE,
+			'\tconst env = { ...process.env };\n\tfor (const key of [\n\t\t"GIT_DIR",',
+			'\tconst env = { ...process.env };\n\tfor (const key of [\n\t\t"GITJIG_UNSET_PLACEHOLDER",',
+		],
+	]);
+	assert.equal(mutant.installed, mutant.decoy, "the mutant still resolved the clone's own HEAD");
 });
 
 test("a composed return above the byte bound refuses before any candidate file exists", async () => {
