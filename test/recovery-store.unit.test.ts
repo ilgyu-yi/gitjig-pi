@@ -1035,6 +1035,9 @@ assert.equal(readFileSync(process.env.FSYNC_LOG,"utf8"),"fdfd");
 		assert.doesNotMatch(source, /^export .*?(?:reset|delete|clear|repair|unlock|inject)/gim);
 		const namespace = await import(`${coordinatorUrl.href}?store-privacy=${Date.now()}-${Math.random()}`);
 		assert.deepEqual(Object.keys(namespace).sort(), [
+			// #418: read-only parity oracle over this module's own route parsers;
+			// claim and finalize remain private and no mutation capability is added.
+			"acceptsRecoveryPiPayload",
 			"coordinateHistoryRecovery",
 			"hasRecoveryRetryReserve",
 			"makeRecoveryProfileDispatcher",

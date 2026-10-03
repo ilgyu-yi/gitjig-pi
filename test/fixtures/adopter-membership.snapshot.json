@@ -274,6 +274,14 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-submit-extension.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-submit.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/dispatch/provision.ts",
 			"disposition": "carried"
 		},
@@ -406,6 +414,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/recovery/pi-profile.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/recovery/profiles.json",
 			"disposition": "carried"
 		},
@@ -459,6 +471,10 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/review/panel.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/review/pi-profile.ts",
 			"disposition": "carried"
 		},
 		{

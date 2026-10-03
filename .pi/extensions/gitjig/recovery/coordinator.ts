@@ -1063,6 +1063,26 @@ function diagnosis(value: unknown): DiagnosisInput | undefined {
 	return value as DiagnosisInput;
 }
 
+/**
+ * Read-only consumer oracle for the Pi producer's accepted-set parity tests
+ * (#418). It delegates to this module's actual route parsers, so the tests
+ * compare the producer against what the consumer really takes rather than
+ * against a second grammar restated beside it. It selects no transport, takes
+ * no Pi path and has no production caller; the coordinator's own Pi wiring is
+ * a later part of #370.
+ */
+export function acceptsRecoveryPiPayload(
+	role: "challenger" | "selector-contest" | "selector-measurement" | "measurement" | "diagnosis",
+	value: unknown,
+	specDigest?: string,
+): boolean {
+	if (role === "challenger") return challenger(value, "root") !== undefined;
+	if (role === "selector-contest") return contest(value) !== undefined;
+	if (role === "selector-measurement") return measurementSpec(value) !== undefined;
+	if (role === "measurement") return specDigest !== undefined && measurementResult(value, specDigest) !== undefined;
+	return diagnosis(value) !== undefined;
+}
+
 function priorContent(history: readonly StateSummary[], basis: RepairBasis): Set<string> {
 	const values = new Set<string>();
 	for (const state of history) for (const ruling of state.rulings) values.add(contentDigest(ruling.evidence));
