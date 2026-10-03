@@ -379,7 +379,18 @@ test("a schema that is an object but not a closed one registers a tool that refu
 
 test("a successful submission installs bytes the dispatcher and the owning parser accept", async () => {
 	for (const { name, profile, valid, accepts } of profiles()) {
+		// A recovery consumer pins the outer summary to its own value, so those
+		// profiles expose no summary property and refuse a submitted one.
+		const pinned = profile.role.startsWith("recovery-");
 		for (const summary of ["an operator-written summary", undefined] as const) {
+			if (pinned && summary !== undefined) {
+				await withCopy([], async (root, context) => {
+					const { tool } = await registerFromCopy(root, context, profile);
+					assert.equal(await refuses(tool, { ...valid, summary }), "submit_result parameters rejected", name);
+					assert.equal(existsSync(context.returnPath), false, name);
+				});
+				continue;
+			}
 			await withCopy([], async (root, context) => {
 				const { tool } = await registerFromCopy(root, context, profile);
 				await tool.execute("call", summary === undefined ? valid : { ...valid, summary });
@@ -397,9 +408,34 @@ test("a successful submission installs bytes the dispatcher and the owning parse
 					`${name}: payload composition`,
 				);
 				assert.equal(accepts(admitted.payload ?? ""), true, `${name}: the owning parser rejected the payload`);
+				// The OUTER summary is the consumer's too: recovery pins it, so an
+				// installed slot carrying anything else is one its consumer discards.
+				if (pinned) assert.equal(admitted.summary, "recovery-result", `${name}: outer summary`);
 			});
 		}
 	}
+});
+
+test("baseline-first private-copy mutant: a recovery profile that lets the delegate choose the outer summary", async () => {
+	const profile = recoveryPiProfile("diagnosis", SPEC_DIGEST) as Profile;
+	const valid = { value: "NONE", invalidation: "nothing", evidence: "the repairs advanced" };
+	// Exposing the summary for a recovery role installs a slot whose outer
+	// summary the recovery consumer refuses, while every inner-payload
+	// assertion still passes — which is why the outer value is asserted above.
+	const mutant = await withCopy(
+		[["extensions/gitjig/dispatch/pi-submit.ts", 'if (profile.role.startsWith("recovery-")) return profile;', ""]],
+		async (root, context) => {
+			const { tool } = await registerFromCopy(root, context, profile);
+			assert.equal(await refuses(tool, { ...valid, summary: "a delegate-chosen summary" }), undefined);
+			return admitReturn(context.returnPath);
+		},
+	);
+	assert.equal(mutant.admitted, true);
+	if (!mutant.admitted) return;
+	assert.equal(mutant.summary, "a delegate-chosen summary", "the mutant did not expose the summary");
+	// The payload alone is fine; the consumer still discards the whole return.
+	assert.equal(acceptsRecoveryPiPayload("diagnosis", JSON.parse(mutant.payload ?? "null"), SPEC_DIGEST), true);
+	assert.notEqual(mutant.summary, "recovery-result", "the outer summary the consumer requires");
 });
 
 test("the slot is published by one link, taken only after the bytes are written and closed", async () => {
@@ -541,8 +577,36 @@ function repositoryWithOneCommit(path: string): string {
 	return git("rev-parse", "--verify", "HEAD").trim();
 }
 
+/**
+ * What each scrubbed variable has to be set to for its presence to change what
+ * `git rev-parse --verify HEAD` returns. Only three of the seven can, measured
+ * rather than assumed: `GIT_INDEX_FILE` is not read by this call,
+ * `GIT_COMMON_DIR` is inert without `GIT_DIR`, git tolerates a `GIT_WORK_TREE`
+ * that no `GIT_DIR` accompanies, and `--verify HEAD` resolves a ref without
+ * reaching the object store, so `GIT_OBJECT_DIRECTORY` does not move it
+ * either. Those four are carried by the shared helper's list, which other git
+ * calls rely on, rather than covered here by arms that would measure nothing
+ * — stated rather than quietly dropped.
+ */
+function redirection(decoyPath: string, _scratch: string): Record<string, Record<string, string>> {
+	return {
+		GIT_DIR: { GIT_DIR: join(decoyPath, ".git") },
+		GIT_CONFIG_COUNT: { GIT_CONFIG_COUNT: "not-a-number" },
+		GIT_CONFIG_PARAMETERS: { GIT_CONFIG_PARAMETERS: "'malformed" },
+	};
+}
+
 async function redirectedHeadScenario(
 	edits: ReadonlyArray<readonly [string, string, string]>,
+	environment: (decoyPath: string, scratch: string) => Record<string, string> = (decoyPath) => ({
+		GIT_DIR: join(decoyPath, ".git"),
+		GIT_WORK_TREE: decoyPath,
+		GIT_INDEX_FILE: join(decoyPath, ".git", "index"),
+		GIT_OBJECT_DIRECTORY: join(decoyPath, ".git", "objects"),
+		GIT_COMMON_DIR: join(decoyPath, ".git"),
+		GIT_CONFIG_COUNT: "not-a-number",
+		GIT_CONFIG_PARAMETERS: "'malformed",
+	}),
 ): Promise<{ installed: string | undefined; decoy: string; real: string }> {
 	const previous = Object.fromEntries(REPOSITORY_LOCATING.map((name) => [name, process.env[name]]));
 	try {
@@ -551,14 +615,10 @@ async function redirectedHeadScenario(
 			const decoy = repositoryWithOneCommit(decoyPath);
 			const real = headHere();
 			assert.notEqual(decoy, real, "the decoy repository shares the real HEAD");
+			mkdirSync(join(scratch, "empty-objects"), { recursive: true });
 			const { tool } = await registerFromCopy(root, context, REVIEW_PI_PROFILES.reviewer);
-			// An inherited environment pointing git at the decoy, the way a caller's
-			// ambient shell can: every variable the scrub removes is set.
-			process.env.GIT_DIR = join(decoyPath, ".git");
-			process.env.GIT_WORK_TREE = decoyPath;
-			process.env.GIT_INDEX_FILE = join(decoyPath, ".git", "index");
-			process.env.GIT_OBJECT_DIRECTORY = join(decoyPath, ".git", "objects");
-			process.env.GIT_COMMON_DIR = join(decoyPath, ".git");
+			// An inherited environment the way a caller's ambient shell carries one.
+			for (const [name, value] of Object.entries(environment(decoyPath, scratch))) process.env[name] = value;
 			await refuses(tool, { token: "APPROVED", findings: [] });
 			const admitted = admitReturn(context.returnPath);
 			return { installed: admitted.admitted ? admitted.reviewedHead : undefined, decoy, real };
@@ -575,17 +635,27 @@ test("an inherited environment cannot redirect the HEAD the tool resolves", asyn
 	assert.equal(observed.installed, observed.real, "the slot carries a head the environment chose");
 });
 
-test("baseline-first private-copy mutant: without the scrub the environment chooses the head", async () => {
-	const baseline = await redirectedHeadScenario([]);
-	assert.equal(baseline.installed, baseline.real);
-	const mutant = await redirectedHeadScenario([
+test("baseline-first private-copy mutants: every scrubbed variable that can redirect this call is measured", async () => {
+	// The whole list dropped: the environment chooses the head outright.
+	const whole = await redirectedHeadScenario([
 		[
 			TOOL_RELATIVE,
 			'\tconst env = { ...process.env };\n\tfor (const key of [\n\t\t"GIT_DIR",',
 			'\tconst env = { ...process.env };\n\tfor (const key of [\n\t\t"GITJIG_UNSET_PLACEHOLDER",',
 		],
 	]);
-	assert.equal(mutant.installed, mutant.decoy, "the mutant still resolved the clone's own HEAD");
+	assert.notEqual(whole.installed, whole.real, "the mutant still resolved the clone's own HEAD");
+
+	// And one variable at a time: with only that key removed from the scrub,
+	// and only that variable set, the slot must stop carrying the clone's head
+	// — either because git answered about the decoy or because it refused.
+	for (const name of Object.keys(redirection("", ""))) {
+		const only = (decoyPath: string, scratch: string) => redirection(decoyPath, scratch)[name];
+		const baseline = await redirectedHeadScenario([], only);
+		assert.equal(baseline.installed, baseline.real, `${name}: the baseline did not install the clone's head`);
+		const mutant = await redirectedHeadScenario([[TOOL_RELATIVE, `\t\t"${name}",\n`, ""]], only);
+		assert.notEqual(mutant.installed, mutant.real, `${name}: dropping it from the scrub changed nothing`);
+	}
 });
 
 test("a composed return above the byte bound refuses before any candidate file exists", async () => {

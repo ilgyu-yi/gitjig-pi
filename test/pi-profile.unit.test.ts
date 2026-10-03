@@ -312,8 +312,18 @@ test("the provisioned summary bound is measured in characters, as the briefs sta
 		const after: Record<string, unknown> = exposed.schema.properties ?? {};
 		for (const key of Object.keys(owned)) assert.deepEqual(after[key], owned[key]);
 	}
-	// The recovery roles are exposed through the same one definition.
+	// The recovery roles go through the same one definition, which exposes no
+	// summary for them: their consumer pins the outer summary to its own
+	// `recovery-result`, so a delegate-chosen one would install a slot that
+	// consumer discards (#418). The closed schema refuses a sent summary, and
+	// the profile's own value is written instead.
 	const recovery = recoveryPiProfile("challenger");
 	assert.ok(recovery);
-	assert.equal(exposedPiProfile(recovery).schema.properties?.summary?.maxLength, 6000);
+	const exposedRecovery = exposedPiProfile(recovery);
+	assert.equal(exposedRecovery.schema.properties?.summary, undefined);
+	assert.equal(exposedRecovery.summary, "recovery-result");
+	assert.equal(
+		matchesProfile(exposedRecovery.schema, { outcome: "BASE_STANDS", method: "", evidence: "e", summary: "s" }),
+		false,
+	);
 });

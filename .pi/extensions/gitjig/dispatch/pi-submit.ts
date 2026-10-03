@@ -8,13 +8,19 @@ import type { Profile } from "./pi-submit-extension.ts";
 import type { DispatchContext } from "./provision.ts";
 
 /**
- * The invocation-bound tool's exposed schema: the consumer's closed payload plus
- * the common final summary, which the caller adds and the delegate never
- * chooses. Exported so what the tool actually validates is readable without
- * provisioning a scratch, and so one definition serves both. The 6,000 bound is
- * stated in characters, matching the briefs and `matchesProfile`'s count.
+ * The invocation-bound tool's exposed schema: the consumer's closed payload,
+ * plus the final summary where — and only where — the consuming parser admits
+ * a free one. The recovery consumer requires the outer summary to be exactly
+ * its own `recovery-result`, so offering a delegate-chosen summary for those
+ * roles would let a submission install a slot that consumer then discards
+ * (#418). For them the summary property is not exposed at all, the closed
+ * schema refuses one that is sent anyway, and the profile's own value is
+ * written. Exported so what the tool actually validates is readable without
+ * provisioning a scratch, and so one definition serves both. The 6,000 bound
+ * is stated in characters, matching the briefs and `matchesProfile`'s count.
  */
 export function exposedPiProfile(profile: Profile): Profile {
+	if (profile.role.startsWith("recovery-")) return profile;
 	return {
 		...profile,
 		schema: {
