@@ -274,6 +274,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/dispatch/rpc-jsonl.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/dispatch/trace-reader.ts",
 			"disposition": "carried"
 		},

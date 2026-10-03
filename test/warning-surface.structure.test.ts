@@ -441,6 +441,9 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 			'options.expectedRef ?? "HEAD"',
 		],
 	},
+	// #414: the Pi RPC frame reader composes no text; a decoded record goes
+	// only to its consumer, never into a message.
+	{ file: "gitjig/dispatch/rpc-jsonl.ts", allow: [] },
 	{
 		file: "gitjig/publish/executor.ts",
 		allow: [
