@@ -270,6 +270,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/dispatch/pi-rpc.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/dispatch/provision.ts",
 			"disposition": "carried"
 		},
