@@ -445,6 +445,16 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// only to its consumer, never into a message.
 	{ file: "gitjig/dispatch/rpc-jsonl.ts", allow: [] },
 	{
+		// #416: the Pi RPC supervisor emits no operator-facing text at all. Its
+		// two interpolations carry no externally written value: `sep` is
+		// node:path's platform separator, used to build the `..` prefix the
+		// containment predicate compares against, and `++sequence` is this
+		// module's own monotonic request counter inside an RPC id. Neither is
+		// a path, a delegate-written string or a message.
+		file: "gitjig/dispatch/pi-rpc.ts",
+		allow: ["sep", "++sequence"],
+	},
+	{
 		file: "gitjig/publish/executor.ts",
 		allow: [
 			// A numeric bound — the module constant by default, a
