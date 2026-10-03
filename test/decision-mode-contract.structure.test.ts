@@ -97,6 +97,11 @@ function productionExtensionFiles(root: string, dir = ".pi/extensions/gitjig"): 
 }
 
 const COORDINATOR_RUNTIME_EXPORTS = [
+	// #418: a read-only oracle over this module's own route parsers, so the Pi
+	// producer's parity tests compare against what the consumer really takes.
+	// It reads and returns a boolean; claimAllowance and finalizeAllowance stay
+	// private, and nothing here gains a mutation, reset or injection capability.
+	"acceptsRecoveryPiPayload",
 	"coordinateHistoryRecovery",
 	"hasRecoveryRetryReserve",
 	"makeRecoveryProfileDispatcher",
