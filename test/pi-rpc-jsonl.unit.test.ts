@@ -46,14 +46,14 @@ test("LF framing preserves U+2028 and handles split UTF-8, CRLF and fast adjacen
 });
 
 test("malformed, empty, scalar and incomplete records invalidate without delivering text", () => {
-	for (const wire of ["{bad}\n", "\n", "[]\n", '"text"\n', '{"type":"incomplete"']) {
+	for (const wire of ["{bad}\n", "\n", "[]\n", '"text"\n', "null\n", "\ufeff{}\n", '{"type":"incomplete"']) {
 		const { stream, records } = reader();
 		stream.push(Buffer.from(wire));
 		assert.equal(stream.finish(), "invalid", JSON.stringify(wire));
 		assert.deepEqual(records, [], JSON.stringify(wire));
 	}
 	// An unfinished record is refused at finish; nothing was delivered before it.
-	for (const wire of ["{bad}\n", "\n", "[]\n", '"text"\n']) {
+	for (const wire of ["{bad}\n", "\n", "[]\n", '"text"\n', "null\n", "\ufeff{}\n"]) {
 		const { stream, records } = reader();
 		assert.equal(stream.push(Buffer.from(wire)), "invalid", JSON.stringify(wire));
 		assertSealed(stream, records);
@@ -77,6 +77,10 @@ test("a refused record suppresses a valid later record that shares its push buff
 		["empty", Buffer.from("\n")],
 		["array", Buffer.from("[]\n")],
 		["scalar", Buffer.from('"text"\n')],
+		["null", Buffer.from("null\n")],
+		// A BOM is never stripped: the record it prefixes is refused, here as a
+		// later record's prefix, where a silently stripping decoder would pass it.
+		["BOM-prefixed", Buffer.from('\ufeff{"type":"x"}\n')],
 		["invalid UTF-8", Buffer.from([0x7b, 0x22, 0xff, 0x22, 0x7d, 0x0a])],
 		["oversized", Buffer.concat([Buffer.alloc(RPC_MAX_RECORD_BYTES + 1, 65), Buffer.from("\n")])],
 	];

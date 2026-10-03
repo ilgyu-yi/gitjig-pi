@@ -15,7 +15,11 @@ export class BoundedRpcJsonl {
 	private total = 0;
 	private count = 0;
 	private state: RpcFrameState = "reading";
-	private readonly decoder = new TextDecoder("utf-8", { fatal: true });
+	// `ignoreBOM: true` keeps a U+FEFF as text instead of silently stripping it,
+	// so a BOM-prefixed record — at the stream's start or a later record's —
+	// reaches JSON.parse intact and is refused there, never rewritten into a
+	// record the child did not send (the precedent runPlatformRead sets).
+	private readonly decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 	private readonly receive: (record: Record<string, unknown>) => void;
 
 	constructor(receive: (record: Record<string, unknown>) => void) {
