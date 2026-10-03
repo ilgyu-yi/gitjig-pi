@@ -54,18 +54,18 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§4.7 | Host boundary | 875 |
 | &nbsp;&nbsp;§4.8 | The command layer | 885 |
 | &nbsp;&nbsp;§4.9 | The delegation layer | 942 |
-| §5 | Cross-cutting contracts | 1063 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1067 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1073 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1077 |
-| &nbsp;&nbsp;§5.4 | Work language | 1081 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1085 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1103 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1115 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1125 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1133 |
-| §6 | Self-governance milestone | 1149 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1160 |
+| §5 | Cross-cutting contracts | 1067 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1071 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1077 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1081 |
+| &nbsp;&nbsp;§5.4 | Work language | 1085 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1089 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1107 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1119 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1129 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1137 |
+| §6 | Self-governance milestone | 1153 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1164 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -1055,6 +1055,10 @@ TRANSCRIPT tool-result-marker rows in the run session file: 1
 The readings those rows carry: a tool registered by a project extension appears among the system-prompt tool inputs (`selectedTools`, with `toolSnippets` beside it); a scripted tool call reaches the registered handler; the registered tool appears **nowhere** in the command list, so tools and command assets are separate registration namespaces — the separation the boundary with §4.8 above rests on; and the tool's result enters the run's transcript, which is the measured ground of the content-free-return prohibition. What the record does **not** establish: what a handler's arguments look like, and any other surface's reach to the model.
 
 **The delegate's shape, measured.** The hermetic arm's delegate is a **child pi session** — a headless run of the substrate itself, on the scripted provider (§3.2's designated hermetic test substrate), inside the provisioned clone. The shape stands under a pre-registered rule: it must be deterministic on three of three runs AND sit within the suite's slowest-integration envelope. Measured against **pi 0.84.3** on 2026-09-05: a fixture repository committing the scripted provider and a script was cloned three times (`git clone --no-hardlinks`), and in each clone one headless run — `env -i` with `PATH` kept and both `HOME` and the substrate's agent directory redirected into the clone, `PI_OFFLINE=1`, `pi -p go -a --session-dir <clone>/sessions --provider scripted --model scripted-model < /dev/null` — produced the identical output `DELEGATE_DONE marker-alpha`, in 278, 237, and 236 ms. Both conjuncts hold, and the shape stands on that record. That record was taken under a cleared environment (`env -i`, `PATH` kept); the shipped executor passes the parent environment through with the repo-locating and config-injection `GIT_*` families removed and the one state seam rebound — in-model, the same trust domain: the delegate inherits the caller's credentials and its remote reach through them is not confined — so the record evidences the delegate's shape, not the environment posture.
+
+**Opt-in Pi operator-attached dispatch.** An internal consumer may explicitly choose a Pi RPC subprocess instead of the generic argv executor; the generic tool and its direct return writer keep their existing contract. The Pi child runs in the same pinned, route-severed clone with the same scrubbed environment, state seam, deadline and process-group abort/timeout/finite-flush bounds. Its only loaded submission extension is provisioned by the caller outside the reviewed tree; project extension discovery is disabled. RPC stdout is continuously drained as bounded LF-framed JSONL, stderr is continuously drained without model-visible content, and malformed or unfinished framing refuses the run. A settled agent or successful RPC response is not a return.
+
+Observation, control and result are distinct planes. Bounded assistant/tool events and an in-memory attachable view are operator-only, never model context, session transcript, final dispatch content/details, audit text, compare input or submitted payload. Explicit steer, follow-up, queue-clear, detach/reattach and abort operate on the child without pausing its deadline or changing the caller's session. Detach does not interrupt draining; abort takes precedence over a submitted slot until the process has settled. No artifact asserts that the delegate was unsteered. The caller selects one closed `submit_result` profile for reviewer, Judge, history diagnosis, or a recovery phase; the delegate neither chooses its role nor receives the held compare operand. The trusted tool validates its typed fields, resolves clone HEAD independently, preflights operand leakage and byte bounds, and installs the existing return slot atomically. A missing submission receives no continuation from this transport and is never a result by inference: §1.7's shared one-retry state is the only automatic second send, and this layer neither adds to it nor replenishes it. Final return admission, validity-only held-head comparison and the consuming role's parser remain authoritative. The trusted tool is the intended producer, not a filesystem-confinement claim: a same-domain child can directly write a valid return slot, which the existing output-validity rule admits and the consumer still parses. No Pi RPC event proves exclusive tool authorship. Preventing that residual requires a separately authorized isolation/provenance boundary, not an invented claim from the current subprocess. Operator UI is an additional opt-in project command subject to §4.8's governed home; it does not reinterpret §5.9's existing partial-result boundary. This clause activates only with its implementing derivation, never from this contract text alone (§5.3).
 
 **Drift.** A substrate whose shape no longer matches that record reads as **cannot measure**, never as a pass (§3.9). The instrument that re-proves the shape per run derives later per §1.2's macro-phase clause and homes with the substrate harness at `test/harness/run-pi.ts` — a path, never a line range (§2.5). The dispatcher itself is an advisory-layer instrument with no enforcement consumer today, and its own enforcement consumer, if one derives, must add any dependency posture it actually stands on.
 
