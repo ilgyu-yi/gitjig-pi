@@ -17,15 +17,25 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseReviewRoundSpec } from "../.pi/extensions/gitjig/commands/review-round.ts";
 import { DIAGNOSTIC_MESSAGES } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { DispatchOutcome, RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import { registerDispatchTool } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import { exposedPiProfile } from "../.pi/extensions/gitjig/dispatch/pi-submit.ts";
-import { challengerBrief, measurementBrief, piRecoveryBrief } from "../.pi/extensions/gitjig/recovery/briefs.ts";
+import {
+	challengerBrief,
+	contestSelectorBrief,
+	freshDiagnosisBrief,
+	measurementBrief,
+	measurementSelectorBrief,
+	piRecoveryBrief,
+} from "../.pi/extensions/gitjig/recovery/briefs.ts";
 import { type RecoveryPiRole, recoveryPiProfile } from "../.pi/extensions/gitjig/recovery/pi-profile.ts";
 import {
 	composeJudgeBrief,
@@ -362,9 +372,38 @@ function assertOnlyForbidsTheFile(brief: string, prohibition: string, label: str
 type ReviewBriefs = { composeReviewerBrief: typeof composeReviewerBrief; composeJudgeBrief: typeof composeJudgeBrief };
 type RecoveryBriefs = {
 	challengerBrief: typeof challengerBrief;
+	contestSelectorBrief: typeof contestSelectorBrief;
+	measurementSelectorBrief: typeof measurementSelectorBrief;
 	measurementBrief: typeof measurementBrief;
+	freshDiagnosisBrief: typeof freshDiagnosisBrief;
 	piRecoveryBrief: typeof piRecoveryBrief;
 };
+
+/** One generic brief per recovery role, over fixed inputs. */
+function recoveryRoleBriefs(briefs: RecoveryBriefs): ReadonlyArray<readonly [RecoveryPiRole, string]> {
+	const diagnosis = { value: "STAGNATION", invalidation: "nothing", evidence: "the repairs repeated" } as never;
+	const basis = { states: [], intervals: [] } as never;
+	const spec = {
+		kind: "measurement",
+		question: "q",
+		method: "m",
+		expectedDiscriminator: "d",
+		evidence: "e",
+		nonMutating: true,
+		notPreviouslyPresent: true,
+	} as never;
+	const result = { kind: "measurement-result", specDigest: "0".repeat(64), result: "r", evidence: "e" } as never;
+	return [
+		["challenger", briefs.challengerBrief("root", diagnosis, basis)],
+		[
+			"selector-contest",
+			briefs.contestSelectorBrief([{ slot: "root", outcome: "ALTERNATIVE", method: "m", evidence: "e" }] as never),
+		],
+		["selector-measurement", briefs.measurementSelectorBrief(diagnosis, basis)],
+		["measurement", briefs.measurementBrief(spec)],
+		["diagnosis", briefs.freshDiagnosisBrief(diagnosis, basis, spec, result)],
+	];
+}
 
 function armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief }: ReviewBriefs): void {
 	// Unusual on purpose: a deadline the composer fixed itself cannot equal these.
@@ -411,7 +450,25 @@ function armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief 
 }
 
 /** The recovery brief is a projection that refuses rather than half-rewrites. */
-function armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piRecoveryBrief }: RecoveryBriefs): void {
+function armProjectsTheRecoveryBrief(briefs: RecoveryBriefs): void {
+	const { challengerBrief, measurementBrief, piRecoveryBrief } = briefs;
+	// Every recovery role's projection, in what it says and withholds: the
+	// tool, the prohibition alone, the transport's own deadline and
+	// absent-submission words, and no generic writer.
+	for (const [role, generic] of recoveryRoleBriefs(briefs)) {
+		const projected = piRecoveryBrief(generic);
+		assert.match(projected, /submit_result/, `${role}: the tool`);
+		assertOnlyForbidsTheFile(projected, RECOVERY_PROHIBITION, role);
+		assert.match(projected, /single complete final typed submission within 540 seconds/, `${role}: the Pi deadline`);
+		assert.match(
+			projected,
+			/a settled agent without a valid tool submission is not a result/,
+			`${role}: the absent-submission words`,
+		);
+		assert.equal(/provisional/i.test(projected), false, `${role}: a provisional instruction survived`);
+		assert.match(generic, /\.\.\/return\.json/, `${role}: the generic brief lost its writer`);
+		assert.equal(/submit_result|typed submission/.test(generic), false, `${role}: Pi words on the generic brief`);
+	}
 	const diagnosis = { value: "STAGNATION", invalidation: "nothing", evidence: "the repairs repeated" };
 	const basis = { states: [], intervals: [] };
 	const generic = challengerBrief("root", diagnosis as never, basis as never);
@@ -458,6 +515,118 @@ function armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piReco
 	);
 }
 
+/**
+ * Criterion 12: generic dispatch is unchanged in its briefs, byte for byte.
+ * The digests below were produced by the base commit's own composers
+ * (de95797, this part's merge base) over exactly these inputs; the head's
+ * composers must reproduce them.
+ */
+const BASE_GENERIC_BRIEFS: Readonly<Record<string, string>> = {
+	reviewer: "167f983e4815df5159d6c9682129a48ae8d241d32dc232667834e004e74a0771",
+	reviewerDefaultTiming: "3784794b0732d89709794b95c7cbf7e6281bb39f8a810a9eba541c69fb58deed",
+	judge: "74e52b9498548ed545f156d6bfdade87b1f1920e0baddcc8cbba8574a22734ea",
+	judgeReRequest: "545d3752817e17d1e8ce4e55536618e61c25c6c7bda4d13261b3318d21307db4",
+	diagnosis: "b1335518c12cd04544809218aa5c928e473b701e368d6c2e814fef6e5f79cabe",
+	challenger: "4be7936af25cf80285f3aeee821d61d3b4af6a71b2392130653f828663243294",
+	contestSelector: "b43b7e943c36ed42695b66918457414086062134505956d618306d456de9e190",
+	measurementSelector: "bd6056c883a7d4ea7a55f1430273115e9596e1a202bad934120df4ea7e5c1c6e",
+	measurement: "61c07a2f08396a1306f370ef4f011387f7cd3181459eb997c47d95c966907264",
+	freshDiagnosis: "b65ad179c574761d89cc418552a6035845039fea7ca9b5ce8860fabb8bba0ae5",
+};
+
+function armKeepsTheGenericBriefs(
+	review: ReviewBriefs & { composeDiagnosisBrief: typeof composeDiagnosisBrief },
+	recovery: RecoveryBriefs,
+): void {
+	const slot = { lens: "suite", surface: "the test suite" } as never;
+	const context = { changeDescription: "a fixed change description" };
+	const fences = {
+		outOfScope: ["out"],
+		forbiddenRemedies: ["forbidden"],
+		deferralHomes: ["#1"],
+		priorFindings: [{ label: "P1", text: "prior" }],
+	};
+	const timing = { firstReturnSeconds: 311, finalReturnSeconds: 1433 };
+	const bundle = [{ rawOrdinal: 0, finding: "one finding", slot }] as never;
+	const manifest = { state: "present", criteria: ["criterion one"] } as const;
+	const diagnosis = { value: "STAGNATION", invalidation: "nothing", evidence: "evidence" } as never;
+	const basis = { states: [{ head: "b".repeat(40), findings: [] }], intervals: [] } as never;
+	const spec = {
+		kind: "measurement",
+		question: "q",
+		method: "m",
+		expectedDiscriminator: "d",
+		evidence: "e",
+		nonMutating: true,
+		notPreviouslyPresent: true,
+	} as never;
+	const result = { kind: "measurement-result", specDigest: "0".repeat(64), result: "r", evidence: "e" } as never;
+	const head: Record<string, string> = {
+		reviewer: review.composeReviewerBrief(slot, context, fences, timing),
+		reviewerDefaultTiming: review.composeReviewerBrief(slot, context, fences),
+		judge: review.composeJudgeBrief(bundle, manifest, context, fences, timing),
+		judgeReRequest: review.composeJudgeBrief(bundle, manifest, context, fences, timing, { gaps: ["0"] }),
+		diagnosis: review.composeDiagnosisBrief(basis, { ...context, withheldHead: "c".repeat(40), timing }),
+		challenger: recovery.challengerBrief("root", diagnosis, basis),
+		contestSelector: recovery.contestSelectorBrief([
+			{ slot: "root", outcome: "ALTERNATIVE", method: "m", evidence: "e" },
+		] as never),
+		measurementSelector: recovery.measurementSelectorBrief(diagnosis, basis),
+		measurement: recovery.measurementBrief(spec),
+		freshDiagnosis: recovery.freshDiagnosisBrief(diagnosis, basis, spec, result),
+	};
+	const digest = (text: string) => createHash("sha256").update(text).digest("hex");
+	assert.deepEqual(
+		Object.fromEntries(Object.entries(head).map(([name, text]) => [name, digest(text)])),
+		BASE_GENERIC_BRIEFS,
+		"a generic brief differs from the base commit's bytes",
+	);
+}
+
+/** Criterion 1: the spec's Pi selection is closed, each refusal by its own check. */
+function armClosesTheSpec(parse: typeof parseReviewRoundSpec): void {
+	const spec = {
+		pr: 370,
+		changeDescription: "Pi mode",
+		fences: { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] },
+		pi: { piExecutable: "/usr/local/bin/pi", provider: "scripted", model: "scripted-model" },
+	};
+	const parsed = parse(spec);
+	assert.deepEqual(parsed?.pi, spec.pi, "the valid selection must parse, or every refusal below is vacuous");
+	assert.equal(parsed?.delegateArgv, undefined);
+	for (const [name, value] of [
+		["beside delegateArgv", { ...spec, delegateArgv: ["pi"] }],
+		["an unknown key", { ...spec, pi: { ...spec.pi, role: "judge" } }],
+		["a null selection", { ...spec, pi: null }],
+		["an empty executable", { ...spec, pi: { ...spec.pi, piExecutable: "" } }],
+		["a numeric executable", { ...spec, pi: { ...spec.pi, piExecutable: 5 } }],
+		["a numeric provider", { ...spec, pi: { ...spec.pi, provider: 123 } }],
+		["a numeric model", { ...spec, pi: { ...spec.pi, model: 7 } }],
+		["a provider outside the charset", { ...spec, pi: { ...spec.pi, provider: "--mode" } }],
+		["a model outside the charset", { ...spec, pi: { ...spec.pi, model: "--mode" } }],
+		["a missing model", { ...spec, pi: { piExecutable: "/usr/local/bin/pi", provider: "scripted" } }],
+	] as const)
+		assert.equal(parse(value), undefined, `${name} was admitted`);
+}
+
+/** Criterion 1: the model-facing tool exposes no Pi field at this head. */
+async function armHidesPiFromTheModel(
+	register: (pi: never, repoRoot: string, stateRoot: string) => void,
+): Promise<void> {
+	let definition: {
+		name?: string;
+		parameters?: { properties?: Record<string, unknown>; additionalProperties?: unknown };
+	} = {};
+	register({ registerTool: (tool: typeof definition) => (definition = tool) } as never, "/r", "/s");
+	assert.equal(definition.name, "gitjig_dispatch");
+	assert.deepEqual(
+		Object.keys(definition.parameters?.properties ?? {}).sort(),
+		["brief", "delegateArgv", "expectedRef", "timeoutMs"],
+		"the model-facing tool's parameters changed",
+	);
+	assert.equal(definition.parameters?.additionalProperties, false, "the model-facing tool admits undeclared fields");
+}
+
 /*
  * The production call sites. The arms above measure the pieces; these measure
  * the places that choose, because a role or a projection applied correctly in
@@ -473,7 +642,10 @@ async function armPinsProductionRoles(round: typeof reviewRound): Promise<void> 
 }
 
 /** A two-commit repository whose one change is a test file, so the round derives the suite slot. */
-async function withFixtureRepository<T>(scenario: (fixture: string) => Promise<T>): Promise<T> {
+async function withFixtureRepository<T>(
+	scenario: (fixture: string) => Promise<T>,
+	changed: readonly string[] = ["test/round.unit.test.ts"],
+): Promise<T> {
 	const fixture = mkdtempSync(join(tmpdir(), "gitjig-422-round-"));
 	const git = (...args: string[]) =>
 		execFileSync("git", ["-c", "commit.gpgsign=false", ...args], {
@@ -492,9 +664,11 @@ async function withFixtureRepository<T>(scenario: (fixture: string) => Promise<T
 		writeFileSync(join(fixture, "README.md"), "base\n");
 		git("add", "README.md");
 		git("commit", "-q", "-m", "base");
-		mkdirSync(join(fixture, "test"));
-		writeFileSync(join(fixture, "test/round.unit.test.ts"), "// the change under review\n");
-		git("add", "test/round.unit.test.ts");
+		for (const file of changed) {
+			mkdirSync(dirname(join(fixture, file)), { recursive: true });
+			writeFileSync(join(fixture, file), "// the change under review\n");
+			git("add", file);
+		}
 		git("commit", "-q", "-m", "change");
 		return await scenario(fixture);
 	} finally {
@@ -597,6 +771,42 @@ async function armEachReviewConsumerNeedsItsOwnReturn({
 			"the slot's own valid retry was not admitted",
 		);
 	});
+	// Two calls in one round, each with its own retry state: both slots miss
+	// their first return and each retries once. A shared state would leave the
+	// second slot without its retry; a replenished one would send a third time.
+	await withFixtureRepository(
+		async (fixture) => {
+			const sends: Record<string, number> = {};
+			const lens = (brief: string) => (/the test suite/.test(brief) ? "suite" : "runtime");
+			const result = await round({
+				repoRoot: fixture,
+				baseRef: "HEAD~1",
+				headRef: "HEAD",
+				manifest: { state: "absent" },
+				fences: { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] },
+				changeDescription: "a change",
+				transport: "pi",
+				dispatch: make(
+					{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: [], pi: PI, timeoutMs: 10 } as unknown as Omit<
+						RunDispatchOptions,
+						"brief" | "expectedRef"
+					>,
+					async (given: RunDispatchOptions) => {
+						const key = lens(given.brief);
+						sends[key] = (sends[key] ?? 0) + 1;
+						return sends[key] === 1 ? refused("RETURN_MISSING") : payload(APPROVED);
+					},
+				),
+			} as never);
+			assert.equal(result.record.slots.length, 2, "the fixture did not derive two slots");
+			assert.deepEqual(sends, { suite: 2, runtime: 2 }, "the two calls did not each retry once");
+			assert.deepEqual(
+				result.record.slots.map((entry) => entry.valid),
+				[true, true],
+			);
+		},
+		["test/round.unit.test.ts", ".pi/extensions/gitjig/probe.ts"],
+	);
 }
 
 async function pinProductionRoles(round: typeof reviewRound, fixture: string): Promise<void> {
@@ -850,7 +1060,14 @@ test("only the retry's own return satisfies its consumer", async () => {
 
 test("each consumer's brief is its transport's own, in what it says and what it withholds", () => {
 	armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief });
-	armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piRecoveryBrief });
+	armProjectsTheRecoveryBrief({
+		challengerBrief,
+		contestSelectorBrief,
+		measurementSelectorBrief,
+		measurementBrief,
+		freshDiagnosisBrief,
+		piRecoveryBrief,
+	});
 });
 
 test("each review consumer is satisfied only by its retry's own valid return", async () => {
@@ -1149,5 +1366,114 @@ test("baseline-first private-copy mutant: a recovery brief offers only what its 
 			],
 		],
 		"the recovery brief inviting a summary its schema refuses",
+	);
+});
+
+test("generic briefs keep the base commit's bytes; the tool and the spec stay closed", async () => {
+	armKeepsTheGenericBriefs(
+		{ composeReviewerBrief, composeJudgeBrief, composeDiagnosisBrief },
+		{
+			challengerBrief,
+			contestSelectorBrief,
+			measurementSelectorBrief,
+			measurementBrief,
+			freshDiagnosisBrief,
+			piRecoveryBrief,
+		},
+	);
+	await armHidesPiFromTheModel(registerDispatchTool as never);
+	armClosesTheSpec(parseReviewRoundSpec);
+});
+
+test("baseline-first private-copy mutants: generic bytes, the tool, the spec and the role-less refusals", async () => {
+	// biome-ignore lint/suspicious/noExplicitAny: modules loaded from a private copy have no static type
+	const generic = async (load: (relative: string) => Promise<any>) =>
+		armKeepsTheGenericBriefs(
+			{ ...(await load("review/briefs.ts")), ...(await load("review/history.ts")) },
+			await load("recovery/briefs.ts"),
+		);
+	const tool = (load: (relative: string) => Promise<{ registerDispatchTool: never }>) =>
+		load("dispatch/index.ts").then((module) => armHidesPiFromTheModel(module.registerDispatchTool));
+	const closed = (load: (relative: string) => Promise<{ parseReviewRoundSpec: typeof parseReviewRoundSpec }>) =>
+		load("commands/review-round.ts").then((module) => armClosesTheSpec(module.parseReviewRoundSpec));
+	await withPrivateCopy([], generic);
+	await withPrivateCopy([], tool);
+	await withPrivateCopy([], closed);
+	await copyFails(
+		generic,
+		[
+			[
+				"review/briefs.ts",
+				'"PARENT directory\'s return.json. The schema is CLOSED:",',
+				'"PARENT directory\'s return.json. The schema is closed:",',
+			],
+		],
+		"a generic brief's bytes changed",
+	);
+	await copyFails(
+		tool,
+		[
+			[
+				"dispatch/index.ts",
+				'\t\ttimeoutMs: {\n\t\t\ttype: "number",',
+				'\t\tpi: { type: "object" },\n\t\ttimeoutMs: {\n\t\t\ttype: "number",',
+			],
+		],
+		"a Pi field on the model-facing tool",
+	);
+	for (const [named, from] of [
+		["the argv exclusion", "\t\t\tvalue.delegateArgv !== undefined ||\n"],
+		["the closed key set", '\t\t\t!exactObject(value.pi, ["piExecutable", "provider", "model"]) ||\n'],
+		["the executable's type", '\t\t\ttypeof value.pi.piExecutable !== "string" ||\n'],
+		["the empty executable", "\t\t\tvalue.pi.piExecutable.length === 0 ||\n"],
+		["the provider's type", '\t\t\ttypeof value.pi.provider !== "string" ||\n'],
+		["the model's type", '\t\t\ttypeof value.pi.model !== "string" ||\n'],
+		["the provider charset", "\t\t\t!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.pi.provider) ||\n"],
+	] as const)
+		await copyFails(closed, [["commands/review-round.ts", from, ""]], `the spec without ${named}`);
+	await copyFails(
+		closed,
+		[["commands/review-round.ts", " ||\n\t\t\t!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.pi.model)\n", "\n"]],
+		"the spec without the model charset",
+	);
+	// The transport a dispatcher declares, and the role a Pi call cannot lack.
+	await assert.rejects(
+		() =>
+			armProjectsInProductionRecovery([
+				[
+					"recovery/coordinator.ts",
+					'transport: input.pi === undefined ? ("generic" as const) : ("pi" as const)',
+					'transport: "generic" as const',
+				],
+			]),
+		(error: unknown) => error instanceof assert.AssertionError,
+		"a Pi dispatcher declaring itself generic: the owner arm still passed",
+	);
+	const roleless = async (load: (relative: string) => Promise<{ makeDispatcher: typeof makeDispatcher }>) => {
+		const { makeDispatcher: make } = await load(ORCHESTRATE);
+		const dispatch = make(
+			{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: [], pi: PI } as unknown as Omit<
+				RunDispatchOptions,
+				"brief" | "expectedRef"
+			>,
+			async () => admitted(),
+		);
+		let thrown: unknown;
+		await dispatch("brief", PIN).catch((error: unknown) => {
+			thrown = error;
+		});
+		assert.match(String(thrown), /Pi role unavailable from consumer/, "a Pi call without its consumer's role was sent");
+	};
+	await withPrivateCopy([], roleless);
+	await copyFails(
+		roleless,
+		[
+			[
+				ORCHESTRATE,
+				'if (options.pi !== undefined && selectedPi === undefined) throw Error("Pi role unavailable from consumer");',
+				"",
+			],
+		],
+		"a Pi call sent without its consumer's role",
 	);
 });
