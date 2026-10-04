@@ -16,7 +16,8 @@
  * no arm observed, and a harness fault is never a kill.
  */
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -372,9 +373,41 @@ function armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piReco
 
 /** The orchestrator fixes `reviewer` and `judge` at its own call sites. */
 async function armPinsProductionRoles(round: typeof reviewRound): Promise<void> {
+	// A two-commit repository of the arm's own, so the round's change surface
+	// is fixed here rather than read from whatever this checkout's last commit
+	// touched (or from history a shallow clone does not have).
+	const fixture = mkdtempSync(join(tmpdir(), "gitjig-422-round-"));
+	const git = (...args: string[]) =>
+		execFileSync("git", ["-c", "commit.gpgsign=false", ...args], {
+			cwd: fixture,
+			encoding: "utf8",
+			env: {
+				...process.env,
+				GIT_AUTHOR_NAME: "t",
+				GIT_AUTHOR_EMAIL: "t@t",
+				GIT_COMMITTER_NAME: "t",
+				GIT_COMMITTER_EMAIL: "t@t",
+			},
+		}).trim();
+	try {
+		git("init", "-q");
+		writeFileSync(join(fixture, "README.md"), "base\n");
+		git("add", "README.md");
+		git("commit", "-q", "-m", "base");
+		mkdirSync(join(fixture, "test"));
+		writeFileSync(join(fixture, "test/round.unit.test.ts"), "// the change under review\n");
+		git("add", "test/round.unit.test.ts");
+		git("commit", "-q", "-m", "change");
+		await pinProductionRoles(round, fixture);
+	} finally {
+		rmSync(fixture, { recursive: true, force: true });
+	}
+}
+
+async function pinProductionRoles(round: typeof reviewRound, fixture: string): Promise<void> {
 	const calls: { brief: string; role?: string }[] = [];
 	const result = await round({
-		repoRoot,
+		repoRoot: fixture,
 		baseRef: "HEAD~1",
 		headRef: "HEAD",
 		manifest: { state: "present", criteria: ["the change does what it says"] },
