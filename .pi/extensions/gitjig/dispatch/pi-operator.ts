@@ -20,6 +20,16 @@ import { randomUUID } from "node:crypto";
 import { quoted } from "../quote.ts";
 import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
 
+/**
+ * What a view may do to a running delegate: steer, follow up, clear its queue,
+ * abort it, and read its lifecycle. NOT attach or detach — the supervisor has
+ * one observer slot, and this hub holds it for the child's whole life. A view
+ * that could take that slot would stop the draining this hub exists to do, and
+ * the rows below would simply stop growing while the view was open (#420).
+ * Views read `piOperatorView`; they do not subscribe.
+ */
+export type PiOperatorControls = Omit<PiRpcSession, "attach" | "detach">;
+
 /** Rendered rows an operator may see at once, the partial row included. */
 export const MAX_VIEW_ROWS = 20;
 /** Code points in one rendered row, this module's own prefix included. */
@@ -48,7 +58,7 @@ interface Active {
 	id: string;
 	lines: string[];
 	partial: string;
-	session?: PiRpcSession;
+	session?: PiOperatorControls;
 }
 const active = new Map<string, Active>();
 
@@ -59,6 +69,11 @@ const active = new Map<string, Active>();
  */
 export function livePiOperatorSessions(): number {
 	return active.size;
+}
+
+/** The controls a view may use on one live session, if it is still running. */
+export function piOperatorControls(id: string): PiOperatorControls | undefined {
+	return active.get(id)?.session;
 }
 
 /**
@@ -116,7 +131,24 @@ export function beginPiOperatorSession() {
 			}
 		},
 		bind(session: PiRpcSession): void {
-			item.session = session;
+			// Bound as controls only: the observer slot stays this hub's, so no
+			// view can displace the sink the runner installed.
+			const { attach: _attach, detach: _detach, ...controls } = session;
+			item.session = {
+				...controls,
+				get done() {
+					return session.done;
+				},
+				get exitCode() {
+					return session.exitCode;
+				},
+				get exitSignal() {
+					return session.exitSignal;
+				},
+				get settleCount() {
+					return session.settleCount;
+				},
+			};
 		},
 		end(): void {
 			active.delete(item.id);

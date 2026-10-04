@@ -195,6 +195,15 @@ function hasInertBreach(value: string): boolean {
 	});
 }
 
+/** Wait, bounded, for a predicate; returns whether it became true. */
+async function settled(predicate: () => boolean, attempts = 200): Promise<boolean> {
+	for (let attempt = 0; attempt < attempts; attempt++) {
+		if (predicate()) return true;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	return predicate();
+}
+
 function applyEdits(root: string, edits: Edits): void {
 	for (const [relative, anchor, replacement] of edits) {
 		const path = join(root, relative);
@@ -238,8 +247,13 @@ async function withRunner<T>(
 import { beginPiOperatorSession as beginReal } from "./pi-operator.ts";
 import { startPiRpc as startReal } from "./pi-rpc.ts";
 import { provisionPiSubmitTool as provisionReal } from "./pi-submit.ts";
-const note = (entry: Record<string, unknown>) =>
-	appendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify(entry)}\\n\`);
+const note = (entry: Record<string, unknown>) => {
+	// A run the arm aborts can settle after its scratch is gone; a recorder
+	// must not turn its own teardown into an unhandled failure.
+	try {
+		appendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify(entry)}\\n\`);
+	} catch {}
+};
 export const provisionPiSubmitTool: typeof provisionReal = (context, profile) => {
 	// The profile's fixed fields carry the caller's measurement digest, so a
 	// substituted one is visible here and not only in the role.
@@ -709,6 +723,62 @@ const armEndsItsOwnSessionOnce: RunnerArm = async (run, trace, scratch) => {
 	}
 };
 
+/**
+ * The supervisor has one observer slot and this hub holds it for the child's
+ * whole life. A view gets controls, never the subscription: if it could take
+ * that slot, the rows would stop growing exactly while someone was watching.
+ */
+const armKeepsTheObserverSlot: RunnerArm = async (run, trace, scratch) => {
+	const hub: Hub = await import(pathToFileURL(join(scratch, "pi-copy", HUB)).href);
+	const context = dispatchContext(scratch);
+	// A child that emits one event, waits, then emits another: a view opens in
+	// between, and the second event must still reach the hub.
+	const executable = join(scratch, "fake-pi");
+	writeFileSync(
+		executable,
+		`#!/usr/bin/env node
+let data = "";
+process.stdin.on("data", (chunk) => {
+	data += chunk;
+	let at;
+	while ((at = data.indexOf("\\n")) !== -1) {
+		const command = JSON.parse(data.slice(0, at));
+		data = data.slice(at + 1);
+		process.stdout.write(JSON.stringify({ type: "response", id: command.id, success: true }) + "\\n");
+		process.stdout.write(JSON.stringify({ type: "tool_execution_start", toolName: "first" }) + "\\n");
+		// The second event arrives after a view has opened, and the child never
+		// settles, so the rows stay readable until the view ends the run itself.
+		setTimeout(() => {
+			process.stdout.write(JSON.stringify({ type: "tool_execution_start", toolName: "second" }) + "\\n");
+		}, 400);
+	}
+});
+process.stdin.on("end", () => process.exit(0));
+setInterval(() => {}, 1000);
+`,
+		{ mode: 0o700 },
+	);
+	chmodSync(executable, 0o700);
+	const running = run(context, invocation(executable), { timeoutMs: 15_000 });
+	// While it runs, a view does what a view may do: read rows and take the
+	// controls. The controls it is given cannot touch the observer slot.
+	await settled(() => trace().some((entry) => entry.call === "hub-bind"));
+	const id = String(trace().find((entry) => entry.call === "hub-begin")?.id);
+	await settled(() => hub.piOperatorView(id).length > 0);
+	const controls = hub.piOperatorControls(id);
+	assert.ok(controls, "a live session offered a view no controls");
+	assert.equal("attach" in controls, false, "a view can take the observer slot");
+	assert.equal("detach" in controls, false, "a view can drop the observer slot");
+	assert.equal(typeof controls.command, "function", "a view cannot steer");
+	// The event the child emits AFTER the view took its controls still reaches
+	// the hub, which is the whole of "draining does not depend on attachment".
+	await settled(() => hub.piOperatorView(id).length >= 2);
+	assert.deepEqual(hub.piOperatorView(id), [`tool started: ${quoted("first")}`, `tool started: ${quoted("second")}`]);
+	// And the controls a view does get reach the child: this one ends the run.
+	controls.abort();
+	assert.equal((await running).aborted, true, "the view's abort never reached the child");
+};
+
 const armLeavesTheConcurrentSessionAlone: RunnerArm = async (run, trace, scratch) => {
 	// The copy has its own registry, so a concurrent session is opened inside
 	// it and must be the survivor: a count alone cannot tell which entry went.
@@ -914,14 +984,19 @@ function armBoundsTheComposedRow(hub: Hub): void {
 	}
 	// A tool row keeps its label the same way, and the partial row obeys the
 	// same bound once its own prefix is counted.
-	const tool = hub.beginPiOperatorSession();
-	try {
-		tool.onEvent({ type: "tool_execution_start", toolName: "t".repeat(hub.MAX_ROW_POINTS * 2) });
-		const [row] = hub.piOperatorView(tool.id);
-		assert.equal([...row].length, hub.MAX_ROW_POINTS);
-		assert.ok(row.startsWith("tool started: "), "the local label was clipped away");
-	} finally {
-		tool.end();
+	for (const [type, label] of [
+		["tool_execution_start", "tool started: "],
+		["tool_execution_end", "tool ended: "],
+	] as ReadonlyArray<readonly [string, string]>) {
+		const tool = hub.beginPiOperatorSession();
+		try {
+			tool.onEvent({ type, toolName: "t".repeat(hub.MAX_ROW_POINTS * 2) });
+			const [row] = hub.piOperatorView(tool.id);
+			assert.equal([...row].length, hub.MAX_ROW_POINTS, label);
+			assert.ok(row.startsWith(label), `${label}: the local label was clipped away`);
+		} finally {
+			tool.end();
+		}
 	}
 	const partial = hub.beginPiOperatorSession();
 	try {
@@ -951,8 +1026,12 @@ function armRendersInertly(hub: Hub): void {
 		const [rendered] = hub.piOperatorView(session.id);
 		assert.equal(hasInertBreach(rendered), false, `a live class survived: ${JSON.stringify(rendered)}`);
 		assert.equal(rendered, `assistant: ${quoted(hostile)}`);
+		// BOTH tool events: a composer used for starts and bypassed for ends
+		// would leave half the rows live.
 		session.onEvent({ type: "tool_execution_start", toolName: "read\u0007file" });
 		assert.equal(hub.piOperatorView(session.id)[1], `tool started: ${quoted("read\u0007file")}`);
+		session.onEvent({ type: "tool_execution_end", toolName: "write\u0007 file" });
+		assert.equal(hub.piOperatorView(session.id)[2], `tool ended: ${quoted("write\u0007 file")}`);
 		// The SAME hostile text through the partial path, which arrives as deltas
 		// and is held raw until a row is rendered: a row composed by concatenation
 		// rather than through the one composer would show it live, and the
@@ -1198,6 +1277,10 @@ test("every hub session the runner begins is ended exactly once, and only its ow
 	await withRunner([], armLeavesTheConcurrentSessionAlone);
 });
 
+test("the hub keeps the supervisor's one observer slot, and a view only gets controls", async () => {
+	await withRunner([], armKeepsTheObserverSlot);
+});
+
 test("each supervisor terminal maps onto exactly one run outcome", async () => {
 	await withRunner([], armMapsEachTerminal);
 });
@@ -1382,6 +1465,19 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		armEndsItsOwnSessionOnce,
 		[[RUN, "\t\toperator.end();\n\t}", "\t\toperator.end();\n\t\toperator.end();\n\t}"]],
 		"the teardown duplicated",
+	);
+	// The raw session bound instead of controls: a view could then take the
+	// observer slot, and the hub would stop seeing the child it is draining.
+	await armFails(
+		armKeepsTheObserverSlot,
+		[
+			[
+				HUB,
+				"\t\t\tconst { attach: _attach, detach: _detach, ...controls } = session;",
+				"\t\t\tconst controls = session;",
+			],
+		],
+		"the raw session bound to the hub",
 	);
 	await armFails(
 		armLeavesTheConcurrentSessionAlone,
