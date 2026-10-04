@@ -767,9 +767,22 @@ setInterval(() => {}, 1000);
 	await settled(() => hub.piOperatorView(id).length > 0);
 	const controls = hub.piOperatorControls(id);
 	assert.ok(controls, "a live session offered a view no controls");
-	assert.equal("attach" in controls, false, "a view can take the observer slot");
-	assert.equal("detach" in controls, false, "a view can drop the observer slot");
-	assert.equal(typeof controls.command, "function", "a view cannot steer");
+	// EXACTLY the settled set, asserted as a set rather than as a few absences:
+	// attach and detach would take the observer slot this hub holds, `prompt`
+	// would be a second send, and `close` would cut off the submission the run
+	// is waiting for — a view that wants to stop a delegate aborts it.
+	assert.deepEqual(Object.keys(controls).sort(), [
+		"abort",
+		"clearQueue",
+		"command",
+		"done",
+		"exitCode",
+		"exitSignal",
+		"settleCount",
+		"waitForSettle",
+	]);
+	for (const withheld of ["attach", "detach", "prompt", "close"])
+		assert.equal(withheld in controls, false, `a view was given ${withheld}`);
 	// The event the child emits AFTER the view took its controls still reaches
 	// the hub, which is the whole of "draining does not depend on attachment".
 	await settled(() => hub.piOperatorView(id).length >= 2);
@@ -1473,11 +1486,11 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		[
 			[
 				HUB,
-				"\t\t\tconst { attach: _attach, detach: _detach, ...controls } = session;",
-				"\t\t\tconst controls = session;",
+				"\t\t\titem.session = {\n\t\t\t\tcommand:",
+				"\t\t\titem.session = {\n\t\t\t\t...session,\n\t\t\t\tcommand:",
 			],
 		],
-		"the raw session bound to the hub",
+		"the whole session spread into a view's controls",
 	);
 	await armFails(
 		armLeavesTheConcurrentSessionAlone,

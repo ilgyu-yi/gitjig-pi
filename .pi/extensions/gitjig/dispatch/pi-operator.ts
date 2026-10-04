@@ -21,14 +21,26 @@ import { quoted } from "../quote.ts";
 import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
 
 /**
- * What a view may do to a running delegate: steer, follow up, clear its queue,
- * abort it, and read its lifecycle. NOT attach or detach — the supervisor has
- * one observer slot, and this hub holds it for the child's whole life. A view
- * that could take that slot would stop the draining this hub exists to do, and
- * the rows below would simply stop growing while the view was open (#420).
- * Views read `piOperatorView`; they do not subscribe.
+ * What a view may do to a running delegate, named positively because the set
+ * is settled: explicit steer and follow-up, clear queue, abort, and reading
+ * its progress. §4.9 lists no other operator act, and three capabilities the
+ * session has are deliberately absent (#420):
+ *
+ * - `attach`/`detach`: the supervisor has ONE observer slot and this hub holds
+ *   it for the child's whole life. A view that could take it would stop the
+ *   draining this hub exists to do, exactly while someone was watching. Views
+ *   read `piOperatorView`; they do not subscribe.
+ * - `prompt`: a second send is not an operator act. §1.7's shared one-retry
+ *   state is the only automatic second send, and this transport adds none.
+ * - `close`: ending the child's input is the runner's own lifecycle step,
+ *   taken after the settle wait. A view that closed early would cut off the
+ *   submission the run is waiting for; a view that wants to stop a delegate
+ *   aborts it, which is the act §4.9 gives it.
  */
-export type PiOperatorControls = Omit<PiRpcSession, "attach" | "detach">;
+export type PiOperatorControls = Pick<
+	PiRpcSession,
+	"command" | "clearQueue" | "abort" | "waitForSettle" | "done" | "exitCode" | "exitSignal" | "settleCount"
+>;
 
 /** Rendered rows an operator may see at once, the partial row included. */
 export const MAX_VIEW_ROWS = 20;
@@ -131,11 +143,14 @@ export function beginPiOperatorSession() {
 			}
 		},
 		bind(session: PiRpcSession): void {
-			// Bound as controls only: the observer slot stays this hub's, so no
-			// view can displace the sink the runner installed.
-			const { attach: _attach, detach: _detach, ...controls } = session;
+			// Bound as the settled control set alone, built by naming what a view
+			// may do rather than by removing what it may not: a capability added
+			// to the session later does not reach a view by default.
 			item.session = {
-				...controls,
+				command: (type, message) => session.command(type, message),
+				clearQueue: () => session.clearQueue(),
+				abort: () => session.abort(),
+				waitForSettle: (after) => session.waitForSettle(after),
 				get done() {
 					return session.done;
 				},
