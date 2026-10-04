@@ -203,7 +203,7 @@ import { provisionPiSubmitTool as provisionReal } from "./pi-submit.ts";
 const note = (entry: Record<string, unknown>) =>
 	appendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify(entry)}\\n\`);
 export const provisionPiSubmitTool: typeof provisionReal = (context, profile) => {
-	note({ call: "provision", role: profile.role, scratchRoot: context.scratchRoot, treeDir: context.treeDir, heldHash: context.heldHash });
+	note({ call: "provision", role: profile.role, context: { ...context } });
 	const path = provisionReal(context, profile);
 	note({ call: "provisioned", path });
 	return path;
@@ -211,9 +211,7 @@ export const provisionPiSubmitTool: typeof provisionReal = (context, profile) =>
 export const startPiRpc: typeof startReal = (options) => {
 	note({
 		call: "startPiRpc",
-		scratchRoot: options.context.scratchRoot,
-		treeDir: options.context.treeDir,
-		heldHash: options.context.heldHash,
+		context: { ...options.context },
 		extensionPath: options.extensionPath,
 		piExecutable: options.piExecutable,
 		provider: options.provider,
@@ -430,10 +428,10 @@ const armSeamsCarryTheSameContext: RunnerArm = async (run, trace, scratch) => {
 	const provision = calls.find((entry) => entry.call === "provision");
 	const start = calls.find((entry) => entry.call === "startPiRpc");
 	const provisioned = calls.find((entry) => entry.call === "provisioned");
-	for (const key of ["scratchRoot", "treeDir", "heldHash"] as const) {
-		assert.equal(provision?.[key], context[key], `provisioner ${key}`);
-		assert.equal(start?.[key], context[key], `supervisor ${key}`);
-	}
+	// The WHOLE context, not a sample of it: a substituted state root, brief
+	// path or return path is as much a different run as a substituted tree.
+	assert.deepEqual(provision?.context, { ...context }, "the provisioner received another context");
+	assert.deepEqual(start?.context, { ...context }, "the supervisor received another context");
 	assert.equal(start?.extensionPath, provisioned?.path, "the supervisor was given another extension");
 	// The hub is wired to the session it opened, in both directions: the
 	// supervisor drains into THIS session's sink, and the session is bound to
@@ -1033,6 +1031,11 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		armSeamsCarryTheSameContext,
 		[[RUN, "\t\t\tonOperatorEvent: operator.onEvent,", ""]],
 		"a supervisor started with no operator sink",
+	);
+	await armFails(
+		armSeamsCarryTheSameContext,
+		[[RUN, "\t\t\tcontext,", "\t\t\tcontext: { ...context, stateDir: context.returnPath },"]],
+		"a context whose state root the runner substituted",
 	);
 	await armFails(
 		armSeamsCarryTheSameContext,

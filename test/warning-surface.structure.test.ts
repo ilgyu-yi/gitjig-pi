@@ -453,17 +453,14 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		// row's bound, which is what this surface's rule asks of composed text;
 		// `name` is a tool name, the same delegate text under the same clip.
 		file: "gitjig/dispatch/pi-operator.ts",
-		allow: [
-			"PARTIAL_PREFIX",
-			"item.partial",
-			// One row composer, used by every row: `prefix` is one of this
-			// module's own fixed labels, chosen by a local branch and never
-			// supplied by anyone else, and the clipped expression is the delegate
-			// text this module has already stripped of control characters and
-			// bounded to the delegate's share of the row.
-			"prefix",
-			"clip(text, MAX_ROW_POINTS - [...prefix].length)",
-		],
+		// The module has exactly ONE composer, and every row goes through it.
+		// `prefix` is one of this module's own fixed labels, chosen by a local
+		// branch and supplied by nobody else; the clipped expression is delegate
+		// text passed through the repository's own escaper, which owns the
+		// control, separator and bidi classes, and then bounded. Nothing else
+		// here interpolates: a raw `item.partial` would have no entry, which is
+		// what keeps the delegate's own text from reaching a row unescaped.
+		allow: ["prefix", "clip(text, MAX_ROW_POINTS - [...prefix].length)"],
 	},
 	// #420: the Pi runner composes no operator-facing text at all.
 	{ file: "gitjig/dispatch/pi-run.ts", allow: [] },
