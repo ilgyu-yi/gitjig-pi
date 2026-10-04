@@ -16,7 +16,7 @@
  * no arm observed, and a harness fault is never a kill.
  */
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { DIAGNOSTIC_MESSAGES } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { DispatchOutcome, RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import { challengerBrief, measurementBrief, piRecoveryBrief } from "../.pi/extensions/gitjig/recovery/briefs.ts";
+import type { RecoveryPiRole } from "../.pi/extensions/gitjig/recovery/pi-profile.ts";
 import {
 	composeJudgeBrief,
 	composeReviewerBrief,
@@ -111,6 +112,18 @@ function scripted(
 }
 
 const PI = { piExecutable: "/usr/bin/pi", provider: "scripted", model: "scripted-model" };
+
+/** Every recovery role; the type below fails to compile if the union gains one this list lacks. */
+const RECOVERY_PI_ROLES = [
+	"challenger",
+	"selector-contest",
+	"selector-measurement",
+	"measurement",
+	"diagnosis",
+] as const satisfies readonly RecoveryPiRole[];
+const ALL_RECOVERY_ROLES: Exclude<RecoveryPiRole, (typeof RECOVERY_PI_ROLES)[number]> extends never ? true : never =
+	true;
+void ALL_RECOVERY_ROLES;
 
 /*
  * The arms.
@@ -461,7 +474,15 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 		}
 		const { makeRecoveryProfileDispatcher } = await import(pathToFileURL(coordinator).href);
 		const { createRecoveryAttemptLedger } = await import(pathToFileURL(join(root, ORCHESTRATE)).href);
-		const sent = async (pi?: { piExecutable: string; provider: string; model: string }) => {
+		type Sent = {
+			brief: string;
+			pi: { role?: string; piExecutable?: string; provider?: string; model?: string } | null;
+		};
+		const sent = async (
+			pi: { piExecutable: string; provider: string; model: string } | undefined,
+			role: RecoveryPiRole | undefined,
+		): Promise<Sent[]> => {
+			const before = existsSync(tracePath) ? readFileSync(tracePath, "utf8").split("\n").filter(Boolean).length : 0;
 			const dispatcher = makeRecoveryProfileDispatcher({
 				repoRoot,
 				stateRoot: join(scratch, "state"),
@@ -481,18 +502,31 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 				),
 				PIN,
 				performance.now() + 60_000,
-				pi === undefined ? undefined : "challenger",
+				role,
 			).catch(() => undefined);
-			const lines = readFileSync(tracePath, "utf8").split("\n").filter(Boolean);
-			return JSON.parse(lines[lines.length - 1]) as { brief: string; pi: unknown };
+			// Only this call's sends: a call that never reached the seam must not
+			// be read through an earlier call's line.
+			const lines = readFileSync(tracePath, "utf8").split("\n").filter(Boolean).slice(before);
+			assert.ok(lines.length >= 1, `${role ?? "generic"}: nothing reached the dispatcher`);
+			return lines.map((line) => JSON.parse(line) as Sent);
 		};
-		const underPi = await sent(PI);
-		assert.match(underPi.brief, /submit_result/, "the production recovery dispatch sent an unprojected brief");
-		assertOnlyForbidsTheFile(underPi.brief, RECOVERY_PROHIBITION, "production recovery");
-		assert.notEqual(underPi.pi, null, "the production recovery dispatch carried no Pi selection");
-		const underGeneric = await sent(undefined);
-		assert.equal(/submit_result/.test(underGeneric.brief), false, "the generic recovery dispatch was projected");
-		assert.equal(underGeneric.pi, null);
+		// Every recovery role reaches the dispatcher below as itself: the role is
+		// the consumer's, read where it is handed on, not where it was chosen.
+		for (const role of RECOVERY_PI_ROLES)
+			for (const underPi of await sent(PI, role)) {
+				assert.match(underPi.brief, /submit_result/, `${role}: an unprojected brief was sent`);
+				assertOnlyForbidsTheFile(underPi.brief, RECOVERY_PROHIBITION, `production recovery ${role}`);
+				assert.equal(underPi.pi?.role, role, `${role}: the role handed on`);
+				assert.deepEqual(
+					[underPi.pi?.piExecutable, underPi.pi?.provider, underPi.pi?.model],
+					[PI.piExecutable, PI.provider, PI.model],
+					`${role}: the selection handed on`,
+				);
+			}
+		for (const underGeneric of await sent(undefined, undefined)) {
+			assert.equal(/submit_result/.test(underGeneric.brief), false, "the generic recovery dispatch was projected");
+			assert.equal(underGeneric.pi, null);
+		}
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
@@ -743,5 +777,30 @@ test("baseline-first private-copy mutants: a Pi brief forbids the file and nothi
 		recovery,
 		[[RECOVERY, "never write ../return.json directly.", "write ../return.json directly."]],
 		"the recovery prohibition turned into an instruction",
+	);
+});
+
+test("baseline-first private-copy mutant: the recovery role handed on is the consumer's", async () => {
+	// The per-call role is the one makeDispatcher hands on; the role spread into
+	// the factory's options is overridden by it, so that statement alone is
+	// equivalent by construction and the mutant targets the load-bearing one.
+	await armProjectsInProductionRecovery([]);
+	await assert.rejects(
+		() =>
+			armProjectsInProductionRecovery([
+				[
+					"recovery/coordinator.ts",
+					"piRecoveryBrief(semanticBrief), expectedHead, role);",
+					'piRecoveryBrief(semanticBrief), expectedHead, role === undefined ? undefined : "challenger");',
+				],
+			]),
+		(error: unknown) => {
+			assert.ok(
+				error instanceof assert.AssertionError,
+				`a constant recovery role: the arm failed for another reason: ${error}`,
+			);
+			return true;
+		},
+		"a constant recovery role: the owner arm still passed",
 	);
 });
