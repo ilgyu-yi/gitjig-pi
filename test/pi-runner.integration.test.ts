@@ -208,8 +208,12 @@ function applyEdits(root: string, edits: Edits): void {
 	for (const [relative, anchor, replacement] of edits) {
 		const path = join(root, relative);
 		const current = readFileSync(path, "utf8");
-		assert.notEqual(current.indexOf(anchor), -1, `mutation anchor must exist in ${relative}: ${anchor}`);
-		assert.equal(current.indexOf(anchor), current.lastIndexOf(anchor), `anchor must be unique in ${relative}`);
+		// A plain Error, not an assertion: `armFails` requires the arm itself to
+		// fail, and a stale anchor is a harness fault that must not be mistaken
+		// for a kill the arm never made.
+		if (current.indexOf(anchor) === -1) throw new Error(`mutation anchor must exist in ${relative}: ${anchor}`);
+		if (current.indexOf(anchor) !== current.lastIndexOf(anchor))
+			throw new Error(`mutation anchor must be unique in ${relative}: ${anchor}`);
 		writeFileSync(
 			path,
 			current.replace(anchor, () => replacement),
@@ -313,7 +317,7 @@ export const beginPiOperatorSession: typeof beginReal = () => {
 				'import { beginPiOperatorSession, provisionPiSubmitTool, startPiRpc } from "./seam-trace.ts";',
 			],
 		] as const) {
-			assert.notEqual(source.indexOf(anchor), -1, `seam anchor must exist: ${anchor}`);
+			if (source.indexOf(anchor) === -1) throw new Error(`seam anchor must exist: ${anchor}`);
 			source = source.replace(anchor, () => replacement);
 		}
 		// Written before the arm's own edits, so an edit targeting this file is
@@ -535,13 +539,16 @@ const armRefusesAnOperandInTheProfile: RunnerArm = async (run, trace, scratch) =
 	const carrying = `${HELD}${"c".repeat(24)}`;
 	assert.equal(carrying.length, 64, "the probe digest is not a valid one");
 	assert.equal(namesHeldOperand(carrying, HELD), true, "the probe digest does not name the operand");
-	for (const [label, over] of [
-		["a measurement digest", { role: "measurement" as const, specDigest: carrying }],
-		["the provider", { provider: `p-${HELD}` }],
-		["the model", { model: `m-${HELD}` }],
-	] as ReadonlyArray<readonly [string, Partial<PiInvocation>]>) {
+	for (const [label, over, named] of [
+		["a measurement digest", { role: "measurement" as const, specDigest: carrying }, "fake-pi"],
+		["the provider", { provider: `p-${HELD}` }, "fake-pi"],
+		["the model", { model: `m-${HELD}` }, "fake-pi"],
+		// The executable's own path becomes the child's argv[1], so it crosses
+		// as much as the provider does.
+		["the executable's path", {}, `fake-pi-${HELD}`],
+	] as ReadonlyArray<readonly [string, Partial<PiInvocation>, string]>) {
 		const context = dispatchContext(join(scratch, label.replace(/\W+/g, "-")));
-		const executable = fakePi(join(context.scratchRoot, "fake-pi"), {});
+		const executable = fakePi(join(context.scratchRoot, named), {});
 		const outcome = await run(context, invocation(executable, over), { timeoutMs: 15_000 });
 		assert.equal(outcome.protocolInvalid, true, `${label} named the held operand and was admitted`);
 		assert.equal(
@@ -1502,9 +1509,40 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 	// into the file written beside the child's tool.
 	await armFails(
 		armRefusesAnOperandInTheProfile,
-		[[RUN, 'if (namesHeldOperand(JSON.stringify(profile), context.heldHash)) return refusal("invalid");', ""]],
-		"the profile scan removed",
+		[[RUN, 'if (namesHeldOperand(crossing, context.heldHash)) return refusal("invalid");', ""]],
+		"the crossing scan removed",
 	);
+	// And each member of what it scans, dropped one at a time: the arm must
+	// fail for every one, or that member is scanned only in the comment.
+	// The scanned object is written once, so each member is dropped by
+	// replacing that whole literal — the same fields appear again where the
+	// supervisor is started, and an anchor must name one place.
+	const crossing = [
+		"\t\t\tprofile,",
+		"\t\t\tprovider: invocation.provider,",
+		"\t\t\tmodel: invocation.model,",
+		"\t\t\tpiExecutable: invocation.piExecutable,",
+	].join("\n");
+	for (const [member, blind] of [
+		["profile", "\t\t\tprofile: {},"],
+		["provider", '\t\t\tprovider: "clean-provider",'],
+		["model", '\t\t\tmodel: "clean-model",'],
+		["piExecutable", '\t\t\tpiExecutable: "clean-executable",'],
+	] as ReadonlyArray<readonly [string, string]>)
+		await armFails(
+			armRefusesAnOperandInTheProfile,
+			[
+				[
+					RUN,
+					crossing,
+					crossing
+						.split("\n")
+						.map((line) => (line.includes(member) ? blind : line))
+						.join("\n"),
+				],
+			],
+			`the crossing scan blind to ${member}`,
+		);
 	// And a module that composes the claim inside an ordinary string rather
 	// than in a comment, where a naive comment strip would hide it.
 	assert.throws(
