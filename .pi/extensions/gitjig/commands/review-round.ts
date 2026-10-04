@@ -295,8 +295,8 @@ export function parseReviewRoundSpec(value: unknown): ReviewRoundSpec | undefine
 	} else {
 		if (
 			value.delegateArgv !== undefined ||
+			// No key outside the three, and each of the three typed below: exactly three.
 			!exactObject(value.pi, ["piExecutable", "provider", "model"]) ||
-			Object.keys(value.pi).length !== 3 ||
 			typeof value.pi.piExecutable !== "string" ||
 			value.pi.piExecutable.length === 0 ||
 			typeof value.pi.provider !== "string" ||
