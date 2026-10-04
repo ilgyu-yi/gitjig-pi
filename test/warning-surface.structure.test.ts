@@ -447,11 +447,6 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	{
 		// #420: the operator event hub's rows are operator-only and never leave
 		// this module, but they are composed text, so each interpolation is named.
-		// `PARTIAL_PREFIX` and the start/end branch are fixed local literals of
-		// this module; `item.partial` and `text` are delegate text that the hub
-		// has already stripped of control characters and clipped to the rendered
-		// row's bound, which is what this surface's rule asks of composed text;
-		// `name` is a tool name, the same delegate text under the same clip.
 		file: "gitjig/dispatch/pi-operator.ts",
 		// The module has exactly ONE composer, and every row goes through it.
 		// `prefix` is one of this module's own fixed labels, chosen by a local

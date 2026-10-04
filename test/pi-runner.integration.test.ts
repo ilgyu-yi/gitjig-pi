@@ -82,7 +82,9 @@ process.stdin.on("data", (chunk) => {
 	while ((at = data.indexOf("\\n")) !== -1) {
 		const command = JSON.parse(data.slice(0, at));
 		data = data.slice(at + 1);
-		fs.appendFileSync(${JSON.stringify(received)}, JSON.stringify({ at: Date.now(), ...command }) + "\\n");
+		// The child's own argv rides with the first frame, so an arm can see what
+		// selection actually reached it rather than only that something ran.
+		fs.appendFileSync(${JSON.stringify(received)}, JSON.stringify({ at: Date.now(), argv: process.argv.slice(2), ...command }) + "\\n");
 		process.stdout.write(JSON.stringify({ type: "response", id: command.id, success: true }) + "\\n");
 		if (${options.settles === false ? "false" : "true"} && !settled) {
 			settled = true;
@@ -885,7 +887,17 @@ async function armRunsThePiDelegate(dispatch: typeof runDispatchReal, repo: stri
 			pi: { piExecutable: executable, provider: "scripted", model: "scripted-model", role: "reviewer" },
 		});
 		// The child that ran is the Pi one: it received the runner's prompt.
-		assert.equal(frames(executable).filter((frame) => frame.type === "prompt").length, 1, "the Pi delegate never ran");
+		const prompts = frames(executable).filter((frame) => frame.type === "prompt");
+		assert.equal(prompts.length, 1, "the Pi delegate never ran");
+		// And the selection the caller gave the DISPATCHER is the one that
+		// reached the child: a provider or model substituted on the way through
+		// is a different run under the same name.
+		const argv = prompts[0].argv as string[];
+		assert.deepEqual(
+			[argv[argv.indexOf("--provider") + 1], argv[argv.indexOf("--model") + 1]],
+			["scripted", "scripted-model"],
+			"the dispatcher changed the caller's selection on the way through",
+		);
 		// No return was submitted, so the dispatch refuses on the missing slot
 		// rather than on the transport — the generic admission still rules.
 		assert.equal(outcome.disposition, "refused");
@@ -1257,6 +1269,22 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 				),
 			assert.AssertionError,
 			"the transport-branch mutant left the arm passing",
+		);
+		// The caller's selection substituted on the way through the dispatcher.
+		await assert.rejects(
+			() =>
+				withDispatcher(
+					[
+						[
+							DISPATCH,
+							": await runPiDelegate(context, options.pi, {",
+							': await runPiDelegate(context, { ...options.pi, provider: "substituted" }, {',
+						],
+					],
+					async (dispatch) => armRunsThePiDelegate(dispatch, repo),
+				),
+			assert.AssertionError,
+			"the substituted-provider mutant left the arm passing",
 		);
 	} finally {
 		rmSync(repo, { recursive: true, force: true });
