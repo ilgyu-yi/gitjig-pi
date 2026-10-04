@@ -588,20 +588,39 @@ const armSendsOnePurposefulPrompt: RunnerArm = async (run, _trace, scratch) => {
 };
 
 const armEndsItsOwnSessionOnce: RunnerArm = async (run, trace, scratch) => {
-	const context = dispatchContext(scratch);
-	const executable = fakePi(join(scratch, "fake-pi"), {});
-	await run(context, invocation(executable), { timeoutMs: 15_000 });
-	const calls = trace().filter((entry) => entry.call === "hub-begin" || entry.call === "hub-end");
-	assert.deepEqual(
-		calls.map((entry) => entry.call),
-		["hub-begin", "hub-end"],
-		`begin/end pairs: ${JSON.stringify(calls)}`,
-	);
-	// By identity, not by count: a second idempotent end leaves the same count,
-	// and so does an end taken against someone else's session.
-	assert.equal(typeof calls[0].id, "string");
-	assert.ok(String(calls[0].id).length > 0, "the hub session carried no identity");
-	assert.equal(calls[0].id, calls[1].id, "the runner ended a session that was not its own");
+	// Every exit after the begin, not only the ordinary one: a session opened
+	// and then abandoned on a provisioning failure or a failed start is as
+	// attachable afterwards as one abandoned on success.
+	for (const [label, prepare] of [
+		["an ordinary terminal", (context: DispatchContext) => fakePi(join(context.scratchRoot, "fake-pi"), {})],
+		[
+			"a provisioning failure",
+			(context: DispatchContext) => {
+				// The scratch the provisioner will try to make already exists, so its
+				// first non-recursive mkdir throws after the session was begun.
+				mkdirSync(join(context.scratchRoot, "trusted-pi"));
+				return fakePi(join(context.scratchRoot, "fake-pi"), {});
+			},
+		],
+		["a failed start", (context: DispatchContext) => join(context.scratchRoot, "absent-pi")],
+	] as ReadonlyArray<readonly [string, (context: DispatchContext) => string]>) {
+		const before = trace().filter((entry) => entry.call === "hub-begin" || entry.call === "hub-end").length;
+		const context = dispatchContext(join(scratch, label.replace(/\W+/g, "-")));
+		await run(context, invocation(prepare(context)), { timeoutMs: 15_000 });
+		const calls = trace()
+			.filter((entry) => entry.call === "hub-begin" || entry.call === "hub-end")
+			.slice(before);
+		assert.deepEqual(
+			calls.map((entry) => entry.call),
+			["hub-begin", "hub-end"],
+			`${label}: begin/end pairs: ${JSON.stringify(calls)}`,
+		);
+		// By identity, not by count: a second idempotent end leaves the same
+		// count, and so does an end taken against someone else's session.
+		assert.equal(typeof calls[0].id, "string", label);
+		assert.ok(String(calls[0].id).length > 0, `${label}: the hub session carried no identity`);
+		assert.equal(calls[0].id, calls[1].id, `${label}: the runner ended a session that was not its own`);
+	}
 };
 
 const armLeavesTheConcurrentSessionAlone: RunnerArm = async (run, trace, scratch) => {
@@ -1180,7 +1199,18 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		],
 		"an empty-purpose prompt",
 	);
-	await armFails(armEndsItsOwnSessionOnce, [[RUN, "\t\toperator.end();\n\t}", "\t}"]], "the teardown deleted");
+	await armFails(
+		armEndsItsOwnSessionOnce,
+		[[RUN, "\t\toperator.end();\n\t}", "\t}"]],
+		"the normal-terminal teardown deleted",
+	);
+	// The other teardown: the one that runs when provisioning or the start
+	// itself fails, which the ordinary path never reaches.
+	await armFails(
+		armEndsItsOwnSessionOnce,
+		[[RUN, '\t\toperator.end();\n\t\treturn refusal("spawn");', '\t\treturn refusal("spawn");']],
+		"the failed-start teardown deleted",
+	);
 	await armFails(
 		armEndsItsOwnSessionOnce,
 		[[RUN, "\t\toperator.end();\n\t}", "\t\toperator.end();\n\t\toperator.end();\n\t}"]],
