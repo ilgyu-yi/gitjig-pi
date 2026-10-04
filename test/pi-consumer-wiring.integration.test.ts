@@ -613,11 +613,11 @@ function armClosesTheSpec(parse: typeof parseReviewRoundSpec): void {
 async function armHidesPiFromTheModel(
 	register: (pi: never, repoRoot: string, stateRoot: string) => void,
 ): Promise<void> {
-	let definition: {
+	const definition: {
 		name?: string;
 		parameters?: { properties?: Record<string, unknown>; additionalProperties?: unknown };
 	} = {};
-	register({ registerTool: (tool: typeof definition) => (definition = tool) } as never, "/r", "/s");
+	register({ registerTool: (tool: typeof definition) => Object.assign(definition, tool) } as never, "/r", "/s");
 	assert.equal(definition.name, "gitjig_dispatch");
 	assert.deepEqual(
 		Object.keys(definition.parameters?.properties ?? {}).sort(),
