@@ -218,6 +218,16 @@ const armEnumeratesTheTrigger: Arm = async (make) => {
 		const run = scripted(make, [refused(code, over)]);
 		await run.dispatch("brief", PIN);
 		assert.equal(run.sent.length, 1, `${code} drew a second send`);
+		if (code === "RETURN_MISSING") continue;
+		// The code decides, not the lifecycle it records: each other code with the
+		// trigger's own exited, numeric, missing-return shape still sends once.
+		for (const exitCode of [0, 7]) {
+			const lookalike = scripted(make, [
+				refused(code, { run: { class: "exited", exitCode, signal: null }, return: { class: "missing" } }),
+			]);
+			await lookalike.dispatch("brief", PIN);
+			assert.equal(lookalike.sent.length, 1, `${code} at exit ${exitCode} with a missing return drew a second send`);
+		}
 	}
 };
 
@@ -299,7 +309,8 @@ type RecoveryBriefs = {
 };
 
 function armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief }: ReviewBriefs): void {
-	const timing = { firstReturnSeconds: 300, finalReturnSeconds: 1500 };
+	// Unusual on purpose: a deadline the composer fixed itself cannot equal these.
+	const timing = { firstReturnSeconds: 311, finalReturnSeconds: 1433 };
 	const context = { changeDescription: "a change" };
 	const fences = { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] };
 	const slot = { lens: "suite", surface: "the test suite" };
@@ -328,6 +339,11 @@ function armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief 
 		);
 		// Its deadline wording is the transport's own.
 		assert.match(pi, /call submit_result once with/, `${label}: the Pi deadline wording`);
+		// And the deadline it states is the caller's, in seconds from T0.
+		assert.ok(
+			pi.includes("final typed result by T0+1433 seconds."),
+			`${label}: the Pi brief's deadline is not the caller's`,
+		);
 		assert.match(pi, /settled agent is not a result/, `${label}: the Pi absent-submission wording`);
 		// The generic brief is untouched by any of that.
 		assert.equal(generic.includes("submit_result"), false, `${label}: the generic brief names the tool`);
@@ -459,7 +475,11 @@ async function pinProductionRoles(round: typeof reviewRound, fixture: string): P
 /** The history diagnosis brief follows its caller's transport, in all three places. */
 function armSelectsTheDiagnosisTransport(compose: typeof composeDiagnosisBrief): void {
 	const basis = { states: [], intervals: [] };
-	const context = { changeDescription: "a change", withheldHead: PIN };
+	const context = {
+		changeDescription: "a change",
+		withheldHead: PIN,
+		timing: { firstReturnSeconds: 311, finalReturnSeconds: 1433 },
+	};
 	const generic = compose(basis as never, { ...context, transport: "generic" });
 	const pi = compose(basis as never, { ...context, transport: "pi" });
 	// Each of the three transport decisions shows in the composed text.
@@ -467,6 +487,7 @@ function armSelectsTheDiagnosisTransport(compose: typeof composeDiagnosisBrief):
 	assert.match(pi, /PI RESULT: use only the trusted submit_result tool/);
 	assert.match(pi, /call submit_result once with/);
 	assertOnlyForbidsTheFile(pi, REVIEW_PROHIBITION, "diagnosis");
+	assert.ok(pi.includes("final typed result by T0+1433 seconds."), "the diagnosis deadline is not the caller's");
 	for (const [name, pattern] of [
 		["payload-slot instruction", /rides the return's "payload" slot/],
 		["generic return contract", /write a complete provisional/],
@@ -839,5 +860,40 @@ test("baseline-first private-copy mutant: the recovery role handed on is the con
 			return true;
 		},
 		"a constant recovery role: the owner arm still passed",
+	);
+});
+
+test("baseline-first private-copy mutants: the trigger's code and the caller's deadline", async () => {
+	const BRIEFS = "review/briefs.ts";
+	const HISTORY = "review/history.ts";
+	const review = (load: (relative: string) => Promise<ReviewBriefs>) =>
+		load(BRIEFS).then((module) => armSelectsTheTransportsBrief(module));
+	const diagnosis = (load: (relative: string) => Promise<{ composeDiagnosisBrief: typeof composeDiagnosisBrief }>) =>
+		load(HISTORY).then((module) => armSelectsTheDiagnosisTransport(module.composeDiagnosisBrief));
+	await withPrivateCopy([], (load) =>
+		load(ORCHESTRATE).then((module) => armEnumeratesTheTrigger(module.makeDispatcher)),
+	);
+	await withPrivateCopy([], review);
+	await withPrivateCopy([], diagnosis);
+	await armFails(
+		armEnumeratesTheTrigger,
+		[[ORCHESTRATE, '\t\t\toutcome.diagnostic.code === "RETURN_MISSING" &&\n', ""]],
+		"the trigger read from the lifecycle alone",
+	);
+	await copyFails(
+		review,
+		[
+			[
+				BRIEFS,
+				'\t\tString(timing.finalReturnSeconds) +\n\t\t" seconds. An absent or late submission',
+				'\t\t"1400" +\n\t\t" seconds. An absent or late submission',
+			],
+		],
+		"the Pi deadline fixed by the composer",
+	);
+	await copyFails(
+		diagnosis,
+		[[HISTORY, "? composePiDeadlines(context.timing ?? DEFAULT_TIMING)", "? composePiDeadlines(DEFAULT_TIMING)"]],
+		"the diagnosis deadline ignoring the caller's timing",
 	);
 });

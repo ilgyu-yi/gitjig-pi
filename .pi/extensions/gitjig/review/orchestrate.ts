@@ -242,8 +242,12 @@ export function makeDispatcher(
 		};
 		let retryAvailable = true;
 		let outcome = await send(brief);
+		// §1.7's sole trigger is the absent return slot, which is the dispatcher's
+		// RETURN_MISSING. Another code recording the same lifecycle (an internal
+		// failure after a numeric exit) is not one, and earns no second send.
 		while (
 			outcome.disposition === "refused" &&
+			outcome.diagnostic.code === "RETURN_MISSING" &&
 			outcome.diagnostic.run.class === "exited" &&
 			Number.isInteger(outcome.diagnostic.run.exitCode) &&
 			outcome.diagnostic.return.class === "missing" &&
