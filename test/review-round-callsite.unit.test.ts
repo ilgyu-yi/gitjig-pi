@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
 	chmodSync,
+	cpSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -13,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	driveReviewRound,
@@ -296,6 +298,140 @@ function repairRecord(head: string): ReviewRecord {
 			resolution: { outcome: "repair", dispositions: [{ finding, disposition: "repair" }] },
 		},
 	};
+}
+
+/*
+ * #422: the registered command's own seams. The defaults are built inside the
+ * handler, so the only place their Pi selection is observable is where they
+ * hand it to the dispatchers below: a private copy routes `review-round.ts`'s
+ * two dispatcher factories through recorders, and the arm runs the real
+ * registered handler over a spec file. An outcome could not show which
+ * selection a factory was given.
+ */
+const EXTENSION = fileURLToPath(new URL("../.pi/extensions/gitjig", import.meta.url));
+const NODE_MODULES = fileURLToPath(new URL("../node_modules", import.meta.url));
+const COMMAND_PI = { piExecutable: "/usr/bin/pi", provider: "scripted", model: "scripted-model" };
+type Traced =
+	| { kind: "review"; pi: Record<string, unknown> | null; role: string | null }
+	| { kind: "recovery"; pi: Record<string, unknown> | null };
+
+async function armRoutesTheCommandsSelection(edits: ReadonlyArray<readonly [string, string, string]>): Promise<void> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-422-command-"));
+	dirs.push(scratch);
+	// The repository's own layout, so the handed-over engine the handler's
+	// default seams import by relative path resolves from the copy too.
+	const root = join(scratch, ".pi/extensions/gitjig");
+	cpSync(EXTENSION, root, { recursive: true });
+	symlinkSync(NODE_MODULES, join(scratch, "node_modules"), "dir");
+	symlinkSync(fileURLToPath(new URL("../.github", import.meta.url)), join(scratch, ".github"), "dir");
+	const trace = join(scratch, "trace.jsonl");
+	writeFileSync(
+		join(root, "review/orchestrate-trace.ts"),
+		[
+			'import { appendFileSync } from "node:fs";',
+			'import { makeDispatcher as real, reviewRound } from "./orchestrate.ts";',
+			'export type { RoundResult } from "./orchestrate.ts";',
+			"export { reviewRound };",
+			"export const makeDispatcher = ((options: Parameters<typeof real>[0]) =>",
+			"\tasync (_brief: string, _head: string, role?: string) => {",
+			`\t\tappendFileSync(${JSON.stringify(trace)}, \`\${JSON.stringify({ kind: "review", pi: options.pi ?? null, role: role ?? null })}\\n\`);`,
+			`\t\treturn { disposition: "admitted", ok: true, summary: "", compare: "confirmed", payload: ${JSON.stringify(JSON.stringify({ token: "APPROVED", findings: [] }))}, diagnostic: ${JSON.stringify(ADMITTED_DIAGNOSTIC)} };`,
+			"\t}) as unknown as typeof real;",
+			"",
+		].join("\n"),
+	);
+	writeFileSync(
+		join(root, "recovery/coordinator-trace.ts"),
+		[
+			'import { appendFileSync } from "node:fs";',
+			'import { makeRecoveryProfileDispatcher as real } from "./coordinator.ts";',
+			'export { coordinateHistoryRecovery, type RecoveryProfileDispatcher } from "./coordinator.ts";',
+			"export const makeRecoveryProfileDispatcher: typeof real = (input) => {",
+			`\tappendFileSync(${JSON.stringify(trace)}, \`\${JSON.stringify({ kind: "recovery", pi: input.pi ?? null })}\\n\`);`,
+			"\treturn real(input);",
+			"};",
+			"",
+		].join("\n"),
+	);
+	const command = join(root, "commands/review-round.ts");
+	for (const [relative, from, to] of [
+		["commands/review-round.ts", 'from "../review/orchestrate.ts";', 'from "../review/orchestrate-trace.ts";'],
+		["commands/review-round.ts", '} from "../recovery/coordinator.ts";', '} from "../recovery/coordinator-trace.ts";'],
+		...edits,
+	]) {
+		const path = join(root, relative);
+		const source = readFileSync(path, "utf8");
+		// A plain Error: a stale anchor is a harness fault, never a kill.
+		if (source.indexOf(from) === -1 || source.indexOf(from) !== source.lastIndexOf(from))
+			throw new Error(`anchor must exist once in ${relative}: ${from}`);
+		writeFileSync(
+			path,
+			source.replace(from, () => to),
+		);
+	}
+	const { registerReviewRoundCommand: register } = (await import(pathToFileURL(command).href)) as {
+		registerReviewRoundCommand: typeof registerReviewRoundCommand;
+	};
+	for (const selected of [undefined, COMMAND_PI]) {
+		const label = selected === undefined ? "generic" : "pi";
+		const fixture = repo();
+		const { delegateArgv: _argv, ...bare } = spec();
+		writeFileSync(
+			join(fixture.root, "round.json"),
+			JSON.stringify(selected === undefined ? spec() : { ...bare, pi: selected }),
+		);
+		writeFileSync(trace, "");
+		const posted: string[] = [];
+		const entries: unknown[] = [];
+		let handler: ((args: string, ctx: { waitForIdle(): Promise<void> }) => Promise<void>) | undefined;
+		const pi = {
+			registerCommand(_name: string, definition: { handler: typeof handler }) {
+				handler = definition.handler;
+			},
+			appendEntry(_type: string, data: unknown) {
+				entries.push(data);
+			},
+			sendMessage() {},
+		} as unknown as ExtensionAPI;
+		// Every seam but the two dispatcher factories is injected; those two are
+		// the handler's own defaults, which is what this arm measures.
+		register(pi, fixture.root, join(fixture.root, "state"), {
+			fetchSubject: async () => subject(fixture.base, fixture.head),
+			refetchSubject: async (_root, current) => current,
+			readComments: async () => population([], posted.at(-1)),
+			recordsFromComments: recordsFromAttestedComments,
+			resolveHead: () => fixture.head,
+			runRound: async (options) => {
+				await options.dispatch("a reviewer brief", fixture.head, "reviewer");
+				return ROUND;
+			},
+			publishRecord: async (body) => {
+				posted.push(body);
+				return receipt(body);
+			},
+		});
+		assert.ok(handler, `${label}: the command registered no handler`);
+		await handler("round.json", { waitForIdle: async () => {} });
+		const seen = readFileSync(trace, "utf8")
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => JSON.parse(line) as Traced);
+		const review = seen.filter((entry) => entry.kind === "review");
+		const recovery = seen.filter((entry) => entry.kind === "recovery");
+		assert.equal(review.length, 1, `${label}: the round's dispatcher was not reached once: ${JSON.stringify(entries)}`);
+		assert.equal(recovery.length, 1, `${label}: the recovery dispatcher was not built once`);
+		if (selected === undefined) {
+			assert.equal(review[0].pi, null, "generic: the round's dispatcher was given a Pi selection");
+			assert.equal(recovery[0].pi, null, "generic: the recovery dispatcher was given a Pi selection");
+		} else {
+			// The operator's three values reach both factories unchanged; the
+			// round's carries the consumer's role, the recovery one carries none,
+			// since each recovery phase fixes its own.
+			assert.deepEqual(review[0].pi, { ...COMMAND_PI, role: "reviewer" }, "pi: the round's dispatcher selection");
+			assert.equal(review[0].kind === "review" && review[0].role, "reviewer", "pi: the per-call role");
+			assert.deepEqual(recovery[0].pi, COMMAND_PI, "pi: the recovery dispatcher selection");
+		}
+	}
 }
 
 describe("review-round production call site", () => {
@@ -1130,6 +1266,35 @@ describe("review-round production call site", () => {
 		);
 		assert.deepEqual(outcome, { disposition: "posted", review: { state: "approved" } });
 		assert.equal(dispatched, 0);
+	});
+
+	it("hands the spec's own Pi selection from the registered command to both dispatchers", async () => {
+		await armRoutesTheCommandsSelection([]);
+	});
+
+	it("baseline-first private-copy mutants: the registered command's own selections", async () => {
+		await armRoutesTheCommandsSelection([]);
+		const killed = async (edit: readonly [string, string, string], named: string) =>
+			assert.rejects(
+				() => armRoutesTheCommandsSelection([edit]),
+				(error: unknown) => {
+					assert.ok(error instanceof assert.AssertionError, `${named}: the arm failed for another reason: ${error}`);
+					return true;
+				},
+				`${named}: the owner arm still passed`,
+			);
+		await killed(
+			[
+				"commands/review-round.ts",
+				'...(input.pi === undefined ? {} : { pi: { ...input.pi, role: "reviewer" as const } }),',
+				"...{},",
+			],
+			"the round's dispatcher left without the operator's selection",
+		);
+		await killed(
+			["commands/review-round.ts", "...(spec?.pi === undefined ? {} : { pi: spec.pi }),", "...{},"],
+			"the recovery dispatcher left without the operator's selection",
+		);
 	});
 
 	it("fixes the history role and both transports from the spec's own Pi selection", async () => {

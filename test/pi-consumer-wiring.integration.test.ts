@@ -488,7 +488,7 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 		const tracePath = join(scratch, "sent.jsonl");
 		writeFileSync(
 			join(root, "dispatch/run-trace.ts"),
-			`import { appendFileSync } from "node:fs";\nimport { runDispatch as real } from "./index.ts";\nexport const runDispatch: typeof real = (options) => {\n\tappendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify({ brief: options.brief, pi: options.pi ?? null })}\\n\`);\n\treturn Promise.resolve({ disposition: "refused", cause: "fixture", diagnostic: { status: "refused", phase: "return", run: { class: "exited", exitCode: 1, signal: null }, return: { class: "missing" }, compare: { class: "not-reached" }, durationMs: 1, code: "RETURN_MISSING" } } as never);\n};\n`,
+			`import { appendFileSync } from "node:fs";\nimport { runDispatch as real } from "./index.ts";\nexport const runDispatch: typeof real = (options) => {\n\tappendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify({ brief: options.brief, pi: options.pi ?? null, delegateArgv: options.delegateArgv })}\\n\`);\n\treturn Promise.resolve({ disposition: "refused", cause: "fixture", diagnostic: { status: "refused", phase: "return", run: { class: "exited", exitCode: 1, signal: null }, return: { class: "missing" }, compare: { class: "not-reached" }, durationMs: 1, code: "RETURN_MISSING" } } as never);\n};\n`,
 		);
 		const coordinator = join(root, "recovery/coordinator.ts");
 		const source = readFileSync(coordinator, "utf8");
@@ -509,6 +509,7 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 		const { createRecoveryAttemptLedger } = await import(pathToFileURL(join(root, ORCHESTRATE)).href);
 		type Sent = {
 			brief: string;
+			delegateArgv: string[];
 			pi: { role?: string; piExecutable?: string; provider?: string; model?: string } | null;
 		};
 		const sent = async (
@@ -550,6 +551,8 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 				assert.match(underPi.brief, /submit_result/, `${role}: an unprojected brief was sent`);
 				assertOnlyForbidsTheFile(underPi.brief, RECOVERY_PROHIBITION, `production recovery ${role}`);
 				assert.equal(underPi.pi?.role, role, `${role}: the role handed on`);
+				// The Pi route carries no generic argv: the profile's command is not its child.
+				assert.deepEqual(underPi.delegateArgv, [], `${role}: a generic argv rode a Pi dispatch`);
 				assert.deepEqual(
 					[underPi.pi?.piExecutable, underPi.pi?.provider, underPi.pi?.model],
 					[PI.piExecutable, PI.provider, PI.model],
@@ -559,6 +562,7 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 		for (const underGeneric of await sent(undefined, undefined)) {
 			assert.equal(/submit_result/.test(underGeneric.brief), false, "the generic recovery dispatch was projected");
 			assert.equal(underGeneric.pi, null);
+			assert.ok(underGeneric.delegateArgv.length > 0, "the generic route lost its profile argv");
 		}
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });

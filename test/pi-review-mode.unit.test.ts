@@ -28,6 +28,30 @@ test("review-round mode is explicit, closed and exclusive of generic argv", () =
 	assert.equal(parseReviewRoundSpec({ ...spec, pi: { ...spec.pi, provider: "--mode" } }), undefined);
 });
 
+test("each field of the Pi selection is refused by its own check", () => {
+	const spec = {
+		pr: 370,
+		changeDescription: "Pi mode",
+		fences: { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] },
+		pi: { piExecutable: "/usr/local/bin/pi", provider: "scripted", model: "scripted-model" },
+	};
+	assert.ok(parseReviewRoundSpec(spec), "the valid selection must parse, or every refusal below is vacuous");
+	// Each case is refused by one check alone. A numeric provider or model
+	// passes the name pattern, since RegExp.test reads it as text, so only the
+	// type check refuses it; and a null selection must refuse, not throw.
+	for (const [name, pi] of [
+		["a null selection", null],
+		["an empty executable", { ...spec.pi, piExecutable: "" }],
+		["a numeric executable", { ...spec.pi, piExecutable: 5 }],
+		["a numeric provider", { ...spec.pi, provider: 123 }],
+		["a numeric model", { ...spec.pi, model: 7 }],
+		["a model that reads as an option", { ...spec.pi, model: "--mode" }],
+		["a model past the name bound", { ...spec.pi, model: `m${"o".repeat(128)}` }],
+		["a missing model", { piExecutable: spec.pi.piExecutable, provider: spec.pi.provider }],
+	] as const)
+		assert.equal(parseReviewRoundSpec({ ...spec, pi }), undefined, `${name} was admitted`);
+});
+
 test("production review-round carries explicit Pi selection into recovery without delegate-selected roles", () => {
 	const source = readFileSync(new URL("../.pi/extensions/gitjig/commands/review-round.ts", import.meta.url), "utf8");
 	const recovery = source.match(/recoveryDispatch: makeRecoveryProfileDispatcher\(\{([\s\S]*?)\n\s*\}\),/)?.[1];
