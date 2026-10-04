@@ -933,6 +933,68 @@ function armComposesNoAttestation(sources: readonly string[]): void {
 	}
 }
 
+/**
+ * The gate, measured by what the timer does rather than by where it stands.
+ * The provisional checkpoint's own window is six minutes, which no test can
+ * wait out, so every run below uses a copy whose window alone is shortened —
+ * a test-local scaling of one constant, stated here so it is not mistaken for
+ * the shipped bound. What is under test is the GATE: with the window short
+ * enough to fire inside a run, a generic dispatch that writes no provisional
+ * return must be cut off by it, and a Pi dispatch must not be.
+ */
+const SHORT_CHECKPOINT: readonly [string, string, string] = [DISPATCH, "}, 360_000),", "}, 250),"];
+
+async function armArmsTheCheckpointOnlyForGeneric(dispatch: typeof runDispatchReal, repo: string): Promise<void> {
+	// Generic: no provisional return is ever written, so the checkpoint aborts
+	// the run long before its own deadline. This is the half that shows the
+	// timer is armed at all, so a gate that never arms cannot pass either.
+	{
+		const started = performance.now();
+		const outcome = await dispatch({
+			callerRepoRoot: repo,
+			stateRoot: join(repo, "state"),
+			delegateArgv: [process.execPath, "-e", "setTimeout(() => {}, 10_000)"],
+			brief: "brief",
+			expectedRef: "HEAD",
+			timeoutMs: 20_000,
+			operationDeadline: performance.now() + 8_000,
+			enteredAt: performance.now(),
+		});
+		const elapsed = performance.now() - started;
+		assert.equal(outcome.disposition, "refused");
+		assert.ok(elapsed < 5_000, `the generic checkpoint never fired: ${Math.round(elapsed)} ms`);
+	}
+	// Pi: SPEC §1.7 owes no provisional file from this child, so the same
+	// checkpoint must not be armed — the run ends on its own deadline instead.
+	{
+		const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-checkpoint-"));
+		try {
+			const executable = fakePi(join(scratch, "fake-pi"), { settleAfterMs: 60_000 });
+			const deadline = performance.now() + 3_000;
+			const started = performance.now();
+			const outcome = await dispatch({
+				callerRepoRoot: repo,
+				stateRoot: join(repo, "state"),
+				delegateArgv: [],
+				brief: "brief",
+				expectedRef: "HEAD",
+				timeoutMs: 20_000,
+				operationDeadline: deadline,
+				enteredAt: performance.now(),
+				pi: { piExecutable: executable, provider: "scripted", model: "scripted-model", role: "reviewer" },
+			});
+			const elapsed = performance.now() - started;
+			assert.equal(outcome.disposition, "refused");
+			assert.ok(
+				elapsed > 2_000,
+				`a conforming Pi child was cut off by the provisional checkpoint after ${Math.round(elapsed)} ms`,
+			);
+		} finally {
+			rmSync(scratch, { recursive: true, force: true });
+		}
+	}
+}
+
 function armGatesTheCheckpoint(applies: typeof provisionalCheckpointApplies, dispatchSource: string): void {
 	// SPEC §1.7 owes a provisional return from the generic argv child alone, so
 	// the gate is exactly "bounded operation AND generic transport".
@@ -1097,6 +1159,9 @@ test("the dispatcher's Pi option is internal, exact, and leaves the generic path
 		await armRefusesEmptyGenericArgv(runDispatchReal, repo);
 		await armRunsThePiDelegate(runDispatchReal, repo);
 		await armDerivesTheRunBound(runDispatchReal, repo);
+		// The gate, measured through a copy whose checkpoint window alone is
+		// shortened: the shipped window is six minutes and no test waits it out.
+		await withDispatcher([SHORT_CHECKPOINT], async (dispatch) => armArmsTheCheckpointOnlyForGeneric(dispatch, repo));
 		// Malformed framing reaches exactly the existing internal-failure class.
 		const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-invalid-"));
 		try {
@@ -1383,15 +1448,49 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 		"the checkpoint-gate mutant left the arm passing",
 	);
 	// And the gate removed from the arming itself, leaving the predicate right.
-	await assert.rejects(
-		() =>
-			withDispatcher(
-				[[DISPATCH, "if (provisionalCheckpointApplies(options))", "if (true)"]],
-				async (_dispatch, applies, source) => armGatesTheCheckpoint(applies, source),
-			),
-		assert.AssertionError,
-		"the ungated-arming mutant left the arm passing",
-	);
+	// This one is measured by what the timer does: with the window shortened,
+	// an ungated checkpoint cuts off a conforming Pi child.
+	const repoForGate = repository();
+	try {
+		await assert.rejects(
+			() =>
+				withDispatcher(
+					[SHORT_CHECKPOINT, [DISPATCH, "if (provisionalCheckpointApplies(options))", "if (true)"]],
+					async (dispatch) => armArmsTheCheckpointOnlyForGeneric(dispatch, repoForGate),
+				),
+			assert.AssertionError,
+			"the ungated-arming mutant left the arm passing",
+		);
+		// The predicate widened to admit Pi reaches the same place.
+		await assert.rejects(
+			() =>
+				withDispatcher(
+					[
+						SHORT_CHECKPOINT,
+						[
+							DISPATCH,
+							"return options.operationDeadline !== undefined && options.pi === undefined;",
+							"return options.operationDeadline !== undefined;",
+						],
+					],
+					async (dispatch) => armArmsTheCheckpointOnlyForGeneric(dispatch, repoForGate),
+				),
+			assert.AssertionError,
+			"the widened-predicate mutant left the behavioural arm passing",
+		);
+		// And the arming deleted outright: the generic half then never fires,
+		// so an arm that only watched the Pi side could not tell the difference.
+		await assert.rejects(
+			() =>
+				withDispatcher([[DISPATCH, "if (provisionalCheckpointApplies(options))", "if (false)"]], async (dispatch) =>
+					armArmsTheCheckpointOnlyForGeneric(dispatch, repoForGate),
+				),
+			assert.AssertionError,
+			"the deleted-arming mutant left the arm passing",
+		);
+	} finally {
+		rmSync(repoForGate, { recursive: true, force: true });
+	}
 
 	// A Pi selection exposed on the model-facing surface, spelled as a computed
 	// key — which is why the arm reads the registered parameters, not the text.
