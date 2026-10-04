@@ -848,6 +848,16 @@ function armRendersInertly(hub: Hub): void {
 		assert.equal(rendered, `assistant: ${quoted(hostile)}`);
 		session.onEvent({ type: "tool_execution_start", toolName: "read\u0007file" });
 		assert.equal(hub.piOperatorView(session.id)[1], `tool started: ${quoted("read\u0007file")}`);
+		// The SAME hostile text through the partial path, which arrives as deltas
+		// and is held raw until a row is rendered: a row composed by concatenation
+		// rather than through the one composer would show it live, and the
+		// structural lock's interpolation scan cannot see a concatenation.
+		for (const delta of [...hostile])
+			session.onEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta } });
+		const live = hub.piOperatorView(session.id).find((candidate) => candidate.startsWith("partial: "));
+		assert.ok(live, "the deltas rendered no partial row");
+		assert.equal(hasInertBreach(live), false, `a live class survived the partial row: ${JSON.stringify(live)}`);
+		assert.equal(live, `partial: ${quoted(hostile)}`);
 		// A completed message supersedes the deltas that preceded it.
 		session.onEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "draft text" } });
 		assert.ok(hub.piOperatorView(session.id).some((row) => row.startsWith("partial: ")));
@@ -1258,7 +1268,16 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 		assert.AssertionError,
 		"the prefix-erasing mutant left the arm passing",
 	);
-	// Control characters rendered as they arrived.
+	// The partial row composed by concatenation instead of through the one
+	// composer. The structural lock scans `${…}` interpolations, so it cannot
+	// see a concatenation at all; only this behavioural arm catches it.
+	await assert.rejects(
+		() => withHub([[HUB, "[row(PARTIAL_PREFIX, item.partial)]", "[PARTIAL_PREFIX + item.partial]"]], armRendersInertly),
+		assert.AssertionError,
+		"the raw partial-row mutant left the arm passing",
+	);
+	// Delegate text rendered through a narrower class than the shared escaper
+	// owns: C0 alone leaves a line separator and a bidi control standing.
 	await assert.rejects(
 		() =>
 			withHub(
