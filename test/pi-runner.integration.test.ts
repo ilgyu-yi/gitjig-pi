@@ -523,6 +523,38 @@ const armRedactsWholeHead: RunnerArm = async (run, trace, scratch) => {
 		assert.equal(namesHeldOperand(text, HELD), false, `${what} names the held operand`);
 };
 
+/**
+ * The brief is not the only thing the child reads. Its profile is written
+ * beside its trusted tool, and the one caller-fixed field in it — a
+ * measurement's spec digest — is free text to this transport: sixty-four hex
+ * characters can contain a forty-character head.
+ */
+const armRefusesAnOperandInTheProfile: RunnerArm = async (run, trace, scratch) => {
+	const context = dispatchContext(scratch);
+	const executable = fakePi(join(scratch, "fake-pi"), {});
+	const carrying = `${HELD}${"c".repeat(24)}`;
+	assert.equal(carrying.length, 64, "the probe digest is not a valid one");
+	assert.equal(namesHeldOperand(carrying, HELD), true, "the probe digest does not name the operand");
+	const outcome = await run(context, invocation(executable, { role: "measurement", specDigest: carrying }), {
+		timeoutMs: 15_000,
+	});
+	assert.equal(outcome.protocolInvalid, true, "a profile naming the held operand was provisioned");
+	assert.equal(
+		trace().some((entry) => entry.call === "provision" || entry.call === "startPiRpc"),
+		false,
+		"the refusal came after provisioning or a child",
+	);
+	// A digest that does NOT name it is still admitted, so the arm measures the
+	// scan rather than the presence of a digest.
+	const clean = dispatchContext(join(scratch, "clean"));
+	const other = fakePi(join(clean.scratchRoot, "fake-pi"), {});
+	assert.equal(
+		(await run(clean, invocation(other, { role: "measurement", specDigest: "c".repeat(64) }), { timeoutMs: 15_000 }))
+			.protocolInvalid === true,
+		false,
+	);
+};
+
 const armRefusesContainedRun: RunnerArm = async (run, trace, scratch) => {
 	// A contained run at the ruled bound: the prefix branch alone would miss
 	// it, and a child must not start.
@@ -1195,7 +1227,11 @@ async function armRefusesEmptyGenericArgv(dispatch: typeof runDispatchReal, repo
 		assert.equal(outcome.diagnostic.code, "PARAMETER_REFUSED", "an empty generic argv passed the preflight");
 }
 
-async function armRunsThePiDelegate(dispatch: typeof runDispatchReal, repo: string): Promise<void> {
+async function armRunsThePiDelegate(
+	dispatch: typeof runDispatchReal,
+	repo: string,
+	handedToRunner: () => DispatchSeam[],
+): Promise<void> {
 	// Two selections, so the whole invocation is observed rather than the two
 	// fields that happen to appear in argv: the role and the caller's digest
 	// reach the child only through the profile written beside its extension.
@@ -1250,6 +1286,33 @@ async function armRunsThePiDelegate(dispatch: typeof runDispatchReal, repo: stri
 			const ran = prompts[0].provisioned as { tree: string; cwd: string; brief: string } | null;
 			assert.ok(ran, `${label}: the child could not read the context it ran under`);
 			assert.equal(ran.cwd, ran.tree, `${label}: the child did not run in the clone of its own scratch`);
+			// The whole context as it crossed the seam, not the three fields the
+			// child happens to be able to see: a substituted state root or return
+			// path is as much a different run as a substituted tree.
+			const handed = handedToRunner();
+			const seam = handed[handed.length - 1];
+			assert.ok(seam, `${label}: the dispatcher never called the runner`);
+			assert.deepEqual(
+				Object.keys(seam.context).sort(),
+				["briefPath", "heldHash", "returnPath", "scratchRoot", "stateDir", "treeDir"],
+				`${label}: the context it handed on is not the provisioned shape`,
+			);
+			// Each path is the one the provisioner made, by its own name under the
+			// one scratch — not merely something inside it, which any of the four
+			// would satisfy for any other.
+			for (const [key, leaf] of [
+				["stateDir", "state"],
+				["briefPath", "brief.md"],
+				["returnPath", "return.json"],
+			] as ReadonlyArray<readonly ["stateDir" | "briefPath" | "returnPath", string]>)
+				assert.equal(seam.context[key], join(seam.context.scratchRoot, leaf), `${label}: ${key} at the seam`);
+			assert.ok(
+				seam.context.treeDir.startsWith(`${seam.context.scratchRoot}/`),
+				`${label}: the clone does not belong to the provisioned scratch`,
+			);
+			assert.equal(seam.invocation.provider, pi.provider, `${label}: provider at the seam`);
+			assert.equal(seam.invocation.model, pi.model, `${label}: model at the seam`);
+			assert.equal(seam.invocation.role, pi.role, `${label}: role at the seam`);
 			assert.equal(ran.brief, "brief", `${label}: the child was given another brief`);
 			// No return was submitted, so the dispatch refuses on the missing slot
 			// rather than on the transport — the generic admission still rules.
@@ -1266,6 +1329,7 @@ test("the held operand never reaches the child: redacted whole, refused at the r
 	await withRunner([], armRedactsWholeHead);
 	await withRunner([], armRefusesContainedRun);
 	await withRunner([], armAdmitsShorterRun);
+	await withRunner([], armRefusesAnOperandInTheProfile);
 });
 
 test("a refusal costs nothing, and every admitted role resolves to its own profile", async () => {
@@ -1323,7 +1387,9 @@ test("the dispatcher's Pi option is internal, exact, and leaves the generic path
 	const repo = repository();
 	try {
 		await armRefusesEmptyGenericArgv(runDispatchReal, repo);
-		await armRunsThePiDelegate(runDispatchReal, repo);
+		await withDispatcher([], async (dispatch, _applies, _source, _keys, handed) =>
+			armRunsThePiDelegate(dispatch, repo, handed),
+		);
 		await withDispatcher([], async (dispatch, _applies, _source, _keys, handed) =>
 			armDerivesTheRunBound(dispatch, repo, handed),
 		);
@@ -1397,6 +1463,13 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 			],
 		],
 		"the held operand carried in the prompt",
+	);
+	// The profile scan removed: a measurement digest then carries the operand
+	// into the file written beside the child's tool.
+	await armFails(
+		armRefusesAnOperandInTheProfile,
+		[[RUN, 'if (namesHeldOperand(JSON.stringify(profile), context.heldHash)) return refusal("invalid");', ""]],
+		"the profile scan removed",
 	);
 	await armFails(
 		armRefusesContainedRun,
@@ -1722,8 +1795,9 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 		// The transport branch, forced to the generic executor.
 		await assert.rejects(
 			() =>
-				withDispatcher([[DISPATCH, "\t\t\t\toptions.pi === undefined\n", "\t\t\t\ttrue\n"]], async (dispatch) =>
-					armRunsThePiDelegate(dispatch, repo),
+				withDispatcher(
+					[[DISPATCH, "\t\t\t\toptions.pi === undefined\n", "\t\t\t\ttrue\n"]],
+					async (dispatch, _applies, _source, _keys, handed) => armRunsThePiDelegate(dispatch, repo, handed),
 				),
 			assert.AssertionError,
 			"the transport-branch mutant left the arm passing",
@@ -1739,7 +1813,7 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 							': await runPiDelegate(context, { ...options.pi, provider: "substituted" }, {',
 						],
 					],
-					async (dispatch) => armRunsThePiDelegate(dispatch, repo),
+					async (dispatch, _applies, _source, _keys, handed) => armRunsThePiDelegate(dispatch, repo, handed),
 				),
 			assert.AssertionError,
 			"the substituted-provider mutant left the arm passing",
@@ -1752,10 +1826,10 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 						[
 							DISPATCH,
 							": await runPiDelegate(context, options.pi, {",
-							": await runPiDelegate({ ...context, treeDir: context.scratchRoot }, options.pi, {",
+							": await runPiDelegate({ ...context, stateDir: context.returnPath }, options.pi, {",
 						],
 					],
-					async (dispatch) => armRunsThePiDelegate(dispatch, repo),
+					async (dispatch, _applies, _source, _keys, handed) => armRunsThePiDelegate(dispatch, repo, handed),
 				),
 			assert.AssertionError,
 			"the substituted-context mutant left the arm passing",
@@ -1804,7 +1878,7 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 							': await runPiDelegate(context, { ...options.pi, role: "judge" }, {',
 						],
 					],
-					async (dispatch) => armRunsThePiDelegate(dispatch, repo),
+					async (dispatch, _applies, _source, _keys, handed) => armRunsThePiDelegate(dispatch, repo, handed),
 				),
 			assert.AssertionError,
 			"the substituted-provider mutant left the arm passing",
