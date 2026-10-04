@@ -39,6 +39,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { DelegateRunOutcome } from "../.pi/extensions/gitjig/dispatch/executor.ts";
 import {
 	provisionalCheckpointApplies,
+	registerDispatchTool,
 	runDispatch as runDispatchReal,
 } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import * as hubReal from "../.pi/extensions/gitjig/dispatch/pi-operator.ts";
@@ -64,7 +65,10 @@ type RunnerArm = (run: Runner, trace: () => Call[], scratch: string) => Promise<
 type Edits = ReadonlyArray<readonly [string, string, string]>;
 
 /** A fake Pi that answers the prompt, optionally settles, and records frames. */
-function fakePi(path: string, options: { settleAfterMs?: number; exitCode?: number }): string {
+function fakePi(
+	path: string,
+	options: { settleAfterMs?: number; exitCode?: number; settles?: boolean; exitAfterMs?: number },
+): string {
 	const received = `${path}.frames`;
 	writeFileSync(
 		path,
@@ -80,7 +84,7 @@ process.stdin.on("data", (chunk) => {
 		data = data.slice(at + 1);
 		fs.appendFileSync(${JSON.stringify(received)}, JSON.stringify({ at: Date.now(), ...command }) + "\\n");
 		process.stdout.write(JSON.stringify({ type: "response", id: command.id, success: true }) + "\\n");
-		if (!settled) {
+		if (${options.settles === false ? "false" : "true"} && !settled) {
 			settled = true;
 			setTimeout(() => process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\\n"), ${options.settleAfterMs ?? 120});
 		}
@@ -92,6 +96,7 @@ process.stdin.on("end", () => {
 	fs.appendFileSync(${JSON.stringify(received)}, JSON.stringify({ at: Date.now(), type: "stdin-end" }) + "\\n");
 	process.exit(${options.exitCode ?? 0});
 });
+${options.exitAfterMs === undefined ? "" : `setTimeout(() => process.exit(${options.exitCode ?? 0}), ${options.exitAfterMs});`}
 setInterval(() => {}, 1000);
 `,
 		{ mode: 0o700 },
@@ -203,7 +208,9 @@ import { provisionPiSubmitTool as provisionReal } from "./pi-submit.ts";
 const note = (entry: Record<string, unknown>) =>
 	appendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify(entry)}\\n\`);
 export const provisionPiSubmitTool: typeof provisionReal = (context, profile) => {
-	note({ call: "provision", role: profile.role, context: { ...context } });
+	// The profile's fixed fields carry the caller's measurement digest, so a
+	// substituted one is visible here and not only in the role.
+	note({ call: "provision", role: profile.role, fixed: { ...profile.fixed }, context: { ...context } });
 	const path = provisionReal(context, profile);
 	note({ call: "provisioned", path });
 	return path;
@@ -296,17 +303,43 @@ async function withHub<T>(edits: Edits, scenario: (hub: Hub) => Promise<T> | T):
 /** The dispatcher from a private copy, with its own checkpoint predicate. */
 async function withDispatcher<T>(
 	edits: Edits,
-	scenario: (dispatch: typeof runDispatchReal, applies: typeof provisionalCheckpointApplies) => Promise<T>,
+	scenario: (
+		dispatch: typeof runDispatchReal,
+		applies: typeof provisionalCheckpointApplies,
+		source: string,
+		parameterKeys: () => string[],
+	) => Promise<T>,
 ): Promise<T> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-dispatch-"));
 	try {
 		const root = copyExtensions(scratch);
 		applyEdits(root, edits);
 		const imported = await import(pathToFileURL(join(root, DISPATCH)).href);
-		return await scenario(imported.runDispatch, imported.provisionalCheckpointApplies);
+		return await scenario(
+			imported.runDispatch,
+			imported.provisionalCheckpointApplies,
+			readFileSync(join(root, DISPATCH), "utf8"),
+			() => registeredDispatchParameterKeys(imported.registerDispatchTool),
+		);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
+}
+
+/** The property keys of the parameters the dispatch tool really registers. */
+function registeredDispatchParameterKeys(register: typeof registerDispatchTool = registerDispatchTool): string[] {
+	let parameters: { properties?: Record<string, unknown> } | undefined;
+	register(
+		{
+			registerTool: (tool: { name: string; parameters: { properties?: Record<string, unknown> } }) => {
+				if (tool.name === "gitjig_dispatch") parameters = tool.parameters;
+			},
+		} as unknown as Parameters<typeof registerDispatchTool>[0],
+		repoRoot,
+		join(tmpdir(), "gitjig-420-unused-state"),
+	);
+	assert.ok(parameters, "the dispatch tool registered no parameters");
+	return Object.keys(parameters.properties ?? {}).sort();
 }
 
 /** A repository the dispatcher can clone, as the existing dispatch arms build one. */
@@ -408,7 +441,14 @@ const armSelectsEachRole: RunnerArm = async (run, trace, scratch) => {
 			{ timeoutMs: 15_000 },
 		);
 		const provisioned = trace().filter((entry) => entry.call === "provision");
-		assert.equal(provisioned[provisioned.length - 1]?.role, expected, role);
+		const last = provisioned[provisioned.length - 1];
+		assert.equal(last?.role, expected, role);
+		// The caller's digest reaches the profile unchanged, or no digest does.
+		assert.equal(
+			(last?.fixed as Record<string, unknown> | undefined)?.specDigest,
+			digest,
+			`${role}: the profile carried another digest`,
+		);
 	}
 };
 
@@ -558,6 +598,20 @@ const armMapsEachTerminal: RunnerArm = async (run, _trace, scratch) => {
 			await run(context, invocation(executable), { timeoutMs: 15_000 }),
 			shape({ exitCode: code }),
 			`exit ${code}`,
+		);
+	}
+	// `exited` — a numeric exit with no settle at all — is its OWN terminal and
+	// is admitted too: §4.9 leaves admission to output validity, so a child
+	// that never settles still has its exit reported rather than refused.
+	// Without this case both arms above reach the mapping through `settled`.
+	{
+		const { context, executable } = at("exited-without-settle");
+		// It answers, never settles, and ends on its own before any bound.
+		fakePi(executable, { exitCode: 3, settles: false, exitAfterMs: 300 });
+		assert.deepEqual(
+			await run(context, invocation(executable), { timeoutMs: 8_000 }),
+			shape({ exitCode: 3 }),
+			"a numeric exit without a settle",
 		);
 	}
 	// timeout.
@@ -762,18 +816,23 @@ function armRendersInertly(hub: Hub): void {
 	assert.equal(hub.livePiOperatorSessions(), live - 1);
 }
 
+/**
+ * No artifact claims the delegate went unsteered. The check is a pattern over
+ * the enumerated ways such a claim is worded, and that is its limit, stated
+ * rather than discovered: prose can always be worded otherwise, so this
+ * establishes that the named forms are absent, not that no sentence could
+ * ever carry the meaning.
+ */
 function armComposesNoAttestation(sources: readonly string[]): void {
+	const claims =
+		/unsteered|(?:not|never|n't|without)[\s\w]{0,24}steer|no (?:operator )?steering|no operator (?:input|intervention|message)|without (?:operator )?intervention/i;
 	for (const source of sources) {
 		const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
-		assert.equal(
-			/unsteered|not steered|no operator (?:input|intervention)|without (?:operator )?intervention/i.test(code),
-			false,
-			"a module composes a claim of absent intervention",
-		);
+		assert.equal(claims.test(code), false, "a module composes a claim of absent intervention");
 	}
 }
 
-function armGatesTheCheckpoint(applies: typeof provisionalCheckpointApplies): void {
+function armGatesTheCheckpoint(applies: typeof provisionalCheckpointApplies, dispatchSource: string): void {
 	// SPEC §1.7 owes a provisional return from the generic argv child alone, so
 	// the gate is exactly "bounded operation AND generic transport".
 	const pi = { piExecutable: "/bin/true", provider: "p", model: "m", role: "reviewer" as const };
@@ -781,6 +840,19 @@ function armGatesTheCheckpoint(applies: typeof provisionalCheckpointApplies): vo
 	assert.equal(applies({}), false);
 	assert.equal(applies({ operationDeadline: 1, pi }), false, "the checkpoint armed under a Pi selection");
 	assert.equal(applies({ pi }), false);
+	// The predicate alone proves nothing about the timer it governs, and that
+	// timer's own window is six minutes, which no test drives. So the call site
+	// is read instead, and this arm says plainly that it is a lexical check:
+	// the provisional arming must stand inside the gate, and nowhere else.
+	const armings =
+		dispatchSource.split("if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();").length - 1;
+	assert.equal(armings, 1, "the provisional arming moved or multiplied; re-read this arm");
+	const gated = dispatchSource.indexOf("if (provisionalCheckpointApplies(options))");
+	assert.notEqual(gated, -1, "the provisional arming is not behind the gate");
+	const provisional = dispatchSource.indexOf("if (!admitReturn(context.returnPath).admitted) checkpointAbort.abort();");
+	assert.notEqual(provisional, -1, "the provisional arming moved; re-read this arm");
+	assert.ok(gated < provisional, "the provisional arming does not follow its gate");
+	assert.ok(provisional - gated < 200, "the provisional arming is no longer the statement the gate guards");
 }
 
 async function armRefusesEmptyGenericArgv(dispatch: typeof runDispatchReal, repo: string): Promise<void> {
@@ -872,17 +944,12 @@ test("the hub bounds what an operator would see, at each boundary and without lo
 });
 
 test("the dispatcher's Pi option is internal, exact, and leaves the generic path alone", async () => {
-	// The model-facing surface carries no Pi field. The tool's parameter block
-	// is private to its module, so this reads it where it is declared; the
-	// behavioural half is below, where only an internal caller selects Pi.
-	const dispatchSource = readFileSync(join(extensionsRoot, DISPATCH), "utf8");
-	const declared = dispatchSource.indexOf("const DISPATCH_PARAMS = {");
-	assert.notEqual(declared, -1, "the parameter block moved");
-	const params = dispatchSource.slice(declared, dispatchSource.indexOf("\n};", declared));
-	assert.ok(params.includes("delegateArgv"), "the parameter block was not the one read");
-	assert.equal(/\bpi\b\s*:/.test(params), false, "the model-facing surface exposes a Pi selection");
+	// The model-facing surface carries no Pi field. This reads the parameters
+	// the tool actually registers rather than their source text, so a key
+	// spelled any way a model could still send is covered.
+	assert.deepEqual(registeredDispatchParameterKeys(), ["brief", "delegateArgv", "expectedRef", "timeoutMs"]);
 
-	armGatesTheCheckpoint(provisionalCheckpointApplies);
+	armGatesTheCheckpoint(provisionalCheckpointApplies, readFileSync(join(extensionsRoot, DISPATCH), "utf8"));
 	const repo = repository();
 	try {
 		await armRefusesEmptyGenericArgv(runDispatchReal, repo);
@@ -1037,6 +1104,31 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		[[RUN, "\t\t\tcontext,", "\t\t\tcontext: { ...context, stateDir: context.returnPath },"]],
 		"a context whose state root the runner substituted",
 	);
+	// A different VALID digest: the role is right and only the fixed field moves.
+	await armFails(
+		armSelectsEachRole,
+		[
+			[
+				RUN,
+				": recoveryPiProfile(invocation.role as RecoveryPiRole, invocation.specDigest);",
+				': recoveryPiProfile(invocation.role as RecoveryPiRole, invocation.specDigest === undefined ? undefined : "c".repeat(64));',
+			],
+		],
+		"another digest reaching the profile",
+	);
+	// The numeric terminal narrowed to `settled`: a child that never settles is
+	// then refused, which only the no-settle case can see.
+	await armFails(
+		armMapsEachTerminal,
+		[
+			[
+				RUN,
+				'if ((terminal !== "settled" && terminal !== "exited") || session.exitCode === null) return refusal("invalid");',
+				'if (terminal !== "settled" || session.exitCode === null) return refusal("invalid");',
+			],
+		],
+		"a numeric exit without a settle refused",
+	);
 	await armFails(
 		armSeamsCarryTheSameContext,
 		[[RUN, "\toperator.bind(session);", ""]],
@@ -1084,12 +1176,19 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 		assert.AssertionError,
 		"the inert-rendering mutant left the arm passing",
 	);
-	// A module that composes a claim of absent intervention.
-	assert.throws(
-		() => armComposesNoAttestation(["const line = `assistant (unsteered by any operator): ${text}`;"]),
-		assert.AssertionError,
-		"the attestation mutant left the arm passing",
-	);
+	// A module that composes a claim of absent intervention, in each of the
+	// wordings the arm enumerates — including an audit line that says it
+	// plainly rather than using the word the first pattern was written for.
+	for (const composed of [
+		"const line = `assistant (unsteered by any operator): ${text}`;",
+		'record("run-started", "dispatch run started: operator did not steer the delegate");',
+		'record("run-started", "no operator intervention occurred");',
+	])
+		assert.throws(
+			() => armComposesNoAttestation([composed]),
+			assert.AssertionError,
+			`the attestation mutant left the arm passing: ${composed}`,
+		);
 
 	// The checkpoint gate, with its transport condition dropped.
 	await assert.rejects(
@@ -1102,10 +1201,40 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 						"return options.operationDeadline !== undefined;",
 					],
 				],
-				async (_dispatch, applies) => armGatesTheCheckpoint(applies),
+				async (_dispatch, applies, source) => armGatesTheCheckpoint(applies, source),
 			),
 		assert.AssertionError,
 		"the checkpoint-gate mutant left the arm passing",
+	);
+	// And the gate removed from the arming itself, leaving the predicate right.
+	await assert.rejects(
+		() =>
+			withDispatcher(
+				[[DISPATCH, "if (provisionalCheckpointApplies(options))", "if (true)"]],
+				async (_dispatch, applies, source) => armGatesTheCheckpoint(applies, source),
+			),
+		assert.AssertionError,
+		"the ungated-arming mutant left the arm passing",
+	);
+
+	// A Pi selection exposed on the model-facing surface, spelled as a computed
+	// key — which is why the arm reads the registered parameters, not the text.
+	await assert.rejects(
+		() =>
+			withDispatcher(
+				[
+					[
+						DISPATCH,
+						'const DISPATCH_PARAMS = {\n\ttype: "object",\n\tproperties: {',
+						'const DISPATCH_PARAMS = {\n\ttype: "object",\n\tproperties: {\n\t\t["pi"]: { type: "object" },',
+					],
+				],
+				async (_dispatch, _applies, _source, keys) => {
+					assert.deepEqual(keys(), ["brief", "delegateArgv", "expectedRef", "timeoutMs"]);
+				},
+			),
+		assert.AssertionError,
+		"the exposed-Pi-field mutant left the arm passing",
 	);
 
 	const repo = repository();
