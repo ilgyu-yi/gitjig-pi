@@ -44,6 +44,7 @@ import {
 import * as hubReal from "../.pi/extensions/gitjig/dispatch/pi-operator.ts";
 import type { PiInvocation } from "../.pi/extensions/gitjig/dispatch/pi-run.ts";
 import type { DispatchContext } from "../.pi/extensions/gitjig/dispatch/provision.ts";
+import { quoted } from "../.pi/extensions/gitjig/quote.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const extensionsRoot = join(repoRoot, ".pi");
@@ -134,11 +135,25 @@ const invocation = (executable: string, over: Partial<PiInvocation> = {}): PiInv
 	...over,
 });
 
-/** A control character anywhere, found without a regex the style rules refuse. */
-function hasControlCharacter(value: string): boolean {
+/**
+ * Any class the repository's escaper treats as live, found without a regex the
+ * style rules refuse: the C0 and C1 controls, the line and paragraph
+ * separators, and the bidi controls.
+ */
+function hasInertBreach(value: string): boolean {
 	return [...value].some((character) => {
 		const point = character.codePointAt(0) ?? 0;
-		return point < 32 || (point >= 127 && point <= 159);
+		return (
+			point < 32 ||
+			(point >= 127 && point <= 159) ||
+			point === 0x061c ||
+			point === 0x200e ||
+			point === 0x200f ||
+			(point >= 0x202a && point <= 0x202e) ||
+			(point >= 0x2066 && point <= 0x2069) ||
+			point === 0x2028 ||
+			point === 0x2029
+		);
 	});
 }
 
@@ -512,7 +527,11 @@ const armLeavesTheConcurrentSessionAlone: RunnerArm = async (run, trace, scratch
 		// legitimately live — and the row the concurrent session holds proves
 		// it is that session which survived, not merely that one did.
 		assert.equal(hub.livePiOperatorSessions(), before, "the run did not return to its baseline");
-		assert.deepEqual(hub.piOperatorView(other.id), ["tool started: concurrent"], "the concurrent session was ended");
+		assert.deepEqual(
+			hub.piOperatorView(other.id),
+			[`tool started: ${quoted("concurrent")}`],
+			"the concurrent session was ended",
+		);
 		assert.deepEqual(hub.piOperatorView(String(own)), [], "the run's own session outlived it");
 	} finally {
 		other.end();
@@ -708,15 +727,19 @@ function armBoundsTheComposedRow(hub: Hub): void {
 function armRendersInertly(hub: Hub): void {
 	const session = hub.beginPiOperatorSession();
 	try {
+		// Every class the repository's own escaper treats as live, not just the
+		// C0 controls: a line separator would let a delegate push text onto a row
+		// of its own, and a bidi control would reverse what an operator reads.
+		const hostile = "before\u0007\u001b[31m\u2028FORGED\u202emalicious";
 		session.onEvent({
 			type: "message_end",
-			message: { role: "assistant", content: [{ type: "text", text: "before\u0007\u001b[31mafter" }] },
+			message: { role: "assistant", content: [{ type: "text", text: hostile }] },
 		});
 		const [rendered] = hub.piOperatorView(session.id);
-		assert.equal(hasControlCharacter(rendered), false, `control bytes survived: ${rendered}`);
-		assert.equal(rendered, "assistant: before  [31mafter");
+		assert.equal(hasInertBreach(rendered), false, `a live class survived: ${JSON.stringify(rendered)}`);
+		assert.equal(rendered, `assistant: ${quoted(hostile)}`);
 		session.onEvent({ type: "tool_execution_start", toolName: "read\u0007file" });
-		assert.equal(hub.piOperatorView(session.id)[1], "tool started: read file");
+		assert.equal(hub.piOperatorView(session.id)[1], `tool started: ${quoted("read\u0007file")}`);
 		// A completed message supersedes the deltas that preceded it.
 		session.onEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "draft text" } });
 		assert.ok(hub.piOperatorView(session.id).some((row) => row.startsWith("partial: ")));
@@ -837,7 +860,11 @@ test("each supervisor terminal maps onto exactly one run outcome", async () => {
 
 test("no delegate text and no claim of absent intervention leaves this part's modules", async () => {
 	await withRunner([], armKeepsNoChildTextInTheOutcome);
-	armComposesNoAttestation([RUN, HUB].map((relative) => readFileSync(join(extensionsRoot, relative), "utf8")));
+	// The dispatcher is in this list too: it is the surface that writes audit
+	// records for a Pi run, so it is where such a claim would be emitted.
+	armComposesNoAttestation(
+		[RUN, HUB, DISPATCH].map((relative) => readFileSync(join(extensionsRoot, relative), "utf8")),
+	);
 });
 
 test("the hub bounds what an operator would see, at each boundary and without losing its label", () => {
@@ -1045,8 +1072,8 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 				[
 					[
 						HUB,
-						'\t\t\treturn point < 32 || (point >= 127 && point <= 159) ? " " : character;',
-						"\t\t\treturn character;",
+						'\treturn [...quoted(value)].slice(-Math.max(0, points)).join("");',
+						'\treturn [...value]\n\t\t.slice(-Math.max(0, points))\n\t\t.map((character) => ((character.codePointAt(0) ?? 0) < 32 ? " " : character))\n\t\t.join("");',
 					],
 				],
 				armRendersInertly,

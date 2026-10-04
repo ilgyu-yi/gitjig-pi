@@ -17,6 +17,7 @@
  * text bounded to what remains.
  */
 import { randomUUID } from "node:crypto";
+import { quoted } from "../quote.ts";
 import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
 
 /** Rendered rows an operator may see at once, the partial row included. */
@@ -27,15 +28,16 @@ export const MAX_ROW_POINTS = 512;
 /** The view's own prefix for the one uncompleted row, counted in its bound. */
 const PARTIAL_PREFIX = "partial: ";
 
-/** Replace control characters and keep the last `points` code points. */
+/**
+ * Delegate text, made inert through the repository's one escaper and then
+ * bounded. The escaper owns which classes are inert — C0 and C1, the line and
+ * paragraph separators, and the bidi controls — so this module consumes that
+ * rule instead of restating a narrower one of its own (§3.11): a row that
+ * replaced only C0 would still let a delegate push text onto a line of its
+ * own, or reverse what an operator reads (#420).
+ */
 function clip(value: string, points: number): string {
-	return [...value]
-		.slice(-Math.max(0, points))
-		.map((character) => {
-			const point = character.codePointAt(0) ?? 0;
-			return point < 32 || (point >= 127 && point <= 159) ? " " : character;
-		})
-		.join("");
+	return [...quoted(value)].slice(-Math.max(0, points)).join("");
 }
 
 /** One rendered row: the local label in full, the delegate's text bounded. */
@@ -67,7 +69,7 @@ export function livePiOperatorSessions(): number {
 export function piOperatorView(id: string): string[] {
 	const item = active.get(id);
 	if (item === undefined) return [];
-	const rows = [...item.lines, ...(item.partial.length > 0 ? [`${PARTIAL_PREFIX}${item.partial}`] : [])];
+	const rows = [...item.lines, ...(item.partial.length > 0 ? [row(PARTIAL_PREFIX, item.partial)] : [])];
 	return rows.slice(-MAX_VIEW_ROWS);
 }
 
@@ -83,10 +85,10 @@ export function beginPiOperatorSession() {
 				const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
 				// Clipped to leave room for the `partial: ` prefix the view adds,
 				// so the rendered row stays inside the same bound as any other.
-				// Held to the delegate's share of a row, so the view's own prefix
-				// always fits beside it.
+				// Kept raw and bounded here, made inert when the row is rendered:
+				// escaping each delta as it arrives would escape the escapes.
 				if (delta?.type === "text_delta" && typeof delta.delta === "string")
-					item.partial = clip(item.partial + delta.delta, MAX_ROW_POINTS - PARTIAL_PREFIX.length);
+					item.partial = [...(item.partial + delta.delta)].slice(-MAX_ROW_POINTS).join("");
 				return;
 			}
 			let line: string | undefined;
