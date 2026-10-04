@@ -208,14 +208,24 @@ export const startPiRpc: typeof startReal = (options) => {
 		// The caller marks its own signal, so identity is read rather than
 		// presence: a freshly minted signal carries no mark.
 		signalMark: (options.signal as { gitjigArmMark?: unknown } | undefined)?.gitjigArmMark,
+		// Likewise for the operator sink: the hub marks its own callback, so a
+		// supervisor started without one, or with someone else's, is visible.
+		eventSinkMark: (options.onOperatorEvent as { gitjigHubSession?: unknown } | undefined)?.gitjigHubSession,
 	});
 	return startReal(options);
 };
 export const beginPiOperatorSession: typeof beginReal = () => {
 	const session = beginReal();
 	note({ call: "hub-begin", id: session.id });
+	const onEvent = (event: Parameters<typeof session.onEvent>[0]) => session.onEvent(event);
+	Object.defineProperty(onEvent, "gitjigHubSession", { value: session.id });
 	return {
 		...session,
+		onEvent,
+		bind: (rpc: Parameters<typeof session.bind>[0]) => {
+			note({ call: "hub-bind", id: session.id, bound: rpc !== undefined });
+			session.bind(rpc);
+		},
 		end: () => {
 			note({ call: "hub-end", id: session.id });
 			session.end();
@@ -410,6 +420,16 @@ const armSeamsCarryTheSameContext: RunnerArm = async (run, trace, scratch) => {
 		assert.equal(start?.[key], context[key], `supervisor ${key}`);
 	}
 	assert.equal(start?.extensionPath, provisioned?.path, "the supervisor was given another extension");
+	// The hub is wired to the session it opened, in both directions: the
+	// supervisor drains into THIS session's sink, and the session is bound to
+	// the running child so a view can reach it. Draining is wired before the
+	// child starts and waits on nobody attaching.
+	const begun = calls.find((entry) => entry.call === "hub-begin")?.id;
+	assert.equal(start?.eventSinkMark, begun, "the supervisor was started without this session's sink");
+	const bind = calls.find((entry) => entry.call === "hub-bind");
+	assert.equal(bind?.id, begun, "the session was never bound to its running child");
+	assert.equal(bind?.bound, true);
+	assert.ok(calls.indexOf(start as Call) < calls.indexOf(bind as Call), "the session was bound before a child existed");
 };
 
 const armCarriesTheCallersSelection: RunnerArm = async (run, trace, scratch) => {
@@ -981,6 +1001,16 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 			],
 		],
 		"a terminal mapped onto another",
+	);
+	await armFails(
+		armSeamsCarryTheSameContext,
+		[[RUN, "\t\t\tonOperatorEvent: operator.onEvent,", ""]],
+		"a supervisor started with no operator sink",
+	);
+	await armFails(
+		armSeamsCarryTheSameContext,
+		[[RUN, "\toperator.bind(session);", ""]],
+		"a session never bound to its child",
 	);
 });
 
