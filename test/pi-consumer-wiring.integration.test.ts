@@ -30,7 +30,8 @@ import {
 	PI_RETURN_PROTOCOL_RETRY_SUFFIX,
 	RETURN_PROTOCOL_RETRY_SUFFIX,
 } from "../.pi/extensions/gitjig/review/briefs.ts";
-import { makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
+import { composeDiagnosisBrief } from "../.pi/extensions/gitjig/review/history.ts";
+import { makeDispatcher, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const ORCHESTRATE = "review/orchestrate.ts";
@@ -328,12 +329,160 @@ function armProjectsTheRecoveryBrief(): void {
 }
 
 /*
- * The harness: a private copy of the extension tree, so a mutant of the module
- * under test can be handed to the arm that owns the property.
+ * The production call sites. The arms above measure the pieces; these measure
+ * the places that choose, because a role or a projection applied correctly in
+ * a helper and wrongly at its call site is a wrong run with the right parts.
  */
-async function withOrchestrator<T>(
+
+/** The orchestrator fixes `reviewer` and `judge` at its own call sites. */
+async function armPinsProductionRoles(round: typeof reviewRound): Promise<void> {
+	const calls: { brief: string; role?: string }[] = [];
+	const result = await round({
+		repoRoot,
+		baseRef: "HEAD~1",
+		headRef: "HEAD",
+		manifest: { state: "present", criteria: ["the change does what it says"] },
+		fences: { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] },
+		changeDescription: "a change",
+		transport: "pi",
+		dispatch: async (brief: string, _head: string, role?: string) => {
+			calls.push({ brief, role });
+			// Each slot returns findings so the Judge is reached; the Judge's own
+			// return is malformed, which ends the round without a verdict.
+			return {
+				disposition: "admitted",
+				ok: true,
+				summary: "a slot summary",
+				payload: '{"token":"FINDINGS","findings":["one"]}',
+				compare: "confirmed",
+				diagnostic: {
+					status: "admitted",
+					phase: "complete",
+					run: { class: "exited", exitCode: 0, signal: null },
+					return: { class: "admitted" },
+					compare: { class: "confirmed" },
+					durationMs: 1,
+					code: "ADMITTED",
+				},
+			} as never;
+		},
+	} as never);
+	assert.ok(result, "the round returned nothing");
+	assert.ok(calls.length >= 2, `the round made ${calls.length} dispatches`);
+	// Every slot dispatch is a reviewer, and the Judge dispatch is a judge.
+	const roles = calls.map((call) => call.role);
+	assert.ok(roles.includes("reviewer"), `no reviewer role was fixed: ${JSON.stringify(roles)}`);
+	assert.ok(roles.includes("judge"), `no judge role was fixed: ${JSON.stringify(roles)}`);
+	assert.equal(roles.includes(undefined), false, "a consumer left its role unset");
+	// And the brief each one carried is its transport's, at the call site.
+	for (const call of calls) {
+		assert.match(call.brief, /submit_result/, `${call.role}: a generic brief on a Pi path`);
+		assert.equal(/write a complete provisional/.test(call.brief), false, `${call.role}: a direct-write instruction`);
+	}
+	// The reviewer's brief is the reviewer's and the Judge's is the Judge's:
+	// a call site that passed the wrong one would still be "a Pi brief".
+	const reviewer = calls.find((call) => call.role === "reviewer");
+	const judge = calls.find((call) => call.role === "judge");
+	assert.match(String(reviewer?.brief), /reviewer/i);
+	assert.match(String(judge?.brief), /adjudicat|Judge/i);
+}
+
+/** The history diagnosis brief follows its caller's transport, in all three places. */
+function armSelectsTheDiagnosisTransport(compose: typeof composeDiagnosisBrief): void {
+	const basis = { states: [], intervals: [] };
+	const context = { changeDescription: "a change", withheldHead: PIN };
+	const generic = compose(basis as never, { ...context, transport: "generic" });
+	const pi = compose(basis as never, { ...context, transport: "pi" });
+	// Each of the three transport decisions shows in the composed text.
+	assert.match(pi, /Submit the following closed object as typed submit_result tool arguments/);
+	assert.match(pi, /PI RESULT: use only the trusted submit_result tool/);
+	assert.match(pi, /call submit_result once with/);
+	for (const [name, pattern] of [
+		["payload-slot instruction", /rides the return's "payload" slot/],
+		["generic return contract", /write a complete provisional/],
+	] as ReadonlyArray<readonly [string, RegExp]>)
+		assert.equal(pattern.test(pi), false, `the Pi diagnosis brief kept the ${name}`);
+	assert.match(generic, /\.\.\/return\.json/);
+	assert.equal(/submit_result/.test(generic), false, "the generic diagnosis brief names the tool");
+}
+
+/** The production recovery dispatcher projects the brief it sends under Pi. */
+async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [string, string, string]>): Promise<void> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-422-recovery-"));
+	try {
+		const root = join(scratch, "gitjig");
+		cpSync(join(repoRoot, ".pi/extensions/gitjig"), root, { recursive: true });
+		symlinkSync(join(repoRoot, "node_modules"), join(scratch, "node_modules"), "dir");
+		// The seam: what the coordinator's own dispatcher hands the dispatcher
+		// below it. An outcome cannot show which brief was sent.
+		const tracePath = join(scratch, "sent.jsonl");
+		writeFileSync(
+			join(root, "dispatch/run-trace.ts"),
+			`import { appendFileSync } from "node:fs";\nimport { runDispatch as real } from "./index.ts";\nexport const runDispatch: typeof real = (options) => {\n\tappendFileSync(${JSON.stringify(tracePath)}, \`\${JSON.stringify({ brief: options.brief, pi: options.pi ?? null })}\\n\`);\n\treturn Promise.resolve({ disposition: "refused", cause: "fixture", diagnostic: { status: "refused", phase: "return", run: { class: "exited", exitCode: 1, signal: null }, return: { class: "missing" }, compare: { class: "not-reached" }, durationMs: 1, code: "RETURN_MISSING" } } as never);\n};\n`,
+		);
+		const coordinator = join(root, "recovery/coordinator.ts");
+		const source = readFileSync(coordinator, "utf8");
+		const anchor = 'import { runDispatch } from "../dispatch/index.ts";';
+		if (source.indexOf(anchor) === -1) throw new Error("the coordinator's dispatch import moved");
+		writeFileSync(coordinator, source.replace(anchor, 'import { runDispatch } from "../dispatch/run-trace.ts";'));
+		for (const [relative, from, to] of edits) {
+			const path = join(root, relative);
+			const current = readFileSync(path, "utf8");
+			if (current.indexOf(from) === -1) throw new Error(`anchor must exist in ${relative}: ${from}`);
+			if (current.indexOf(from) !== current.lastIndexOf(from)) throw new Error(`anchor must be unique: ${from}`);
+			writeFileSync(
+				path,
+				current.replace(from, () => to),
+			);
+		}
+		const { makeRecoveryProfileDispatcher } = await import(pathToFileURL(coordinator).href);
+		const { createRecoveryAttemptLedger } = await import(pathToFileURL(join(root, ORCHESTRATE)).href);
+		const sent = async (pi?: { piExecutable: string; provider: string; model: string }) => {
+			const dispatcher = makeRecoveryProfileDispatcher({
+				repoRoot,
+				stateRoot: join(scratch, "state"),
+				...(pi === undefined ? {} : { pi }),
+			});
+			assert.equal(dispatcher.transport, pi === undefined ? "generic" : "pi", "the dispatcher's declared transport");
+			await dispatcher(
+				createRecoveryAttemptLedger(performance.now()),
+				"stagnation-root",
+				challengerBrief(
+					"root",
+					{ value: "STAGNATION", invalidation: "nothing", evidence: "e" } as never,
+					{
+						states: [],
+						intervals: [],
+					} as never,
+				),
+				PIN,
+				performance.now() + 60_000,
+				pi === undefined ? undefined : "challenger",
+			).catch(() => undefined);
+			const lines = readFileSync(tracePath, "utf8").split("\n").filter(Boolean);
+			return JSON.parse(lines[lines.length - 1]) as { brief: string; pi: unknown };
+		};
+		const underPi = await sent(PI);
+		assert.match(underPi.brief, /submit_result/, "the production recovery dispatch sent an unprojected brief");
+		assert.equal(/required provisional\/final \.\.\/return\.json/.test(underPi.brief), false);
+		assert.notEqual(underPi.pi, null, "the production recovery dispatch carried no Pi selection");
+		const underGeneric = await sent(undefined);
+		assert.equal(/submit_result/.test(underGeneric.brief), false, "the generic recovery dispatch was projected");
+		assert.equal(underGeneric.pi, null);
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+/*
+ * The harness: a private copy of the extension tree, so a mutant of the module
+ * under test can be handed to the arm that owns the property. Each module is
+ * loaded from the edited copy.
+ */
+async function withPrivateCopy<T>(
 	edits: ReadonlyArray<readonly [string, string, string]>,
-	scenario: (make: typeof makeDispatcher) => Promise<T>,
+	// biome-ignore lint/suspicious/noExplicitAny: a module loaded from a private copy has no static type
+	scenario: (load: (relative: string) => Promise<any>) => Promise<T>,
 ): Promise<T> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-422-"));
 	try {
@@ -353,8 +502,7 @@ async function withOrchestrator<T>(
 				source.replace(anchor, () => replacement),
 			);
 		}
-		const imported = await import(pathToFileURL(join(root, ORCHESTRATE)).href);
-		return await scenario(imported.makeDispatcher);
+		return await scenario((relative) => import(pathToFileURL(join(root, relative)).href));
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
@@ -365,8 +513,18 @@ async function armFails(
 	edits: ReadonlyArray<readonly [string, string, string]>,
 	named: string,
 ): Promise<void> {
+	await copyFails((load) => load(ORCHESTRATE).then((module) => arm(module.makeDispatcher)), edits, named);
+}
+
+/** The same requirement for an arm over any module of the copy. */
+async function copyFails(
+	// biome-ignore lint/suspicious/noExplicitAny: see withPrivateCopy
+	arm: (load: (relative: string) => Promise<any>) => Promise<unknown> | unknown,
+	edits: ReadonlyArray<readonly [string, string, string]>,
+	named: string,
+): Promise<void> {
 	await assert.rejects(
-		() => withOrchestrator(edits, arm),
+		() => withPrivateCopy(edits, async (load) => arm(load)),
 		(error: unknown) => {
 			assert.ok(error instanceof assert.AssertionError, `${named}: the arm failed for another reason: ${error}`);
 			return true;
@@ -394,6 +552,12 @@ test("only the retry's own return satisfies its consumer", async () => {
 test("each consumer's brief is its transport's own, in what it says and what it withholds", () => {
 	armSelectsTheTransportsBrief();
 	armProjectsTheRecoveryBrief();
+});
+
+test("the production call sites fix their own roles and briefs", async () => {
+	await armPinsProductionRoles(reviewRound);
+	armSelectsTheDiagnosisTransport(composeDiagnosisBrief);
+	await armProjectsInProductionRecovery([]);
 });
 
 test("baseline-first private-copy mutants: the shared retry's own commitments", async () => {
@@ -446,5 +610,82 @@ test("baseline-first private-copy mutants: the shared retry's own commitments", 
 		armRequiresTheRetrysOwnReturn,
 		[[ORCHESTRATE, "retryAvailable = false;", "retryAvailable = true;"]],
 		"a retry state that never spends",
+	);
+});
+
+test("baseline-first private-copy mutants: each production call site's own choice", async () => {
+	const roles = (load: (relative: string) => Promise<{ reviewRound: typeof reviewRound }>) =>
+		load(ORCHESTRATE).then((module) => armPinsProductionRoles(module.reviewRound));
+	const diagnosis = (load: (relative: string) => Promise<{ composeDiagnosisBrief: typeof composeDiagnosisBrief }>) =>
+		load("review/history.ts").then((module) => armSelectsTheDiagnosisTransport(module.composeDiagnosisBrief));
+	// Baseline first: the unedited copy passes every arm the mutants run.
+	await withPrivateCopy([], roles);
+	await withPrivateCopy([], diagnosis);
+	await armProjectsInProductionRecovery([]);
+	await copyFails(
+		roles,
+		[[ORCHESTRATE, 'options.dispatch(brief, head, "reviewer")', 'options.dispatch(brief, head, "judge")']],
+		"the reviewer call site dispatched as a judge",
+	);
+	await copyFails(
+		roles,
+		[[ORCHESTRATE, 'options.dispatch(judgeBrief, head, "judge")', 'options.dispatch(judgeBrief, head, "reviewer")']],
+		"the Judge call site dispatched as a reviewer",
+	);
+	await copyFails(
+		roles,
+		[
+			[
+				ORCHESTRATE,
+				"\t\t\t\toptions.timing,\n\t\t\t\toptions.transport,\n\t\t\t);\n\t\t\tconst outcome = await options.dispatch(brief",
+				'\t\t\t\toptions.timing,\n\t\t\t\t"generic",\n\t\t\t);\n\t\t\tconst outcome = await options.dispatch(brief',
+			],
+		],
+		"the reviewer brief composed generically on a Pi round",
+	);
+	await copyFails(
+		diagnosis,
+		[
+			[
+				"review/history.ts",
+				'context.transport === "pi"\n\t\t\t? "Submit the following',
+				'false\n\t\t\t? "Submit the following',
+			],
+		],
+		"the diagnosis payload instruction left generic",
+	);
+	await copyFails(
+		diagnosis,
+		[["review/history.ts", 'context.transport === "pi" ? PI_RETURN_CONTRACT', "false ? PI_RETURN_CONTRACT"]],
+		"the diagnosis return contract left generic",
+	);
+	await copyFails(
+		diagnosis,
+		[
+			[
+				"review/history.ts",
+				'context.transport === "pi"\n\t\t\t? composePiDeadlines',
+				"false\n\t\t\t? composePiDeadlines",
+			],
+		],
+		"the diagnosis deadlines left generic",
+	);
+	await assert.rejects(
+		() =>
+			armProjectsInProductionRecovery([
+				[
+					"recovery/coordinator.ts",
+					"input.pi === undefined ? semanticBrief : piRecoveryBrief(semanticBrief)",
+					"semanticBrief",
+				],
+			]),
+		(error: unknown) => {
+			assert.ok(
+				error instanceof assert.AssertionError,
+				`the unprojected recovery dispatch: the arm failed for another reason: ${error}`,
+			);
+			return true;
+		},
+		"the unprojected recovery dispatch: the owner arm still passed",
 	);
 });

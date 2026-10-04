@@ -1132,6 +1132,66 @@ describe("review-round production call site", () => {
 		assert.equal(dispatched, 0);
 	});
 
+	it("fixes the history role and both transports from the spec's own Pi selection", async () => {
+		// #422: the diagnosis is the one consumer the command dispatches itself,
+		// so its role and its brief's transport are fixed here or nowhere.
+		for (const pi of [undefined, { piExecutable: "pi", provider: "provider", model: "model" }]) {
+			const fixture = repo();
+			const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+			const seen: { brief: string; role?: string }[] = [];
+			let transport: RoundOptions["transport"] | "unread" = "unread";
+			// The round's own record is read back after publication, as on the platform.
+			let published: string | undefined;
+			const { delegateArgv: _argv, ...bare } = spec();
+			const outcome = await driveReviewRound(
+				pi === undefined ? spec() : { ...bare, pi },
+				fixture.root,
+				seams({
+					fetchSubject: async () => subject(fixture.base, fixture.head),
+					resolveHead: () => fixture.head,
+					readComments: async () => population(bodies, published),
+					publishRecord: async (body) => {
+						published = body;
+						return receipt(body);
+					},
+					makeDispatch: () => async (brief, _head, role) => {
+						seen.push({ brief, role });
+						return {
+							disposition: "admitted" as const,
+							ok: true,
+							summary: "",
+							compare: "confirmed" as const,
+							payload: JSON.stringify({ value: "NONE", invalidation: "nothing", evidence: "ordinary" }),
+							diagnostic: ADMITTED_DIAGNOSTIC,
+						};
+					},
+					runRound: async (options) => {
+						transport = options.transport;
+						return ROUND;
+					},
+				}),
+			);
+			const label = pi === undefined ? "generic" : "pi";
+			assert.equal(outcome.disposition, "posted", `${label}: the round did not continue: ${JSON.stringify(outcome)}`);
+			// Only diagnoses are dispatched here, before the round and after it.
+			assert.ok(seen.length >= 1, `${label}: no diagnosis was dispatched`);
+			assert.deepEqual(
+				seen.map((call) => call.role),
+				seen.map(() => "history"),
+				`${label}: the diagnosis role`,
+			);
+			assert.equal(transport, label, `${label}: the round's transport`);
+			for (const { brief } of seen)
+				if (pi === undefined) {
+					assert.match(brief, /\.\.\/return\.json/);
+					assert.equal(/submit_result/.test(brief), false, "a generic diagnosis brief named the tool");
+				} else {
+					assert.match(brief, /submit_result/, "a Pi diagnosis brief kept the generic return");
+					assert.equal(/write a complete provisional/.test(brief), false);
+				}
+		}
+	});
+
 	it("routes a pre-round autonomous STAGNATION through the shared coordinator after both freshness callbacks", async () => {
 		const fixture = repo();
 		const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
