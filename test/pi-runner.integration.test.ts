@@ -42,6 +42,7 @@ import {
 	registerDispatchTool,
 	runDispatch as runDispatchReal,
 } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import { namesHeldOperand } from "../.pi/extensions/gitjig/dispatch/operand.ts";
 import * as hubReal from "../.pi/extensions/gitjig/dispatch/pi-operator.ts";
 import type { PiInvocation } from "../.pi/extensions/gitjig/dispatch/pi-run.ts";
 import type { Profile } from "../.pi/extensions/gitjig/dispatch/pi-submit-extension.ts";
@@ -494,6 +495,18 @@ const armRedactsWholeHead: RunnerArm = async (run, trace, scratch) => {
 		trace().some((entry) => entry.call === "startPiRpc"),
 		true,
 	);
+	// What the child was actually GIVEN, judged by part 1's ruled predicate
+	// rather than by a substring search: the brief it reads, the prompt it was
+	// sent, and every other frame that reached it. A redaction that left the
+	// operand in the prompt would satisfy the brief assertions above.
+	// The caller's own context carries the held hash by design — the runner
+	// needs it to redact with — so what is scanned is what CROSSES to the
+	// child, not the parameters the supervisor was given.
+	for (const [what, text] of [
+		["the brief it reads", brief],
+		["the frames it received", JSON.stringify(frames(executable))],
+	] as ReadonlyArray<readonly [string, string]>)
+		assert.equal(namesHeldOperand(text, HELD), false, `${what} names the held operand`);
 };
 
 const armRefusesContainedRun: RunnerArm = async (run, trace, scratch) => {
@@ -1274,6 +1287,20 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		armRedactsWholeHead,
 		[[RUN, "if (redacted !== original) writeFileSync(context.briefPath, redacted);", "void redacted;"]],
 		"the redaction removed",
+	);
+	// The brief is redacted and the operand rides in the PROMPT instead: every
+	// assertion about the brief still holds, and only what the child received
+	// shows it.
+	await armFails(
+		armRedactsWholeHead,
+		[
+			[
+				RUN,
+				'prompt: "Read ../brief.md; submit your final result with the available submit_result tool.",',
+				"prompt: `Read ../brief.md at ${context.heldHash}; submit your final result with the available submit_result tool.`,",
+			],
+		],
+		"the held operand carried in the prompt",
 	);
 	await armFails(
 		armRefusesContainedRun,
