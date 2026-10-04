@@ -44,8 +44,11 @@ import {
 } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import * as hubReal from "../.pi/extensions/gitjig/dispatch/pi-operator.ts";
 import type { PiInvocation } from "../.pi/extensions/gitjig/dispatch/pi-run.ts";
+import type { Profile } from "../.pi/extensions/gitjig/dispatch/pi-submit-extension.ts";
 import type { DispatchContext } from "../.pi/extensions/gitjig/dispatch/provision.ts";
 import { quoted } from "../.pi/extensions/gitjig/quote.ts";
+import { recoveryPiProfile } from "../.pi/extensions/gitjig/recovery/pi-profile.ts";
+import { REVIEW_PI_PROFILES } from "../.pi/extensions/gitjig/review/pi-profile.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const extensionsRoot = join(repoRoot, ".pi");
@@ -232,7 +235,9 @@ const note = (entry: Record<string, unknown>) =>
 export const provisionPiSubmitTool: typeof provisionReal = (context, profile) => {
 	// The profile's fixed fields carry the caller's measurement digest, so a
 	// substituted one is visible here and not only in the role.
-	note({ call: "provision", role: profile.role, fixed: { ...profile.fixed }, context: { ...context } });
+	// The WHOLE profile: its schema and summary are as much the consumer's
+	// choice as its role, and a substituted schema would admit another shape.
+	note({ call: "provision", profile: { ...profile }, context: { ...context } });
 	const path = provisionReal(context, profile);
 	note({ call: "provisioned", path });
 	return path;
@@ -503,14 +508,19 @@ const armSelectsEachRole: RunnerArm = async (run, trace, scratch) => {
 			{ timeoutMs: 15_000 },
 		);
 		const provisioned = trace().filter((entry) => entry.call === "provision");
-		const last = provisioned[provisioned.length - 1];
+		const last = provisioned[provisioned.length - 1]?.profile as Profile | undefined;
 		assert.equal(last?.role, expected, role);
 		// The caller's digest reaches the profile unchanged, or no digest does.
-		assert.equal(
-			(last?.fixed as Record<string, unknown> | undefined)?.specDigest,
-			digest,
-			`${role}: the profile carried another digest`,
-		);
+		assert.equal(last?.fixed?.specDigest, digest, `${role}: the profile carried another digest`);
+		// And the profile is the consumer's OWN, whole: the same schema and
+		// summary that module owns, not merely something with the right role.
+		// Compared before exposure, which the provisioner applies itself when it
+		// writes the profile beside the tool.
+		const owned =
+			role in REVIEW_PI_PROFILES
+				? REVIEW_PI_PROFILES[role as keyof typeof REVIEW_PI_PROFILES]
+				: (recoveryPiProfile(role as Parameters<typeof recoveryPiProfile>[0], digest) as Profile);
+		assert.deepEqual(last, owned, `${role}: the provisioned profile is not the consumer's own`);
 	}
 };
 
@@ -1247,6 +1257,19 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		armSeamsCarryTheSameContext,
 		[[RUN, "\t\t\tcontext,", "\t\t\tcontext: { ...context, stateDir: context.returnPath },"]],
 		"a context whose state root the runner substituted",
+	);
+	// A substituted schema: the role and the digest are right, and only the
+	// shape the child may submit moves.
+	await armFails(
+		armSelectsEachRole,
+		[
+			[
+				RUN,
+				"const extensionPath = provisionPiSubmitTool(context, profile);",
+				"const extensionPath = provisionPiSubmitTool(context, { ...profile, schema: REVIEW_PI_PROFILES.reviewer.schema });",
+			],
+		],
+		"another consumer's schema under the right role",
 	);
 	// A different VALID digest: the role is right and only the fixed field moves.
 	await armFails(
