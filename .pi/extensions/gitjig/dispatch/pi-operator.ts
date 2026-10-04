@@ -9,6 +9,12 @@
  * row cap because it is rendered beside the others, and the code-point cap
  * applies to the composed row including this module's own prefix, not to the
  * delegate text before one is added (#420).
+ *
+ * The delegate's share of a row is what gives way, never the local label. A
+ * bound applied to the composed row from the right would drop the prefix off
+ * a long message and leave delegate text standing where a trusted label is
+ * read — so each row is composed as a fixed local prefix plus the delegate
+ * text bounded to what remains.
  */
 import { randomUUID } from "node:crypto";
 import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
@@ -21,15 +27,20 @@ export const MAX_ROW_POINTS = 512;
 /** The view's own prefix for the one uncompleted row, counted in its bound. */
 const PARTIAL_PREFIX = "partial: ";
 
-/** Replace control characters and clip the WHOLE row to its bound. */
-function clip(value: string): string {
+/** Replace control characters and keep the last `points` code points. */
+function clip(value: string, points: number): string {
 	return [...value]
-		.slice(-MAX_ROW_POINTS)
+		.slice(-Math.max(0, points))
 		.map((character) => {
 			const point = character.codePointAt(0) ?? 0;
 			return point < 32 || (point >= 127 && point <= 159) ? " " : character;
 		})
 		.join("");
+}
+
+/** One rendered row: the local label in full, the delegate's text bounded. */
+function row(prefix: string, text: string): string {
+	return `${prefix}${clip(text, MAX_ROW_POINTS - [...prefix].length)}`;
 }
 interface Active {
 	id: string;
@@ -72,10 +83,10 @@ export function beginPiOperatorSession() {
 				const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
 				// Clipped to leave room for the `partial: ` prefix the view adds,
 				// so the rendered row stays inside the same bound as any other.
+				// Held to the delegate's share of a row, so the view's own prefix
+				// always fits beside it.
 				if (delta?.type === "text_delta" && typeof delta.delta === "string")
-					item.partial = [...clip(item.partial + delta.delta)]
-						.slice(-(MAX_ROW_POINTS - PARTIAL_PREFIX.length))
-						.join("");
+					item.partial = clip(item.partial + delta.delta, MAX_ROW_POINTS - PARTIAL_PREFIX.length);
 				return;
 			}
 			let line: string | undefined;
@@ -89,17 +100,16 @@ export function beginPiOperatorSession() {
 								: [],
 						)
 						.join(" ");
-					line = `assistant: ${text}`;
+					line = row("assistant: ", text);
 					item.partial = ""; // completion supersedes deltas
 				}
 			} else if (event.type === "tool_execution_start" || event.type === "tool_execution_end") {
 				const name = typeof event.toolName === "string" ? event.toolName : "tool";
-				line = `${event.type === "tool_execution_start" ? "tool started" : "tool ended"}: ${name}`;
+				line = row(event.type === "tool_execution_start" ? "tool started: " : "tool ended: ", name);
 			}
 			if (line !== undefined) {
-				// Clipped after composition: the bound is on the row an operator
-				// sees, and this module's own prefix is part of that row.
-				item.lines.push(clip(line));
+				// Already composed within the bound by `row`, prefix included.
+				item.lines.push(line);
 				if (item.lines.length > MAX_VIEW_ROWS) item.lines.shift();
 			}
 		},
