@@ -1187,7 +1187,10 @@ describe("review-round production call site", () => {
 					assert.equal(/submit_result/.test(brief), false, "a generic diagnosis brief named the tool");
 				} else {
 					assert.match(brief, /submit_result/, "a Pi diagnosis brief kept the generic return");
-					assert.equal(/write a complete provisional/.test(brief), false);
+					// Every mention of the file is the settled prohibition itself.
+					const prohibition = "Do NOT write\n../return.json directly,";
+					assert.ok(brief.includes(prohibition), "the Pi diagnosis brief forbids nothing");
+					assert.equal(brief.split("../return.json").length, brief.split(prohibition).length);
 				}
 		}
 	});

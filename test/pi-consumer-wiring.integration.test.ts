@@ -259,7 +259,32 @@ const armRequiresTheRetrysOwnReturn: Arm = async (make) => {
 };
 
 /** §4.9: a Pi brief submits through the tool and never instructs a direct write. */
-function armSelectsTheTransportsBrief(): void {
+/** The settled prohibitions, by their own bytes: the review contract's and the recovery projection's. */
+const REVIEW_PROHIBITION =
+	"Do NOT write\n../return.json directly, choose a role, supply a commit hash, or encode an outer return envelope.";
+const RECOVERY_PROHIBITION = "Submit only via the trusted submit_result tool; never write ../return.json directly.";
+
+/**
+ * A Pi brief forbids the direct write and says nothing else about the file:
+ * the prohibition is present by its own bytes, and every mention of the path
+ * lies inside one of them. Disconnected substrings would admit a brief that
+ * forbids nothing and instructs the write in the next sentence.
+ */
+function assertOnlyForbidsTheFile(brief: string, prohibition: string, label: string): void {
+	const mentions = brief.split("../return.json").length - 1;
+	const forbidding = brief.split(prohibition).length - 1;
+	assert.ok(forbidding >= 1, `${label}: the settled prohibition is absent`);
+	assert.equal(mentions, forbidding, `${label}: the file is mentioned outside its prohibition`);
+}
+
+type ReviewBriefs = { composeReviewerBrief: typeof composeReviewerBrief; composeJudgeBrief: typeof composeJudgeBrief };
+type RecoveryBriefs = {
+	challengerBrief: typeof challengerBrief;
+	measurementBrief: typeof measurementBrief;
+	piRecoveryBrief: typeof piRecoveryBrief;
+};
+
+function armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief }: ReviewBriefs): void {
 	const timing = { firstReturnSeconds: 300, finalReturnSeconds: 1500 };
 	const context = { changeDescription: "a change" };
 	const fences = { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] };
@@ -280,10 +305,7 @@ function armSelectsTheTransportsBrief(): void {
 		// The Pi brief names the tool, and carries the settled prohibition of
 		// writing the file directly — an absence would not forbid it.
 		assert.match(pi, /submit_result/, `${label}: the Pi brief never names the tool`);
-		assert.ok(
-			pi.includes("Do NOT write") && pi.includes("../return.json"),
-			`${label}: the Pi brief does not forbid writing the return file`,
-		);
+		assertOnlyForbidsTheFile(pi, REVIEW_PROHIBITION, label);
 		// And it carries no instruction TO write one, provisional or final.
 		assert.equal(
 			/write a complete provisional|overwrite it with the final|rides the return's "payload" slot/.test(pi),
@@ -301,13 +323,13 @@ function armSelectsTheTransportsBrief(): void {
 }
 
 /** The recovery brief is a projection that refuses rather than half-rewrites. */
-function armProjectsTheRecoveryBrief(): void {
+function armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piRecoveryBrief }: RecoveryBriefs): void {
 	const diagnosis = { value: "STAGNATION", invalidation: "nothing", evidence: "the repairs repeated" };
 	const basis = { states: [], intervals: [] };
 	const generic = challengerBrief("root", diagnosis as never, basis as never);
 	const pi = piRecoveryBrief(generic);
 	assert.match(pi, /submit_result/);
-	assert.ok(pi.includes("never write ../return.json directly"), "the projection dropped its prohibition");
+	assertOnlyForbidsTheFile(pi, RECOVERY_PROHIBITION, "challenger");
 	assert.equal(/required provisional\/final \.\.\/return\.json/.test(pi), false, "the generic writer survived");
 	assert.match(pi, /a settled agent without a valid tool submission is not a result/);
 	// Each anchor the projection depends on: with it absent or doubled, the
@@ -326,6 +348,7 @@ function armProjectsTheRecoveryBrief(): void {
 		measurementBrief({ question: "q", method: "m", expectedDiscriminator: "d", kind: "measurement" } as never),
 	);
 	assert.match(measurement, /submit_result/);
+	assertOnlyForbidsTheFile(measurement, RECOVERY_PROHIBITION, "measurement");
 }
 
 /*
@@ -377,7 +400,7 @@ async function armPinsProductionRoles(round: typeof reviewRound): Promise<void> 
 	// And the brief each one carried is its transport's, at the call site.
 	for (const call of calls) {
 		assert.match(call.brief, /submit_result/, `${call.role}: a generic brief on a Pi path`);
-		assert.equal(/write a complete provisional/.test(call.brief), false, `${call.role}: a direct-write instruction`);
+		assertOnlyForbidsTheFile(call.brief, REVIEW_PROHIBITION, String(call.role));
 	}
 	// The reviewer's brief is the reviewer's and the Judge's is the Judge's:
 	// a call site that passed the wrong one would still be "a Pi brief".
@@ -397,6 +420,7 @@ function armSelectsTheDiagnosisTransport(compose: typeof composeDiagnosisBrief):
 	assert.match(pi, /Submit the following closed object as typed submit_result tool arguments/);
 	assert.match(pi, /PI RESULT: use only the trusted submit_result tool/);
 	assert.match(pi, /call submit_result once with/);
+	assertOnlyForbidsTheFile(pi, REVIEW_PROHIBITION, "diagnosis");
 	for (const [name, pattern] of [
 		["payload-slot instruction", /rides the return's "payload" slot/],
 		["generic return contract", /write a complete provisional/],
@@ -464,7 +488,7 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 		};
 		const underPi = await sent(PI);
 		assert.match(underPi.brief, /submit_result/, "the production recovery dispatch sent an unprojected brief");
-		assert.equal(/required provisional\/final \.\.\/return\.json/.test(underPi.brief), false);
+		assertOnlyForbidsTheFile(underPi.brief, RECOVERY_PROHIBITION, "production recovery");
 		assert.notEqual(underPi.pi, null, "the production recovery dispatch carried no Pi selection");
 		const underGeneric = await sent(undefined);
 		assert.equal(/submit_result/.test(underGeneric.brief), false, "the generic recovery dispatch was projected");
@@ -550,8 +574,8 @@ test("only the retry's own return satisfies its consumer", async () => {
 });
 
 test("each consumer's brief is its transport's own, in what it says and what it withholds", () => {
-	armSelectsTheTransportsBrief();
-	armProjectsTheRecoveryBrief();
+	armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief });
+	armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piRecoveryBrief });
 });
 
 test("the production call sites fix their own roles and briefs", async () => {
@@ -687,5 +711,37 @@ test("baseline-first private-copy mutants: each production call site's own choic
 			return true;
 		},
 		"the unprojected recovery dispatch: the owner arm still passed",
+	);
+});
+
+test("baseline-first private-copy mutants: a Pi brief forbids the file and nothing else", async () => {
+	const BRIEFS = "review/briefs.ts";
+	const RECOVERY = "recovery/briefs.ts";
+	const review = (load: (relative: string) => Promise<ReviewBriefs>) =>
+		load(BRIEFS).then((module) => armSelectsTheTransportsBrief(module));
+	const recovery = (load: (relative: string) => Promise<RecoveryBriefs>) =>
+		load(RECOVERY).then((module) => armProjectsTheRecoveryBrief(module));
+	await withPrivateCopy([], review);
+	await withPrivateCopy([], recovery);
+	await copyFails(
+		review,
+		[[BRIEFS, '"../return.json directly, choose a role,', '"elsewhere. Write ../return.json directly, choose a role,']],
+		"the prohibition turned into an instruction",
+	);
+	await copyFails(
+		review,
+		[
+			[
+				BRIEFS,
+				'"before the deadline. Once the tool accepts',
+				'"Also write ../return.json before the deadline. Once the tool accepts',
+			],
+		],
+		"an affirmative write added beside the prohibition",
+	);
+	await copyFails(
+		recovery,
+		[[RECOVERY, "never write ../return.json directly.", "write ../return.json directly."]],
+		"the recovery prohibition turned into an instruction",
 	);
 });

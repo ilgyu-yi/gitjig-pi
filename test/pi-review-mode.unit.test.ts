@@ -61,8 +61,19 @@ test("consumer-owned Pi briefs use submit_result, not the generic direct return 
 		"pi",
 	);
 	const recovery = piRecoveryBrief(contestSelectorBrief([]));
-	for (const brief of [reviewer, judge, recovery]) {
+	for (const [brief, prohibition] of [
+		[reviewer, "Do NOT write\n../return.json directly,"],
+		[judge, "Do NOT write\n../return.json directly,"],
+		[recovery, "never write ../return.json directly."],
+	]) {
 		assert.match(brief, /submit_result/);
+		// Every mention of the file is its prohibition: present, and alone.
+		assert.ok(brief.includes(prohibition), "the settled prohibition is absent");
+		assert.equal(
+			brief.split("../return.json").length,
+			brief.split(prohibition).length,
+			"the file is mentioned outside its prohibition",
+		);
 		assert.doesNotMatch(
 			brief,
 			/RETURN: write JSON|provisional \.\.\/return\.json|Return only through \.\.\/return\.json/,
