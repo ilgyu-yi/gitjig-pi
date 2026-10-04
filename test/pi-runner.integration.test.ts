@@ -58,6 +58,13 @@ const DISPATCH = "extensions/gitjig/dispatch/index.ts";
 const HELD = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
 
 type Call = Record<string, unknown> & { call: string };
+/** What the dispatcher handed the runner, as values rather than as timing. */
+type DispatchSeam = {
+	at: number;
+	timeoutMs?: number;
+	context: DispatchContext;
+	invocation: PiInvocation;
+};
 type Runner = (
 	context: DispatchContext,
 	invocation: PiInvocation,
@@ -335,18 +342,55 @@ async function withDispatcher<T>(
 		applies: typeof provisionalCheckpointApplies,
 		source: string,
 		parameterKeys: () => string[],
+		handedToRunner: () => DispatchSeam[],
 	) => Promise<T>,
 ): Promise<T> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-dispatch-"));
 	try {
 		const root = copyExtensions(scratch);
-		applyEdits(root, edits);
+		// The dispatcher's own seam is recorded the way the runner's are. What
+		// it hands the runner is a VALUE, and a value can be compared; inferring
+		// it from when a run ended is what this suite did before, and a timing
+		// window admits a materially different bound however tight it is drawn.
+		const tracePath = join(scratch, "dispatch-seam.jsonl");
+		writeFileSync(
+			join(root, "extensions/gitjig/dispatch/run-trace.ts"),
+			`import { appendFileSync } from "node:fs";
+import { runPiDelegate as runReal } from "./pi-run.ts";
+export type { PiInvocation } from "./pi-run.ts";
+export const runPiDelegate: typeof runReal = (context, invocation, options) => {
+	appendFileSync(
+		${JSON.stringify(tracePath)},
+		\`\${JSON.stringify({ at: performance.now(), timeoutMs: options.timeoutMs, context, invocation })}\\n\`,
+	);
+	return runReal(context, invocation, options);
+};
+`,
+		);
+		applyEdits(root, [
+			[
+				DISPATCH,
+				'import { type PiInvocation, runPiDelegate } from "./pi-run.ts";',
+				'import { type PiInvocation, runPiDelegate } from "./run-trace.ts";',
+			],
+			...edits,
+		]);
 		const imported = await import(pathToFileURL(join(root, DISPATCH)).href);
 		return await scenario(
 			imported.runDispatch,
 			imported.provisionalCheckpointApplies,
 			readFileSync(join(root, DISPATCH), "utf8"),
 			() => registeredDispatchParameterKeys(imported.registerDispatchTool),
+			() => {
+				try {
+					return readFileSync(tracePath, "utf8")
+						.split("\n")
+						.filter(Boolean)
+						.map((line) => JSON.parse(line) as DispatchSeam);
+				} catch {
+					return [];
+				}
+			},
 		);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
@@ -359,7 +403,11 @@ async function withDispatcher<T>(
  * never settles ends on whichever bound reached it, so a deadline far below
  * the timeout separates the derived bound from the raw one.
  */
-async function armDerivesTheRunBound(dispatch: typeof runDispatchReal, repo: string): Promise<void> {
+async function armDerivesTheRunBound(
+	dispatch: typeof runDispatchReal,
+	repo: string,
+	handedToRunner: () => DispatchSeam[],
+): Promise<void> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-bound-"));
 	try {
 		const executable = fakePi(join(scratch, "fake-pi"), { settleAfterMs: 60_000 });
@@ -379,15 +427,24 @@ async function armDerivesTheRunBound(dispatch: typeof runDispatchReal, repo: str
 			enteredAt: performance.now(),
 			pi: { piExecutable: executable, provider: "scripted", model: "scripted-model", role: "reviewer" },
 		});
-		const past = performance.now() - deadline;
 		assert.equal(outcome.disposition, "refused");
-		// Not before the deadline, and not materially after it: the supervisor's
-		// own flush grace is the only thing that may follow, which is bounded.
-		assert.ok(past >= 0, `the run ended before the deadline it was given: ${Math.round(past)} ms`);
-		// Measured: the correct bound ends the run within tens of milliseconds of
-		// the deadline, while a bound three times as long ends it about three
-		// seconds past. One second separates them with room for scheduling.
-		assert.ok(past < 1_000, `the run outlived its derived bound by ${Math.round(past)} ms`);
+		// The bound is READ, not inferred from when the run ended. Two earlier
+		// corrections tightened a timing window and a later mutant walked through
+		// it anyway; a value handed across a seam is a value, so it is compared.
+		const handed = handedToRunner();
+		assert.equal(handed.length, 1, `the dispatcher called the runner ${handed.length} times`);
+		const [seam] = handed;
+		// What the caller's deadline left at the moment of that call, which is
+		// what the dispatcher must have derived and passed on. The two are taken
+		// microseconds apart, so they agree within a small scheduling slack — and
+		// any bound that is not the derived one is seconds away, not milliseconds.
+		const remaining = deadline - seam.at;
+		assert.ok(
+			seam.timeoutMs !== undefined && Math.abs(seam.timeoutMs - remaining) < 50,
+			`the runner was given ${seam.timeoutMs} ms where the deadline left ${Math.round(remaining)} ms`,
+		);
+		// And it is the deadline that bounded it, not the caller's own timeout.
+		assert.ok((seam.timeoutMs ?? 0) < 20_000, `the runner was given the caller's raw timeout: ${seam.timeoutMs} ms`);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
@@ -1158,7 +1215,9 @@ test("the dispatcher's Pi option is internal, exact, and leaves the generic path
 	try {
 		await armRefusesEmptyGenericArgv(runDispatchReal, repo);
 		await armRunsThePiDelegate(runDispatchReal, repo);
-		await armDerivesTheRunBound(runDispatchReal, repo);
+		await withDispatcher([], async (dispatch, _applies, _source, _keys, handed) =>
+			armDerivesTheRunBound(dispatch, repo, handed),
+		);
 		// The gate, measured through a copy whose checkpoint window alone is
 		// shortened: the shipped window is six minutes and no test waits it out.
 		await withDispatcher([SHORT_CHECKPOINT], async (dispatch) => armArmsTheCheckpointOnlyForGeneric(dispatch, repo));
@@ -1577,7 +1636,7 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 							": await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: (runBound ?? 0) * 3,",
 						],
 					],
-					async (dispatch) => armDerivesTheRunBound(dispatch, repo),
+					async (dispatch, _applies, _source, _keys, handed) => armDerivesTheRunBound(dispatch, repo, handed),
 				),
 			assert.AssertionError,
 			"the widened-bound mutant left the arm passing",
@@ -1593,7 +1652,7 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 							": await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: options.timeoutMs,",
 						],
 					],
-					async (dispatch) => armDerivesTheRunBound(dispatch, repo),
+					async (dispatch, _applies, _source, _keys, handed) => armDerivesTheRunBound(dispatch, repo, handed),
 				),
 			assert.AssertionError,
 			"the raw-timeout mutant left the arm passing",
