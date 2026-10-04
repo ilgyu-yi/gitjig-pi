@@ -57,7 +57,11 @@ describe("#266 isolated return-protocol retry mutants", () => {
 	});
 
 	it("kills suffix, event identity, event count, and event-order mutants independently", () => {
-		kill("suffix", "brief + RETURN_PROTOCOL_RETRY_SUFFIX", "brief");
+		kill(
+			"suffix",
+			"selectedPi === undefined ? RETURN_PROTOCOL_RETRY_SUFFIX : PI_RETURN_PROTOCOL_RETRY_SUFFIX",
+			'selectedPi === undefined ? "" : PI_RETURN_PROTOCOL_RETRY_SUFFIX',
+		);
 		kill("event", 'onEvent?.("retry-return-protocol")', 'onEvent?.("retry-return-protocol-changed")');
 		kill(
 			"spurious-event",
@@ -66,8 +70,8 @@ describe("#266 isolated return-protocol retry mutants", () => {
 		);
 		kill(
 			"event-order",
-			'onEvent?.("retry-return-protocol");\n\t\t\t} catch {\n\t\t\t\t// Fixture-only observation cannot alter the authorized transport act.\n\t\t\t}\n\t\t\toutcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);',
-			'outcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);\n\t\t\t\tonEvent?.("retry-return-protocol");\n\t\t\t} catch {\n\t\t\t\t// Fixture-only observation cannot alter the authorized transport act.\n\t\t\t}',
+			'onEvent?.("retry-return-protocol");\n\t\t\t} catch {\n\t\t\t\t// Fixture-only observation cannot alter the authorized transport act.\n\t\t\t}\n\t\t\toutcome = await send(\n\t\t\t\tbrief + (selectedPi === undefined ? RETURN_PROTOCOL_RETRY_SUFFIX : PI_RETURN_PROTOCOL_RETRY_SUFFIX),\n\t\t\t);',
+			'outcome = await send(\n\t\t\t\tbrief + (selectedPi === undefined ? RETURN_PROTOCOL_RETRY_SUFFIX : PI_RETURN_PROTOCOL_RETRY_SUFFIX),\n\t\t\t);\n\t\t\t\tonEvent?.("retry-return-protocol");\n\t\t\t} catch {\n\t\t\t\t// Fixture-only observation cannot alter the authorized transport act.\n\t\t\t}',
 		);
 	});
 });
