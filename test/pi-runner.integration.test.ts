@@ -358,7 +358,10 @@ async function armDerivesTheRunBound(dispatch: typeof runDispatchReal, repo: str
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-bound-"));
 	try {
 		const executable = fakePi(join(scratch, "fake-pi"), { settleAfterMs: 60_000 });
-		const started = performance.now();
+		// The deadline is ABSOLUTE, so the run must end at it however long the
+		// provisioning before it took — which makes the expectation exact rather
+		// than a window wide enough to admit a materially different bound.
+		const deadline = performance.now() + 1_500;
 		const outcome = await dispatch({
 			callerRepoRoot: repo,
 			stateRoot: join(repo, "state"),
@@ -367,16 +370,19 @@ async function armDerivesTheRunBound(dispatch: typeof runDispatchReal, repo: str
 			expectedRef: "HEAD",
 			// Twenty seconds the caller allows, one and a half the operation has.
 			timeoutMs: 20_000,
-			operationDeadline: performance.now() + 1_500,
+			operationDeadline: deadline,
 			enteredAt: performance.now(),
 			pi: { piExecutable: executable, provider: "scripted", model: "scripted-model", role: "reviewer" },
 		});
-		const elapsed = performance.now() - started;
+		const past = performance.now() - deadline;
 		assert.equal(outcome.disposition, "refused");
-		// The derived bound ended it, not the caller's twenty seconds. The margin
-		// is wide because a clone and a spawn sit inside it; what it excludes is
-		// the raw timeout, which is an order of magnitude away.
-		assert.ok(elapsed < 10_000, `the run outlived the operation deadline: ${Math.round(elapsed)} ms`);
+		// Not before the deadline, and not materially after it: the supervisor's
+		// own flush grace is the only thing that may follow, which is bounded.
+		assert.ok(past >= 0, `the run ended before the deadline it was given: ${Math.round(past)} ms`);
+		// Measured: the correct bound ends the run within tens of milliseconds of
+		// the deadline, while a bound three times as long ends it about three
+		// seconds past. One second separates them with room for scheduling.
+		assert.ok(past < 1_000, `the run outlived its derived bound by ${Math.round(past)} ms`);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
@@ -1436,6 +1442,23 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 				),
 			assert.AssertionError,
 			"the substituted-context mutant left the arm passing",
+		);
+		// A bound three times the derived one: the run still ends, so only an
+		// expectation tied to the deadline itself can see it.
+		await assert.rejects(
+			() =>
+				withDispatcher(
+					[
+						[
+							DISPATCH,
+							": await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: runBound,",
+							": await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: (runBound ?? 0) * 3,",
+						],
+					],
+					async (dispatch) => armDerivesTheRunBound(dispatch, repo),
+				),
+			assert.AssertionError,
+			"the widened-bound mutant left the arm passing",
 		);
 		// The derived bound, replaced by the caller's raw timeout.
 		await assert.rejects(
