@@ -530,20 +530,27 @@ const armRedactsWholeHead: RunnerArm = async (run, trace, scratch) => {
  * characters can contain a forty-character head.
  */
 const armRefusesAnOperandInTheProfile: RunnerArm = async (run, trace, scratch) => {
-	const context = dispatchContext(scratch);
-	const executable = fakePi(join(scratch, "fake-pi"), {});
+	// Each thing that crosses to the child beside the brief: the profile's one
+	// caller-fixed field, and the provider and model that become its argv.
 	const carrying = `${HELD}${"c".repeat(24)}`;
 	assert.equal(carrying.length, 64, "the probe digest is not a valid one");
 	assert.equal(namesHeldOperand(carrying, HELD), true, "the probe digest does not name the operand");
-	const outcome = await run(context, invocation(executable, { role: "measurement", specDigest: carrying }), {
-		timeoutMs: 15_000,
-	});
-	assert.equal(outcome.protocolInvalid, true, "a profile naming the held operand was provisioned");
-	assert.equal(
-		trace().some((entry) => entry.call === "provision" || entry.call === "startPiRpc"),
-		false,
-		"the refusal came after provisioning or a child",
-	);
+	for (const [label, over] of [
+		["a measurement digest", { role: "measurement" as const, specDigest: carrying }],
+		["the provider", { provider: `p-${HELD}` }],
+		["the model", { model: `m-${HELD}` }],
+	] as ReadonlyArray<readonly [string, Partial<PiInvocation>]>) {
+		const context = dispatchContext(join(scratch, label.replace(/\W+/g, "-")));
+		const executable = fakePi(join(context.scratchRoot, "fake-pi"), {});
+		const outcome = await run(context, invocation(executable, over), { timeoutMs: 15_000 });
+		assert.equal(outcome.protocolInvalid, true, `${label} named the held operand and was admitted`);
+		assert.equal(
+			trace().some((entry) => entry.call === "provision" || entry.call === "startPiRpc"),
+			false,
+			`${label}: the refusal came after provisioning or a child`,
+		);
+		assert.deepEqual(frames(executable), [], `${label}: a child received a frame`);
+	}
 	// A digest that does NOT name it is still admitted, so the arm measures the
 	// scan rather than the presence of a digest.
 	const clean = dispatchContext(join(scratch, "clean"));
@@ -552,6 +559,7 @@ const armRefusesAnOperandInTheProfile: RunnerArm = async (run, trace, scratch) =
 		(await run(clean, invocation(other, { role: "measurement", specDigest: "c".repeat(64) }), { timeoutMs: 15_000 }))
 			.protocolInvalid === true,
 		false,
+		"a digest that names nothing was refused",
 	);
 };
 
@@ -1122,7 +1130,25 @@ function armComposesNoAttestation(sources: readonly string[]): void {
 	const claims =
 		/unsteered|(?:not|never|n't|without)[\s\w]{0,24}steer|no (?:operator )?steering|no operator (?:input|intervention|message)|without (?:operator )?intervention/i;
 	for (const source of sources) {
-		const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+		// Whole comment LINES are skipped, rather than everything after a `//`
+		// anywhere: a slash pair inside an ordinary string is not a comment, and
+		// treating it as one would hide a claim composed in a URL-looking value.
+		let inBlock = false;
+		const code = source
+			.split("\n")
+			.filter((line) => {
+				const trimmed = line.trim();
+				if (inBlock) {
+					if (trimmed.includes("*/")) inBlock = false;
+					return false;
+				}
+				if (trimmed.startsWith("/*")) {
+					inBlock = !trimmed.includes("*/");
+					return false;
+				}
+				return !(trimmed.startsWith("//") || trimmed.startsWith("*"));
+			})
+			.join("\n");
 		assert.equal(claims.test(code), false, "a module composes a claim of absent intervention");
 	}
 }
@@ -1310,6 +1336,14 @@ async function armRunsThePiDelegate(
 				seam.context.treeDir.startsWith(`${seam.context.scratchRoot}/`),
 				`${label}: the clone does not belong to the provisioned scratch`,
 			);
+			// The held operand the dispatcher resolved, which is the repository's
+			// own head: a substituted one would send the runner redacting against
+			// a hash the clone was never pinned to.
+			assert.equal(
+				seam.context.heldHash,
+				execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+				`${label}: the held operand at the seam`,
+			);
 			assert.equal(seam.invocation.provider, pi.provider, `${label}: provider at the seam`);
 			assert.equal(seam.invocation.model, pi.model, `${label}: model at the seam`);
 			assert.equal(seam.invocation.role, pi.role, `${label}: role at the seam`);
@@ -1470,6 +1504,13 @@ test("baseline-first private-copy mutants: the runner's seams", async () => {
 		armRefusesAnOperandInTheProfile,
 		[[RUN, 'if (namesHeldOperand(JSON.stringify(profile), context.heldHash)) return refusal("invalid");', ""]],
 		"the profile scan removed",
+	);
+	// And a module that composes the claim inside an ordinary string rather
+	// than in a comment, where a naive comment strip would hide it.
+	assert.throws(
+		() => armComposesNoAttestation(['const link = "https://example.invalid/no operator intervention";']),
+		assert.AssertionError,
+		"a claim inside a string was treated as a comment",
 	);
 	await armFails(
 		armRefusesContainedRun,
@@ -1826,7 +1867,7 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 						[
 							DISPATCH,
 							": await runPiDelegate(context, options.pi, {",
-							": await runPiDelegate({ ...context, stateDir: context.returnPath }, options.pi, {",
+							': await runPiDelegate({ ...context, heldHash: "0".repeat(40) }, options.pi, {',
 						],
 					],
 					async (dispatch, _applies, _source, _keys, handed) => armRunsThePiDelegate(dispatch, repo, handed),

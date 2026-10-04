@@ -46,12 +46,19 @@ export async function runPiDelegate(
 	// independently resolve its clone HEAD for the trusted tool instead.
 	try {
 		if (!/^[0-9a-f]{40}$/.test(context.heldHash)) return refusal("invalid");
-		// The brief is not the only thing the child reads: the profile is written
-		// beside its trusted tool, and a caller-fixed measurement digest is free
-		// text as far as this transport is concerned. A digest that names the held
-		// operand would hand it over through that file, so the whole profile
+		// The brief is not the only thing that crosses. The profile is written
+		// beside the child's trusted tool, and the provider, model and executable
+		// become its own argv; a caller-fixed measurement digest is free text as
+		// far as this transport is concerned, and sixty-four hex characters can
+		// contain a forty-character head. Everything the child can read therefore
 		// rides the same ruled scan the brief does (SPEC §4.9, #420).
-		if (namesHeldOperand(JSON.stringify(profile), context.heldHash)) return refusal("invalid");
+		const crossing = JSON.stringify({
+			profile,
+			provider: invocation.provider,
+			model: invocation.model,
+			piExecutable: invocation.piExecutable,
+		});
+		if (namesHeldOperand(crossing, context.heldHash)) return refusal("invalid");
 		const original = readFileSync(context.briefPath, "utf8");
 		const redacted = original.replaceAll(new RegExp(context.heldHash, "gi"), "[clone head withheld]");
 		// The brief is held to the dispatcher's own ruled scan, not to a second
