@@ -86,12 +86,25 @@ process.stdin.on("data", (chunk) => {
 		// profile written beside its trusted extension: together they are the
 		// whole selection as the child received it, not merely that one ran.
 		let profile = null;
+		let provisioned = null;
 		try {
+			const path = require("node:path");
 			const argv = process.argv.slice(2);
 			const extension = argv[argv.indexOf("--extension") + 1];
-			profile = JSON.parse(fs.readFileSync(require("node:path").join(require("node:path").dirname(extension), "profile.json"), "utf8"));
+			profile = JSON.parse(fs.readFileSync(path.join(path.dirname(extension), "profile.json"), "utf8"));
+			// The scratch the extension sits in IS the context's scratch root, and
+			// the brief beside it is the one that context names, so the child can
+			// report the context it was actually run under.
+			// Resolved here, while the dispatcher's scratch still exists: it is
+			// removed when the run ends, so the arm cannot resolve it afterwards.
+			const scratchRoot = path.dirname(path.dirname(extension));
+			provisioned = {
+				tree: fs.realpathSync(path.join(scratchRoot, "tree")),
+				cwd: fs.realpathSync(process.cwd()),
+				brief: fs.readFileSync(path.join(scratchRoot, "brief.md"), "utf8"),
+			};
 		} catch {}
-		fs.appendFileSync(${JSON.stringify(received)}, JSON.stringify({ at: Date.now(), argv: process.argv.slice(2), profile, ...command }) + "\\n");
+		fs.appendFileSync(${JSON.stringify(received)}, JSON.stringify({ at: Date.now(), argv: process.argv.slice(2), profile, provisioned, ...command }) + "\\n");
 		process.stdout.write(JSON.stringify({ type: "response", id: command.id, success: true }) + "\\n");
 		if (${options.settles === false ? "false" : "true"} && !settled) {
 			settled = true;
@@ -330,6 +343,40 @@ async function withDispatcher<T>(
 			readFileSync(join(root, DISPATCH), "utf8"),
 			() => registeredDispatchParameterKeys(imported.registerDispatchTool),
 		);
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+/**
+ * The dispatcher derives the child's bound from its own timeout and the
+ * caller's operation deadline, and hands THAT to the runner. A child that
+ * never settles ends on whichever bound reached it, so a deadline far below
+ * the timeout separates the derived bound from the raw one.
+ */
+async function armDerivesTheRunBound(dispatch: typeof runDispatchReal, repo: string): Promise<void> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-bound-"));
+	try {
+		const executable = fakePi(join(scratch, "fake-pi"), { settleAfterMs: 60_000 });
+		const started = performance.now();
+		const outcome = await dispatch({
+			callerRepoRoot: repo,
+			stateRoot: join(repo, "state"),
+			delegateArgv: [],
+			brief: "brief",
+			expectedRef: "HEAD",
+			// Twenty seconds the caller allows, one and a half the operation has.
+			timeoutMs: 20_000,
+			operationDeadline: performance.now() + 1_500,
+			enteredAt: performance.now(),
+			pi: { piExecutable: executable, provider: "scripted", model: "scripted-model", role: "reviewer" },
+		});
+		const elapsed = performance.now() - started;
+		assert.equal(outcome.disposition, "refused");
+		// The derived bound ended it, not the caller's twenty seconds. The margin
+		// is wide because a clone and a spawn sit inside it; what it excludes is
+		// the raw timeout, which is an order of magnitude away.
+		assert.ok(elapsed < 10_000, `the run outlived the operation deadline: ${Math.round(elapsed)} ms`);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
@@ -928,6 +975,13 @@ async function armRunsThePiDelegate(dispatch: typeof runDispatchReal, repo: stri
 			const profile = prompts[0].profile as { role?: string; fixed?: Record<string, unknown> } | null;
 			assert.equal(profile?.role, expected.role, `${label}: the child was given another role`);
 			assert.equal(profile?.fixed?.specDigest, expected.specDigest, `${label}: the child was given another digest`);
+			// The context the DISPATCHER provisioned is the one the run used: the
+			// child's trusted extension sits in that scratch, it runs in that
+			// scratch's clone, and the brief beside it is the caller's own.
+			const ran = prompts[0].provisioned as { tree: string; cwd: string; brief: string } | null;
+			assert.ok(ran, `${label}: the child could not read the context it ran under`);
+			assert.equal(ran.cwd, ran.tree, `${label}: the child did not run in the clone of its own scratch`);
+			assert.equal(ran.brief, "brief", `${label}: the child was given another brief`);
 			// No return was submitted, so the dispatch refuses on the missing slot
 			// rather than on the transport — the generic admission still rules.
 			assert.equal(outcome.disposition, "refused");
@@ -997,6 +1051,7 @@ test("the dispatcher's Pi option is internal, exact, and leaves the generic path
 	try {
 		await armRefusesEmptyGenericArgv(runDispatchReal, repo);
 		await armRunsThePiDelegate(runDispatchReal, repo);
+		await armDerivesTheRunBound(runDispatchReal, repo);
 		// Malformed framing reaches exactly the existing internal-failure class.
 		const scratch = mkdtempSync(join(tmpdir(), "gitjig-420-invalid-"));
 		try {
@@ -1316,6 +1371,38 @@ test("baseline-first private-copy mutants: the hub's bounds and the dispatcher's
 				),
 			assert.AssertionError,
 			"the substituted-provider mutant left the arm passing",
+		);
+		// The context the dispatcher provisioned, substituted on the way through.
+		await assert.rejects(
+			() =>
+				withDispatcher(
+					[
+						[
+							DISPATCH,
+							": await runPiDelegate(context, options.pi, {",
+							": await runPiDelegate({ ...context, treeDir: context.scratchRoot }, options.pi, {",
+						],
+					],
+					async (dispatch) => armRunsThePiDelegate(dispatch, repo),
+				),
+			assert.AssertionError,
+			"the substituted-context mutant left the arm passing",
+		);
+		// The derived bound, replaced by the caller's raw timeout.
+		await assert.rejects(
+			() =>
+				withDispatcher(
+					[
+						[
+							DISPATCH,
+							": await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: runBound,",
+							": await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: options.timeoutMs,",
+						],
+					],
+					async (dispatch) => armDerivesTheRunBound(dispatch, repo),
+				),
+			assert.AssertionError,
+			"the raw-timeout mutant left the arm passing",
 		);
 		// The role, likewise: it reaches the child only through the profile.
 		await assert.rejects(
