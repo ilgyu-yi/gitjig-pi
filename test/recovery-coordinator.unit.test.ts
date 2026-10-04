@@ -996,6 +996,135 @@ describe("Phase-A history recovery coordinator", () => {
 		}
 	});
 
+	// #422, §1.7 at every recovery consumer: only the retry's own independently
+	// valid return satisfies it. Each phase slot on both routes misses its first
+	// return through the real dispatcher in Pi mode; an absent or malformed retry
+	// leaves that slot unadmitted and the route without a continue, with no third
+	// send. A valid retry at the same slot is the control.
+	it("leaves each recovery consumer without a result unless its own retry returns one", async () => {
+		const missing: DispatchOutcome = {
+			disposition: "refused",
+			cause: "no return",
+			diagnostic: makeDiagnostic({
+				status: "refused",
+				phase: "return",
+				run: { class: "exited", exitCode: 0, signal: null },
+				return: { class: "missing" },
+				compare: { class: "not-reached" },
+				durationMs: 1,
+				code: "RETURN_MISSING",
+			}),
+		};
+		const spec = {
+			kind: "measurement",
+			question: "Which invariant differs?",
+			method: "Read one bounded artifact",
+			expectedDiscriminator: "A unique state",
+			evidence: "Selector evidence",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+		const outputs = {
+			stagnation: {
+				"stagnation-root": { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" },
+				"stagnation-blast-radius": { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+				"recovery-selector": { selected: "root", materiallyDifferent: true, evidence: "selection evidence" },
+			},
+			measurement: {
+				"recovery-selector": spec,
+				"recovery-measurement": {
+					kind: "measurement-result",
+					specDigest: structuralDigest("gitjig-recovery-measurement-spec:v1", spec),
+					result: "unique result",
+					evidence: "new result evidence",
+				},
+				"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+			},
+		} as const;
+		const consumers = [
+			["stagnation", "stagnation-root"],
+			["stagnation", "stagnation-blast-radius"],
+			["stagnation", "recovery-selector"],
+			["measurement", "recovery-selector"],
+			["measurement", "recovery-measurement"],
+			["measurement", "recovery-diagnosis"],
+		] as const;
+		let lineage = 0;
+		const run = async (route: keyof typeof outputs, target: PhaseAProfileId, second: DispatchOutcome) => {
+			const current = {
+				...subject,
+				context: {
+					...subject.context,
+					pullRequest: { ...subject.context.pullRequest, id: `PR_OWN_RETURN_${lineage++}` },
+				},
+			};
+			const routeOutputs: Partial<Record<PhaseAProfileId, unknown>> = outputs[route];
+			let targetSends = 0;
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: current,
+				history,
+				basis,
+				diagnosis:
+					route === "stagnation"
+						? { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" }
+						: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+				refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+				dispatchProfile: async (ledger, profileId, _brief, head, _deadline, role) =>
+					makeDispatcher(
+						{
+							callerRepoRoot: "/repo",
+							stateRoot: "/state",
+							delegateArgv: [],
+							pi: { piExecutable: "/usr/bin/pi", provider: "scripted", model: "scripted-model", role: "challenger" },
+							timeoutMs: 600_000,
+						},
+						async () => {
+							if (profileId !== target) return admitted(routeOutputs[profileId]);
+							targetSends += 1;
+							return targetSends === 1 ? missing : second;
+						},
+						{ attemptPolicy: { ledger, beforeRetry: () => true } },
+					)("brief", head, role),
+			});
+			return { result, targetSends };
+		};
+		for (const [route, target] of consumers) {
+			for (const [name, second] of [
+				["absent", missing],
+				["malformed", admittedRaw("{ not json")],
+			] as ReadonlyArray<readonly [string, DispatchOutcome]>) {
+				const { result, targetSends } = await run(route, target, second);
+				const label: string = `${route} ${target}, ${name}`;
+				assert.equal(targetSends, 2, `${label}: the consumer's sends`);
+				assert.notEqual(result.terminal, "continue", `${label}: a route continued without the consumer's result`);
+				assert.ok(result.recordRef, `${label}: no durable record`);
+				const durable = JSON.parse(
+					readFileSync(
+						join(stateRoot, "gitjig", "recovery", `r2-${result.recordRef.repoHash}-${result.recordRef.keyHash}.json`),
+						"utf8",
+					),
+				);
+				assert.equal(
+					durable.completeness.admittedSlots.includes(target),
+					false,
+					`${label}: an unusable retry was admitted`,
+				);
+			}
+			// The control: the same consumer's own valid retry does satisfy it.
+			const control = await run(route, target, admitted((outputs[route] as Record<string, unknown>)[target]));
+			assert.equal(control.targetSends, 2, `${route} ${target}: the control's sends`);
+			assert.equal(
+				control.result.terminal,
+				"continue",
+				`${route} ${target}: the consumer's own valid retry was refused`,
+			);
+		}
+	});
+
 	it("persists the one missing-return retry with global attempt order and nonempty retrySlots", async () => {
 		const current = {
 			...subject,

@@ -24,8 +24,9 @@ import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DIAGNOSTIC_MESSAGES } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { DispatchOutcome, RunDispatchOptions } from "../.pi/extensions/gitjig/dispatch/index.ts";
+import { exposedPiProfile } from "../.pi/extensions/gitjig/dispatch/pi-submit.ts";
 import { challengerBrief, measurementBrief, piRecoveryBrief } from "../.pi/extensions/gitjig/recovery/briefs.ts";
-import type { RecoveryPiRole } from "../.pi/extensions/gitjig/recovery/pi-profile.ts";
+import { type RecoveryPiRole, recoveryPiProfile } from "../.pi/extensions/gitjig/recovery/pi-profile.ts";
 import {
 	composeJudgeBrief,
 	composeReviewerBrief,
@@ -33,7 +34,11 @@ import {
 	RETURN_PROTOCOL_RETRY_SUFFIX,
 } from "../.pi/extensions/gitjig/review/briefs.ts";
 import { composeDiagnosisBrief } from "../.pi/extensions/gitjig/review/history.ts";
-import { makeDispatcher, reviewRound } from "../.pi/extensions/gitjig/review/orchestrate.ts";
+import {
+	createRecoveryAttemptLedger,
+	makeDispatcher,
+	reviewRound,
+} from "../.pi/extensions/gitjig/review/orchestrate.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const ORCHESTRATE = "review/orchestrate.ts";
@@ -159,6 +164,59 @@ const armRepeatsTheSameCall: Arm = async (make) => {
 		assert.equal(run.sent[1].brief.includes(other), false, `${label}: the other transport's suffix was sent`);
 	}
 };
+
+type OrchestratorModule = {
+	makeDispatcher: typeof makeDispatcher;
+	createRecoveryAttemptLedger: typeof createRecoveryAttemptLedger;
+};
+
+/**
+ * §1.7 under the recovery attempt policy: the retry repeats every option, the
+ * Pi selection and pin included. The one field that differs is `enteredAt`,
+ * the origin each send's diagnostic duration is measured from. It is a
+ * measurement, not a caller option: the retry's own duration must start at the
+ * retry, or attempt two would report a duration spanning both. Bounds come from
+ * `operationDeadline`, which repeats. Both halves are read here, not assumed.
+ */
+async function armRepeatsUnderTheAttemptPolicy({
+	makeDispatcher: make,
+	createRecoveryAttemptLedger: ledgerOf,
+}: OrchestratorModule): Promise<void> {
+	const sent: { options: RunDispatchOptions; returnedAt: number }[] = [];
+	const outcomes = [refused("RETURN_MISSING"), admitted()];
+	const dispatch = make(
+		{
+			callerRepoRoot: "/r",
+			stateRoot: "/s",
+			delegateArgv: [],
+			pi: { ...PI, role: "challenger" },
+			timeoutMs: 600_000,
+			operationDeadline: performance.now() + 3_600_000,
+		} as unknown as Omit<RunDispatchOptions, "brief" | "expectedRef">,
+		async (given: RunDispatchOptions) => {
+			const outcome = outcomes[sent.length] ?? admitted();
+			sent.push({ options: given, returnedAt: performance.now() });
+			return outcome;
+		},
+		{ attemptPolicy: { ledger: ledgerOf(performance.now()), beforeRetry: () => true } },
+	);
+	await dispatch("the semantic brief", PIN, "challenger");
+	assert.equal(sent.length, 2, "the policy path did not retry once");
+	const [first, second] = sent;
+	const rest = ({ options }: (typeof sent)[number]) => {
+		const { brief: _brief, enteredAt: _enteredAt, ...others } = options as unknown as Record<string, unknown>;
+		return JSON.stringify(others);
+	};
+	assert.equal(rest(second), rest(first), "the retry changed an option other than its measurement origin");
+	assert.equal(second.options.brief, `the semantic brief${PI_RETURN_PROTOCOL_RETRY_SUFFIX}`);
+	assert.equal(typeof first.options.enteredAt, "number", "the first send carried no measurement origin");
+	assert.equal(typeof second.options.enteredAt, "number", "the retry carried no measurement origin");
+	// The retry's origin is its own: no earlier than the instant the first send returned.
+	assert.ok(
+		(second.options.enteredAt as number) >= first.returnedAt,
+		"the retry's duration would be measured from the first send",
+	);
+}
 
 /** §1.7: exactly one combination retries, enumerated over the dispatcher's codes. */
 const armEnumeratesTheTrigger: Arm = async (make) => {
@@ -379,6 +437,25 @@ function armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piReco
 	);
 	assert.match(measurement, /submit_result/);
 	assertOnlyForbidsTheFile(measurement, RECOVERY_PROHIBITION, "measurement");
+	// What the brief offers, the tool accepts: no recovery role's exposed
+	// schema has a summary field, so no recovery brief may invite one.
+	for (const role of RECOVERY_PI_ROLES) {
+		const profile = recoveryPiProfile(role, "0".repeat(64));
+		assert.ok(profile, `${role}: no profile`);
+		const exposed = exposedPiProfile(profile);
+		assert.equal(exposed.schema.additionalProperties, false, `${role}: the exposed schema is not closed`);
+		assert.equal("summary" in (exposed.schema.properties ?? {}), false, `${role}: the exposed schema gained a summary`);
+	}
+	for (const brief of [pi, measurement])
+		assert.equal(
+			/optional summary|summary holds|summary argument/i.test(brief),
+			false,
+			"a recovery brief invites a summary its schema refuses",
+		);
+	assert.ok(
+		pi.includes("a recovery submission carries no summary field"),
+		"the recovery brief does not say its summary is fixed",
+	);
 }
 
 /*
@@ -392,6 +469,11 @@ async function armPinsProductionRoles(round: typeof reviewRound): Promise<void> 
 	// A two-commit repository of the arm's own, so the round's change surface
 	// is fixed here rather than read from whatever this checkout's last commit
 	// touched (or from history a shallow clone does not have).
+	await withFixtureRepository((fixture) => pinProductionRoles(round, fixture));
+}
+
+/** A two-commit repository whose one change is a test file, so the round derives the suite slot. */
+async function withFixtureRepository<T>(scenario: (fixture: string) => Promise<T>): Promise<T> {
 	const fixture = mkdtempSync(join(tmpdir(), "gitjig-422-round-"));
 	const git = (...args: string[]) =>
 		execFileSync("git", ["-c", "commit.gpgsign=false", ...args], {
@@ -414,10 +496,107 @@ async function armPinsProductionRoles(round: typeof reviewRound): Promise<void> 
 		writeFileSync(join(fixture, "test/round.unit.test.ts"), "// the change under review\n");
 		git("add", "test/round.unit.test.ts");
 		git("commit", "-q", "-m", "change");
-		await pinProductionRoles(round, fixture);
+		return await scenario(fixture);
 	} finally {
 		rmSync(fixture, { recursive: true, force: true });
 	}
+}
+
+/**
+ * §1.7 at each review consumer: only the retry's own independently valid
+ * return satisfies it. The real round runs over the real dispatcher, whose run
+ * is scripted per role: the consumer under test misses its first return, and
+ * its retry then returns nothing again or returns malformed. Either way that
+ * consumer is left without a result and nothing sends a third time. A valid
+ * retry is the control, so the arm is not vacuous.
+ */
+async function armEachReviewConsumerNeedsItsOwnReturn({
+	reviewRound: round,
+	makeDispatcher: make,
+}: {
+	reviewRound: typeof reviewRound;
+	makeDispatcher: typeof makeDispatcher;
+}): Promise<void> {
+	const FINDINGS = JSON.stringify({ token: "FINDINGS", findings: ["one finding"] });
+	const APPROVED = JSON.stringify({ token: "APPROVED", findings: [] });
+	const payload = (text: string): DispatchOutcome =>
+		({
+			disposition: "admitted",
+			ok: true,
+			summary: "a summary",
+			payload: text,
+			compare: "confirmed",
+			diagnostic: {
+				status: "admitted",
+				phase: "complete",
+				run: { class: "exited", exitCode: 0, signal: null },
+				return: { class: "admitted" },
+				compare: { class: "confirmed" },
+				durationMs: 1,
+				code: "ADMITTED",
+			},
+		}) as unknown as DispatchOutcome;
+	const seconds: ReadonlyArray<readonly [string, DispatchOutcome]> = [
+		["absent", refused("RETURN_MISSING")],
+		["malformed", payload("{ not json")],
+	];
+	await withFixtureRepository(async (fixture) => {
+		const drive = async (script: Record<string, DispatchOutcome[]>) => {
+			const sends: Record<string, number> = {};
+			const result = await round({
+				repoRoot: fixture,
+				baseRef: "HEAD~1",
+				headRef: "HEAD",
+				manifest: { state: "present", criteria: ["the change does what it says"] },
+				fences: { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] },
+				changeDescription: "a change",
+				transport: "pi",
+				dispatch: make(
+					{ callerRepoRoot: "/r", stateRoot: "/s", delegateArgv: [], pi: PI, timeoutMs: 10 } as unknown as Omit<
+						RunDispatchOptions,
+						"brief" | "expectedRef"
+					>,
+					async (given: RunDispatchOptions) => {
+						const role = String(given.pi?.role);
+						const count = sends[role] ?? 0;
+						sends[role] = count + 1;
+						return script[role]?.[count] ?? admitted();
+					},
+				),
+			} as never);
+			return { result, sends };
+		};
+		for (const [name, second] of seconds) {
+			// The reviewer slot: its missing and then unusable return leaves it invalid.
+			const slot = await drive({ reviewer: [refused("RETURN_MISSING"), second] });
+			assert.equal(slot.sends.reviewer, 2, `reviewer, ${name}: the slot's sends`);
+			assert.deepEqual(
+				slot.result.record.slots.map((entry) => entry.valid),
+				[false],
+				`reviewer, ${name}: a slot without its own valid return was counted`,
+			);
+			assert.notEqual(slot.result.review.state, "approved", `reviewer, ${name}: the round approved`);
+			// The Judge: a complete panel, then a Judge whose retry is unusable.
+			const judge = await drive({
+				reviewer: [payload(FINDINGS)],
+				judge: [refused("RETURN_MISSING"), second],
+			});
+			assert.equal(judge.sends.judge, 2, `judge, ${name}: the Judge's sends`);
+			assert.deepEqual(
+				judge.result.review,
+				{ state: "incomplete", cause: "adjudication-missing" },
+				`judge, ${name}: a Judge without its own valid return adjudicated`,
+			);
+		}
+		// The control: the slot's own valid retry does satisfy it.
+		const control = await drive({ reviewer: [refused("RETURN_MISSING"), payload(APPROVED)] });
+		assert.equal(control.sends.reviewer, 2);
+		assert.deepEqual(
+			control.result.record.slots.map((entry) => entry.valid),
+			[true],
+			"the slot's own valid retry was not admitted",
+		);
+	});
 }
 
 async function pinProductionRoles(round: typeof reviewRound, fixture: string): Promise<void> {
@@ -653,6 +832,10 @@ test("the shared retry repeats the same call, with only its transport's suffix",
 	await armRepeatsTheSameCall(makeDispatcher);
 });
 
+test("the retry under the attempt policy repeats every option but its own measurement origin", async () => {
+	await armRepeatsUnderTheAttemptPolicy({ makeDispatcher, createRecoveryAttemptLedger });
+});
+
 test("exactly one of the dispatcher's diagnostic codes draws a second send", async () => {
 	await armEnumeratesTheTrigger(makeDispatcher);
 });
@@ -668,6 +851,10 @@ test("only the retry's own return satisfies its consumer", async () => {
 test("each consumer's brief is its transport's own, in what it says and what it withholds", () => {
 	armSelectsTheTransportsBrief({ composeReviewerBrief, composeJudgeBrief });
 	armProjectsTheRecoveryBrief({ challengerBrief, measurementBrief, piRecoveryBrief });
+});
+
+test("each review consumer is satisfied only by its retry's own valid return", async () => {
+	await armEachReviewConsumerNeedsItsOwnReturn({ reviewRound, makeDispatcher });
 });
 
 test("the production call sites fix their own roles and briefs", async () => {
@@ -895,5 +1082,72 @@ test("baseline-first private-copy mutants: the trigger's code and the caller's d
 		diagnosis,
 		[[HISTORY, "? composePiDeadlines(context.timing ?? DEFAULT_TIMING)", "? composePiDeadlines(DEFAULT_TIMING)"]],
 		"the diagnosis deadline ignoring the caller's timing",
+	);
+});
+
+test("baseline-first private-copy mutants: the attempt-policy retry's options", async () => {
+	const policy = (load: (relative: string) => Promise<OrchestratorModule>) =>
+		load(ORCHESTRATE).then((module) => armRepeatsUnderTheAttemptPolicy(module));
+	await withPrivateCopy([], policy);
+	await copyFails(
+		policy,
+		[
+			[
+				ORCHESTRATE,
+				"\t\t\t\tbrief: semanticBrief,\n",
+				"\t\t\t\tbrief: semanticBrief,\n\t\t\t\t...(attempt === 2 ? { timeoutMs: 1 } : {}),\n",
+			],
+		],
+		"the retry sent with a changed bound",
+	);
+	await copyFails(
+		policy,
+		[
+			[
+				ORCHESTRATE,
+				"...(policy === undefined ? {} : { enteredAt: performance.now() }),",
+				"...(policy === undefined ? {} : { enteredAt: (stamp ??= performance.now()) }),",
+			],
+			[
+				ORCHESTRATE,
+				"\t\tlet retryAvailable = true;\n",
+				"\t\tlet retryAvailable = true;\n\t\tlet stamp: number | undefined;\n",
+			],
+		],
+		"the retry measured from the first send",
+	);
+});
+
+test("baseline-first private-copy mutants: each review consumer's own return", async () => {
+	const consumers = (
+		load: (relative: string) => Promise<{ reviewRound: typeof reviewRound; makeDispatcher: typeof makeDispatcher }>,
+	) => load(ORCHESTRATE).then((module) => armEachReviewConsumerNeedsItsOwnReturn(module));
+	await withPrivateCopy([], consumers);
+	await copyFails(
+		consumers,
+		[[ORCHESTRATE, "\t\t\toutcome = await send(\n", "\t\t\tawait send(\n"]],
+		"the consumer handed the first send's outcome instead of the retry's",
+	);
+	await copyFails(
+		consumers,
+		[[ORCHESTRATE, "\t\tlet retryAvailable = true;\n", "\t\tlet retryAvailable = false;\n"]],
+		"no retry at any consumer",
+	);
+});
+
+test("baseline-first private-copy mutant: a recovery brief offers only what its schema accepts", async () => {
+	const recovery = (load: (relative: string) => Promise<RecoveryBriefs>) =>
+		load("recovery/briefs.ts").then((module) => armProjectsTheRecoveryBrief(module));
+	await withPrivateCopy([], recovery);
+	await copyFails(
+		recovery,
+		[
+			[
+				"recovery/briefs.ts",
+				"summary, fixed fields and payload encoding; a recovery submission carries no summary field.",
+				"default summary, fixed fields and payload encoding. Optional summary holds bounded final text.",
+			],
+		],
+		"the recovery brief inviting a summary its schema refuses",
 	);
 });

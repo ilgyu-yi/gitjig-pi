@@ -30,7 +30,7 @@ export function piRecoveryBrief(semantic: RecoverySemanticBrief): RecoverySemant
 		)
 		.replace(
 			RETURN,
-			"Use the closed submit_result tool for a single complete final typed submission within 540 seconds. The caller owns the role, clone HEAD, default summary, fixed fields and payload encoding. Optional summary holds bounded final text. Do not supply an outer return envelope or a commit hash; a settled agent without a valid tool submission is not a result.",
+			"Use the closed submit_result tool for a single complete final typed submission within 540 seconds. The caller owns the role, clone HEAD, summary, fixed fields and payload encoding; a recovery submission carries no summary field. Do not supply an outer return envelope or a commit hash; a settled agent without a valid tool submission is not a result.",
 		);
 	return (
 		withoutGeneric.slice(0, withoutGeneric.indexOf(PAYLOAD_PREFIX)) +

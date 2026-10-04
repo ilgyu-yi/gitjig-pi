@@ -1297,6 +1297,80 @@ describe("review-round production call site", () => {
 		);
 	});
 
+	it("leaves the history diagnosis without a result unless its own retry returns one", async () => {
+		// #422, §1.7 at the diagnosis consumer: the real dispatcher, shaped as the
+		// command builds it for a Pi spec, over a scripted run. The diagnosis
+		// misses its first return; an absent or malformed retry leaves it with
+		// no result, so the round hands off, and a valid retry is the control.
+		const missing = {
+			disposition: "refused" as const,
+			cause: "no return",
+			diagnostic: {
+				...ADMITTED_DIAGNOSTIC,
+				status: "refused",
+				phase: "return",
+				return: { class: "missing" },
+				compare: { class: "not-reached" },
+				code: "RETURN_MISSING",
+				message: "dispatch refused: no return file was present after the delegate exited",
+			},
+		} as unknown as DispatchOutcome;
+		const returned = (payload: string) =>
+			({
+				disposition: "admitted",
+				ok: true,
+				summary: "",
+				compare: "confirmed",
+				payload,
+				diagnostic: ADMITTED_DIAGNOSTIC,
+			}) as unknown as DispatchOutcome;
+		const { delegateArgv: _argv, ...bare } = spec();
+		const piSpec = { ...bare, pi: { piExecutable: "pi", provider: "provider", model: "model" } };
+		for (const [name, second, expected] of [
+			["absent", missing, "hand-off"],
+			["malformed", returned("{ not json"), "hand-off"],
+			["valid", returned(JSON.stringify({ value: "NONE", invalidation: "nothing", evidence: "own" })), "posted"],
+		] as const) {
+			const fixture = repo();
+			const bodies = [composeReviewRecord(repairRecord(fixture.base)), composeReviewRecord(repairRecord(fixture.head))];
+			let published: string | undefined;
+			let sends = 0;
+			const outcome = await driveReviewRound(
+				piSpec,
+				fixture.root,
+				seams({
+					fetchSubject: async () => subject(fixture.base, fixture.head),
+					resolveHead: () => fixture.head,
+					readComments: async () => population(bodies, published),
+					publishRecord: async (body) => {
+						published = body;
+						return receipt(body);
+					},
+					makeDispatch: (input) =>
+						makeDispatcher(
+							{
+								callerRepoRoot: fixture.root,
+								stateRoot: join(fixture.root, "state"),
+								delegateArgv: [],
+								...(input.pi === undefined ? {} : { pi: { ...input.pi, role: "reviewer" as const } }),
+							},
+							async () => (sends++ === 0 ? missing : second),
+						),
+				}),
+			);
+			assert.equal(outcome.disposition, expected, `${name}: ${JSON.stringify(outcome)}`);
+			if (expected === "hand-off")
+				assert.equal(
+					"cause" in outcome && outcome.cause,
+					"review-round handed off: the required history diagnosis was unavailable or required handoff",
+					`${name}: the cause`,
+				);
+			// The pre-round diagnosis is sent twice; a posted round may diagnose again after it.
+			assert.ok(sends >= 2, `${name}: the diagnosis was not retried`);
+			if (expected === "hand-off") assert.equal(sends, 2, `${name}: a third send`);
+		}
+	});
+
 	it("fixes the history role and both transports from the spec's own Pi selection", async () => {
 		// #422: the diagnosis is the one consumer the command dispatches itself,
 		// so its role and its brief's transport are fixed here or nowhere.
