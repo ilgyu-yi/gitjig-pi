@@ -456,9 +456,13 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 		allow: [
 			"PARTIAL_PREFIX",
 			"item.partial",
-			"text",
-			"name",
-			'event.type === "tool_execution_start" ? "tool started" : "tool ended"',
+			// One row composer, used by every row: `prefix` is one of this
+			// module's own fixed labels, chosen by a local branch and never
+			// supplied by anyone else, and the clipped expression is the delegate
+			// text this module has already stripped of control characters and
+			// bounded to the delegate's share of the row.
+			"prefix",
+			"clip(text, MAX_ROW_POINTS - [...prefix].length)",
 		],
 	},
 	// #420: the Pi runner composes no operator-facing text at all.
