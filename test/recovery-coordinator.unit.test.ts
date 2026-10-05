@@ -395,6 +395,56 @@ async function armEachRecoveryConsumerNeedsItsOwnReturn(modules: CoordinatorModu
 	}
 }
 
+/** #422: the coordinator hands the measurement phase its spec's digest, and no other phase one. */
+async function armHandsTheMeasurementItsDigest(modules: CoordinatorModules, lineage: string): Promise<void> {
+	const spec = {
+		kind: "measurement",
+		question: "Which invariant differs?",
+		method: "Read one bounded artifact",
+		expectedDiscriminator: "A unique state",
+		evidence: "Selector evidence",
+		nonMutating: true,
+		notPreviouslyPresent: true,
+	};
+	const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+	const specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+	const outputs: Partial<Record<PhaseAProfileId, unknown>> = {
+		"recovery-selector": spec,
+		"recovery-measurement": {
+			kind: "measurement-result",
+			specDigest,
+			result: "unique result",
+			evidence: "new result evidence",
+		},
+		"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+	};
+	const current = {
+		...subject,
+		context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: `PR_SPEC_DIGEST_${lineage}` } },
+	};
+	const seen: Array<[PhaseAProfileId, string | undefined]> = [];
+	const result = await modules.coordinateHistoryRecovery({
+		repoRoot: process.cwd(),
+		modes,
+		subject: current,
+		history,
+		basis,
+		diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+		refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+		refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+		dispatchProfile: async (ledger, profileId, _brief, _head, _deadline, _role, digest) => {
+			seen.push([profileId, digest]);
+			return observedBy(modules.makeDispatcher, ledger, admitted(outputs[profileId]));
+		},
+	});
+	assert.equal(result.terminal, "continue");
+	assert.deepEqual(seen, [
+		["recovery-selector", undefined],
+		["recovery-measurement", specDigest],
+		["recovery-diagnosis", undefined],
+	]);
+}
+
 describe("Phase-A history recovery coordinator", () => {
 	it("pins the exact 192 KiB durable consumed-record cap", () => {
 		const source = readFileSync(new URL("../.pi/extensions/gitjig/recovery/coordinator.ts", import.meta.url), "utf8");
@@ -1206,9 +1256,19 @@ describe("Phase-A history recovery coordinator", () => {
 		await armEachRecoveryConsumerNeedsItsOwnReturn({ coordinateHistoryRecovery, makeDispatcher }, "base");
 	});
 
+	it("hands the measurement phase its spec digest and no other phase one", async () => {
+		await armHandsTheMeasurementItsDigest({ coordinateHistoryRecovery, makeDispatcher }, "base");
+	});
+
 	it("baseline-first private-copy mutants: the Pi route's preflight exemption and each consumer's own return", async () => {
 		await withCoordinatorCopy([], (modules) => armExemptsThePiRoute(modules, "copy"));
 		await withCoordinatorCopy([], (modules) => armEachRecoveryConsumerNeedsItsOwnReturn(modules, "copy"));
+		await withCoordinatorCopy([], (modules) => armHandsTheMeasurementItsDigest(modules, "copy"));
+		await copyKills(
+			(modules) => armHandsTheMeasurementItsDigest(modules, "mutant"),
+			[["recovery/coordinator.ts", "\t\t\t\tpiRole,\n\t\t\t\tspecDigest,\n", "\t\t\t\tpiRole,\n\t\t\t\tundefined,\n"]],
+			"the measurement dispatched without its spec digest",
+		);
 		await copyKills(
 			(modules) => armExemptsThePiRoute(modules, "mutant"),
 			[["recovery/coordinator.ts", 'input.dispatchProfile.transport !== "pi"', "true"]],

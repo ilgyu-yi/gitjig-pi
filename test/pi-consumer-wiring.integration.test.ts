@@ -129,6 +129,9 @@ function scripted(
 
 const PI = { piExecutable: "/usr/bin/pi", provider: "scripted", model: "scripted-model" };
 
+/** The measurement phase's spec digest, as a caller would hand it on. */
+const SPEC_DIGEST = "5".repeat(64);
+
 /** Every recovery role; the type below fails to compile if the union gains one this list lacks. */
 const RECOVERY_PI_ROLES = [
 	"challenger",
@@ -920,7 +923,7 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 		type Sent = {
 			brief: string;
 			delegateArgv: string[];
-			pi: { role?: string; piExecutable?: string; provider?: string; model?: string } | null;
+			pi: { role?: string; specDigest?: string; piExecutable?: string; provider?: string; model?: string } | null;
 		};
 		const sent = async (
 			pi: { piExecutable: string; provider: string; model: string } | undefined,
@@ -947,6 +950,8 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 				PIN,
 				performance.now() + 60_000,
 				role,
+				// The measurement phase's profile is bound to its spec by digest; no other phase has one.
+				role === "measurement" ? SPEC_DIGEST : undefined,
 			).catch(() => undefined);
 			// Only this call's sends: a call that never reached the seam must not
 			// be read through an earlier call's line.
@@ -961,6 +966,13 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 				assert.match(underPi.brief, /submit_result/, `${role}: an unprojected brief was sent`);
 				assertOnlyForbidsTheFile(underPi.brief, RECOVERY_PROHIBITION, `production recovery ${role}`);
 				assert.equal(underPi.pi?.role, role, `${role}: the role handed on`);
+				// The measurement's spec digest rides the invocation to the runner, which
+				// cannot build that profile without it; no other phase carries one.
+				assert.equal(
+					underPi.pi?.specDigest,
+					role === "measurement" ? SPEC_DIGEST : undefined,
+					`${role}: the spec digest handed on`,
+				);
 				// The Pi route carries no generic argv: the profile's command is not its child.
 				assert.deepEqual(underPi.delegateArgv, [], `${role}: a generic argv rode a Pi dispatch`);
 				assert.deepEqual(
@@ -1243,6 +1255,22 @@ test("baseline-first private-copy mutants: a Pi brief forbids the file and nothi
 });
 
 test("baseline-first private-copy mutant: the recovery role handed on is the consumer's", async () => {
+	// The spec digest has no per-call override, so the factory's spread is the
+	// one statement that hands it on: removing it is a kill, not an equivalence.
+	await assert.rejects(
+		() =>
+			armProjectsInProductionRecovery([
+				["recovery/coordinator.ts", "{ pi: { ...input.pi, role, specDigest } }", "{ pi: { ...input.pi, role } }"],
+			]),
+		(error: unknown) => {
+			assert.ok(
+				error instanceof assert.AssertionError,
+				`a dropped spec digest: the arm failed for another reason: ${error}`,
+			);
+			return true;
+		},
+		"a dropped spec digest: the owner arm still passed",
+	);
 	// The per-call role is the one makeDispatcher hands on; the role spread into
 	// the factory's options is overridden by it, so that statement alone is
 	// equivalent by construction and the mutant targets the load-bearing one.
