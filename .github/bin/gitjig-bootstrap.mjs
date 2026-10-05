@@ -263,24 +263,21 @@ export async function acquire(argv, read, seams) {
 	if (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");
 	// HEAD's own tree entry: the committed pin, whatever the index now holds.
 	const tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\0$/, "");
-	const trackedEntry = /^100(644|755) blob [0-9a-f]{40}\t(.+)$/s.exec(tracked);
+	const trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\t(.+)$/s.exec(tracked);
 	if (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");
 	const headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);
 	// pin-admission
 	const pin = projection(admitPin(top, headBlob));
 	const sourceUrl = `https://github.com/${pin.owner}/${pin.repository}`;
 	// temporary-create
-	let base;
-	try {
-		base = realpathSync(seams.temporaryBase());
-	} catch {
-		refuse("temporary-storage-unavailable");
-	}
-	const baseStats = lstatSync(base, { throwIfNoEntry: false });
-	if (!isAbsolute(base) || !baseStats || !baseStats.isDirectory() || baseStats.isSymbolicLink())
-		refuse("temporary-storage-unavailable");
+	// Every error before the child exists is the fallback relation's
+	// pre-creation temporary error, whichever step raised it.
 	let child;
 	try {
+		const base = realpathSync(seams.temporaryBase());
+		const baseStats = lstatSync(base, { throwIfNoEntry: false });
+		if (!isAbsolute(base) || !baseStats || !baseStats.isDirectory() || baseStats.isSymbolicLink())
+			refuse("temporary-storage-unavailable");
 		child = mkdtempSync(join(base, "gitjig-acquire-"));
 	} catch {
 		refuse("temporary-storage-unavailable");

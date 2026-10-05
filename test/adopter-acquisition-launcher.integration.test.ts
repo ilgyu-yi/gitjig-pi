@@ -101,6 +101,7 @@ function fixture(
 		pin?: (revision: string) => string | Buffer;
 		plan?: GitPlan;
 		targetName?: string;
+		targetFormat?: "sha1" | "sha256";
 	} = {},
 ): Fixture {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-362-"));
@@ -126,7 +127,7 @@ function fixture(
 		options.pin?.(revision) ??
 		`${JSON.stringify({ schemaVersion: 1, source: { provider: "github", host: "github.com", owner: "o", repository: "r" }, revision, payload: [] })}\n`;
 	writeFileSync(join(target, ".pi/gitjig.pin.json"), pin);
-	git(root, "init", "-q", target);
+	git(root, "init", "-q", `--object-format=${options.targetFormat ?? "sha1"}`, target);
 	git(target, "add", "-A");
 	git(target, "commit", "-qm", "target");
 	const bin = join(root, "bin");
@@ -219,7 +220,8 @@ function launch(f: Fixture, extra: Record<string, string> = {}, argv: string[] =
 function launchWith(f: Fixture, seams: string, prelude = ""): Run {
 	const harness = [
 		`import { main, defaultSeams } from ${JSON.stringify(f.launcher)};`,
-		'import { chmodSync } from "node:fs";',
+		'import fs, { chmodSync } from "node:fs";',
+		'import { syncBuiltinESMExports } from "node:module";',
 		'import { dirname } from "node:path";',
 		"process.umask(0o077);",
 		prelude,
@@ -286,6 +288,10 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	// The closure check is the launcher's own node: it hashes in-process and spawns no Git.
 	assert.equal(asked.filter((line) => / hash-object /.test(line)).length, 0, "the closure check spawned a Git child");
 	assert.equal(asked.filter((line) => / fetch /.test(line)).length, 1, "more than one fetch");
+	// A target in the longer object format admits its pin the same way.
+	const sha256 = fixture(launcher, { targetFormat: "sha256" });
+	const sha256Run = launch(sha256);
+	assert.equal(sha256Run.status, 0, `a SHA-256 target was refused (stderr ${JSON.stringify(sha256Run.stderr)})`);
 	// A physical path that ends in a space is still the target the launcher derives.
 	const spaced = fixture(launcher, { targetName: "target " });
 	const spacedRun = launch(spaced);
@@ -365,6 +371,23 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 		refused(launch(f), "invalid-input", 64, label);
 		invariant(f, before, label);
 	}
+	// The pin's path exchanged between the open and the post-read check, for a
+	// byte-identical file: only the pathname and descriptor identity can refuse it.
+	const exchanged = fixture(launcher);
+	const exchangedPin = join(exchanged.target, ".pi/gitjig.pin.json");
+	writeFileSync(join(exchanged.target, ".pi/swap.json"), readFileSync(exchangedPin));
+	refused(
+		launchWith(
+			exchanged,
+			"",
+			`const readSync = fs.readSync; let swapped = false; fs.readSync = (...args) => { if (!swapped) { swapped = true; fs.renameSync(${JSON.stringify(join(exchanged.target, ".pi/swap.json"))}, ${JSON.stringify(exchangedPin)}); } return readSync(...args); }; syncBuiltinESMExports();`,
+		),
+		"invalid-input",
+		64,
+		"a pin exchanged during its read",
+	);
+	assert.equal(snapshot(exchanged.target).includes("swap.json"), false, "the exchange did not happen");
+	assert.equal(existsSync(exchanged.record), false, "an exchanged pin reached provision");
 	// A pin that is not the caller's own: the harness reports another uid.
 	const foreign = fixture(launcher);
 	const foreignBefore = snapshot(foreign.target);
@@ -682,6 +705,22 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 	} finally {
 		chmodSync(locked.scratch, 0o700);
 	}
+	// A base that resolves but cannot be inspected: the pre-creation temporary error.
+	const opaque = fixture(launcher);
+	const opaqueBase = join(opaque.root, "opaque-base");
+	mkdirSync(opaqueBase);
+	const opaqueBefore = snapshot(opaque.target);
+	refused(
+		launchWith(
+			opaque,
+			`temporaryBase: () => ${JSON.stringify(opaqueBase)}`,
+			'const lstat = fs.lstatSync; fs.lstatSync = (path, ...rest) => { if (String(path).endsWith("/opaque-base")) throw Object.assign(new Error("EACCES"), { code: "EACCES" }); return lstat(path, ...rest); }; syncBuiltinESMExports();',
+		),
+		"temporary-storage-unavailable",
+		73,
+		"an uninspectable temporary base",
+	);
+	invariant(opaque, opaqueBefore, "an uninspectable temporary base");
 	// A temporary base that is not a directory.
 	const nowhere = fixture(launcher);
 	const before = snapshot(nowhere.target);
@@ -863,8 +902,8 @@ test(
 		);
 		await killed(
 			armAdmitsOnlyTheCommittedPin,
-			"/^100(644|755) blob [0-9a-f]{40}\\t(.+)$/s.exec(tracked)",
-			"/^1[02]0(644|755|000) blob [0-9a-f]{40}\\t(.+)$/s.exec(tracked)",
+			"/^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked)",
+			"/^1[02]0(644|755|000) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked)",
 			"a HEAD link admitted as the pin",
 		);
 		await killed(
@@ -928,6 +967,26 @@ test(
 			" || (uid !== undefined && opened.uid !== uid)",
 			"",
 			"a foreign pin admitted",
+		);
+		// Round 4's boundaries.
+		await killed(
+			armOrdersTheTerminals,
+			'\t} catch {\n\t\trefuse("temporary-storage-unavailable");\n\t}\n\treturn { child,',
+			'\t} catch (error) {\n\t\tif (error instanceof Refusal) throw error;\n\t\tthrow new Error("unmapped");\n\t}\n\treturn { child,',
+			"a temporary-base error left to the admission fallback",
+		);
+		await killed(
+			armSucceedsExactly,
+			"blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked)",
+			"blob [0-9a-f]{40}\\t(.+)$/s.exec(tracked)",
+			"a SHA-256 pin entry refused",
+		);
+		// Either identity comparison refuses the exchange alone, so the pair is the mutant.
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'\t\tif (after.dev !== before.dev || after.ino !== before.ino) refuse("invalid-input");\n\t\tif (descriptorAfter.dev !== after.dev || descriptorAfter.ino !== after.ino) refuse("invalid-input");\n',
+			"",
+			"a pin exchanged during its read admitted",
 		);
 		// The bounds.
 		await killed(armPinsTheBounds, "gitTimeoutMs: 120000", "gitTimeoutMs: 1200000", "a widened Git bound");
