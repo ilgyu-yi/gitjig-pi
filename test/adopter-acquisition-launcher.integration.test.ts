@@ -26,11 +26,14 @@ import {
 	chmodSync,
 	copyFileSync,
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	readlinkSync,
 	realpathSync,
+	renameSync,
 	rmSync,
 	symlinkSync,
 	unlinkSync,
@@ -163,6 +166,9 @@ type GitPlan = {
 	fetch?: "signal" | "overflow" | "sleep";
 	origin?: string;
 	attached?: boolean;
+	dirty?: boolean;
+	// Git's answer replaced, for an invocation whose arguments end so.
+	say?: Record<string, string>;
 };
 
 function gitSeam({
@@ -185,6 +191,11 @@ const plan = ${JSON.stringify(plan)};
 let args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(log)}, args.join(" ") + "\\n");
 appendFileSync(${JSON.stringify(envLog)}, "== " + args.join(" ") + "\\n" + Object.keys(process.env).sort().map((key) => key + "=" + process.env[key]).join("\\n") + "\\n");
+for (const [tail, text] of Object.entries(plan.say ?? {}))
+	if (args.join(" ").endsWith(tail)) {
+		process.stdout.write(text + "\\n");
+		process.exit(0);
+	}
 let env = process.env;
 if (args.includes("fetch")) {
 	if (plan.fetch === "signal") process.kill(process.pid, "SIGTERM");
@@ -199,6 +210,9 @@ if (plan.origin && args.includes("checkout"))
 if (plan.attached && args.includes("checkout"))
 	args = args.flatMap((arg) => (arg === "--detach" ? ["-B", "main"] : [arg]));
 const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
+// After the checkout: an untracked file outside the module population.
+if (plan.dirty && args.includes("checkout") && run.status === 0)
+	require("node:fs").writeFileSync(require("node:path").join(args[args.indexOf("-C") + 1], "untracked.txt"), "x\\n");
 if (run.signal) process.kill(process.pid, run.signal);
 process.exit(run.status ?? 1);
 `;
@@ -248,7 +262,11 @@ function snapshot(target: string): string {
 	return JSON.stringify({
 		status: git(target, "status", "--porcelain=v1", "--untracked-files=all", "--ignored"),
 		head: git(target, "rev-parse", "HEAD"),
-		bytes: files.map((path) => [path, readFileSync(join(target, path)).toString("base64")]),
+		// A link is recorded as its own target text, never followed.
+		bytes: files.map((path) => {
+			const at = join(target, path);
+			return [path, lstatSync(at).isSymbolicLink() ? `link:${readlinkSync(at)}` : readFileSync(at).toString("base64")];
+		}),
 		gitjig: existsSync(join(target, ".gitjig")),
 	});
 }
@@ -388,6 +406,29 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 	);
 	assert.equal(snapshot(exchanged.target).includes("swap.json"), false, "the exchange did not happen");
 	assert.equal(existsSync(exchanged.record), false, "an exchanged pin reached provision");
+	// Git names another toplevel than the one the launcher derives.
+	const elsewhere = fixture(launcher, { plan: { say: { "target rev-parse --show-toplevel": "/" } } });
+	const elsewhereBefore = snapshot(elsewhere.target);
+	refused(launch(elsewhere), "invalid-input", 64, "another toplevel");
+	invariant(elsewhere, elsewhereBefore, "another toplevel");
+	// The pin reached through a linked `.pi`: its bytes are HEAD's, its ancestor is not a directory.
+	const linked = fixture(launcher);
+	renameSync(join(linked.target, ".pi"), join(linked.target, "pi-real"));
+	symlinkSync("pi-real", join(linked.target, ".pi"));
+	const linkedBefore = snapshot(linked.target);
+	refused(launch(linked), "invalid-input", 64, "a linked .pi");
+	invariant(linked, linkedBefore, "a linked .pi");
+	// The launcher located through a link beside it: the same target, but not its own physical path.
+	const viaLink = fixture(launcher);
+	symlinkSync("gitjig-bootstrap.mjs", join(viaLink.target, ".github/bin/link.mjs"));
+	const viaLinkBefore = snapshot(viaLink.target);
+	refused(
+		launchWith(viaLink, `launcherPath: ${JSON.stringify(join(viaLink.target, ".github/bin/link.mjs"))}`),
+		"invalid-input",
+		64,
+		"a linked launcher path",
+	);
+	invariant(viaLink, viaLinkBefore, "a linked launcher path");
 	// A pin that is not the caller's own: the harness reports another uid.
 	const foreign = fixture(launcher);
 	const foreignBefore = snapshot(foreign.target);
@@ -620,6 +661,11 @@ async function armConfirmsTheClosure(launcher: string): Promise<void> {
 	for (const [label, plan] of [
 		["another origin", { origin: "https://github.com/o/r2" }],
 		["an attached checkout", { attached: true }],
+		["another common directory", { say: { "snapshot rev-parse --git-common-dir": "/" } }],
+		["another work tree", { say: { "snapshot rev-parse --show-toplevel": "/" } }],
+		["another revision", { say: { "snapshot rev-parse HEAD": "0".repeat(40) } }],
+		// Clean everywhere the closure looks, dirty only to status.
+		["an untracked file in the snapshot", { dirty: true }],
 	] as const) {
 		const f = fixture(launcher, { plan });
 		const before = snapshot(f.target);
@@ -664,6 +710,34 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 		kind === "dir" ? mode !== 0o700 : kind === "file" ? mode !== 0o600 : true,
 	);
 	assert.deepEqual(wrong, [], "a created entry is not owner-private at the relation's mode");
+	// An acquired entry another user owns: the harness reports another owner for the snapshot.
+	const foreign = fixture(launcher);
+	const foreignBefore = snapshot(foreign.target);
+	refused(
+		launchWith(
+			foreign,
+			"",
+			"const lstat = fs.lstatSync; fs.lstatSync = (path, ...rest) => { const stats = lstat(path, ...rest); return stats && /gitjig-acquire-[^/]+\\/snapshot\\//.test(String(path)) ? Object.assign(Object.create(Object.getPrototypeOf(stats)), stats, { uid: stats.uid + 1 }) : stats; }; syncBuiltinESMExports();",
+		),
+		"snapshot-identity-mismatch",
+		65,
+		"a foreign-owned artifact",
+	);
+	invariant(foreign, foreignBefore, "a foreign-owned artifact");
+	// The child created at another mode than the relation's.
+	const loose = fixture(launcher);
+	const looseBefore = snapshot(loose.target);
+	refused(
+		launchWith(
+			loose,
+			"",
+			"const mkdtemp = fs.mkdtempSync; fs.mkdtempSync = (...args) => { const made = mkdtemp(...args); fs.chmodSync(made, 0o755); return made; }; syncBuiltinESMExports();",
+		),
+		"temporary-storage-unavailable",
+		73,
+		"a child created at another mode",
+	);
+	invariant(loose, looseBefore, "a child created at another mode");
 }
 
 // ---------------------------------------------------------------------------
@@ -987,6 +1061,52 @@ test(
 			'\t\tif (after.dev !== before.dev || after.ino !== before.ino) refuse("invalid-input");\n\t\tif (descriptorAfter.dev !== after.dev || descriptorAfter.ino !== after.ino) refuse("invalid-input");\n',
 			"",
 			"a pin exchanged during its read admitted",
+		);
+		// The refusal sweep's distinct survivors, each by its owning arm.
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'\tif (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");\n',
+			"",
+			"another toplevel admitted",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'\t\tif (!parent.isDirectory() || parent.isSymbolicLink()) refuse("invalid-input");\n',
+			"",
+			"a linked .pi admitted",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'\tif (!launcherStats.isFile() || launcherStats.isSymbolicLink()) refuse("invalid-input");\n',
+			"",
+			"a linked launcher path admitted",
+		);
+		await killed(armConfirmsTheClosure, "!isInside(commonDir, real) || ", "", "another common directory admitted");
+		await killed(armConfirmsTheClosure, " || workTree !== real) refuse", ") refuse", "another work tree admitted");
+		await killed(
+			armConfirmsTheClosure,
+			'\tif ((await shown(["rev-parse", "HEAD"])) !== pin.revision) refuse("snapshot-identity-mismatch");\n',
+			"",
+			"another revision admitted",
+		);
+		await killed(
+			armOwnsEveryArtifact,
+			'\t\tif (uid !== undefined && stats.uid !== uid) refuse("snapshot-identity-mismatch");\n',
+			"",
+			"a foreign-owned artifact admitted",
+		);
+		await killed(
+			armOwnsEveryArtifact,
+			"\t\t(created.mode & 0o777) !== 0o700\n",
+			"\t\tfalse\n",
+			"a child at another mode admitted",
+		);
+		// Round 5's boundary.
+		await killed(
+			armConfirmsTheClosure,
+			'\tif ((await shown(["status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching"])) !== "")\n\t\trefuse("snapshot-identity-mismatch");\n',
+			"",
+			"a dirty snapshot admitted",
 		);
 		// The bounds.
 		await killed(armPinsTheBounds, "gitTimeoutMs: 120000", "gitTimeoutMs: 1200000", "a widened Git bound");
