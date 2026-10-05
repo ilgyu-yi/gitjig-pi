@@ -339,7 +339,21 @@ const armAttaches: Arm = async (load) => {
 		assert.deepEqual(seen.notices, [], `${label}: a ${label} selection reached a session`);
 	}
 	assert.deepEqual([...firstActs, ...secondActs], [["abort"]], "a cancelled or unlisted selection was acted on");
-	endAll([first, second]);
+	// A listed session that ends while the operator is choosing it: no view is
+	// rendered for it, nothing is sent, and the operator is told it ended.
+	const ending = await run(
+		terminal([
+			(options: string[]) => {
+				second.end();
+				return options[1];
+			},
+			"Abort",
+		]),
+	);
+	assert.equal(ending.selects.length, 1, "a view was rendered for a session that ended before it");
+	assert.deepEqual(ending.notices, ["That Pi delegate has ended"], "the operator was not told the session ended");
+	assert.deepEqual([...firstActs, ...secondActs], [["abort"]], "a session that ended before its view received an act");
+	endAll([first]);
 };
 
 // ---------------------------------------------------------------------------
@@ -912,6 +926,17 @@ test("baseline-first private-copy mutants: the command's selections and gates", 
 		armAttaches,
 		[[COMMAND, " || !ids.includes(id)) return;", ") return;"]],
 		"acting on an identifier the hub never listed",
+	);
+	await killed(
+		armAttaches,
+		[
+			[
+				COMMAND,
+				'\t\t\t\tif (piOperatorControls(id) === undefined) {\n\t\t\t\t\tctx.ui.notify(DELEGATE_NOTICES.ended, "info");\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst rows',
+				"\t\t\t\tconst rows",
+			],
+		],
+		"a view rendered for a session that ended before it",
 	);
 	// Each action, and the empty-input guard.
 	await killed(
