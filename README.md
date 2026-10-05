@@ -17,7 +17,7 @@ The runtime has no build step — the tree ships TypeScript sources that run dir
 
 To arm the local git-hook tier in a clone of this source repository, run `bash .githooks/bind_local_tier.sh` from the repository root — idempotent; full contract in SPEC §3.2/§4.7.
 
-An adopter has a different product boundary: its reviewed history carries self-standing handed-over assets and `.pi/gitjig.pin.json`; the gitjig runtime is carried and verified per clone, never committed. The delivery and provisioning commands derive after the settlement in SPEC §4, so this source-tree bind command is not presented as an adopter installer.
+An adopter has a different product boundary: its reviewed history carries self-standing handed-over assets and `.pi/gitjig.pin.json`; the gitjig runtime is carried and verified per clone, never committed. The zero-operand first-clone launcher and its exact acquisition and cleanup contract are defined in SPEC §§4.1–4.2 and 4.6–4.7; runtime delivery follows that settlement. This source-tree bind command is therefore not presented as an adopter installer.
 
 Run the verification suite as:
 
