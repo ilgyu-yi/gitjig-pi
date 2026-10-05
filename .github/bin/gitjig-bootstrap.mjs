@@ -17,6 +17,7 @@
  * residual relation's caller-held part, not guaranteed here.
  */
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	chmodSync,
 	closeSync,
@@ -26,6 +27,7 @@ import {
 	mkdtempSync,
 	openSync,
 	readdirSync,
+	readFileSync,
 	readSync,
 	realpathSync,
 	rmSync,
@@ -323,7 +325,10 @@ export async function acquireIn(state, seams) {
 	if (origin !== sourceUrl && origin !== `${sourceUrl}.git`) refuse("snapshot-identity-mismatch");
 	if ((await shown(["status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching"])) !== "")
 		refuse("snapshot-identity-mismatch");
-	// closure-check: the complete module population, HEAD against working, byte for byte.
+	// Still the snapshot check's Git children: HEAD's module population and the
+	// repository's object format, which the closure check hashes against.
+	const format = await shown(["rev-parse", "--show-object-format"]);
+	if (format !== "sha1" && format !== "sha256") refuse("snapshot-identity-mismatch");
 	const listed = (
 		await git(
 			["-C", destination, "ls-tree", "-r", "-z", "--full-tree", "HEAD", "--", SCOPE_FILE, SCOPE_DIR],
@@ -333,9 +338,11 @@ export async function acquireIn(state, seams) {
 		.toString("utf8")
 		.split("\0")
 		.filter(Boolean);
+	// closure-check: the launcher's own node, spawning nothing. The complete
+	// module population, HEAD against working, byte for byte.
 	const head = new Map();
 	for (const line of listed) {
-		const match = /^(100644|100755) blob ([0-9a-f]{40})\t(.+)$/s.exec(line);
+		const match = /^(100644|100755) blob ([0-9a-f]{40}|[0-9a-f]{64})\t(.+)$/s.exec(line);
 		if (match === null) refuse("snapshot-identity-mismatch");
 		head.set(match[3], match[2]);
 	}
@@ -357,10 +364,10 @@ export async function acquireIn(state, seams) {
 	working.add(SCOPE_FILE);
 	walk(SCOPE_DIR);
 	if (working.size !== head.size || ![...working].every((path) => head.has(path))) refuse("snapshot-identity-mismatch");
+	// Each working file's own bytes, hashed as Git names a blob: no filter, no conversion.
 	for (const [path, oid] of head) {
-		const hashed = line(
-			await git(["-C", destination, "hash-object", "--no-filters", "--", path], "snapshot-identity-mismatch", real),
-		);
+		const bytes = readFileSync(join(real, path));
+		const hashed = createHash(format).update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
 		if (hashed !== oid) refuse("snapshot-identity-mismatch");
 	}
 	if (!head.has(ENTRY)) refuse("snapshot-identity-mismatch");

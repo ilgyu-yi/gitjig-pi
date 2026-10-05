@@ -216,12 +216,13 @@ function launch(f: Fixture, extra: Record<string, string> = {}, argv: string[] =
 }
 
 /** The same launcher, imported, with some of its seams narrowed. */
-function launchWith(f: Fixture, seams: string): Run {
+function launchWith(f: Fixture, seams: string, prelude = ""): Run {
 	const harness = [
 		`import { main, defaultSeams } from ${JSON.stringify(f.launcher)};`,
 		'import { chmodSync } from "node:fs";',
 		'import { dirname } from "node:path";',
 		"process.umask(0o077);",
+		prelude,
 		`const seams = { ...defaultSeams(), ${seams} };`,
 		"process.exitCode = await main([], { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: process.env.LC_ALL }, seams);",
 	].join("\n");
@@ -281,7 +282,9 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	const asked = readFileSync(f.log, "utf8").split("\n").filter(Boolean);
 	const at = (pattern: RegExp) => asked.findIndex((line) => pattern.test(line));
 	assert.ok(at(/ cat-file blob HEAD:\.pi\/gitjig\.pin\.json/) < at(/ fetch /), "the pin was not read before the fetch");
-	assert.ok(at(/ fetch /) < at(/ hash-object /), "the closure was not checked after the fetch");
+	assert.ok(at(/ fetch /) < at(/ ls-tree -r /), "the closure was not listed after the fetch");
+	// The closure check is the launcher's own node: it hashes in-process and spawns no Git.
+	assert.equal(asked.filter((line) => / hash-object /.test(line)).length, 0, "the closure check spawned a Git child");
 	assert.equal(asked.filter((line) => / fetch /.test(line)).length, 1, "more than one fetch");
 	// A physical path that ends in a space is still the target the launcher derives.
 	const spaced = fixture(launcher, { targetName: "target " });
@@ -362,6 +365,16 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 		refused(launch(f), "invalid-input", 64, label);
 		invariant(f, before, label);
 	}
+	// A pin that is not the caller's own: the harness reports another uid.
+	const foreign = fixture(launcher);
+	const foreignBefore = snapshot(foreign.target);
+	refused(
+		launchWith(foreign, "", "process.getuid = () => 4242424;"),
+		"invalid-input",
+		64,
+		"a pin owned by another user",
+	);
+	invariant(foreign, foreignBefore, "a pin owned by another user");
 	// The routing projection, closed.
 	const source = (over: object) => ({ provider: "github", host: "github.com", owner: "o", repository: "r", ...over });
 	for (const [label, pin] of [
@@ -528,6 +541,11 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 			`a Git child's global config is not the owned file: ${args}`,
 		);
 	}
+	// And every Git invocation opens with the profile's config rows, exactly.
+	const rows =
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects ";
+	for (const { args } of blocks)
+		assert.ok(args.startsWith(rows), `a Git child lacks the profile's config rows: ${args}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -833,8 +851,8 @@ test(
 		);
 		await killed(
 			armConfirmsTheClosure,
-			"([0-9a-f]{40})\\t(.+)$/s.exec(line);",
-			"([0-9a-f]{40})\\t(.+)$/.exec(line);",
+			"([0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(line);",
+			"([0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/.exec(line);",
 			"a newline-named member refused",
 		);
 		await killed(
@@ -897,6 +915,19 @@ test(
 			'line(await git(["-C", destination, ...args], "snapshot-identity-mismatch"))',
 			'line(await bounded(seams, "git", [...GIT_CONFIG, "-C", destination, ...args], { env: { ...env.git, EXTRA_ENV: "1" }, cwd: child, timeoutMs: seams.gitTimeoutMs, cause: "snapshot-identity-mismatch" }))',
 			"a snapshot child given an extra variable",
+		);
+		// Round 3's boundaries.
+		await killed(
+			armBuildsEachChildEnvironment,
+			'\t"-c",\n\t"credential.helper=",\n',
+			"",
+			"a Git child left a credential helper",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			" || (uid !== undefined && opened.uid !== uid)",
+			"",
+			"a foreign pin admitted",
 		);
 		// The bounds.
 		await killed(armPinsTheBounds, "gitTimeoutMs: 120000", "gitTimeoutMs: 1200000", "a widened Git bound");
