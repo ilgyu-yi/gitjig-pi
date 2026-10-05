@@ -22,9 +22,12 @@ import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
 
 /**
  * What a view may do to a running delegate, named positively because the set
- * is settled: explicit steer and follow-up, clear queue, abort, and reading
- * its progress. §4.9 lists no other operator act, and three capabilities the
- * session has are deliberately absent (#420):
+ * is settled: explicit steer and follow-up (`command`, closed over exactly
+ * those two), clear queue, and abort. §4.9 lists no other operator act.
+ * Reading progress is `piOperatorView`'s plane, and whether a session is still
+ * live is this hub's own answer, since an ended session has no controls, so the
+ * session's lifecycle reads and its settle wait are not a view's either (#424).
+ * Three further capabilities the session has are deliberately absent (#420):
  *
  * - `attach`/`detach`: the supervisor has ONE observer slot and this hub holds
  *   it for the child's whole life. A view that could take it would stop the
@@ -37,10 +40,7 @@ import type { PiRpcEvent, PiRpcSession } from "./pi-rpc.ts";
  *   submission the run is waiting for; a view that wants to stop a delegate
  *   aborts it, which is the act §4.9 gives it.
  */
-export type PiOperatorControls = Pick<
-	PiRpcSession,
-	"command" | "clearQueue" | "abort" | "waitForSettle" | "done" | "exitCode" | "exitSignal" | "settleCount"
->;
+export type PiOperatorControls = Pick<PiRpcSession, "command" | "clearQueue" | "abort">;
 
 /** Rendered rows an operator may see at once, the partial row included. */
 export const MAX_VIEW_ROWS = 20;
@@ -75,12 +75,22 @@ interface Active {
 const active = new Map<string, Active>();
 
 /**
- * How many sessions are live. Read-only, and the only thing this module tells
- * anyone about its registry: it is what makes a runner's teardown observable
- * from outside without exposing a session or its text.
+ * How many sessions are live. Read-only: it is what makes a runner's teardown
+ * observable from outside without exposing a session or its text.
  */
 export function livePiOperatorSessions(): number {
 	return active.size;
+}
+
+/**
+ * The identifiers of the live sessions a view can attach to: those with bound
+ * controls, in the order they began. With the count above, this is all this
+ * module tells anyone about its registry. An identifier is the hub's own
+ * random UUID and carries no delegate text; a session begun but not yet bound
+ * has nothing to attach to, and an ended one is gone (#424).
+ */
+export function livePiOperatorIds(): string[] {
+	return [...active.values()].flatMap((item) => (item.session === undefined ? [] : [item.id]));
 }
 
 /** The controls a view may use on one live session, if it is still running. */
@@ -150,19 +160,6 @@ export function beginPiOperatorSession() {
 				command: (type, message) => session.command(type, message),
 				clearQueue: () => session.clearQueue(),
 				abort: () => session.abort(),
-				waitForSettle: (after) => session.waitForSettle(after),
-				get done() {
-					return session.done;
-				},
-				get exitCode() {
-					return session.exitCode;
-				},
-				get exitSignal() {
-					return session.exitSignal;
-				},
-				get settleCount() {
-					return session.settleCount;
-				},
 			};
 		},
 		end(): void {

@@ -818,16 +818,9 @@ setInterval(() => {}, 1000);
 	// attach and detach would take the observer slot this hub holds, `prompt`
 	// would be a second send, and `close` would cut off the submission the run
 	// is waiting for — a view that wants to stop a delegate aborts it.
-	assert.deepEqual(Object.keys(controls).sort(), [
-		"abort",
-		"clearQueue",
-		"command",
-		"done",
-		"exitCode",
-		"exitSignal",
-		"settleCount",
-		"waitForSettle",
-	]);
+	// #424 narrowed it to the operator acts alone: lifecycle reads and the
+	// settle wait are the runner's, and an ended session has no controls.
+	assert.deepEqual(Object.keys(controls).sort(), ["abort", "clearQueue", "command"]);
 	for (const withheld of ["attach", "detach", "prompt", "close"])
 		assert.equal(withheld in controls, false, `a view was given ${withheld}`);
 	// The event the child emits AFTER the view took its controls still reaches

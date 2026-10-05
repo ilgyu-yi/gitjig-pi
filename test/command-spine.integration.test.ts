@@ -118,6 +118,7 @@ const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 /** The expected governed-home multiset — governed commands on their ruled surfaces. */
 const EXPECTED_GOVERNED_ROWS = [
 	"authoring-brief|extension",
+	"delegate|extension",
 	"dispatch-trace|extension",
 	"governance|extension",
 	"land|extension",

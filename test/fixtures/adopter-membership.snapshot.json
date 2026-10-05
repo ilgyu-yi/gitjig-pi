@@ -214,6 +214,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/commands/delegate.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/commands/dispatch-trace.ts",
 			"disposition": "carried"
 		},
@@ -715,6 +719,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/422.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/424.md",
 			"disposition": "instance-state"
 		},
 		{
