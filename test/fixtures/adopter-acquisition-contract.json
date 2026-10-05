@@ -1,0 +1,152 @@
+{
+	"schemaVersion": 3,
+	"relations": {
+		"activation": [
+			[".github/bin/gitjig-bootstrap.mjs", "settled-pending-runtime", "#362", "none"],
+			[".pi/extensions/gitjig/install/bootstrap.ts", "live", "none", "#362"],
+			[".pi/extensions/gitjig/install/acquire.ts", "live", "none", "none"]
+		],
+		"nodes": [
+			["argv-admission", "startup", "launcher", "launcher", "invalid-input"],
+			["self-location", "startup", "launcher", "launcher", "invalid-input"],
+			["pin-read", "target-admission", "git-child", "launcher", "invalid-input"],
+			["pin-admission", "target-admission", "launcher", "launcher", "invalid-input"],
+			["temporary-create", "temporary-create", "filesystem", "launcher", "temporary-storage-unavailable"],
+			["source-fetch", "source-acquisition", "git-child", "launcher", "source-unavailable"],
+			["snapshot-check", "snapshot-confirmation", "git-child", "launcher", "snapshot-identity-mismatch"],
+			["closure-check", "snapshot-confirmation", "launcher", "launcher", "snapshot-identity-mismatch"],
+			["provision-run", "provision", "provision-node", "provision-owner", "provision-refused"],
+			["cleanup", "cleanup", "filesystem", "launcher", "cleanup-failed"],
+			["terminal", "terminal", "terminal", "launcher", "success"]
+		],
+		"edges": [
+			["before", "argv-admission", "self-location"],
+			["before", "self-location", "pin-read"],
+			["before", "pin-read", "pin-admission"],
+			["before", "pin-admission", "temporary-create"],
+			["before", "temporary-create", "source-fetch"],
+			["before", "source-fetch", "snapshot-check"],
+			["before", "snapshot-check", "closure-check"],
+			["before", "closure-check", "provision-run"],
+			["before", "provision-run", "cleanup"],
+			["before", "cleanup", "terminal"],
+			["reaches", "temporary-create", "cleanup"],
+			["overrides", "cleanup-failed", "post-creation-cause"]
+		],
+		"authority": [
+			["argv-admission", "operand", "process-argv", "refused", "0"],
+			["self-location", "target-top", "physical-launcher-path", "routing", "1"],
+			["pin-read", "pin-blob", "target-head", "routing", "1"],
+			["pin-admission", "routing-projection", "admitted-pin-bytes", "non-authorizing", "1"],
+			["source-fetch", "source", "routing-projection", "routing", "1"],
+			["source-fetch", "revision", "routing-projection", "routing", "1"],
+			["provision-run", "entry", "confirmed-snapshot", "execution", "1"],
+			["provision-run", "complete-pin", "target-pin-reread", "integrity", "1"]
+		],
+		"predicates": [
+			["argv-admission", "operand-count", "equals", "0"],
+			["self-location", "launcher-file", "is", "regular-non-link"],
+			["self-location", "target-top", "derived-from", "launcher-physical-path"],
+			["pin-admission", "pin-entry", "is", "head-tracked-regular-blob"],
+			["pin-admission", "pin-ancestors", "are", "non-link"],
+			["pin-admission", "pin-open", "is", "no-follow-one-link-current-user-owned"],
+			["pin-admission", "pin-bytes", "at-most", "1048576"],
+			["pin-admission", "pin-bytes", "equals", "head-blob-under-path-and-descriptor-identity"],
+			["pin-admission", "projection-encoding", "is", "utf-8-json-object"],
+			["pin-admission", "schemaVersion", "equals", "1"],
+			["pin-admission", "source-key", "includes", "provider"],
+			["pin-admission", "source-key", "includes", "host"],
+			["pin-admission", "source-key", "includes", "owner"],
+			["pin-admission", "source-key", "includes", "repository"],
+			["pin-admission", "source-key-count", "equals", "4"],
+			["pin-admission", "provider", "equals", "github"],
+			["pin-admission", "host", "equals", "github.com"],
+			["pin-admission", "owner", "is", "non-empty-nfc-no-control-slash-percent"],
+			["pin-admission", "repository", "is", "non-empty-nfc-no-control-slash-percent"],
+			["pin-admission", "revision", "is", "lowercase-40-hex"],
+			["source-fetch", "input-url", "equals", "https://github.com/OWNER/REPOSITORY"],
+			["source-fetch", "revision-identity", "equals", "projected-object"],
+			["source-fetch", "identity-substitute", "admits", "none"],
+			["snapshot-check", "git-common-dir", "is", "inside-fresh-destination"],
+			["snapshot-check", "work-tree", "is", "inside-fresh-destination"],
+			["snapshot-check", "head", "equals", "projected-revision-detached"],
+			["snapshot-check", "origin", "equals-any", "https://github.com/OWNER/REPOSITORY"],
+			["snapshot-check", "origin", "equals-any", "https://github.com/OWNER/REPOSITORY.git"],
+			["snapshot-check", "porcelain", "equals", "empty"],
+			["closure-check", "population-scope", "includes", ".pi/extensions/gitjig.ts"],
+			["closure-check", "population-scope", "includes", ".pi/extensions/gitjig/**"],
+			["closure-check", "population-scope", "admits", "none-other"],
+			["closure-check", "working-population", "equals", "head-population"],
+			["closure-check", "head-entry-mode", "is", "regular-blob"],
+			["closure-check", "entry-and-ancestors", "are", "non-link-confined"],
+			["closure-check", "working-bytes", "equals", "head-blob"],
+			["closure-check", "fixed-entry", "equals", ".pi/extensions/gitjig/install/provision-cli.ts"]
+		],
+		"limits": [
+			["pin-read", "eof", "120000", "1048576", "1048576", "launcher"],
+			["source-fetch", "eof", "120000", "1048576", "1048576", "launcher"],
+			["snapshot-check", "eof", "120000", "1048576", "1048576", "launcher"],
+			["provision-run", "eof", "300000", "1048576", "1048576", "provision-owner"]
+		],
+		"child-outcomes": [
+			["spawn-failure", "node-cause"],
+			["timeout", "node-cause"],
+			["stream-overflow", "node-cause"],
+			["signal", "node-cause"],
+			["nonzero", "node-cause"]
+		],
+		"environment": [
+			["launcher", "read", "PATH", "caller-value"],
+			["launcher", "read", "HOME", "caller-value"],
+			["launcher", "read", "LC_ALL", "caller-value"],
+			["launcher", "read", "temporary-base", "platform-temporary-base"],
+			["git", "env", "PATH", "launcher-read-PATH"],
+			["git", "env", "LC_ALL", "C"],
+			["git", "env", "GIT_CONFIG_NOSYSTEM", "1"],
+			["git", "env", "GIT_CONFIG_GLOBAL", "owned-empty-file"],
+			["git", "env", "GIT_TERMINAL_PROMPT", "0"],
+			["git", "config", "credential.helper", "empty"],
+			["git", "config", "core.hooksPath", "disabled"],
+			["git", "config", "http.followRedirects", "false"],
+			["node", "env", "PATH", "launcher-read-PATH"],
+			["node", "env", "LC_ALL", "C"],
+			["node", "env", "HOME", "target-home"]
+		],
+		"exclusions": [
+			["git", "inherited-environment"],
+			["git", "url-rewrite"],
+			["git", "filter-smudge"],
+			["git", "alternates"],
+			["git", "replacement-refs"],
+			["git", "object-directory"],
+			["git", "work-tree-or-git-dir-input"],
+			["git", "local-file-transport"],
+			["node", "inherited-environment"],
+			["node", "node-options"],
+			["node", "node-path"],
+			["node", "loader-injection"]
+		],
+		"artifacts": [
+			["temporary-base", "1", "existing", "platform", "realpath-absolute-existing-non-link-directory"],
+			["acquisition-child", "1", "0700", "current-user", "non-link"],
+			["created-directory", "0-or-more", "0700", "current-user", "non-link"],
+			["created-file", "0-or-more", "0600", "current-user", "non-link"]
+		],
+		"terminal": [
+			["success", "0", "empty", "empty"],
+			["invalid-input", "64", "empty", "cause-line"],
+			["snapshot-identity-mismatch", "65", "empty", "cause-line"],
+			["source-unavailable", "69", "empty", "cause-line"],
+			["provision-refused", "70", "empty", "cause-line"],
+			["temporary-storage-unavailable", "73", "empty", "cause-line"],
+			["cleanup-failed", "74", "empty", "cause-line"]
+		],
+		"fallbacks": [
+			["unknown-admission-error", "invalid-input"],
+			["pre-creation-temporary-error", "temporary-storage-unavailable"],
+			["post-creation-pre-identity-non-git-error", "snapshot-identity-mismatch"],
+			["git-error", "source-unavailable"],
+			["post-identity-error", "provision-refused"]
+		]
+	}
+}
