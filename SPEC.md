@@ -52,20 +52,20 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1039 |
 | &nbsp;&nbsp;§4.6 | Binding and resolution | 1043 |
 | &nbsp;&nbsp;§4.7 | Host boundary | 1059 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1121 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1178 |
-| §5 | Cross-cutting contracts | 1303 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1307 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1313 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1317 |
-| &nbsp;&nbsp;§5.4 | Work language | 1321 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1325 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1343 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1355 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1365 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1373 |
-| §6 | Self-governance milestone | 1389 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1400 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1122 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1179 |
+| §5 | Cross-cutting contracts | 1304 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1308 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1314 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1318 |
+| &nbsp;&nbsp;§5.4 | Work language | 1322 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1326 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1344 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1356 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1366 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1374 |
+| §6 | Self-governance milestone | 1390 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1401 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -859,7 +859,7 @@ The pin's closed v1 JSON contains exactly `schemaVersion: 1`; platform-attested 
 Manifest order is unsigned UTF-8 path-byte order. Each digest record is one class byte (`0x48` handed, `0x43` carried), uint32-big-endian path-byte length, path bytes, uint64-big-endian file-byte length, and the raw 32-byte member digest. `payloadDigest` hashes all concatenated records; `carriedDigest` hashes only carried records; an empty projection hashes the empty byte string. Acquisition obtains bytes from the platform-attested source at exactly `revision`, reconstructs the complete manifest and both aggregate digests, and refuses before any target mutation on any mismatch. Provisioning and freshness reconstruct the carried records with this same grammar. Another provider or algorithm requires a new version, never reinterpretation of v1.
 
 <!-- acquisition-contract: trust:start -->
-**First-clone trust transition.** The relations below are the one owner of the handed first-clone launcher's trust, process, environment and admission contract (#363). Each is a Markdown table with the fixed header shown. Every cell is one scalar from the column's closed domain, and a row is one tuple. Closed column domains: `stage` and `surface` as listed below; `owner` is `launcher` or `provision-owner`; `relation` is `before`, `reaches` or `overrides`; `role` is `refused`, `routing`, `non-authorizing`, `execution` or `integrity`; `operator` is `equals`, `equals-any`, `is`, `are`, `at-most`, `derived-from`, `includes` or `admits`; `stdin` is `eof`; `processGroupOwner` is `launcher` or `provision-owner`; `profile` is `launcher`, `git` or `node`; `kind` is `read`, `env` or `config`; numeric columns are decimal integers. A table admits no row outside its key and reference domains: a node an edge, limit, input or predicate names must be a row of the node relation, and a cause must be a row of §4.7's terminal relation. Surrounding prose explains the tuples and never adds a node, input, predicate, limit, environment entry, edge or cause. The launcher is invoked as `node .github/bin/gitjig-bootstrap.mjs` with no following argument; it physically self-locates its target, reads the committed pin only for a non-authorizing routing projection, and hands the acquired snapshot's fixed entry to the existing canonical codec and verifier, which reread the complete target pin and remain the sole integrity admission before mutation.
+**First-clone trust transition.** The relations below are the one owner of the handed first-clone launcher's trust, process, environment and admission contract (#363). Each is a Markdown table with the fixed header shown. Every cell is one scalar from the column's closed domain, and a row is one tuple. Closed column domains: `stage` and `surface` as listed below; `owner` is `launcher` or `provision-owner`; `relation` is `before`, `reaches` or `overrides`; `role` is `refused`, `routing`, `non-authorizing`, `execution` or `integrity`; `operator` is `equals`, `equals-any`, `is`, `are`, `at-most`, `derived-from`, `includes` or `admits`; `stdin` is `eof`; `processGroupOwner` is `launcher` or `provision-owner`; `profile` is `launcher`, `git` or `node`; `kind` is `read`, `env` or `config`; numeric columns are decimal integers. A table admits no row outside its key and reference domains: a node that an edge, limit, input or predicate names must be a row of the node relation, and a cause must be a row of §4.7's terminal relation. Surrounding prose explains the tuples and never adds a node, input, predicate, limit, environment entry, edge or cause. The launcher is invoked as `node .github/bin/gitjig-bootstrap.mjs` with no following argument; it physically self-locates its target, reads the committed pin only for a non-authorizing routing projection, and hands the acquired snapshot's fixed entry to the existing canonical codec and verifier, which reread the complete target pin and remain the sole integrity admission before mutation.
 
 Process nodes — the stage set is exactly `startup`, `target-admission`, `temporary-create`, `source-acquisition`, `snapshot-confirmation`, `provision`, `cleanup` and `terminal`; the surface set is exactly `launcher`, `git-child`, `provision-node`, `filesystem` and `terminal`; row order is process order:
 
@@ -1077,14 +1077,15 @@ The acquisition child is named `gitjig-acquire-*`. These limits, the cleanup obl
 <!-- acquisition-relation: residuals:start -->
 | residual | holder | scope |
 | --- | --- | --- |
-| executable-selection | caller | pre-entry |
+| node-executable-selection | caller | pre-entry |
+| git-executable-selection | caller | child-spawn |
 | home-sensitive-behaviour | caller | selected-executable |
 | node-startup-controls | caller | pre-entry |
 | filesystem-failure | host | after-controlled-terminal |
 | abrupt-termination | host | outside-controlled-terminal |
 <!-- acquisition-relation: residuals:end -->
 
-`node-startup-controls` are the selected runtime's own startup inputs inherited from the caller, such as `NODE_OPTIONS` or `NODE_V8_COVERAGE`: they act before the handed bytes execute, so neither a write they cause nor an exit they force is the launcher's write or a controlled terminal, exactly as the caller's selection of `node` is not acquisition authority. A caller that wants them absent invokes the launcher from an emptied environment; the contract neither requires nor attests that. Cleanup responsibility begins with that first artifact, cleanup is attempted on every controlled terminal (§4.2's `reaches` edge), and every owned artifact is confirmed absent before success.
+`node-startup-controls` are the selected runtime's own startup inputs inherited from the caller, such as `NODE_OPTIONS` or `NODE_V8_COVERAGE`: they act before the handed bytes execute, so neither a write they cause nor an exit they force is the launcher's write or a controlled terminal, exactly as the caller's selection of `node`, and of `git` through the `PATH` the launcher reads and hands its Git children, is not acquisition authority: an executable the caller selects is the caller's, and what it reports is only as trustworthy as that selection. A caller that wants them absent invokes the launcher from an emptied environment; the contract neither requires nor attests that. Cleanup responsibility begins with that first artifact, cleanup is attempted on every controlled terminal (§4.2's `reaches` edge), and every owned artifact is confirmed absent before success.
 **First-clone terminal algebra.** Success has empty stdout and stderr. Every refusal has empty stdout and writes exactly one ASCII stderr line `gitjig-bootstrap: <cause>` followed by a line feed, rendering no operand or child diagnostic:
 
 <!-- acquisition-relation: terminal:start -->

@@ -135,7 +135,8 @@
 			["created-file", "acquisition-child-subtree", "0-or-more", "0600", "current-user", "non-link"]
 		],
 		"residuals": [
-			["executable-selection", "caller", "pre-entry"],
+			["node-executable-selection", "caller", "pre-entry"],
+			["git-executable-selection", "caller", "child-spawn"],
 			["home-sensitive-behaviour", "caller", "selected-executable"],
 			["node-startup-controls", "caller", "pre-entry"],
 			["filesystem-failure", "host", "after-controlled-terminal"],
@@ -160,8 +161,8 @@
 	},
 	"prose": {
 		"launcher": "1d7048afb5e00d031e1ec2b4d18993356c701289197b71add099e90f75692997",
-		"trust": "ea516311729e26d92c445bb87e0c606b2fcf551f9ab6574b3111ae2f2af26ea9",
+		"trust": "5bb443011bf34202489d3776809649991c3c452a30cd80f339cdb9e3392473d1",
 		"binding": "201b0bc7f190428d39db1abd97ed680c1e32d9af2184d774d4bc5955219f2ec8",
-		"host": "a60b062a0c27acab5a36b204281c22f82dec9e680439c7c2d47ca5f84d4dce0d"
+		"host": "ce819d1d6facafd716735ebc694af33cd1cac8a1183bc932a164423e84597b83"
 	}
 }

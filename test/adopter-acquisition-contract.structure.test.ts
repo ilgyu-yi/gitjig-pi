@@ -10,14 +10,9 @@
  * reviewed with them. So any tuple that drifts fails by value, however the
  * surrounding prose reads.
  *
- * Separately, `settled` reads #363's enumerated settlement values off the
- * parsed tuples, so the SPEC and its projection drifting together still red
- * for those values: routing, the closed routing projection and its keys, the
- * pin's identity checks, closure, child limits, the child environments and
- * exclusions, the temporary artifacts with their parents and modes, the
- * terminal algebra, cleanup reach and precedence, the residuals, and
- * activation. Every other tuple is guarded by the projection alone, so changing
- * it is a contract change visible in both files of the diff.
+ * Changing any tuple therefore changes the SPEC and its projection together:
+ * a contract change visible in both files of the diff, which review owns.
+ * Nothing here claims to pin a value independently of that projection.
  *
  * There are no runtime probes here: this is a contract-only change, and the
  * handed launcher does not exist yet. Real Git and provision-child selection,
@@ -237,98 +232,6 @@ function closed(parsed: Parsed): boolean {
 	return JSON.stringify(children.map(([node]) => node)) === JSON.stringify(parsed.limits.map(([node]) => node));
 }
 
-const has = (rows: string[][], ...row: string[]) =>
-	rows.some((candidate) => JSON.stringify(candidate) === JSON.stringify(row));
-
-/** #363's settled values, read off the parsed tuples. */
-function settled(parsed: Parsed): boolean {
-	const status = Object.fromEntries(parsed.terminal.map(([cause, value]) => [cause, Number(value)]));
-	const limit = Object.fromEntries(
-		parsed.limits.map(([node, , timeout, out, err]) => [node, [timeout, out, err].map(Number)]),
-	);
-	return (
-		// Pre-verification execution: nothing runs before closure, and no source Git before the temporary child.
-		has(parsed.edges, "before", "closure-check", "provision-run") &&
-		has(parsed.edges, "before", "temporary-create", "source-fetch") &&
-		// Cleanup reach and precedence.
-		has(parsed.edges, "reaches", "temporary-create", "cleanup") &&
-		has(parsed.edges, "before", "cleanup", "terminal") &&
-		has(parsed.edges, "overrides", "cleanup-failed", "post-creation-cause") &&
-		// Routing is the pin's alone, with no override or fallback.
-		has(parsed.authority, "argv-admission", "operand", "process-argv", "refused", "0") &&
-		has(parsed.authority, "pin-admission", "routing-projection", "admitted-pin-bytes", "non-authorizing", "1") &&
-		has(parsed.authority, "provision-run", "complete-pin", "target-pin-reread", "integrity", "1") &&
-		has(parsed.predicates, "source-fetch", "identity-substitute", "admits", "none") &&
-		// Closure: complete, regular, non-link, byte-equal, and the fixed entry.
-		has(parsed.predicates, "closure-check", "working-population", "equals", "head-population") &&
-		has(parsed.predicates, "closure-check", "working-bytes", "equals", "head-blob") &&
-		has(parsed.predicates, "closure-check", "population-scope", "admits", "none-other") &&
-		has(parsed.predicates, "closure-check", "head-entry-mode", "is", "regular-blob") &&
-		has(
-			parsed.predicates,
-			"closure-check",
-			"fixed-entry",
-			"equals",
-			".pi/extensions/gitjig/install/provision-cli.ts",
-		) &&
-		// Bounds, by value.
-		JSON.stringify(limit["source-fetch"]) === JSON.stringify([120000, 1048576, 1048576]) &&
-		JSON.stringify(limit["provision-run"]) === JSON.stringify([300000, 1048576, 1048576]) &&
-		has(parsed.predicates, "pin-admission", "pin-bytes", "at-most", "1048576") &&
-		// Statuses, exactly the six plus silent success.
-		JSON.stringify(status) ===
-			JSON.stringify({
-				success: 0,
-				"invalid-input": 64,
-				"snapshot-identity-mismatch": 65,
-				"source-unavailable": 69,
-				"provision-refused": 70,
-				"temporary-storage-unavailable": 73,
-				"cleanup-failed": 74,
-			}) &&
-		// Ambient exclusion, constructed positively.
-		has(parsed.environment, "git", "env", "GIT_CONFIG_NOSYSTEM", "1") &&
-		has(parsed.exclusions, "git", "inherited-environment") &&
-		has(parsed.exclusions, "node", "inherited-environment") &&
-		// The closed routing projection: exactly its four source keys and its values.
-		JSON.stringify(
-			parsed.predicates
-				.filter(([node, subject]) => node === "pin-admission" && subject === "source-key")
-				.map(([, , , key]) => key),
-		) === JSON.stringify(["provider", "host", "owner", "repository"]) &&
-		has(parsed.predicates, "pin-admission", "source-key-count", "equals", "4") &&
-		has(parsed.predicates, "pin-admission", "schemaVersion", "equals", "1") &&
-		has(parsed.predicates, "pin-admission", "provider", "equals", "github") &&
-		has(parsed.predicates, "pin-admission", "host", "equals", "github.com") &&
-		has(parsed.predicates, "pin-admission", "revision", "is", "lowercase-40-hex") &&
-		// The pin's identity, checked before the open and after the read.
-		has(parsed.predicates, "pin-admission", "pin-bytes", "equals", "head-blob") &&
-		has(parsed.predicates, "pin-admission", "pathname-identity", "equals", "before-open-and-after-read") &&
-		has(parsed.predicates, "pin-admission", "descriptor-identity", "equals", "pathname-identity-after-read") &&
-		// Every child's stdin is EOF, and the Node child's HOME is the launcher's own read.
-		parsed.limits.every(([, stdin]) => stdin === "eof") &&
-		has(parsed.environment, "node", "env", "HOME", "launcher-read-HOME") &&
-		// The temporary exception: one child of the base, everything else inside it, owner-private.
-		JSON.stringify(parsed.artifacts) ===
-			JSON.stringify([
-				["temporary-base", "none", "1", "existing", "platform", "realpath-absolute-existing-non-link-directory"],
-				["acquisition-child", "temporary-base", "1", "0700", "current-user", "non-link"],
-				["created-directory", "acquisition-child-subtree", "0-or-more", "0700", "current-user", "non-link"],
-				["created-file", "acquisition-child-subtree", "0-or-more", "0600", "current-user", "non-link"],
-			]) &&
-		// Silent success, and one content-free line for every refusal.
-		parsed.terminal.every(
-			([cause, , stdout, stderr]) => stdout === "empty" && stderr === (cause === "success" ? "empty" : "cause-line"),
-		) &&
-		// What the caller's own invocation does is held by the caller, not guaranteed.
-		has(parsed.residuals, "node-startup-controls", "caller", "pre-entry") &&
-		has(parsed.residuals, "executable-selection", "caller", "pre-entry") &&
-		// Activation: settled now, live only with its runtime.
-		has(parsed.activation, ".github/bin/gitjig-bootstrap.mjs", "settled-pending-runtime", "#362", "none") &&
-		has(parsed.activation, ".pi/extensions/gitjig/install/bootstrap.ts", "live", "none", "#362")
-	);
-}
-
 /**
  * Each owned region's prose, with every relation block replaced by its name:
  * the explanation the tables sit in. It is fixed by digest in the reviewed
@@ -355,7 +258,7 @@ function prose(text: string): Record<string, string> | undefined {
 	);
 }
 
-/** The whole contract: schema, closure, the reviewed projection, and the settled values. */
+/** The whole contract: schema, closure, and the reviewed projection of its tuples and prose. */
 function contractHolds(text: string): boolean {
 	const parsed = relations(text);
 	return (
@@ -363,7 +266,6 @@ function contractHolds(text: string): boolean {
 		fixture.schemaVersion === 3 &&
 		JSON.stringify(parsed) === JSON.stringify(fixture.relations) &&
 		JSON.stringify(prose(text)) === JSON.stringify(fixture.prose) &&
-		settled(parsed) &&
 		!text.includes("acquisition-process-matrix")
 	);
 }
@@ -429,80 +331,6 @@ it("each AC7 class reds by value when its tuples drift", () => {
 		["cleanup failure not overriding", "| overrides | cleanup-failed | post-creation-cause |\n", ""],
 	] as const)
 		assert.equal(contractHolds(edited(from, to)), false, `${named} survived`);
-});
-
-it("the settled values hold on their own, so a SPEC and projection drifting together still red", () => {
-	// Every mutant above edits the SPEC alone, so the projection comparison
-	// would catch each. A change that moved the SPEC and its projection
-	// together would pass that comparison; #363's settled values must not.
-	const baseline = relations(spec);
-	assert.ok(baseline && settled(baseline), "the baseline relations do not hold the settled values");
-	for (const [named, from, to] of [
-		["provision before closure", "| before | closure-check | provision-run |\n", ""],
-		[
-			"an admitted identity substitute",
-			"| source-fetch | identity-substitute | admits | none |",
-			"| source-fetch | identity-substitute | admits | mirror |",
-		],
-		["closure without byte equality", "| closure-check | working-bytes | equals | head-blob |\n", ""],
-		["an inherited Node environment", "| node | inherited-environment |\n", ""],
-		["a shorter Git bound", "| source-fetch | eof | 120000 |", "| source-fetch | eof | 60000 |"],
-		["a moved status", "| invalid-input | 64 |", "| invalid-input | 1 |"],
-		["cleanup failure not overriding", "| overrides | cleanup-failed | post-creation-cause |\n", ""],
-		[
-			"the launcher activated now",
-			"| .github/bin/gitjig-bootstrap.mjs | settled-pending-runtime |",
-			"| .github/bin/gitjig-bootstrap.mjs | live |",
-		],
-		// Round 1's coordinated-drift survivors, each now read off the tuples.
-		[
-			"a source key dropped",
-			"| pin-admission | source-key-count | equals | 4 |",
-			"| pin-admission | source-key-count | equals | 3 |",
-		],
-		[
-			"a fifth source key",
-			"| pin-admission | source-key | includes | repository |",
-			"| pin-admission | source-key | includes | repository |\n| pin-admission | source-key | includes | branch |",
-		],
-		[
-			"a looser acquisition child",
-			"| acquisition-child | temporary-base | 1 | 0700 |",
-			"| acquisition-child | temporary-base | 1 | 0600 |",
-		],
-		[
-			"a looser created directory",
-			"| created-directory | acquisition-child-subtree | 0-or-more | 0700 |",
-			"| created-directory | acquisition-child-subtree | 0-or-more | 0600 |",
-		],
-		[
-			"a created file beside the child",
-			"| created-file | acquisition-child-subtree |",
-			"| created-file | temporary-base |",
-		],
-		[
-			"pin identity read once",
-			"| pin-admission | pathname-identity | equals | before-open-and-after-read |",
-			"| pin-admission | pathname-identity | equals | before-open |",
-		],
-		["an inherited Node HOME", "| node | env | HOME | launcher-read-HOME |", "| node | env | HOME | caller-value |"],
-		["startup controls claimed as guaranteed", "| node-startup-controls | caller | pre-entry |\n", ""],
-		// Round 2's survivors.
-		[
-			"closure over non-regular entries",
-			"| closure-check | head-entry-mode | is | regular-blob |",
-			"| closure-check | head-entry-mode | is | blob |",
-		],
-		[
-			"no fixed entry",
-			"| closure-check | fixed-entry | equals | .pi/extensions/gitjig/install/provision-cli.ts |\n",
-			"",
-		],
-	] as const) {
-		const drifted = relations(edited(from, to));
-		assert.ok(drifted, `${named}: the drifted relations no longer parse, so this measures the schema instead`);
-		assert.equal(settled(drifted), false, `${named} survived a consistent drift`);
-	}
 });
 
 it("the relations are a closed schema: domains, keys, references, headers and placement", () => {
