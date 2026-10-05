@@ -802,7 +802,7 @@ setInterval(() => {}, 1000);`,
 		.filter(Boolean)
 		.map((line) => JSON.parse(line) as { type: string; message?: string });
 	assert.deepEqual(
-		frames.filter((frame) => frame.type !== "prompt").map((frame) => [frame.type, frame.message]),
+		frames.filter((f) => f.type !== "prompt" || f.message?.includes(OPERATOR_MARK)).map((f) => [f.type, f.message]),
 		[
 			["steer", `steer ${OPERATOR_MARK}`],
 			["follow_up", `follow ${OPERATOR_MARK}`],
