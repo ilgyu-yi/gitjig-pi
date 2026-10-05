@@ -992,6 +992,144 @@ async function armProjectsInProductionRecovery(edits: ReadonlyArray<readonly [st
 }
 
 /*
+ * Criterion 11, end to end. A fake Pi child that never calls `submit_result`:
+ * it records the profile provisioned beside its trusted extension, then writes
+ * the return slot itself. Through the real dispatcher and runner, each
+ * production path that can select Pi must provision its own role's profile, and
+ * the dispatcher's existing admission must take the directly written slot,
+ * which is the settled same-domain residual, not a new claim.
+ */
+function directSlotPi(path: string, record: string, payloads: Readonly<Record<string, string>>): string {
+	writeFileSync(
+		path,
+		`#!/usr/bin/env node
+const fs = require("node:fs");
+const pathModule = require("node:path");
+const { execFileSync } = require("node:child_process");
+let data = "";
+let done = false;
+process.stdin.on("data", (chunk) => {
+	data += chunk;
+	let at;
+	while ((at = data.indexOf("\\n")) !== -1) {
+		const command = JSON.parse(data.slice(0, at));
+		data = data.slice(at + 1);
+		process.stdout.write(JSON.stringify({ type: "response", id: command.id, success: true }) + "\\n");
+		if (done) continue;
+		done = true;
+		const argv = process.argv.slice(2);
+		const extension = argv[argv.indexOf("--extension") + 1];
+		const profile = JSON.parse(fs.readFileSync(pathModule.join(pathModule.dirname(extension), "profile.json"), "utf8"));
+		const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8" }).trim();
+		const payloads = ${JSON.stringify(payloads)};
+		fs.writeFileSync(
+			pathModule.join(process.cwd(), "..", "return.json"),
+			JSON.stringify({ ok: true, summary: "written directly", reviewedHead: head, payload: payloads[profile.role] ?? "{}" }),
+		);
+		fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ role: profile.role, extension: fs.existsSync(extension) }) + "\\n");
+		setTimeout(() => process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\\n"), 50);
+	}
+});
+process.stdin.on("end", () => process.exit(0));
+setInterval(() => {}, 1000);
+`,
+		{ mode: 0o700 },
+	);
+	return path;
+}
+
+const provisioned = (record: string): { role: string; extension: boolean }[] =>
+	existsSync(record)
+		? readFileSync(record, "utf8")
+				.split("\n")
+				.filter(Boolean)
+				.map((line) => JSON.parse(line))
+		: [];
+
+async function armProvisionsAndAdmitsTheDirectSlot(): Promise<void> {
+	await withFixtureRepository(async (fixture) => {
+		const scratch = mkdtempSync(join(tmpdir(), "gitjig-422-direct-"));
+		try {
+			const record = join(scratch, "provisioned.jsonl");
+			const executable = directSlotPi(join(scratch, "fake-pi"), record, {
+				reviewer: JSON.stringify({ token: "APPROVED", findings: [] }),
+			});
+			const pi = { piExecutable: executable, provider: "scripted", model: "scripted-model" };
+			// The review path: a real round, its slot a real Pi child.
+			const round = await reviewRound({
+				repoRoot: fixture,
+				baseRef: "HEAD~1",
+				headRef: "HEAD",
+				manifest: { state: "absent" },
+				fences: { outOfScope: [], forbiddenRemedies: [], deferralHomes: [], priorFindings: [] },
+				changeDescription: "a change",
+				transport: "pi",
+				dispatch: makeDispatcher({
+					callerRepoRoot: fixture,
+					stateRoot: join(scratch, "state"),
+					delegateArgv: [],
+					pi,
+					timeoutMs: 60_000,
+				} as unknown as Omit<RunDispatchOptions, "brief" | "expectedRef">),
+			});
+			assert.deepEqual(
+				provisioned(record),
+				[{ role: "reviewer", extension: true }],
+				"the review path did not provision the reviewer's own profile beside its trusted tool",
+			);
+			assert.deepEqual(
+				round.record.slots.map((slot) => slot.valid),
+				[true],
+				"the dispatcher's existing admission refused a directly written valid slot",
+			);
+			assert.equal(round.review.state, "approved", "the consumer did not parse the directly written return");
+			// The recovery path: the production recovery dispatcher, every role.
+			const { makeRecoveryProfileDispatcher } = await import("../.pi/extensions/gitjig/recovery/coordinator.ts");
+			const dispatcher = makeRecoveryProfileDispatcher({ repoRoot: fixture, stateRoot: join(scratch, "state"), pi });
+			const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fixture, encoding: "utf8" }).trim();
+			const briefs = new Map(
+				recoveryRoleBriefs({
+					challengerBrief,
+					contestSelectorBrief,
+					measurementSelectorBrief,
+					measurementBrief,
+					freshDiagnosisBrief,
+					piRecoveryBrief,
+				}),
+			);
+			for (const role of RECOVERY_PI_ROLES) {
+				writeFileSync(record, "");
+				const observed = await dispatcher(
+					createRecoveryAttemptLedger(performance.now()),
+					role === "challenger"
+						? "stagnation-root"
+						: role.startsWith("selector")
+							? "recovery-selector"
+							: role === "measurement"
+								? "recovery-measurement"
+								: "recovery-diagnosis",
+					briefs.get(role) as never,
+					head,
+					performance.now() + 120_000,
+					role,
+					role === "measurement" ? SPEC_DIGEST : undefined,
+				);
+				const [child] = provisioned(record);
+				assert.equal(child?.extension, true, `${role}: no trusted tool beside the profile`);
+				assert.equal(
+					child?.role,
+					recoveryPiProfile(role, SPEC_DIGEST)?.role,
+					`${role}: another role's profile was provisioned`,
+				);
+				assert.equal(observed.outcome.disposition, "admitted", `${role}: the directly written slot was not admitted`);
+			}
+		} finally {
+			rmSync(scratch, { recursive: true, force: true });
+		}
+	});
+}
+
+/*
  * The harness: a private copy of the extension tree, so a mutant of the module
  * under test can be handed to the arm that owns the property. Each module is
  * loaded from the edited copy.
@@ -1084,6 +1222,10 @@ test("each consumer's brief is its transport's own, in what it says and what it 
 
 test("each review consumer is satisfied only by its retry's own valid return", async () => {
 	await armEachReviewConsumerNeedsItsOwnReturn({ reviewRound, makeDispatcher });
+});
+
+test("every production Pi path provisions its own profile, and the direct slot stays admitted", async () => {
+	await armProvisionsAndAdmitsTheDirectSlot();
 });
 
 test("the production call sites fix their own roles and briefs", async () => {
