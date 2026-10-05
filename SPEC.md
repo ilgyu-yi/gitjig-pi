@@ -842,12 +842,12 @@ The local tier's handed-over helpers live at `.githooks/helpers/`; its explicit 
 <!-- acquisition-relation: activation:start -->
 | owner | state | activatesWith | retiresWith |
 | --- | --- | --- | --- |
-| .github/bin/gitjig-bootstrap.mjs | settled-pending-runtime | #362 | none |
-| .pi/extensions/gitjig/install/bootstrap.ts | live | none | #362 |
+| .github/bin/gitjig-bootstrap.mjs | live | none | none |
+| .pi/extensions/gitjig/install/bootstrap.ts | retired | none | #362 |
 | .pi/extensions/gitjig/install/acquire.ts | live | none | none |
 <!-- acquisition-relation: activation:end -->
 
-Until #362's runtime lands, the carried `bootstrap.ts` and `acquire.ts` contract is live and unchanged. That runtime adds the handed launcher, which is available from target history before carried runtime exists, and retires `bootstrap.ts` with no redirect or shim address.
+#362's runtime added the handed launcher, which is available from target history before carried runtime exists, and retired the carried `bootstrap.ts` with no redirect or shim address; the carried `acquire.ts` stays live.
 <!-- acquisition-contract: launcher:end -->
 
 ### 4.2 Target-parameterization
