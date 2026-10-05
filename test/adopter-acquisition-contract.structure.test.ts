@@ -189,6 +189,9 @@ function relations(text: string): Parsed | undefined {
 				.split("|")
 				.slice(1, -1)
 				.map((cell) => cell.trim());
+		// Every line is exactly the canonical rendering of its cells, so nothing can
+		// ride after a closing pipe or between cells without breaking the table.
+		if (!lines.every((line) => line === `| ${cells(line).join(" | ")} |`)) return undefined;
 		if (JSON.stringify(cells(lines[0] ?? "")) !== JSON.stringify(relation.header)) return undefined;
 		if (JSON.stringify(cells(lines[1] ?? "")) !== JSON.stringify(relation.header.map(() => "---"))) return undefined;
 		const rows = lines.slice(2).map(cells);
@@ -283,6 +286,19 @@ function contractOnly(tree: string): boolean {
 	);
 }
 
+/** README's one settled pointer to this contract. */
+const README_POINTER =
+	"An adopter has a different product boundary: its reviewed history carries self-standing handed-over assets and `.pi/gitjig.pin.json`; the gitjig runtime is carried and verified per clone, never committed. The zero-operand first-clone launcher and its exact acquisition and cleanup contract are defined in SPEC §§4.1–4.2 and 4.6–4.7; runtime delivery follows that settlement. This source-tree bind command is therefore not presented as an adopter installer.";
+
+/** The README carries the pointer exactly once, as its own line, and no other line speaks of the contract. */
+function thinPointer(text: string): boolean {
+	const lines = text.split("\n");
+	if (lines.filter((line) => line === README_POINTER).length !== 1) return false;
+	return !lines.some(
+		(line) => line !== README_POINTER && /launcher|acquisition|gitjig-bootstrap|first-clone|§§4\.1/iu.test(line),
+	);
+}
+
 /** A copy of the SPEC with one exact edit; the anchor must exist once, or the harness faults. */
 function edited(from: string, to: string): string {
 	if (spec.split(from).length !== 2) throw new Error(`anchor must exist once: ${from}`);
@@ -292,7 +308,23 @@ function edited(from: string, to: string): string {
 it("#363's contract is the SPEC's closed relations, matching their reviewed projection", () => {
 	assert.equal(contractHolds(spec), true);
 	assert.equal(contractOnly(root), true, "a runtime file landed, or the carried owner moved");
-	assert.match(readme, /SPEC §§4\.1–4\.2 and 4\.6–4\.7/u);
+	assert.equal(thinPointer(readme), true, "README is not the thin settled pointer");
+});
+
+it("README stays one thin pointer: its paragraph exact, and the contract nowhere else", () => {
+	for (const [named, text] of [
+		["a contradiction appended", `${readme}These sections do not define a launcher contract.\n`],
+		["the pointer reworded", readme.replace("its exact acquisition and cleanup contract", "its acquisition contract")],
+		["the pointer removed", readme.replace(README_POINTER, "")],
+		[
+			"the contract restated elsewhere",
+			readme.replace(
+				"Run the verification suite as:",
+				"The first-clone acquisition runs Git first.\n\nRun the verification suite as:",
+			),
+		],
+	] as const)
+		assert.equal(thinPointer(text), false, `${named} survived`);
 });
 
 it("each AC7 class reds by value when its tuples drift", () => {
@@ -363,6 +395,11 @@ it("the relations are a closed schema: domains, keys, references, headers and pl
 		],
 		["a non-integer bound", "| pin-read | git-admission | eof | 120000 |", "| pin-read | git-admission | eof | 120s |"],
 		["a child without a defined profile", "| pin-read | git-admission |", "| pin-read | git-fast |"],
+		[
+			"text after a row's closing pipe",
+			"| argv-admission | operand-count | equals | 0 |",
+			"| argv-admission | operand-count | equals | 0 | This requirement is optional.",
+		],
 		["a header drift", "| node | profile | stdin | timeoutMs |", "| node | profile | stdin | timeout |"],
 		[
 			"a prose-valued cell",
