@@ -1064,3 +1064,31 @@ test(
 		);
 	},
 );
+
+test(
+	"baseline-first private-copy mutants: the deadline under attachment and the supervisor's abort",
+	{ timeout: 300_000 },
+	async () => {
+		// A bound the dispatcher widens before handing it on: the attached run then
+		// outlives its own deadline, which is what the arm reads.
+		await armFails(
+			armKeepsTheDeadline,
+			[
+				[
+					DISPATCH,
+					"await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: runBound,",
+					"await runPiDelegate(context, options.pi, {\n\t\t\t\t\t\t\ttimeoutMs: runBound + 20_000,",
+				],
+			],
+			"the run's bound widened while an operator is attached",
+		);
+		// The supervisor forgetting that the stop was a deliberate abort: the
+		// child's own ending then classifies the run, and the slot it installed
+		// outranks the operator.
+		await armFails(
+			armTheSlotWasAdmissible,
+			[[SUPERVISOR, "\t\t\tstopping ??\n\t\t\t(!valid", "\t\t\t(!valid"]],
+			"an abort that loses its own cause",
+		);
+	},
+);
