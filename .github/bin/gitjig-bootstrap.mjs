@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * gitjig-bootstrap — the handed first-clone acquisition launcher (#362).
+ * The handed first-clone acquisition launcher (#362).
  *
- * It implements the closed acquisition relations of SPEC §§4.1–4.2 and
- * §§4.6–4.7, node by node, in their process order: argv admission,
+ * It implements the product contract's closed acquisition relations (#363),
+ * node by node, in their process order: argv admission,
  * self-location, the target-admission pin read and pin admission, the one
  * temporary child, the source fetch, the snapshot check, the closure check,
  * the provision run, cleanup, and the terminal. Every refusal is the cause of
- * the node it occurs at (§4.2's node relation), or the fallback relation's
+ * the node it occurs at (the node relation), or the fallback relation's
  * cause where no node owns an error, and a cleanup that cannot confirm absence
- * overrides every post-creation cause (§4.7).
+ * overrides every post-creation cause.
  *
  * It is self-standing: Node's built-ins only, so it runs from target history
  * before any carried runtime exists. It is invoked as
  * `node .github/bin/gitjig-bootstrap.mjs` with no argument. What the caller's
  * invocation does before or beneath these bytes — its selection of `node` and
  * of `git` through PATH, its Node startup controls, HOME-sensitive behaviour —
- * is §4.7's caller-held residual, not guaranteed here.
+ * the residual relation's caller-held part, not guaranteed here.
  */
 import { spawn } from "node:child_process";
 import {
@@ -38,9 +38,9 @@ import { devNull, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The limits relation's values (SPEC §4.2). */
+/** The limits relation's values. */
 export const LIMITS = Object.freeze({ gitTimeoutMs: 120000, nodeTimeoutMs: 300000, streamBytes: 1048576 });
-/** The terminal relation (SPEC §4.7). */
+/** The terminal relation. */
 export const STATUS = Object.freeze({
 	"invalid-input": 64,
 	"snapshot-identity-mismatch": 65,
@@ -118,7 +118,7 @@ function bounded(seams, executable, args, { env, cwd, timeoutMs, cause }) {
 	});
 }
 
-/** The environment relation's profiles, built from their rows alone (SPEC §4.2). */
+/** The environment relation's profiles, built from their rows alone. */
 function profiles(read, ownedConfig) {
 	const git = (globalConfig) => ({
 		PATH: read.PATH ?? "",
@@ -174,7 +174,7 @@ function projection(bytes) {
 	return { owner: source.owner, repository: source.repository, revision: value.revision };
 }
 
-/** Pin admission: the committed pin's bytes, read once under identity checks (SPEC §4.2). */
+/** Pin admission: the committed pin's bytes, read once under identity checks. */
 function admitPin(top, headBlob) {
 	const ancestor = join(top, ".pi");
 	const pathname = join(top, PIN);
@@ -261,7 +261,8 @@ export async function acquire(argv, read, seams) {
 	const shownTop = (await admissionGit(["rev-parse", "--show-toplevel"])).toString("utf8").trim();
 	if (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");
 	const staged = (await admissionGit(["ls-files", "--stage", "--full-name", "--", PIN])).toString("utf8").trim();
-	if (!/^100(644|755) [0-9a-f]{40} 0\t\.pi\/gitjig\.pin\.json$/.test(staged)) refuse("invalid-input");
+	const stagedEntry = /^100(644|755) [0-9a-f]{40} 0\t(.+)$/.exec(staged);
+	if (stagedEntry === null || stagedEntry[2] !== PIN) refuse("invalid-input");
 	const headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);
 	// pin-admission
 	const pin = projection(admitPin(top, headBlob));
@@ -382,7 +383,7 @@ export async function acquireIn(state, seams) {
 	);
 }
 
-/** Cleanup: remove every owned artifact and confirm its absence (SPEC §4.7). */
+/** Cleanup: remove every owned artifact and confirm its absence. */
 function cleanup(child, seams) {
 	try {
 		seams.remove(child);
@@ -429,7 +430,7 @@ export function defaultSeams() {
 }
 
 if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
-	// Children inherit an owner-private creation mask (§4.7's artifact modes).
+	// Children inherit an owner-private creation mask (the artifact relation's modes).
 	process.umask(0o077);
 	const read = { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: process.env.LC_ALL };
 	process.exitCode = await main(process.argv.slice(2), read, defaultSeams());
