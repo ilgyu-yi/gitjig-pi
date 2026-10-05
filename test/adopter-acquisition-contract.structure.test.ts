@@ -91,8 +91,8 @@ const RELATIONS: Record<string, Relation> = {
 	},
 	limits: {
 		region: "trust",
-		header: ["node", "stdin", "timeoutMs", "stdoutBytes", "stderrBytes", "processGroupOwner"],
-		domains: [SCALAR, ["eof"], INT, INT, INT, ["launcher", "provision-owner"]],
+		header: ["node", "profile", "stdin", "timeoutMs", "stdoutBytes", "stderrBytes", "processGroupOwner"],
+		domains: [SCALAR, ["git-admission", "git", "node"], ["eof"], INT, INT, INT, ["launcher", "provision-owner"]],
 		key: [0],
 	},
 	"child-outcomes": {
@@ -104,13 +104,13 @@ const RELATIONS: Record<string, Relation> = {
 	environment: {
 		region: "trust",
 		header: ["profile", "kind", "key", "value"],
-		domains: [["launcher", "git", "node"], ["read", "env", "config"], SCALAR, SCALAR],
+		domains: [["launcher", "git-admission", "git", "node"], ["read", "env", "config"], SCALAR, SCALAR],
 		key: [0, 1, 2],
 	},
 	exclusions: {
 		region: "trust",
 		header: ["profile", "excluded"],
-		domains: [["git", "node"], SCALAR],
+		domains: [["git-admission", "git", "node"], SCALAR],
 		key: [0, 1],
 	},
 	artifacts: {
@@ -227,6 +227,10 @@ function closed(parsed: Parsed): boolean {
 			return false;
 	for (const name of ["authority", "predicates", "limits"])
 		if (!parsed[name].every(([node]) => nodes.has(node))) return false;
+	// Every child's profile is a profile the environment relation defines, with its exclusions.
+	const profiles = new Set(parsed.environment.map(([profile]) => profile));
+	const excluded = new Set(parsed.exclusions.map(([profile]) => profile));
+	if (!parsed.limits.every(([, profile]) => profiles.has(profile) && excluded.has(profile))) return false;
 	// Exactly the child nodes carry limits.
 	const children = parsed.nodes.filter(([, , surface]) => surface === "git-child" || surface === "provision-node");
 	return JSON.stringify(children.map(([node]) => node)) === JSON.stringify(parsed.limits.map(([node]) => node));
@@ -319,11 +323,16 @@ it("each AC7 class reds by value when its tuples drift", () => {
 		["an inherited Git environment", "| git | inherited-environment |\n", ""],
 		["a system Git config", "| git | env | GIT_CONFIG_NOSYSTEM | 1 |", "| git | env | GIT_CONFIG_NOSYSTEM | 0 |"],
 		// Bound and status drift.
-		["a shorter Git bound", "| source-fetch | eof | 120000 |", "| source-fetch | eof | 60000 |"],
+		["a shorter Git bound", "| source-fetch | git | eof | 120000 |", "| source-fetch | git | eof | 60000 |"],
+		[
+			"an admission Git read given the owned config file",
+			"| git-admission | env | GIT_CONFIG_GLOBAL | platform-null-device |",
+			"| git-admission | env | GIT_CONFIG_GLOBAL | owned-empty-file |",
+		],
 		[
 			"a larger provision cap",
-			"| provision-run | eof | 300000 | 1048576 |",
-			"| provision-run | eof | 300000 | 2097152 |",
+			"| provision-run | node | eof | 300000 | 1048576 |",
+			"| provision-run | node | eof | 300000 | 2097152 |",
 		],
 		["a moved status", "| invalid-input | 64 |", "| invalid-input | 1 |"],
 		// Cleanup reach and precedence.
@@ -352,14 +361,15 @@ it("the relations are a closed schema: domains, keys, references, headers and pl
 			"| provision-run | provision | provision-node | provision-owner | provision-refused |",
 			"| provision-run | provision | provision-node | provision-owner | provision-failed |",
 		],
-		["a non-integer bound", "| pin-read | eof | 120000 |", "| pin-read | eof | 120s |"],
-		["a header drift", "| node | stdin | timeoutMs |", "| node | stdin | timeout |"],
+		["a non-integer bound", "| pin-read | git-admission | eof | 120000 |", "| pin-read | git-admission | eof | 120s |"],
+		["a child without a defined profile", "| pin-read | git-admission |", "| pin-read | git-fast |"],
+		["a header drift", "| node | profile | stdin | timeoutMs |", "| node | profile | stdin | timeout |"],
 		[
 			"a prose-valued cell",
 			"| launcher | read | HOME | caller-value |",
 			"| launcher | read | HOME | the caller's value |",
 		],
-		["a child node without limits", "| pin-read | eof | 120000 | 1048576 | 1048576 | launcher |\n", ""],
+		["a child node without limits", "| pin-read | git-admission | eof | 120000 | 1048576 | 1048576 | launcher |\n", ""],
 		[
 			"a relation outside the family",
 			"<!-- acquisition-relation: fallbacks:start -->",

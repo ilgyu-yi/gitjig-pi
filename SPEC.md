@@ -47,25 +47,25 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | §4 | Substrate and install contract | 825 |
 | &nbsp;&nbsp;§4.1 | Namespaces | 829 |
 | &nbsp;&nbsp;§4.2 | Target-parameterization | 853 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 1029 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1035 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1039 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 1043 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 1059 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1122 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1179 |
-| §5 | Cross-cutting contracts | 1304 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1308 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1314 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1318 |
-| &nbsp;&nbsp;§5.4 | Work language | 1322 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1326 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1344 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1356 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1366 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1374 |
-| §6 | Self-governance milestone | 1390 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1401 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 1045 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1051 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1055 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 1059 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 1075 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1138 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1195 |
+| §5 | Cross-cutting contracts | 1320 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1324 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1330 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1334 |
+| &nbsp;&nbsp;§5.4 | Work language | 1338 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1342 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1360 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1372 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1382 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1390 |
+| §6 | Self-governance milestone | 1406 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1417 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -859,7 +859,7 @@ The pin's closed v1 JSON contains exactly `schemaVersion: 1`; platform-attested 
 Manifest order is unsigned UTF-8 path-byte order. Each digest record is one class byte (`0x48` handed, `0x43` carried), uint32-big-endian path-byte length, path bytes, uint64-big-endian file-byte length, and the raw 32-byte member digest. `payloadDigest` hashes all concatenated records; `carriedDigest` hashes only carried records; an empty projection hashes the empty byte string. Acquisition obtains bytes from the platform-attested source at exactly `revision`, reconstructs the complete manifest and both aggregate digests, and refuses before any target mutation on any mismatch. Provisioning and freshness reconstruct the carried records with this same grammar. Another provider or algorithm requires a new version, never reinterpretation of v1.
 
 <!-- acquisition-contract: trust:start -->
-**First-clone trust transition.** The relations below are the one owner of the handed first-clone launcher's trust, process, environment and admission contract (#363). Each is a Markdown table with the fixed header shown. Every cell is one scalar from the column's closed domain, and a row is one tuple. Closed column domains: `stage` and `surface` as listed below; `owner` is `launcher` or `provision-owner`; `relation` is `before`, `reaches` or `overrides`; `role` is `refused`, `routing`, `non-authorizing`, `execution` or `integrity`; `operator` is `equals`, `equals-any`, `is`, `are`, `at-most`, `derived-from`, `includes` or `admits`; `stdin` is `eof`; `processGroupOwner` is `launcher` or `provision-owner`; `profile` is `launcher`, `git` or `node`; `kind` is `read`, `env` or `config`; numeric columns are decimal integers. A table admits no row outside its key and reference domains: a node that an edge, limit, input or predicate names must be a row of the node relation, and a cause must be a row of §4.7's terminal relation. Surrounding prose explains the tuples and never adds a node, input, predicate, limit, environment entry, edge or cause. The launcher is invoked as `node .github/bin/gitjig-bootstrap.mjs` with no following argument; it physically self-locates its target, reads the committed pin only for a non-authorizing routing projection, and hands the acquired snapshot's fixed entry to the existing canonical codec and verifier, which reread the complete target pin and remain the sole integrity admission before mutation.
+**First-clone trust transition.** The relations below are the one owner of the handed first-clone launcher's trust, process, environment and admission contract (#363). Each is a Markdown table with the fixed header shown. Every cell is one scalar from the column's closed domain, and a row is one tuple. Closed column domains: `stage` and `surface` as listed below; `owner` is `launcher` or `provision-owner`; `relation` is `before`, `reaches` or `overrides`; `role` is `refused`, `routing`, `non-authorizing`, `execution` or `integrity`; `operator` is `equals`, `equals-any`, `is`, `are`, `at-most`, `derived-from`, `includes` or `admits`; `stdin` is `eof`; `processGroupOwner` is `launcher` or `provision-owner`; `profile` is `launcher`, `git-admission`, `git` or `node`; `kind` is `read`, `env` or `config`; numeric columns are decimal integers. A table admits no row outside its key and reference domains: a node that an edge, limit, input or predicate names must be a row of the node relation, and a cause must be a row of §4.7's terminal relation. Surrounding prose explains the tuples and never adds a node, input, predicate, limit, environment entry, edge or cause. The launcher is invoked as `node .github/bin/gitjig-bootstrap.mjs` with no following argument; it physically self-locates its target, reads the committed pin only for a non-authorizing routing projection, and hands the acquired snapshot's fixed entry to the existing canonical codec and verifier, which reread the complete target pin and remain the sole integrity admission before mutation.
 
 Process nodes — the stage set is exactly `startup`, `target-admission`, `temporary-create`, `source-acquisition`, `snapshot-confirmation`, `provision`, `cleanup` and `terminal`; the surface set is exactly `launcher`, `git-child`, `provision-node`, `filesystem` and `terminal`; row order is process order:
 
@@ -964,12 +964,12 @@ Admission predicates — each is a necessary condition at its node, refusing wit
 Child limits — every child's stdin is EOF; timeouts are milliseconds and caps are bytes per stream; a child's outcome maps to its node's cause:
 
 <!-- acquisition-relation: limits:start -->
-| node | stdin | timeoutMs | stdoutBytes | stderrBytes | processGroupOwner |
-| --- | --- | --- | --- | --- | --- |
-| pin-read | eof | 120000 | 1048576 | 1048576 | launcher |
-| source-fetch | eof | 120000 | 1048576 | 1048576 | launcher |
-| snapshot-check | eof | 120000 | 1048576 | 1048576 | launcher |
-| provision-run | eof | 300000 | 1048576 | 1048576 | provision-owner |
+| node | profile | stdin | timeoutMs | stdoutBytes | stderrBytes | processGroupOwner |
+| --- | --- | --- | --- | --- | --- | --- |
+| pin-read | git-admission | eof | 120000 | 1048576 | 1048576 | launcher |
+| source-fetch | git | eof | 120000 | 1048576 | 1048576 | launcher |
+| snapshot-check | git | eof | 120000 | 1048576 | 1048576 | launcher |
+| provision-run | node | eof | 300000 | 1048576 | 1048576 | provision-owner |
 <!-- acquisition-relation: limits:end -->
 
 <!-- acquisition-relation: child-outcomes:start -->
@@ -984,7 +984,7 @@ Child limits — every child's stdin is EOF; timeouts are milliseconds and caps 
 
 Git descendants of the provision child belong to its process group and therefore to its bound, its cleanup and the existing provision owner; the provision owner, not this relation, governs what that child runs.
 
-Environment profiles — `launcher` names the values the launcher itself reads; `git` and `node` are the exact environments a child receives, constructed from these rows alone with no inherited key, never by clearing an inherited environment:
+Environment profiles — `launcher` names the values the launcher itself reads; `git-admission`, `git` and `node` are the exact environments a child receives, by its row in the limits relation, constructed from these rows alone with no inherited key, never by clearing an inherited environment. The target-admission Git read runs before the acquisition child exists, so its profile points global configuration at the platform null device rather than at an owned empty file:
 
 <!-- acquisition-relation: environment:start -->
 | profile | kind | key | value |
@@ -993,6 +993,14 @@ Environment profiles — `launcher` names the values the launcher itself reads; 
 | launcher | read | HOME | caller-value |
 | launcher | read | LC_ALL | caller-value |
 | launcher | read | temporary-base | platform-temporary-base |
+| git-admission | env | PATH | launcher-read-PATH |
+| git-admission | env | LC_ALL | C |
+| git-admission | env | GIT_CONFIG_NOSYSTEM | 1 |
+| git-admission | env | GIT_CONFIG_GLOBAL | platform-null-device |
+| git-admission | env | GIT_TERMINAL_PROMPT | 0 |
+| git-admission | config | credential.helper | empty |
+| git-admission | config | core.hooksPath | disabled |
+| git-admission | config | http.followRedirects | false |
 | git | env | PATH | launcher-read-PATH |
 | git | env | LC_ALL | C |
 | git | env | GIT_CONFIG_NOSYSTEM | 1 |
@@ -1009,6 +1017,14 @@ Environment profiles — `launcher` names the values the launcher itself reads; 
 <!-- acquisition-relation: exclusions:start -->
 | profile | excluded |
 | --- | --- |
+| git-admission | inherited-environment |
+| git-admission | url-rewrite |
+| git-admission | filter-smudge |
+| git-admission | alternates |
+| git-admission | replacement-refs |
+| git-admission | object-directory |
+| git-admission | work-tree-or-git-dir-input |
+| git-admission | local-file-transport |
 | git | inherited-environment |
 | git | url-rewrite |
 | git | filter-smudge |

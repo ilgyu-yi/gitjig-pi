@@ -85,10 +85,10 @@
 			["closure-check", "fixed-entry", "equals", ".pi/extensions/gitjig/install/provision-cli.ts"]
 		],
 		"limits": [
-			["pin-read", "eof", "120000", "1048576", "1048576", "launcher"],
-			["source-fetch", "eof", "120000", "1048576", "1048576", "launcher"],
-			["snapshot-check", "eof", "120000", "1048576", "1048576", "launcher"],
-			["provision-run", "eof", "300000", "1048576", "1048576", "provision-owner"]
+			["pin-read", "git-admission", "eof", "120000", "1048576", "1048576", "launcher"],
+			["source-fetch", "git", "eof", "120000", "1048576", "1048576", "launcher"],
+			["snapshot-check", "git", "eof", "120000", "1048576", "1048576", "launcher"],
+			["provision-run", "node", "eof", "300000", "1048576", "1048576", "provision-owner"]
 		],
 		"child-outcomes": [
 			["spawn-failure", "node-cause"],
@@ -102,6 +102,14 @@
 			["launcher", "read", "HOME", "caller-value"],
 			["launcher", "read", "LC_ALL", "caller-value"],
 			["launcher", "read", "temporary-base", "platform-temporary-base"],
+			["git-admission", "env", "PATH", "launcher-read-PATH"],
+			["git-admission", "env", "LC_ALL", "C"],
+			["git-admission", "env", "GIT_CONFIG_NOSYSTEM", "1"],
+			["git-admission", "env", "GIT_CONFIG_GLOBAL", "platform-null-device"],
+			["git-admission", "env", "GIT_TERMINAL_PROMPT", "0"],
+			["git-admission", "config", "credential.helper", "empty"],
+			["git-admission", "config", "core.hooksPath", "disabled"],
+			["git-admission", "config", "http.followRedirects", "false"],
 			["git", "env", "PATH", "launcher-read-PATH"],
 			["git", "env", "LC_ALL", "C"],
 			["git", "env", "GIT_CONFIG_NOSYSTEM", "1"],
@@ -115,6 +123,14 @@
 			["node", "env", "HOME", "launcher-read-HOME"]
 		],
 		"exclusions": [
+			["git-admission", "inherited-environment"],
+			["git-admission", "url-rewrite"],
+			["git-admission", "filter-smudge"],
+			["git-admission", "alternates"],
+			["git-admission", "replacement-refs"],
+			["git-admission", "object-directory"],
+			["git-admission", "work-tree-or-git-dir-input"],
+			["git-admission", "local-file-transport"],
 			["git", "inherited-environment"],
 			["git", "url-rewrite"],
 			["git", "filter-smudge"],
@@ -161,7 +177,7 @@
 	},
 	"prose": {
 		"launcher": "1d7048afb5e00d031e1ec2b4d18993356c701289197b71add099e90f75692997",
-		"trust": "5bb443011bf34202489d3776809649991c3c452a30cd80f339cdb9e3392473d1",
+		"trust": "bc09b1509d0401a34dd2cac20c31fd246e5bce6de0adc7be30571669d738bc96",
 		"binding": "201b0bc7f190428d39db1abd97ed680c1e32d9af2184d774d4bc5955219f2ec8",
 		"host": "ce819d1d6facafd716735ebc694af33cd1cac8a1183bc932a164423e84597b83"
 	}
