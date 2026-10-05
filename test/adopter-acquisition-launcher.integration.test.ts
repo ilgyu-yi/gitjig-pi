@@ -99,7 +99,8 @@ function fixture(
 	options: {
 		source?: (work: string, record: string) => void;
 		pin?: (revision: string) => string | Buffer;
-		wrapper?: string;
+		plan?: GitPlan;
+		targetName?: string;
 	} = {},
 ): Fixture {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-362-"));
@@ -117,7 +118,7 @@ function fixture(
 	const revision = git(work, "rev-parse", "HEAD");
 	const bare = join(root, "source.git");
 	git(root, "clone", "-q", "--bare", work, bare);
-	const target = join(root, "target");
+	const target = join(root, options.targetName ?? "target");
 	mkdirSync(join(target, ".github/bin"), { recursive: true });
 	mkdirSync(join(target, ".pi"), { recursive: true });
 	copyFileSync(launcher, join(target, ".github/bin/gitjig-bootstrap.mjs"));
@@ -134,14 +135,7 @@ function fixture(
 	const log = join(root, "git.log");
 	writeFileSync(
 		join(bin, "git"),
-		[
-			"#!/bin/sh",
-			`printf '%s\\n' "$*" >> ${JSON.stringify(log)}`,
-			`{ printf '== %s\\n' "$*"; env | sort; } >> ${JSON.stringify(join(root, "git-env.log"))}`,
-			`case " $* " in *" fetch "*) ${options.wrapper ?? ":"}; export GIT_ALLOW_PROTOCOL=file; exec ${JSON.stringify(real)} -c "url.file://${bare}.insteadOf=https://github.com/o/r" "$@";; esac`,
-			`exec ${JSON.stringify(real)} "$@"`,
-			"",
-		].join("\n"),
+		gitSeam({ real, bare, log, envLog: join(root, "git-env.log"), plan: options.plan ?? {} }),
 	);
 	chmodSync(join(bin, "git"), 0o755);
 	const scratch = join(root, "tmp");
@@ -157,6 +151,56 @@ function fixture(
 		work,
 		scratch,
 	};
+}
+
+/**
+ * What the caller-selected `git` does besides forwarding: serve the projected
+ * URL from the local source for a fetch, and, per test, misbehave in one
+ * named way. It logs every invocation and that invocation's own environment.
+ */
+type GitPlan = {
+	fetch?: "signal" | "overflow" | "sleep";
+	origin?: string;
+	attached?: boolean;
+};
+
+function gitSeam({
+	real,
+	bare,
+	log,
+	envLog,
+	plan,
+}: {
+	real: string;
+	bare: string;
+	log: string;
+	envLog: string;
+	plan: GitPlan;
+}) {
+	return `#!${process.execPath}
+const { spawnSync } = require("node:child_process");
+const { appendFileSync } = require("node:fs");
+const plan = ${JSON.stringify(plan)};
+let args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(log)}, args.join(" ") + "\\n");
+appendFileSync(${JSON.stringify(envLog)}, "== " + args.join(" ") + "\\n" + Object.keys(process.env).sort().map((key) => key + "=" + process.env[key]).join("\\n") + "\\n");
+let env = process.env;
+if (args.includes("fetch")) {
+	if (plan.fetch === "signal") process.kill(process.pid, "SIGTERM");
+	if (plan.fetch === "overflow") process.stdout.write("x".repeat(4096));
+	if (plan.fetch === "sleep") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+	env = { ...env, GIT_ALLOW_PROTOCOL: "file" };
+	args = ["-c", "url.file://${bare}.insteadOf=https://github.com/o/r", ...args];
+}
+// After the fetch, so the snapshot exists: the repository's origin is changed before the checkout.
+if (plan.origin && args.includes("checkout"))
+	spawnSync(${JSON.stringify(real)}, ["-C", args[args.indexOf("-C") + 1], "remote", "set-url", "origin", plan.origin], { env });
+if (plan.attached && args.includes("checkout"))
+	args = args.flatMap((arg) => (arg === "--detach" ? ["-B", "main"] : [arg]));
+const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
+if (run.signal) process.kill(process.pid, run.signal);
+process.exit(run.status ?? 1);
+`;
 }
 
 type Run = { status: number | null; stdout: string; stderr: string };
@@ -175,6 +219,8 @@ function launch(f: Fixture, extra: Record<string, string> = {}, argv: string[] =
 function launchWith(f: Fixture, seams: string): Run {
 	const harness = [
 		`import { main, defaultSeams } from ${JSON.stringify(f.launcher)};`,
+		'import { chmodSync } from "node:fs";',
+		'import { dirname } from "node:path";',
 		"process.umask(0o077);",
 		`const seams = { ...defaultSeams(), ${seams} };`,
 		"process.exitCode = await main([], { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: process.env.LC_ALL }, seams);",
@@ -237,6 +283,14 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	assert.ok(at(/ cat-file blob HEAD:\.pi\/gitjig\.pin\.json/) < at(/ fetch /), "the pin was not read before the fetch");
 	assert.ok(at(/ fetch /) < at(/ hash-object /), "the closure was not checked after the fetch");
 	assert.equal(asked.filter((line) => / fetch /.test(line)).length, 1, "more than one fetch");
+	// A physical path that ends in a space is still the target the launcher derives.
+	const spaced = fixture(launcher, { targetName: "target " });
+	const spacedRun = launch(spaced);
+	assert.equal(
+		spacedRun.status,
+		0,
+		`a target ending in a space was refused (stderr ${JSON.stringify(spacedRun.stderr)})`,
+	);
 	assert.ok(
 		asked.every((line) => !/--depth=1 origin (?![0-9a-f]{40}$)/.test(line)),
 		"a fetch named something but the revision",
@@ -380,12 +434,12 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	refused(launch(absent), "source-unavailable", 69, "an absent revision");
 	invariant(absent, absentBefore, "an absent revision");
 	// A Git child that signals, overflows or outlives its bound.
-	for (const [label, wrapper, seams] of [
-		["a signalled fetch", "kill -TERM $$", ""],
-		["an overflowing fetch", "head -c 4096 /dev/zero", "streamBytes: 1024"],
-		["a fetch past its bound", "sleep 5", "gitTimeoutMs: 500"],
+	for (const [label, fetch, seams] of [
+		["a signalled fetch", "signal", ""],
+		["an overflowing fetch", "overflow", "streamBytes: 1024"],
+		["a fetch past its bound", "sleep", "gitTimeoutMs: 500"],
 	] as const) {
-		const f = fixture(launcher, { wrapper });
+		const f = fixture(launcher, { plan: { fetch } });
 		const before = snapshot(f.target);
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "source-unavailable", 69, label);
 		invariant(f, before, label);
@@ -463,12 +517,15 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 			`the admission child's global config is not the null device: ${args}`,
 		);
 	}
-	for (const { args, env } of acquisition) {
-		assert.deepEqual(keysOf(env), profile, `the acquisition child's environment is not its profile: ${args}`);
+	// Every other Git child, source, snapshot and closure alike, gets the git profile exactly.
+	const others = blocks.filter((block) => !admission.includes(block));
+	assert.ok(others.length >= 8, "the acquisition Git children were not all observed");
+	for (const { args, env } of others) {
+		assert.deepEqual(keysOf(env), profile, `a Git child's environment is not its profile: ${args}`);
 		assert.match(
 			env.GIT_CONFIG_GLOBAL,
 			/gitjig-acquire-[^/]+\/gitconfig$/,
-			"the source child's global config is not the owned file",
+			`a Git child's global config is not the owned file: ${args}`,
 		);
 	}
 }
@@ -518,6 +575,23 @@ async function armConfirmsTheClosure(launcher: string): Promise<void> {
 		refused(launch(f), "snapshot-identity-mismatch", 65, label);
 		invariant(f, before, label);
 	}
+	// The snapshot check: one of the two origin spellings, and a detached HEAD.
+	for (const [label, plan] of [
+		["another origin", { origin: "https://github.com/o/r2" }],
+		["an attached checkout", { attached: true }],
+	] as const) {
+		const f = fixture(launcher, { plan });
+		const before = snapshot(f.target);
+		refused(launch(f), "snapshot-identity-mismatch", 65, label);
+		invariant(f, before, label);
+	}
+	const suffixed = fixture(launcher, { plan: { origin: "https://github.com/o/r.git" } });
+	const suffixedRun = launch(suffixed);
+	assert.equal(
+		suffixedRun.status,
+		0,
+		`the .git origin spelling was refused (stderr ${JSON.stringify(suffixedRun.stderr)})`,
+	);
 	// A member whose name holds a newline is still a member: admitted, not refused.
 	const newline = fixture(launcher, {
 		source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/odd\nname.ts"), "// odd\n"),
@@ -578,6 +652,18 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 		source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/install/provision-cli.ts"), "process.exit(2);\n"),
 	});
 	refused(launchWith(both, "remove: () => {}"), "cleanup-failed", 74, "a refusal whose cleanup failed");
+	// Cleanup that cannot even look at the child: still the cause line and its status.
+	const locked = fixture(launcher);
+	try {
+		refused(
+			launchWith(locked, "remove: (path) => chmodSync(dirname(path), 0)"),
+			"cleanup-failed",
+			74,
+			"an unreadable cleanup",
+		);
+	} finally {
+		chmodSync(locked.scratch, 0o700);
+	}
 	// A temporary base that is not a directory.
 	const nowhere = fixture(launcher);
 	const before = snapshot(nowhere.target);
@@ -774,6 +860,43 @@ test(
 			"\t\t\tif ((stats.mode & 0o777) !== 0o600) chmodSync(path, 0o600);\n",
 			"",
 			"an executable left at its checkout mode",
+		);
+		// Round 2's boundaries.
+		await killed(
+			armConfirmsTheClosure,
+			'\tif (origin !== sourceUrl && origin !== `${sourceUrl}.git`) refuse("snapshot-identity-mismatch");\n',
+			"",
+			"any origin admitted",
+		);
+		await killed(
+			armConfirmsTheClosure,
+			"origin !== sourceUrl && origin !== `${sourceUrl}.git`",
+			"origin !== sourceUrl",
+			"the .git origin spelling refused",
+		);
+		await killed(
+			armConfirmsTheClosure,
+			'\tif ((await shown(["rev-parse", "--symbolic-full-name", "HEAD"])) !== "HEAD") refuse("snapshot-identity-mismatch");\n',
+			"",
+			"an attached HEAD admitted",
+		);
+		await killed(
+			armSucceedsExactly,
+			'.toString("utf8").replace(/\\n$/, "");',
+			'.toString("utf8").trim();',
+			"a path's trailing space trimmed",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			"\ttry {\n\t\treturn lstatSync(child, { throwIfNoEntry: false }) === undefined;\n\t} catch {\n\t\treturn false;\n\t}",
+			"\treturn lstatSync(child, { throwIfNoEntry: false }) === undefined;",
+			"a cleanup confirmation that throws",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'line(await git(["-C", destination, ...args], "snapshot-identity-mismatch"))',
+			'line(await bounded(seams, "git", [...GIT_CONFIG, "-C", destination, ...args], { env: { ...env.git, EXTRA_ENV: "1" }, cwd: child, timeoutMs: seams.gitTimeoutMs, cause: "snapshot-identity-mismatch" }))',
+			"a snapshot child given an extra variable",
 		);
 		// The bounds.
 		await killed(armPinsTheBounds, "gitTimeoutMs: 120000", "gitTimeoutMs: 1200000", "a widened Git bound");

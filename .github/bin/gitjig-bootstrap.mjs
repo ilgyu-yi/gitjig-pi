@@ -147,6 +147,9 @@ const GIT_CONFIG = [
 
 const isInside = (child, parent) => child === parent || child.startsWith(parent + sep);
 
+/** Git's own output with its one line terminator removed: a path may end in a space. */
+const line = (bytes) => bytes.toString("utf8").replace(/\n$/, "");
+
 /** @param {Buffer} bytes */
 function projection(bytes) {
 	let value;
@@ -254,7 +257,7 @@ export async function acquire(argv, read, seams) {
 			cause: "invalid-input",
 		});
 	// pin-read
-	const shownTop = (await admissionGit(["rev-parse", "--show-toplevel"])).toString("utf8").trim();
+	const shownTop = line(await admissionGit(["rev-parse", "--show-toplevel"]));
 	if (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");
 	// HEAD's own tree entry: the committed pin, whatever the index now holds.
 	const tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\0$/, "");
@@ -308,8 +311,7 @@ export async function acquireIn(state, seams) {
 	await git(["-C", destination, "checkout", "-q", "--detach", pin.revision], "source-unavailable");
 	ownedSubtree(child, uid);
 	// snapshot-check
-	const shown = async (args) =>
-		(await git(["-C", destination, ...args], "snapshot-identity-mismatch")).toString("utf8").trim();
+	const shown = async (args) => line(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));
 	const real = realpathSync(destination);
 	const commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));
 	const workTree = realpathSync(await shown(["rev-parse", "--show-toplevel"]));
@@ -356,11 +358,9 @@ export async function acquireIn(state, seams) {
 	walk(SCOPE_DIR);
 	if (working.size !== head.size || ![...working].every((path) => head.has(path))) refuse("snapshot-identity-mismatch");
 	for (const [path, oid] of head) {
-		const hashed = (
-			await git(["-C", destination, "hash-object", "--no-filters", "--", path], "snapshot-identity-mismatch", real)
-		)
-			.toString("utf8")
-			.trim();
+		const hashed = line(
+			await git(["-C", destination, "hash-object", "--no-filters", "--", path], "snapshot-identity-mismatch", real),
+		);
 		if (hashed !== oid) refuse("snapshot-identity-mismatch");
 	}
 	if (!head.has(ENTRY)) refuse("snapshot-identity-mismatch");
@@ -388,7 +388,12 @@ function cleanup(child, seams) {
 	try {
 		seams.remove(child);
 	} catch {}
-	return lstatSync(child, { throwIfNoEntry: false }) === undefined;
+	// Absence is confirmed only by a clean ENOENT; an unreadable parent is not absence.
+	try {
+		return lstatSync(child, { throwIfNoEntry: false }) === undefined;
+	} catch {
+		return false;
+	}
 }
 
 /** The whole launcher: nodes, cleanup, and the terminal algebra. Returns the exit status. */
