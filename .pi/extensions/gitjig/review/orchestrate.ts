@@ -30,11 +30,13 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { DispatchOutcome, RunDispatchOptions } from "../dispatch/index.ts";
 import { runDispatch } from "../dispatch/index.ts";
+import type { PiInvocation } from "../dispatch/pi-run.ts";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 import {
 	type BriefTiming,
 	composeJudgeBrief,
 	composeReviewerBrief,
+	PI_RETURN_PROTOCOL_RETRY_SUFFIX,
 	RETURN_PROTOCOL_RETRY_SUFFIX,
 	type ReviewFences,
 } from "./briefs.ts";
@@ -69,6 +71,7 @@ export type RoundOptions = {
 	fences: ReviewFences;
 	changeDescription: string;
 	timing?: BriefTiming;
+	transport?: "generic" | "pi";
 	/**
 	 * The one seam to §4.9's dispatcher — `makeDispatcher` for the real
 	 * one. The second argument is the round's OWN resolved head, passed
@@ -77,7 +80,7 @@ export type RoundOptions = {
 	 * ref hand each dispatch a different held hash with every compare
 	 * confirming (issue #184).
 	 */
-	dispatch: (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
+	dispatch: (brief: string, expectedHead: string, role?: PiInvocation["role"]) => Promise<DispatchOutcome>;
 };
 
 export type RoundResult = { review: ReviewState; record: ReviewRecord; recordBody: string };
@@ -201,18 +204,24 @@ export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
 	run: (options: RunDispatchOptions) => Promise<DispatchOutcome>,
 	configuration: RecoveryAttemptPolicy,
-): (brief: string, expectedHead: string) => Promise<ObservedDispatchOutcome>;
+): (brief: string, expectedHead: string, role?: PiInvocation["role"]) => Promise<ObservedDispatchOutcome>;
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
 	run?: (options: RunDispatchOptions) => Promise<DispatchOutcome>,
 	onEvent?: (event: "retry-return-protocol") => void,
-): (brief: string, expectedHead: string) => Promise<DispatchOutcome>;
+): (brief: string, expectedHead: string, role?: PiInvocation["role"]) => Promise<DispatchOutcome>;
 export function makeDispatcher(
 	options: Omit<RunDispatchOptions, "brief" | "expectedRef">,
 	run: (options: RunDispatchOptions) => Promise<DispatchOutcome> = runDispatch,
 	third?: ((event: "retry-return-protocol") => void) | RecoveryAttemptPolicy,
-): (brief: string, expectedHead: string) => Promise<DispatchOutcome | ObservedDispatchOutcome> {
-	return async (brief, expectedHead) => {
+): (
+	brief: string,
+	expectedHead: string,
+	role?: PiInvocation["role"],
+) => Promise<DispatchOutcome | ObservedDispatchOutcome> {
+	return async (brief, expectedHead, role) => {
+		const selectedPi = options.pi === undefined ? undefined : role === undefined ? undefined : { ...options.pi, role };
+		if (options.pi !== undefined && selectedPi === undefined) throw Error("Pi role unavailable from consumer");
 		const policy = typeof third === "object" ? third.attemptPolicy : undefined;
 		const onEvent = typeof third === "function" ? third : undefined;
 		const attempts: HostAttemptEvent[] = [];
@@ -221,6 +230,7 @@ export function makeDispatcher(
 			const started = policy === undefined ? undefined : ledgerStart(policy.ledger);
 			const returned = await run({
 				...options,
+				...(selectedPi === undefined ? {} : { pi: selectedPi }),
 				brief: semanticBrief,
 				expectedRef: expectedHead,
 				...(policy === undefined ? {} : { enteredAt: performance.now() }),
@@ -232,8 +242,12 @@ export function makeDispatcher(
 		};
 		let retryAvailable = true;
 		let outcome = await send(brief);
+		// §1.7's sole trigger is the absent return slot, which is the dispatcher's
+		// RETURN_MISSING. Another code recording the same lifecycle (an internal
+		// failure after a numeric exit) is not one, and earns no second send.
 		while (
 			outcome.disposition === "refused" &&
+			outcome.diagnostic.code === "RETURN_MISSING" &&
 			outcome.diagnostic.run.class === "exited" &&
 			Number.isInteger(outcome.diagnostic.run.exitCode) &&
 			outcome.diagnostic.return.class === "missing" &&
@@ -255,7 +269,9 @@ export function makeDispatcher(
 			} catch {
 				// Fixture-only observation cannot alter the authorized transport act.
 			}
-			outcome = await send(brief + RETURN_PROTOCOL_RETRY_SUFFIX);
+			outcome = await send(
+				brief + (selectedPi === undefined ? RETURN_PROTOCOL_RETRY_SUFFIX : PI_RETURN_PROTOCOL_RETRY_SUFFIX),
+			);
 		}
 		if (policy === undefined) return outcome;
 		const observed = Object.freeze({
@@ -311,8 +327,9 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 				{ changeDescription: options.changeDescription },
 				options.fences,
 				options.timing,
+				options.transport,
 			);
-			const outcome = await options.dispatch(brief, head);
+			const outcome = await options.dispatch(brief, head, "reviewer");
 			if (outcome.disposition === "admitted") {
 				collect({ from: "slot", slot, text: outcome.summary });
 			}
@@ -350,8 +367,9 @@ export async function reviewRound(options: RoundOptions): Promise<RoundResult> {
 				options.fences,
 				options.timing,
 				gaps === undefined ? undefined : { gaps },
+				options.transport,
 			);
-			const outcome = await options.dispatch(judgeBrief, head);
+			const outcome = await options.dispatch(judgeBrief, head, "judge");
 			if (outcome.disposition === "admitted") {
 				collect({ from: "judge", text: outcome.summary });
 			}

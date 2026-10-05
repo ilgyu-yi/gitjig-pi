@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
 import {
 	chmodSync,
+	cpSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	renameSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeDiagnostic } from "../.pi/extensions/gitjig/dispatch/diagnostics.ts";
 import type { DispatchOutcome } from "../.pi/extensions/gitjig/dispatch/index.ts";
 import {
@@ -29,6 +32,7 @@ import {
 } from "../.pi/extensions/gitjig/recovery/coordinator.ts";
 import type { PhaseAProfileId, RecoveryFreshness } from "../.pi/extensions/gitjig/recovery/types.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
+import type { HostAttemptLedger } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import { createRecoveryAttemptLedger, makeDispatcher } from "../.pi/extensions/gitjig/review/orchestrate.ts";
 import type { ReviewSubject } from "../.pi/extensions/gitjig/review/subject.ts";
 
@@ -146,6 +150,299 @@ function dispatcher(outputs: Partial<Record<PhaseAProfileId, unknown>>): Recover
 
 function freshness(): RecoveryFreshness {
 	return { subject: structuredClone(subject), history: structuredClone(history), basis };
+}
+
+type CoordinatorModules = {
+	coordinateHistoryRecovery: typeof coordinateHistoryRecovery;
+	makeDispatcher: typeof makeDispatcher;
+};
+
+/** `observed` over a given module's dispatcher, so a private copy brands its own attempts. */
+function observedBy(
+	make: typeof makeDispatcher,
+	ledger: Parameters<RecoveryProfileDispatcher>[0],
+	outcome: DispatchOutcome,
+) {
+	return make(
+		{ callerRepoRoot: "/repo", stateRoot: "/state", delegateArgv: ["pi"], timeoutMs: 600_000 },
+		async () => outcome,
+		{ attemptPolicy: { ledger, beforeRetry: () => true } },
+	)("brief", "b".repeat(40));
+}
+
+/**
+ * A private copy of the extension laid out like the repository, edited, with
+ * the coordinator and the orchestrator loaded from it together: the
+ * coordinator only admits attempts branded by its own orchestrator module.
+ */
+async function withCoordinatorCopy<T>(
+	edits: ReadonlyArray<readonly [string, string, string]>,
+	scenario: (modules: CoordinatorModules) => Promise<T>,
+): Promise<T> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-422-coordinator-"));
+	try {
+		const root = join(scratch, ".pi/extensions/gitjig");
+		cpSync(fileURLToPath(new URL("../.pi/extensions/gitjig", import.meta.url)), root, { recursive: true });
+		symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(scratch, "node_modules"), "dir");
+		symlinkSync(fileURLToPath(new URL("../.github", import.meta.url)), join(scratch, ".github"), "dir");
+		for (const [relative, from, to] of edits) {
+			const path = join(root, relative);
+			const source = readFileSync(path, "utf8");
+			// A plain Error: a stale anchor is a harness fault, never a kill.
+			if (source.indexOf(from) === -1 || source.indexOf(from) !== source.lastIndexOf(from))
+				throw new Error(`anchor must exist once in ${relative}: ${from}`);
+			writeFileSync(
+				path,
+				source.replace(from, () => to),
+			);
+		}
+		const coordinator = await import(pathToFileURL(join(root, "recovery/coordinator.ts")).href);
+		const orchestrate = await import(pathToFileURL(join(root, "review/orchestrate.ts")).href);
+		return await scenario({
+			coordinateHistoryRecovery: coordinator.coordinateHistoryRecovery,
+			makeDispatcher: orchestrate.makeDispatcher,
+		});
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+async function copyKills(
+	arm: (modules: CoordinatorModules) => Promise<void>,
+	edits: ReadonlyArray<readonly [string, string, string]>,
+	named: string,
+): Promise<void> {
+	await assert.rejects(
+		() => withCoordinatorCopy(edits, arm),
+		(error: unknown) => {
+			assert.ok(error instanceof assert.AssertionError, `${named}: the arm failed for another reason: ${error}`);
+			return true;
+		},
+		`${named}: the owner arm still passed`,
+	);
+}
+
+async function armExemptsThePiRoute(modules: CoordinatorModules, lineage: string): Promise<void> {
+	const saved = process.env.PATH;
+	const seen: PhaseAProfileId[] = [];
+	try {
+		process.env.PATH = stateRoot;
+		const generic: RecoveryProfileDispatcher = async () => {
+			throw new Error("no dispatch");
+		};
+		assert.equal(generic.transport, undefined);
+		const piSubject = {
+			...subject,
+			context: {
+				...subject.context,
+				pullRequest: { ...subject.context.pullRequest, id: `PR_PI_PREFLIGHT_${lineage}` },
+			},
+		};
+		const piDispatch: RecoveryProfileDispatcher = Object.assign(
+			async (ledger: HostAttemptLedger, profileId: PhaseAProfileId) => {
+				seen.push(profileId);
+				return observedBy(
+					modules.makeDispatcher,
+					ledger,
+					admitted(
+						profileId === "recovery-selector"
+							? { selected: "root", materiallyDifferent: true, evidence: "selection evidence" }
+							: profileId === "stagnation-root"
+								? { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" }
+								: { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+					),
+				);
+			},
+			{ transport: "pi" as const },
+		);
+		const result = await modules.coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: piSubject,
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(piSubject) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(piSubject) }),
+			dispatchProfile: piDispatch,
+		});
+		// It reached its dispatches instead of handing off at the preflight.
+		assert.deepEqual(seen, ["stagnation-root", "stagnation-blast-radius", "recovery-selector"]);
+		assert.notEqual(result.terminal === "handoff" && result.cause, "profile-preflight");
+		assert.equal(result.terminal, "continue");
+	} finally {
+		process.env.PATH = saved;
+	}
+}
+
+async function armEachRecoveryConsumerNeedsItsOwnReturn(modules: CoordinatorModules, prefix: string): Promise<void> {
+	const missing: DispatchOutcome = {
+		disposition: "refused",
+		cause: "no return",
+		diagnostic: makeDiagnostic({
+			status: "refused",
+			phase: "return",
+			run: { class: "exited", exitCode: 0, signal: null },
+			return: { class: "missing" },
+			compare: { class: "not-reached" },
+			durationMs: 1,
+			code: "RETURN_MISSING",
+		}),
+	};
+	const spec = {
+		kind: "measurement",
+		question: "Which invariant differs?",
+		method: "Read one bounded artifact",
+		expectedDiscriminator: "A unique state",
+		evidence: "Selector evidence",
+		nonMutating: true,
+		notPreviouslyPresent: true,
+	};
+	const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+	const outputs = {
+		stagnation: {
+			"stagnation-root": { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" },
+			"stagnation-blast-radius": { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+			"recovery-selector": { selected: "root", materiallyDifferent: true, evidence: "selection evidence" },
+		},
+		measurement: {
+			"recovery-selector": spec,
+			"recovery-measurement": {
+				kind: "measurement-result",
+				specDigest: structuralDigest("gitjig-recovery-measurement-spec:v1", spec),
+				result: "unique result",
+				evidence: "new result evidence",
+			},
+			"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+		},
+	} as const;
+	const consumers = [
+		["stagnation", "stagnation-root"],
+		["stagnation", "stagnation-blast-radius"],
+		["stagnation", "recovery-selector"],
+		["measurement", "recovery-selector"],
+		["measurement", "recovery-measurement"],
+		["measurement", "recovery-diagnosis"],
+	] as const;
+	let lineage = 0;
+	const run = async (route: keyof typeof outputs, target: PhaseAProfileId, second: DispatchOutcome) => {
+		const current = {
+			...subject,
+			context: {
+				...subject.context,
+				pullRequest: { ...subject.context.pullRequest, id: `PR_OWN_RETURN_${prefix}_${lineage++}` },
+			},
+		};
+		const routeOutputs: Partial<Record<PhaseAProfileId, unknown>> = outputs[route];
+		let targetSends = 0;
+		const result = await modules.coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: current,
+			history,
+			basis,
+			diagnosis:
+				route === "stagnation"
+					? { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" }
+					: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+			dispatchProfile: async (ledger, profileId, _brief, head, _deadline, role) =>
+				modules.makeDispatcher(
+					{
+						callerRepoRoot: "/repo",
+						stateRoot: "/state",
+						delegateArgv: [],
+						pi: { piExecutable: "/usr/bin/pi", provider: "scripted", model: "scripted-model", role: "challenger" },
+						timeoutMs: 600_000,
+					},
+					async () => {
+						if (profileId !== target) return admitted(routeOutputs[profileId]);
+						targetSends += 1;
+						return targetSends === 1 ? missing : second;
+					},
+					{ attemptPolicy: { ledger, beforeRetry: () => true } },
+				)("brief", head, role),
+		});
+		return { result, targetSends };
+	};
+	for (const [route, target] of consumers) {
+		for (const [name, second] of [
+			["absent", missing],
+			["malformed", admittedRaw("{ not json")],
+		] as ReadonlyArray<readonly [string, DispatchOutcome]>) {
+			const { result, targetSends } = await run(route, target, second);
+			const label: string = `${route} ${target}, ${name}`;
+			assert.equal(targetSends, 2, `${label}: the consumer's sends`);
+			assert.notEqual(result.terminal, "continue", `${label}: a route continued without the consumer's result`);
+			assert.ok(result.recordRef, `${label}: no durable record`);
+			const durable = JSON.parse(
+				readFileSync(
+					join(stateRoot, "gitjig", "recovery", `r2-${result.recordRef.repoHash}-${result.recordRef.keyHash}.json`),
+					"utf8",
+				),
+			);
+			assert.equal(
+				durable.completeness.admittedSlots.includes(target),
+				false,
+				`${label}: an unusable retry was admitted`,
+			);
+		}
+		// The control: the same consumer's own valid retry does satisfy it.
+		const control = await run(route, target, admitted((outputs[route] as Record<string, unknown>)[target]));
+		assert.equal(control.targetSends, 2, `${route} ${target}: the control's sends`);
+		assert.equal(control.result.terminal, "continue", `${route} ${target}: the consumer's own valid retry was refused`);
+	}
+}
+
+/** #422: the coordinator hands the measurement phase its spec's digest, and no other phase one. */
+async function armHandsTheMeasurementItsDigest(modules: CoordinatorModules, lineage: string): Promise<void> {
+	const spec = {
+		kind: "measurement",
+		question: "Which invariant differs?",
+		method: "Read one bounded artifact",
+		expectedDiscriminator: "A unique state",
+		evidence: "Selector evidence",
+		nonMutating: true,
+		notPreviouslyPresent: true,
+	};
+	const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+	const specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+	const outputs: Partial<Record<PhaseAProfileId, unknown>> = {
+		"recovery-selector": spec,
+		"recovery-measurement": {
+			kind: "measurement-result",
+			specDigest,
+			result: "unique result",
+			evidence: "new result evidence",
+		},
+		"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+	};
+	const current = {
+		...subject,
+		context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: `PR_SPEC_DIGEST_${lineage}` } },
+	};
+	const seen: Array<[PhaseAProfileId, string | undefined]> = [];
+	const result = await modules.coordinateHistoryRecovery({
+		repoRoot: process.cwd(),
+		modes,
+		subject: current,
+		history,
+		basis,
+		diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+		refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(current) }),
+		refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(current) }),
+		dispatchProfile: async (ledger, profileId, _brief, _head, _deadline, _role, digest) => {
+			seen.push([profileId, digest]);
+			return observedBy(modules.makeDispatcher, ledger, admitted(outputs[profileId]));
+		},
+	});
+	assert.equal(result.terminal, "continue");
+	assert.deepEqual(seen, [
+		["recovery-selector", undefined],
+		["recovery-measurement", specDigest],
+		["recovery-diagnosis", undefined],
+	]);
 }
 
 describe("Phase-A history recovery coordinator", () => {
@@ -276,6 +573,105 @@ describe("Phase-A history recovery coordinator", () => {
 		assert.equal(precontinue, 1);
 		if (result.terminal === "continue" && result.route === "stagnation")
 			assert.equal(result.selectedIntervention.method, "new root method");
+	});
+
+	// #370: that preflight measures the ambient generic profile executable. An
+	// explicitly selected Pi dispatcher carries its own, so the same unavailable
+	// ambient executable must not hand the Pi route off.
+	it("does not gate an explicitly selected Pi route on the ambient generic executable", async () => {
+		await armExemptsThePiRoute({ coordinateHistoryRecovery, makeDispatcher }, "base");
+	});
+
+	// #370: the Pi transport's role is the consumer's, fixed per phase before
+	// each dispatch. Only this seam observes which role each phase asks for, so
+	// a constant role substituted inside the coordinator is caught here.
+	it("fixes one Pi role per recovery phase, on both routes, before any dispatch", async () => {
+		const seen: Array<[PhaseAProfileId, string | undefined]> = [];
+		const record =
+			(outputs: Partial<Record<PhaseAProfileId, unknown>>): RecoveryProfileDispatcher =>
+			async (ledger, profileId, _brief, _head, _deadline, role) => {
+				seen.push([profileId, role]);
+				return observed(ledger, admitted(outputs[profileId]));
+			};
+		const stagnation = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: {
+				...subject,
+				context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+			},
+			history,
+			basis,
+			diagnosis: { value: "STAGNATION", invalidation: "nothing", evidence: "history evidence" },
+			refreshPreclaim: async () => ({
+				...freshness(),
+				subject: {
+					...subject,
+					context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+				},
+			}),
+			refreshPrecontinue: async () => ({
+				...freshness(),
+				subject: {
+					...subject,
+					context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_STAGNATION" } },
+				},
+			}),
+			dispatchProfile: record({
+				"stagnation-root": { outcome: "ALTERNATIVE", method: "new root method", evidence: "root evidence" },
+				"stagnation-blast-radius": { outcome: "BASE_STANDS", method: "", evidence: "blast evidence" },
+				"recovery-selector": { selected: "root", materiallyDifferent: true, evidence: "selection evidence" },
+			}),
+		});
+		assert.equal(stagnation.terminal, "continue");
+		assert.deepEqual(seen, [
+			["stagnation-root", "challenger"],
+			["stagnation-blast-radius", "challenger"],
+			["recovery-selector", "selector-contest"],
+		]);
+
+		seen.length = 0;
+		const spec = {
+			kind: "measurement",
+			question: "Which invariant differs?",
+			method: "Read one bounded artifact",
+			expectedDiscriminator: "A unique state",
+			evidence: "Selector evidence",
+			nonMutating: true,
+			notPreviouslyPresent: true,
+		};
+		const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+		const specDigest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+		const measurementSubject = {
+			...subject,
+			context: { ...subject.context, pullRequest: { ...subject.context.pullRequest, id: "PR_ROLE_MEASUREMENT" } },
+		};
+		const measurement = await coordinateHistoryRecovery({
+			repoRoot: process.cwd(),
+			modes,
+			subject: measurementSubject,
+			history,
+			basis,
+			diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original evidence" },
+			refreshPreclaim: async () => ({ ...freshness(), subject: structuredClone(measurementSubject) }),
+			refreshPrecontinue: async () => ({ ...freshness(), subject: structuredClone(measurementSubject) }),
+			dispatchProfile: record({
+				"recovery-selector": spec,
+				"recovery-measurement": {
+					kind: "measurement-result",
+					specDigest,
+					result: "unique result",
+					evidence: "new result evidence",
+				},
+				"recovery-diagnosis": { value: "NONE", invalidation: "plan", evidence: "fresh ruling evidence" },
+			}),
+		});
+		assert.equal(measurement.terminal, "continue");
+		assert.deepEqual(seen, [
+			["recovery-selector", "selector-measurement"],
+			["recovery-measurement", "measurement"],
+			["recovery-diagnosis", "diagnosis"],
+		]);
 	});
 
 	it("refuses a second recovery request at the consumed-allowance guard", async () => {
@@ -849,6 +1245,45 @@ describe("Phase-A history recovery coordinator", () => {
 			if (watchdog !== undefined) clearTimeout(watchdog);
 			Object.defineProperty(performance, "now", { configurable: true, value: original });
 		}
+	});
+
+	// #422, §1.7 at every recovery consumer: only the retry's own independently
+	// valid return satisfies it. Each phase slot on both routes misses its first
+	// return through the real dispatcher in Pi mode; an absent or malformed retry
+	// leaves that slot unadmitted and the route without a continue, with no third
+	// send. A valid retry at the same slot is the control.
+	it("leaves each recovery consumer without a result unless its own retry returns one", async () => {
+		await armEachRecoveryConsumerNeedsItsOwnReturn({ coordinateHistoryRecovery, makeDispatcher }, "base");
+	});
+
+	it("hands the measurement phase its spec digest and no other phase one", async () => {
+		await armHandsTheMeasurementItsDigest({ coordinateHistoryRecovery, makeDispatcher }, "base");
+	});
+
+	it("baseline-first private-copy mutants: the Pi route's preflight exemption and each consumer's own return", async () => {
+		await withCoordinatorCopy([], (modules) => armExemptsThePiRoute(modules, "copy"));
+		await withCoordinatorCopy([], (modules) => armEachRecoveryConsumerNeedsItsOwnReturn(modules, "copy"));
+		await withCoordinatorCopy([], (modules) => armHandsTheMeasurementItsDigest(modules, "copy"));
+		await copyKills(
+			(modules) => armHandsTheMeasurementItsDigest(modules, "mutant"),
+			[["recovery/coordinator.ts", "\t\t\t\tpiRole,\n\t\t\t\tspecDigest,\n", "\t\t\t\tpiRole,\n\t\t\t\tundefined,\n"]],
+			"the measurement dispatched without its spec digest",
+		);
+		await copyKills(
+			(modules) => armExemptsThePiRoute(modules, "mutant"),
+			[["recovery/coordinator.ts", 'input.dispatchProfile.transport !== "pi"', "true"]],
+			"the ambient preflight gating a Pi route",
+		);
+		await copyKills(
+			(modules) => armEachRecoveryConsumerNeedsItsOwnReturn(modules, "first"),
+			[["review/orchestrate.ts", "\t\t\toutcome = await send(\n", "\t\t\tawait send(\n"]],
+			"a recovery consumer handed the first send's outcome",
+		);
+		await copyKills(
+			(modules) => armEachRecoveryConsumerNeedsItsOwnReturn(modules, "never"),
+			[["review/orchestrate.ts", "\t\tlet retryAvailable = true;\n", "\t\tlet retryAvailable = false;\n"]],
+			"no retry at any recovery consumer",
+		);
 	});
 
 	it("persists the one missing-return retry with global attempt order and nonempty retrySlots", async () => {

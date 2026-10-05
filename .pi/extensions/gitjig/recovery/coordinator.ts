@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { makeDiagnostic } from "../dispatch/diagnostics.ts";
 import type { DispatchOutcome } from "../dispatch/index.ts";
 import { runDispatch } from "../dispatch/index.ts";
+import type { PiInvocation } from "../dispatch/pi-run.ts";
 import type { ResolvedModes } from "../modes.ts";
 import type { DiagnosisInput, RepairBasis, StateSummary } from "../review/history.ts";
 import {
@@ -33,8 +34,10 @@ import {
 	freshDiagnosisBrief,
 	measurementBrief,
 	measurementSelectorBrief,
+	piRecoveryBrief,
 } from "./briefs.ts";
 import { admitChangeKeyOperands, deriveAllowancePathEncoding } from "./lineage.ts";
+import type { RecoveryPiRole } from "./pi-profile.ts";
 import { loadRecoveryProfiles, materializeRecoveryProfile, preflightRecoveryExecutable } from "./profiles.ts";
 import { resolveRecoveryStateDomain } from "./state-domain.ts";
 import {
@@ -827,13 +830,24 @@ const ROUTE_TERMINAL_MS = 3_840_000;
 const MAX_RETAINED_RECORD_BYTES = 192 * 1024;
 
 type RecoveryDispatchResult = ObservedDispatchOutcome;
-export type RecoveryProfileDispatcher = (
+export type RecoveryProfileDispatcher = ((
 	ledger: HostAttemptLedger,
 	profileId: PhaseAProfileId,
 	semanticBrief: RecoverySemanticBrief,
 	expectedHead: string,
 	operationDeadline: number,
-) => Promise<RecoveryDispatchResult>;
+	role?: RecoveryPiRole,
+	specDigest?: string,
+) => Promise<RecoveryDispatchResult>) & {
+	/**
+	 * The transport the caller selected for this dispatcher, declared by its
+	 * own producer. The coordinator reads it for one purpose: the ambient
+	 * generic-executable preflight is the generic profile argv's gate, and an
+	 * explicitly selected Pi dispatcher carries its own executable. An absent
+	 * marker is the generic transport.
+	 */
+	readonly transport?: "generic" | "pi";
+};
 
 export type CoordinateRecoveryInput = {
 	repoRoot: string;
@@ -856,8 +870,19 @@ export function makeRecoveryProfileDispatcher(input: {
 	repoRoot: string;
 	stateRoot: string;
 	surface?: SessionSurface;
+	/** Explicit caller-selected Pi mode. The coordinator fixes the route role. */
+	pi?: Omit<PiInvocation, "role" | "specDigest">;
 }): RecoveryProfileDispatcher {
-	return async (ledger, profileId, semanticBrief, expectedHead, operationDeadline) => {
+	const dispatcher = async (
+		ledger: HostAttemptLedger,
+		profileId: PhaseAProfileId,
+		semanticBrief: RecoverySemanticBrief,
+		expectedHead: string,
+		operationDeadline: number,
+		role?: RecoveryPiRole,
+		specDigest?: string,
+	): Promise<RecoveryDispatchResult> => {
+		if (input.pi !== undefined && role === undefined) throw Error("recovery Pi role unavailable from consumer");
 		const loaded = loadRecoveryProfiles();
 		const materialized = loaded === undefined ? undefined : materializeRecoveryProfile(loaded, profileId);
 		if (materialized === undefined) throw new Error("recovery profile unavailable");
@@ -865,7 +890,8 @@ export function makeRecoveryProfileDispatcher(input: {
 			{
 				callerRepoRoot: input.repoRoot,
 				stateRoot: input.stateRoot,
-				delegateArgv: materialized.argv,
+				delegateArgv: input.pi === undefined ? materialized.argv : [],
+				...(input.pi === undefined || role === undefined ? {} : { pi: { ...input.pi, role, specDigest } }),
 				timeoutMs: Math.min(ATTEMPT_BOUND_MS, Math.max(1, Math.floor(operationDeadline - performance.now()))),
 				operationDeadline,
 				surface: input.surface,
@@ -878,8 +904,10 @@ export function makeRecoveryProfileDispatcher(input: {
 				},
 			},
 		);
-		return dispatch(semanticBrief, expectedHead);
+		return dispatch(input.pi === undefined ? semanticBrief : piRecoveryBrief(semanticBrief), expectedHead, role);
 	};
+	// The producer declares its own transport; the coordinator never infers it.
+	return Object.assign(dispatcher, { transport: input.pi === undefined ? ("generic" as const) : ("pi" as const) });
 }
 
 function sameFreshness(
@@ -1064,12 +1092,10 @@ function diagnosis(value: unknown): DiagnosisInput | undefined {
 }
 
 /**
- * Read-only consumer oracle for the Pi producer's accepted-set parity tests
- * (#418). It delegates to this module's actual route parsers, so the tests
- * compare the producer against what the consumer really takes rather than
- * against a second grammar restated beside it. It selects no transport, takes
- * no Pi path and has no production caller; the coordinator's own Pi wiring is
- * a later part of #370.
+ * Read-only oracle over this module's own route parsers, so the Pi producer's
+ * parity tests compare against what the consumer really takes rather than
+ * against a second grammar restated beside it (#418). It selects no transport
+ * and reads no caller state; the coordinator's Pi wiring is above.
  */
 export function acceptsRecoveryPiPayload(
 	role: "challenger" | "selector-contest" | "selector-measurement" | "measurement" | "diagnosis",
@@ -1174,7 +1200,13 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 	const stateDomain = resolveRecoveryStateDomain();
 	if (stateDomain === undefined) return handoff("state-domain", "nothing", null);
 	const loaded = loadRecoveryProfiles();
-	if (loaded === undefined || !preflightRecoveryExecutable()) return handoff("profile-preflight", "nothing", null);
+	// The preflight measures the ambient generic profile executable. Under an
+	// explicitly selected Pi transport that executable is not the one the route
+	// will run, so its absence or different help text must not hand this route
+	// off; the Pi dispatcher's own parameters are refused at its own gate.
+	const ambientPreflight = input.dispatchProfile.transport !== "pi";
+	if (loaded === undefined || (ambientPreflight && !preflightRecoveryExecutable()))
+		return handoff("profile-preflight", "nothing", null);
 	if (resolveRecoveryStateDomain() !== stateDomain) return handoff("state-domain", "nothing", null);
 	const fresh = await input.refreshPreclaim();
 	if (fresh === undefined || !sameFreshness(fresh, input.subject, input.history, input.basis))
@@ -1298,7 +1330,18 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 	const dispatch = async (
 		profileId: PhaseAProfileId,
 		semanticBrief: RecoverySemanticBrief,
+		specDigest?: string,
 	): Promise<RecoveryDispatchResult | undefined> => {
+		const piRole: RecoveryPiRole =
+			profileId === "stagnation-root" || profileId === "stagnation-blast-radius"
+				? "challenger"
+				: profileId === "recovery-selector"
+					? route === "stagnation"
+						? "selector-contest"
+						: "selector-measurement"
+					: profileId === "recovery-measurement"
+						? "measurement"
+						: "diagnosis";
 		const now = performance.now();
 		if (routeDeadline - now < SLOT_RESERVE_MS) return undefined;
 		try {
@@ -1308,6 +1351,8 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 				semanticBrief,
 				input.subject.context.pullRequest.head.oid,
 				now + SLOT_OPERATION_MS,
+				piRole,
+				specDigest,
 			);
 			return admitObservedDispatch(ledger, observed);
 		} catch {
@@ -1446,7 +1491,7 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 			const specDigest = spec === undefined ? null : structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
 			appendAttempts("recovery-selector", selectorRun, specDigest, spec !== undefined && specNovel);
 			if (spec === undefined || !specNovel || specDigest === null) return finalizeHandoff();
-			const measurementRun = await dispatch("recovery-measurement", measurementBrief(spec));
+			const measurementRun = await dispatch("recovery-measurement", measurementBrief(spec), specDigest);
 			if (measurementRun === undefined) return finalizeHandoff();
 			const parsedMeasurement = measurementResult(payload(measurementRun.outcome), specDigest);
 			const measured = retainWithinRouteBudget(

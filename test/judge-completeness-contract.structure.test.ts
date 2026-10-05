@@ -74,7 +74,10 @@ const SECTION_SHA256: ReadonlyArray<readonly [string, string]> = [
 const README_POINTER =
 	"The command appends one structured `gitjig-review-round` entry and displays one terminal line. `refused` means the input was rejected before a round; `hand-off` means subject, history, dispatch, publication, or required re-entry could not safely complete and names the re-entry target; `posted` means the durable review record was confirmed, including an incomplete record when a required return was unavailable; `recovery` reports the bounded recovery route's terminal, next gate, and route, and a content-free record reference where one exists, not an approval or landing decision. The terminal line reports the disposition and, when present, the review state and diagnosis. `/review-round` applies SPEC §§1.7 and 1.9's indexed-bundle completeness and one bounded full-bundle Judge re-request before a resolved review, writing version-2 records; historical unversioned records stay readable, §1.4 keeps ambiguous legacy history fail-closed, and no existing handoff is released.";
 const README_SECTION_HEADING = "## Driving a review round";
-const README_SECTION_SHA256 = "b7f8bd11d4be72cd15de92fe4003151afa9f367e5afe02d8644190183427735a";
+// #422 re-pins this section: the round's transport became selectable, so the
+// section that documents driving a round documents the choice. The line-level
+// table below moves with it, and only the generic-dispatch sentence changed.
+const README_SECTION_SHA256 = "5be4819230d174dc8293b0a9d41f70d01fbb099805cadac4ecac92e068eabe29";
 
 /** Named obligations, so a failure points at the meaning that moved; each lives in exactly one owned paragraph. */
 const OBLIGATIONS = [
@@ -139,7 +142,7 @@ const SETTLED_README: ReadonlyArray<readonly [string, string]> = [
 	["46fa2b872c272e19a0ca2a9b4fd09953989b605559661361c95f0a8b5a3db6f1", "/review-round review-round.json"],
 	["0eb97762ca1a13f5603394a462a082a20fa4ae53b3f0b14a6a0a0b23ae08b7b4", '    "priorFindings": [{"label": "F1", "t'],
 	["e9f9ac87382ab133a5f519240737fc75f82d21ce384a0bd04bd9cbdbfe34ab77", '  "changeDescription": "Add the review-r'],
-	["a95f778d3b736eb40633c4c7e0776b9e806aa6d40ac6b6d2b2353b8ac37fbaa5", "This example is for generic argv dispatc"],
+	["592dc3233b2c0c545afc665e27891c129de15599b5fb441c758b6e6b83edb88b", "This example is for generic argv dispatc"],
 	["ec1c53c7996c1db28e319ae2e1fb75fc8f730d7ec5d13104873759023e29a9b1", "The command appends one structured `gitj"],
 	["06d8faf183324bd6936fea16fd02f30889fe525c0f79f300049cd9216b89cc59", "Use ordinary `body` publication for pros"],
 	["4619fc4f7cff0f89053cd2c3e4c7bdbe54b2822c1bb0ba74cd8728fc22710f19", "Tier 1 always tries ordinary landing fir"],

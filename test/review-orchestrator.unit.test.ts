@@ -34,6 +34,7 @@ const REVIEW_DIR = "/.pi/extensions/gitjig/review/";
 type Slot = { lens: string; surface: string };
 type BundleEntry = { rawOrdinal?: number; finding: string; slot: Slot };
 type DispatchDiagnostic = {
+	code?: string;
 	run: { class: RunClass; exitCode: number | null; signal: string | null };
 	return: { class: ReturnClass };
 	compare?: { class: string };
@@ -1398,7 +1399,12 @@ describe("§1.7/§1.9 the composed round (issue #184)", () => {
 	const missingReturn = (exitCode: number): DispatchOutcome => ({
 		disposition: "refused",
 		cause: DIAGNOSTIC_MESSAGES.RETURN_MISSING,
-		diagnostic: { run: { class: "exited", exitCode, signal: null }, return: { class: "missing" } },
+		// The dispatcher always records its code, and §1.7's trigger reads it (#422).
+		diagnostic: {
+			code: "RETURN_MISSING",
+			run: { class: "exited", exitCode, signal: null },
+			return: { class: "missing" },
+		},
 	});
 	const refused = (runClass: RunClass, returnClass: ReturnClass): DispatchOutcome => ({
 		disposition: "refused",
