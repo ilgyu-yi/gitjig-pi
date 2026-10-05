@@ -74,7 +74,20 @@ type Fixture = {
 
 /** A provision entry that records exactly what reached it. */
 const recordingProvision = (record: string) =>
-	`import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), env: process.env, cwd: process.cwd() }));\nprocess.stdout.write("provision: done\\n");\n`;
+	[
+		'import { lstatSync, readdirSync, writeFileSync } from "node:fs";',
+		'import { join } from "node:path";',
+		"const modes = [];",
+		"const visit = (path, relative) => {",
+		"\tconst stats = lstatSync(path);",
+		'\tmodes.push([relative, stats.isDirectory() ? "dir" : stats.isFile() ? "file" : "other", stats.mode & 0o777]);',
+		"\tif (stats.isDirectory()) for (const name of readdirSync(path)) visit(join(path, name), `${relative}/${name}`);",
+		"};",
+		'visit(process.cwd(), ".");',
+		`writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), env: process.env, cwd: process.cwd(), modes }));`,
+		'process.stdout.write("provision: done\\n");',
+		"",
+	].join("\n");
 
 /**
  * The fixture. `source` may add or replace files in the source before it is
@@ -124,7 +137,7 @@ function fixture(
 		[
 			"#!/bin/sh",
 			`printf '%s\\n' "$*" >> ${JSON.stringify(log)}`,
-			`env | sort > ${JSON.stringify(join(root, "git-env.last"))}`,
+			`{ printf '== %s\\n' "$*"; env | sort; } >> ${JSON.stringify(join(root, "git-env.log"))}`,
 			`case " $* " in *" fetch "*) ${options.wrapper ?? ":"}; export GIT_ALLOW_PROTOCOL=file; exec ${JSON.stringify(real)} -c "url.file://${bare}.insteadOf=https://github.com/o/r" "$@";; esac`,
 			`exec ${JSON.stringify(real)} "$@"`,
 			"",
@@ -259,7 +272,35 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 				symlinkSync(copy, pin);
 			},
 		],
-		["an untracked pin", (f: Fixture) => git(f.target, "rm", "-q", "--cached", ".pi/gitjig.pin.json")],
+		[
+			// HEAD does not track it: the removal is committed and the file restored beside.
+			"an untracked pin",
+			(f: Fixture) => {
+				const pin = join(f.target, ".pi/gitjig.pin.json");
+				const bytes = readFileSync(pin);
+				git(f.target, "rm", "-q", ".pi/gitjig.pin.json");
+				git(f.target, "commit", "-qm", "drop the pin");
+				mkdirSync(join(f.target, ".pi"), { recursive: true });
+				writeFileSync(pin, bytes);
+			},
+		],
+		[
+			// HEAD holds a link; the index and the working tree hold a regular file.
+			"a HEAD symlink staged as a file",
+			(f: Fixture) => {
+				// The link's target text is the pin's exact bytes, so HEAD's blob equals
+				// the working file byte for byte: only HEAD's entry mode can refuse it.
+				const pin = join(f.target, ".pi/gitjig.pin.json");
+				const bytes = readFileSync(pin);
+				unlinkSync(pin);
+				symlinkSync(bytes.toString("utf8"), pin);
+				git(f.target, "add", "-A");
+				git(f.target, "commit", "-qm", "link the pin");
+				unlinkSync(pin);
+				writeFileSync(pin, bytes);
+				git(f.target, "add", ".pi/gitjig.pin.json");
+			},
+		],
 	] as const) {
 		const f = fixture(launcher);
 		mutate(f);
@@ -390,17 +431,46 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 	);
 	assert.equal(reached.env.HOME, f.root, "the provision child's HOME is not the launcher's own read");
 	assert.equal(reached.env.LC_ALL, "C");
-	const gitEnv = readFileSync(join(f.root, "git-env.last"), "utf8")
-		.split("\n")
+	// Each Git child's own environment, read where it ran.
+	const blocks = readFileSync(join(f.root, "git-env.log"), "utf8")
+		.split(/^== /m)
 		.filter(Boolean)
-		.map((line) => line.slice(0, line.indexOf("=")))
-		.filter((key) => !platform.has(key) && !["PWD", "SHLVL", "_", "OLDPWD"].includes(key))
-		.sort();
-	assert.deepEqual(
-		gitEnv,
-		["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "LC_ALL", "PATH"],
-		"the Git child's environment is not its profile",
+		.map((block) => {
+			const [args, ...lines] = block.split("\n").filter(Boolean);
+			return {
+				args,
+				env: Object.fromEntries(
+					lines.map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+				),
+			};
+		});
+	const shellOwn = new Set(["PWD", "SHLVL", "_", "OLDPWD"]);
+	const keysOf = (env: Record<string, string>) =>
+		Object.keys(env)
+			.filter((key) => !platform.has(key) && !shellOwn.has(key))
+			.sort();
+	const profile = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "LC_ALL", "PATH"];
+	const admission = blocks.filter(
+		({ args }) => /cat-file blob HEAD:|rev-parse --show-toplevel$|ls-tree -z HEAD/.test(args) && !/snapshot/.test(args),
 	);
+	const acquisition = blocks.filter(({ args }) => / fetch /.test(args));
+	assert.ok(admission.length >= 3 && acquisition.length === 1, "the Git children were not all observed");
+	for (const { args, env } of admission) {
+		assert.deepEqual(keysOf(env), profile, `the admission child's environment is not its profile: ${args}`);
+		assert.equal(
+			env.GIT_CONFIG_GLOBAL,
+			"/dev/null",
+			`the admission child's global config is not the null device: ${args}`,
+		);
+	}
+	for (const { args, env } of acquisition) {
+		assert.deepEqual(keysOf(env), profile, `the acquisition child's environment is not its profile: ${args}`);
+		assert.match(
+			env.GIT_CONFIG_GLOBAL,
+			/gitjig-acquire-[^/]+\/gitconfig$/,
+			"the source child's global config is not the owned file",
+		);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +493,19 @@ async function armConfirmsTheClosure(launcher: string): Promise<void> {
 			},
 		],
 		[
+			// Status calls the checkout clean, but its bytes are not HEAD's blobs.
+			"CRLF-smudged module bytes",
+			(work: string) => writeFileSync(join(work, ".gitattributes"), "*.ts text eol=crlf\n"),
+		],
+		[
+			"the entry file as a directory",
+			(work: string) => {
+				rmSync(join(work, ".pi/extensions/gitjig.ts"));
+				mkdirSync(join(work, ".pi/extensions/gitjig.ts"));
+				writeFileSync(join(work, ".pi/extensions/gitjig.ts/inner.ts"), "// inner\n");
+			},
+		],
+		[
 			"a missing fixed entry",
 			(work: string) => {
 				rmSync(join(work, ".pi/extensions/gitjig/install/provision-cli.ts"));
@@ -435,6 +518,37 @@ async function armConfirmsTheClosure(launcher: string): Promise<void> {
 		refused(launch(f), "snapshot-identity-mismatch", 65, label);
 		invariant(f, before, label);
 	}
+	// A member whose name holds a newline is still a member: admitted, not refused.
+	const newline = fixture(launcher, {
+		source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/odd\nname.ts"), "// odd\n"),
+	});
+	const admitted = launch(newline);
+	assert.equal(admitted.status, 0, `a newline-named member was refused (stderr ${JSON.stringify(admitted.stderr)})`);
+}
+
+// ---------------------------------------------------------------------------
+// The artifact relation: everything created is owner-private, executables included.
+
+async function armOwnsEveryArtifact(launcher: string): Promise<void> {
+	const f = fixture(launcher, {
+		source: (work) => {
+			mkdirSync(join(work, "tools/nested"), { recursive: true });
+			writeFileSync(join(work, "tools/run.sh"), "#!/bin/sh\n");
+			chmodSync(join(work, "tools/run.sh"), 0o755);
+			writeFileSync(join(work, "tools/nested/data.txt"), "data\n");
+		},
+	});
+	const run = launch(f);
+	assert.equal(run.status, 0, `acquisition failed (stderr ${JSON.stringify(run.stderr)})`);
+	const { modes } = JSON.parse(readFileSync(f.record, "utf8")) as { modes: [string, string, number][] };
+	assert.ok(
+		modes.some(([path]) => path === "./tools/run.sh"),
+		"the executable was not acquired",
+	);
+	const wrong = modes.filter(([, kind, mode]) =>
+		kind === "dir" ? mode !== 0o700 : kind === "file" ? mode !== 0o600 : true,
+	);
+	assert.deepEqual(wrong, [], "a created entry is not owner-private at the relation's mode");
 }
 
 // ---------------------------------------------------------------------------
@@ -514,6 +628,7 @@ const ARMS = {
 	armBuildsEachChildEnvironment,
 	armConfirmsTheClosure,
 	armOrdersTheTerminals,
+	armOwnsEveryArtifact,
 	armPinsTheBounds,
 } as const;
 
@@ -622,6 +737,43 @@ test(
 			'\t\tif (!cleanup(state.child, seams)) cause = "cleanup-failed";\n',
 			"",
 			"cleanup omitted",
+		);
+		// Round 1's boundaries, each by the arm that now owns it.
+		await killed(
+			armConfirmsTheClosure,
+			'\t\tif (hashed !== oid) refuse("snapshot-identity-mismatch");\n',
+			"",
+			"closure without byte equality",
+		);
+		await killed(
+			armConfirmsTheClosure,
+			"([0-9a-f]{40})\\t(.+)$/s.exec(line);",
+			"([0-9a-f]{40})\\t(.+)$/.exec(line);",
+			"a newline-named member refused",
+		);
+		await killed(
+			armConfirmsTheClosure,
+			'\tif (!head.has(SCOPE_FILE) || !entryFile?.isFile() || entryFile.isSymbolicLink()) refuse("snapshot-identity-mismatch");\n\tworking.add(SCOPE_FILE);\n\twalk(SCOPE_DIR);',
+			"\twalk(SCOPE_FILE);\n\twalk(SCOPE_DIR);",
+			"the entry admitted as a directory (both statements, which each decide it alone)",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			"/^100(644|755) blob [0-9a-f]{40}\\t(.+)$/s.exec(tracked)",
+			"/^1[02]0(644|755|000) blob [0-9a-f]{40}\\t(.+)$/s.exec(tracked)",
+			"a HEAD link admitted as the pin",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'\t\t"git-admission": git(devNull),',
+			'\t\t"git-admission": git(join(tmpdir(), "hostile-config")),',
+			"the admission child given another global config",
+		);
+		await killed(
+			armOwnsEveryArtifact,
+			"\t\t\tif ((stats.mode & 0o777) !== 0o600) chmodSync(path, 0o600);\n",
+			"",
+			"an executable left at its checkout mode",
 		);
 		// The bounds.
 		await killed(armPinsTheBounds, "gitTimeoutMs: 120000", "gitTimeoutMs: 1200000", "a widened Git bound");

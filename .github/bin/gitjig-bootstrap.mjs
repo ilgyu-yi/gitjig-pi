@@ -12,11 +12,9 @@
  * overrides every post-creation cause.
  *
  * It is self-standing: Node's built-ins only, so it runs from target history
- * before any carried runtime exists. It is invoked as
- * `node .github/bin/gitjig-bootstrap.mjs` with no argument. What the caller's
- * invocation does before or beneath these bytes — its selection of `node` and
- * of `git` through PATH, its Node startup controls, HOME-sensitive behaviour —
- * the residual relation's caller-held part, not guaranteed here.
+ * before any carried runtime exists, invoked as the activation relation names
+ * it. What the caller's invocation does before or beneath these bytes is the
+ * residual relation's caller-held part, not guaranteed here.
  */
 import { spawn } from "node:child_process";
 import {
@@ -25,7 +23,6 @@ import {
 	constants,
 	fstatSync,
 	lstatSync,
-	mkdirSync,
 	mkdtempSync,
 	openSync,
 	readdirSync,
@@ -68,10 +65,9 @@ const refuse = (cause) => {
 };
 
 /**
- * One bounded child: stdin at EOF, its own process group, both streams capped,
- * a timeout. Any spawn failure, timeout, overflow, signal or nonzero exit is
- * the calling node's cause (the child-outcome relation). Output is returned to
- * the launcher only, never to the terminal.
+ * One child under its limits-relation row, in its own process group. Every
+ * outcome the child-outcome relation names is the calling node's cause, and
+ * the child's output stays with the launcher, never reaching the terminal.
  */
 function bounded(seams, executable, args, { env, cwd, timeoutMs, cause }) {
 	return new Promise((resolveRun, rejectRun) => {
@@ -260,9 +256,10 @@ export async function acquire(argv, read, seams) {
 	// pin-read
 	const shownTop = (await admissionGit(["rev-parse", "--show-toplevel"])).toString("utf8").trim();
 	if (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");
-	const staged = (await admissionGit(["ls-files", "--stage", "--full-name", "--", PIN])).toString("utf8").trim();
-	const stagedEntry = /^100(644|755) [0-9a-f]{40} 0\t(.+)$/.exec(staged);
-	if (stagedEntry === null || stagedEntry[2] !== PIN) refuse("invalid-input");
+	// HEAD's own tree entry: the committed pin, whatever the index now holds.
+	const tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\0$/, "");
+	const trackedEntry = /^100(644|755) blob [0-9a-f]{40}\t(.+)$/s.exec(tracked);
+	if (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");
 	const headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);
 	// pin-admission
 	const pin = projection(admitPin(top, headBlob));
@@ -289,7 +286,7 @@ export async function acquire(argv, read, seams) {
 /** The post-creation nodes, run with cleanup owed from the first artifact. */
 export async function acquireIn(state, seams) {
 	const { child, top, pin, sourceUrl, uid, read } = state;
-	// The created child itself: a non-link directory, the caller's own, mode 0700.
+	// The created child itself, against the artifact relation's acquisition-child row.
 	const created = lstatSync(child);
 	if (
 		!created.isDirectory() ||
@@ -336,7 +333,7 @@ export async function acquireIn(state, seams) {
 		.filter(Boolean);
 	const head = new Map();
 	for (const line of listed) {
-		const match = /^(100644|100755) blob ([0-9a-f]{40})\t(.+)$/.exec(line);
+		const match = /^(100644|100755) blob ([0-9a-f]{40})\t(.+)$/s.exec(line);
 		if (match === null) refuse("snapshot-identity-mismatch");
 		head.set(match[3], match[2]);
 	}
@@ -352,7 +349,10 @@ export async function acquireIn(state, seams) {
 	if (lstatSync(join(real, ".pi"), { throwIfNoEntry: false })?.isSymbolicLink()) refuse("snapshot-identity-mismatch");
 	if (lstatSync(join(real, ".pi/extensions"), { throwIfNoEntry: false })?.isSymbolicLink())
 		refuse("snapshot-identity-mismatch");
-	walk(SCOPE_FILE);
+	// The entry is one regular blob in HEAD and one regular file here, never a directory.
+	const entryFile = lstatSync(join(real, SCOPE_FILE), { throwIfNoEntry: false });
+	if (!head.has(SCOPE_FILE) || !entryFile?.isFile() || entryFile.isSymbolicLink()) refuse("snapshot-identity-mismatch");
+	working.add(SCOPE_FILE);
 	walk(SCOPE_DIR);
 	if (working.size !== head.size || ![...working].every((path) => head.has(path))) refuse("snapshot-identity-mismatch");
 	for (const [path, oid] of head) {
@@ -398,15 +398,14 @@ export async function main(argv, read, seams) {
 	try {
 		state = await acquire(argv, read, seams);
 	} catch (error) {
-		// Fallbacks before creation: admission errors are invalid-input.
+		// The fallback relation, before creation.
 		cause = error instanceof Refusal ? error.refusal : "invalid-input";
 	}
 	if (cause === undefined) {
 		try {
 			await acquireIn(state, seams);
 		} catch (error) {
-			// Fallbacks after creation: before identity is confirmed an unowned
-			// error is a snapshot mismatch, after it a provision refusal.
+			// The fallback relation, after creation: identity confirmed or not.
 			cause =
 				error instanceof Refusal ? error.refusal : state.confirmed ? "provision-refused" : "snapshot-identity-mismatch";
 		}

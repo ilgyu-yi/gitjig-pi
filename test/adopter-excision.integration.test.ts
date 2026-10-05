@@ -49,14 +49,18 @@ function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] 
 	// running the fixed entry. Only those exact names are neutralized, and only
 	// in that one asset; any other carried path or brand use in it still fails.
 	const acquisitionLauncher = ".github/bin/gitjig-bootstrap.mjs";
+	// Each settled name exactly as the launcher spells it, quotes included, so a
+	// longer name that merely contains one (a brand around it) is not neutralized.
+	const settledLiterals: readonly (readonly [string, string])[] = [
+		['".pi/extensions/gitjig/install/provision-cli.ts"', '"carried-fixed-entry"'],
+		['".pi/extensions/gitjig.ts"', '"carried-entry"'],
+		['".pi/extensions/gitjig"', '"carried-scope"'],
+		['".pi/gitjig.pin.json"', '"committed-pin"'],
+		['"gitjig-acquire-"', '"acquisition-child-"'],
+		["`gitjig-bootstrap: ${cause}\\n`", "`acquisition-launcher: ${cause}\\n`"],
+	];
 	const neutralizeAcquisitionNames = (value: string) =>
-		value
-			.replaceAll(".pi/extensions/gitjig/install/provision-cli.ts", "carried-fixed-entry")
-			.replaceAll(".pi/extensions/gitjig.ts", "carried-entry")
-			.replaceAll('".pi/extensions/gitjig"', '"carried-scope"')
-			.replaceAll(".pi/gitjig.pin.json", "committed-pin")
-			.replaceAll("gitjig-bootstrap", "acquisition-launcher")
-			.replaceAll("gitjig-acquire-", "acquisition-child-");
+		settledLiterals.reduce((text, [literal, neutral]) => text.replaceAll(literal, neutral), value);
 	for (const candidate of candidates) {
 		const raw = candidate.bytes.toString("utf8");
 		const text = candidate.path === acquisitionLauncher ? neutralizeAcquisitionNames(raw) : raw;
@@ -128,6 +132,12 @@ test("#251 named negative fixture catches a handed-over reference to a carried m
 		dependencyFindings([{ ...launcher, bytes: Buffer.from("// the gitjig shell\n") }]),
 		[".github/bin/gitjig-bootstrap.mjs: source-shell branding"],
 		"other branding in the launcher was admitted",
+	);
+	// A brand around a settled name is still a brand.
+	assert.deepEqual(
+		dependencyFindings([{ ...launcher, bytes: Buffer.from('const label = "evil-gitjig-bootstrap-brand";\n') }]),
+		[".github/bin/gitjig-bootstrap.mjs: source-shell branding"],
+		"a brand containing a settled name was admitted",
 	);
 	assert.deepEqual(
 		dependencyFindings([
