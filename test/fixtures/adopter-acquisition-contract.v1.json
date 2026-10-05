@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 2,
+	"stages": [
+		"startup",
+		"target-admission",
+		"temporary-create",
+		"source-acquisition",
+		"snapshot-confirmation",
+		"provision",
+		"cleanup",
+		"terminal"
+	],
+	"surfaces": ["launcher", "git-child", "provision-node", "filesystem", "terminal"],
+	"cells": [
+		["startup", "launcher", "invalid-input", 64],
+		["target-admission", "launcher", "invalid-input", 64],
+		["temporary-create", "filesystem", "temporary-storage-unavailable", 73],
+		["source-acquisition", "git-child", "source-unavailable", 69],
+		["snapshot-confirmation", "launcher", "snapshot-identity-mismatch", 65],
+		["provision", "provision-node", "provision-refused", 70],
+		["cleanup", "filesystem", "cleanup-failed", 74],
+		["terminal", "terminal", "closed-six-cause-status-algebra", 0]
+	],
+	"crossStage": [
+		"temporary-create<source-acquisition",
+		"snapshot-confirmation<provision",
+		"temporary-create=>cleanup",
+		"cleanup<terminal",
+		"cleanup-failed>stage-result"
+	]
+}
