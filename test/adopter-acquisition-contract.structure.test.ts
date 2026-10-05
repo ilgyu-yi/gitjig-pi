@@ -33,6 +33,7 @@ const fixture = JSON.parse(readFileSync(join(root, "test/fixtures/adopter-acquis
 	schemaVersion: number;
 	relations: Record<string, string[][]>;
 	prose: Record<string, string>;
+	carried: Record<string, string>;
 };
 
 const STAGES = [
@@ -172,8 +173,15 @@ function relations(text: string): Parsed | undefined {
 	const owned = regions(text);
 	if (owned === undefined) return undefined;
 	// No relation marker outside the closed family, and none outside its region.
-	const markers = [...text.matchAll(/<!-- acquisition-relation: ([a-z-]+):start -->/g)].map((match) => match[1]);
-	if (JSON.stringify([...markers].sort()) !== JSON.stringify(Object.keys(RELATIONS).sort())) return undefined;
+	// Start and end markers alike, each exactly once per relation of the family.
+	const family = JSON.stringify(Object.keys(RELATIONS).sort());
+	for (const side of ["start", "end"]) {
+		const markers = [...text.matchAll(new RegExp(`<!-- acquisition-relation: ([a-z-]+):${side} -->`, "g"))].map(
+			(match) => match[1],
+		);
+		if (JSON.stringify([...markers].sort()) !== family) return undefined;
+	}
+	if ((text.match(/<!-- acquisition-relation:/g) ?? []).length !== Object.keys(RELATIONS).length * 2) return undefined;
 	const parsed: Parsed = {};
 	for (const [name, relation] of Object.entries(RELATIONS)) {
 		const region = owned[relation.region as keyof typeof REGIONS];
@@ -277,12 +285,21 @@ function contractHolds(text: string): boolean {
 	);
 }
 
-/** No runtime is smuggled into a contract-only change: the launcher is absent and the carried owner live. */
+/**
+ * No runtime is smuggled into this contract-only change. The handed launcher is
+ * absent, and the activation relation's two live carried owners are present
+ * and byte-identical to their reviewed digests: the SPEC says they stay live
+ * and unchanged until #362's runtime, which retires `bootstrap.ts` and so
+ * changes these pins as part of its own change.
+ */
 function contractOnly(tree: string): boolean {
-	return (
-		!existsSync(join(tree, ".github/bin/gitjig-bootstrap.mjs")) &&
-		existsSync(join(tree, ".pi/extensions/gitjig/install/bootstrap.ts")) &&
-		existsSync(join(tree, ".pi/extensions/gitjig/install/acquire.ts"))
+	if (existsSync(join(tree, ".github/bin/gitjig-bootstrap.mjs"))) return false;
+	return Object.entries(fixture.carried).every(
+		([path, digest]) =>
+			existsSync(join(tree, path)) &&
+			createHash("sha256")
+				.update(readFileSync(join(tree, path)))
+				.digest("hex") === digest,
 	);
 }
 
@@ -413,6 +430,11 @@ it("the relations are a closed schema: domains, keys, references, headers and pl
 			"<!-- acquisition-relation: extra:start -->\n| a |\n| --- |\n| b |\n<!-- acquisition-relation: extra:end -->\n<!-- acquisition-relation: fallbacks:start -->",
 		],
 		[
+			"an unmatched end marker",
+			"<!-- acquisition-relation: nodes:start -->",
+			"<!-- acquisition-relation: phantom:end -->\n<!-- acquisition-relation: nodes:start -->",
+		],
+		[
 			"the old matrix restored",
 			"<!-- acquisition-relation: nodes:start -->",
 			"<!-- acquisition-process-matrix: start -->\n<!-- acquisition-relation: nodes:start -->",
@@ -453,16 +475,20 @@ it("a contradiction in any region's prose reds, though no table changed", () => 
 it("a runtime file smuggled into the contract-only change reds", () => {
 	const tree = mkdtempSync(join(tmpdir(), "gitjig-acquisition-contract-"));
 	try {
-		for (const file of [".pi/extensions/gitjig/install/bootstrap.ts", ".pi/extensions/gitjig/install/acquire.ts"]) {
+		for (const file of Object.keys(fixture.carried)) {
 			mkdirSync(dirname(join(tree, file)), { recursive: true });
-			writeFileSync(join(tree, file), "// carried\n");
+			writeFileSync(join(tree, file), readFileSync(join(root, file)));
 		}
 		assert.equal(contractOnly(tree), true, "the baseline tree does not hold");
 		mkdirSync(join(tree, ".github/bin"), { recursive: true });
 		writeFileSync(join(tree, ".github/bin/gitjig-bootstrap.mjs"), "// smuggled runtime\n");
 		assert.equal(contractOnly(tree), false, "the handed launcher landed in a contract-only change");
 		rmSync(join(tree, ".github/bin/gitjig-bootstrap.mjs"));
-		rmSync(join(tree, ".pi/extensions/gitjig/install/bootstrap.ts"));
+		// A carried runtime file changed by a single appended line.
+		const carried = join(tree, ".pi/extensions/gitjig/install/bootstrap.ts");
+		writeFileSync(carried, `${readFileSync(carried, "utf8")}\n// runtime mutation\n`);
+		assert.equal(contractOnly(tree), false, "a carried runtime file changed in a contract-only change");
+		rmSync(carried);
 		assert.equal(contractOnly(tree), false, "the carried owner was retired before its runtime");
 	} finally {
 		rmSync(tree, { recursive: true, force: true });

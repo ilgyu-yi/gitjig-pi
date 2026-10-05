@@ -180,5 +180,9 @@
 		"trust": "bc09b1509d0401a34dd2cac20c31fd246e5bce6de0adc7be30571669d738bc96",
 		"binding": "a6d529dbfaa16d0d49b738400fa22f0a72a151880102d252c0499072b4100c59",
 		"host": "ce819d1d6facafd716735ebc694af33cd1cac8a1183bc932a164423e84597b83"
+	},
+	"carried": {
+		".pi/extensions/gitjig/install/bootstrap.ts": "b05c2ce89928f1ecac05efe391d116e3f8377fdd7f432a0bf93ea23caa70ca57",
+		".pi/extensions/gitjig/install/acquire.ts": "d6569e27f6c0ddcb4ce5b04261ee70fa23da39efde9781de6a68edc978b1ad60"
 	}
 }
