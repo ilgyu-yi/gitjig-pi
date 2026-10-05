@@ -618,6 +618,25 @@ describe("cross-surface uniqueness over the governed home (issue #91 AC 2)", () 
 		);
 	});
 
+	// #424: `/delegate`, read off the substrate's WHOLE command list rather than
+	// the governed filter: exactly one row of any surface reports the name, and
+	// that row satisfies both limbs of §4.8's governed-home conjunct.
+	it("delegate is one row across every surface, an extension command in the governed home", () => {
+		const named = commandRows(registrationRun).filter((row) => row.name === "delegate");
+		assert.equal(
+			named.length,
+			1,
+			`delegate rows across all surfaces: ${JSON.stringify(named)}\n${diagnostics(registrationRun)}`,
+		);
+		const [row] = named;
+		assert.equal(row.source, "extension", "delegate is not an extension command");
+		assert.equal(row.scope, "project", "delegate is not project-scoped");
+		assert.ok(
+			row.baseDir !== undefined && governedBaseDirs(registrationFixture).has(row.baseDir),
+			`delegate's baseDir is not the repository's .pi: ${row.baseDir}`,
+		);
+	});
+
 	// INVERSION (both mutant arms): these run against deliberately poisoned
 	// fixtures and assert the DETECTION, so they are GREEN when the equality
 	// matcher has teeth; a red here means the substrate silently deduped the
