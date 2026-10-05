@@ -366,6 +366,15 @@ const SOURCES: readonly { file: string; allow: readonly string[]; allowErrorRead
 	// #263: every notice is a fixed module constant; the rendered trace is
 	// passed whole to one terminal component, never interpolated.
 	{ file: "gitjig/commands/dispatch-trace.ts", allow: [] },
+	{
+		file: "gitjig/commands/delegate.ts",
+		// The command composes one thing: a rendered row, marked as a row. The
+		// mark is this module's own constant, and the row is exactly what the
+		// hub's `piOperatorView` returned, already composed by the hub's one
+		// row composer, which escapes delegate text through the repository's
+		// escaper and bounds it. Its notices are fixed literals (#424).
+		allow: ["VIEW_ROW", "row"],
+	},
 	// Admission and the delegate child compose no interpolated text; every
 	// refusal they surface is a fixed content-free literal.
 	{ file: "gitjig/dispatch/admit.ts", allow: [] },

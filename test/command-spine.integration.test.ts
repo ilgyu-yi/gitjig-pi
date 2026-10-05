@@ -118,6 +118,7 @@ const TEXT_ONLY_SCRIPT = [{ kind: "text" as const, text: "SPINE_RUN_DONE" }];
 /** The expected governed-home multiset — governed commands on their ruled surfaces. */
 const EXPECTED_GOVERNED_ROWS = [
 	"authoring-brief|extension",
+	"delegate|extension",
 	"dispatch-trace|extension",
 	"governance|extension",
 	"land|extension",
@@ -614,6 +615,25 @@ describe("cross-surface uniqueness over the governed home (issue #91 AC 2)", () 
 			`${subjectAbsent("uniqueness", "all governed command assets")} — full-row-multiset equality is what ` +
 				`fails on every collision shape §4.8 measured (within-surface suffixing, cross-surface ` +
 				`side-by-side rows, an alias's extra row) as well as on a missing asset\n${diagnostics(registrationRun)}`,
+		);
+	});
+
+	// #424: `/delegate`, read off the substrate's WHOLE command list rather than
+	// the governed filter: exactly one row of any surface reports the name, and
+	// that row satisfies both limbs of §4.8's governed-home conjunct.
+	it("delegate is one row across every surface, an extension command in the governed home", () => {
+		const named = commandRows(registrationRun).filter((row) => row.name === "delegate");
+		assert.equal(
+			named.length,
+			1,
+			`delegate rows across all surfaces: ${JSON.stringify(named)}\n${diagnostics(registrationRun)}`,
+		);
+		const [row] = named;
+		assert.equal(row.source, "extension", "delegate is not an extension command");
+		assert.equal(row.scope, "project", "delegate is not project-scoped");
+		assert.ok(
+			row.baseDir !== undefined && governedBaseDirs(registrationFixture).has(row.baseDir),
+			`delegate's baseDir is not the repository's .pi: ${row.baseDir}`,
 		);
 	});
 
