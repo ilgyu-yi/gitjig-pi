@@ -24,6 +24,7 @@
  * limits and environments are #362's runtime evidence.
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -36,6 +37,7 @@ const readme = readFileSync(join(root, "README.md"), "utf8");
 const fixture = JSON.parse(readFileSync(join(root, "test/fixtures/adopter-acquisition-contract.json"), "utf8")) as {
 	schemaVersion: number;
 	relations: Record<string, string[][]>;
+	prose: Record<string, string>;
 };
 
 const STAGES = [
@@ -261,6 +263,14 @@ function settled(parsed: Parsed): boolean {
 		has(parsed.predicates, "closure-check", "working-population", "equals", "head-population") &&
 		has(parsed.predicates, "closure-check", "working-bytes", "equals", "head-blob") &&
 		has(parsed.predicates, "closure-check", "population-scope", "admits", "none-other") &&
+		has(parsed.predicates, "closure-check", "head-entry-mode", "is", "regular-blob") &&
+		has(
+			parsed.predicates,
+			"closure-check",
+			"fixed-entry",
+			"equals",
+			".pi/extensions/gitjig/install/provision-cli.ts",
+		) &&
 		// Bounds, by value.
 		JSON.stringify(limit["source-fetch"]) === JSON.stringify([120000, 1048576, 1048576]) &&
 		JSON.stringify(limit["provision-run"]) === JSON.stringify([300000, 1048576, 1048576]) &&
@@ -319,6 +329,32 @@ function settled(parsed: Parsed): boolean {
 	);
 }
 
+/**
+ * Each owned region's prose, with every relation block replaced by its name:
+ * the explanation the tables sit in. It is fixed by digest in the reviewed
+ * projection, so a sentence added, removed or changed anywhere in a region,
+ * including one that contradicts a table, is a drift that fails. That is a
+ * whole-region lock, not a phrase guard: no wording is singled out.
+ */
+function prose(text: string): Record<string, string> | undefined {
+	const owned = regions(text);
+	if (owned === undefined) return undefined;
+	return Object.fromEntries(
+		Object.entries(owned).map(([name, body]) => {
+			const placed = body.replace(
+				/<!-- acquisition-relation: ([a-z-]+):start -->[\s\S]*?<!-- acquisition-relation: \1:end -->/g,
+				(_match, relation: string) => `<relation:${relation}>`,
+			);
+			const normalized = placed
+				.split("\n")
+				.map((line) => line.trimEnd())
+				.join("\n")
+				.trim();
+			return [name, createHash("sha256").update(normalized).digest("hex")];
+		}),
+	);
+}
+
 /** The whole contract: schema, closure, the reviewed projection, and the settled values. */
 function contractHolds(text: string): boolean {
 	const parsed = relations(text);
@@ -326,6 +362,7 @@ function contractHolds(text: string): boolean {
 		parsed !== undefined &&
 		fixture.schemaVersion === 3 &&
 		JSON.stringify(parsed) === JSON.stringify(fixture.relations) &&
+		JSON.stringify(prose(text)) === JSON.stringify(fixture.prose) &&
 		settled(parsed) &&
 		!text.includes("acquisition-process-matrix")
 	);
@@ -450,6 +487,17 @@ it("the settled values hold on their own, so a SPEC and projection drifting toge
 		],
 		["an inherited Node HOME", "| node | env | HOME | launcher-read-HOME |", "| node | env | HOME | caller-value |"],
 		["startup controls claimed as guaranteed", "| node-startup-controls | caller | pre-entry |\n", ""],
+		// Round 2's survivors.
+		[
+			"closure over non-regular entries",
+			"| closure-check | head-entry-mode | is | regular-blob |",
+			"| closure-check | head-entry-mode | is | blob |",
+		],
+		[
+			"no fixed entry",
+			"| closure-check | fixed-entry | equals | .pi/extensions/gitjig/install/provision-cli.ts |\n",
+			"",
+		],
 	] as const) {
 		const drifted = relations(edited(from, to));
 		assert.ok(drifted, `${named}: the drifted relations no longer parse, so this measures the schema instead`);
@@ -506,6 +554,25 @@ it("the relations are a closed schema: domains, keys, references, headers and pl
 		() => `${terminal}\n<!-- acquisition-contract: trust:end -->`,
 	);
 	assert.equal(contractHolds(moved), false, "a relation moved out of its region survived");
+});
+
+it("a contradiction in any region's prose reds, though no table changed", () => {
+	for (const [named, region] of [
+		["a redirect kept after retirement", "launcher"],
+		["an override admitted in prose", "trust"],
+		["a caller target admitted in prose", "binding"],
+		["a second host exception in prose", "host"],
+	] as const) {
+		const end = `<!-- acquisition-contract: ${region}:end -->`;
+		const drifted = edited(end, `The carried bootstrap remains as a redirect after #362.\n${end}`);
+		assert.ok(relations(drifted), `${named}: the tables no longer parse, so this measures the schema instead`);
+		assert.equal(contractHolds(drifted), false, `${named} survived`);
+	}
+	// A word changed inside existing prose, not only a sentence added.
+	assert.equal(
+		contractHolds(edited("Neither exception changes configuration", "Neither exception usually changes configuration")),
+		false,
+	);
 });
 
 it("a runtime file smuggled into the contract-only change reds", () => {
