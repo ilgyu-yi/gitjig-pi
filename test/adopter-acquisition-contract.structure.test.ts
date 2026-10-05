@@ -7,9 +7,17 @@
  * unique keys, and references that resolve (a node an edge names is a node, a
  * cause a node names is a terminal cause). The parsed tuples are then compared
  * whole against `adopter-acquisition-contract.json`, a non-normative projection
- * reviewed with them, and separately against #363's settled values. So a
- * timeout, a cap, a status, an environment entry, an edge or an admission
- * predicate that drifts fails by value, however the surrounding prose reads.
+ * reviewed with them. So any tuple that drifts fails by value, however the
+ * surrounding prose reads.
+ *
+ * Separately, `settled` reads #363's enumerated settlement values off the
+ * parsed tuples, so the SPEC and its projection drifting together still red
+ * for those values: routing, the closed routing projection and its keys, the
+ * pin's identity checks, closure, child limits, the child environments and
+ * exclusions, the temporary artifacts with their parents and modes, the
+ * terminal algebra, cleanup reach and precedence, the residuals, and
+ * activation. Every other tuple is guarded by the projection alone, so changing
+ * it is a contract change visible in both files of the diff.
  *
  * There are no runtime probes here: this is a contract-only change, and the
  * handed launcher does not exist yet. Real Git and provision-child selection,
@@ -110,8 +118,14 @@ const RELATIONS: Record<string, Relation> = {
 	},
 	artifacts: {
 		region: "host",
-		header: ["artifact", "count", "mode", "owner", "linkPolicy"],
-		domains: [SCALAR, ["1", "0-or-more"], ["existing", "0700", "0600"], ["platform", "current-user"], SCALAR],
+		header: ["artifact", "parent", "count", "mode", "owner", "linkPolicy"],
+		domains: [SCALAR, SCALAR, ["1", "0-or-more"], ["existing", "0700", "0600"], ["platform", "current-user"], SCALAR],
+		key: [0],
+	},
+	residuals: {
+		region: "host",
+		header: ["residual", "holder", "scope"],
+		domains: [SCALAR, ["caller", "host"], SCALAR],
 		key: [0],
 	},
 	terminal: {
@@ -266,8 +280,42 @@ function settled(parsed: Parsed): boolean {
 		has(parsed.environment, "git", "env", "GIT_CONFIG_NOSYSTEM", "1") &&
 		has(parsed.exclusions, "git", "inherited-environment") &&
 		has(parsed.exclusions, "node", "inherited-environment") &&
+		// The closed routing projection: exactly its four source keys and its values.
+		JSON.stringify(
+			parsed.predicates
+				.filter(([node, subject]) => node === "pin-admission" && subject === "source-key")
+				.map(([, , , key]) => key),
+		) === JSON.stringify(["provider", "host", "owner", "repository"]) &&
+		has(parsed.predicates, "pin-admission", "source-key-count", "equals", "4") &&
+		has(parsed.predicates, "pin-admission", "schemaVersion", "equals", "1") &&
+		has(parsed.predicates, "pin-admission", "provider", "equals", "github") &&
+		has(parsed.predicates, "pin-admission", "host", "equals", "github.com") &&
+		has(parsed.predicates, "pin-admission", "revision", "is", "lowercase-40-hex") &&
+		// The pin's identity, checked before the open and after the read.
+		has(parsed.predicates, "pin-admission", "pin-bytes", "equals", "head-blob") &&
+		has(parsed.predicates, "pin-admission", "pathname-identity", "equals", "before-open-and-after-read") &&
+		has(parsed.predicates, "pin-admission", "descriptor-identity", "equals", "pathname-identity-after-read") &&
+		// Every child's stdin is EOF, and the Node child's HOME is the launcher's own read.
+		parsed.limits.every(([, stdin]) => stdin === "eof") &&
+		has(parsed.environment, "node", "env", "HOME", "launcher-read-HOME") &&
+		// The temporary exception: one child of the base, everything else inside it, owner-private.
+		JSON.stringify(parsed.artifacts) ===
+			JSON.stringify([
+				["temporary-base", "none", "1", "existing", "platform", "realpath-absolute-existing-non-link-directory"],
+				["acquisition-child", "temporary-base", "1", "0700", "current-user", "non-link"],
+				["created-directory", "acquisition-child-subtree", "0-or-more", "0700", "current-user", "non-link"],
+				["created-file", "acquisition-child-subtree", "0-or-more", "0600", "current-user", "non-link"],
+			]) &&
+		// Silent success, and one content-free line for every refusal.
+		parsed.terminal.every(
+			([cause, , stdout, stderr]) => stdout === "empty" && stderr === (cause === "success" ? "empty" : "cause-line"),
+		) &&
+		// What the caller's own invocation does is held by the caller, not guaranteed.
+		has(parsed.residuals, "node-startup-controls", "caller", "pre-entry") &&
+		has(parsed.residuals, "executable-selection", "caller", "pre-entry") &&
 		// Activation: settled now, live only with its runtime.
-		has(parsed.activation, ".github/bin/gitjig-bootstrap.mjs", "settled-pending-runtime", "#362", "none")
+		has(parsed.activation, ".github/bin/gitjig-bootstrap.mjs", "settled-pending-runtime", "#362", "none") &&
+		has(parsed.activation, ".pi/extensions/gitjig/install/bootstrap.ts", "live", "none", "#362")
 	);
 }
 
@@ -369,6 +417,39 @@ it("the settled values hold on their own, so a SPEC and projection drifting toge
 			"| .github/bin/gitjig-bootstrap.mjs | settled-pending-runtime |",
 			"| .github/bin/gitjig-bootstrap.mjs | live |",
 		],
+		// Round 1's coordinated-drift survivors, each now read off the tuples.
+		[
+			"a source key dropped",
+			"| pin-admission | source-key-count | equals | 4 |",
+			"| pin-admission | source-key-count | equals | 3 |",
+		],
+		[
+			"a fifth source key",
+			"| pin-admission | source-key | includes | repository |",
+			"| pin-admission | source-key | includes | repository |\n| pin-admission | source-key | includes | branch |",
+		],
+		[
+			"a looser acquisition child",
+			"| acquisition-child | temporary-base | 1 | 0700 |",
+			"| acquisition-child | temporary-base | 1 | 0600 |",
+		],
+		[
+			"a looser created directory",
+			"| created-directory | acquisition-child-subtree | 0-or-more | 0700 |",
+			"| created-directory | acquisition-child-subtree | 0-or-more | 0600 |",
+		],
+		[
+			"a created file beside the child",
+			"| created-file | acquisition-child-subtree |",
+			"| created-file | temporary-base |",
+		],
+		[
+			"pin identity read once",
+			"| pin-admission | pathname-identity | equals | before-open-and-after-read |",
+			"| pin-admission | pathname-identity | equals | before-open |",
+		],
+		["an inherited Node HOME", "| node | env | HOME | launcher-read-HOME |", "| node | env | HOME | caller-value |"],
+		["startup controls claimed as guaranteed", "| node-startup-controls | caller | pre-entry |\n", ""],
 	] as const) {
 		const drifted = relations(edited(from, to));
 		assert.ok(drifted, `${named}: the drifted relations no longer parse, so this measures the schema instead`);

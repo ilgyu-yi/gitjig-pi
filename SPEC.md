@@ -47,25 +47,25 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | §4 | Substrate and install contract | 825 |
 | &nbsp;&nbsp;§4.1 | Namespaces | 829 |
 | &nbsp;&nbsp;§4.2 | Target-parameterization | 853 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 1027 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1033 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1037 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 1041 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 1057 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1108 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1165 |
-| §5 | Cross-cutting contracts | 1290 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1294 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1300 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1304 |
-| &nbsp;&nbsp;§5.4 | Work language | 1308 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1312 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1330 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1342 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1352 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1360 |
-| §6 | Self-governance milestone | 1376 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1387 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 1029 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1035 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1039 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 1043 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 1059 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1121 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1178 |
+| §5 | Cross-cutting contracts | 1303 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1307 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1313 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1317 |
+| &nbsp;&nbsp;§5.4 | Work language | 1321 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1325 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1343 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1355 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1365 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1373 |
+| §6 | Self-governance milestone | 1389 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1400 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -925,7 +925,9 @@ Admission predicates — each is a necessary condition at its node, refusing wit
 | pin-admission | pin-ancestors | are | non-link |
 | pin-admission | pin-open | is | no-follow-one-link-current-user-owned |
 | pin-admission | pin-bytes | at-most | 1048576 |
-| pin-admission | pin-bytes | equals | head-blob-under-path-and-descriptor-identity |
+| pin-admission | pin-bytes | equals | head-blob |
+| pin-admission | pathname-identity | equals | before-open-and-after-read |
+| pin-admission | descriptor-identity | equals | pathname-identity-after-read |
 | pin-admission | projection-encoding | is | utf-8-json-object |
 | pin-admission | schemaVersion | equals | 1 |
 | pin-admission | source-key | includes | provider |
@@ -1001,7 +1003,7 @@ Environment profiles — `launcher` names the values the launcher itself reads; 
 | git | config | http.followRedirects | false |
 | node | env | PATH | launcher-read-PATH |
 | node | env | LC_ALL | C |
-| node | env | HOME | target-home |
+| node | env | HOME | launcher-read-HOME |
 <!-- acquisition-relation: environment:end -->
 
 <!-- acquisition-relation: exclusions:start -->
@@ -1021,7 +1023,7 @@ Environment profiles — `launcher` names the values the launcher itself reads; 
 | node | loader-injection |
 <!-- acquisition-relation: exclusions:end -->
 
-Every other inherited value is non-authorizing and is never forwarded. The launcher does not claim that the selected Node process's own pre-entry environment is closed: the caller's selection of `node` through `PATH`, and any `HOME`-sensitive behaviour of a selected executable, act before or beneath the handed bytes and remain explicit executable-selection residuals, not acquisition authority. Operands and child diagnostics never reach the terminal.
+Every other inherited value is non-authorizing and is never forwarded. The launcher does not claim that the selected Node process's own pre-entry environment is closed: what acts before or beneath the handed bytes is §4.7's residual relation, held by the caller, not acquisition authority. Operands and child diagnostics never reach the terminal.
 <!-- acquisition-contract: trust:end -->
 
 ### 4.3 PR-based installs
@@ -1057,21 +1059,32 @@ The norm is **procedural today**, enforced at review (§2.3), with one landed in
 ### 4.7 Host boundary
 
 <!-- acquisition-contract: host:start -->
-Installation and operation leave the host untouched outside governed repositories: no home-directory configuration, shell login file, global version-control setting, PATH registration, service, or auto-start hook. Two bounded exceptions exist. First, §1.4's state-domain recovery allowance may create and update only §5.5's exact owner-only `gitjig/recovery` directory chain and direct allowance leaves in the resolved account state domain. Second, first-clone acquisition may create only the disposable artifacts of the relation below, under the platform temporary base it resolves once. Neither exception changes configuration, registration, service, repository metadata, or another host path. Package-manager invocation and privilege escalation remain outside installer actions. Disabling the shell is ceasing to invoke it.
+Installation and operation leave the host untouched outside governed repositories: no home-directory configuration, shell login file, global version-control setting, PATH registration, service, or auto-start hook. Two bounded exceptions exist. First, §1.4's state-domain recovery allowance may create and update only §5.5's exact owner-only `gitjig/recovery` directory chain and direct allowance leaves in the resolved account state domain. Second, first-clone acquisition may create only the disposable artifacts of the relation below: one child of the platform temporary base it resolves once, and nothing outside that child's subtree. Neither exception changes configuration, registration, service, repository metadata, or another host path. Package-manager invocation and privilege escalation remain outside installer actions. Disabling the shell is ceasing to invoke it.
 
 First-clone artifacts — the shared operating-system base may be sticky or world-writable; every artifact from the first successfully created child onward is owned as the row states, `current-user` where a uid exists:
 
 <!-- acquisition-relation: artifacts:start -->
-| artifact | count | mode | owner | linkPolicy |
-| --- | --- | --- | --- | --- |
-| temporary-base | 1 | existing | platform | realpath-absolute-existing-non-link-directory |
-| acquisition-child | 1 | 0700 | current-user | non-link |
-| created-directory | 0-or-more | 0700 | current-user | non-link |
-| created-file | 0-or-more | 0600 | current-user | non-link |
+| artifact | parent | count | mode | owner | linkPolicy |
+| --- | --- | --- | --- | --- | --- |
+| temporary-base | none | 1 | existing | platform | realpath-absolute-existing-non-link-directory |
+| acquisition-child | temporary-base | 1 | 0700 | current-user | non-link |
+| created-directory | acquisition-child-subtree | 0-or-more | 0700 | current-user | non-link |
+| created-file | acquisition-child-subtree | 0-or-more | 0600 | current-user | non-link |
 <!-- acquisition-relation: artifacts:end -->
 
-The acquisition child is named `gitjig-acquire-*`. Cleanup responsibility begins with that first artifact, cleanup is attempted on every controlled terminal (§4.2's `reaches` edge), and every owned artifact is confirmed absent before success. Filesystem failure, abrupt process death or host termination may leave a residual; abrupt termination is outside the controlled terminal guarantee.
+The acquisition child is named `gitjig-acquire-*`. These limits, the cleanup obligation and the terminal algebra below govern the handed launcher's own writes and its controlled outcomes. What the caller's own invocation does before or beneath those bytes is held by the residual relation, not guaranteed here:
 
+<!-- acquisition-relation: residuals:start -->
+| residual | holder | scope |
+| --- | --- | --- |
+| executable-selection | caller | pre-entry |
+| home-sensitive-behaviour | caller | selected-executable |
+| node-startup-controls | caller | pre-entry |
+| filesystem-failure | host | after-controlled-terminal |
+| abrupt-termination | host | outside-controlled-terminal |
+<!-- acquisition-relation: residuals:end -->
+
+`node-startup-controls` are the selected runtime's own startup inputs inherited from the caller, such as `NODE_OPTIONS` or `NODE_V8_COVERAGE`: they act before the handed bytes execute, so neither a write they cause nor an exit they force is the launcher's write or a controlled terminal, exactly as the caller's selection of `node` is not acquisition authority. A caller that wants them absent invokes the launcher from an emptied environment; the contract neither requires nor attests that. Cleanup responsibility begins with that first artifact, cleanup is attempted on every controlled terminal (§4.2's `reaches` edge), and every owned artifact is confirmed absent before success. 
 **First-clone terminal algebra.** Success has empty stdout and stderr. Every refusal has empty stdout and writes exactly one ASCII stderr line `gitjig-bootstrap: <cause>` followed by a line feed, rendering no operand or child diagnostic:
 
 <!-- acquisition-relation: terminal:start -->

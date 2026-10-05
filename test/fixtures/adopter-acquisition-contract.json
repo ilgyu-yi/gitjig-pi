@@ -51,7 +51,9 @@
 			["pin-admission", "pin-ancestors", "are", "non-link"],
 			["pin-admission", "pin-open", "is", "no-follow-one-link-current-user-owned"],
 			["pin-admission", "pin-bytes", "at-most", "1048576"],
-			["pin-admission", "pin-bytes", "equals", "head-blob-under-path-and-descriptor-identity"],
+			["pin-admission", "pin-bytes", "equals", "head-blob"],
+			["pin-admission", "pathname-identity", "equals", "before-open-and-after-read"],
+			["pin-admission", "descriptor-identity", "equals", "pathname-identity-after-read"],
 			["pin-admission", "projection-encoding", "is", "utf-8-json-object"],
 			["pin-admission", "schemaVersion", "equals", "1"],
 			["pin-admission", "source-key", "includes", "provider"],
@@ -110,7 +112,7 @@
 			["git", "config", "http.followRedirects", "false"],
 			["node", "env", "PATH", "launcher-read-PATH"],
 			["node", "env", "LC_ALL", "C"],
-			["node", "env", "HOME", "target-home"]
+			["node", "env", "HOME", "launcher-read-HOME"]
 		],
 		"exclusions": [
 			["git", "inherited-environment"],
@@ -127,10 +129,17 @@
 			["node", "loader-injection"]
 		],
 		"artifacts": [
-			["temporary-base", "1", "existing", "platform", "realpath-absolute-existing-non-link-directory"],
-			["acquisition-child", "1", "0700", "current-user", "non-link"],
-			["created-directory", "0-or-more", "0700", "current-user", "non-link"],
-			["created-file", "0-or-more", "0600", "current-user", "non-link"]
+			["temporary-base", "none", "1", "existing", "platform", "realpath-absolute-existing-non-link-directory"],
+			["acquisition-child", "temporary-base", "1", "0700", "current-user", "non-link"],
+			["created-directory", "acquisition-child-subtree", "0-or-more", "0700", "current-user", "non-link"],
+			["created-file", "acquisition-child-subtree", "0-or-more", "0600", "current-user", "non-link"]
+		],
+		"residuals": [
+			["executable-selection", "caller", "pre-entry"],
+			["home-sensitive-behaviour", "caller", "selected-executable"],
+			["node-startup-controls", "caller", "pre-entry"],
+			["filesystem-failure", "host", "after-controlled-terminal"],
+			["abrupt-termination", "host", "outside-controlled-terminal"]
 		],
 		"terminal": [
 			["success", "0", "empty", "empty"],
