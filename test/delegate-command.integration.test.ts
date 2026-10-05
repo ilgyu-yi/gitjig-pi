@@ -794,12 +794,28 @@ setInterval(() => {}, 1000);`,
 	assert.equal(outcome.diagnostic.code, "ABORTED", "the operator's abort did not end the run");
 	// The command itself called no publication writer.
 	assert.deepEqual(command.writes, [], "the command wrote to the session");
-	// The operator's marks reached the child, and only the child.
-	const sent = readFileSync(received, "utf8");
-	assert.ok(
-		sent.includes(`steer ${OPERATOR_MARK}`) && sent.includes(`follow ${OPERATOR_MARK}`),
-		"steer text missed the child",
+	// The child received exactly what the operator sent, as the acts that
+	// carry it, and nothing the view observed: no delegate row goes back in,
+	// appended to an operator's message or in a frame of its own.
+	const frames = readFileSync(received, "utf8")
+		.split("\n")
+		.filter(Boolean)
+		.map((line) => JSON.parse(line) as { type: string; message?: string });
+	assert.deepEqual(
+		frames.filter((frame) => frame.type !== "prompt").map((frame) => [frame.type, frame.message]),
+		[
+			["steer", `steer ${OPERATOR_MARK}`],
+			["follow_up", `follow ${OPERATOR_MARK}`],
+			["clear_queue", undefined],
+		],
+		"the child did not receive exactly the operator's acts",
 	);
+	for (const frame of frames)
+		assert.equal(
+			JSON.stringify(frame).includes(DELEGATE_MARK),
+			false,
+			"an observed delegate row was sent back to the child",
+		);
 	// Neither mark appears in what crosses to the parent, or in any record the
 	// dispatcher keeps; its content-free writes after the abort are allowed.
 	const kept = (directory: string): string[] =>
@@ -989,6 +1005,18 @@ test("baseline-first private-copy mutants: the hub's narrowed controls and its l
 		armReadsOnlyTheHub,
 		[[HUB, "(item.session === undefined ? [] : [item.id])", "[item.id]"]],
 		"an unbound session listed",
+	);
+	// An observed row republished into what the child receives (round 1's mutant).
+	await armFails(
+		armPublishesNothing,
+		[
+			[
+				HUB,
+				"\t\t\t\tcommand: (type, message) => session.command(type, message),\n",
+				'\t\t\t\tcommand: (type, message) => session.command(type, `${message} ${item.lines[0] ?? ""}`),\n',
+			],
+		],
+		"an observed delegate row sent back to the child",
 	);
 	// An ended session leaves the listing through two statements, so the pair is
 	// the mutant: each alone is inert, because either one excludes it.
