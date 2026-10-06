@@ -169,6 +169,8 @@ type GitPlan = {
 	dirty?: boolean;
 	// Git's answer replaced, for an invocation whose arguments end so.
 	say?: Record<string, string>;
+	// Every invocation reads its stdin to end of file before it runs.
+	readsStdin?: boolean;
 };
 
 function gitSeam({
@@ -191,6 +193,7 @@ const plan = ${JSON.stringify(plan)};
 let args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(log)}, args.join(" ") + "\\n");
 appendFileSync(${JSON.stringify(envLog)}, "== " + args.join(" ") + "\\n" + Object.keys(process.env).sort().map((key) => key + "=" + process.env[key]).join("\\n") + "\\n");
+if (plan.readsStdin) require("node:fs").readFileSync(0);
 for (const [tail, text] of Object.entries(plan.say ?? {}))
 	if (args.join(" ").endsWith(tail)) {
 		process.stdout.write(text + "\\n");
@@ -521,6 +524,25 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "source-unavailable", 69, label);
 		invariant(f, before, label);
 	}
+	// The source children, argument for argument: an empty template, one revision, no tags.
+	const exact = fixture(launcher);
+	assert.equal(launch(exact).status, 0, "the exact source run failed");
+	const asked = readFileSync(exact.log, "utf8").split("\n");
+	const rows =
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects";
+	const snapshotDir =
+		asked
+			.find((line) => / init /.test(line))
+			?.split(" ")
+			.at(-1) ?? "";
+	assert.match(snapshotDir, /gitjig-acquire-[^/]+\/snapshot$/, "the init child was not observed");
+	for (const expected of [
+		`${rows} init -q --template= -- ${snapshotDir}`,
+		`${rows} -C ${snapshotDir} remote add origin https://github.com/o/r`,
+		`${rows} -C ${snapshotDir} fetch -q --no-tags --depth=1 origin ${exact.revision}`,
+		`${rows} -C ${snapshotDir} checkout -q --detach ${exact.revision}`,
+	])
+		assert.equal(asked.filter((line) => line === expected).length, 1, `the source child was not exactly: ${expected}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -561,6 +583,8 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 		"the provision child's environment is not its profile",
 	);
 	assert.equal(reached.env.HOME, f.root, "the provision child's HOME is not the launcher's own read");
+	const callerPath = `${f.bin}:${process.env.PATH ?? ""}`;
+	assert.equal(reached.env.PATH, callerPath, "the provision child's PATH is not the launcher's own read");
 	assert.equal(reached.env.LC_ALL, "C");
 	// Each Git child's own environment, read where it ran.
 	const blocks = readFileSync(join(f.root, "git-env.log"), "utf8")
@@ -604,6 +628,13 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 			/gitjig-acquire-[^/]+\/gitconfig$/,
 			`a Git child's global config is not the owned file: ${args}`,
 		);
+	}
+	// Every Git child's values, row by row.
+	for (const { args, env } of blocks) {
+		assert.equal(env.PATH, `${f.bin}:${process.env.PATH ?? ""}`, `a Git child's PATH: ${args}`);
+		assert.equal(env.LC_ALL, "C", `a Git child's LC_ALL: ${args}`);
+		assert.equal(env.GIT_CONFIG_NOSYSTEM, "1", `a Git child's GIT_CONFIG_NOSYSTEM: ${args}`);
+		assert.equal(env.GIT_TERMINAL_PROMPT, "0", `a Git child's GIT_TERMINAL_PROMPT: ${args}`);
 	}
 	// And every Git invocation opens with the profile's config rows, exactly.
 	const rows =
@@ -779,6 +810,51 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 	} finally {
 		chmodSync(locked.scratch, 0o700);
 	}
+	// The fallback relation, row by row: an error no node names, at each stage.
+	const unknown = fixture(launcher);
+	const unknownBefore = snapshot(unknown.target);
+	refused(
+		launchWith(unknown, `launcherPath: ${JSON.stringify(join(unknown.target, ".github/bin/absent.mjs"))}`),
+		"invalid-input",
+		64,
+		"an unknown admission error",
+	);
+	invariant(unknown, unknownBefore, "an unknown admission error");
+	// After creation, before identity: the owned config already exists, so its exclusive create throws.
+	const preIdentity = fixture(launcher);
+	const preIdentityBefore = snapshot(preIdentity.target);
+	refused(
+		launchWith(
+			preIdentity,
+			"",
+			'const mkdtemp = fs.mkdtempSync; fs.mkdtempSync = (...args) => { const made = mkdtemp(...args); fs.writeFileSync(`${made}/gitconfig`, "[core]\\n"); return made; }; syncBuiltinESMExports();',
+		),
+		"snapshot-identity-mismatch",
+		65,
+		"a pre-identity error",
+	);
+	invariant(preIdentity, preIdentityBefore, "a pre-identity error");
+	// After identity: the provision spawn returns something that is not a child.
+	const postIdentity = fixture(launcher);
+	refused(
+		launchWith(
+			postIdentity,
+			"nodeTimeoutMs: 2000, spawn: (file, args, options) => (file === process.execPath ? {} : realSpawn(file, args, options))",
+			FAKE_CHILD,
+		),
+		"provision-refused",
+		70,
+		"a post-identity error",
+	);
+	assert.deepEqual(readdirSync(postIdentity.scratch), [], "a post-identity error: the child was not removed");
+	// A removal that throws is still a cleanup that did not confirm absence.
+	const throwingRemove = fixture(launcher);
+	refused(
+		launchWith(throwingRemove, 'remove: () => { throw new Error("EBUSY"); }'),
+		"cleanup-failed",
+		74,
+		"a removal that threw",
+	);
 	// A base that resolves but cannot be inspected: the pre-creation temporary error.
 	const opaque = fixture(launcher);
 	const opaqueBase = join(opaque.root, "opaque-base");
@@ -809,6 +885,116 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 
 // ---------------------------------------------------------------------------
 // Criterion 4: the production bounds and the terminal algebra, by value.
+
+// ---------------------------------------------------------------------------
+// The child-outcome relation: every way a bounded child ends, at its node's cause.
+
+/**
+ * A child that never ran a process: it reports exactly the events given. Its
+ * pid is above any platform's pid range, so a group signal to it reaches nothing.
+ */
+const FAKE_CHILD = [
+	'const { spawn: realSpawn } = await import("node:child_process");',
+	'const { EventEmitter } = await import("node:events");',
+	'const { PassThrough, Writable } = await import("node:stream");',
+	"const fake = (events) => { const child = new EventEmitter(); child.pid = 2 ** 22 + 7; child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.stdin = new Writable({ write: (_c, _e, done) => done() }); child.kill = () => true; setImmediate(() => events(child)); return child; };",
+].join("\n");
+
+/** The provision child replaced by a fake that plays `events`; every Git child is real. */
+const provisionPlays = (events: string) =>
+	`spawn: (file, args, options) => (file === process.execPath ? fake(${events}) : realSpawn(file, args, options))`;
+
+async function armMapsEveryChildOutcome(launcher: string): Promise<void> {
+	// Output past the bound fails the child even when it then exits 0, on either stream.
+	for (const stream of ["stdout", "stderr"] as const) {
+		const f = fixture(launcher);
+		refused(
+			launchWith(
+				f,
+				`streamBytes: 1024, ${provisionPlays(`(child) => { child.${stream}.write("x".repeat(2048)); setTimeout(() => child.emit("close", 0, null), 100); }`)}`,
+				FAKE_CHILD,
+			),
+			"provision-refused",
+			70,
+			`an overflowing ${stream} that exits 0`,
+		);
+		assert.deepEqual(readdirSync(f.scratch), [], `an overflowing ${stream}: the child was not removed`);
+	}
+	// A spawn that fails asynchronously: its error event, at the node's cause.
+	const erring = fixture(launcher);
+	refused(
+		launchWith(
+			erring,
+			provisionPlays(
+				'(child) => { child.emit("error", Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" })); child.emit("close", -2, null); }',
+			),
+			FAKE_CHILD,
+		),
+		"provision-refused",
+		70,
+		"a provision that failed to spawn",
+	);
+	// And for real: no Git on the caller's PATH fails the first admission child.
+	const gitless = fixture(launcher);
+	const gitlessBefore = snapshot(gitless.target);
+	refused(launch(gitless, { PATH: gitless.scratch }), "invalid-input", 64, "no Git on PATH");
+	invariant(gitless, gitlessBefore, "no Git on PATH");
+	// A spawn that throws synchronously: still the node's own cause.
+	const throwing = fixture(launcher);
+	refused(
+		launchWith(
+			throwing,
+			'spawn: (file, args, options) => { if (args.includes("init")) throw new Error("spawn EAGAIN"); return realSpawn(file, args, options); }',
+			FAKE_CHILD,
+		),
+		"source-unavailable",
+		69,
+		"a Git spawn that threw",
+	);
+	// A child holding a grandchild: the bound ends the whole group, not just the child.
+	const pidFile = join(tmpdir(), `gitjig-362-grandchild-${process.pid}`);
+	const holding = fixture(launcher, {
+		source: (work) =>
+			writeFileSync(
+				join(work, ".pi/extensions/gitjig/install/provision-cli.ts"),
+				[
+					'import { spawn } from "node:child_process";',
+					'import { writeFileSync } from "node:fs";',
+					'const grandchild = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "inherit" });',
+					`writeFileSync(${JSON.stringify(pidFile)}, String(grandchild.pid));`,
+					"setInterval(() => {}, 1000);",
+					"",
+				].join("\n"),
+			),
+	});
+	const started = Date.now();
+	try {
+		refused(launchWith(holding, "nodeTimeoutMs: 1500"), "provision-refused", 70, "a provision holding a grandchild");
+		assert.ok(Date.now() - started < 20_000, "the grandchild outlived the bound: the group was not ended");
+		const grandchild = Number(readFileSync(pidFile, "utf8"));
+		// The grandchild was killed with its group; its reaping by init may trail briefly.
+		let alive = true;
+		for (let tries = 0; alive && tries < 50; tries++) {
+			try {
+				process.kill(grandchild, 0);
+				Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+			} catch {
+				alive = false;
+			}
+		}
+		assert.equal(alive, false, "the grandchild survived the bound");
+	} finally {
+		rmSync(pidFile, { force: true });
+	}
+	// Each child's stdin is closed, so a child that reads it reaches end of file.
+	const reading = fixture(launcher, { plan: { readsStdin: true } });
+	const readingRun = launchWith(reading, "gitTimeoutMs: 10000");
+	assert.equal(
+		readingRun.status,
+		0,
+		`a child reading its stdin did not end (stderr ${JSON.stringify(readingRun.stderr)})`,
+	);
+}
 
 async function armPinsTheBounds(launcher: string): Promise<void> {
 	const module = (await import(`${launcher}?bounds=${Date.now()}`)) as {
@@ -846,6 +1032,7 @@ const ARMS = {
 	armConfirmsTheClosure,
 	armOrdersTheTerminals,
 	armOwnsEveryArtifact,
+	armMapsEveryChildOutcome,
 	armPinsTheBounds,
 } as const;
 
@@ -882,7 +1069,7 @@ async function killed(arm: (launcher: string) => Promise<void>, from: string, to
 
 test(
 	"#362: baseline-first private-copy mutants, each killed by the arm that owns it",
-	{ timeout: 900_000 },
+	{ timeout: 1_800_000 },
 	async () => {
 		// Pre-reread execution: provision before the closure is confirmed.
 		await killed(
@@ -1101,6 +1288,87 @@ test(
 			"\t\tfalse\n",
 			"a child at another mode admitted",
 		);
+		// Round 6: the child-outcome relation, row by row.
+		await killed(
+			armMapsEveryChildOutcome,
+			'\t\tchild.on("error", () => {\n\t\t\tclearTimeout(timer);\n\t\t\trejectRun(new Refusal(cause));\n\t\t});\n',
+			"",
+			"a spawn error left unhandled",
+		);
+		await killed(
+			armMapsEveryChildOutcome,
+			"\t\t} catch {\n\t\t\trejectRun(new Refusal(cause));\n\t\t\treturn;\n\t\t}",
+			"\t\t} catch {}",
+			"a synchronous spawn failure left to the fallback",
+		);
+		await killed(
+			armMapsEveryChildOutcome,
+			"if (failed || signal",
+			"if (signal",
+			"an overflow forgiven by a clean exit",
+		);
+		await killed(
+			armMapsEveryChildOutcome,
+			"if (counts[name] > seams.streamBytes) kill();",
+			'if (name === "stdout" && counts[name] > seams.streamBytes) kill();',
+			"stderr left unbounded",
+		);
+		await killed(
+			armMapsEveryChildOutcome,
+			'process.kill(-child.pid, "SIGKILL");',
+			'child.kill("SIGKILL");',
+			"only the child ended",
+		);
+		await killed(armMapsEveryChildOutcome, "detached: true", "detached: false", "a child in the launcher's own group");
+		await killed(armMapsEveryChildOutcome, "\t\tchild.stdin.end();\n", "", "a child's stdin left open");
+		// The second sweep: fallbacks, cleanup, profile values and exact source argv.
+		await killed(
+			armOrdersTheTerminals,
+			'cause = error instanceof Refusal ? error.refusal : "invalid-input";',
+			'cause = error instanceof Refusal ? error.refusal : "temporary-storage-unavailable";',
+			"an unknown admission error misnamed",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			'state.confirmed ? "provision-refused" : "snapshot-identity-mismatch"',
+			'"provision-refused"',
+			"a pre-identity error misnamed",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			'state.confirmed ? "provision-refused" : "snapshot-identity-mismatch"',
+			'"snapshot-identity-mismatch"',
+			"a post-identity error misnamed",
+		);
+		await killed(armOrdersTheTerminals, "\tstate.confirmed = true;\n", "", "identity never recorded");
+		await killed(armOrdersTheTerminals, 'flag: "wx"', 'flag: "w"', "an existing owned config reused");
+		await killed(
+			armOrdersTheTerminals,
+			"\t\tseams.remove(child);\n\t} catch {}",
+			"\t\tseams.remove(child);\n\t} finally {}",
+			"a throwing removal escaped",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'node: { PATH: read.PATH ?? ""',
+			'node: { PATH: "/usr/bin:/bin"',
+			"the provision child's PATH replaced",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'GIT_TERMINAL_PROMPT: "0"',
+			'GIT_TERMINAL_PROMPT: "1"',
+			"Git allowed to prompt",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'GIT_CONFIG_NOSYSTEM: "1"',
+			'GIT_CONFIG_NOSYSTEM: "0"',
+			"the system config read",
+		);
+		await killed(armSourcesOnlyTheProjection, '"--depth=1",', "", "the whole history fetched");
+		await killed(armSourcesOnlyTheProjection, '"--no-tags",', "", "tags fetched");
+		await killed(armSourcesOnlyTheProjection, '"--template=",', "", "a template installed");
 		// Round 5's boundary.
 		await killed(
 			armConfirmsTheClosure,
