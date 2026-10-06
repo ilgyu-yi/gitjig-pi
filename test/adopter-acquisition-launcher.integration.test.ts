@@ -26,6 +26,7 @@ import {
 	chmodSync,
 	copyFileSync,
 	existsSync,
+	linkSync,
 	lstatSync,
 	mkdirSync,
 	mkdtempSync,
@@ -432,6 +433,12 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 		"a linked launcher path",
 	);
 	invariant(viaLink, viaLinkBefore, "a linked launcher path");
+	// Byte-identical and HEAD-tracked, but not one-link: the extra link is outside the target.
+	const multiplyLinked = fixture(launcher);
+	linkSync(join(multiplyLinked.target, ".pi/gitjig.pin.json"), join(multiplyLinked.root, "pin-hardlink"));
+	const multiplyLinkedBefore = snapshot(multiplyLinked.target);
+	refused(launch(multiplyLinked), "invalid-input", 64, "a multiply-linked pin");
+	invariant(multiplyLinked, multiplyLinkedBefore, "a multiply-linked pin");
 	// A pin that is not the caller's own: the harness reports another uid.
 	const foreign = fixture(launcher);
 	const foreignBefore = snapshot(foreign.target);
@@ -1288,6 +1295,8 @@ test(
 			"\t\tfalse\n",
 			"a child at another mode admitted",
 		);
+		// Round 7: pin-open's one-link requirement stands independently.
+		await killed(armAdmitsOnlyTheCommittedPin, "opened.nlink !== 1 || ", "", "a multiply-linked pin admitted");
 		// Round 6: the child-outcome relation, row by row.
 		await killed(
 			armMapsEveryChildOutcome,
