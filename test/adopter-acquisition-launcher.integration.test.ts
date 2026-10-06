@@ -260,6 +260,13 @@ if (plan.omittedMember && args.includes("ls-tree") && args.includes("-r")) {
 	process.exit(listed.status ?? 1);
 }
 const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
+// The modes Git itself created, before anything normalizes them: the artifact
+// relation holds from the first created child onward, not from provision.
+if (args.includes("init") && run.status === 0) {
+	const at = args[args.length - 1];
+	const mode = (p) => { try { return require("node:fs").lstatSync(p).mode & 0o777; } catch { return null; } };
+	appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), dir: mode(require("node:path").join(at, ".git")), file: mode(require("node:path").join(at, ".git/config")) }) + "\\n");
+}
 // After the checkout: the created store declares an object store outside itself.
 if (plan.alternates && args.includes("checkout") && run.status === 0) {
 	const info = require("node:path").join(args[args.indexOf("-C") + 1], ".git/objects/info");
@@ -990,6 +997,19 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 		kind === "dir" ? mode !== 0o700 : kind === "file" ? mode !== 0o600 : true,
 	);
 	assert.deepEqual(wrong, [], "a created entry is not owner-private at the relation's mode");
+	// Those modes are read at provision, after normalization. The relation holds from
+	// the first created child, so the modes Git created under the launcher's own mask
+	// are read where they were made: right after the snapshot repository was created.
+	const created = readFileSync(join(f.root, "git-env.log.modes.jsonl"), "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as { args: string; dir: number | null; file: number | null });
+	assert.equal(created.length, 1, "the created repository was not observed exactly once");
+	assert.deepEqual(
+		created.map(({ dir, file }) => [dir, file]),
+		[[0o700, 0o600]],
+		"Git created the snapshot repository outside the relation's modes",
+	);
 	// An acquired entry another user owns: the harness reports another owner for the snapshot.
 	const foreign = fixture(launcher);
 	const foreignBefore = snapshot(foreign.target);
@@ -1475,6 +1495,13 @@ test(
 			"invalid pin bytes decoded with replacement",
 		);
 		// Governed round 2's locale: each profile fixes LC_ALL rather than forwarding it.
+		// The mask the created children inherit, read where they are created.
+		await killed(
+			armOwnsEveryArtifact,
+			"\tprocess.umask(0o077);\n",
+			"\tprocess.umask(0o022);\n",
+			"a child created under a group- and world-readable mask",
+		);
 		// A variable the platform adds too, with another value: a name-only
 		// subtraction hides it on a host that adds that name, and a host that does
 		// not add it refuses the extra name instead. Either way the arm decides.
