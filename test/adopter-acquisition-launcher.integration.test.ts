@@ -106,6 +106,7 @@ function fixture(
 		plan?: GitPlan;
 		targetName?: string;
 		targetFormat?: "sha1" | "sha256";
+		repository?: string;
 	} = {},
 ): Fixture {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-362-"));
@@ -129,7 +130,7 @@ function fixture(
 	copyFileSync(launcher, join(target, ".github/bin/gitjig-bootstrap.mjs"));
 	const pin =
 		options.pin?.(revision) ??
-		`${JSON.stringify({ schemaVersion: 1, source: { provider: "github", host: "github.com", owner: "o", repository: "r" }, revision, payload: [] })}\n`;
+		`${JSON.stringify({ schemaVersion: 1, source: { provider: "github", host: "github.com", owner: "o", repository: options.repository ?? "r" }, revision, payload: [] })}\n`;
 	writeFileSync(join(target, ".pi/gitjig.pin.json"), pin);
 	git(root, "init", "-q", `--object-format=${options.targetFormat ?? "sha1"}`, target);
 	git(target, "add", "-A");
@@ -140,7 +141,14 @@ function fixture(
 	const log = join(root, "git.log");
 	writeFileSync(
 		join(bin, "git"),
-		gitSeam({ real, bare, log, envLog: join(root, "git-env.log"), plan: options.plan ?? {} }),
+		gitSeam({
+			real,
+			bare,
+			log,
+			envLog: join(root, "git-env.log"),
+			plan: options.plan ?? {},
+			sourceUrl: `https://github.com/o/${options.repository ?? "r"}`,
+		}),
 	);
 	chmodSync(join(bin, "git"), 0o755);
 	const scratch = join(root, "tmp");
@@ -180,12 +188,14 @@ function gitSeam({
 	log,
 	envLog,
 	plan,
+	sourceUrl,
 }: {
 	real: string;
 	bare: string;
 	log: string;
 	envLog: string;
 	plan: GitPlan;
+	sourceUrl: string;
 }) {
 	return `#!${process.execPath}
 const { spawnSync } = require("node:child_process");
@@ -206,7 +216,7 @@ if (args.includes("fetch")) {
 	if (plan.fetch === "overflow") process.stdout.write("x".repeat(4096));
 	if (plan.fetch === "sleep") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
 	env = { ...env, GIT_ALLOW_PROTOCOL: "file" };
-	args = ["-c", "url.file://${bare}.insteadOf=https://github.com/o/r", ...args];
+	args = ["-c", ${JSON.stringify(`url.file://${bare}.insteadOf=${sourceUrl}`)}, ...args];
 }
 // After the fetch, so the snapshot exists: the repository's origin is changed before the checkout.
 if (plan.origin && args.includes("checkout"))
@@ -310,6 +320,36 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	// The closure check is the launcher's own node: it hashes in-process and spawns no Git.
 	assert.equal(asked.filter((line) => / hash-object /.test(line)).length, 0, "the closure check spawned a Git child");
 	assert.equal(asked.filter((line) => / fetch /.test(line)).length, 1, "more than one fetch");
+	// The whole closed Git-child sequence: no unowned call may hide behind a
+	// different command name in the launcher's closure node.
+	const rows =
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects ";
+	const init = asked.find((line) => / init /.test(line));
+	assert.ok(init, "init was not observed");
+	const destination = init.slice(init.indexOf(" init -q --template= -- ") + " init -q --template= -- ".length);
+	assert.deepEqual(
+		asked,
+		[
+			`${rows}-C ${realpathSync(f.target)} rev-parse --show-toplevel`,
+			`${rows}-C ${realpathSync(f.target)} ls-tree -z HEAD -- .pi/gitjig.pin.json`,
+			`${rows}-C ${realpathSync(f.target)} cat-file blob HEAD:.pi/gitjig.pin.json`,
+			`${rows}init -q --template= -- ${destination}`,
+			`${rows}-C ${destination} remote add origin https://github.com/o/r`,
+			`${rows}-C ${destination} fetch -q --no-tags --depth=1 origin ${f.revision}`,
+			`${rows}-C ${destination} checkout -q --detach ${f.revision}`,
+			...[
+				"rev-parse --git-common-dir",
+				"rev-parse --show-toplevel",
+				"rev-parse HEAD",
+				"rev-parse --symbolic-full-name HEAD",
+				"remote get-url origin",
+				"status --porcelain=v1 --untracked-files=all --ignored=matching",
+				"rev-parse --show-object-format",
+				"ls-tree -r -z --full-tree HEAD -- .pi/extensions/gitjig.ts .pi/extensions/gitjig",
+			].map((args) => `${rows}-C ${destination} ${args}`),
+		],
+		"the acquisition spawned a child outside its closed node-owned sequence",
+	);
 	// A target in the longer object format admits its pin the same way.
 	const sha256 = fixture(launcher, { targetFormat: "sha256" });
 	const sha256Run = launch(sha256);
@@ -531,6 +571,13 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "source-unavailable", 69, label);
 		invariant(f, before, label);
 	}
+	// Repository spelling is literal: .git belongs to the name, not an optional suffix.
+	const literalSuffix = fixture(launcher, { repository: "r.git" });
+	const suffixRun = launch(literalSuffix);
+	assert.equal(suffixRun.status, 0, `literal .git repository was refused: ${suffixRun.stderr}`);
+	const suffixReached = JSON.parse(readFileSync(literalSuffix.record, "utf8")) as { argv: string[] };
+	assert.equal(suffixReached.argv[suffixReached.argv.indexOf("--source") + 1], "https://github.com/o/r.git");
+	assert.ok(readFileSync(literalSuffix.log, "utf8").includes("remote add origin https://github.com/o/r.git\n"));
 	// The source children, argument for argument: an empty template, one revision, no tags.
 	const exact = fixture(launcher);
 	assert.equal(launch(exact).status, 0, "the exact source run failed");
@@ -1300,6 +1347,19 @@ test(
 			"\t\t(created.mode & 0o777) !== 0o700\n",
 			"\t\tfalse\n",
 			"a child at another mode admitted",
+		);
+		// Round 9: closed child ownership and literal source spelling.
+		await killed(
+			armSucceedsExactly,
+			"\tconst head = new Map();",
+			'\tawait shown(["rev-parse", "HEAD"]);\n\tconst head = new Map();',
+			"an unowned closure Git child",
+		);
+		await killed(
+			armSourcesOnlyTheProjection,
+			"${pin.owner}/${pin.repository}",
+			'${pin.owner}/${pin.repository.replace(/\\.git$/, "")}',
+			"a literal repository suffix stripped",
 		);
 		// No historical shell-key exceptions: the seam is Node, not a shell.
 		for (const key of ["PWD", "SHLVL", "_", "OLDPWD"])
