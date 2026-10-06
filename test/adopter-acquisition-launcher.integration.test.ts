@@ -597,7 +597,23 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: revision.slice(1) }),
 		],
 		["not an object", () => "[]"],
-		["not UTF-8", () => Buffer.from([0x7b, 0xff, 0x7d])],
+		// These bytes are not UTF-8 and not JSON either, so they measure the parse,
+		// not the decoder.
+		["neither UTF-8 nor JSON", () => Buffer.from([0x7b, 0xff, 0x7d])],
+		// The decoder alone: one invalid byte inside a string the projection ignores.
+		// Decoded with replacement these bytes are valid JSON naming a valid source,
+		// so only a fatal decode refuses them.
+		[
+			"an invalid byte inside an ignored string",
+			(revision: string) => {
+				const bytes = Buffer.from(
+					`${JSON.stringify({ schemaVersion: 1, source: source({}), revision, payload: ["x"] })}\n`,
+					"utf8",
+				);
+				bytes[bytes.lastIndexOf(0x78)] = 0xff;
+				return bytes;
+			},
+		],
 		["an oversized pin", () => `${" ".repeat(1048576)}{}`],
 	] as const) {
 		const f = fixture(launcher, { pin });
@@ -1428,6 +1444,12 @@ test(
 		// Round 12c's alternates row: each call site, and each of the helper's two
 		// decisions, refuses something no other statement does.
 		await killed(armAdmitsOnlyTheCommittedPin, "name.length === 0 || ", "", "an empty routing name admitted");
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'new TextDecoder("utf-8", { fatal: true })',
+			'new TextDecoder("utf-8", { fatal: false })',
+			"invalid pin bytes decoded with replacement",
+		);
 		// Governed round 2's locale: each profile fixes LC_ALL rather than forwarding it.
 		await killed(
 			armBuildsEachChildEnvironment,
