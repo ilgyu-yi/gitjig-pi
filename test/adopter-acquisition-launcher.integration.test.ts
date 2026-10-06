@@ -507,6 +507,24 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 	);
 	assert.equal(snapshot(exchanged.target).includes("swap.json"), false, "the exchange did not happen");
 	assert.equal(existsSync(exchanged.record), false, "an exchanged pin reached provision");
+	// The same byte-identical replacement, but in the window between the pathname's
+	// own stat and the open: only the two before-anchored identity comparisons can
+	// refuse it, and either of them does.
+	const preOpen = fixture(launcher);
+	const preOpenPin = join(preOpen.target, ".pi/gitjig.pin.json");
+	writeFileSync(join(preOpen.target, ".pi/swap.json"), readFileSync(preOpenPin));
+	refused(
+		launchWith(
+			preOpen,
+			"",
+			`const openSync = fs.openSync; let swapped = false; fs.openSync = (...args) => { if (!swapped && String(args[0]).endsWith("gitjig.pin.json")) { swapped = true; fs.renameSync(${JSON.stringify(join(preOpen.target, ".pi/swap.json"))}, ${JSON.stringify(preOpenPin)}); } return openSync(...args); }; syncBuiltinESMExports();`,
+		),
+		"invalid-input",
+		64,
+		"a pin exchanged before its open",
+	);
+	assert.equal(snapshot(preOpen.target).includes("swap.json"), false, "the pre-open exchange did not happen");
+	assert.equal(existsSync(preOpen.record), false, "a pin exchanged before its open reached provision");
 	// Git names another toplevel than the one the launcher derives.
 	const elsewhere = fixture(launcher, { plan: { say: { "target rev-parse --show-toplevel": "/" } } });
 	const elsewhereBefore = snapshot(elsewhere.target);
@@ -1444,6 +1462,12 @@ test(
 		// Round 12c's alternates row: each call site, and each of the helper's two
 		// decisions, refuses something no other statement does.
 		await killed(armAdmitsOnlyTheCommittedPin, "name.length === 0 || ", "", "an empty routing name admitted");
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'\t\tif (opened.dev !== before.dev || opened.ino !== before.ino || opened.size > MAX_PIN_BYTES) refuse("invalid-input");\n\t\tconst bytes = Buffer.alloc(MAX_PIN_BYTES + 1);\n\t\tlet length = 0;\n\t\tfor (;;) {\n\t\t\tconst read = readSync(descriptor, bytes, length, bytes.length - length, null);\n\t\t\tif (read === 0) break;\n\t\t\tlength += read;\n\t\t\tif (length > MAX_PIN_BYTES) refuse("invalid-input");\n\t\t}\n\t\tconst after = lstatSync(pathname);\n\t\tconst descriptorAfter = fstatSync(descriptor);\n\t\tif (after.dev !== before.dev || after.ino !== before.ino) refuse("invalid-input");\n',
+			'\t\tif (opened.size > MAX_PIN_BYTES) refuse("invalid-input");\n\t\tconst bytes = Buffer.alloc(MAX_PIN_BYTES + 1);\n\t\tlet length = 0;\n\t\tfor (;;) {\n\t\t\tconst read = readSync(descriptor, bytes, length, bytes.length - length, null);\n\t\t\tif (read === 0) break;\n\t\t\tlength += read;\n\t\t\tif (length > MAX_PIN_BYTES) refuse("invalid-input");\n\t\t}\n\t\tconst after = lstatSync(pathname);\n\t\tconst descriptorAfter = fstatSync(descriptor);\n',
+			"both before-open identity comparisons removed (each decides the pre-open swap alone)",
+		);
 		await killed(
 			armAdmitsOnlyTheCommittedPin,
 			'new TextDecoder("utf-8", { fatal: true })',
