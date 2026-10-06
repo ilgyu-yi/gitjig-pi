@@ -52,6 +52,16 @@ after(() => {
 	for (const root of roots) rmSync(root, { recursive: true, force: true });
 });
 
+/**
+ * Every Git seam's own failures, in one file shared by all fixtures. The corpus
+ * claims each named mutant is killed by its owner arm's property; a seam that
+ * cannot observe what it was asked to observe records it here, so `killed` can
+ * refuse to count a harness fault as a kill.
+ */
+const FAULTS = join(mkdtempSync(join(tmpdir(), "gitjig-362-faults-")), "faults.jsonl");
+roots.push(join(FAULTS, ".."));
+writeFileSync(FAULTS, "");
+
 const GIT_ENV = {
 	...process.env,
 	GIT_AUTHOR_NAME: "t",
@@ -184,6 +194,8 @@ type GitPlan = {
 	// Every invocation reads its stdin to end of file before it runs.
 	readsStdin?: boolean;
 	omittedMember?: string;
+	// An external object store the snapshot declares once its checkout exists.
+	alternates?: string;
 };
 
 function gitSeam({
@@ -208,7 +220,20 @@ const plan = ${JSON.stringify(plan)};
 let args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(log)}, args.join(" ") + "\\n");
 appendFileSync(${JSON.stringify(envLog)}, "== " + args.join(" ") + "\\n" + Object.keys(process.env).sort().map((key) => key + "=" + process.env[key]).join("\\n") + "\\n");
-appendFileSync(${JSON.stringify(`${envLog}.config.jsonl`)}, JSON.stringify({ args: args.join(" "), bytes: require("node:fs").readFileSync(process.env.GIT_CONFIG_GLOBAL).toString("base64") }) + "\\n");
+// Real Git reads an absent or unset global config as empty rather than failing,
+// so this observer does too: only another failure is the harness's own, and it
+// is recorded as a fault instead of breaking the child under observation.
+let bytes = null;
+let fault = null;
+if (typeof process.env.GIT_CONFIG_GLOBAL === "string") {
+	try {
+		bytes = require("node:fs").readFileSync(process.env.GIT_CONFIG_GLOBAL).toString("base64");
+	} catch (error) {
+		if (error.code !== "ENOENT") fault = String(error);
+	}
+}
+appendFileSync(${JSON.stringify(`${envLog}.config.jsonl`)}, JSON.stringify({ args: args.join(" "), bytes, fault }) + "\\n");
+if (fault !== null) appendFileSync(${JSON.stringify(FAULTS)}, JSON.stringify({ args: args.join(" "), fault }) + "\\n");
 if (plan.readsStdin) require("node:fs").readFileSync(0);
 for (const [tail, text] of Object.entries(plan.say ?? {}))
 	if (args.join(" ").endsWith(tail)) {
@@ -235,6 +260,12 @@ if (plan.omittedMember && args.includes("ls-tree") && args.includes("-r")) {
 	process.exit(listed.status ?? 1);
 }
 const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
+// After the checkout: the created store declares an object store outside itself.
+if (plan.alternates && args.includes("checkout") && run.status === 0) {
+	const info = require("node:path").join(args[args.indexOf("-C") + 1], ".git/objects/info");
+	require("node:fs").mkdirSync(info, { recursive: true });
+	require("node:fs").writeFileSync(require("node:path").join(info, "alternates"), plan.alternates + "\\n");
+}
 // After the checkout: an untracked file outside the module population.
 if (plan.dirty && args.includes("checkout") && run.status === 0)
 	require("node:fs").writeFileSync(require("node:path").join(args[args.indexOf("-C") + 1], "untracked.txt"), "x\\n");
@@ -712,13 +743,17 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 	const configs = readFileSync(join(f.root, "git-env.log.config.jsonl"), "utf8")
 		.trim()
 		.split("\n")
-		.map((line) => JSON.parse(line) as { args: string; bytes: string });
+		.map((line) => JSON.parse(line) as { args: string; bytes: string | null; fault: string | null });
 	assert.deepEqual(
 		configs.map(({ args }) => args),
 		blocks.map(({ args }) => args),
 		"a config observation is missing",
 	);
-	for (const { args, bytes } of configs) assert.equal(bytes, "", `a Git child's owned config is not empty: ${args}`);
+	for (const { args, bytes, fault } of configs) {
+		assert.equal(fault, null, `the seam could not observe a Git child's config: ${args}`);
+		// Absent and unset are both recorded as no bytes, exactly as Git reads them.
+		assert.equal(bytes, "", `a Git child's owned config is not empty: ${args}`);
+	}
 	// Every Git child's values, row by row.
 	for (const { args, env } of blocks) {
 		assert.equal(env.PATH, `${f.bin}:${process.env.PATH ?? ""}`, `a Git child's PATH: ${args}`);
@@ -731,6 +766,68 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects ";
 	for (const { args } of blocks)
 		assert.ok(args.startsWith(rows), `a Git child lacks the profile's config rows: ${args}`);
+	// Last, because it writes to the logs just read: the seam and real Git agree
+	// that an absent global config is empty rather than a failure. When they
+	// disagreed, a mutant that only moved this path red this arm on the seam's own
+	// error, before any profile assertion could decide anything.
+	const absent = join(f.root, "no-such-gitconfig");
+	for (const command of [join(f.bin, "git"), execFileSync("which", ["git"], { encoding: "utf8" }).trim()]) {
+		const probe = spawnSync(command, ["-C", f.target, "rev-parse", "--show-toplevel"], {
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH ?? "",
+				LC_ALL: "C",
+				GIT_CONFIG_NOSYSTEM: "1",
+				GIT_CONFIG_GLOBAL: absent,
+				GIT_TERMINAL_PROMPT: "0",
+			},
+		});
+		assert.equal(probe.status, 0, `an absent global config broke ${command}: ${probe.stderr}`);
+	}
+	assert.equal(readFileSync(FAULTS, "utf8"), "", "the seam recorded a fault of its own");
+}
+
+/**
+ * Criterion 4: the exclusions relation's `alternates` row, for both Git profiles.
+ * Git honours an object database's own `objects/info/alternates` whatever its
+ * environment holds, so no profile row can exclude it: the launcher reads the
+ * declaration itself, for the target it admits and for the store it creates.
+ */
+async function armExcludesAlternateObjectStores(launcher: string): Promise<void> {
+	// The target's entire object database moved outside the target, reachable only
+	// through the declaration left behind.
+	const external = fixture(launcher);
+	const externalHead = git(external.target, "rev-parse", "HEAD");
+	const store = join(external.root, "external-objects");
+	renameSync(join(external.target, ".git/objects"), store);
+	mkdirSync(join(external.target, ".git/objects/info"), { recursive: true });
+	writeFileSync(join(external.target, ".git/objects/info/alternates"), `${store}\n`);
+	// The objects really are outside the target, so what follows is the
+	// declaration's refusal and not an absent-object accident: Git itself still
+	// names HEAD here, and only through that store.
+	assert.equal(git(external.target, "rev-parse", "HEAD"), externalHead, "the external store is not serving HEAD");
+	assert.deepEqual(readdirSync(join(external.target, ".git/objects")), ["info"], "an object stayed in the target");
+	const externalBefore = snapshot(external.target);
+	refused(launch(external), "invalid-input", 64, "a target declaring an alternate store");
+	invariant(external, externalBefore, "a target declaring an alternate store");
+	// The store this acquisition creates, declaring an alternate after its checkout
+	// and before the closure check reads one object.
+	const created = fixture(launcher, { plan: { alternates: "/nowhere/objects" } });
+	const createdBefore = snapshot(created.target);
+	refused(launch(created), "snapshot-identity-mismatch", 65, "a snapshot declaring an alternate store");
+	invariant(created, createdBefore, "a snapshot declaring an alternate store");
+	// A target whose `.git` is a gitdir pointer keeps its object database
+	// elsewhere, so this process cannot read the declaration at all: the row is
+	// unproven, and an unproven row refuses.
+	const pointer = fixture(launcher);
+	const pointerHead = git(pointer.target, "rev-parse", "HEAD");
+	const elsewhere = join(pointer.root, "target-gitdir");
+	renameSync(join(pointer.target, ".git"), elsewhere);
+	writeFileSync(join(pointer.target, ".git"), `gitdir: ${elsewhere}\n`);
+	assert.equal(git(pointer.target, "rev-parse", "HEAD"), pointerHead, "the pointer does not resolve");
+	const pointerBefore = snapshot(pointer.target);
+	refused(launch(pointer), "invalid-input", 64, "a target whose object database is elsewhere");
+	invariant(pointer, pointerBefore, "a target whose object database is elsewhere");
 }
 
 // ---------------------------------------------------------------------------
@@ -1163,6 +1260,7 @@ const ARMS = {
 	armAdmitsOnlyTheCommittedPin,
 	armSourcesOnlyTheProjection,
 	armBuildsEachChildEnvironment,
+	armExcludesAlternateObjectStores,
 	armConfirmsTheClosure,
 	armOrdersTheTerminals,
 	armOwnsEveryArtifact,
@@ -1191,10 +1289,17 @@ function mutant(from: string, to: string): string {
 }
 
 async function killed(arm: (launcher: string) => Promise<void>, from: string, to: string, named: string) {
+	const before = readFileSync(FAULTS, "utf8");
 	await assert.rejects(
 		() => arm(mutant(from, to)),
 		(error: unknown) => {
 			assert.ok(error instanceof assert.AssertionError, `${named}: the arm failed for another reason: ${error}`);
+			// A seam that broke under the mutant proves nothing about the property.
+			assert.equal(
+				readFileSync(FAULTS, "utf8"),
+				before,
+				`${named}: the arm red on a harness fault, not on its own property`,
+			);
 			return true;
 		},
 		`${named}: the owner arm still passed`,
@@ -1306,6 +1411,32 @@ test(
 			'\t\t"git-admission": git(devNull),',
 			'\t\t"git-admission": git(join(tmpdir(), "hostile-config")),',
 			"the admission child given another global config",
+		);
+		// Round 12c's alternates row: each call site, and each of the helper's two
+		// decisions, refuses something no other statement does.
+		await killed(
+			armExcludesAlternateObjectStores,
+			'\trefuseAlternates(join(top, ".git"), "invalid-input");\n',
+			"",
+			"the target's own declaration never read",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			'\trefuseAlternates(commonDir, "snapshot-identity-mismatch");\n',
+			"",
+			"the created store's declaration never read",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			"\tif (declared !== undefined) refuse(cause);\n",
+			"",
+			"a declared alternate store admitted",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			"\t\trefuse(cause);\n\t}\n\tif (declared !== undefined) refuse(cause);",
+			"\t\tdeclared = undefined;\n\t}\n\tif (declared !== undefined) refuse(cause);",
+			"an unreadable declaration taken as an absent one",
 		);
 		await killed(
 			armOwnsEveryArtifact,

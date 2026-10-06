@@ -149,6 +149,25 @@ const GIT_CONFIG = [
 
 const isInside = (child, parent) => child === parent || child.startsWith(parent + sep);
 
+/**
+ * The exclusions relation's `alternates` row, for both Git profiles. Git honours
+ * an object database's own `objects/info/alternates` whatever its environment
+ * holds, so no profile row can exclude it: the declaration is read here, in this
+ * process, and any alternate store refuses before a Git child can consume it.
+ */
+function refuseAlternates(gitDir, cause) {
+	let declared;
+	try {
+		declared = lstatSync(join(gitDir, "objects", "info", "alternates"), { throwIfNoEntry: false });
+	} catch {
+		// Unreadable is not absent, and a `.git` that is not its own directory keeps
+		// its object database elsewhere: either way this process cannot read the
+		// declaration, so the row is unproven rather than met.
+		refuse(cause);
+	}
+	if (declared !== undefined) refuse(cause);
+}
+
 /** Git's own output with its one line terminator removed: a path may end in a space. */
 const line = (bytes) => bytes.toString("utf8").replace(/\n$/, "");
 
@@ -250,6 +269,9 @@ export async function acquire(argv, read, seams) {
 	const launcherStats = lstatSync(launcher);
 	if (!launcherStats.isFile() || launcherStats.isSymbolicLink()) refuse("invalid-input");
 	const top = resolve(dirname(launcher), "..", "..");
+	// Before the first child that reads an object: the target's own database
+	// declares no store outside it.
+	refuseAlternates(join(top, ".git"), "invalid-input");
 	const admission = profiles(read, devNull)["git-admission"];
 	const admissionGit = (args) =>
 		bounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args], {
@@ -315,6 +337,9 @@ export async function acquireIn(state, seams) {
 	const commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));
 	const workTree = realpathSync(await shown(["rev-parse", "--show-toplevel"]));
 	if (!isInside(commonDir, real) || workTree !== real) refuse("snapshot-identity-mismatch");
+	// The same row for the store this acquisition created, whose objects the
+	// closure check and provision then read.
+	refuseAlternates(commonDir, "snapshot-identity-mismatch");
 	if ((await shown(["rev-parse", "HEAD"])) !== pin.revision) refuse("snapshot-identity-mismatch");
 	// Detached: `rev-parse --symbolic-full-name HEAD` prints `HEAD` itself only then.
 	if ((await shown(["rev-parse", "--symbolic-full-name", "HEAD"])) !== "HEAD") refuse("snapshot-identity-mismatch");
