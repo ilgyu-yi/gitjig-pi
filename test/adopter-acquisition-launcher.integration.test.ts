@@ -89,7 +89,9 @@ const recordingProvision = (record: string) =>
 		"\tif (stats.isDirectory()) for (const name of readdirSync(path)) visit(join(path, name), `${relative}/${name}`);",
 		"};",
 		'visit(process.cwd(), ".");',
-		`writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), env: process.env, cwd: process.cwd(), modes }));`,
+		"const snapshotModes = modes.splice(0);",
+		'visit(join(process.cwd(), ".."), ".");',
+		`writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), env: process.env, cwd: process.cwd(), modes: snapshotModes, artifactModes: modes }));`,
 		'process.stdout.write("provision: done\\n");',
 		"",
 	].join("\n");
@@ -829,9 +831,15 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 	});
 	const run = launch(f);
 	assert.equal(run.status, 0, `acquisition failed (stderr ${JSON.stringify(run.stderr)})`);
-	const { modes } = JSON.parse(readFileSync(f.record, "utf8")) as { modes: [string, string, number][] };
+	const { artifactModes: modes } = JSON.parse(readFileSync(f.record, "utf8")) as {
+		artifactModes: [string, string, number][];
+	};
 	assert.ok(
-		modes.some(([path]) => path === "./tools/run.sh"),
+		modes.some(([path]) => path === "./gitconfig"),
+		"the owned config was not observed",
+	);
+	assert.ok(
+		modes.some(([path]) => path === "./snapshot/tools/run.sh"),
 		"the executable was not acquired",
 	);
 	const wrong = modes.filter(([, kind, mode]) =>
@@ -895,6 +903,28 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 		source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/install/provision-cli.ts"), "process.exit(2);\n"),
 	});
 	refused(launchWith(both, "remove: () => {}"), "cleanup-failed", 74, "a refusal whose cleanup failed");
+	// Exercise every other post-creation cause with cleanup deliberately failing,
+	// not just success and provision-refused. These cases retain artifacts by design.
+	for (const [label, options, prelude] of [
+		["source-unavailable", { plan: { fetch: "signal" as const } }, ""],
+		["snapshot-identity-mismatch", { plan: { attached: true } }, ""],
+		[
+			"temporary-storage-unavailable",
+			{},
+			"const mkdtemp = fs.mkdtempSync; fs.mkdtempSync = (...args) => { const made = mkdtemp(...args); fs.chmodSync(made, 0o755); return made; }; syncBuiltinESMExports();",
+		],
+	] as const) {
+		const simultaneous = fixture(launcher, options);
+		const before = snapshot(simultaneous.target);
+		refused(launchWith(simultaneous, "remove: () => {}", prelude), "cleanup-failed", 74, `cleanup overriding ${label}`);
+		assert.equal(snapshot(simultaneous.target), before, `cleanup overriding ${label}: the target changed`);
+		assert.equal(existsSync(simultaneous.record), false, `cleanup overriding ${label}: provision ran`);
+		assert.equal(
+			readdirSync(simultaneous.scratch).length,
+			1,
+			`cleanup overriding ${label}: the retained artifact was not observed`,
+		);
+	}
 	// Cleanup that cannot even look at the child: still the cause line and its status.
 	const locked = fixture(launcher);
 	try {
@@ -1392,6 +1422,25 @@ test(
 			"\t\tfalse\n",
 			"a child at another mode admitted",
 		);
+		// Round 11: all artifacts, including the config sibling, and each cleanup cause.
+		await killed(
+			armOwnsEveryArtifact,
+			"\townedSubtree(child, uid);",
+			"\townedSubtree(child, uid);\n\tchmodSync(config, 0o644);",
+			"a non-private owned config",
+		);
+		for (const cause of [
+			"source-unavailable",
+			"snapshot-identity-mismatch",
+			"temporary-storage-unavailable",
+			"provision-refused",
+		])
+			await killed(
+				armOrdersTheTerminals,
+				'\t\tif (!cleanup(state.child, seams)) cause = "cleanup-failed";',
+				`\t\tif (!cleanup(state.child, seams) && cause !== "${cause}") cause = "cleanup-failed";`,
+				`cleanup failed to override ${cause}`,
+			);
 		// Round 10: population, owned-empty config and Git metadata invariance.
 		await killed(
 			armConfirmsTheClosure,
