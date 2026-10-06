@@ -683,6 +683,9 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 		GIT_ALTERNATE_OBJECT_DIRECTORIES: "/hostile",
 		NODE_PATH: "/hostile",
 		HOSTILE_MARK: "1",
+		// Never the value the profiles fix, so forwarding the caller's own locale
+		// cannot satisfy the assertions below by coincidence.
+		LC_ALL: "tr_TR.UTF-8",
 	});
 	assert.equal(run.status, 0, `the hostile ambient broke acquisition (stderr ${JSON.stringify(run.stderr)})`);
 	// The platform's own additions, measured with an empty-environment control child.
@@ -1425,6 +1428,19 @@ test(
 		// Round 12c's alternates row: each call site, and each of the helper's two
 		// decisions, refuses something no other statement does.
 		await killed(armAdmitsOnlyTheCommittedPin, "name.length === 0 || ", "", "an empty routing name admitted");
+		// Governed round 2's locale: each profile fixes LC_ALL rather than forwarding it.
+		await killed(
+			armBuildsEachChildEnvironment,
+			'\t\tLC_ALL: "C",\n\t\tGIT_CONFIG_NOSYSTEM: "1",',
+			'\t\tLC_ALL: read.LC_ALL ?? "C",\n\t\tGIT_CONFIG_NOSYSTEM: "1",',
+			"a Git child given the caller's locale",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'node: { PATH: read.PATH ?? "", LC_ALL: "C", HOME: read.HOME ?? "" },',
+			'node: { PATH: read.PATH ?? "", LC_ALL: read.LC_ALL ?? "C", HOME: read.HOME ?? "" },',
+			"the provision child given the caller's locale",
+		);
 		await killed(
 			armExcludesAlternateObjectStores,
 			'\trefuseAlternates(join(top, ".git"), "invalid-input");\n',
