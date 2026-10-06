@@ -606,10 +606,9 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 				),
 			};
 		});
-	const shellOwn = new Set(["PWD", "SHLVL", "_", "OLDPWD"]);
 	const keysOf = (env: Record<string, string>) =>
 		Object.keys(env)
-			.filter((key) => !platform.has(key) && !shellOwn.has(key))
+			.filter((key) => !platform.has(key))
 			.sort();
 	const profile = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "LC_ALL", "PATH"];
 	const admission = blocks.filter(
@@ -959,9 +958,10 @@ async function armMapsEveryChildOutcome(launcher: string): Promise<void> {
 		"a Git spawn that threw",
 	);
 	// A child holding a grandchild: the bound ends the whole group, not just the child.
-	const pidFile = join(tmpdir(), `gitjig-362-grandchild-${process.pid}`);
+	let pidFile = "";
 	const holding = fixture(launcher, {
-		source: (work) =>
+		source: (work) => {
+			pidFile = join(work, "..", "grandchild.pid");
 			writeFileSync(
 				join(work, ".pi/extensions/gitjig/install/provision-cli.ts"),
 				[
@@ -972,8 +972,14 @@ async function armMapsEveryChildOutcome(launcher: string): Promise<void> {
 					"setInterval(() => {}, 1000);",
 					"",
 				].join("\n"),
-			),
+			);
+		},
 	});
+	assert.equal(
+		realpathSync(join(pidFile, "..")),
+		realpathSync(holding.root),
+		"the PID artifact must belong to the fixture root",
+	);
 	const started = Date.now();
 	try {
 		refused(launchWith(holding, "nodeTimeoutMs: 1500"), "provision-refused", 70, "a provision holding a grandchild");
@@ -1295,6 +1301,14 @@ test(
 			"\t\tfalse\n",
 			"a child at another mode admitted",
 		);
+		// No historical shell-key exceptions: the seam is Node, not a shell.
+		for (const key of ["PWD", "SHLVL", "_", "OLDPWD"])
+			await killed(
+				armBuildsEachChildEnvironment,
+				'\tconst git = (globalConfig) => ({\n\t\tPATH: read.PATH ?? "",',
+				`\tconst git = (globalConfig) => ({\n\t\t${key}: "injected",\n\t\tPATH: read.PATH ?? "",`,
+				`an unlisted ${key} given to Git`,
+			);
 		// Round 7: pin-open's one-link requirement stands independently.
 		await killed(armAdmitsOnlyTheCommittedPin, "opened.nlink !== 1 || ", "", "a multiply-linked pin admitted");
 		// Round 6: the child-outcome relation, row by row.
