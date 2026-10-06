@@ -60,6 +60,7 @@ const GIT_ENV = {
 	GIT_COMMITTER_EMAIL: "t@t",
 	GIT_CONFIG_NOSYSTEM: "1",
 	GIT_CONFIG_GLOBAL: "/dev/null",
+	GIT_OPTIONAL_LOCKS: "0",
 };
 const git = (cwd: string, ...args: string[]) =>
 	execFileSync("git", ["-c", "commit.gpgsign=false", ...args], { cwd, env: GIT_ENV, encoding: "utf8" }).trim();
@@ -180,6 +181,7 @@ type GitPlan = {
 	say?: Record<string, string>;
 	// Every invocation reads its stdin to end of file before it runs.
 	readsStdin?: boolean;
+	omittedMember?: string;
 };
 
 function gitSeam({
@@ -204,6 +206,7 @@ const plan = ${JSON.stringify(plan)};
 let args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(log)}, args.join(" ") + "\\n");
 appendFileSync(${JSON.stringify(envLog)}, "== " + args.join(" ") + "\\n" + Object.keys(process.env).sort().map((key) => key + "=" + process.env[key]).join("\\n") + "\\n");
+appendFileSync(${JSON.stringify(`${envLog}.config.jsonl`)}, JSON.stringify({ args: args.join(" "), bytes: require("node:fs").readFileSync(process.env.GIT_CONFIG_GLOBAL).toString("base64") }) + "\\n");
 if (plan.readsStdin) require("node:fs").readFileSync(0);
 for (const [tail, text] of Object.entries(plan.say ?? {}))
 	if (args.join(" ").endsWith(tail)) {
@@ -223,6 +226,12 @@ if (plan.origin && args.includes("checkout"))
 	spawnSync(${JSON.stringify(real)}, ["-C", args[args.indexOf("-C") + 1], "remote", "set-url", "origin", plan.origin], { env });
 if (plan.attached && args.includes("checkout"))
 	args = args.flatMap((arg) => (arg === "--detach" ? ["-B", "main"] : [arg]));
+if (plan.omittedMember && args.includes("ls-tree") && args.includes("-r")) {
+	const listed = spawnSync(${JSON.stringify(real)}, args, { env });
+	process.stdout.write(listed.stdout.toString("utf8").split("\\0").filter((entry) => !entry.endsWith("\\t" + plan.omittedMember)).join("\\0"));
+	process.stderr.write(listed.stderr);
+	process.exit(listed.status ?? 1);
+}
 const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
 // After the checkout: an untracked file outside the module population.
 if (plan.dirty && args.includes("checkout") && run.status === 0)
@@ -273,7 +282,22 @@ const refused = (run: Run, cause: string, status: number, label: string) => {
 /** The target as it stands: every tracked and untracked byte, and Git's view of it. */
 function snapshot(target: string): string {
 	const files = git(target, "ls-files", "-c", "-o", "-z").split("\0").filter(Boolean).sort();
+	// Include the complete fixture tree, especially .git/config and the index;
+	// path/type/mode/bytes are observed without following links. Git probes use
+	// GIT_OPTIONAL_LOCKS=0 so the observer does not refresh target metadata.
+	const tree: unknown[] = [];
+	const walk = (relative: string) => {
+		const at = join(target, relative);
+		const stats = lstatSync(at);
+		if (stats.isSymbolicLink()) tree.push([relative, "link", stats.mode & 0o777, readlinkSync(at)]);
+		else if (stats.isDirectory()) {
+			tree.push([relative, "dir", stats.mode & 0o777]);
+			for (const name of readdirSync(at).sort()) walk(relative === "." ? name : `${relative}/${name}`);
+		} else tree.push([relative, "file", stats.mode & 0o777, readFileSync(at).toString("base64")]);
+	};
+	walk(".");
 	return JSON.stringify({
+		tree,
 		status: git(target, "status", "--porcelain=v1", "--untracked-files=all", "--ignored"),
 		head: git(target, "rev-parse", "HEAD"),
 		// A link is recorded as its own target text, never followed.
@@ -682,6 +706,17 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 			`a Git child's global config is not the owned file: ${args}`,
 		);
 	}
+	// Observe the config's bytes at every Git-child invocation, before cleanup.
+	const configs = readFileSync(join(f.root, "git-env.log.config.jsonl"), "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as { args: string; bytes: string });
+	assert.deepEqual(
+		configs.map(({ args }) => args),
+		blocks.map(({ args }) => args),
+		"a config observation is missing",
+	);
+	for (const { args, bytes } of configs) assert.equal(bytes, "", `a Git child's owned config is not empty: ${args}`);
 	// Every Git child's values, row by row.
 	for (const { args, env } of blocks) {
 		assert.equal(env.PATH, `${f.bin}:${process.env.PATH ?? ""}`, `a Git child's PATH: ${args}`);
@@ -700,6 +735,15 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 // Criterion 3: the confirmed snapshot's closure.
 
 async function armConfirmsTheClosure(launcher: string): Promise<void> {
+	// Git's listing omits a tracked module while the clean checkout retains it:
+	// only working-population equality can distinguish this from a valid closure.
+	const omitted = fixture(launcher, {
+		source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/extra.ts"), "// member\n"),
+		plan: { omittedMember: ".pi/extensions/gitjig/extra.ts" },
+	});
+	const omittedBefore = snapshot(omitted.target);
+	refused(launch(omitted), "snapshot-identity-mismatch", 65, "a listed population missing a working member");
+	invariant(omitted, omittedBefore, "a listed population missing a working member");
 	for (const [label, source] of [
 		[
 			"a linked module file",
@@ -1347,6 +1391,25 @@ test(
 			"\t\t(created.mode & 0o777) !== 0o700\n",
 			"\t\tfalse\n",
 			"a child at another mode admitted",
+		);
+		// Round 10: population, owned-empty config and Git metadata invariance.
+		await killed(
+			armConfirmsTheClosure,
+			'\tif (working.size !== head.size || ![...working].every((path) => head.has(path))) refuse("snapshot-identity-mismatch");\n',
+			"",
+			"a working member omitted from HEAD's listed population",
+		);
+		await killed(
+			armBuildsEachChildEnvironment,
+			'writeFileSync(config, "",',
+			'writeFileSync(config, "[user]\\nname=intruder\\n",',
+			"a nonempty owned global config",
+		);
+		await killed(
+			armSourcesOnlyTheProjection,
+			"\tconst pin = projection(admitPin(top, headBlob));",
+			'\tconst pin = projection(admitPin(top, headBlob));\n\twriteFileSync(join(top, ".git/config"), "\\n# unintended write\\n", { flag: "a" });',
+			"target Git metadata changed on refusal",
 		);
 		// Round 9: closed child ownership and literal source spelling.
 		await killed(
