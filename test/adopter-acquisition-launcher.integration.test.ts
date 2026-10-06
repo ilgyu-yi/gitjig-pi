@@ -578,6 +578,16 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 			"a decomposed owner",
 			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({ owner: "e\u0301" }), revision }),
 		],
+		// An empty name is refused by its own predicate: no other one decides it,
+		// and without it the acquisition reaches the network for a nameless URL.
+		[
+			"an empty owner",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({ owner: "" }), revision }),
+		],
+		[
+			"an empty repository",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({ repository: "" }), revision }),
+		],
 		[
 			"an uppercase revision",
 			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: revision.toUpperCase() }),
@@ -1414,6 +1424,7 @@ test(
 		);
 		// Round 12c's alternates row: each call site, and each of the helper's two
 		// decisions, refuses something no other statement does.
+		await killed(armAdmitsOnlyTheCommittedPin, "name.length === 0 || ", "", "an empty routing name admitted");
 		await killed(
 			armExcludesAlternateObjectStores,
 			'\trefuseAlternates(join(top, ".git"), "invalid-input");\n',
