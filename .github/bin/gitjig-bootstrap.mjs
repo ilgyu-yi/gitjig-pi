@@ -48,6 +48,37 @@ export const STATUS = Object.freeze({
 	"temporary-storage-unavailable": 73,
 	"cleanup-failed": 74,
 });
+/**
+ * The caller's own environment, as the trust relation's rows read it.
+ * @typedef {{ PATH?: string, HOME?: string, LC_ALL?: string }} Read
+ */
+/**
+ * The limits relation's values plus the primitives the command line supplies;
+ * a test imports this module to narrow them.
+ * @typedef {typeof LIMITS & {
+ *   launcherPath: string,
+ *   spawn: typeof spawn,
+ *   temporaryBase: () => string,
+ *   remove: (path: string) => void,
+ *   stderr: (text: string) => void,
+ * }} Seams
+ */
+/**
+ * What the pin projects: the source the acquisition may reach, and nothing else.
+ * @typedef {{ owner: string, repository: string, revision: string }} Pin
+ */
+/**
+ * The acquisition's own state, from the created child until its terminal.
+ * @typedef {{
+ *   child: string,
+ *   top: string,
+ *   pin: Pin,
+ *   sourceUrl: string,
+ *   uid: number | undefined,
+ *   read: Read,
+ *   confirmed: boolean,
+ * }} State
+ */
 const PIN = ".pi/gitjig.pin.json";
 const ENTRY = ".pi/extensions/gitjig/install/provision-cli.ts";
 const SCOPE_FILE = ".pi/extensions/gitjig.ts";
@@ -70,9 +101,16 @@ const refuse = (cause) => {
  * One child under its limits-relation row, in its own process group. Every
  * outcome the child-outcome relation names is the calling node's cause, and
  * the child's output stays with the launcher, never reaching the terminal.
+ *
+ * @param {Seams} seams
+ * @param {string} executable
+ * @param {string[]} args
+ * @param {{ env: Record<string,string>, cwd: string, timeoutMs: number, cause: keyof typeof STATUS }} row
+ * @returns {Promise<Buffer>}
  */
 function bounded(seams, executable, args, { env, cwd, timeoutMs, cause }) {
 	return new Promise((resolveRun, rejectRun) => {
+		/** @type {import("node:child_process").ChildProcessByStdio<import("node:stream").Writable, import("node:stream").Readable, import("node:stream").Readable>} */
 		let child;
 		try {
 			child = seams.spawn(executable, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: true });
@@ -80,13 +118,14 @@ function bounded(seams, executable, args, { env, cwd, timeoutMs, cause }) {
 			rejectRun(new Refusal(cause));
 			return;
 		}
+		/** @type {Buffer[]} */
 		const chunks = [];
 		const counts = { stdout: 0, stderr: 0 };
 		let failed = false;
 		const kill = () => {
 			failed = true;
 			try {
-				process.kill(-child.pid, "SIGKILL");
+				process.kill(-(/** @type {number} */ (child.pid)), "SIGKILL");
 			} catch {
 				try {
 					child.kill("SIGKILL");
@@ -94,8 +133,8 @@ function bounded(seams, executable, args, { env, cwd, timeoutMs, cause }) {
 			}
 		};
 		const timer = setTimeout(kill, timeoutMs);
-		const take = (stream, name) =>
-			stream.on("data", (chunk) => {
+		const take = (/** @type {import("node:stream").Readable} */ stream, /** @type {"stdout" | "stderr"} */ name) =>
+			stream.on("data", (/** @type {Buffer} */ chunk) => {
 				counts[name] += chunk.length;
 				if (counts[name] > seams.streamBytes) kill();
 				else if (name === "stdout") chunks.push(chunk);
@@ -116,9 +155,12 @@ function bounded(seams, executable, args, { env, cwd, timeoutMs, cause }) {
 	});
 }
 
-/** The environment relation's profiles, built from their rows alone. */
+/**
+ * The environment relation's profiles, built from their rows alone.
+ * @param {Read} read @param {string} ownedConfig
+ */
 function profiles(read, ownedConfig) {
-	const git = (globalConfig) => ({
+	const git = (/** @type {string} */ globalConfig) => ({
 		PATH: read.PATH ?? "",
 		LC_ALL: "C",
 		GIT_CONFIG_NOSYSTEM: "1",
@@ -147,13 +189,16 @@ const GIT_CONFIG = [
 	"--no-replace-objects",
 ];
 
-const isInside = (child, parent) => child === parent || child.startsWith(parent + sep);
+const isInside = (/** @type {string} */ child, /** @type {string} */ parent) =>
+	child === parent || child.startsWith(parent + sep);
 
 /**
  * The exclusions relation's `alternates` row, for both Git profiles. Git honours
  * an object database's own `objects/info/alternates` whatever its environment
  * holds, so no profile row can exclude it: the declaration is read here, in this
  * process, and any alternate store refuses before a Git child can consume it.
+ *
+ * @param {string} gitDir @param {keyof typeof STATUS} cause
  */
 function refuseAlternates(gitDir, cause) {
 	let declared;
@@ -169,7 +214,7 @@ function refuseAlternates(gitDir, cause) {
 }
 
 /** Git's own output with its one line terminator removed: a path may end in a space. */
-const line = (bytes) => bytes.toString("utf8").replace(/\n$/, "");
+const line = (/** @type {Buffer} */ bytes) => bytes.toString("utf8").replace(/\n$/, "");
 
 /** @param {Buffer} bytes */
 function projection(bytes) {
@@ -179,7 +224,7 @@ function projection(bytes) {
 	} catch {
 		refuse("invalid-input");
 	}
-	const own = (object, key) => Object.hasOwn(object, key);
+	const own = (/** @type {object} */ object, /** @type {string} */ key) => Object.hasOwn(object, key);
 	if (typeof value !== "object" || value === null || Array.isArray(value)) refuse("invalid-input");
 	if (!own(value, "schemaVersion") || value.schemaVersion !== 1) refuse("invalid-input");
 	const source = own(value, "source") ? value.source : undefined;
@@ -194,7 +239,10 @@ function projection(bytes) {
 	return { owner: source.owner, repository: source.repository, revision: value.revision };
 }
 
-/** Pin admission: the committed pin's bytes, read once under identity checks. */
+/**
+ * Pin admission: the committed pin's bytes, read once under identity checks.
+ * @param {string} top @param {Buffer} headBlob
+ */
 function admitPin(top, headBlob) {
 	const ancestor = join(top, ".pi");
 	const pathname = join(top, PIN);
@@ -239,9 +287,12 @@ function admitPin(top, headBlob) {
 	}
 }
 
-/** Normalize every created entry to the artifact relation's modes; any link refuses. */
+/**
+ * Normalize every created entry to the artifact relation's modes; any link refuses.
+ * @param {string} root @param {number | undefined} uid
+ */
 function ownedSubtree(root, uid) {
-	const visit = (path) => {
+	const visit = (/** @type {string} */ path) => {
 		const stats = lstatSync(path);
 		if (uid !== undefined && stats.uid !== uid) refuse("snapshot-identity-mismatch");
 		if (stats.isDirectory()) {
@@ -259,6 +310,8 @@ function ownedSubtree(root, uid) {
  * The acquisition, node by node. `seams` carries the limits relation's values
  * and the spawn and temporary-base primitives; the command line always passes
  * the defaults, and a test imports this module to narrow them.
+ *
+ * @param {string[]} argv @param {Read} read @param {Seams} seams @returns {Promise<State>}
  */
 export async function acquire(argv, read, seams) {
 	const uid = typeof process.getuid === "function" ? process.getuid() : undefined;
@@ -273,7 +326,7 @@ export async function acquire(argv, read, seams) {
 	// declares no store outside it.
 	refuseAlternates(join(top, ".git"), "invalid-input");
 	const admission = profiles(read, devNull)["git-admission"];
-	const admissionGit = (args) =>
+	const admissionGit = (/** @type {string[]} */ args) =>
 		bounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args], {
 			env: admission,
 			cwd: top,
@@ -307,7 +360,10 @@ export async function acquire(argv, read, seams) {
 	return { child, top, pin, sourceUrl, uid, read, confirmed: false };
 }
 
-/** The post-creation nodes, run with cleanup owed from the first artifact. */
+/**
+ * The post-creation nodes, run with cleanup owed from the first artifact.
+ * @param {State} state @param {Seams} seams
+ */
 export async function acquireIn(state, seams) {
 	const { child, top, pin, sourceUrl, uid, read } = state;
 	// The created child itself, against the artifact relation's acquisition-child row.
@@ -323,7 +379,7 @@ export async function acquireIn(state, seams) {
 	writeFileSync(config, "", { mode: 0o600, flag: "wx" });
 	const env = profiles(read, config);
 	const destination = join(child, "snapshot");
-	const git = (args, cause, cwd = child) =>
+	const git = (/** @type {string[]} */ args, /** @type {keyof typeof STATUS} */ cause, cwd = child) =>
 		bounded(seams, "git", [...GIT_CONFIG, ...args], { env: env.git, cwd, timeoutMs: seams.gitTimeoutMs, cause });
 	// source-fetch: the projected source at the exact revision, nothing else.
 	await git(["init", "-q", "--template=", "--", destination], "source-unavailable");
@@ -332,7 +388,8 @@ export async function acquireIn(state, seams) {
 	await git(["-C", destination, "checkout", "-q", "--detach", pin.revision], "source-unavailable");
 	ownedSubtree(child, uid);
 	// snapshot-check
-	const shown = async (args) => line(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));
+	const shown = async (/** @type {string[]} */ args) =>
+		line(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));
 	const real = realpathSync(destination);
 	const commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));
 	const workTree = realpathSync(await shown(["rev-parse", "--show-toplevel"]));
@@ -369,7 +426,7 @@ export async function acquireIn(state, seams) {
 		head.set(match[3], match[2]);
 	}
 	const working = new Set();
-	const walk = (relative) => {
+	const walk = (/** @type {string} */ relative) => {
 		const absolute = join(real, relative);
 		const stats = lstatSync(absolute, { throwIfNoEntry: false });
 		if (!stats || stats.isSymbolicLink()) refuse("snapshot-identity-mismatch");
@@ -412,7 +469,10 @@ export async function acquireIn(state, seams) {
 	);
 }
 
-/** Cleanup: remove every owned artifact and confirm its absence. */
+/**
+ * Cleanup: remove every owned artifact and confirm its absence.
+ * @param {string} child @param {Seams} seams
+ */
 function cleanup(child, seams) {
 	try {
 		seams.remove(child);
@@ -425,9 +485,14 @@ function cleanup(child, seams) {
 	}
 }
 
-/** The whole launcher: nodes, cleanup, and the terminal algebra. Returns the exit status. */
+/**
+ * The whole launcher: nodes, cleanup, and the terminal algebra. Returns the exit status.
+ * @param {string[]} argv @param {Read} read @param {Seams} seams @returns {Promise<number>}
+ */
 export async function main(argv, read, seams) {
+	/** @type {keyof typeof STATUS | undefined} */
 	let cause;
+	/** @type {State | undefined} */
 	let state;
 	try {
 		state = await acquire(argv, read, seams);
@@ -435,30 +500,39 @@ export async function main(argv, read, seams) {
 		// The fallback relation, before creation.
 		cause = error instanceof Refusal ? error.refusal : "invalid-input";
 	}
+	// Reached only where `acquire` returned, so the state exists.
+	const acquired = /** @type {State} */ (state);
 	if (cause === undefined) {
 		try {
-			await acquireIn(state, seams);
+			await acquireIn(acquired, seams);
 		} catch (error) {
 			// The fallback relation, after creation: identity confirmed or not.
 			cause =
-				error instanceof Refusal ? error.refusal : state.confirmed ? "provision-refused" : "snapshot-identity-mismatch";
+				error instanceof Refusal
+					? error.refusal
+					: acquired.confirmed
+						? "provision-refused"
+						: "snapshot-identity-mismatch";
 		}
-		if (!cleanup(state.child, seams)) cause = "cleanup-failed";
+		if (!cleanup(acquired.child, seams)) cause = "cleanup-failed";
 	}
 	if (cause === undefined) return 0;
 	seams.stderr(`gitjig-bootstrap: ${cause}\n`);
 	return STATUS[cause];
 }
 
-/** The command line's seams: the limits relation's values and the real primitives. */
+/**
+ * The command line's seams: the limits relation's values and the real primitives.
+ * @returns {Seams}
+ */
 export function defaultSeams() {
 	return {
 		...LIMITS,
 		launcherPath: fileURLToPath(import.meta.url),
 		spawn,
 		temporaryBase: tmpdir,
-		remove: (path) => rmSync(path, { recursive: true, force: true }),
-		stderr: (text) => process.stderr.write(text),
+		remove: (/** @type {string} */ path) => rmSync(path, { recursive: true, force: true }),
+		stderr: (/** @type {string} */ text) => process.stderr.write(text),
 	};
 }
 

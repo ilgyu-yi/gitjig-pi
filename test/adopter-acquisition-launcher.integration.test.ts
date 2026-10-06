@@ -723,19 +723,19 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 	});
 	assert.equal(run.status, 0, `the hostile ambient broke acquisition (stderr ${JSON.stringify(run.stderr)})`);
 	// The platform's own additions, measured with an empty-environment control child.
-	const control = spawnSync(
-		process.execPath,
-		["-e", "process.stdout.write(JSON.stringify(Object.keys(process.env)))"],
-		{
-			encoding: "utf8",
-			env: {},
-		},
-	);
-	const platform = new Set(JSON.parse(control.stdout) as string[]);
+	// Names alone are not enough: a variable the platform also adds, carrying another
+	// value, would be invisible to a name-only subtraction. So the control's exact
+	// name and value pairs are subtracted, and nothing else is.
+	const control = spawnSync(process.execPath, ["-e", "process.stdout.write(JSON.stringify(process.env))"], {
+		encoding: "utf8",
+		env: {},
+	});
+	const added = JSON.parse(control.stdout) as Record<string, string>;
+	const platform = { has: (key: string, value: string) => added[key] === value };
 	const reached = JSON.parse(readFileSync(f.record, "utf8")) as { env: Record<string, string> };
 	assert.deepEqual(
 		Object.keys(reached.env)
-			.filter((key) => !platform.has(key))
+			.filter((key) => !platform.has(key, reached.env[key] as string))
 			.sort(),
 		["HOME", "LC_ALL", "PATH"],
 		"the provision child's environment is not its profile",
@@ -759,7 +759,7 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 		});
 	const keysOf = (env: Record<string, string>) =>
 		Object.keys(env)
-			.filter((key) => !platform.has(key))
+			.filter((key) => !platform.has(key, env[key] as string))
 			.sort();
 	const profile = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "LC_ALL", "PATH"];
 	const admission = blocks.filter(
@@ -1392,8 +1392,8 @@ test(
 		// Ambient rewrite and loader injection: the caller's environment forwarded.
 		await killed(
 			armBuildsEachChildEnvironment,
-			'\tconst git = (globalConfig) => ({\n\t\tPATH: read.PATH ?? "",',
-			'\tconst git = (globalConfig) => ({\n\t\t...process.env,\n\t\tPATH: read.PATH ?? "",',
+			'\tconst git = (/** @type {string} */ globalConfig) => ({\n\t\tPATH: read.PATH ?? "",',
+			'\tconst git = (/** @type {string} */ globalConfig) => ({\n\t\t...process.env,\n\t\tPATH: read.PATH ?? "",',
 			"the caller's environment forwarded to Git",
 		);
 		await killed(
@@ -1418,13 +1418,13 @@ test(
 		// Omitted cleanup, and success before cleanup.
 		await killed(
 			armOrdersTheTerminals,
-			'\t\tif (!cleanup(state.child, seams)) cause = "cleanup-failed";\n',
-			"\t\tcleanup(state.child, seams);\n",
+			'\t\tif (!cleanup(acquired.child, seams)) cause = "cleanup-failed";\n',
+			"\t\tcleanup(acquired.child, seams);\n",
 			"cleanup not confirmed",
 		);
 		await killed(
 			armSucceedsExactly,
-			'\t\tif (!cleanup(state.child, seams)) cause = "cleanup-failed";\n',
+			'\t\tif (!cleanup(acquired.child, seams)) cause = "cleanup-failed";\n',
 			"",
 			"cleanup omitted",
 		);
@@ -1475,6 +1475,15 @@ test(
 			"invalid pin bytes decoded with replacement",
 		);
 		// Governed round 2's locale: each profile fixes LC_ALL rather than forwarding it.
+		// A variable the platform adds too, with another value: a name-only
+		// subtraction hides it on a host that adds that name, and a host that does
+		// not add it refuses the extra name instead. Either way the arm decides.
+		await killed(
+			armBuildsEachChildEnvironment,
+			'\t\tGIT_TERMINAL_PROMPT: "0",\n\t});',
+			'\t\tGIT_TERMINAL_PROMPT: "0",\n\t\t__CF_USER_TEXT_ENCODING: "0x1F5:0x0:0x0",\n\t});',
+			"a Git child given a platform-named variable of another value",
+		);
 		await killed(
 			armBuildsEachChildEnvironment,
 			'\t\tLC_ALL: "C",\n\t\tGIT_CONFIG_NOSYSTEM: "1",',
@@ -1641,8 +1650,8 @@ test(
 		])
 			await killed(
 				armOrdersTheTerminals,
-				'\t\tif (!cleanup(state.child, seams)) cause = "cleanup-failed";',
-				`\t\tif (!cleanup(state.child, seams) && cause !== "${cause}") cause = "cleanup-failed";`,
+				'\t\tif (!cleanup(acquired.child, seams)) cause = "cleanup-failed";',
+				`\t\tif (!cleanup(acquired.child, seams) && cause !== "${cause}") cause = "cleanup-failed";`,
 				`cleanup failed to override ${cause}`,
 			);
 		// Round 10: population, owned-empty config and Git metadata invariance.
@@ -1681,8 +1690,8 @@ test(
 		for (const key of ["PWD", "SHLVL", "_", "OLDPWD"])
 			await killed(
 				armBuildsEachChildEnvironment,
-				'\tconst git = (globalConfig) => ({\n\t\tPATH: read.PATH ?? "",',
-				`\tconst git = (globalConfig) => ({\n\t\t${key}: "injected",\n\t\tPATH: read.PATH ?? "",`,
+				'\tconst git = (/** @type {string} */ globalConfig) => ({\n\t\tPATH: read.PATH ?? "",',
+				`\tconst git = (/** @type {string} */ globalConfig) => ({\n\t\t${key}: "injected",\n\t\tPATH: read.PATH ?? "",`,
 				`an unlisted ${key} given to Git`,
 			);
 		// Round 7: pin-open's one-link requirement stands independently.
@@ -1714,7 +1723,7 @@ test(
 		);
 		await killed(
 			armMapsEveryChildOutcome,
-			'process.kill(-child.pid, "SIGKILL");',
+			'process.kill(-(/** @type {number} */ (child.pid)), "SIGKILL");',
 			'child.kill("SIGKILL");',
 			"only the child ended",
 		);
@@ -1729,13 +1738,13 @@ test(
 		);
 		await killed(
 			armOrdersTheTerminals,
-			'state.confirmed ? "provision-refused" : "snapshot-identity-mismatch"',
+			'acquired.confirmed\n\t\t\t\t\t\t? "provision-refused"\n\t\t\t\t\t\t: "snapshot-identity-mismatch"',
 			'"provision-refused"',
 			"a pre-identity error misnamed",
 		);
 		await killed(
 			armOrdersTheTerminals,
-			'state.confirmed ? "provision-refused" : "snapshot-identity-mismatch"',
+			'acquired.confirmed\n\t\t\t\t\t\t? "provision-refused"\n\t\t\t\t\t\t: "snapshot-identity-mismatch"',
 			'"snapshot-identity-mismatch"',
 			"a post-identity error misnamed",
 		);
