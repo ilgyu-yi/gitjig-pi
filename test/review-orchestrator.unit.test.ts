@@ -496,7 +496,10 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 			"  the claim / the evidence / what it actually observes / why that cannot establish it.",
 			"C — explicit contract-required evidence is absent, with the AUTHORITY CITED — an acceptance",
 			"  criterion saying 'arms pin ...' is such an authority; so is §3.12's scoped obligation, which",
-			"  reaches a guard whose pinning a settled contract requires and no other guard.",
+			"  reaches only a guard that is high-cost as defined in SPEC §3.12, predicate or preventive",
+			"  control alike. A survivor on any other guard is recorded, not admitted, under that",
+			"  obligation, and a hypothesis that adds an operation where none existed, every existing",
+			"  guard intact, is not a survivor at all.",
 			"Otherwise: RECORD, DO NOT ADMIT. State each recorded-not-admitted observation in your return's",
 			"summary with the ground it failed; it enters no ruling and no payload key. The ground is §1.9's",
 			'own sentence — "Deliberate absences are recorded as decisions, not omissions" — so no new',
@@ -529,6 +532,22 @@ describe("§1.7/§1.9 brief composition is code, not hand-authoring (issue #184)
 				"channel and §1.9 ground, and the demote-before-dedup ordering are pinned as one whole, END INCLUDED " +
 				"(substring needles survive polarity inversion; a substring " +
 				"pin over this block could not see a second home of the exculpatory rule appended to it)",
+		);
+		// Baseline first (above), then the mutant: limb C reverted to its pre-#430
+		// paraphrase of §3.12, the rest of the brief untouched, must not match the pin.
+		const currentC =
+			"  reaches only a guard that is high-cost as defined in SPEC §3.12, predicate or preventive\n" +
+			"  control alike. A survivor on any other guard is recorded, not admitted, under that\n" +
+			"  obligation, and a hypothesis that adds an operation where none existed, every existing\n" +
+			"  guard intact, is not a survivor at all.";
+		assert.ok(text.includes(currentC), "limb C's current text is absent, so the reverted mutant measures nothing");
+		assert.notEqual(
+			composedBlock(
+				text.replace(currentC, () => "  reaches a guard whose pinning a settled contract requires and no other guard."),
+				"ADMISSION —",
+			),
+			expectedAdmission,
+			"a limb C reverted to the pre-#430 survivor scope still matched the pin",
 		);
 		assert.ok(
 			text.indexOf("ADMISSION") < text.indexOf("1. DEDUP"),
