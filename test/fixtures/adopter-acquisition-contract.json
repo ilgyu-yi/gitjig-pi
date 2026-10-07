@@ -2,8 +2,8 @@
 	"schemaVersion": 3,
 	"relations": {
 		"activation": [
-			[".github/bin/gitjig-bootstrap.mjs", "settled-pending-runtime", "#362", "none"],
-			[".pi/extensions/gitjig/install/bootstrap.ts", "live", "none", "#362"],
+			[".github/bin/gitjig-bootstrap.mjs", "live", "none", "none"],
+			[".pi/extensions/gitjig/install/bootstrap.ts", "retired", "none", "#362"],
 			[".pi/extensions/gitjig/install/acquire.ts", "live", "none", "none"]
 		],
 		"nodes": [
@@ -177,13 +177,12 @@
 		]
 	},
 	"prose": {
-		"launcher": "1d7048afb5e00d031e1ec2b4d18993356c701289197b71add099e90f75692997",
+		"launcher": "835d433db13ec0d798a78b8d71226c00c139623537cd7a9e628dde273ae3037f",
 		"trust": "bc09b1509d0401a34dd2cac20c31fd246e5bce6de0adc7be30571669d738bc96",
 		"binding": "a6d529dbfaa16d0d49b738400fa22f0a72a151880102d252c0499072b4100c59",
 		"host": "631b980f347cf13d1877f900a3c856f01979e523b9916d4a071e7e3d8d144fed"
 	},
 	"carried": {
-		".pi/extensions/gitjig/install/bootstrap.ts": "b05c2ce89928f1ecac05efe391d116e3f8377fdd7f432a0bf93ea23caa70ca57",
 		".pi/extensions/gitjig/install/acquire.ts": "d6569e27f6c0ddcb4ce5b04261ee70fa23da39efde9781de6a68edc978b1ad60"
 	}
 }

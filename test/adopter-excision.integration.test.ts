@@ -43,8 +43,27 @@ function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] 
 		".github/workflows/gitjig-governance-platform.mjs",
 		".github/workflows/gitjig-governance-service.mjs",
 	]);
+	// #363's acquisition relations settle these names for the first-clone
+	// launcher: its own path and cause line, its temporary child's prefix, the
+	// committed pin it reads, and the carried population it confirms before
+	// running the fixed entry. Only those exact names are neutralized, and only
+	// in that one asset; any other carried path or brand use in it still fails.
+	const acquisitionLauncher = ".github/bin/gitjig-bootstrap.mjs";
+	// Each settled name exactly as the launcher spells it, quotes included, so a
+	// longer name that merely contains one (a brand around it) is not neutralized.
+	const settledLiterals: readonly (readonly [string, string])[] = [
+		['".pi/extensions/gitjig/install/provision-cli.ts"', '"carried-fixed-entry"'],
+		['".pi/extensions/gitjig.ts"', '"carried-entry"'],
+		['".pi/extensions/gitjig"', '"carried-scope"'],
+		['".pi/gitjig.pin.json"', '"committed-pin"'],
+		['"gitjig-acquire-"', '"acquisition-child-"'],
+		["`gitjig-bootstrap: ${cause}\\n`", "`acquisition-launcher: ${cause}\\n`"],
+	];
+	const neutralizeAcquisitionNames = (value: string) =>
+		settledLiterals.reduce((text, [literal, neutral]) => text.replaceAll(literal, neutral), value);
 	for (const candidate of candidates) {
-		const text = candidate.bytes.toString("utf8");
+		const raw = candidate.bytes.toString("utf8");
+		const text = candidate.path === acquisitionLauncher ? neutralizeAcquisitionNames(raw) : raw;
 		for (const rule of forbiddenDependencies) {
 			if (rule.pattern.test(text)) findings.push(`${candidate.path}: ${rule.name}`);
 		}
@@ -56,7 +75,11 @@ function dependencyFindings(candidates: readonly ObservedCandidate[]): string[] 
 			? neutralizeContractName(text).replaceAll("gitjig-governance", "governance-contract")
 			: neutralizeContractName(text);
 		if (/gitjig/i.test(brandingSurface)) findings.push(`${candidate.path}: source-shell branding`);
-		if (!governanceAssets.has(candidate.path) && /gitjig/i.test(neutralizeContractName(candidate.path)))
+		if (
+			!governanceAssets.has(candidate.path) &&
+			candidate.path !== acquisitionLauncher &&
+			/gitjig/i.test(neutralizeContractName(candidate.path))
+		)
 			findings.push(`${candidate.path}: branded handed-over path`);
 	}
 	return findings;
@@ -89,6 +112,33 @@ test("#251 named negative fixture catches a handed-over reference to a carried m
 		bytes: Buffer.from("run: node .pi/extensions/gitjig.ts\n"),
 	};
 	assert.ok(dependencyFindings([negative]).includes(".github/workflows/negative.yml: carried path"));
+	// The acquisition launcher's exemption covers its settled names alone.
+	const launcher = { ...negative, path: ".github/bin/gitjig-bootstrap.mjs" };
+	assert.deepEqual(
+		dependencyFindings([
+			{ ...launcher, bytes: Buffer.from('const ENTRY = ".pi/extensions/gitjig/install/provision-cli.ts";\n') },
+		]),
+		[],
+		"a settled name was flagged",
+	);
+	assert.deepEqual(
+		dependencyFindings([
+			{ ...launcher, bytes: Buffer.from('import "../../.pi/extensions/gitjig/install/acquire.ts";\n') },
+		]),
+		[".github/bin/gitjig-bootstrap.mjs: carried path", ".github/bin/gitjig-bootstrap.mjs: source-shell branding"],
+		"another carried path in the launcher was admitted",
+	);
+	assert.deepEqual(
+		dependencyFindings([{ ...launcher, bytes: Buffer.from("// the gitjig shell\n") }]),
+		[".github/bin/gitjig-bootstrap.mjs: source-shell branding"],
+		"other branding in the launcher was admitted",
+	);
+	// A brand around a settled name is still a brand.
+	assert.deepEqual(
+		dependencyFindings([{ ...launcher, bytes: Buffer.from('const label = "evil-gitjig-bootstrap-brand";\n') }]),
+		[".github/bin/gitjig-bootstrap.mjs: source-shell branding"],
+		"a brand containing a settled name was admitted",
+	);
 	assert.deepEqual(
 		dependencyFindings([
 			{ ...negative, path: ".github/workflows/gitjig-rival.yml", bytes: Buffer.from("name: rival\n") },
