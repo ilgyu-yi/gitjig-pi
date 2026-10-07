@@ -273,8 +273,12 @@ const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
 if (run.status === 0) {
 	const fsm = require("node:fs");
 	const pathm = require("node:path");
-	const at = args.includes("-C") ? args[args.indexOf("-C") + 1] : args[args.length - 1];
-	if (typeof at === "string" && at.includes("gitjig-acquire-") && fsm.existsSync(at)) {
+	const named = args.includes("-C") ? args[args.indexOf("-C") + 1] : args[args.length - 1];
+	// The whole acquisition child, not only the snapshot: the launcher's own
+	// gitconfig is a created file in that subtree too.
+	const owned = typeof named === "string" ? /^(.*gitjig-acquire-[^/]+)/.exec(named) : null;
+	const at = owned ? owned[1] : named;
+	if (owned && fsm.existsSync(at)) {
 		const offenders = [];
 		let files = 0;
 		let dirs = 0;
@@ -300,7 +304,7 @@ if (run.status === 0) {
 		};
 		walk(at);
 		const mode = (p) => { try { return fsm.lstatSync(p).mode & 0o777; } catch { return null; } };
-		appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), gitDir: mode(pathm.join(at, ".git")), config: mode(pathm.join(at, ".git/config")), offenders, files, dirs }) + "\\n");
+		appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), gitDir: mode(pathm.join(named, ".git")), config: mode(pathm.join(named, ".git/config")), offenders, files, dirs }) + "\\n");
 	}
 }
 // After the checkout: the created store declares an object store outside itself.
@@ -423,7 +427,7 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	// The whole closed Git-child sequence: no unowned call may hide behind a
 	// different command name in the launcher's closure node.
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects ";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects ";
 	const init = asked.find((line) => / init /.test(line));
 	assert.ok(init, "init was not observed");
 	const destination = init.slice(init.indexOf(" init -q --template= -- ") + " init -q --template= -- ".length);
@@ -741,7 +745,7 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	assert.equal(launch(exact).status, 0, "the exact source run failed");
 	const asked = readFileSync(exact.log, "utf8").split("\n");
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects";
 	const snapshotDir =
 		asked
 			.find((line) => / init /.test(line))
@@ -867,7 +871,7 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 	}
 	// And every Git invocation opens with the profile's config rows, exactly.
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false --no-replace-objects ";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects ";
 	for (const { args } of blocks)
 		assert.ok(args.startsWith(rows), `a Git child lacks the profile's config rows: ${args}`);
 	// Last, because it writes to the logs just read: the seam and real Git agree
@@ -955,13 +959,10 @@ async function armConfirmsTheClosure(launcher: string): Promise<void> {
 				symlinkSync("../README.md", join(work, ".pi/extensions/gitjig.ts"));
 			},
 		],
-		[
-			"a linked file outside the module population",
-			(work: string) => {
-				mkdirSync(join(work, "docs"));
-				symlinkSync("../README.md", join(work, "docs/link.md"));
-			},
-		],
+		// A tracked link outside the module population no longer refuses: the git
+		// profile checks one out as a regular file holding its link text, so nothing
+		// outside the population is a link to walk. `armOwnsEveryArtifact` owns that
+		// property now, with the mutant that drops the config row.
 		[
 			// Status calls the checkout clean, but its bytes are not HEAD's blobs.
 			"CRLF-smudged module bytes",
@@ -1088,6 +1089,54 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 		[0o700, 0o600],
 		"Git created the snapshot repository outside the relation's modes",
 	);
+	// The launcher's own gitconfig is created at the relation's mode, observed where
+	// it is created rather than at provision: a write at another mode, normalized
+	// before the first Git child, is invisible to every later observer.
+	const configModes = join(f.root, "config-creation.log");
+	const observed = fixture(launcher);
+	const observedRun = launchWith(
+		observed,
+		"",
+		`const write = fs.writeFileSync; fs.writeFileSync = (path, ...rest) => { const out = write(path, ...rest); if (String(path).endsWith("/gitconfig")) fs.appendFileSync(${JSON.stringify(configModes)}, (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); return out; }; syncBuiltinESMExports();`,
+	);
+	assert.equal(observedRun.status, 0, `the observed acquisition failed (stderr ${JSON.stringify(observedRun.stderr)})`);
+	assert.deepEqual(
+		readFileSync(configModes, "utf8").trim().split("\n"),
+		["600"],
+		"the owned config was not created at the relation's mode",
+	);
+	// A tracked link is never created, at any moment: outside the module population
+	// the acquisition still succeeds and the child holds no link, and inside it the
+	// entry's own mode refuses the closure.
+	const linked = fixture(launcher, {
+		source: (work) => {
+			symlinkSync("README.md", join(work, "tracked-link"));
+		},
+	});
+	const linkedRun = launch(linked);
+	assert.equal(
+		linkedRun.status,
+		0,
+		`a tracked link outside the module refused (stderr ${JSON.stringify(linkedRun.stderr)})`,
+	);
+	for (const { args, offenders } of readFileSync(join(linked.root, "git-env.log.modes.jsonl"), "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as { args: string; offenders: [string, string, number][] }))
+		assert.deepEqual(offenders, [], `a tracked link was created in the acquisition child: ${args}`);
+	const insideModule = fixture(launcher, {
+		source: (work) => {
+			symlinkSync("../../../README.md", join(work, ".pi/extensions/gitjig/linked.ts"));
+		},
+	});
+	const insideBefore = snapshot(insideModule.target);
+	refused(launch(insideModule), "snapshot-identity-mismatch", 65, "a tracked link inside the module population");
+	invariant(insideModule, insideBefore, "a tracked link inside the module population");
+	for (const { args, offenders } of readFileSync(join(insideModule.root, "git-env.log.modes.jsonl"), "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as { args: string; offenders: [string, string, number][] }))
+		assert.deepEqual(offenders, [], `a tracked link was created before the refusal: ${args}`);
 	// An acquired entry another user owns: the harness reports another owner for the snapshot.
 	const foreign = fixture(launcher);
 	const foreignBefore = snapshot(foreign.target);
@@ -1470,11 +1519,15 @@ test(
 			"",
 			"execution without the fixed entry",
 		);
-		await killed(
-			armConfirmsTheClosure,
-			'\t\t\t// A link, or anything else, is neither: the artifact relation admits none.\n\t\t} else refuse("snapshot-identity-mismatch");',
-			"\t\t}",
-			"a linked created entry admitted",
+		// The subtree walk's final branch — an entry that is neither a regular file
+		// nor a directory — has no mutant, and that is a measured statement rather than
+		// an omission: with `core.symlinks=false` on every Git invocation, no child of
+		// this contract can create such an entry, so removing the branch changes no
+		// observable outcome and any reported kill would be one no arm witnessed. It
+		// stays as a fail-closed residual over a creator the relation does not admit.
+		assert.ok(
+			readFileSync(LAUNCHER, "utf8").includes('\t\t} else refuse("snapshot-identity-mismatch");'),
+			"the subtree walk's fail-closed branch is gone, so its residual statement is stale",
 		);
 		// Argv and pin overrides.
 		await killed(
@@ -1587,6 +1640,20 @@ test(
 			"\tprocess.umask(0o077);\n",
 			"\tprocess.umask(0o022);\n",
 			"a child created under a group- and world-readable mask",
+		);
+		// A tracked link materialized as a link, and the owned config created at
+		// another mode and normalized before any Git child could observe it.
+		await killed(
+			armOwnsEveryArtifact,
+			'\t"-c",\n\t"core.symlinks=false",\n',
+			"",
+			"a tracked link checked out as a link",
+		);
+		await killed(
+			armOwnsEveryArtifact,
+			'\twriteFileSync(config, "", { mode: 0o600, flag: "wx" });\n',
+			'\tprocess.umask(0o022);\n\twriteFileSync(config, "", { mode: 0o644, flag: "wx" });\n\tchmodSync(config, 0o600);\n\tprocess.umask(0o077);\n',
+			"the owned config created readable and normalized before Git",
 		);
 		// The snapshot subtree's own root is a created directory too.
 		await killed(
