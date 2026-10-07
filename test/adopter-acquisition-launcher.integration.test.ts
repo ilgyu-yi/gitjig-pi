@@ -260,12 +260,38 @@ if (plan.omittedMember && args.includes("ls-tree") && args.includes("-r")) {
 	process.exit(listed.status ?? 1);
 }
 const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
-// The modes Git itself created, before anything normalizes them: the artifact
-// relation holds from the first created child onward, not from provision.
-if (args.includes("init") && run.status === 0) {
-	const at = args[args.length - 1];
-	const mode = (p) => { try { return require("node:fs").lstatSync(p).mode & 0o777; } catch { return null; } };
-	appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), dir: mode(require("node:path").join(at, ".git")), file: mode(require("node:path").join(at, ".git/config")) }) + "\\n");
+// The modes each Git child creates, read where it creates them, before anything
+// normalizes them. The artifacts relation holds from the first created child
+// onward: a git-child's own file may be read-only or executable, but nothing it
+// creates is group- or world-accessible, and a created directory is 0700.
+if (run.status === 0) {
+	const fsm = require("node:fs");
+	const pathm = require("node:path");
+	const at = args.includes("-C") ? args[args.indexOf("-C") + 1] : args[args.length - 1];
+	if (typeof at === "string" && at.includes("gitjig-acquire-") && fsm.existsSync(at)) {
+		const offenders = [];
+		let files = 0;
+		let dirs = 0;
+		const walk = (p) => {
+			for (const name of fsm.readdirSync(p)) {
+				const full = pathm.join(p, name);
+				const stats = fsm.lstatSync(full);
+				const mode = stats.mode & 0o777;
+				const rel = pathm.relative(at, full);
+				if (stats.isDirectory()) {
+					dirs++;
+					if (mode !== 0o700) offenders.push([rel, "dir", mode]);
+					walk(full);
+				} else if (stats.isFile()) {
+					files++;
+					if ((mode & 0o077) !== 0) offenders.push([rel, "file", mode]);
+				} else offenders.push([rel, "other", mode]);
+			}
+		};
+		walk(at);
+		const mode = (p) => { try { return fsm.lstatSync(p).mode & 0o777; } catch { return null; } };
+		appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), gitDir: mode(pathm.join(at, ".git")), config: mode(pathm.join(at, ".git/config")), offenders, files, dirs }) + "\\n");
+	}
 }
 // After the checkout: the created store declares an object store outside itself.
 if (plan.alternates && args.includes("checkout") && run.status === 0) {
@@ -998,16 +1024,44 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 	);
 	assert.deepEqual(wrong, [], "a created entry is not owner-private at the relation's mode");
 	// Those modes are read at provision, after normalization. The relation holds from
-	// the first created child, so the modes Git created under the launcher's own mask
-	// are read where they were made: right after the snapshot repository was created.
+	// the first created child onward, so every Git child's own creations are read
+	// where they were made, after each invocation and before the launcher normalizes
+	// anything: `git-child-created-file` admits a read-only or executable file and
+	// nothing group- or world-accessible, and a created directory is 0700.
 	const created = readFileSync(join(f.root, "git-env.log.modes.jsonl"), "utf8")
 		.trim()
 		.split("\n")
-		.map((line) => JSON.parse(line) as { args: string; dir: number | null; file: number | null });
-	assert.equal(created.length, 1, "the created repository was not observed exactly once");
+		.map(
+			(line) =>
+				JSON.parse(line) as {
+					args: string;
+					gitDir: number | null;
+					config: number | null;
+					offenders: [string, string, number][];
+					files: number;
+					dirs: number;
+				},
+		);
+	// Every child that writes in the acquisition child is observed: the snapshot's
+	// creation, its origin, the fetch that writes the object store, and the checkout
+	// that writes the working files.
+	for (const stage of [" init ", "remote add origin", " fetch ", " checkout "])
+		assert.ok(
+			created.some(({ args }) => args.includes(stage)),
+			`no creation-time observation for${stage}`,
+		);
+	for (const { args, offenders } of created)
+		assert.deepEqual(offenders, [], `a Git child created an entry outside the artifacts relation: ${args}`);
+	// The fetch really did write an object store, and the checkout really did write
+	// files, so an empty observation cannot pass as a clean one.
+	const fetched = created.find(({ args }) => args.includes(" fetch "));
+	const checked = created.find(({ args }) => args.includes(" checkout "));
+	assert.ok((fetched?.files ?? 0) > 0 && (fetched?.dirs ?? 0) > 0, "the fetch observation saw no created entries");
+	assert.ok((checked?.files ?? 0) > (fetched?.files ?? 0), "the checkout observation saw no new files");
+	const initial = created.find(({ args }) => args.includes(" init "));
 	assert.deepEqual(
-		created.map(({ dir, file }) => [dir, file]),
-		[[0o700, 0o600]],
+		[initial?.gitDir, initial?.config],
+		[0o700, 0o600],
 		"Git created the snapshot repository outside the relation's modes",
 	);
 	// An acquired entry another user owns: the harness reports another owner for the snapshot.
@@ -1501,6 +1555,15 @@ test(
 			"\tprocess.umask(0o077);\n",
 			"\tprocess.umask(0o022);\n",
 			"a child created under a group- and world-readable mask",
+		);
+		// The same mask loosened around one child only, and restored before the
+		// normalization: every provision-time mode is still exact, so only an
+		// observation taken at the creating child can refuse it.
+		await killed(
+			armOwnsEveryArtifact,
+			'\tawait git(["-C", destination, "fetch", "-q", "--no-tags", "--depth=1", "origin", pin.revision], "source-unavailable");\n',
+			'\tprocess.umask(0o022);\n\tawait git(["-C", destination, "fetch", "-q", "--no-tags", "--depth=1", "origin", pin.revision], "source-unavailable");\n\tprocess.umask(0o077);\n',
+			"the mask loosened for the fetch alone",
 		);
 		// A variable the platform adds too, with another value: a name-only
 		// subtraction hides it on a host that adds that name, and a host that does
