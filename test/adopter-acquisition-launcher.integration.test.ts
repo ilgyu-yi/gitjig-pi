@@ -963,6 +963,29 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	const linkedDirBefore = snapshot(linkedDir.target);
 	refused(launch(linkedDir), "invalid-input", 64, "a target whose database is reached through a link");
 	invariant(linkedDir, linkedDirBefore, "a target whose database is reached through a link");
+	// The object database reached through a link below `.git`: the whole `objects`
+	// directory, and one fan-out directory alone. Neither declares an alternate,
+	// and both store objects outside the target.
+	for (const [label, linkAt] of [
+		["a linked objects directory", "objects"],
+		["a linked fan-out directory", "fanout"],
+	] as const) {
+		const f = fixture(launcher);
+		const head = git(f.target, "rev-parse", "HEAD");
+		const objects = join(f.target, ".git/objects");
+		const moved =
+			linkAt === "objects"
+				? objects
+				: join(objects, readdirSync(objects).find((name) => /^[0-9a-f]{2}$/.test(name)) ?? "");
+		const external = join(f.root, `external-${linkAt}`);
+		renameSync(moved, external);
+		symlinkSync(external, moved);
+		assert.equal(git(f.target, "rev-parse", "HEAD"), head, `${label}: the linked store does not serve HEAD`);
+		assert.equal(existsSync(join(objects, "info/alternates")), false, `${label}: an alternate is declared`);
+		const before = snapshot(f.target);
+		refused(launch(f), "invalid-input", 64, label);
+		invariant(f, before, label);
+	}
 	// A declaration that cannot be read is not an absent one. The harness refuses the
 	// read itself, because a target whose `.git` is a real directory can still hold
 	// an unreadable `objects/info`, and reading nothing there must not admit the
@@ -1037,7 +1060,9 @@ async function armConfirmsTheClosure(launcher: string): Promise<void> {
 	for (const [label, plan] of [
 		["another origin", { origin: "https://github.com/o/r2" }],
 		["an attached checkout", { attached: true }],
-		["another common directory", { say: { "snapshot rev-parse --git-common-dir": "/" } }],
+		// A real repository outside the child (the fixture's own bare source), so only
+		// confinement refuses it: its database is clean, linkless and undeclared.
+		["another common directory", { say: { "snapshot rev-parse --git-common-dir": "../../../source.git" } }],
 		["another work tree", { say: { "snapshot rev-parse --show-toplevel": "/" } }],
 		["another revision", { say: { "snapshot rev-parse HEAD": "0".repeat(40) } }],
 		// Clean everywhere the closure looks, dirty only to status.
@@ -1784,6 +1809,12 @@ test(
 			'\townedSubtree(child, uid);\n\t// snapshot-check\n\tconst shown = async (/** @type {string[]} */ args) =>\n\t\tline(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));\n\tconst real = realpathSync(destination);\n\tconst commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));\n',
 			'\t// snapshot-check\n\tconst shown = async (/** @type {string[]} */ args) =>\n\t\tline(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));\n\tconst real = realpathSync(destination);\n\tconst commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));\n\townedSubtree(child, uid);\n',
 			"normalization deferred past the node's first successor call",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			"\t\tif (stats.isSymbolicLink()) refuse(cause);\n\t\tif (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));\n",
+			"\t\tif (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));\n",
+			"an object database reached through a link below .git",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
