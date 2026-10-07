@@ -196,6 +196,8 @@ type GitPlan = {
 	omittedMember?: string;
 	// An external object store the snapshot declares once its checkout exists.
 	alternates?: string;
+	// The invocation whose arguments end so fails, so a node's own child can fail.
+	failAt?: string;
 };
 
 function gitSeam({
@@ -240,11 +242,15 @@ for (const [tail, text] of Object.entries(plan.say ?? {}))
 		process.stdout.write(text + "\\n");
 		process.exit(0);
 	}
+if (plan.failAt && args.join(" ").endsWith(plan.failAt)) {
+	process.stderr.write("the seam refused this invocation\\n");
+	process.exit(3);
+}
 let env = process.env;
 if (args.includes("fetch")) {
 	if (plan.fetch === "signal") process.kill(process.pid, "SIGTERM");
 	if (plan.fetch === "overflow") process.stdout.write("x".repeat(4096));
-	if (plan.fetch === "sleep") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+	if (plan.fetch === "sleep") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
 	env = { ...env, GIT_ALLOW_PROTOCOL: "file" };
 	args = ["-c", ${JSON.stringify(`url.file://${bare}.insteadOf=${sourceUrl}`)}, ...args];
 }
@@ -272,6 +278,10 @@ if (run.status === 0) {
 		const offenders = [];
 		let files = 0;
 		let dirs = 0;
+		// The subtree's own root counts: it is a created directory too.
+		const rootMode = fsm.lstatSync(at).mode & 0o777;
+		dirs++;
+		if (rootMode !== 0o700) offenders.push([".", "dir", rootMode]);
 		const walk = (p) => {
 			for (const name of fsm.readdirSync(p)) {
 				const full = pathm.join(p, name);
@@ -702,9 +712,23 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	] as const) {
 		const f = fixture(launcher, { plan: { fetch } });
 		const before = snapshot(f.target);
+		const started = Date.now();
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "source-unavailable", 69, label);
+		// The sleeping child outlives any bound this suite sets, so what ended it is
+		// the deadline that was applied, not the child finishing: a widened deadline
+		// shows up here as elapsed time, where a status alone cannot see it.
+		if (fetch === "sleep")
+			assert.ok(
+				Date.now() - started < 4000,
+				`${label}: the applied deadline was not the narrowed one (${Date.now() - started} ms)`,
+			);
 		invariant(f, before, label);
 	}
+	// A snapshot-check Git child that fails is that node's cause, not another's.
+	const failing = fixture(launcher, { plan: { failAt: "rev-parse --git-common-dir" } });
+	const failingBefore = snapshot(failing.target);
+	refused(launch(failing), "snapshot-identity-mismatch", 65, "a failing snapshot-check child");
+	invariant(failing, failingBefore, "a failing snapshot-check child");
 	// Repository spelling is literal: .git belongs to the name, not an optional suffix.
 	const literalSuffix = fixture(launcher, { repository: "r.git" });
 	const suffixRun = launch(literalSuffix);
@@ -1104,14 +1128,22 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 		["an overflowing provision", 'process.stdout.write("x".repeat(4096));\n', "streamBytes: 1024"],
 		[
 			"a provision past its bound",
-			"await new Promise((resolve) => setTimeout(resolve, 5000));\n",
+			"await new Promise((resolve) => setTimeout(resolve, 30000));\n",
 			"nodeTimeoutMs: 500",
 		],
 	] as const) {
 		const f = fixture(launcher, {
 			source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/install/provision-cli.ts"), body),
 		});
+		const started = Date.now();
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "provision-refused", 70, label);
+		// As with the Git bound: this child never ends on its own, so the elapsed time
+		// is the deadline that was actually applied.
+		if (label === "a provision past its bound")
+			assert.ok(
+				Date.now() - started < 4000,
+				`${label}: the applied deadline was not the narrowed one (${Date.now() - started} ms)`,
+			);
 		assert.deepEqual(readdirSync(f.scratch), [], `${label}: the child was not removed`);
 	}
 	// Cleanup that cannot confirm absence overrides success and every other cause.
@@ -1555,6 +1587,33 @@ test(
 			"\tprocess.umask(0o077);\n",
 			"\tprocess.umask(0o022);\n",
 			"a child created under a group- and world-readable mask",
+		);
+		// The snapshot subtree's own root is a created directory too.
+		await killed(
+			armOwnsEveryArtifact,
+			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n',
+			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n\tchmodSync(destination, 0o755);\n',
+			"the snapshot root left group- and world-readable",
+		);
+		// Every snapshot-check Git child carries that node's own cause.
+		await killed(
+			armSourcesOnlyTheProjection,
+			'line(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));',
+			'line(await git(["-C", destination, ...args], "source-unavailable"));',
+			"a failing snapshot-check child misnamed as an unavailable source",
+		);
+		// The deadline that is applied, not merely the one exported.
+		await killed(
+			armSourcesOnlyTheProjection,
+			"const timer = setTimeout(kill, timeoutMs);",
+			"const timer = setTimeout(kill, timeoutMs * 10);",
+			"a Git child's applied deadline widened tenfold",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			"const timer = setTimeout(kill, timeoutMs);",
+			"const timer = setTimeout(kill, timeoutMs * 10);",
+			"the provision child's applied deadline widened tenfold",
 		);
 		// The same mask loosened around one child only, and restored before the
 		// normalization: every provision-time mode is still exact, so only an
