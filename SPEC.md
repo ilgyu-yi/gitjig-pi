@@ -52,20 +52,20 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1055 |
 | &nbsp;&nbsp;§4.6 | Binding and resolution | 1059 |
 | &nbsp;&nbsp;§4.7 | Host boundary | 1075 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1138 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1195 |
-| §5 | Cross-cutting contracts | 1320 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1324 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1330 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1334 |
-| &nbsp;&nbsp;§5.4 | Work language | 1338 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1342 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1360 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1372 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1382 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1390 |
-| §6 | Self-governance milestone | 1406 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1417 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1141 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1198 |
+| §5 | Cross-cutting contracts | 1323 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1327 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1333 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1337 |
+| &nbsp;&nbsp;§5.4 | Work language | 1341 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1345 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1363 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1375 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1385 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1393 |
+| §6 | Self-governance milestone | 1409 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1420 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -1086,7 +1086,10 @@ First-clone artifacts — the shared operating-system base may be sticky or worl
 | acquisition-child | temporary-base | 1 | 0700 | current-user | non-link |
 | created-directory | acquisition-child-subtree | 0-or-more | 0700 | current-user | non-link |
 | created-file | acquisition-child-subtree | 0-or-more | 0600 | current-user | non-link |
+| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only | current-user | non-link |
 <!-- acquisition-relation: artifacts:end -->
+
+A git-child mandated by §4.2 writes inside that subtree itself, and Git, not the launcher, chooses those modes: it creates an object file read-only and a checked-out executable blob with its executable bit, each from its own fixed base mode. The `git-child-created-file` row admits exactly that latitude and no more. `owner-only` is a closed mode value: every file such a child creates carries no group bit and no world bit at any moment, so the absence of an exact mode is never the absence of owner-privacy. The launcher's own creations have no such latitude — they are the `created-file` and `created-directory` modes at creation — and a created directory is 0700 whoever creates it. The launcher normalizes every created entry to those two rows' modes within the node whose child created it, before that node's successor runs, so no later node observes a mode outside them. The owner and `linkPolicy` columns hold for every artifact at every moment, unconditionally and for every creator.
 
 The acquisition child is named `gitjig-acquire-*`. These limits, the cleanup obligation and the terminal algebra below govern the handed launcher's own writes and its controlled outcomes. What the caller's own invocation does before or beneath those bytes is held by the residual relation, not guaranteed here:
 

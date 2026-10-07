@@ -117,7 +117,14 @@ const RELATIONS: Record<string, Relation> = {
 	artifacts: {
 		region: "host",
 		header: ["artifact", "parent", "count", "mode", "owner", "linkPolicy"],
-		domains: [SCALAR, SCALAR, ["1", "0-or-more"], ["existing", "0700", "0600"], ["platform", "current-user"], SCALAR],
+		domains: [
+			SCALAR,
+			SCALAR,
+			["1", "0-or-more"],
+			["existing", "0700", "0600", "owner-only"],
+			["platform", "current-user"],
+			SCALAR,
+		],
 		key: [0],
 	},
 	residuals: {
@@ -434,6 +441,39 @@ it("the relations are a closed schema: domains, keys, references, headers and pl
 			"<!-- acquisition-relation: nodes:start -->",
 			"<!-- acquisition-relation: phantom:end -->\n<!-- acquisition-relation: nodes:start -->",
 		],
+		// The git-child latitude, obligation by obligation. Each row cell is the
+		// contract's own statement, so each edit is refused by the schema or by the
+		// reviewed projection, and none of them is refused by two.
+		[
+			"the git-child row dropped, so a child's own writes claim the launcher's mode",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only | current-user | non-link |\n",
+			"",
+		],
+		[
+			"a group bit admitted for a git-child's file",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only |",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | 0640 |",
+		],
+		[
+			"the latitude widened to the launcher's own creations",
+			"| created-file | acquisition-child-subtree | 0-or-more | 0600 |",
+			"| created-file | acquisition-child-subtree | 0-or-more | owner-only |",
+		],
+		[
+			"the latitude widened to a created directory",
+			"| created-directory | acquisition-child-subtree | 0-or-more | 0700 |",
+			"| created-directory | acquisition-child-subtree | 0-or-more | owner-only |",
+		],
+		[
+			"a git-child's file exempted from the owner column",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only | current-user | non-link |",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only | platform | non-link |",
+		],
+		[
+			"a git-child's file exempted from the link policy",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only | current-user | non-link |",
+			"| git-child-created-file | acquisition-child-subtree | 0-or-more | owner-only | current-user | any |",
+		],
 		[
 			"the old matrix restored",
 			"<!-- acquisition-relation: nodes:start -->",
@@ -470,6 +510,34 @@ it("a contradiction in any region's prose reds, though no table changed", () => 
 		contractHolds(edited("Neither exception changes configuration", "Neither exception usually changes configuration")),
 		false,
 	);
+	// The git-child latitude's own prose obligations, which no table cell carries:
+	// when the normalization happens, and that the latitude is owner-only at every
+	// moment rather than only at the end.
+	for (const [named, from, to] of [
+		[
+			"the normalization unbound from its node",
+			"within the node whose child created it, before that node's successor runs",
+			"at some point before the terminal",
+		],
+		[
+			"the owner-only latitude weakened to an eventual state",
+			"carries no group bit and no world bit at any moment",
+			"carries no group bit and no world bit once normalization has run",
+		],
+		[
+			"a created directory given the git-child latitude in prose",
+			"a created directory is 0700 whoever creates it",
+			"a created directory may be owner-only",
+		],
+		[
+			"the unconditional owner and link obligations made conditional",
+			"unconditionally and for every creator",
+			"for the launcher's own creations",
+		],
+	] as const) {
+		assert.ok(spec.includes(from), `${named}: the obligation is not in SPEC, so this measures nothing`);
+		assert.equal(contractHolds(edited(from, to)), false, `${named} survived`);
+	}
 });
 
 it("a runtime file smuggled into the contract-only change reds", () => {
