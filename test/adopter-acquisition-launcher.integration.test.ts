@@ -198,6 +198,8 @@ type GitPlan = {
 	alternates?: string;
 	// The invocation whose arguments end so fails, so a node's own child can fail.
 	failAt?: string;
+	// The invocation whose arguments end so outlives any bound the suite sets.
+	sleepAt?: string;
 };
 
 function gitSeam({
@@ -242,6 +244,7 @@ for (const [tail, text] of Object.entries(plan.say ?? {}))
 		process.stdout.write(text + "\\n");
 		process.exit(0);
 	}
+if (plan.sleepAt && args.join(" ").endsWith(plan.sleepAt)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
 if (plan.failAt && args.join(" ").endsWith(plan.failAt)) {
 	process.stderr.write("the seam refused this invocation\\n");
 	process.exit(3);
@@ -739,6 +742,16 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 		invariant(f, before, label);
 	}
 	// A snapshot-check Git child that fails is that node's cause, not another's.
+	// The target-admission Git child carries its own deadline, applied as narrowly.
+	const sleepingAdmission = fixture(launcher, { plan: { sleepAt: "target rev-parse --show-toplevel" } });
+	const sleepingBefore = snapshot(sleepingAdmission.target);
+	const admissionStarted = Date.now();
+	refused(launchWith(sleepingAdmission, "gitTimeoutMs: 500"), "invalid-input", 64, "an admission child past its bound");
+	assert.ok(
+		Date.now() - admissionStarted < 4000,
+		`an admission child past its bound: the applied deadline was not the narrowed one (${Date.now() - admissionStarted} ms)`,
+	);
+	invariant(sleepingAdmission, sleepingBefore, "an admission child past its bound");
 	const failing = fixture(launcher, { plan: { failAt: "rev-parse --git-common-dir" } });
 	const failingBefore = snapshot(failing.target);
 	refused(launch(failing), "snapshot-identity-mismatch", 65, "a failing snapshot-check child");
@@ -1831,6 +1844,12 @@ test(
 			"counts[name] += chunk.length;",
 			"counts[name] = chunk.length;",
 			"a stream's output counted per chunk rather than in total",
+		);
+		await killed(
+			armSourcesOnlyTheProjection,
+			"\t\t\ttimeoutMs: seams.gitTimeoutMs,\n",
+			"\t\t\ttimeoutMs: seams.gitTimeoutMs * 10,\n",
+			"the admission child's applied deadline widened tenfold",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
