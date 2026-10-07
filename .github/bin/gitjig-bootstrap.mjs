@@ -186,6 +186,14 @@ const GIT_CONFIG = [
 	"protocol.file.allow=never",
 	"-c",
 	"core.fileMode=false",
+	// The artifact relation's linkPolicy is unconditional and holds at every
+	// moment, so a tracked link must never be created, not refused after the fact:
+	// with this row Git materializes one as a regular file holding the link text,
+	// which is also exactly the bytes its blob carries, so the closure check still
+	// compares equal and a link inside the module population still refuses on its
+	// entry mode.
+	"-c",
+	"core.symlinks=false",
 	"--no-replace-objects",
 ];
 
