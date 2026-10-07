@@ -220,6 +220,20 @@ function refuseAlternates(gitDir, cause) {
 		refuse(cause);
 	}
 	if (!own || !own.isDirectory() || own.isSymbolicLink()) refuse(cause);
+	// The same holds at every depth of the object database: a linked `objects`,
+	// fan-out or pack directory, or a linked object file, stores objects elsewhere
+	// as surely as a declared alternate does.
+	const walkObjects = (/** @type {string} */ path) => {
+		let stats;
+		try {
+			stats = lstatSync(path);
+		} catch {
+			refuse(cause);
+		}
+		if (stats.isSymbolicLink()) refuse(cause);
+		if (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));
+	};
+	walkObjects(join(gitDir, "objects"));
 	let declared;
 	try {
 		declared = lstatSync(join(gitDir, "objects", "info", "alternates"), { throwIfNoEntry: false });
