@@ -936,6 +936,40 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	const pointerBefore = snapshot(pointer.target);
 	refused(launch(pointer), "invalid-input", 64, "a target whose object database is elsewhere");
 	invariant(pointer, pointerBefore, "a target whose object database is elsewhere");
+	// The same database elsewhere, reached through a link rather than a pointer
+	// file: reading the declaration through the link would find none and admit the
+	// external store, so the link itself refuses.
+	const linkedDir = fixture(launcher);
+	const linkedHead = git(linkedDir.target, "rev-parse", "HEAD");
+	const moved = join(linkedDir.root, "linked-gitdir");
+	renameSync(join(linkedDir.target, ".git"), moved);
+	symlinkSync(moved, join(linkedDir.target, ".git"));
+	assert.equal(git(linkedDir.target, "rev-parse", "HEAD"), linkedHead, "the linked database does not resolve");
+	assert.equal(
+		existsSync(join(linkedDir.target, ".git/objects/info/alternates")),
+		false,
+		"the linked database declares an alternate, so this measures the leaf instead",
+	);
+	const linkedDirBefore = snapshot(linkedDir.target);
+	refused(launch(linkedDir), "invalid-input", 64, "a target whose database is reached through a link");
+	invariant(linkedDir, linkedDirBefore, "a target whose database is reached through a link");
+	// A declaration that cannot be read is not an absent one. The harness refuses the
+	// read itself, because a target whose `.git` is a real directory can still hold
+	// an unreadable `objects/info`, and reading nothing there must not admit the
+	// store it might have named.
+	const unreadable = fixture(launcher);
+	const unreadableBefore = snapshot(unreadable.target);
+	refused(
+		launchWith(
+			unreadable,
+			"",
+			'const lstat = fs.lstatSync; fs.lstatSync = (path, ...rest) => { if (String(path).endsWith("objects/info/alternates")) { const error = new Error("EACCES: permission denied"); error.code = "EACCES"; throw error; } return lstat(path, ...rest); }; syncBuiltinESMExports();',
+		),
+		"invalid-input",
+		64,
+		"an unreadable alternates declaration",
+	);
+	invariant(unreadable, unreadableBefore, "an unreadable alternates declaration");
 }
 
 // ---------------------------------------------------------------------------
@@ -1097,13 +1131,20 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 	const observedRun = launchWith(
 		observed,
 		"",
-		`const write = fs.writeFileSync; fs.writeFileSync = (path, ...rest) => { const out = write(path, ...rest); if (String(path).endsWith("/gitconfig")) fs.appendFileSync(${JSON.stringify(configModes)}, (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); return out; }; syncBuiltinESMExports();`,
+		`const write = fs.writeFileSync; fs.writeFileSync = (path, ...rest) => { const out = write(path, ...rest); if (String(path).endsWith("/gitconfig")) fs.appendFileSync(${JSON.stringify(configModes)}, "file " + (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); return out; }; const mkdir = fs.mkdirSync; fs.mkdirSync = (path, ...rest) => { const out = mkdir(path, ...rest); try { fs.appendFileSync(${JSON.stringify(configModes)}, "dir " + (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); } catch {} return out; }; const mkdtemp = fs.mkdtempSync; fs.mkdtempSync = (...rest) => { const made = mkdtemp(...rest); fs.appendFileSync(${JSON.stringify(configModes)}, "dir " + (fs.lstatSync(made).mode & 0o777).toString(8) + "\\n"); return made; }; syncBuiltinESMExports();`,
 	);
 	assert.equal(observedRun.status, 0, `the observed acquisition failed (stderr ${JSON.stringify(observedRun.stderr)})`);
+	// Read in the launcher's own process, at the moment of creation: a mode set
+	// after the fact, before any Git child runs, is invisible everywhere else.
+	const atCreation = readFileSync(configModes, "utf8").trim().split("\n");
+	assert.ok(
+		atCreation.includes("file 600") && atCreation.includes("dir 700"),
+		`the launcher's own creations were not observed: ${JSON.stringify(atCreation)}`,
+	);
 	assert.deepEqual(
-		readFileSync(configModes, "utf8").trim().split("\n"),
-		["600"],
-		"the owned config was not created at the relation's mode",
+		[...new Set(atCreation)].sort(),
+		["dir 700", "file 600"],
+		"the launcher created an entry outside the relation's modes",
 	);
 	// A tracked link is never created, at any moment: outside the module population
 	// the acquisition still succeeds and the child holds no link, and inside it the
@@ -1654,6 +1695,20 @@ test(
 			'\twriteFileSync(config, "", { mode: 0o600, flag: "wx" });\n',
 			'\tprocess.umask(0o022);\n\twriteFileSync(config, "", { mode: 0o644, flag: "wx" });\n\tchmodSync(config, 0o600);\n\tprocess.umask(0o077);\n',
 			"the owned config created readable and normalized before Git",
+		);
+		// A database reached through a linked `.git`, and a directory created public
+		// and normalized before any Git child could observe it.
+		await killed(
+			armExcludesAlternateObjectStores,
+			"\tif (!own || !own.isDirectory() || own.isSymbolicLink()) refuse(cause);\n",
+			"",
+			"a target database reached through a link",
+		);
+		await killed(
+			armOwnsEveryArtifact,
+			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n',
+			'\tconst { mkdirSync } = await import("node:fs");\n\tprocess.umask(0o022);\n\tmkdirSync(destination, { mode: 0o755 });\n\tchmodSync(destination, 0o700);\n\tprocess.umask(0o077);\n\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n',
+			"a directory created public and normalized before Git",
 		);
 		// The snapshot subtree's own root is a created directory too.
 		await killed(
