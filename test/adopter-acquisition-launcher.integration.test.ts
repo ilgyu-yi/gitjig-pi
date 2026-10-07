@@ -280,6 +280,9 @@ if (run.status === 0) {
 	const at = owned ? owned[1] : named;
 	if (owned && fsm.existsSync(at)) {
 		const offenders = [];
+		// Entries that are owner-only but not yet at the relation's exact modes: the
+		// latitude a git-child has until the launcher normalizes within its node.
+		const loose = [];
 		let files = 0;
 		let dirs = 0;
 		// The subtree's own root counts: it is a created directory too.
@@ -299,12 +302,13 @@ if (run.status === 0) {
 				} else if (stats.isFile()) {
 					files++;
 					if ((mode & 0o077) !== 0) offenders.push([rel, "file", mode]);
+					else if (mode !== 0o600) loose.push([rel, "file", mode]);
 				} else offenders.push([rel, "other", mode]);
 			}
 		};
 		walk(at);
 		const mode = (p) => { try { return fsm.lstatSync(p).mode & 0o777; } catch { return null; } };
-		appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), gitDir: mode(pathm.join(named, ".git")), config: mode(pathm.join(named, ".git/config")), offenders, files, dirs }) + "\\n");
+		appendFileSync(${JSON.stringify(`${envLog}.modes.jsonl`)}, JSON.stringify({ args: args.join(" "), gitDir: mode(pathm.join(named, ".git")), config: mode(pathm.join(named, ".git/config")), offenders, loose, files, dirs }) + "\\n");
 	}
 }
 // After the checkout: the created store declares an object store outside itself.
@@ -660,6 +664,12 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 		[
 			"a short revision",
 			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: revision.slice(1) }),
+		],
+		[
+			// The pattern test coerces, so a one-element array of the exact revision
+			// matches it: only the type itself refuses this shape.
+			"a revision that is not a string",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: [revision] }),
 		],
 		["not an object", () => "[]"],
 		// These bytes are not UTF-8 and not JSON either, so they measure the parse,
@@ -1097,6 +1107,7 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 					gitDir: number | null;
 					config: number | null;
 					offenders: [string, string, number][];
+					loose: [string, string, number][];
 					files: number;
 					dirs: number;
 				},
@@ -1111,6 +1122,17 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 		);
 	for (const { args, offenders } of created)
 		assert.deepEqual(offenders, [], `a Git child created an entry outside the artifacts relation: ${args}`);
+	// The latitude ends with the node that used it: by the time the snapshot check's
+	// own children run, the source-fetch node's successor, every entry is already at
+	// the relation's exact modes.
+	const sourceFetch = /( init | remote add | fetch | checkout )/;
+	for (const { args, loose } of created.filter(({ args }) => !sourceFetch.test(` ${args} `)))
+		assert.deepEqual(loose, [], `the successor node observed an unnormalized entry: ${args}`);
+	// And the latitude was really used, so the assertion above is not vacuous.
+	assert.ok(
+		created.some(({ args, loose }) => sourceFetch.test(` ${args} `) && loose.length > 0),
+		"no Git child used the read-only or executable latitude, so normalization proves nothing",
+	);
 	// The fetch really did write an object store, and the checkout really did write
 	// files, so an empty observation cannot pass as a clean one.
 	const fetched = created.find(({ args }) => args.includes(" fetch "));
@@ -1695,6 +1717,21 @@ test(
 			'\twriteFileSync(config, "", { mode: 0o600, flag: "wx" });\n',
 			'\tprocess.umask(0o022);\n\twriteFileSync(config, "", { mode: 0o644, flag: "wx" });\n\tchmodSync(config, 0o600);\n\tprocess.umask(0o077);\n',
 			"the owned config created readable and normalized before Git",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			'typeof value.revision !== "string" || ',
+			"",
+			"a revision admitted by its pattern alone",
+		);
+		// Normalization belongs to the node whose child created the entry, before its
+		// successor runs: moved past the snapshot check's first call, everything is
+		// still normalized, and only an observation taken at that call can see it.
+		await killed(
+			armOwnsEveryArtifact,
+			'\townedSubtree(child, uid);\n\t// snapshot-check\n\tconst shown = async (/** @type {string[]} */ args) =>\n\t\tline(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));\n\tconst real = realpathSync(destination);\n\tconst commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));\n',
+			'\t// snapshot-check\n\tconst shown = async (/** @type {string[]} */ args) =>\n\t\tline(await git(["-C", destination, ...args], "snapshot-identity-mismatch"));\n\tconst real = realpathSync(destination);\n\tconst commonDir = realpathSync(resolve(destination, await shown(["rev-parse", "--git-common-dir"])));\n\townedSubtree(child, uid);\n',
+			"normalization deferred past the node's first successor call",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
