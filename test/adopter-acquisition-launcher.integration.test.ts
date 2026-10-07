@@ -1153,7 +1153,7 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 	const observedRun = launchWith(
 		observed,
 		"",
-		`const write = fs.writeFileSync; fs.writeFileSync = (path, ...rest) => { const out = write(path, ...rest); if (String(path).endsWith("/gitconfig")) fs.appendFileSync(${JSON.stringify(configModes)}, "file " + (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); return out; }; const mkdir = fs.mkdirSync; fs.mkdirSync = (path, ...rest) => { const out = mkdir(path, ...rest); try { fs.appendFileSync(${JSON.stringify(configModes)}, "dir " + (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); } catch {} return out; }; const mkdtemp = fs.mkdtempSync; fs.mkdtempSync = (...rest) => { const made = mkdtemp(...rest); fs.appendFileSync(${JSON.stringify(configModes)}, "dir " + (fs.lstatSync(made).mode & 0o777).toString(8) + "\\n"); return made; }; const chmod = fs.chmodSync; fs.chmodSync = (path, mode, ...rest) => { fs.appendFileSync(${JSON.stringify(configModes)}, "chmod " + (mode & 0o777).toString(8) + "\\n"); return chmod(path, mode, ...rest); }; syncBuiltinESMExports();`,
+		`const write = fs.writeFileSync; fs.writeFileSync = (path, ...rest) => { const out = write(path, ...rest); if (String(path).endsWith("/gitconfig")) fs.appendFileSync(${JSON.stringify(configModes)}, "file " + (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); return out; }; const mkdir = fs.mkdirSync; fs.mkdirSync = (path, ...rest) => { const out = mkdir(path, ...rest); try { fs.appendFileSync(${JSON.stringify(configModes)}, "dir " + (fs.lstatSync(path).mode & 0o777).toString(8) + "\\n"); } catch {} return out; }; const mkdtemp = fs.mkdtempSync; fs.mkdtempSync = (...rest) => { const made = mkdtemp(...rest); fs.appendFileSync(${JSON.stringify(configModes)}, "dir " + (fs.lstatSync(made).mode & 0o777).toString(8) + "\\n"); return made; }; const chmod = fs.chmodSync; fs.chmodSync = (path, mode, ...rest) => { const kind = fs.lstatSync(path).isDirectory() ? "dir" : "file"; fs.appendFileSync(${JSON.stringify(configModes)}, "chmod " + kind + " " + (mode & 0o777).toString(8) + "\\n"); return chmod(path, mode, ...rest); }; syncBuiltinESMExports();`,
 	);
 	assert.equal(observedRun.status, 0, `the observed acquisition failed (stderr ${JSON.stringify(observedRun.stderr)})`);
 	// Read in the launcher's own process, at the moment of creation: a mode set
@@ -1169,14 +1169,15 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 		"the launcher created an entry outside the relation's modes",
 	);
 	// Between those boundaries the launcher changes modes itself, and the relation
-	// holds continuously: every mode it sets is one of the relation's own, so no
-	// entry is exposed and restored between two observations.
+	// holds continuously: every mode it sets is its own entry's row, read with the
+	// entry's type, so no entry is exposed or mistyped between two observations. A
+	// directory is 0700 whatever latitude a git-child's file has.
 	const chmods = atCreation.filter((line) => line.startsWith("chmod "));
 	assert.ok(chmods.length > 0, "the launcher set no mode at all, so this measures nothing");
 	assert.deepEqual(
-		[...new Set(chmods)].filter((line) => line !== "chmod 600" && line !== "chmod 700"),
+		[...new Set(chmods)].filter((line) => line !== "chmod file 600" && line !== "chmod dir 700"),
 		[],
-		`the launcher set a mode outside the relation: ${JSON.stringify([...new Set(chmods)])}`,
+		`the launcher set a mode outside the entry's own row: ${JSON.stringify([...new Set(chmods)])}`,
 	);
 	// A tracked link is never created, at any moment: outside the module population
 	// the acquisition still succeeds and the child holds no link, and inside it the
@@ -1762,6 +1763,12 @@ test(
 			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n',
 			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n\tchmodSync(destination, 0o755);\n\tchmodSync(destination, 0o700);\n',
 			"a directory exposed and restored between observations",
+		);
+		await killed(
+			armOwnsEveryArtifact,
+			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n',
+			'\tawait git(["init", "-q", "--template=", "--", destination], "source-unavailable");\n\tchmodSync(destination, 0o600);\n\tchmodSync(destination, 0o700);\n',
+			"a directory set to a file's mode between observations",
 		);
 		await killed(
 			armMapsEveryChildOutcome,
