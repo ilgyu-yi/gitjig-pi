@@ -44,28 +44,28 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.10 | Delegated computation | 779 |
 | &nbsp;&nbsp;§3.11 | Gate design | 793 |
 | &nbsp;&nbsp;§3.12 | Gate verification | 815 |
-| §4 | Substrate and install contract | 825 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 829 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 853 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 1045 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1051 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1055 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 1059 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 1075 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1141 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1198 |
-| §5 | Cross-cutting contracts | 1323 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1327 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1333 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1337 |
-| &nbsp;&nbsp;§5.4 | Work language | 1341 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1345 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1363 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1375 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1385 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1393 |
-| §6 | Self-governance milestone | 1409 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1420 |
+| §4 | Substrate and install contract | 827 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 831 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 855 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 1047 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1053 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1057 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 1061 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 1077 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1143 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1200 |
+| §5 | Cross-cutting contracts | 1325 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1329 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1335 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1339 |
+| &nbsp;&nbsp;§5.4 | Work language | 1343 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1347 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1365 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1377 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1387 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1395 |
+| §6 | Self-governance milestone | 1411 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1422 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -814,7 +814,9 @@ The norm is **procedural today**, enforced at review (§2.3); the semantics land
 
 ### 3.12 Gate verification
 
-A green suite does not prove a guard is live: a silently weakened guard can keep passing assertions that no longer exercise it. Guards are therefore verified by **mutating the guarded artifact** — weaken the rule in a throwaway, isolated copy of the tree, run the suite there, and require it to **fail** — and the obligation the verification carries is scoped: a surviving mutant on a guard whose pinning a settled contract requires — a guard is such where it enforces a settled contract of this document, the instruments of the committed gate classes (§3.3) being the enumerated core and every other case ruled at review from the contract's own text (§2.3, this norm's face) — means no assertion pins that guard, a harness defect, never a tolerated gap; a survivor on any other guard is recorded as a decision (§1.9), never owed work by this clause. Mutation coverage is prioritized by the same wrong-allow cost asymmetry that selects enforcement faces (§3.6): the gates whose wrong allow is irreversible are the ones whose kill is proven first — an ordering over which kills are proven, never a widening of which survivors are owed repair. This generalizes §1.2's failing-first rule from one test to the guard corpus.
+A green suite does not prove a guard is live: a silently weakened guard can keep passing assertions that no longer exercise it. Guards are therefore verified by **mutating the guarded artifact** — weaken the rule in a throwaway, isolated copy of the tree, run the suite there, and require it to **fail**. A **guard** is either a **predicate**, one condition that admits or refuses, or a **preventive control**, an existing setting, argument, mask, mode or step that stops a harm from arising at all. A **weakening** is a change after which a predicate admits at least one value it refused before — whatever else it now refuses and whatever the edit's syntax, so inserting the ambient environment into a child's allowlist is one — or after which a preventive control is removed or relaxed so that a harm it stopped can arise; a mixed edit is decomposed, and each newly admitted value or newly possible harm is classified on its own. A **new action** — an operation added where none existed, every predicate and every preventive control left in place, such as a mode set and then restored — is not a weakening: it is a question for the review of the diff that would introduce it, never a survivor.
+
+The obligation is keyed on what a wrong allow would cost, decided per guard and ruled at review from the contract's own text (§2.3, this norm's face). A guard is **high-cost** where its weakening lets a value a caller or source can present under the current code — through a value a predicate newly admits, or a harm a control no longer stops, classified by the most costly node any such value reaches and never by one fixture's value — cause any of: reading, fetching or executing something its contract does not admit, including bytes decoded or interpreted other than as the contract settles them; creating a link or an artifact outside its own scope, leaving an artifact behind past cleanup, or making one accessible to another user, an owner-only mode awaiting the artifact's own normalization being none of these; handing a child process an environment, configuration or input its contract excludes; running a child without a bound or past its contract's settled bound; mutating a target before its transition; or reporting success where its contract requires a refusal, or confirmed cleanup while an artifact it created remains. Reporting one refusal cause where the contract assigns another refusal cause is not among them. A high-cost guard is owed a test that presents that value at its boundary and observes the outcome, and a surviving weakening of it means no assertion pins that guard — a harness defect, never a tolerated gap. Any other guard owes no mutation-kill evidence: a survivor on it is recorded as a decision (§1.9), never owed work by this clause, and the cost of that is accepted in terms — a latent defect in such a guard may go unmeasured and rests on review reading. Only the mutation-kill obligation is narrowed: §1.2's behavioural evidence, every obligation an acceptance criterion states in terms, an actual artifact defect shown by tracing a state to an output a settled contract forbids, the false-red rule below and §2.4's support-apparatus rule all stand. An acceptance criterion asking for mutation evidence over named boundaries reaches the high-cost guards among them, unless it says in terms that it reaches more, and this text governs over a review brief's paraphrase of it until the brief restates it. Mutation coverage is prioritized by the same wrong-allow cost asymmetry that selects enforcement faces (§3.6): the gates whose wrong allow is irreversible are the ones whose kill is proven first — an ordering over which kills are proven, never a widening of which survivors are owed repair. This generalizes §1.2's failing-first rule from one test to the guard corpus.
 
 A newly landed gate **cannot be observed by its own landing change** where the platform withholds a gate's execution from the change that introduces it: the landing verifies structure only, and the next change is the gate's first empirical firing. This is a named deferral of §5.3's smallest-change activation probe, not an exemption from it — the probe obligation transfers to the first post-landing change.
 
