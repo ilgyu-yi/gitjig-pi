@@ -1274,6 +1274,16 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 	for (const [label, body, seams] of [
 		["a refused provision", "process.exit(2);\n", ""],
 		["an overflowing provision", 'process.stdout.write("x".repeat(4096));\n', "streamBytes: 1024"],
+		// The cap is per stream and cumulative: two writes each under it, apart in
+		// time so they arrive as separate chunks, together exceed it.
+		...(["stdout", "stderr"] as const).map(
+			(stream) =>
+				[
+					`a provision whose ${stream} overflows across writes`,
+					`process.${stream}.write("x".repeat(600));\nawait new Promise((resolve) => setTimeout(resolve, 200));\nprocess.${stream}.write("x".repeat(600));\n`,
+					"streamBytes: 1024",
+				] as const,
+		),
 		[
 			"a provision past its bound",
 			"await new Promise((resolve) => setTimeout(resolve, 30000));\n",
@@ -1815,6 +1825,12 @@ test(
 			"\t\tif (stats.isSymbolicLink()) refuse(cause);\n\t\tif (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));\n",
 			"\t\tif (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));\n",
 			"an object database reached through a link below .git",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			"counts[name] += chunk.length;",
+			"counts[name] = chunk.length;",
+			"a stream's output counted per chunk rather than in total",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
