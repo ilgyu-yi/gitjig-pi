@@ -42,6 +42,7 @@
 		".github/workflows/gitjig-governance.mjs",
 		".github/workflows/gitjig-governance-service.mjs",
 		".github/workflows/gitjig-governance-platform.mjs",
+		".github/bin/gitjig-bootstrap.mjs",
 		".github/bin/gitjig-governance.mjs",
 		"test/**/*.ts"
 	]

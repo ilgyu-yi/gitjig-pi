@@ -14,9 +14,9 @@
  * a contract change visible in both files of the diff, which review owns.
  * Nothing here claims to pin a value independently of that projection.
  *
- * There are no runtime probes here: this is a contract-only change, and the
- * handed launcher does not exist yet. Real Git and provision-child selection,
- * limits and environments are #362's runtime evidence.
+ * Runtime behaviour is not measured here: the handed launcher's real Git and
+ * provision children, limits, environments and cleanup are measured by
+ * `adopter-acquisition-launcher.integration.test.ts` (#362).
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -58,7 +58,7 @@ const RELATIONS: Record<string, Relation> = {
 	activation: {
 		region: "launcher",
 		header: ["owner", "state", "activatesWith", "retiresWith"],
-		domains: [SCALAR, ["settled-pending-runtime", "live"], ["#362", "none"], ["#362", "none"]],
+		domains: [SCALAR, ["settled-pending-runtime", "live", "retired"], ["#362", "none"], ["#362", "none"]],
 		key: [0],
 	},
 	nodes: {
@@ -293,14 +293,18 @@ function contractHolds(text: string): boolean {
 }
 
 /**
- * No runtime is smuggled into this contract-only change. The handed launcher is
- * absent, and the activation relation's two live carried owners are present
- * and byte-identical to their reviewed digests: the SPEC says they stay live
- * and unchanged until #362's runtime, which retires `bootstrap.ts` and so
- * changes these pins as part of its own change.
+ * The tree agrees with the activation relation: every `live` owner exists,
+ * every `retired` owner is gone, and the carried owners the projection pins
+ * are byte-identical to their reviewed digests. #362's runtime moved the
+ * launcher to `live` and retired the carried `bootstrap.ts`; the carried
+ * `acquire.ts` stays live and pinned.
  */
-function contractOnly(tree: string): boolean {
-	if (existsSync(join(tree, ".github/bin/gitjig-bootstrap.mjs"))) return false;
+function activationHolds(tree: string, parsed: Parsed | undefined = relations(spec)): boolean {
+	if (parsed === undefined) return false;
+	for (const [owner, state] of parsed.activation) {
+		if (state === "live" && !existsSync(join(tree, owner))) return false;
+		if (state === "retired" && existsSync(join(tree, owner))) return false;
+	}
 	return Object.entries(fixture.carried).every(
 		([path, digest]) =>
 			existsSync(join(tree, path)) &&
@@ -331,7 +335,7 @@ function edited(from: string, to: string): string {
 
 it("#363's contract is the SPEC's closed relations, matching their reviewed projection", () => {
 	assert.equal(contractHolds(spec), true);
-	assert.equal(contractOnly(root), true, "a runtime file landed, or the carried owner moved");
+	assert.equal(activationHolds(root), true, "the tree does not match the activation relation");
 	assert.equal(thinPointer(readme), true, "README is not the thin settled pointer");
 });
 
@@ -540,24 +544,28 @@ it("a contradiction in any region's prose reds, though no table changed", () => 
 	}
 });
 
-it("a runtime file smuggled into the contract-only change reds", () => {
+it("the tree matches the activation relation: a live launcher, a retired bootstrap, a pinned acquire", () => {
 	const tree = mkdtempSync(join(tmpdir(), "gitjig-acquisition-contract-"));
 	try {
-		for (const file of Object.keys(fixture.carried)) {
+		const place = (file: string, bytes: Buffer | string) => {
 			mkdirSync(dirname(join(tree, file)), { recursive: true });
-			writeFileSync(join(tree, file), readFileSync(join(root, file)));
-		}
-		assert.equal(contractOnly(tree), true, "the baseline tree does not hold");
-		mkdirSync(join(tree, ".github/bin"), { recursive: true });
-		writeFileSync(join(tree, ".github/bin/gitjig-bootstrap.mjs"), "// smuggled runtime\n");
-		assert.equal(contractOnly(tree), false, "the handed launcher landed in a contract-only change");
+			writeFileSync(join(tree, file), bytes);
+		};
+		place(".github/bin/gitjig-bootstrap.mjs", readFileSync(join(root, ".github/bin/gitjig-bootstrap.mjs")));
+		for (const file of Object.keys(fixture.carried)) place(file, readFileSync(join(root, file)));
+		assert.equal(activationHolds(tree), true, "the baseline tree does not hold");
+		// The retired bootstrap returned.
+		place(".pi/extensions/gitjig/install/bootstrap.ts", "// carried\n");
+		assert.equal(activationHolds(tree), false, "a retired owner came back");
+		rmSync(join(tree, ".pi/extensions/gitjig/install/bootstrap.ts"));
+		// A live carried owner changed by a single appended line.
+		const acquire = join(tree, ".pi/extensions/gitjig/install/acquire.ts");
+		writeFileSync(acquire, `${readFileSync(acquire, "utf8")}\n// runtime mutation\n`);
+		assert.equal(activationHolds(tree), false, "a pinned carried owner changed");
+		writeFileSync(acquire, readFileSync(join(root, ".pi/extensions/gitjig/install/acquire.ts")));
+		// The live launcher removed.
 		rmSync(join(tree, ".github/bin/gitjig-bootstrap.mjs"));
-		// A carried runtime file changed by a single appended line.
-		const carried = join(tree, ".pi/extensions/gitjig/install/bootstrap.ts");
-		writeFileSync(carried, `${readFileSync(carried, "utf8")}\n// runtime mutation\n`);
-		assert.equal(contractOnly(tree), false, "a carried runtime file changed in a contract-only change");
-		rmSync(carried);
-		assert.equal(contractOnly(tree), false, "the carried owner was retired before its runtime");
+		assert.equal(activationHolds(tree), false, "the live launcher is missing");
 	} finally {
 		rmSync(tree, { recursive: true, force: true });
 	}
