@@ -200,6 +200,9 @@ type GitPlan = {
 	failAt?: string;
 	// The invocation whose arguments end so outlives any bound the suite sets.
 	sleepAt?: string;
+	// The invocation whose arguments end so writes past any cap the suite sets, on
+	// stderr, and otherwise runs as usual.
+	overflowAt?: string;
 };
 
 function gitSeam({
@@ -244,6 +247,9 @@ for (const [tail, text] of Object.entries(plan.say ?? {}))
 		process.stdout.write(text + "\\n");
 		process.exit(0);
 	}
+// Past the cap on stderr, which the launcher counts and discards, and then Git
+// runs as usual: only the cap itself can refuse this invocation.
+if (plan.overflowAt && args.join(" ").endsWith(plan.overflowAt)) process.stderr.write("x".repeat(4096));
 if (plan.sleepAt && args.join(" ").endsWith(plan.sleepAt)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
 if (plan.failAt && args.join(" ").endsWith(plan.failAt)) {
 	process.stderr.write("the seam refused this invocation\\n");
@@ -742,6 +748,16 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 		invariant(f, before, label);
 	}
 	// A snapshot-check Git child that fails is that node's cause, not another's.
+	// And its own output cap, applied as narrowly.
+	const overflowingAdmission = fixture(launcher, { plan: { overflowAt: "target rev-parse --show-toplevel" } });
+	const overflowingBefore = snapshot(overflowingAdmission.target);
+	refused(
+		launchWith(overflowingAdmission, "streamBytes: 1024"),
+		"invalid-input",
+		64,
+		"an admission child past its cap",
+	);
+	invariant(overflowingAdmission, overflowingBefore, "an admission child past its cap");
 	// The target-admission Git child carries its own deadline, applied as narrowly.
 	const sleepingAdmission = fixture(launcher, { plan: { sleepAt: "target rev-parse --show-toplevel" } });
 	const sleepingBefore = snapshot(sleepingAdmission.target);
@@ -1850,6 +1866,12 @@ test(
 			"\t\t\ttimeoutMs: seams.gitTimeoutMs,\n",
 			"\t\t\ttimeoutMs: seams.gitTimeoutMs * 10,\n",
 			"the admission child's applied deadline widened tenfold",
+		);
+		await killed(
+			armSourcesOnlyTheProjection,
+			'bounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args]',
+			'bounded({ ...seams, streamBytes: seams.streamBytes * 10 }, "git", [...GIT_CONFIG, "-C", top, ...args]',
+			"the admission child's applied output cap widened tenfold",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
