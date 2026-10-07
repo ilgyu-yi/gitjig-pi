@@ -209,13 +209,22 @@ const isInside = (/** @type {string} */ child, /** @type {string} */ parent) =>
  * @param {string} gitDir @param {keyof typeof STATUS} cause
  */
 function refuseAlternates(gitDir, cause) {
+	// The database must be the one this path names, not one it points at: a linked
+	// or non-directory `.git` keeps its objects elsewhere, and reading the
+	// declaration through the link would admit exactly the external store the
+	// exclusions forbid.
+	let own;
+	try {
+		own = lstatSync(gitDir, { throwIfNoEntry: false });
+	} catch {
+		refuse(cause);
+	}
+	if (!own || !own.isDirectory() || own.isSymbolicLink()) refuse(cause);
 	let declared;
 	try {
 		declared = lstatSync(join(gitDir, "objects", "info", "alternates"), { throwIfNoEntry: false });
 	} catch {
-		// Unreadable is not absent, and a `.git` that is not its own directory keeps
-		// its object database elsewhere: either way this process cannot read the
-		// declaration, so the row is unproven rather than met.
+		// Unreadable is not absent: the row is unproven rather than met.
 		refuse(cause);
 	}
 	if (declared !== undefined) refuse(cause);
