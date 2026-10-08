@@ -58,7 +58,7 @@ const RELATIONS: Record<string, Relation> = {
 	activation: {
 		region: "launcher",
 		header: ["owner", "state", "activatesWith", "retiresWith"],
-		domains: [SCALAR, ["settled-pending-runtime", "live", "retired"], ["#362", "none"], ["#362", "none"]],
+		domains: [SCALAR, ["live", "retired"], ["#362", "none"], ["#362", "none"]],
 		key: [0],
 	},
 	nodes: {
@@ -316,7 +316,7 @@ function activationHolds(tree: string, parsed: Parsed | undefined = relations(sp
 
 /** README's one settled pointer to this contract. */
 const README_POINTER =
-	"An adopter has a different product boundary: its reviewed history carries self-standing handed-over assets and `.pi/gitjig.pin.json`; the gitjig runtime is carried and verified per clone, never committed. The zero-operand first-clone launcher and its exact acquisition and cleanup contract are defined in SPEC §§4.1–4.2 and 4.6–4.7; runtime delivery follows that settlement. This source-tree bind command is therefore not presented as an adopter installer.";
+	"An adopter has a different product boundary: its reviewed history carries self-standing handed-over assets and `.pi/gitjig.pin.json`; the gitjig runtime is carried and verified per clone, never committed. The zero-operand first-clone launcher, `node .github/bin/gitjig-bootstrap.mjs`, and its exact acquisition and cleanup contract are defined in SPEC §§4.1–4.2 and 4.6–4.7. This source-tree bind command is therefore not presented as an adopter installer.";
 
 /** The README carries the pointer exactly once, as its own line, and no other line speaks of the contract. */
 function thinPointer(text: string): boolean {
