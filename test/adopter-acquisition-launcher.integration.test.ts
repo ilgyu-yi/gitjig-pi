@@ -25,6 +25,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
 	chmodSync,
 	copyFileSync,
+	cpSync,
 	existsSync,
 	linkSync,
 	lstatSync,
@@ -448,6 +449,8 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 		asked,
 		[
 			`${rows}-C ${realpathSync(f.target)} rev-parse --show-toplevel`,
+			`${rows}-C ${realpathSync(f.target)} rev-parse --git-common-dir`,
+			`${rows}-C ${realpathSync(f.target)} rev-parse --git-path objects`,
 			`${rows}-C ${realpathSync(f.target)} ls-tree -z HEAD -- .pi/gitjig.pin.json`,
 			`${rows}-C ${realpathSync(f.target)} cat-file blob HEAD:.pi/gitjig.pin.json`,
 			`${rows}init -q --template= -- ${destination}`,
@@ -768,7 +771,7 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 		`an admission child past its bound: the applied deadline was not the narrowed one (${Date.now() - admissionStarted} ms)`,
 	);
 	invariant(sleepingAdmission, sleepingBefore, "an admission child past its bound");
-	const failing = fixture(launcher, { plan: { failAt: "rev-parse --git-common-dir" } });
+	const failing = fixture(launcher, { plan: { failAt: "snapshot rev-parse --git-common-dir" } });
 	const failingBefore = snapshot(failing.target);
 	refused(launch(failing), "snapshot-identity-mismatch", 65, "a failing snapshot-check child");
 	invariant(failing, failingBefore, "a failing snapshot-check child");
@@ -863,7 +866,10 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 			.sort();
 	const profile = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "LC_ALL", "PATH"];
 	const admission = blocks.filter(
-		({ args }) => /cat-file blob HEAD:|rev-parse --show-toplevel$|ls-tree -z HEAD/.test(args) && !/snapshot/.test(args),
+		({ args }) =>
+			/cat-file blob HEAD:|rev-parse --show-toplevel$|rev-parse --git-common-dir$|rev-parse --git-path objects$|ls-tree -z HEAD/.test(
+				args,
+			) && !/snapshot/.test(args),
 	);
 	const acquisition = blocks.filter(({ args }) => / fetch /.test(args));
 	assert.ok(admission.length >= 3 && acquisition.length === 1, "the Git children were not all observed");
@@ -1015,6 +1021,26 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 		refused(launch(f), "invalid-input", 64, label);
 		invariant(f, before, label);
 	}
+	// A real `.git` directory whose `commondir` file hands Git another repository's
+	// database, its own objects empty: no link, no declared alternate in the target,
+	// and Git reads the pin's objects from outside it all the same.
+	const common = fixture(launcher);
+	const commonHead = git(common.target, "rev-parse", "HEAD");
+	const externalCommon = join(common.root, "external-common");
+	cpSync(join(common.target, ".git"), externalCommon, { recursive: true });
+	rmSync(join(common.target, ".git/objects"), { recursive: true });
+	mkdirSync(join(common.target, ".git/objects/info"), { recursive: true });
+	mkdirSync(join(common.target, ".git/objects/pack"), { recursive: true });
+	writeFileSync(join(common.target, ".git/commondir"), `${externalCommon}\n`);
+	assert.equal(git(common.target, "rev-parse", "HEAD"), commonHead, "the common directory does not serve HEAD");
+	assert.equal(
+		realpathSync(git(common.target, "rev-parse", "--git-common-dir")),
+		realpathSync(externalCommon),
+		"Git does not read the external common directory, so this measures nothing",
+	);
+	const commonBefore = snapshot(common.target);
+	refused(launch(common), "invalid-input", 64, "a target whose common directory is elsewhere");
+	invariant(common, commonBefore, "a target whose common directory is elsewhere");
 	// A declaration that cannot be read is not an absent one. The harness refuses the
 	// read itself, because a target whose `.git` is a real directory can still hold
 	// an unreadable `objects/info`, and reading nothing there must not admit the
@@ -1872,6 +1898,12 @@ test(
 			'bounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args]',
 			'bounded({ ...seams, streamBytes: seams.streamBytes * 10 }, "git", [...GIT_CONFIG, "-C", top, ...args]',
 			"the admission child's applied output cap widened tenfold",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			'\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n',
+			"",
+			"the object database Git resolves left unchecked",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
