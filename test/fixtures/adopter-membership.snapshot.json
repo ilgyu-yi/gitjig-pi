@@ -1162,10 +1162,6 @@
 			"disposition": "instance-state"
 		},
 		{
-			"path": "changelog_unreleased/removed/362.md",
-			"disposition": "instance-state"
-		},
-		{
 			"path": "changelog_unreleased/security/.gitkeep",
 			"disposition": "instance-state"
 		},
