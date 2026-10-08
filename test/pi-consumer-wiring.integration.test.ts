@@ -522,13 +522,16 @@ function armProjectsTheRecoveryBrief(briefs: RecoveryBriefs): void {
  * Criterion 12: generic dispatch is unchanged in its briefs, byte for byte.
  * The digests below were produced by the base commit's own composers
  * (de95797, this part's merge base) over exactly these inputs; the head's
- * composers must reproduce them.
+ * composers must reproduce them. The two Judge digests are the one deliberate
+ * exception: #432 restated limb C of the admission block, which only the Judge
+ * brief carries, so they were regenerated from the composers at that change and
+ * every other digest is still the base commit's.
  */
 const BASE_GENERIC_BRIEFS: Readonly<Record<string, string>> = {
 	reviewer: "167f983e4815df5159d6c9682129a48ae8d241d32dc232667834e004e74a0771",
 	reviewerDefaultTiming: "3784794b0732d89709794b95c7cbf7e6281bb39f8a810a9eba541c69fb58deed",
-	judge: "74e52b9498548ed545f156d6bfdade87b1f1920e0baddcc8cbba8574a22734ea",
-	judgeReRequest: "545d3752817e17d1e8ce4e55536618e61c25c6c7bda4d13261b3318d21307db4",
+	judge: "83d060600bb728a8a02f092bfa773c210c5455c7246d2fd68331c912ee4d9c15",
+	judgeReRequest: "e53c1aad7885ac4c3225e2121d8920e980b5143f3d82b8c3fe81791f0e972c0d",
 	diagnosis: "b1335518c12cd04544809218aa5c928e473b701e368d6c2e814fef6e5f79cabe",
 	challenger: "4be7936af25cf80285f3aeee821d61d3b4af6a71b2392130653f828663243294",
 	contestSelector: "b43b7e943c36ed42695b66918457414086062134505956d618306d456de9e190",
