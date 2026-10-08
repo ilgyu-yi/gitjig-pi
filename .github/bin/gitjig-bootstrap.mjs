@@ -194,6 +194,11 @@ const GIT_CONFIG = [
 	// entry mode.
 	"-c",
 	"core.symlinks=false",
+	// A fetch, a checkout or a commit would otherwise start `git maintenance run
+	// --auto --detach`: a daemonized child outside the bounded child's process
+	// group and deadline, still writing into the acquisition child as cleanup runs.
+	"-c",
+	"maintenance.auto=false",
 	"--no-replace-objects",
 	// A target configured as a partial clone would otherwise fetch a missing object
 	// on demand from its promisor remote, through whatever transport and program

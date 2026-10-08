@@ -74,7 +74,11 @@ const GIT_ENV = {
 	GIT_OPTIONAL_LOCKS: "0",
 };
 const git = (cwd: string, ...args: string[]) =>
-	execFileSync("git", ["-c", "commit.gpgsign=false", ...args], { cwd, env: GIT_ENV, encoding: "utf8" }).trim();
+	execFileSync("git", ["-c", "commit.gpgsign=false", "-c", "maintenance.auto=false", ...args], {
+		cwd,
+		env: GIT_ENV,
+		encoding: "utf8",
+	}).trim();
 
 type Fixture = {
 	root: string;
@@ -275,6 +279,9 @@ if (plan.omittedMember && args.includes("ls-tree") && args.includes("-r")) {
 	process.stderr.write(listed.stderr);
 	process.exit(listed.status ?? 1);
 }
+// Git's own record of the children it starts, to a file the launcher never sees:
+// only the forwarded real Git gets it, after this invocation's environment was logged.
+env = { ...env, GIT_TRACE2_EVENT: ${JSON.stringify(`${envLog}.trace2.jsonl`)} };
 const run = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit", env });
 // The modes each Git child creates, read where it creates them, before anything
 // normalizes them. The artifacts relation holds from the first created child
@@ -441,7 +448,7 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	// The whole closed Git-child sequence: no unowned call may hide behind a
 	// different command name in the launcher's closure node.
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects --no-lazy-fetch ";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false -c maintenance.auto=false --no-replace-objects --no-lazy-fetch ";
 	const init = asked.find((line) => / init /.test(line));
 	assert.ok(init, "init was not observed");
 	const destination = init.slice(init.indexOf(" init -q --template= -- ") + " init -q --template= -- ".length);
@@ -469,6 +476,21 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 			].map((args) => `${rows}-C ${destination} ${args}`),
 		],
 		"the acquisition spawned a child outside its closed node-owned sequence",
+	);
+	// No Git child starts a background child of its own: `git maintenance run
+	// --detach` would daemonize outside the bounded child's group and deadline and
+	// keep writing into the acquisition child while cleanup runs. Git's own trace of
+	// every child it started, read for the whole acquisition.
+	const started = readFileSync(join(f.root, "git-env.log.trace2.jsonl"), "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as { event: string; argv?: string[] })
+		.filter(({ event }) => event === "child_start");
+	assert.ok(started.length > 0, "Git's trace recorded no child at all, so this measures nothing");
+	assert.deepEqual(
+		started.filter(({ argv }) => (argv ?? []).includes("maintenance")).map(({ argv }) => (argv ?? []).join(" ")),
+		[],
+		"a Git child started background maintenance",
 	);
 	// A target in the longer object format admits its pin the same way.
 	const sha256 = fixture(launcher, { targetFormat: "sha256" });
@@ -787,7 +809,7 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	assert.equal(launch(exact).status, 0, "the exact source run failed");
 	const asked = readFileSync(exact.log, "utf8").split("\n");
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects --no-lazy-fetch";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false -c maintenance.auto=false --no-replace-objects --no-lazy-fetch";
 	const snapshotDir =
 		asked
 			.find((line) => / init /.test(line))
@@ -916,7 +938,7 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 	}
 	// And every Git invocation opens with the profile's config rows, exactly.
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects --no-lazy-fetch ";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false -c maintenance.auto=false --no-replace-objects --no-lazy-fetch ";
 	for (const { args } of blocks)
 		assert.ok(args.startsWith(rows), `a Git child lacks the profile's config rows: ${args}`);
 	// Last, because it writes to the logs just read: the seam and real Git agree
@@ -1056,6 +1078,28 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	refused(launch(common), "invalid-input", 64, "a target whose common directory is elsewhere");
 	invariant(common, commonBefore, "a target whose common directory is elsewhere");
 	readNoObject(common, "a target whose common directory is elsewhere");
+	// The same redirect with its objects linked back to the target's own store, so the
+	// object directory Git resolves is the target's: only the common directory, where
+	// Git also reads refs and config, still lies outside it.
+	const looped = fixture(launcher);
+	const loopedHead = git(looped.target, "rev-parse", "HEAD");
+	const loopedCommon = join(looped.root, "looped-common");
+	cpSync(join(looped.target, ".git"), loopedCommon, { recursive: true });
+	rmSync(join(loopedCommon, "objects"), { recursive: true });
+	symlinkSync(join(looped.target, ".git/objects"), join(loopedCommon, "objects"));
+	writeFileSync(join(looped.target, ".git/commondir"), `${loopedCommon}\n`);
+	git(looped.root, "config", "--file", join(loopedCommon, "config"), "gitjig.mark", "external");
+	assert.equal(git(looped.target, "rev-parse", "HEAD"), loopedHead, "the looped common directory does not serve HEAD");
+	assert.equal(git(looped.target, "config", "gitjig.mark"), "external", "Git does not read the external config");
+	assert.equal(
+		realpathSync(git(looped.target, "rev-parse", "--git-path", "objects")),
+		realpathSync(join(looped.target, ".git/objects")),
+		"the resolved object directory is not the target's own, so this measures the other conjunct",
+	);
+	const loopedBefore = snapshot(looped.target);
+	refused(launch(looped), "invalid-input", 64, "a common directory elsewhere over the target's own objects");
+	invariant(looped, loopedBefore, "a common directory elsewhere over the target's own objects");
+	readNoObject(looped, "a common directory elsewhere over the target's own objects");
 	// A target configured as a partial clone, its pin blob missing locally: Git would
 	// fetch it on demand through the transport and program the target's own config
 	// names. The pin is refused because it cannot be read, and that program never runs.
@@ -1960,6 +2004,18 @@ test(
 			'\trefuseAlternates(join(top, ".git"), "invalid-input");\n\tconst admission = profiles(read, devNull)["git-admission"];\n\tconst admissionGit = (/** @type {string[]} */ args) =>\n\t\tbounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args], {\n\t\t\tenv: admission,\n\t\t\tcwd: top,\n\t\t\ttimeoutMs: seams.gitTimeoutMs,\n\t\t\tcause: "invalid-input",\n\t\t});\n\t// pin-read\n\tconst shownTop = line(await admissionGit(["rev-parse", "--show-toplevel"]));\n\tif (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");\n\t// The object database Git will actually read, as Git itself resolves it, before\n\t// the first child that reads an object. A commondir file, or any indirection\n\t// Git honours, names a store outside the target as surely as an alternate does,\n\t// so the resolved common directory and object directory must be the target\'s\n\t// own. Neither query reads an object.\n\tconst ownGit = realpathSync(join(top, ".git"));\n\tconst commonGit = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-common-dir"]))));\n\tconst objectsAt = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-path", "objects"]))));\n\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n\t// HEAD\'s own tree entry: the committed pin, whatever the index now holds.\n\tconst tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\\0$/, "");\n\tconst trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked);\n\tif (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");\n\tconst headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);\n',
 			'\tconst admission = profiles(read, devNull)["git-admission"];\n\tconst admissionGit = (/** @type {string[]} */ args) =>\n\t\tbounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args], {\n\t\t\tenv: admission,\n\t\t\tcwd: top,\n\t\t\ttimeoutMs: seams.gitTimeoutMs,\n\t\t\tcause: "invalid-input",\n\t\t});\n\t// pin-read\n\tconst shownTop = line(await admissionGit(["rev-parse", "--show-toplevel"]));\n\tif (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");\n\t// The object database Git will actually read, as Git itself resolves it, before\n\t// the first child that reads an object. A commondir file, or any indirection\n\t// Git honours, names a store outside the target as surely as an alternate does,\n\t// so the resolved common directory and object directory must be the target\'s\n\t// own. Neither query reads an object.\n\tconst ownGit = realpathSync(join(top, ".git"));\n\tconst commonGit = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-common-dir"]))));\n\tconst objectsAt = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-path", "objects"]))));\n\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n\t// HEAD\'s own tree entry: the committed pin, whatever the index now holds.\n\tconst tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\\0$/, "");\n\tconst trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked);\n\tif (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");\n\tconst headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);\n\trefuseAlternates(join(top, ".git"), "invalid-input");\n',
 			"the target database check moved after the pin's object read",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			'if (commonGit !== ownGit || objectsAt !== join(ownGit, "objects"))',
+			'if (objectsAt !== join(ownGit, "objects"))',
+			"a common directory elsewhere admitted over the target's own objects",
+		);
+		await killed(
+			armSucceedsExactly,
+			'\t"-c",\n\t"maintenance.auto=false",\n',
+			"",
+			"a Git child left free to start detached maintenance",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
