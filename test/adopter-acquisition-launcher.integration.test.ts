@@ -441,7 +441,7 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	// The whole closed Git-child sequence: no unowned call may hide behind a
 	// different command name in the launcher's closure node.
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects ";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects --no-lazy-fetch ";
 	const init = asked.find((line) => / init /.test(line));
 	assert.ok(init, "init was not observed");
 	const destination = init.slice(init.indexOf(" init -q --template= -- ") + " init -q --template= -- ".length);
@@ -787,7 +787,7 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	assert.equal(launch(exact).status, 0, "the exact source run failed");
 	const asked = readFileSync(exact.log, "utf8").split("\n");
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects --no-lazy-fetch";
 	const snapshotDir =
 		asked
 			.find((line) => / init /.test(line))
@@ -916,7 +916,7 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 	}
 	// And every Git invocation opens with the profile's config rows, exactly.
 	const rows =
-		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects ";
+		"-c credential.helper= -c core.hooksPath=/dev/null -c http.followRedirects=false -c protocol.file.allow=never -c core.fileMode=false -c core.symlinks=false --no-replace-objects --no-lazy-fetch ";
 	for (const { args } of blocks)
 		assert.ok(args.startsWith(rows), `a Git child lacks the profile's config rows: ${args}`);
 	// Last, because it writes to the logs just read: the seam and real Git agree
@@ -938,6 +938,16 @@ async function armBuildsEachChildEnvironment(launcher: string): Promise<void> {
 		assert.equal(probe.status, 0, `an absent global config broke ${command}: ${probe.stderr}`);
 	}
 	assert.equal(readFileSync(FAULTS, "utf8"), "", "the seam recorded a fault of its own");
+}
+
+/** A target refused for its object database never had an object read from it. */
+function readNoObject(f: Fixture, label: string) {
+	const asked = existsSync(f.log) ? readFileSync(f.log, "utf8").split("\n").filter(Boolean) : [];
+	assert.deepEqual(
+		asked.filter((line) => / (cat-file|ls-tree) /.test(line)),
+		[],
+		`${label}: an object was read before the database was refused`,
+	);
 }
 
 /**
@@ -963,6 +973,7 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	const externalBefore = snapshot(external.target);
 	refused(launch(external), "invalid-input", 64, "a target declaring an alternate store");
 	invariant(external, externalBefore, "a target declaring an alternate store");
+	readNoObject(external, "a target declaring an alternate store");
 	// The store this acquisition creates, declaring an alternate after its checkout
 	// and before the closure check reads one object.
 	const created = fixture(launcher, { plan: { alternates: "/nowhere/objects" } });
@@ -981,6 +992,7 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	const pointerBefore = snapshot(pointer.target);
 	refused(launch(pointer), "invalid-input", 64, "a target whose object database is elsewhere");
 	invariant(pointer, pointerBefore, "a target whose object database is elsewhere");
+	readNoObject(pointer, "a target whose object database is elsewhere");
 	// The same database elsewhere, reached through a link rather than a pointer
 	// file: reading the declaration through the link would find none and admit the
 	// external store, so the link itself refuses.
@@ -998,6 +1010,7 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	const linkedDirBefore = snapshot(linkedDir.target);
 	refused(launch(linkedDir), "invalid-input", 64, "a target whose database is reached through a link");
 	invariant(linkedDir, linkedDirBefore, "a target whose database is reached through a link");
+	readNoObject(linkedDir, "a target whose database is reached through a link");
 	// The object database reached through a link below `.git`: the whole `objects`
 	// directory, and one fan-out directory alone. Neither declares an alternate,
 	// and both store objects outside the target.
@@ -1020,6 +1033,7 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 		const before = snapshot(f.target);
 		refused(launch(f), "invalid-input", 64, label);
 		invariant(f, before, label);
+		readNoObject(f, label);
 	}
 	// A real `.git` directory whose `commondir` file hands Git another repository's
 	// database, its own objects empty: no link, no declared alternate in the target,
@@ -1041,6 +1055,30 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	const commonBefore = snapshot(common.target);
 	refused(launch(common), "invalid-input", 64, "a target whose common directory is elsewhere");
 	invariant(common, commonBefore, "a target whose common directory is elsewhere");
+	readNoObject(common, "a target whose common directory is elsewhere");
+	// A target configured as a partial clone, its pin blob missing locally: Git would
+	// fetch it on demand through the transport and program the target's own config
+	// names. The pin is refused because it cannot be read, and that program never runs.
+	const promisor = fixture(launcher);
+	const marker = join(promisor.root, "promisor-ran");
+	const ssh = join(promisor.root, "promisor-ssh.sh");
+	writeFileSync(ssh, `#!/bin/sh\necho "$@" > ${JSON.stringify(marker)}\nexit 1\n`);
+	chmodSync(ssh, 0o755);
+	const pinBlob = git(promisor.target, "rev-parse", "HEAD:.pi/gitjig.pin.json");
+	for (const [key, value] of [
+		["core.repositoryformatversion", "1"],
+		["extensions.partialClone", "origin"],
+		["remote.origin.url", "ssh://example.invalid/x"],
+		["remote.origin.promisor", "true"],
+		["core.sshCommand", ssh],
+	])
+		git(promisor.target, "config", key, value);
+	rmSync(join(promisor.target, ".git/objects", pinBlob.slice(0, 2), pinBlob.slice(2)));
+	const promisorBefore = snapshot(promisor.target);
+	rmSync(marker, { force: true });
+	refused(launch(promisor), "invalid-input", 64, "a partial-clone target missing its pin blob");
+	assert.equal(existsSync(marker), false, "the target's own promisor transport ran at admission");
+	invariant(promisor, promisorBefore, "a partial-clone target missing its pin blob");
 	// A declaration that cannot be read is not an absent one. The harness refuses the
 	// read itself, because a target whose `.git` is a real directory can still hold
 	// an unreadable `objects/info`, and reading nothing there must not admit the
@@ -1904,6 +1942,24 @@ test(
 			'\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n',
 			"",
 			"the object database Git resolves left unchecked",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			'\t"--no-lazy-fetch",\n',
+			"",
+			"a missing object fetched on demand through the target's own transport",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			'\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n\t// HEAD\'s own tree entry: the committed pin, whatever the index now holds.\n\tconst tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\\0$/, "");\n\tconst trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked);\n\tif (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");\n\tconst headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);\n',
+			'\t// HEAD\'s own tree entry: the committed pin, whatever the index now holds.\n\tconst tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\\0$/, "");\n\tconst trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked);\n\tif (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");\n\tconst headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);\n\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n',
+			"the resolved-database check moved after the pin's object read",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			'\trefuseAlternates(join(top, ".git"), "invalid-input");\n\tconst admission = profiles(read, devNull)["git-admission"];\n\tconst admissionGit = (/** @type {string[]} */ args) =>\n\t\tbounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args], {\n\t\t\tenv: admission,\n\t\t\tcwd: top,\n\t\t\ttimeoutMs: seams.gitTimeoutMs,\n\t\t\tcause: "invalid-input",\n\t\t});\n\t// pin-read\n\tconst shownTop = line(await admissionGit(["rev-parse", "--show-toplevel"]));\n\tif (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");\n\t// The object database Git will actually read, as Git itself resolves it, before\n\t// the first child that reads an object. A commondir file, or any indirection\n\t// Git honours, names a store outside the target as surely as an alternate does,\n\t// so the resolved common directory and object directory must be the target\'s\n\t// own. Neither query reads an object.\n\tconst ownGit = realpathSync(join(top, ".git"));\n\tconst commonGit = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-common-dir"]))));\n\tconst objectsAt = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-path", "objects"]))));\n\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n\t// HEAD\'s own tree entry: the committed pin, whatever the index now holds.\n\tconst tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\\0$/, "");\n\tconst trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked);\n\tif (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");\n\tconst headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);\n',
+			'\tconst admission = profiles(read, devNull)["git-admission"];\n\tconst admissionGit = (/** @type {string[]} */ args) =>\n\t\tbounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args], {\n\t\t\tenv: admission,\n\t\t\tcwd: top,\n\t\t\ttimeoutMs: seams.gitTimeoutMs,\n\t\t\tcause: "invalid-input",\n\t\t});\n\t// pin-read\n\tconst shownTop = line(await admissionGit(["rev-parse", "--show-toplevel"]));\n\tif (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");\n\t// The object database Git will actually read, as Git itself resolves it, before\n\t// the first child that reads an object. A commondir file, or any indirection\n\t// Git honours, names a store outside the target as surely as an alternate does,\n\t// so the resolved common directory and object directory must be the target\'s\n\t// own. Neither query reads an object.\n\tconst ownGit = realpathSync(join(top, ".git"));\n\tconst commonGit = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-common-dir"]))));\n\tconst objectsAt = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-path", "objects"]))));\n\tif (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");\n\t// HEAD\'s own tree entry: the committed pin, whatever the index now holds.\n\tconst tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\\0$/, "");\n\tconst trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\\t(.+)$/s.exec(tracked);\n\tif (trackedEntry === null || trackedEntry[2] !== PIN) refuse("invalid-input");\n\tconst headBlob = await admissionGit(["cat-file", "blob", `HEAD:${PIN}`]);\n\trefuseAlternates(join(top, ".git"), "invalid-input");\n',
+			"the target database check moved after the pin's object read",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.

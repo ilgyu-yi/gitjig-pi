@@ -195,6 +195,10 @@ const GIT_CONFIG = [
 	"-c",
 	"core.symlinks=false",
 	"--no-replace-objects",
+	// A target configured as a partial clone would otherwise fetch a missing object
+	// on demand from its promisor remote, through whatever transport and program
+	// its own config names: an unadmitted fetch and an unadmitted execution.
+	"--no-lazy-fetch",
 ];
 
 const isInside = (/** @type {string} */ child, /** @type {string} */ parent) =>
