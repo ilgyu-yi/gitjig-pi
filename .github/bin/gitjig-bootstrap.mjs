@@ -367,6 +367,15 @@ export async function acquire(argv, read, seams) {
 	// pin-read
 	const shownTop = line(await admissionGit(["rev-parse", "--show-toplevel"]));
 	if (realpathSync(shownTop) !== realpathSync(top)) refuse("invalid-input");
+	// The object database Git will actually read, as Git itself resolves it, before
+	// the first child that reads an object. A commondir file, or any indirection
+	// Git honours, names a store outside the target as surely as an alternate does,
+	// so the resolved common directory and object directory must be the target's
+	// own. Neither query reads an object.
+	const ownGit = realpathSync(join(top, ".git"));
+	const commonGit = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-common-dir"]))));
+	const objectsAt = realpathSync(resolve(top, line(await admissionGit(["rev-parse", "--git-path", "objects"]))));
+	if (commonGit !== ownGit || objectsAt !== join(ownGit, "objects")) refuse("invalid-input");
 	// HEAD's own tree entry: the committed pin, whatever the index now holds.
 	const tracked = (await admissionGit(["ls-tree", "-z", "HEAD", "--", PIN])).toString("utf8").replace(/\0$/, "");
 	const trackedEntry = /^100(644|755) blob (?:[0-9a-f]{40}|[0-9a-f]{64})\t(.+)$/s.exec(tracked);
