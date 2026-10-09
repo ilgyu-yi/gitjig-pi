@@ -452,6 +452,14 @@ async function armSucceedsExactly(launcher: string): Promise<void> {
 	const init = asked.find((line) => / init /.test(line));
 	assert.ok(init, "init was not observed");
 	const destination = init.slice(init.indexOf(" init -q --template= -- ") + " init -q --template= -- ".length);
+	// The acquisition child is the caller's platform temporary base's own child, and
+	// nowhere else: not inside the target, not beside the launcher.
+	assert.ok(
+		destination.startsWith(`${realpathSync(f.scratch)}/gitjig-acquire-`) &&
+			destination.endsWith("/snapshot") &&
+			!destination.slice(realpathSync(f.scratch).length + 1, -"/snapshot".length).includes("/"),
+		`the acquisition child is not a direct child of the platform temporary base: ${destination}`,
+	);
 	assert.deepEqual(
 		asked,
 		[
@@ -2016,6 +2024,12 @@ test(
 			'\t"-c",\n\t"maintenance.auto=false",\n',
 			"",
 			"a Git child left free to start detached maintenance",
+		);
+		await killed(
+			armSucceedsExactly,
+			"temporaryBase: tmpdir,",
+			"temporaryBase: () => dirname(fileURLToPath(import.meta.url)),",
+			"the acquisition child created beside the launcher, inside the target",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
