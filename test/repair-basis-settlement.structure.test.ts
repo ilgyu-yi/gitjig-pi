@@ -43,11 +43,16 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
 		crossReview.includes(
-			"A correction interval exists only where the earlier endpoint is an ancestor of the later one",
+			"When the earlier endpoint is an ancestor of the later one, the interval is the tree delta between them",
 		) &&
 		crossReview.includes(
-			"an adjacent pair decided non-ancestral by a completed walk leaves the projection unavailable",
+			"restricted to the paths that either head changes relative to its own merge-base with the PR base head pinned for the round",
 		) &&
+		crossReview.includes(
+			"A path changed only by the base between the two merge-bases is not the author's correction and is excluded",
+		) &&
+		crossReview.includes("can overstate the correction but never understates it") &&
+		crossReview.includes("a read failure, a timeout or a cap — withholds the projection as below") &&
 		crossReview.includes("Several included findings in one state share that whole interval") &&
 		crossReview.includes("caller never slices edits or attributes an edit to a finding") &&
 		crossReview.includes("NIT/remedy, refuted/`none`, `defer`, `measure-escalate`, and Nit carry-forward") &&
@@ -96,12 +101,21 @@ describe("issue #236 repair-basis settlement", () => {
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
-					"exists only where the earlier endpoint is an ancestor of the later one",
-					"exists between any two endpoints",
+					"restricted to the paths that either head changes",
+					"covering every path the two heads differ on, as",
 				),
 				JUDGE,
 			],
-			[CROSS_REVIEW.replace("leaves the projection unavailable", "is diagnosed across"), JUDGE],
+			[CROSS_REVIEW.replace("is not the author's correction and is excluded", "is included"), JUDGE],
+			[CROSS_REVIEW.replace("never understates it", "may understate it"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"relative to its own merge-base with the PR base head pinned for the round",
+					"relative to the later head's merge-base",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("withholds the projection as below", "is skipped"), JUDGE],
 			[
 				CROSS_REVIEW.replace("never slices edits or attributes an edit to a finding", "attributes edits by proximity"),
 				JUDGE,
