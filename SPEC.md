@@ -46,26 +46,26 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§3.12 | Gate verification | 815 |
 | §4 | Substrate and install contract | 827 |
 | &nbsp;&nbsp;§4.1 | Namespaces | 831 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 853 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 1045 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1051 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1055 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 1059 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 1075 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1141 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1198 |
-| §5 | Cross-cutting contracts | 1323 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1327 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1333 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1337 |
-| &nbsp;&nbsp;§5.4 | Work language | 1341 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1345 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1363 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1375 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1385 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1393 |
-| §6 | Self-governance milestone | 1409 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1420 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 855 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 1047 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1053 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1057 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 1061 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 1077 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1143 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1200 |
+| §5 | Cross-cutting contracts | 1325 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1329 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1335 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1339 |
+| &nbsp;&nbsp;§5.4 | Work language | 1343 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1347 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1365 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1377 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1387 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1395 |
+| §6 | Self-governance milestone | 1411 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1422 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -845,9 +845,11 @@ The local tier's handed-over helpers live at `.githooks/helpers/`; its explicit 
 | owner | state | activatesWith | retiresWith |
 | --- | --- | --- | --- |
 | .github/bin/gitjig-bootstrap.mjs | live | none | none |
-| .pi/extensions/gitjig/install/bootstrap.ts | retired | none | #362 |
+| .pi/extensions/gitjig/install/bootstrap.ts | retired | none | none |
 | .pi/extensions/gitjig/install/acquire.ts | live | none | none |
 <!-- acquisition-relation: activation:end -->
+
+A transition column names the change that will make that transition, and reads `none` once no transition is pending.
 <!-- acquisition-contract: launcher:end -->
 
 ### 4.2 Target-parameterization

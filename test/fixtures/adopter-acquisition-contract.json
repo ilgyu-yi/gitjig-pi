@@ -3,7 +3,7 @@
 	"relations": {
 		"activation": [
 			[".github/bin/gitjig-bootstrap.mjs", "live", "none", "none"],
-			[".pi/extensions/gitjig/install/bootstrap.ts", "retired", "none", "#362"],
+			[".pi/extensions/gitjig/install/bootstrap.ts", "retired", "none", "none"],
 			[".pi/extensions/gitjig/install/acquire.ts", "live", "none", "none"]
 		],
 		"nodes": [
@@ -177,7 +177,7 @@
 		]
 	},
 	"prose": {
-		"launcher": "835d433db13ec0d798a78b8d71226c00c139623537cd7a9e628dde273ae3037f",
+		"launcher": "fcb77473baa6e18e2dc38c8cc4d15b11346908d723615e7726b6f2857ebc9bfc",
 		"trust": "bc09b1509d0401a34dd2cac20c31fd246e5bce6de0adc7be30571669d738bc96",
 		"binding": "a6d529dbfaa16d0d49b738400fa22f0a72a151880102d252c0499072b4100c59",
 		"host": "631b980f347cf13d1877f900a3c856f01979e523b9916d4a071e7e3d8d144fed"
