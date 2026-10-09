@@ -707,6 +707,25 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 			"a short revision",
 			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: revision.slice(1) }),
 		],
+		// Forty valid hex digits with one more character on either side: only the
+		// pattern's own anchors refuse these, and either would reach the fetch.
+		[
+			"a revision with a leading character",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: `x${revision}` }),
+		],
+		[
+			"a revision with a trailing character",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({}), revision: `${revision}x` }),
+		],
+		// Controls past the C0 range — DEL and a C1 control — are controls too.
+		[
+			"a DEL in the owner",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({ owner: "o\u007f" }), revision }),
+		],
+		[
+			"a C1 control in the repository",
+			(revision: string) => JSON.stringify({ schemaVersion: 1, source: source({ repository: "r\u0085" }), revision }),
+		],
 		[
 			// The pattern test coerces, so a one-element array of the exact revision
 			// matches it: only the type itself refuses this shape.
@@ -2041,6 +2060,24 @@ test(
 			"\t\tif (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));\n",
 			'\t\tif (stats.isDirectory() && path === join(gitDir, "objects")) for (const name of readdirSync(path)) walkObjects(join(path, name));\n',
 			"the object-database walk stopped below its first level",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			"!/^[0-9a-f]{40}$/.test(value.revision)",
+			"!/[0-9a-f]{40}$/.test(value.revision)",
+			"a revision admitted with a leading character",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			"!/^[0-9a-f]{40}$/.test(value.revision)",
+			"!/^[0-9a-f]{40}/.test(value.revision)",
+			"a revision admitted with a trailing character",
+		);
+		await killed(
+			armAdmitsOnlyTheCommittedPin,
+			"/[\\p{Cc}/%]/u.test(name)",
+			"/[\\x00-\\x1f/%]/.test(name)",
+			"controls past the C0 range admitted in a routing name",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
