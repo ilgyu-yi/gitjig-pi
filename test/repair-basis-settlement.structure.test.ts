@@ -42,6 +42,12 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("between adjacent states in that run, oldest first") &&
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
+		crossReview.includes(
+			"A correction interval exists only where the earlier endpoint is an ancestor of the later one",
+		) &&
+		crossReview.includes(
+			"an adjacent pair decided non-ancestral by a completed walk leaves the projection unavailable",
+		) &&
 		crossReview.includes("Several included findings in one state share that whole interval") &&
 		crossReview.includes("caller never slices edits or attributes an edit to a finding") &&
 		crossReview.includes("NIT/remedy, refuted/`none`, `defer`, `measure-escalate`, and Nit carry-forward") &&
@@ -88,6 +94,14 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"exists only where the earlier endpoint is an ancestor of the later one",
+					"exists between any two endpoints",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("leaves the projection unavailable", "is diagnosed across"), JUDGE],
 			[
 				CROSS_REVIEW.replace("never slices edits or attributes an edit to a finding", "attributes edits by proximity"),
 				JUDGE,

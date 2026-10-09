@@ -65,7 +65,7 @@ const OWNED = [
 
 /** The three sections holding the contract, each pinned whole by SHA-256. */
 const SECTION_SHA256: ReadonlyArray<readonly [string, string]> = [
-	["1.4", "73167919b3a20e2123938916d804f430a08f40533045367b51a513349689d223"],
+	["1.4", "9df9e2a73e053678d0751e1a1d0bf9915d3288f1604648030b4fe499e3eab57c"],
 	["1.7", "76327e76eb2141d4a7e2504725416479785cc98fddfdde6cb9fbafb206406aec"],
 	["1.9", "989f91156c41b631b5453ddb1f3b301ad6dd1d3719e0eadaa4280fe032f553cb"],
 ];
