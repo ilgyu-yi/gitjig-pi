@@ -1047,14 +1047,19 @@ async function armExcludesAlternateObjectStores(launcher: string): Promise<void>
 	for (const [label, linkAt] of [
 		["a linked objects directory", "objects"],
 		["a linked fan-out directory", "fanout"],
+		["a linked object file", "object"],
 	] as const) {
 		const f = fixture(launcher);
 		const head = git(f.target, "rev-parse", "HEAD");
 		const objects = join(f.target, ".git/objects");
+		// The pin's own blob, so the object read at admission is the linked one.
+		const pinBlob = git(f.target, "rev-parse", "HEAD:.pi/gitjig.pin.json");
 		const moved =
 			linkAt === "objects"
 				? objects
-				: join(objects, readdirSync(objects).find((name) => /^[0-9a-f]{2}$/.test(name)) ?? "");
+				: linkAt === "fanout"
+					? join(objects, readdirSync(objects).find((name) => /^[0-9a-f]{2}$/.test(name)) ?? "")
+					: join(objects, pinBlob.slice(0, 2), pinBlob.slice(2));
 		const external = join(f.root, `external-${linkAt}`);
 		renameSync(moved, external);
 		symlinkSync(external, moved);
@@ -2030,6 +2035,12 @@ test(
 			"temporaryBase: tmpdir,",
 			"temporaryBase: () => dirname(fileURLToPath(import.meta.url)),",
 			"the acquisition child created beside the launcher, inside the target",
+		);
+		await killed(
+			armExcludesAlternateObjectStores,
+			"\t\tif (stats.isDirectory()) for (const name of readdirSync(path)) walkObjects(join(path, name));\n",
+			'\t\tif (stats.isDirectory() && path === join(gitDir, "objects")) for (const name of readdirSync(path)) walkObjects(join(path, name));\n',
+			"the object-database walk stopped below its first level",
 		);
 		// A database reached through a linked `.git`, and a directory created public
 		// and normalized before any Git child could observe it.
