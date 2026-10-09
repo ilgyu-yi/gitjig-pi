@@ -42,6 +42,12 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("between adjacent states in that run, oldest first") &&
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
+		crossReview.includes("it is the **branch-scoped delta**: the tree delta from the earlier head to the later one") &&
+		crossReview.includes("a missing object, an absent or ambiguous merge-base") &&
+		crossReview.includes("carries the base's change as well") &&
+		crossReview.includes("A rename appears as a deletion and an addition") &&
+		crossReview.includes("never understates it — a stated residual") &&
+		crossReview.includes("This interval definition activates only with its implementing derivation") &&
 		crossReview.includes(
 			"When the earlier endpoint is an ancestor of the later one, the interval is the tree delta between them",
 		) &&
@@ -99,6 +105,22 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[
+				CROSS_REVIEW.replace("the interval is the tree delta between them", "the interval is the branch-scoped delta"),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"it is the **branch-scoped delta**: the tree delta from the earlier head to the later one",
+					"it is withheld",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("a missing object, an absent or ambiguous merge-base", "a missing object"), JUDGE],
+			[CROSS_REVIEW.replace("carries the base's change as well", "is excluded as well"), JUDGE],
+			[CROSS_REVIEW.replace("A rename appears as a deletion and an addition", "A rename is ignored"), JUDGE],
+			[CROSS_REVIEW.replace("never understates it — a stated residual", "never understates it"), JUDGE],
+			[CROSS_REVIEW.replace("activates only with its implementing derivation", "activates at once"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
 					"restricted to the paths that either head changes",
