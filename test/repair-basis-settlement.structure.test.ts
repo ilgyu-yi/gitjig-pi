@@ -42,10 +42,16 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("between adjacent states in that run, oldest first") &&
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
+		crossReview.includes("NONE needs every correction in the run, so a run containing a marker is never NONE") &&
+		crossReview.includes(
+			"it is STAGNATION or OSCILLATION only where linear intervals alone establish that value, and INDETERMINATE otherwise",
+		) &&
 		crossReview.includes(
 			"A pair is *linear* when it is ancestral and no commit in its range, reachable from the later head but not from the earlier head, has more than one parent",
 		) &&
-		crossReview.includes("because a merge can carry the base's changes into a tree delta") &&
+		crossReview.includes(
+			"because a rewrite leaves no tree delta between the heads that is the author's alone and a merge can carry the base's changes into one",
+		) &&
 		crossReview.includes("and counts among the N−1 intervals") &&
 		crossReview.includes("and computes a tree delta for an ancestral one") &&
 		crossReview.includes(
@@ -125,6 +131,29 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[CROSS_REVIEW.replace("NONE needs every correction in the run", "NONE needs the corrections it can see"), JUDGE],
+			[CROSS_REVIEW.replace("a run containing a marker is never NONE", "a run containing a marker may be NONE"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"only where linear intervals alone establish that value",
+					"where any interval suggests that value",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"establish that value, and INDETERMINATE otherwise",
+					"establish that value, and NONE otherwise",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"a rewrite leaves no tree delta between the heads that is the author's alone",
+					"a rewrite leaves the author's tree delta intact",
+				),
+				JUDGE,
+			],
 			[
 				CROSS_REVIEW.replace(
 					"when it is ancestral and no commit in its range",
@@ -150,7 +179,7 @@ describe("issue #236 repair-basis settlement", () => {
 			[CROSS_REVIEW.replace("a correction across a rewrite or a merge,", "a correction across a rewrite,"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
-					"because a merge can carry the base's changes into a tree delta",
+					"because a rewrite leaves no tree delta between the heads that is the author's alone and a merge can carry the base's changes into one",
 					"because a merge carries only the author's changes",
 				),
 				JUDGE,
