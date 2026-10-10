@@ -42,6 +42,7 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("between adjacent states in that run, oldest first") &&
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
+		crossReview.includes("Each interval is decided by an ancestry walk from its later head") &&
 		crossReview.includes("a walk that reaches the earlier head decides the pair ancestral") &&
 		crossReview.includes("a walk that completes without reaching it decides the pair non-ancestral") &&
 		crossReview.includes("a walk that does not complete withholds the projection and never decides either") &&
@@ -103,6 +104,14 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[CROSS_REVIEW.replace("an ancestry walk from its later head", "an ancestry walk from its earlier head"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"Each interval is decided by an ancestry walk",
+					"Each interval is assumed ancestral, or decided by an ancestry walk",
+				),
+				JUDGE,
+			],
 			[
 				CROSS_REVIEW.replace(
 					"a walk that reaches the earlier head decides the pair ancestral",
