@@ -311,6 +311,19 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		assert.equal(await readCorrectionInterval(root, absent, large), undefined);
 	});
 
+	it("withholds at the deadline when a batch read never answers", { timeout: 20_000 }, async () => {
+		const root = repo();
+		const first = commit(root, "a", "1");
+		const later = commit(root, "a", "2");
+		const loose = join(root, ".git", "objects", first.slice(0, 2), first.slice(2));
+		unlinkSync(loose);
+		execFileSync("mkfifo", [loose]);
+		const started = Date.now();
+		const pairs = [{ earlierHead: "e".repeat(40), laterHead: later }];
+		assert.equal(await readCorrectionIntervals(root, pairs, { runMs: 500, commitCap: 100_000 }), undefined);
+		assert.ok(Date.now() - started < 10_000, "the per-pair timer bounds a blocked read");
+	});
+
 	it("withholds, never marks, at the commit cap and the deadline", async () => {
 		const root = repo();
 		const later = longChain(root, 3000);

@@ -22,18 +22,20 @@ type Sources = typeof SOURCES;
  * way (missing, malformed, capped or past the deadline), so it is pinned
  * for its line but owes no weakening (§3.12).
  *
- * A behavioural sweep applied every weakening below to the source and ran the
- * real-Git arms; each is killed there too, save three recorded as decisions:
+ * Measured sweep: each of the 26 weakenings below was applied to the source
+ * and run against the behavioural arms (the #437, #238, #404, history and
+ * coordinator unit tests). 22 are killed there; four survive and are recorded
+ * as decisions:
  * - the self-parent refusal is unreachable, since a commit's name hashes its
  *   own parent lines;
  * - `!failed && ready()` admits only a response already buffered before the
  *   failure, read within the bounds, and every later read refuses on `failed`;
- * - the stderr kill: a corrupt commit prints errors and answers `missing` on
- *   stdout, which the header check refuses, so it is equivalent there;
  * - the completing loop's own deadline check is redundant while the visited
  *   set holds, since every iteration then makes a real read the timer can
  *   interrupt; it guards the cached path the visited set's weakening opens,
- *   and the diamond arm kills that weakening through it.
+ *   and the diamond arm kills that weakening through it;
+ * - the stderr kill: a corrupt commit prints errors and answers `missing` on
+ *   stdout, which the header check refuses, so it is equivalent there.
  */
 function guardsHold({ interval, history, caller, coordinator, briefs }: Sources): boolean {
 	return (
