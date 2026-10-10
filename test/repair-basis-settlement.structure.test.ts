@@ -43,7 +43,7 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
 		crossReview.includes(
-			"a reader that does not hold a pair's earlier or later head, such as a fresh clone after a rebase removed it from every ref, cannot complete that pair's walk and withholds the projection as limb (c) until the run resets",
+			"a reader that does not hold a pair's later head, such as a fresh clone after a rebase removed it from every ref, cannot complete that pair's walk and withholds the projection as limb (c) until the run resets",
 		) &&
 		crossReview.includes(
 			"keeping a ref to every reviewed head avoids it, and the failure is a block, never a bypass",
@@ -148,6 +148,10 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[
+				CROSS_REVIEW.replace("does not hold a pair's later head", "does not hold a pair's earlier or later head"),
+				JUDGE,
+			],
 			[
 				CROSS_REVIEW.replace(
 					"cannot complete that pair's walk and withholds the projection as limb (c)",
