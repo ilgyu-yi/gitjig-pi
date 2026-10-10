@@ -42,6 +42,19 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("between adjacent states in that run, oldest first") &&
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
+		crossReview.includes(
+			"a walk that reaches the earlier head decides the pair ancestral, a walk that completes without reaching it decides the pair non-ancestral, and a walk that does not complete withholds the projection and never decides either",
+		) &&
+		crossReview.includes("a correction across a rewrite, such as a rebase onto an advancing base, is not measured") &&
+		crossReview.includes(
+			"a value whose required evidence lies in the unmeasured correction is INDETERMINATE, and other values may be ruled only from other states and ancestral intervals",
+		) &&
+		crossReview.includes(
+			"Because INDETERMINATE over-stops, a rewrite can cost an over-stop after a diagnosis has run, never an under-stop",
+		) &&
+		crossReview.includes(
+			"This interval definition activates only with its implementing derivation, never from a contract-only PR alone (§5.3)",
+		) &&
 		crossReview.includes("Each interval is decided by an ancestry walk from its later head") &&
 		crossReview.includes("a walk that reaches the earlier head decides the pair ancestral") &&
 		crossReview.includes("a walk that completes without reaching it decides the pair non-ancestral") &&
@@ -56,7 +69,7 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("other values may be ruled only from other states and ancestral intervals") &&
 		crossReview.includes("a rewrite can cost an over-stop after a diagnosis has run, never an under-stop") &&
 		crossReview.includes("This interval definition activates only with its implementing derivation") &&
-		crossReview.includes("until then the installed reader withholds a non-ancestral pair") &&
+		crossReview.includes("until then the installed reader withholds the projection for a non-ancestral pair") &&
 		crossReview.includes("— of which a rewrite marker is none —") &&
 		crossReview.includes("Several included findings in one state share that whole interval") &&
 		crossReview.includes("caller never slices edits or attributes an edit to a finding") &&
@@ -104,6 +117,21 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"never from a contract-only PR alone (§5.3); until then the installed reader",
+					"or from a contract-only PR (§5.3); until then the installed reader",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"such as a rebase onto an advancing base, is not measured",
+					"such as a rebase onto an advancing base, is measured",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("Because INDETERMINATE over-stops", "Although INDETERMINATE may continue"), JUDGE],
 			[CROSS_REVIEW.replace("an ancestry walk from its later head", "an ancestry walk from its earlier head"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
@@ -167,7 +195,7 @@ describe("issue #236 repair-basis settlement", () => {
 			[CROSS_REVIEW.replace("activates only with its implementing derivation", "activates at once"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
-					"until then the installed reader withholds a non-ancestral pair",
+					"until then the installed reader withholds the projection for a non-ancestral pair",
 					"until then nothing changes",
 				),
 				JUDGE,
