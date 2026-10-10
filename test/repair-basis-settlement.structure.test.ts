@@ -64,7 +64,7 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 			"a value whose required evidence lies in the unmeasured correction is INDETERMINATE, and other values may be ruled only from other states and linear intervals",
 		) &&
 		crossReview.includes(
-			"Because INDETERMINATE over-stops, a rewrite can cost an over-stop after a diagnosis has run, never an under-stop",
+			"Because INDETERMINATE over-stops, a rewrite or a merge in a pair's range can cost an over-stop after a diagnosis has run, never an under-stop",
 		) &&
 		crossReview.includes(
 			"This interval definition activates only with its implementing derivation, never from a contract-only PR alone (§5.3)",
@@ -81,7 +81,9 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("The marker is evidence for no value: it cannot support NONE, STAGNATION or OSCILLATION") &&
 		crossReview.includes("a value whose required evidence lies in the unmeasured correction is INDETERMINATE") &&
 		crossReview.includes("other values may be ruled only from other states and linear intervals") &&
-		crossReview.includes("a rewrite can cost an over-stop after a diagnosis has run, never an under-stop") &&
+		crossReview.includes(
+			"a rewrite or a merge in a pair's range can cost an over-stop after a diagnosis has run, never an under-stop",
+		) &&
 		crossReview.includes("This interval definition activates only with its implementing derivation") &&
 		crossReview.includes("until then the installed reader withholds the projection for a non-ancestral pair") &&
 		crossReview.includes("— of which a rewrite marker is none —") &&
@@ -131,6 +133,7 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[CROSS_REVIEW.replace("a rewrite or a merge in a pair's range can cost", "a rewrite can cost"), JUDGE],
 			[CROSS_REVIEW.replace("NONE needs every correction in the run", "NONE needs the corrections it can see"), JUDGE],
 			[CROSS_REVIEW.replace("a run containing a marker is never NONE", "a run containing a marker may be NONE"), JUDGE],
 			[
