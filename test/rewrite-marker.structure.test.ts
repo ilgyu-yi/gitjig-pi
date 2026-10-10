@@ -26,7 +26,11 @@ function guardsHold({ interval, history, caller, coordinator, briefs }: Sources)
 	return (
 		interval.includes('return "kind" in interval && interval.kind === "rewrite-marker";') &&
 		interval.includes("\t\t\tif (parents === undefined) return undefined;\n\t\t\tif (parents.length !== 1) break;") &&
-		interval.includes("\t\t\tif (parents === undefined) return undefined;\n\t\t\tpending.push(...parents);") &&
+		interval.includes("\t\t\tif (parents === undefined) return undefined;\n\t\t\t// First parent popped first") &&
+		interval.includes("pending.push(...parents.toReversed());") &&
+		interval.includes('const end = raw.indexOf(Buffer.from("\\n\\n"));\n\tif (end < 0) return undefined;') &&
+		interval.includes("\t\tif (parents.includes(parent)) return undefined;") &&
+		interval.includes("\t\t\treturn undefined;\n\t}\n\treturn parents;") &&
 		interval.includes("if (parents === undefined || parents.includes(oid)) return undefined;") &&
 		interval.includes("return !failed && ready();") &&
 		interval.includes("const timer = setTimeout(fail, timeout);") &&
@@ -58,9 +62,17 @@ describe("issue #437 rewrite-marker guards", () => {
 			["interval", "if (parents.length !== 1) break;", "if (parents.length === 0) break;"],
 			[
 				"interval",
-				"\t\t\tif (parents === undefined) return undefined;\n\t\t\tpending.push(...parents);",
-				'\t\t\tif (parents === undefined) return "rewrite";\n\t\t\tpending.push(...parents);',
+				"\t\t\tif (parents === undefined) return undefined;\n\t\t\t// First parent popped first",
+				'\t\t\tif (parents === undefined) return "rewrite";\n\t\t\t// First parent popped first',
 			],
+			["interval", "pending.push(...parents.toReversed());", "pending.push(...parents);"],
+			[
+				"interval",
+				'const end = raw.indexOf(Buffer.from("\\n\\n"));\n\tif (end < 0) return undefined;',
+				'const end = raw.indexOf(Buffer.from("\\n\\n"));\n\tif (end < 0) return [];',
+			],
+			["interval", "\t\tif (parents.includes(parent)) return undefined;", ""],
+			["interval", "\t\t\treturn undefined;\n\t}\n\treturn parents;", "\t\t\tcontinue;\n\t}\n\treturn parents;"],
 			["interval", "parents === undefined || parents.includes(oid)", "parents === undefined"],
 			["interval", "return !failed && ready();", "return ready();"],
 			["interval", "const timer = setTimeout(fail, timeout);", "const timer = undefined;"],

@@ -179,6 +179,37 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		assert.equal(await readCorrectionInterval(root, absent, merged), undefined);
 	});
 
+	it("meets a first-parent earlier head before walking a merged-in base history", async () => {
+		const root = repo();
+		longChain(root, 3000);
+		git(root, ["checkout", "-qb", "topic", "main~2999"]);
+		const before = commit(root, "topic", "t");
+		git(root, ["merge", "--no-ff", "--no-gpg-sign", "-qm", "merge main", "main"]);
+		const after = git(root, ["rev-parse", "HEAD"]);
+		assert.equal(git(root, ["rev-parse", `${after}^1`]), before);
+		const pairs = [{ earlierHead: before, laterHead: after }];
+		assert.deepEqual(await readCorrectionIntervals(root, pairs, { runMs: 30_000, commitCap: 2 }), [
+			marker(before, after),
+		]);
+	});
+
+	it("withholds, never marks, when a commit on the walk is malformed", async () => {
+		const root = repo();
+		const base = commit(root, "a", "1");
+		const tree = git(root, ["rev-parse", `${base}^{tree}`]);
+		const header = `tree ${tree}\nauthor A <a@example.test> 0 +0000\ncommitter A <a@example.test> 0 +0000\n`;
+		const write = (body: string) => git(root, ["hash-object", "-t", "commit", "-w", "--literally", "--stdin"], body);
+		const noBlankLine = write(`tree ${tree}\nparent ${base}\nauthor A <a@example.test> 0 +0000`);
+		const duplicated = write(
+			`tree ${tree}\nparent ${base}\nparent ${base}\n${header.slice(header.indexOf("author"))}\nd\n`,
+		);
+		const absent = "e".repeat(40);
+		for (const bad of [noBlankLine, duplicated]) {
+			const child = write(`tree ${tree}\nparent ${bad}\n${header.slice(header.indexOf("author"))}\nc\n`);
+			assert.equal(await readCorrectionInterval(root, absent, child), undefined, bad);
+		}
+	});
+
 	it("withholds, never marks, at the commit cap and the deadline", async () => {
 		const root = repo();
 		const later = longChain(root, 3000);

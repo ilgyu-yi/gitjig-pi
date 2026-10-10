@@ -179,7 +179,9 @@ async function walkPair(
 			seen.add(oid);
 			const parents = await parentsOf(oid);
 			if (parents === undefined) return undefined;
-			pending.push(...parents);
+			// First parent popped first, so an earlier head on the first-parent
+			// line is met before a merged-in base history is walked.
+			pending.push(...parents.toReversed());
 		}
 		return "rewrite";
 	} finally {
