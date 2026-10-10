@@ -37,6 +37,9 @@ function guardsHold({ interval, history, caller, coordinator, briefs }: Sources)
 		interval.includes("if (budget.bytes > BYTE_CAP) return fail();") &&
 		interval.includes('child.stderr.on("data", fail);') &&
 		interval.includes("if (shape === undefined) return undefined;") &&
+		interval.includes(
+			"if (earlierHead === laterHead || !OID.test(earlierHead) || !OID.test(laterHead)) return undefined;",
+		) &&
 		interval.includes('if (shape === "rewrite") return { kind: "rewrite-marker", earlierHead, laterHead };') &&
 		history.includes("return basis.intervals.some(isRewriteMarker);") &&
 		history.includes('if (admitted.available && admitted.diagnosis.value === "NONE" && hasRewriteMarker(basis))') &&
@@ -84,6 +87,7 @@ describe("issue #437 rewrite-marker guards", () => {
 				'if (shape === undefined) return { kind: "rewrite-marker", earlierHead, laterHead };',
 			],
 			["interval", 'if (shape === "rewrite") return', "if (false) return"],
+			["interval", "|| !OID.test(earlierHead) ||", "||"],
 			["history", "return basis.intervals.some(isRewriteMarker);", "return false;"],
 			["history", 'admitted.diagnosis.value === "NONE" && hasRewriteMarker(basis)', "false"],
 			["history", "...(hasRewriteMarker(basis) ? REWRITE_MARKER_RULE : []),", ""],

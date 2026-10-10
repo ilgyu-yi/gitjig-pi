@@ -145,6 +145,14 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		assert.deepEqual(await readCorrectionInterval(root, absent, later), marker(absent, later));
 	});
 
+	it("withholds, never marks, when the earlier head is not an exact 40-hex object name", async () => {
+		const root = repo();
+		const earlier = commit(root, "a", "1");
+		const later = commit(root, "a", "2");
+		for (const spelled of ["HEAD~1", earlier.slice(0, 12), earlier.toUpperCase(), `${earlier}^{commit}`])
+			assert.equal(await readCorrectionInterval(root, spelled, later), undefined, spelled);
+	});
+
 	it("withholds when the later head is absent: the walk cannot start", async () => {
 		const root = repo();
 		const earlier = commit(root, "a", "1");
