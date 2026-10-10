@@ -43,11 +43,12 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
 		crossReview.includes(
-			"the marker stays in the trailing run until an honored limb-(b) terminal starts a new one, so every diagnosis of that run interrupts",
+			"the marker stays in the trailing run until that run resets, so every diagnosis of that run interrupts",
 		) &&
 		crossReview.includes(
-			"under `autonomous` the first such stop claims the lineage's single recovery allowance, whose only return to ordinary flow — a fresh NONE — a run containing a marker cannot reach, so the allowance is spent and the change hands off as limb (b)",
+			"where the autonomous route claims the lineage's recovery allowance for such a stop, the allowance cannot return the change to ordinary flow",
 		) &&
+		crossReview.includes("because its only return — a fresh NONE — is one a run containing a marker cannot reach") &&
 		crossReview.includes("NONE needs every correction in the run, so a run containing a marker is never NONE") &&
 		crossReview.includes(
 			"it is STAGNATION or OSCILLATION only where those states and linear intervals establish that value, and INDETERMINATE otherwise",
@@ -141,17 +142,9 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
-			[CROSS_REVIEW.replace("a marker's endpoint states included", "a marker's endpoint states excluded"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
-					"those states and linear intervals establish that value",
-					"linear intervals alone establish that value",
-				),
-				JUDGE,
-			],
-			[
-				CROSS_REVIEW.replace(
-					"the marker stays in the trailing run until an honored limb-(b) terminal starts a new one",
+					"the marker stays in the trailing run until that run resets",
 					"the marker leaves the trailing run at the next round",
 				),
 				JUDGE,
@@ -165,22 +158,23 @@ describe("issue #236 repair-basis settlement", () => {
 			],
 			[
 				CROSS_REVIEW.replace(
-					"the first such stop claims the lineage's single recovery allowance",
-					"the first such stop claims no recovery allowance",
+					"the allowance cannot return the change to ordinary flow",
+					"the allowance returns the change to ordinary flow",
 				),
 				JUDGE,
 			],
 			[
 				CROSS_REVIEW.replace(
-					"a run containing a marker cannot reach, so the allowance is spent",
-					"a run containing a marker can reach, so the allowance is spent",
+					"is one a run containing a marker cannot reach",
+					"is one a run containing a marker can reach",
 				),
 				JUDGE,
 			],
+			[CROSS_REVIEW.replace("a marker's endpoint states included", "a marker's endpoint states excluded"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
-					"so the allowance is spent and the change hands off as limb (b)",
-					"so the allowance is kept and the change continues",
+					"those states and linear intervals establish that value",
+					"linear intervals alone establish that value",
 				),
 				JUDGE,
 			],
