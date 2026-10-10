@@ -153,6 +153,23 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 			assert.equal(await readCorrectionInterval(root, spelled, later), undefined, spelled);
 	});
 
+	it("withholds, never measures, when a parent line names a non-commit earlier head", async () => {
+		const root = repo();
+		const base = commit(root, "a", "1");
+		const tree = git(root, ["rev-parse", `${base}^{tree}`]);
+		git(root, ["tag", "-a", "-m", "t", "annotated", base]);
+		const tag = git(root, ["rev-parse", "annotated"]);
+		const author = "author A <a@example.test> 0 +0000\ncommitter A <a@example.test> 0 +0000\n";
+		for (const earlier of [tag, tree]) {
+			const later = git(
+				root,
+				["hash-object", "-t", "commit", "-w", "--literally", "--stdin"],
+				`tree ${tree}\nparent ${earlier}\n${author}\nc\n`,
+			);
+			assert.equal(await readCorrectionInterval(root, earlier, later), undefined, earlier);
+		}
+	});
+
 	it("withholds when the later head is absent: the walk cannot start", async () => {
 		const root = repo();
 		const earlier = commit(root, "a", "1");

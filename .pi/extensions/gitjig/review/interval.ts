@@ -164,7 +164,8 @@ async function walkPair(
 	try {
 		let cursor = later;
 		for (;;) {
-			if (cursor === earlier) return "linear";
+			// The earlier head is measured as a tree, so it must read as a commit.
+			if (cursor === earlier) return (await parentsOf(earlier)) === undefined ? undefined : "linear";
 			const parents = await parentsOf(cursor);
 			if (parents === undefined) return undefined;
 			if (parents.length !== 1) break;

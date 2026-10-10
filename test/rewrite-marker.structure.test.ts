@@ -42,6 +42,9 @@ function guardsHold({ interval, history, caller, coordinator, briefs }: Sources)
 		interval.includes("\t\t\treturn undefined;\n\t}\n\treturn parents;") &&
 		interval.includes("if (parents === undefined || parents.includes(oid)) return undefined;") &&
 		interval.includes("return !failed && ready();") &&
+		interval.includes(
+			'if (cursor === earlier) return (await parentsOf(earlier)) === undefined ? undefined : "linear";',
+		) &&
 		interval.includes("const timer = setTimeout(fail, timeout);") &&
 		interval.includes("if (budget.bytes > BYTE_CAP) return fail();") &&
 		interval.includes('child.stderr.on("data", fail);') &&
@@ -87,6 +90,7 @@ describe("issue #437 rewrite-marker guards", () => {
 			["interval", "\t\t\treturn undefined;\n\t}\n\treturn parents;", "\t\t\tcontinue;\n\t}\n\treturn parents;"],
 			["interval", "parents === undefined || parents.includes(oid)", "parents === undefined"],
 			["interval", "return !failed && ready();", "return ready();"],
+			["interval", '(await parentsOf(earlier)) === undefined ? undefined : "linear"', '"linear"'],
 			["interval", "const timer = setTimeout(fail, timeout);", "const timer = undefined;"],
 			["interval", "if (budget.bytes > BYTE_CAP) return fail();", ""],
 			["interval", 'child.stderr.on("data", fail);', ""],
