@@ -174,6 +174,8 @@ async function walkPair(
 		const pending = [later];
 		const seen = new Set<string>();
 		while (pending.length > 0) {
+			// A cached read never yields to the deadline timer, so the loop checks it.
+			if (failed || Date.now() >= budget.deadline) return undefined;
 			const oid = pending.pop() as string;
 			if (oid === earlier) return "rewrite";
 			if (seen.has(oid)) continue;

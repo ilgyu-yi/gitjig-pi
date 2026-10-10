@@ -75,7 +75,7 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL.replace("const RUN_MS = 30_000", "const RUN_MS = Infinity"), HISTORY, CALLER],
 			[INTERVAL.replace("const BYTE_CAP = 16 * 1024 * 1024", "const BYTE_CAP = Infinity"), HISTORY, CALLER],
 			[INTERVAL.replace("const COMMIT_CAP = 100_000", "const COMMIT_CAP = Infinity"), HISTORY, CALLER],
-			[INTERVAL.replace("commit (\\d+)$/.exec(", "(?:commit|tag) (\\d+)$/.exec("), HISTORY, CALLER],
+			[INTERVAL.replace("commit (\\d+)$/.exec(", "(?:commit|blob) (\\d+)$/.exec("), HISTORY, CALLER],
 			[INTERVAL.replace("header === null || header[1] !== oid", "header === null"), HISTORY, CALLER],
 			[
 				INTERVAL.replace('["-C", repoRoot, "cat-file", "--batch"]', '["-C", repoRoot, "rev-list", "--parents"]'),

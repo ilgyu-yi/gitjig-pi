@@ -170,6 +170,62 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		}
 	});
 
+	it("withholds, never measures, when a parent line names a blob holding commit bytes", async () => {
+		const root = repo();
+		const base = commit(root, "a", "1");
+		const tree = git(root, ["rev-parse", `${base}^{tree}`]);
+		const author = "author A <a@example.test> 0 +0000\ncommitter A <a@example.test> 0 +0000\n";
+		const blob = git(
+			root,
+			["hash-object", "-t", "blob", "-w", "--stdin"],
+			`tree ${tree}\nparent ${base}\n${author}\nb\n`,
+		);
+		const later = git(
+			root,
+			["hash-object", "-t", "commit", "-w", "--literally", "--stdin"],
+			`tree ${tree}\nparent ${blob}\n${author}\nc\n`,
+		);
+		assert.equal(await readCorrectionInterval(root, base, later), undefined);
+		assert.equal(await readCorrectionInterval(root, blob, later), undefined);
+	});
+
+	it("walks a diamond-heavy history once per commit and marks it within its bounds", async () => {
+		const root = repo();
+		const stream = ["commit refs/heads/main", "mark :1", "committer A <a@example.test> 0 +0000", "data 1", "r", ""];
+		let top = 1;
+		for (let index = 0; index < 30; index += 1) {
+			const [left, right, merge] = [top + 1, top + 2, top + 3];
+			for (const mark of [left, right])
+				stream.push(
+					"commit refs/heads/main",
+					`mark :${String(mark)}`,
+					"committer A <a@example.test> 0 +0000",
+					"data 1",
+					mark === left ? "l" : "r",
+					`from :${String(top)}`,
+					"",
+				);
+			stream.push(
+				"commit refs/heads/main",
+				`mark :${String(merge)}`,
+				"committer A <a@example.test> 0 +0000",
+				"data 1",
+				"m",
+				`from :${String(left)}`,
+				`merge :${String(right)}`,
+				"",
+			);
+			top = merge;
+		}
+		git(root, ["fast-import", "--quiet", "--force"], `${stream.join("\n")}\n`);
+		const later = git(root, ["rev-parse", "main"]);
+		const absent = "e".repeat(40);
+		const pairs = [{ earlierHead: absent, laterHead: later }];
+		assert.deepEqual(await readCorrectionIntervals(root, pairs, { runMs: 2000, commitCap: 100_000 }), [
+			marker(absent, later),
+		]);
+	});
+
 	it("withholds when the later head is absent: the walk cannot start", async () => {
 		const root = repo();
 		const earlier = commit(root, "a", "1");

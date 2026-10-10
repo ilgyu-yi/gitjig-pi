@@ -29,7 +29,11 @@ type Sources = typeof SOURCES;
  * - `!failed && ready()` admits only a response already buffered before the
  *   failure, read within the bounds, and every later read refuses on `failed`;
  * - the stderr kill: a corrupt commit prints errors and answers `missing` on
- *   stdout, which the header check refuses, so it is equivalent there.
+ *   stdout, which the header check refuses, so it is equivalent there;
+ * - the completing loop's own deadline check is redundant while the visited
+ *   set holds, since every iteration then makes a real read the timer can
+ *   interrupt; it guards the cached path the visited set's weakening opens,
+ *   and the diamond arm kills that weakening through it.
  */
 function guardsHold({ interval, history, caller, coordinator, briefs }: Sources): boolean {
 	return (
@@ -42,6 +46,9 @@ function guardsHold({ interval, history, caller, coordinator, briefs }: Sources)
 		interval.includes("\t\t\treturn undefined;\n\t}\n\treturn parents;") &&
 		interval.includes("if (parents === undefined || parents.includes(oid)) return undefined;") &&
 		interval.includes("return !failed && ready();") &&
+		interval.includes("const header = /^([0-9a-f]{40}) commit (\\d+)$/.exec(") &&
+		interval.includes("\t\t\tif (seen.has(oid)) continue;\n\t\t\tseen.add(oid);") &&
+		interval.includes("if (failed || Date.now() >= budget.deadline) return undefined;") &&
 		interval.includes(
 			'if (cursor === earlier) return (await parentsOf(earlier)) === undefined ? undefined : "linear";',
 		) &&
@@ -90,6 +97,9 @@ describe("issue #437 rewrite-marker guards", () => {
 			["interval", "\t\t\treturn undefined;\n\t}\n\treturn parents;", "\t\t\tcontinue;\n\t}\n\treturn parents;"],
 			["interval", "parents === undefined || parents.includes(oid)", "parents === undefined"],
 			["interval", "return !failed && ready();", "return ready();"],
+			["interval", "\t\t\tif (seen.has(oid)) continue;\n", ""],
+			["interval", "if (failed || Date.now() >= budget.deadline) return undefined;", ""],
+			["interval", "commit (\\d+)$/.exec(", "(?:commit|blob) (\\d+)$/.exec("],
 			["interval", '(await parentsOf(earlier)) === undefined ? undefined : "linear"', '"linear"'],
 			["interval", "const timer = setTimeout(fail, timeout);", "const timer = undefined;"],
 			["interval", "if (budget.bytes > BYTE_CAP) return fail();", ""],
