@@ -43,11 +43,19 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
 		crossReview.includes(
+			"A pair is *linear* when it is ancestral and no commit in its range, reachable from the later head but not from the earlier head, has more than one parent",
+		) &&
+		crossReview.includes("because a merge can carry the base's changes into a tree delta") &&
+		crossReview.includes("and counts among the N−1 intervals") &&
+		crossReview.includes("and computes a tree delta for an ancestral one") &&
+		crossReview.includes(
 			"a walk that reaches the earlier head decides the pair ancestral, a walk that completes without reaching it decides the pair non-ancestral, and a walk that does not complete withholds the projection and never decides either",
 		) &&
-		crossReview.includes("a correction across a rewrite, such as a rebase onto an advancing base, is not measured") &&
 		crossReview.includes(
-			"a value whose required evidence lies in the unmeasured correction is INDETERMINATE, and other values may be ruled only from other states and ancestral intervals",
+			"a correction across a rewrite or a merge, such as a rebase onto an advancing base, is not measured",
+		) &&
+		crossReview.includes(
+			"a value whose required evidence lies in the unmeasured correction is INDETERMINATE, and other values may be ruled only from other states and linear intervals",
 		) &&
 		crossReview.includes(
 			"Because INDETERMINATE over-stops, a rewrite can cost an over-stop after a diagnosis has run, never an under-stop",
@@ -59,14 +67,14 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("a walk that reaches the earlier head decides the pair ancestral") &&
 		crossReview.includes("a walk that completes without reaching it decides the pair non-ancestral") &&
 		crossReview.includes("a walk that does not complete withholds the projection and never decides either") &&
-		crossReview.includes("An ancestral pair's interval is the tree delta between the two heads") &&
+		crossReview.includes("A linear pair's interval is the tree delta between the two heads") &&
 		crossReview.includes(
-			"A non-ancestral pair's interval is a **rewrite marker** that names the two heads and carries no delta",
+			"Every other pair's interval — a non-ancestral pair, or an ancestral pair whose range contains a merge commit — is a **rewrite marker** that names the two heads and carries no delta",
 		) &&
 		crossReview.includes("A rewrite marker is a complete interval, not missing delta data") &&
 		crossReview.includes("The marker is evidence for no value: it cannot support NONE, STAGNATION or OSCILLATION") &&
 		crossReview.includes("a value whose required evidence lies in the unmeasured correction is INDETERMINATE") &&
-		crossReview.includes("other values may be ruled only from other states and ancestral intervals") &&
+		crossReview.includes("other values may be ruled only from other states and linear intervals") &&
 		crossReview.includes("a rewrite can cost an over-stop after a diagnosis has run, never an under-stop") &&
 		crossReview.includes("This interval definition activates only with its implementing derivation") &&
 		crossReview.includes("until then the installed reader withholds the projection for a non-ancestral pair") &&
@@ -119,6 +127,45 @@ describe("issue #236 repair-basis settlement", () => {
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
+					"when it is ancestral and no commit in its range",
+					"when it is ancestral or no commit in its range",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"reachable from the later head but not from the earlier head, has more",
+					"reachable from the later head, has more",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("has more than one parent", "has more than two parents"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"a non-ancestral pair, or an ancestral pair whose range contains a merge commit —",
+					"a non-ancestral pair —",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("a correction across a rewrite or a merge,", "a correction across a rewrite,"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"because a merge can carry the base's changes into a tree delta",
+					"because a merge carries only the author's changes",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("and counts among the N−1 intervals", "and counts among no intervals"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"and computes a tree delta for an ancestral one",
+					"and computes a rewrite marker for an ancestral one",
+				),
+				JUDGE,
+			],
+			[CROSS_REVIEW.replace("other states and linear intervals", "other states and ancestral intervals"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
 					"never from a contract-only PR alone (§5.3); until then the installed reader",
 					"or from a contract-only PR (§5.3); until then the installed reader",
 				),
@@ -163,8 +210,8 @@ describe("issue #236 repair-basis settlement", () => {
 			],
 			[
 				CROSS_REVIEW.replace(
-					"An ancestral pair's interval is the tree delta between the two heads",
-					"An ancestral pair's interval is a rewrite marker",
+					"A linear pair's interval is the tree delta between the two heads",
+					"A linear pair's interval is a rewrite marker",
 				),
 				JUDGE,
 			],
@@ -186,7 +233,7 @@ describe("issue #236 repair-basis settlement", () => {
 			],
 			[
 				CROSS_REVIEW.replace(
-					"other values may be ruled only from other states and ancestral intervals",
+					"other values may be ruled only from other states and linear intervals",
 					"other values may be ruled from the marker",
 				),
 				JUDGE,
