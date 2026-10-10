@@ -226,6 +226,14 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		]);
 	});
 
+	it("withholds, never measures, when the later head is not an exact 40-hex object name", async () => {
+		const root = repo();
+		const earlier = commit(root, "a", "1");
+		const later = commit(root, "a", "2");
+		for (const spelled of ["HEAD", later.slice(0, 12), later.toUpperCase(), `${later}^{commit}`])
+			assert.equal(await readCorrectionInterval(root, earlier, spelled), undefined, spelled);
+	});
+
 	it("withholds when the later head is absent: the walk cannot start", async () => {
 		const root = repo();
 		const earlier = commit(root, "a", "1");
@@ -356,7 +364,7 @@ describe("issue #437 a marker run is never NONE (§1.4)", () => {
 	it("renders a marker and states the marker rule only over a basis containing one", () => {
 		const context = { changeDescription: "change" };
 		const markedBrief = composeDiagnosisBrief(basis([marked]), context);
-		assert.match(markedBrief, /REWRITE MARKER: a rewrite or a merge lies between these heads/);
+		assert.match(markedBrief, /a{40} -> b{40}\n {9}REWRITE MARKER: a rewrite or a merge lies between these heads/);
 		assert.match(markedBrief, /a run containing a marker is never NONE/);
 		assert.match(markedBrief, /INDETERMINATE otherwise/);
 		assert.doesNotMatch(composeDiagnosisBrief(basis([delta]), context), /REWRITE MARKER/);

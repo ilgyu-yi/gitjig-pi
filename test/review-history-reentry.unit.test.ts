@@ -292,6 +292,27 @@ describe("#404 the record every history hand-off writes", () => {
 		assert.deepEqual(h.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
 	});
 
+	it("refuses NONE over a rewrite-marker basis as limb (c) and rules other values over it (#437)", async () => {
+		const r = repository();
+		const git = (...args: string[]) => execFileSync("git", args, { cwd: r.root, encoding: "utf8" }).trim();
+		git("checkout", "-q", "--detach", r.base);
+		writeFileSync(join(r.root, ".pi", "seed.ts"), "export const a = 3;\n");
+		git("commit", "-qam", "rebased");
+		const rebased = git("rev-parse", "HEAD");
+		const history = [writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(rebased)))];
+		const none = harness(r.root, subjectAt(r.base, rebased), history, {
+			diagnosis: { value: "NONE", invalidation: "nothing", evidence: "advancing" },
+		});
+		const outcome = await driveReviewRound(spec(), r.root, none.seams);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(none.dispatches(), 1, "the marker basis was derived and the Judge dispatched");
+		assert.deepEqual(none.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
+		assert.equal(none.rounds(), 0, "NONE over a marker never continues to the panel");
+		const ruled = harness(r.root, subjectAt(r.base, rebased), history, { diagnosis: STAGNATION });
+		await driveReviewRound(spec(), r.root, ruled.seams);
+		assert.deepEqual(ruled.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.b]);
+	});
+
 	it("writes limb (c) when the Judge is unavailable, and limb (b) with the invalidation for a handed-off ruling", async () => {
 		const r = repository();
 		const history = [writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(r.second)))];

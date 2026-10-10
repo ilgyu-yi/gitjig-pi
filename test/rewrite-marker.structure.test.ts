@@ -22,10 +22,10 @@ type Sources = typeof SOURCES;
  * way (missing, malformed, capped or past the deadline), so it is pinned
  * for its line but owes no weakening (§3.12).
  *
- * Measured sweep: each of the 26 weakenings below was applied to the source
- * and run against the behavioural arms (the #437, #238, #404, history and
- * coordinator unit tests). 22 are killed there; four survive and are recorded
- * as decisions:
+ * Measured sweep: each of the 26 weakenings below, and the joint later-head
+ * weakening, was applied to the source and run against the behavioural arms
+ * (the #437, #238, #404, history and coordinator unit tests). 23 are killed
+ * there on an assertion; four survive and are recorded as decisions:
  * - the self-parent refusal is unreachable, since a commit's name hashes its
  *   own parent lines;
  * - `!failed && ready()` admits only a response already buffered before the
@@ -48,6 +48,7 @@ function guardsHold({ interval, history, caller, coordinator, briefs }: Sources)
 		interval.includes("\t\t\treturn undefined;\n\t}\n\treturn parents;") &&
 		interval.includes("if (parents === undefined || parents.includes(oid)) return undefined;") &&
 		interval.includes("return !failed && ready();") &&
+		interval.includes("if (header === null || header[1] !== oid) return undefined;") &&
 		interval.includes("const header = /^([0-9a-f]{40}) commit (\\d+)$/.exec(") &&
 		interval.includes("\t\t\tif (seen.has(oid)) continue;\n\t\t\tseen.add(oid);") &&
 		interval.includes("if (failed || Date.now() >= budget.deadline) return undefined;") &&
@@ -78,6 +79,15 @@ function guardsHold({ interval, history, caller, coordinator, briefs }: Sources)
 describe("issue #437 rewrite-marker guards", () => {
 	it("pins the walk, the marker decision and both NONE refusals", () => {
 		assert.equal(guardsHold(SOURCES), true);
+	});
+
+	it("kills the joint weakening of the later head's two exact-name checks", () => {
+		// Each check backs the other, so either alone is redundant; together they
+		// keep a revision expression or a short name from being measured (#437).
+		const interval = SOURCES.interval
+			.replace("|| !OID.test(laterHead)) return undefined;", ") return undefined;")
+			.replace("header === null || header[1] !== oid", "header === null");
+		assert.equal(guardsHold({ ...SOURCES, interval }), false);
 	});
 
 	it("kills one weakening of every high-cost guard", () => {
@@ -116,7 +126,11 @@ describe("issue #437 rewrite-marker guards", () => {
 			["history", "return basis.intervals.some(isRewriteMarker);", "return false;"],
 			["history", 'admitted.diagnosis.value === "NONE" && hasRewriteMarker(basis)', "false"],
 			["history", "...(hasRewriteMarker(basis) ? REWRITE_MARKER_RULE : []),", ""],
-			["caller", "const admitted = admitBasisDiagnosis(\n\t\t\t\tbasis,", "const admitted = admitDiagnosis("],
+			[
+				"caller",
+				"const admitted = admitBasisDiagnosis(\n\t\t\t\tbasis,",
+				"const admitted = admitBasisDiagnosis(\n\t\t\t\t{ ...basis, intervals: [] },",
+			],
 			["coordinator", 'decodedDiagnosis?.value === "NONE" && hasRewriteMarker(input.basis)', "false"],
 			[
 				"coordinator",
