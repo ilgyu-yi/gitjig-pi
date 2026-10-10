@@ -21,6 +21,15 @@ type Sources = typeof SOURCES;
  * equivalent, because that walk rereads the same commit and fails the same
  * way (missing, malformed, capped or past the deadline), so it is pinned
  * for its line but owes no weakening (§3.12).
+ *
+ * A behavioural sweep applied every weakening below to the source and ran the
+ * real-Git arms; each is killed there too, save three recorded as decisions:
+ * - the self-parent refusal is unreachable, since a commit's name hashes its
+ *   own parent lines;
+ * - `!failed && ready()` admits only a response already buffered before the
+ *   failure, read within the bounds, and every later read refuses on `failed`;
+ * - the stderr kill: a corrupt commit prints errors and answers `missing` on
+ *   stdout, which the header check refuses, so it is equivalent there.
  */
 function guardsHold({ interval, history, caller, coordinator, briefs }: Sources): boolean {
 	return (

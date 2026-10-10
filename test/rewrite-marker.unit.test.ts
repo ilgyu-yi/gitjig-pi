@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -169,6 +169,10 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		unlinkSync(join(root, ".git", "objects", middle.slice(0, 2), middle.slice(2)));
 		assert.equal(await readCorrectionInterval(root, first, last), undefined, "linear chain broken");
 		assert.equal(await readCorrectionInterval(root, unrelated, last), undefined, "non-ancestral walk broken");
+		const corrupt = join(root, ".git", "objects", first.slice(0, 2), first.slice(2));
+		chmodSync(corrupt, 0o600);
+		writeFileSync(corrupt, "not a zlib stream");
+		assert.equal(await readCorrectionInterval(root, "e".repeat(40), first), undefined, "corrupt commit");
 	});
 
 	it("withholds, never marks, when the completing walk past a merge meets a missing commit", async () => {
@@ -212,10 +216,26 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 			`tree ${tree}\nparent ${base}\nparent ${base}\n${header.slice(header.indexOf("author"))}\nd\n`,
 		);
 		const absent = "e".repeat(40);
-		for (const bad of [noBlankLine, duplicated]) {
+		const lateHeader = write(
+			`tree ${tree}\nparent ${base}\ntree ${tree}\n${header.slice(header.indexOf("author"))}\nh\n`,
+		);
+		for (const bad of [noBlankLine, duplicated, lateHeader]) {
 			const child = write(`tree ${tree}\nparent ${bad}\n${header.slice(header.indexOf("author"))}\nc\n`);
 			assert.equal(await readCorrectionInterval(root, absent, child), undefined, bad);
 		}
+	});
+
+	it("withholds, never marks, when the walk's reads pass the byte cap", async () => {
+		const root = repo();
+		const base = commit(root, "a", "1");
+		const tree = git(root, ["rev-parse", `${base}^{tree}`]);
+		const author = "author A <a@example.test> 0 +0000\ncommitter A <a@example.test> 0 +0000\n";
+		const write = (body: string) => git(root, ["hash-object", "-t", "commit", "-w", "--stdin"], body);
+		const large = write(`tree ${tree}\nparent ${base}\n${author}\n${"x".repeat(17 * 1024 * 1024)}\n`);
+		const small = write(`tree ${tree}\nparent ${base}\n${author}\nsmall\n`);
+		const absent = "e".repeat(40);
+		assert.deepEqual(await readCorrectionInterval(root, absent, small), marker(absent, small));
+		assert.equal(await readCorrectionInterval(root, absent, large), undefined);
 	});
 
 	it("withholds, never marks, at the commit cap and the deadline", async () => {
