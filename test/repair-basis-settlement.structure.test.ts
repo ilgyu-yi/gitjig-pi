@@ -42,9 +42,15 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("between adjacent states in that run, oldest first") &&
 		crossReview.includes("exact unique reviewed-head endpoints of one state and the immediately following state") &&
 		crossReview.includes("terminal state remains intentionally unmatched") &&
+		crossReview.includes(
+			"the marker stays in the trailing run until an honored limb-(b) terminal starts a new one, so every diagnosis of that run interrupts",
+		) &&
+		crossReview.includes(
+			"under `autonomous` the first such stop claims the lineage's single recovery allowance, whose only return to ordinary flow — a fresh NONE — a run containing a marker cannot reach, so the allowance is spent and the change hands off as limb (b)",
+		) &&
 		crossReview.includes("NONE needs every correction in the run, so a run containing a marker is never NONE") &&
 		crossReview.includes(
-			"it is STAGNATION or OSCILLATION only where linear intervals alone establish that value, and INDETERMINATE otherwise",
+			"it is STAGNATION or OSCILLATION only where those states and linear intervals establish that value, and INDETERMINATE otherwise",
 		) &&
 		crossReview.includes(
 			"A pair is *linear* when it is ancestral and no commit in its range, reachable from the later head but not from the earlier head, has more than one parent",
@@ -61,7 +67,7 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 			"a correction across a rewrite or a merge, such as a rebase onto an advancing base, is not measured",
 		) &&
 		crossReview.includes(
-			"a value whose required evidence lies in the unmeasured correction is INDETERMINATE, and other values may be ruled only from other states and linear intervals",
+			"a value whose required evidence lies in the unmeasured correction is INDETERMINATE, and other values may be ruled only from the run's states, a marker's endpoint states included, and its linear intervals",
 		) &&
 		crossReview.includes(
 			"Because INDETERMINATE over-stops, a rewrite or a merge in a pair's range can cost an over-stop after a diagnosis has run, never an under-stop",
@@ -80,7 +86,9 @@ function settlementHolds(crossReview: string, judge: string): boolean {
 		crossReview.includes("A rewrite marker is a complete interval, not missing delta data") &&
 		crossReview.includes("The marker is evidence for no value: it cannot support NONE, STAGNATION or OSCILLATION") &&
 		crossReview.includes("a value whose required evidence lies in the unmeasured correction is INDETERMINATE") &&
-		crossReview.includes("other values may be ruled only from other states and linear intervals") &&
+		crossReview.includes(
+			"other values may be ruled only from the run's states, a marker's endpoint states included, and its linear intervals",
+		) &&
 		crossReview.includes(
 			"a rewrite or a merge in a pair's range can cost an over-stop after a diagnosis has run, never an under-stop",
 		) &&
@@ -133,12 +141,55 @@ describe("issue #236 repair-basis settlement", () => {
 				JUDGE,
 			],
 			[CROSS_REVIEW.replace("share that whole interval", "receive per-finding slices"), JUDGE],
+			[CROSS_REVIEW.replace("a marker's endpoint states included", "a marker's endpoint states excluded"), JUDGE],
+			[
+				CROSS_REVIEW.replace(
+					"those states and linear intervals establish that value",
+					"linear intervals alone establish that value",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"the marker stays in the trailing run until an honored limb-(b) terminal starts a new one",
+					"the marker leaves the trailing run at the next round",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"so every diagnosis of that run interrupts",
+					"so only the first diagnosis of that run interrupts",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"the first such stop claims the lineage's single recovery allowance",
+					"the first such stop claims no recovery allowance",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"a run containing a marker cannot reach, so the allowance is spent",
+					"a run containing a marker can reach, so the allowance is spent",
+				),
+				JUDGE,
+			],
+			[
+				CROSS_REVIEW.replace(
+					"so the allowance is spent and the change hands off as limb (b)",
+					"so the allowance is kept and the change continues",
+				),
+				JUDGE,
+			],
 			[CROSS_REVIEW.replace("a rewrite or a merge in a pair's range can cost", "a rewrite can cost"), JUDGE],
 			[CROSS_REVIEW.replace("NONE needs every correction in the run", "NONE needs the corrections it can see"), JUDGE],
 			[CROSS_REVIEW.replace("a run containing a marker is never NONE", "a run containing a marker may be NONE"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
-					"only where linear intervals alone establish that value",
+					"only where those states and linear intervals establish that value",
 					"where any interval suggests that value",
 				),
 				JUDGE,
@@ -195,7 +246,7 @@ describe("issue #236 repair-basis settlement", () => {
 				),
 				JUDGE,
 			],
-			[CROSS_REVIEW.replace("other states and linear intervals", "other states and ancestral intervals"), JUDGE],
+			[CROSS_REVIEW.replace("and its linear intervals", "and its ancestral intervals"), JUDGE],
 			[
 				CROSS_REVIEW.replace(
 					"never from a contract-only PR alone (§5.3); until then the installed reader",
@@ -265,7 +316,7 @@ describe("issue #236 repair-basis settlement", () => {
 			],
 			[
 				CROSS_REVIEW.replace(
-					"other values may be ruled only from other states and linear intervals",
+					"other values may be ruled only from the run's states, a marker's endpoint states included, and its linear intervals",
 					"other values may be ruled from the marker",
 				),
 				JUDGE,
