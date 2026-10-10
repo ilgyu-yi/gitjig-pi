@@ -1,10 +1,11 @@
 /**
- * Canonical §1.4 inter-head tree deltas for the repair-basis projection.
+ * Canonical §1.4 correction intervals for the repair-basis projection: a
+ * linear pair's tree delta, or a rewrite marker for every other pair (#437).
  * Warning-surface roster: EXEMPT — every Git diagnostic is piped and
  * reduced to an unavailable value; this module authors no warned,
  * thrown, or printed message.
  */
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { withoutRepoLocatingGitEnv } from "../dispatch/provision.ts";
 
 const OID = /^[0-9a-f]{40}$/;
@@ -20,10 +21,20 @@ const COMMIT_CAP = 100_000;
 
 export type DeltaSide = { mode: string; type: "blob" | "commit"; oid: string; bytesBase64: string | null };
 export type DeltaEntry = { pathBase64: string; before: DeltaSide | null; after: DeltaSide | null };
-export type CorrectionInterval = { earlierHead: string; laterHead: string; entries: DeltaEntry[] };
+export type TreeDelta = { earlierHead: string; laterHead: string; entries: DeltaEntry[] };
+/** §1.4: a pair that is not linear carries no delta; its correction is not measured. */
+export type RewriteMarker = { kind: "rewrite-marker"; earlierHead: string; laterHead: string };
+export type CorrectionInterval = TreeDelta | RewriteMarker;
+
+export function isRewriteMarker(interval: CorrectionInterval): interval is RewriteMarker {
+	return "kind" in interval && interval.kind === "rewrite-marker";
+}
 
 type TreeEntry = { path: Buffer; mode: string; type: "blob" | "commit"; oid: string };
-type Budget = { deadline: number; bytes: number; commits: number };
+type Budget = { deadline: number; bytes: number; commits: number; commitCap: number };
+/** Per-pair bounds; production passes none, so §1.4's settled values apply. */
+export type IntervalLimits = { readonly runMs: number; readonly commitCap: number };
+const LIMITS: IntervalLimits = { runMs: RUN_MS, commitCap: COMMIT_CAP };
 
 function gitEnv(): NodeJS.ProcessEnv {
 	return { ...withoutRepoLocatingGitEnv(process.env), GIT_ADVICE: "0", GIT_NO_REPLACE_OBJECTS: "1", LC_ALL: "C" };
@@ -45,12 +56,6 @@ async function run(repoRoot: string, args: string[], budget: Budget): Promise<Bu
 			},
 		);
 	});
-}
-
-async function exactCommit(repoRoot: string, oid: string, budget: Budget): Promise<boolean> {
-	if (!OID.test(oid)) return false;
-	const out = await run(repoRoot, ["rev-parse", "--verify", "--end-of-options", `${oid}^{commit}`], budget);
-	return out?.equals(Buffer.from(`${oid}\n`)) === true;
 }
 
 function commitParents(raw: Buffer): string[] | undefined {
@@ -85,23 +90,103 @@ function commitParents(raw: Buffer): string[] | undefined {
 	return parents;
 }
 
-async function isRawAncestor(repoRoot: string, earlier: string, later: string, budget: Budget): Promise<boolean> {
-	const pending = [later];
-	const seen = new Set<string>();
-	while (pending.length > 0) {
-		const oid = pending.pop() as string;
-		if (oid === earlier) return true;
-		if (seen.has(oid)) continue;
-		seen.add(oid);
+/**
+ * Decide a pair by a walk from its later head over raw commit objects, in one
+ * `cat-file --batch` process (§1.4, #437). The pair is linear when the
+ * single-parent chain from the later head reaches the earlier head; otherwise
+ * the walk runs to completion, reaching the earlier head or exhausting every
+ * parent, and the pair gets a rewrite marker. A missing, unreadable or
+ * malformed commit, a cap or the deadline leaves the walk incomplete, which
+ * withholds the projection and decides nothing.
+ */
+async function walkPair(
+	repoRoot: string,
+	earlier: string,
+	later: string,
+	budget: Budget,
+): Promise<"linear" | "rewrite" | undefined> {
+	const timeout = budget.deadline - Date.now();
+	if (timeout <= 0 || budget.bytes >= BYTE_CAP) return undefined;
+	const child = spawn("git", ["-C", repoRoot, "cat-file", "--batch"], {
+		env: gitEnv(),
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	let failed = false;
+	let closed = false;
+	let buffered = Buffer.alloc(0);
+	let wake: (() => void) | undefined;
+	const fail = () => {
+		failed = true;
+		child.kill("SIGKILL");
+		wake?.();
+	};
+	const timer = setTimeout(fail, timeout);
+	child.stdout.on("data", (chunk: Buffer) => {
+		budget.bytes += chunk.length;
+		if (budget.bytes > BYTE_CAP) return fail();
+		buffered = Buffer.concat([buffered, chunk]);
+		wake?.();
+	});
+	child.stderr.on("data", fail);
+	child.stdin.on("error", fail);
+	child.on("error", fail);
+	child.on("close", () => {
+		closed = true;
+		wake?.();
+	});
+	const until = async (ready: () => boolean): Promise<boolean> => {
+		while (!ready() && !failed && !closed)
+			await new Promise<void>((resolve) => {
+				wake = resolve;
+			});
+		wake = undefined;
+		return !failed && ready();
+	};
+	const known = new Map<string, string[]>();
+	const parentsOf = async (oid: string): Promise<string[] | undefined> => {
+		const cached = known.get(oid);
+		if (cached !== undefined) return cached;
 		budget.commits += 1;
-		if (budget.commits > COMMIT_CAP) return false;
-		const raw = await run(repoRoot, ["cat-file", "commit", oid], budget);
-		if (raw === undefined) return false;
-		const parents = commitParents(raw);
-		if (parents === undefined || parents.includes(oid)) return false;
-		pending.push(...parents);
+		if (budget.commits > budget.commitCap || failed || closed) return undefined;
+		child.stdin.write(`${oid}\n`);
+		if (!(await until(() => buffered.indexOf(10) >= 0))) return undefined;
+		const newline = buffered.indexOf(10);
+		const header = /^([0-9a-f]{40}) commit (\d+)$/.exec(buffered.subarray(0, newline).toString("ascii"));
+		if (header === null || header[1] !== oid) return undefined;
+		const end = newline + 1 + Number(header[2]);
+		if (!(await until(() => buffered.length > end)) || buffered[end] !== 10) return undefined;
+		const parents = commitParents(Buffer.from(buffered.subarray(newline + 1, end)));
+		buffered = buffered.subarray(end + 1);
+		if (parents === undefined || parents.includes(oid)) return undefined;
+		known.set(oid, parents);
+		return parents;
+	};
+	try {
+		let cursor = later;
+		for (;;) {
+			if (cursor === earlier) return "linear";
+			const parents = await parentsOf(cursor);
+			if (parents === undefined) return undefined;
+			if (parents.length !== 1) break;
+			cursor = parents[0];
+		}
+		const pending = [later];
+		const seen = new Set<string>();
+		while (pending.length > 0) {
+			const oid = pending.pop() as string;
+			if (oid === earlier) return "rewrite";
+			if (seen.has(oid)) continue;
+			seen.add(oid);
+			const parents = await parentsOf(oid);
+			if (parents === undefined) return undefined;
+			pending.push(...parents);
+		}
+		return "rewrite";
+	} finally {
+		clearTimeout(timer);
+		child.stdin.end();
+		if (!closed) child.kill("SIGKILL");
 	}
-	return false;
 }
 
 function parseTree(raw: Buffer): TreeEntry[] | undefined {
@@ -139,10 +224,10 @@ async function readWithBudget(
 	laterHead: string,
 	budget: Budget,
 ): Promise<CorrectionInterval | undefined> {
-	if (earlierHead === laterHead) return undefined;
-	if (!(await exactCommit(repoRoot, earlierHead, budget)) || !(await exactCommit(repoRoot, laterHead, budget)))
-		return undefined;
-	if (!(await isRawAncestor(repoRoot, earlierHead, laterHead, budget))) return undefined;
+	if (earlierHead === laterHead || !OID.test(earlierHead) || !OID.test(laterHead)) return undefined;
+	const shape = await walkPair(repoRoot, earlierHead, laterHead, budget);
+	if (shape === undefined) return undefined;
+	if (shape === "rewrite") return { kind: "rewrite-marker", earlierHead, laterHead };
 	const earlierRaw = await run(
 		repoRoot,
 		["ls-tree", "-r", "-z", "--full-tree", "--end-of-options", earlierHead],
@@ -185,10 +270,11 @@ async function readWithBudget(
 export async function readCorrectionIntervals(
 	repoRoot: string,
 	pairs: readonly { earlierHead: string; laterHead: string }[],
+	limits: IntervalLimits = LIMITS,
 ): Promise<CorrectionInterval[] | undefined> {
 	const intervals: CorrectionInterval[] = [];
 	for (const pair of pairs) {
-		const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };
+		const budget: Budget = { deadline: Date.now() + limits.runMs, bytes: 0, commits: 0, commitCap: limits.commitCap };
 		const interval = await readWithBudget(repoRoot, pair.earlierHead, pair.laterHead, budget);
 		if (interval === undefined) return undefined;
 		intervals.push(interval);

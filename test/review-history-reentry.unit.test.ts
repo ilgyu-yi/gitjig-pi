@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -279,10 +279,13 @@ describe("#404 the record every history hand-off writes", () => {
 	});
 
 	it("writes limb (c) for an environmental projection failure, never limb (a)", async () => {
+		// A commit the walk must read between the two heads is unreadable, so
+		// the walk cannot complete (§1.4, #437). A missing earlier head no longer
+		// fails: the walk from the later head completes and the pair is marked.
 		const r = repository();
-		const missing = "f".repeat(40);
+		unlinkSync(join(r.root, ".git", "objects", r.first.slice(0, 2), r.first.slice(2)));
 		const h = harness(r.root, subjectAt(r.base, r.second), [
-			writer(1, composeReviewRecord(repair(missing))),
+			writer(1, composeReviewRecord(repair(r.base))),
 			writer(2, composeReviewRecord(repair(r.second))),
 		]);
 		await driveReviewRound(spec(), r.root, h.seams);
@@ -383,9 +386,11 @@ describe("#404 standing records", () => {
 	});
 
 	it("keeps a standing limb-(c) record on an environmental projection failure", async () => {
+		// An unreadable commit between the heads leaves the walk incomplete (#437).
 		const r = repository();
+		unlinkSync(join(r.root, ".git", "objects", r.first.slice(0, 2), r.first.slice(2)));
 		const h = harness(r.root, subjectAt(r.base, r.second), [
-			writer(1, composeReviewRecord(repair("f".repeat(40)))),
+			writer(1, composeReviewRecord(repair(r.base))),
 			writer(2, composeReviewRecord(repair(r.second))),
 			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
 		]);

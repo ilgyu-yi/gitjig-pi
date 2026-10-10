@@ -12,8 +12,9 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		interval.includes("const RUN_MS = 30_000") &&
 		interval.includes("const BYTE_CAP = 16 * 1024 * 1024") &&
 		interval.includes("const COMMIT_CAP = 100_000") &&
-		interval.includes('["rev-parse", "--verify", "--end-of-options", `${oid}^{commit}`]') &&
-		interval.includes('["cat-file", "commit", oid]') &&
+		interval.includes('["-C", repoRoot, "cat-file", "--batch"]') &&
+		interval.includes("const header = /^([0-9a-f]{40}) commit (\\d+)$/.exec(") &&
+		interval.includes("if (header === null || header[1] !== oid) return undefined;") &&
 		interval.includes('if (lines.length === 0 || !/^tree [0-9a-f]{40}$/.test(lines[0].toString("ascii")))') &&
 		interval.includes('while (index < lines.length && lines[index].subarray(0, 7).equals(Buffer.from("parent ")))') &&
 		interval.includes('["ls-tree", "-r", "-z", "--full-tree", "--end-of-options", earlierHead]') &&
@@ -24,7 +25,11 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		interval.includes('["160000", "commit"]') &&
 		!interval.includes("merge-base") &&
 		!interval.includes("git diff") &&
-		interval.includes("const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 }") &&
+		interval.includes("const LIMITS: IntervalLimits = { runMs: RUN_MS, commitCap: COMMIT_CAP };") &&
+		interval.includes(
+			"const budget: Budget = { deadline: Date.now() + limits.runMs, bytes: 0, commits: 0, commitCap: limits.commitCap };",
+		) &&
+		interval.includes("if (budget.commits > budget.commitCap || failed || closed) return undefined;") &&
 		interval.indexOf("const budget: Budget =") > interval.indexOf("for (const pair of pairs)") &&
 		history.includes('while (start > 0 && history[start - 1].outcome === "repair")') &&
 		history.includes(
@@ -48,7 +53,7 @@ function contractHolds(interval: string, history: string, caller: string): boole
 		history.includes("disposition?.finding !== ruling.finding") &&
 		history.includes("await readCorrectionIntervals(") &&
 		history.includes(
-			"states.slice(0, -1).map((state, index) => ({ earlierHead: state.head, laterHead: states[index + 1].head }))",
+			"states.slice(0, -1).map((state, index) => ({ earlierHead: state.head, laterHead: states[index + 1].head })),\n\t);",
 		) &&
 		history.includes("composeDiagnosisBrief(\n\tbasis: RepairBasis") &&
 		caller.includes("await deriveRepairBasis(repoRoot, history)") &&
@@ -70,8 +75,23 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL.replace("const RUN_MS = 30_000", "const RUN_MS = Infinity"), HISTORY, CALLER],
 			[INTERVAL.replace("const BYTE_CAP = 16 * 1024 * 1024", "const BYTE_CAP = Infinity"), HISTORY, CALLER],
 			[INTERVAL.replace("const COMMIT_CAP = 100_000", "const COMMIT_CAP = Infinity"), HISTORY, CALLER],
-			[INTERVAL.replace('"--end-of-options", `${oid}^{commit}`', "`${oid}^{commit}`"), HISTORY, CALLER],
-			[INTERVAL.replace('["cat-file", "commit", oid]', '["merge-base", oid]'), HISTORY, CALLER],
+			[INTERVAL.replace("commit (\\d+)$/.exec(", "(?:commit|tag) (\\d+)$/.exec("), HISTORY, CALLER],
+			[INTERVAL.replace("header === null || header[1] !== oid", "header === null"), HISTORY, CALLER],
+			[
+				INTERVAL.replace('["-C", repoRoot, "cat-file", "--batch"]', '["-C", repoRoot, "rev-list", "--parents"]'),
+				HISTORY,
+				CALLER,
+			],
+			[INTERVAL.replace("runMs: RUN_MS, commitCap: COMMIT_CAP", "runMs: RUN_MS, commitCap: Infinity"), HISTORY, CALLER],
+			[INTERVAL.replace("budget.commits > budget.commitCap ||", "false ||"), HISTORY, CALLER],
+			[
+				INTERVAL,
+				HISTORY.replace(
+					"laterHead: states[index + 1].head })),\n\t);",
+					"laterHead: states[index + 1].head })),\n\t\t{ runMs: Infinity, commitCap: Infinity },\n\t);",
+				),
+				CALLER,
+			],
 			[INTERVAL.replace('lines[0].toString("ascii")', 'raw.toString("ascii")'), HISTORY, CALLER],
 			[
 				INTERVAL.replace(
@@ -86,8 +106,8 @@ describe("issue #238 structural mutation teeth", () => {
 			[INTERVAL.replace('["120000", "blob"]', '["120000", "commit"]'), HISTORY, CALLER],
 			[
 				INTERVAL.replace(
-					"const intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {\n\t\tconst budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };",
-					"const budget: Budget = { deadline: Date.now() + RUN_MS, bytes: 0, commits: 0 };\n\tconst intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {",
+					"const intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {\n\t\tconst budget: Budget = { deadline: Date.now() + limits.runMs, bytes: 0, commits: 0, commitCap: limits.commitCap };",
+					"const budget: Budget = { deadline: Date.now() + limits.runMs, bytes: 0, commits: 0, commitCap: limits.commitCap };\n\tconst intervals: CorrectionInterval[] = [];\n\tfor (const pair of pairs) {",
 				),
 				HISTORY,
 				CALLER,

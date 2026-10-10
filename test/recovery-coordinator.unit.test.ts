@@ -1504,6 +1504,74 @@ describe("Phase-A history recovery coordinator", () => {
 		}
 	});
 
+	it("refuses a fresh NONE over a basis containing a rewrite marker and keeps the initial reentry (#437)", async () => {
+		const marked = {
+			...basis,
+			intervals: [{ kind: "rewrite-marker", earlierHead: "a".repeat(40), laterHead: "b".repeat(40) }],
+		} as unknown as RepairBasis;
+		const outcomes = [];
+		for (const [index, current] of [marked, basis].entries()) {
+			const pull = {
+				...subject,
+				context: {
+					...subject.context,
+					pullRequest: { ...subject.context.pullRequest, id: `PR_MARKER_${String(index)}` },
+				},
+			};
+			const spec = {
+				kind: "measurement",
+				question: `marker question ${String(index)}`,
+				method: `marker method ${String(index)}`,
+				expectedDiscriminator: `marker discriminator ${String(index)}`,
+				evidence: `marker selector ${String(index)}`,
+				nonMutating: true,
+				notPreviouslyPresent: true,
+			};
+			let digest = "";
+			let freshBrief = "";
+			const dispatchProfile: RecoveryProfileDispatcher = async (ledger, profileId, brief) => {
+				let value: unknown;
+				if (profileId === "recovery-selector") {
+					value = spec;
+					const { structuralDigest } = await import("../.pi/extensions/gitjig/recovery/types.ts");
+					digest = structuralDigest("gitjig-recovery-measurement-spec:v1", spec);
+				} else if (profileId === "recovery-measurement") {
+					value = {
+						kind: "measurement-result",
+						specDigest: digest,
+						result: `marker result ${String(index)}`,
+						evidence: `marker measured ${String(index)}`,
+					};
+				} else {
+					freshBrief = String(brief);
+					value = { value: "NONE", invalidation: "plan", evidence: `marker ruling ${String(index)}` };
+				}
+				return observed(ledger, admitted(value));
+			};
+			const refresh = async () => ({ ...freshness(), subject: structuredClone(pull), basis: current });
+			const result = await coordinateHistoryRecovery({
+				repoRoot: process.cwd(),
+				modes,
+				subject: pull,
+				history,
+				basis: current,
+				diagnosis: { value: "INDETERMINATE", invalidation: "nothing", evidence: "original" },
+				refreshPreclaim: refresh,
+				refreshPrecontinue: refresh,
+				dispatchProfile,
+			});
+			outcomes.push({ terminal: result.terminal, gate: result.nextGate, reentry: result.reentry, freshBrief });
+		}
+		assert.deepEqual(
+			outcomes.map(({ terminal, gate, reentry }) => ({ terminal, gate, reentry })),
+			[
+				{ terminal: "handoff", gate: "park", reentry: "nothing" },
+				{ terminal: "continue", gate: "planning", reentry: "plan" },
+			],
+		);
+		assert.match(outcomes[0].freshBrief, /a run containing a marker is never NONE/);
+	});
+
 	it("rejects duplicate/extra payload keys and noncanonical route text before selection", async () => {
 		for (const [suffix, malformed] of [
 			["DUP", '{"outcome":"ALTERNATIVE","outcome":"ALTERNATIVE","method":"m","evidence":"e"}'],
