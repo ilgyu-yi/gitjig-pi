@@ -289,6 +289,7 @@ describe("#404 the record every history hand-off writes", () => {
 			writer(2, composeReviewRecord(repair(r.second))),
 		]);
 		await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(h.dispatches(), 0);
 		assert.deepEqual(h.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
 	});
 
@@ -416,6 +417,7 @@ describe("#404 standing records", () => {
 			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
 		]);
 		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(h.dispatches(), 0);
 		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
 		assert.equal(h.published.length, 0);
 	});
