@@ -144,7 +144,7 @@ function asDifference<T>(read: () => T): T {
 	try {
 		return read();
 	} catch (error) {
-		if (error instanceof ClassificationRefusal) throw new ClassificationRefusal(error.message, "differs");
+		if (error instanceof ClassificationRefusal) throw Object.assign(error, { shape: "differs" as const });
 		throw error;
 	}
 }
