@@ -54,7 +54,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'\tif (committedPin.kind === "bytes") process.getBuiltinModule("node:fs").writeFileSync(join(targetRoot, INSTALLED_PIN_PATH), committedPin.bytes);\n\tconst installedPin = readPinFile(targetRoot, INSTALLED_PIN_PATH);\n',
 	],
 	[
-		"a link followed: a linked member reads as observed",
+		"a link refusal reshaped: a linked member reads as unreadable, not differs",
 		CLASSIFIER,
 		'\t\t\tstats.isSymbolicLink() ? "candidate is a symlink" : "candidate is non-regular",\n\t\t\t"differs",',
 		'\t\t\tstats.isSymbolicLink() ? "candidate is a symlink" : "candidate is non-regular",\n\t\t\t"unreadable",',
@@ -102,6 +102,24 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		COMMAND,
 		'outcome === undefined ? "[invalid gitjig freshness record]" : freshnessLine(outcome),',
 		'outcome === undefined ? "[invalid gitjig freshness record]" : "x",',
+	],
+	[
+		"the command writes: it copies the committed pin over the record before measuring",
+		COMMAND,
+		"const outcome = help ? undefined : measureFreshness(repoRoot, capture);",
+		'if (!help) process.getBuiltinModule("node:fs").copyFileSync(`${repoRoot}/.pi/gitjig.pin.json`, `${repoRoot}/.gitjig/installed-pin.json`);\n\t\t\tconst outcome = help ? undefined : measureFreshness(repoRoot, capture);',
+	],
+	[
+		"the measurement's deadline not handed to the walk",
+		FRESHNESS,
+		"let projection = observeCarried(targetRoot, deadline);",
+		"let projection = observeCarried(targetRoot, Number.POSITIVE_INFINITY);",
+	],
+	[
+		"one root's absent container hides the others",
+		CLASSIFIER,
+		"if (!containersStand(root, carried)) continue;",
+		'if (!containersStand(root, carried)) return { kind: "observed", members: [] };',
 	],
 	[
 		"an unbounded observation",

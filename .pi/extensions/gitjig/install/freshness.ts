@@ -28,7 +28,7 @@ export interface FreshnessResult {
 	readonly recovery: FreshnessRecovery;
 }
 export const INSTALLED_PIN_PATH = ".gitjig/installed-pin.json";
-/** The read budget of one measurement; past it the result is `cannot-measure`. */
+/** The read budget of one measurement; past it the projection reads unobservable, so the result is never `current`. */
 export const READ_BOUND_MS = 2000;
 
 /** A pin file as read: its bytes, absent, a link or non-regular entry, or unreadable. */
@@ -191,7 +191,7 @@ export function measureFreshness(
 	const committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);
 	const installedPin = readPinFile(targetRoot, INSTALLED_PIN_PATH);
 	let projection = observeCarried(targetRoot, deadline);
-	// The pin reads and the walk share one budget; past it nothing read decides.
+	// The pin reads and the walk share one budget; past it the projection is unobservable.
 	if (clock() > deadline) projection = { kind: "unreadable" };
 	return evaluateFreshness({ committedPin, installedPin, projection, capture });
 }
