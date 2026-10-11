@@ -139,10 +139,13 @@ function commitPin(target: string, at: Snapshot): void {
 }
 /** The real provision run against `at`, from whatever record the target holds. */
 async function provision(target: string, at: Snapshot): Promise<string> {
+	// As the provision CLI reads it: absent is null, any other failure refuses.
 	let installed: Buffer | null = null;
 	try {
 		installed = readFileSync(join(target, INSTALLED_PIN_PATH));
-	} catch {}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") return "refused";
+	}
 	const result = await provisionAdopter({
 		snapshotRoot: at.root,
 		targetRoot: target,
@@ -180,7 +183,9 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 	"exactly its committed bytes, and a handed-over file only the old pin lists is absent;":
 		"refuses a missing handed-over file and one only the old pin lists; refuses a handed-over file that differs",
 	"every carried file both pins list is exactly the old or the new":
-		"converges a behind record over exact-old bytes; refuses an edited, missing or linked carried file",
+		"converges a behind record over exact-old bytes, and over exact-new bytes; refuses an edited, missing or linked carried file",
+	"It also refuses a record it cannot read or that is not a regular file, and a carried file it cannot read.":
+		"refuses an unreadable or non-regular record through the real provision CLI, and an unreadable carried file",
 	"one only the new pin lists is absent or exactly the new bytes": "converges a carried file only one pin lists",
 	"exactly the old bytes or absent;": "converges a carried file only one pin lists",
 	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes.":
@@ -396,6 +401,56 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 			assert.deepEqual(probe.seen, MISMATCH, label);
 			assert.deepEqual(freshness(target), CURRENT, label);
 		}
+	});
+
+	it("converges a behind record over carried files already holding the new bytes", async () => {
+		const target = await provisioned(OLD);
+		commitPin(target, NEXT);
+		write(target, PROMPT, NEXT.carried.get(PROMPT) as Buffer);
+		assert.deepEqual(freshness(target), MISMATCH);
+		assert.notEqual(await provision(target, NEXT), "refused");
+		assert.deepEqual(freshness(target), CURRENT);
+	});
+
+	it("refuses an unreadable or non-regular record through the real provision CLI, and an unreadable carried file", async (context) => {
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 file");
+		const cli = (target: string) =>
+			spawnSync(
+				process.execPath,
+				[
+					join(NEXT.root, ".pi/extensions/gitjig/install/provision-cli.ts"),
+					"--target",
+					target,
+					"--source",
+					"https://github.com/example/source",
+					"--revision",
+					parsePin(NEXT.pin.toString()).revision,
+				],
+				{ encoding: "utf8", env: { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: "C" } },
+			).status;
+		const unreadable = await provisioned(NEXT);
+		chmodSync(join(unreadable, INSTALLED_PIN_PATH), 0o000);
+		assert.deepEqual(freshness(unreadable), { state: "cannot-measure", recovery: PROVISION_COMMAND });
+		assert.equal(cli(unreadable), 2, "an unreadable record refuses");
+		chmodSync(join(unreadable, INSTALLED_PIN_PATH), 0o600);
+		assert.equal(cli(unreadable), 0, "a readable record converges");
+
+		const directory = await provisioned(NEXT);
+		rmSync(join(directory, INSTALLED_PIN_PATH));
+		mkdirSync(join(directory, INSTALLED_PIN_PATH));
+		assert.deepEqual(freshness(directory), MISMATCH);
+		assert.equal(cli(directory), 2, "a record that is not a regular file refuses");
+		rmSync(join(directory, INSTALLED_PIN_PATH), { recursive: true });
+		fallback(directory, NEXT);
+		assert.equal(cli(directory), 0, "removing it, then the absent-record step, converges");
+
+		const carried = await provisioned(NEXT);
+		chmodSync(join(carried, PROMPT), 0o000);
+		assert.deepEqual(freshness(carried), { state: "cannot-measure", recovery: PROVISION_COMMAND });
+		assert.equal(await provision(carried, NEXT), "refused");
+		chmodSync(join(carried, PROMPT), 0o600);
+		assert.notEqual(await provision(carried, NEXT), "refused");
+		assert.deepEqual(freshness(carried), CURRENT);
 	});
 
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {
