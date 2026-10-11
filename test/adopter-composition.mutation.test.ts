@@ -121,8 +121,8 @@ describe("#250 named isolated guard mutants", () => {
 		kill(
 			"nofollow-open",
 			"classifier.ts",
-			"descriptor = openSync(childAbs, constants.O_RDONLY | constants.O_NOFOLLOW);",
-			"descriptor = openSync(childAbs, constants.O_RDONLY);",
+			"descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW);",
+			"descriptor = openSync(abs, constants.O_RDONLY);",
 			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync,symlinkSync,rmSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"); mkdirSync(join(root,".github"),{recursive:true}); const file=join(root,".github/a"),outside=join(root,"outside"); writeFileSync(file,"in"); writeFileSync(outside,"out"); assert.throws(()=>observeCandidates(root,{afterLstat(p){if(p===".github/a"){renameSync(file,outside+"-checked");symlinkSync(outside+"-checked",file)}},afterRead(p){if(p===".github/a"){rmSync(file);renameSync(outside+"-checked",file)}}}));`,
 		);
 		kill(
@@ -135,7 +135,7 @@ describe("#250 named isolated guard mutants", () => {
 		kill(
 			"post-pathname-identity",
 			"classifier.ts",
-			"!sameObject(opened, lstatSync(childAbs))",
+			"!sameObject(opened, lstatSync(abs))",
 			"false",
 			`import assert from "node:assert/strict"; import {mkdirSync,writeFileSync,renameSync} from "node:fs"; import {join} from "node:path"; import {observeCandidates} from "./install/classifier.ts"; const root=join(import.meta.dirname,"source"),d=join(root,".github"),f=join(d,"a"),old=join(root,"old"); mkdirSync(d,{recursive:true}); writeFileSync(f,"old"); assert.throws(()=>observeCandidates(root,{afterRead(){renameSync(f,old);writeFileSync(f,"new")}}));`,
 		);

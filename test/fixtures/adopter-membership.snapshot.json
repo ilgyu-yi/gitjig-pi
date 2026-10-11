@@ -226,6 +226,10 @@
 			"disposition": "carried"
 		},
 		{
+			"path": ".pi/extensions/gitjig/commands/freshness.ts",
+			"disposition": "carried"
+		},
+		{
 			"path": ".pi/extensions/gitjig/commands/governance.ts",
 			"disposition": "carried"
 		},
@@ -327,6 +331,10 @@
 		},
 		{
 			"path": ".pi/extensions/gitjig/install/delivery.ts",
+			"disposition": "carried"
+		},
+		{
+			"path": ".pi/extensions/gitjig/install/freshness.ts",
 			"disposition": "carried"
 		},
 		{
@@ -715,6 +723,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/363.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/365.md",
 			"disposition": "instance-state"
 		},
 		{
