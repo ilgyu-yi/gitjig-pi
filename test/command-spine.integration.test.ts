@@ -120,6 +120,7 @@ const EXPECTED_GOVERNED_ROWS = [
 	"authoring-brief|extension",
 	"delegate|extension",
 	"dispatch-trace|extension",
+	"freshness|extension",
 	"governance|extension",
 	"land|extension",
 	"lifecycle|extension",
