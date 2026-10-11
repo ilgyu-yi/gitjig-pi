@@ -115,7 +115,12 @@ function sameObject(left: Stats, right: Stats): boolean {
 }
 
 /** Read one target-rooted file without following a link at any component. */
-export function readPinFile(targetRoot: string, relative: string): PinRead {
+export function readPinFile(
+	targetRoot: string,
+	relative: string,
+	/** Test seams at the exact phases a replacement could slip in. */
+	seams: { afterLstat?: () => void; afterRead?: () => void } = {},
+): PinRead {
 	const parts = relative.split("/");
 	let current = resolve(targetRoot);
 	for (const part of parts.slice(0, -1)) {
@@ -135,12 +140,14 @@ export function readPinFile(targetRoot: string, relative: string): PinRead {
 		return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "unreadable" };
 	}
 	if (!before.isFile() || before.isSymbolicLink()) return { kind: "differs" };
+	seams.afterLstat?.();
 	let descriptor: number | undefined;
 	try {
 		descriptor = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
 		const opened = fstatSync(descriptor);
 		if (!opened.isFile() || !sameObject(before, opened)) return { kind: "unreadable" };
 		const bytes = readFileSync(descriptor);
+		seams.afterRead?.();
 		if (!sameObject(opened, lstatSync(absolute))) return { kind: "unreadable" };
 		return { kind: "bytes", bytes };
 	} catch {
@@ -151,21 +158,40 @@ export function readPinFile(targetRoot: string, relative: string): PinRead {
 }
 
 /**
- * Capture the target's carried projection as the extension loads. RESIDUAL,
- * stated: this observes the files on disk at load, not the bytes the
- * extension's static imports already evaluated, so a carried file corrected
- * between those imports and this capture is invisible to `session-stale`.
+ * The capture belongs to this module instance: Pi's /new, /resume and fork
+ * re-run the extension factory over the cached module, which still runs the
+ * code it first loaded, so a re-run keeps the first capture rather than
+ * retaking it from corrected files. A fresh module instance captures anew.
+ */
+const captures = new Map<string, CarriedObservation>();
+
+/**
+ * Capture the target's carried projection as the extension first loads in
+ * this module instance. RESIDUAL, stated: this observes the files on disk at
+ * that load, not the bytes the extension's static imports already evaluated,
+ * so a carried file corrected between those imports and this capture is
+ * invisible to `session-stale`.
  */
 export function captureCarriedProjection(targetRoot: string): CarriedObservation {
-	return Object.freeze(observeCarried(targetRoot, Date.now() + READ_BOUND_MS));
+	const root = resolve(targetRoot);
+	const held = captures.get(root);
+	if (held !== undefined) return held;
+	const capture = Object.freeze(observeCarried(root, Date.now() + READ_BOUND_MS));
+	captures.set(root, capture);
+	return capture;
 }
 
 /** One on-demand measurement: every read under one budget, then the pure evaluation. */
-export function measureFreshness(targetRoot: string, capture: CarriedObservation | undefined): FreshnessResult {
-	const deadline = Date.now() + READ_BOUND_MS;
+export function measureFreshness(
+	targetRoot: string,
+	capture: CarriedObservation | undefined,
+	clock: () => number = Date.now,
+): FreshnessResult {
+	const deadline = clock() + READ_BOUND_MS;
 	const committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);
 	const installedPin = readPinFile(targetRoot, INSTALLED_PIN_PATH);
 	let projection = observeCarried(targetRoot, deadline);
-	if (Date.now() > deadline) projection = { kind: "unreadable" };
+	// The pin reads and the walk share one budget; past it nothing read decides.
+	if (clock() > deadline) projection = { kind: "unreadable" };
 	return evaluateFreshness({ committedPin, installedPin, projection, capture });
 }

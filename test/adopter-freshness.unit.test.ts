@@ -15,7 +15,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
-import { freshnessLine } from "../.pi/extensions/gitjig/commands/freshness.ts";
+import {
+	FRESHNESS_HELP,
+	FRESHNESS_MESSAGE,
+	freshnessLine,
+	registerFreshnessCommand,
+} from "../.pi/extensions/gitjig/commands/freshness.ts";
 import { type CarriedObservation, observeCarried } from "../.pi/extensions/gitjig/install/classifier.ts";
 import {
 	captureCarriedProjection,
@@ -141,6 +146,7 @@ describe("#365 the evaluator's total precedence", () => {
 			bytes(Buffer.from("not a pin")),
 			bytes(pinFor(CARRIED, "b".repeat(40))),
 			bytes(pinFor({ ...CARRIED, ".pi/prompts/p.md": "older\n" })),
+			bytes(Buffer.from(COMMITTED.toString().replace('"owner":"o"', '"owner":"p"'))),
 		] as PinRead[])
 			assert.deepEqual(evaluate({ installedPin, projection: { kind: "unreadable" } }), {
 				state: "placement-mismatch",
@@ -258,6 +264,45 @@ describe("#365 the classifier's carried observer", () => {
 		}
 	});
 
+	it("reads a member refused for its name or bytes as differs, not unreadable", () => {
+		const nonUtf8 = target();
+		writeFileSync(join(nonUtf8, ".pi/prompts/bad.md"), Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x0a]));
+		const declared = target();
+		writeFileSync(join(declared, ".pi/prompts/declared.md"), "# gitjig: unknown-declaration\n");
+		const decomposed = target();
+		writeFileSync(join(decomposed, ".pi/prompts/cafe\u0301.md"), "x\n");
+		for (const [label, root] of Object.entries({ nonUtf8, declared, decomposed }))
+			assert.deepEqual(observeCarried(root, Date.now() + 2000), { kind: "differs" }, label);
+	});
+
+	it("reads a projection past the byte bound as unreadable", () => {
+		const root = target();
+		assert.deepEqual(observeCarried(root, Date.now() + 2000, { maxBytes: 4 }), { kind: "unreadable" });
+		assert.equal(observeCarried(root, Date.now() + 2000, { maxBytes: 1024 }).kind, "observed");
+	});
+
+	it("observes an absent carried root as no members, and an unreadable container or root as unreadable", (context) => {
+		const noPrompts = target();
+		rmSync(join(noPrompts, ".pi/prompts"), { recursive: true });
+		assert.deepEqual(
+			(observeCarried(noPrompts, Date.now() + 2000) as unknown as { members: { path: string }[] }).members.map(
+				({ path }) => path,
+			),
+			[".pi/extensions/gitjig.ts", ".pi/extensions/gitjig/a.ts"],
+		);
+		assert.deepEqual(
+			measureFreshness(noPrompts, observeCarried(noPrompts, Date.now() + 2000)).state,
+			"placement-mismatch",
+		);
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 directory");
+		const lockedContainer = target();
+		chmodSync(join(lockedContainer, ".pi"), 0o000);
+		assert.deepEqual(observeCarried(lockedContainer, Date.now() + 2000), { kind: "unreadable" });
+		const lockedRoot = target();
+		chmodSync(join(lockedRoot, ".pi/extensions"), 0o000);
+		assert.deepEqual(observeCarried(lockedRoot, Date.now() + 2000), { kind: "unreadable" });
+	});
+
 	it("reads an absent .pi as an empty projection", () => {
 		const root = mkdtempSync(join(tmpdir(), "gitjig-365-empty-"));
 		roots.push(root);
@@ -284,6 +329,26 @@ describe("#365 the pin reads", () => {
 	});
 });
 
+describe("#365 the pin reads under replacement", () => {
+	it("read a record replaced between lstat and open, or after the read, as unreadable", () => {
+		const swap = (root: string) => () => {
+			rmSync(join(root, INSTALLED_PIN_PATH));
+			writeFileSync(join(root, INSTALLED_PIN_PATH), COMMITTED);
+		};
+		const early = target();
+		assert.deepEqual(readPinFile(early, INSTALLED_PIN_PATH, { afterLstat: swap(early) }), { kind: "unreadable" });
+		const late = target();
+		assert.deepEqual(readPinFile(late, INSTALLED_PIN_PATH, { afterRead: swap(late) }), { kind: "unreadable" });
+	});
+
+	it("read an unreadable container as unreadable", (context) => {
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 directory");
+		const root = target();
+		chmodSync(join(root, ".gitjig"), 0o000);
+		assert.deepEqual(readPinFile(root, INSTALLED_PIN_PATH), { kind: "unreadable" });
+	});
+});
+
 describe("#365 one measurement, end to end", () => {
 	it("measures current, mismatch and stale on real files, repeatably and without mutation", () => {
 		const root = target();
@@ -294,9 +359,33 @@ describe("#365 one measurement, end to end", () => {
 		assert.equal(tree(root), before, "a measurement mutated the target");
 		writeFileSync(join(root, ".pi/prompts/p.md"), "edited\n");
 		assert.deepEqual(measureFreshness(root, capture), { state: "placement-mismatch", recovery: PROVISION_COMMAND });
-		const staleCapture = captureCarriedProjection(root);
+		const staleCapture = observeCarried(root, Date.now() + 2000);
 		writeFileSync(join(root, ".pi/prompts/p.md"), CARRIED[".pi/prompts/p.md"]);
 		assert.deepEqual(measureFreshness(root, staleCapture), { state: "session-stale", recovery: RELOAD_COMMAND });
+	});
+
+	it("keeps one capture per module instance, as Pi's /new and /resume re-run the factory over the cached module", async () => {
+		const root = target();
+		const first = captureCarriedProjection(root);
+		writeFileSync(join(root, ".pi/prompts/p.md"), "corrected later\n");
+		assert.equal(captureCarriedProjection(root), first, "a factory re-run retook the capture");
+		const fresh = (await import(
+			`../.pi/extensions/gitjig/install/freshness.ts?instance=${Date.now()}`
+		)) as typeof import("../.pi/extensions/gitjig/install/freshness.ts");
+		assert.notDeepEqual(fresh.captureCarriedProjection(root), first, "a fresh module instance did not capture anew");
+	});
+
+	it("reads cannot-measure when the reads pass the measurement's own budget", () => {
+		const root = target();
+		// The walk itself finishes inside its deadline; only the measurement's
+		// closing check sees the budget spent.
+		const start = Date.now();
+		let tick = 0;
+		const clock = () => (tick++ === 0 ? start : start + 3000);
+		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root), clock), {
+			state: "cannot-measure",
+			recovery: PROVISION_COMMAND,
+		});
 	});
 
 	it("measures against its own target only", () => {
@@ -327,5 +416,73 @@ describe("#365 the rendered line", () => {
 			freshnessLine({ state: "session-stale", recovery: RELOAD_COMMAND }),
 			"gitjig freshness: session-stale — run /reload (see /freshness help)",
 		);
+	});
+});
+
+describe("#365 the registered renderer and command", () => {
+	type Renderer = (
+		message: { details: unknown },
+		options: { outputPad: number },
+	) => { render(width: number): string[] };
+	type Command = { handler: (args: string, context: unknown) => Promise<void> };
+	function registered(root: string) {
+		const renderers = new Map<string, Renderer>();
+		const commands = new Map<string, Command>();
+		const sent: Array<[Record<string, unknown>, Record<string, unknown>]> = [];
+		const pi = {
+			registerMessageRenderer: (type: string, renderer: Renderer) => renderers.set(type, renderer),
+			registerCommand: (name: string, command: Command) => commands.set(name, command),
+			sendMessage: (message: Record<string, unknown>, options: Record<string, unknown>) =>
+				sent.push([message, options]),
+		};
+		registerFreshnessCommand(pi as never, root, captureCarriedProjection(root));
+		const renderer = renderers.get(FRESHNESS_MESSAGE) as Renderer;
+		const render = (details: unknown) =>
+			renderer({ details }, { outputPad: 0 })
+				.render(400)
+				.map((line) => line.trimEnd())
+				.join("\n")
+				.trim();
+		return { render, command: commands.get("freshness") as Command, sent };
+	}
+
+	it("renders the help, every valid record, and an invalid record as invalid", () => {
+		const { render } = registered(target());
+		assert.equal(render("help"), FRESHNESS_HELP);
+		assert.equal(render({ state: "current", recovery: null }), "gitjig freshness: current");
+		assert.equal(
+			render({ state: "session-stale", recovery: RELOAD_COMMAND }),
+			"gitjig freshness: session-stale — run /reload (see /freshness help)",
+		);
+		for (const details of [
+			{ state: "current", recovery: null, path: "/x" },
+			{ state: "fresh", recovery: null },
+			{ state: "current", recovery: "rm -rf" },
+			null,
+			"other",
+		])
+			assert.equal(render(details), "[invalid gitjig freshness record]", JSON.stringify(details));
+	});
+
+	it("sends one content-free message per run, taking no model turn", async () => {
+		const root = target();
+		const { command, sent } = registered(root);
+		await command.handler("", {});
+		await command.handler("help", {});
+		assert.deepEqual(sent, [
+			[
+				{
+					customType: FRESHNESS_MESSAGE,
+					content: "gitjig freshness: current",
+					display: true,
+					details: { state: "current", recovery: null },
+				},
+				{ triggerTurn: false },
+			],
+			[
+				{ customType: FRESHNESS_MESSAGE, content: FRESHNESS_HELP, display: true, details: "help" },
+				{ triggerTurn: false },
+			],
+		]);
 	});
 });

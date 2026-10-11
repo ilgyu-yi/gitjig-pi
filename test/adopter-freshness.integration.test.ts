@@ -16,16 +16,16 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { observeCarried } from "../.pi/extensions/gitjig/install/classifier.ts";
 import { composeAdopter } from "../.pi/extensions/gitjig/install/compose.ts";
 import {
-	captureCarriedProjection,
 	INSTALLED_PIN_PATH,
 	measureFreshness,
 	PROVISION_COMMAND,
 	RELOAD_COMMAND,
 } from "../.pi/extensions/gitjig/install/freshness.ts";
 import { LocalProvisionPlatform } from "../.pi/extensions/gitjig/install/local-provision.ts";
-import { GENERATED_PIN_PATH } from "../.pi/extensions/gitjig/install/pin.ts";
+import { buildPin, encodePin, GENERATED_PIN_PATH, parsePin } from "../.pi/extensions/gitjig/install/pin.ts";
 import { provisionAdopter } from "../.pi/extensions/gitjig/install/provision.ts";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -101,6 +101,20 @@ cpSync(oldRoot, nextRoot, { recursive: true });
 rmSync(join(nextRoot, ".git"), { recursive: true, force: true });
 writeFileSync(join(nextRoot, PROMPT), Buffer.concat([readFileSync(join(nextRoot, PROMPT)), Buffer.from("\nNext.\n")]));
 const NEXT = snapshot(nextRoot);
+/** A carried file only this snapshot lists, added to the next one. */
+const ADDED_PATH = ".pi/prompts/added-locally.md";
+const addedRoot = join(base, "added");
+cpSync(nextRoot, addedRoot, { recursive: true });
+rmSync(join(addedRoot, ".git"), { recursive: true, force: true });
+writeFileSync(join(addedRoot, ADDED_PATH), "Added.\n");
+const ADDED = snapshot(addedRoot);
+/** The old snapshot less one handed-over file. */
+const RETIRED_PATH = [...OLD.handed.keys()].find((path) => path.startsWith(".github/workflows/")) as string;
+const retiredRoot = join(base, "retired");
+cpSync(oldRoot, retiredRoot, { recursive: true });
+rmSync(join(retiredRoot, ".git"), { recursive: true, force: true });
+rmSync(join(retiredRoot, RETIRED_PATH));
+const RETIRED = snapshot(retiredRoot);
 
 function write(target: string, path: string, bytes: Buffer): void {
 	mkdirSync(dirname(join(target, path)), { recursive: true });
@@ -137,7 +151,8 @@ async function provision(target: string, at: Snapshot): Promise<string> {
 	});
 	return result.outcome;
 }
-const freshness = (target: string) => measureFreshness(target, captureCarriedProjection(target));
+/** A measurement in a session loaded now: its capture is a fresh observation of the files. */
+const freshness = (target: string) => measureFreshness(target, observeCarried(target, Date.now() + 2000));
 const MISMATCH = { state: "placement-mismatch", recovery: PROVISION_COMMAND };
 const CURRENT = { state: "current", recovery: null };
 /** Remove the record and every carried file that is not exactly the next bytes. */
@@ -230,13 +245,102 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 	it("refuses a handed-over file that differs from its committed bytes; restoring it from HEAD converges", async () => {
 		const target = await provisioned(NEXT);
 		const handed = [...NEXT.handed.keys()][0] as string;
-		writeFileSync(join(target, PROMPT), "edited\n");
 		writeFileSync(join(target, handed), "handed-over edit\n");
 		assert.equal(await provision(target, NEXT), "refused");
 		git(target, ["checkout", "--", handed]);
 		write(target, PROMPT, NEXT.carried.get(PROMPT) as Buffer);
 		assert.notEqual(await provision(target, NEXT), "refused");
 		assert.deepEqual(freshness(target), CURRENT);
+	});
+
+	it("refuses a missing handed-over file and one only the old pin lists; restoring or removing it converges", async () => {
+		const missing = await provisioned(NEXT);
+		const handed = [...NEXT.handed.keys()][0] as string;
+		rmSync(join(missing, handed));
+		assert.equal(await provision(missing, NEXT), "refused");
+		git(missing, ["checkout", "--", handed]);
+		assert.notEqual(await provision(missing, NEXT), "refused");
+
+		const stale = await provisioned(OLD);
+		commitPin(stale, RETIRED);
+		assert.equal(await provision(stale, RETIRED), "refused");
+		rmSync(join(stale, RETIRED_PATH));
+		assert.notEqual(await provision(stale, RETIRED), "refused");
+		assert.deepEqual(freshness(stale), CURRENT);
+	});
+
+	it("refuses a renamed, foreign or non-regular carried file under a present record", async () => {
+		const other = [...NEXT.carried.keys()].find((path) => path !== PROMPT) as string;
+		for (const damage of ["renamed", "foreign", "fifo"] as const) {
+			const target = await provisioned(NEXT);
+			const path = join(target, PROMPT);
+			if (damage === "renamed") cpSync(path, `${path}.renamed`);
+			rmSync(path);
+			if (damage === "foreign") writeFileSync(path, NEXT.carried.get(other) as Buffer);
+			if (damage === "fifo") execFileSync("mkfifo", [path]);
+			assert.deepEqual(freshness(target), MISMATCH, damage);
+			assert.equal(await provision(target, NEXT), "refused", damage);
+			rmSync(path, { force: true });
+			rmSync(`${path}.renamed`, { force: true });
+			write(target, PROMPT, NEXT.carried.get(PROMPT) as Buffer);
+			assert.notEqual(await provision(target, NEXT), "refused", damage);
+			assert.deepEqual(freshness(target), CURRENT, damage);
+		}
+	});
+
+	it("refuses an edited, foreign, linked or non-regular carried file under an absent record; the absent-record step converges", async () => {
+		const other = [...NEXT.carried.keys()].find((path) => path !== PROMPT) as string;
+		for (const damage of ["edited", "foreign", "linked", "fifo"] as const) {
+			const target = await provisioned(NEXT);
+			rmSync(join(target, INSTALLED_PIN_PATH));
+			const path = join(target, PROMPT);
+			rmSync(path);
+			if (damage === "edited") writeFileSync(path, "edited\n");
+			if (damage === "foreign") writeFileSync(path, NEXT.carried.get(other) as Buffer);
+			if (damage === "linked") symlinkSync(join(NEXT.root, PROMPT), path);
+			if (damage === "fifo") execFileSync("mkfifo", [path]);
+			assert.equal(await provision(target, NEXT), "refused", damage);
+			rmSync(path, { force: true });
+			assert.notEqual(await provision(target, NEXT), "refused", damage);
+			assert.deepEqual(freshness(target), CURRENT, damage);
+		}
+	});
+
+	it("refuses a record naming another source, or another class for a path; the fallback converges", async () => {
+		const otherSource = { ...source, owner: "elsewhere" };
+		const changed = Buffer.from(encodePin({ ...parsePin(NEXT.pin.toString()), source: otherSource }));
+		const inputs = [...NEXT.carried, ...NEXT.handed].map(([path, bytes]) => ({
+			path,
+			class: path === PROMPT || NEXT.handed.has(path) ? ("handed-over" as const) : ("carried" as const),
+			bytes,
+		}));
+		const transition = Buffer.from(encodePin(buildPin(source, parsePin(NEXT.pin.toString()).revision, inputs)));
+		for (const [label, record] of [
+			["changed source", changed],
+			["class transition", transition],
+		] as const) {
+			const target = await provisioned(NEXT);
+			writeFileSync(join(target, INSTALLED_PIN_PATH), record);
+			assert.deepEqual(freshness(target), MISMATCH, label);
+			assert.equal(await provision(target, NEXT), "refused", label);
+			fallback(target, NEXT);
+			assert.notEqual(await provision(target, NEXT), "refused", label);
+			assert.deepEqual(freshness(target), CURRENT, label);
+		}
+	});
+
+	it("converges an absent carried file that only one pin lists, under a present record", async () => {
+		const upgrade = await provisioned(NEXT);
+		commitPin(upgrade, ADDED);
+		assert.deepEqual(freshness(upgrade), MISMATCH);
+		assert.equal(await provision(upgrade, ADDED), "verified");
+		assert.deepEqual(freshness(upgrade), CURRENT);
+
+		const retire = await provisioned(ADDED);
+		commitPin(retire, NEXT);
+		rmSync(join(retire, ADDED_PATH));
+		assert.notEqual(await provision(retire, NEXT), "refused");
+		assert.deepEqual(freshness(retire), CURRENT);
 	});
 
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {
