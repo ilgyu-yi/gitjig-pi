@@ -1507,7 +1507,11 @@ describe("Phase-A history recovery coordinator", () => {
 	it("refuses a fresh NONE over a basis containing a rewrite marker and keeps the initial reentry (#437)", async () => {
 		const marked = {
 			...basis,
-			intervals: [{ kind: "rewrite-marker", earlierHead: "a".repeat(40), laterHead: "b".repeat(40) }],
+			// Mixed: a linear interval first, then the marker (#437).
+			intervals: [
+				{ earlierHead: "9".repeat(40), laterHead: "a".repeat(40), entries: [] },
+				{ kind: "rewrite-marker", earlierHead: "a".repeat(40), laterHead: "b".repeat(40) },
+			],
 		} as unknown as RepairBasis;
 		const outcomes = [];
 		for (const [index, current] of [marked, basis].entries()) {

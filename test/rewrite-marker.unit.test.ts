@@ -67,10 +67,9 @@ function longChain(root: string, count: number): string {
 }
 const basis = (intervals: CorrectionInterval[]): RepairBasis =>
 	({
-		states: [
-			{ head: "a".repeat(40), findings: [] },
-			{ head: "b".repeat(40), findings: [] },
-		],
+		states: [...intervals.map(({ earlierHead }) => earlierHead), intervals.at(-1)?.laterHead ?? "f".repeat(40)].map(
+			(head) => ({ head, findings: [] }),
+		),
 		intervals,
 	}) as unknown as RepairBasis;
 const admitted = (input: DiagnosisInput): DispatchOutcome =>
@@ -363,11 +362,15 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 describe("issue #437 a marker run is never NONE (§1.4)", () => {
 	const delta: CorrectionInterval = { earlierHead: "a".repeat(40), laterHead: "b".repeat(40), entries: [] };
 	const marked = marker("a".repeat(40), "b".repeat(40));
+	// A run whose linear interval comes first and whose marker comes last.
+	const mixed = [delta, marker("b".repeat(40), "c".repeat(40))];
 
 	it("refuses NONE over a basis containing a marker and admits every other value", () => {
 		const none = { value: "NONE", invalidation: "nothing", evidence: "e" } as const;
 		const refused = admitBasisDiagnosis(basis([marked]), admitted(none));
 		assert.ok(!refused.available && refused.disposition === "hand-off" && /never NONE/.test(refused.reason));
+		const refusedMixed = admitBasisDiagnosis(basis(mixed), admitted(none));
+		assert.ok(!refusedMixed.available && /never NONE/.test(refusedMixed.reason), "a mixed run is a marker run");
 		assert.deepEqual(admitBasisDiagnosis(basis([delta]), admitted(none)), { available: true, diagnosis: none });
 		for (const value of ["STAGNATION", "OSCILLATION", "INDETERMINATE"] as const) {
 			const input = { value, invalidation: "nothing", evidence: "e" } as const;
@@ -381,6 +384,9 @@ describe("issue #437 a marker run is never NONE (§1.4)", () => {
 		assert.match(markedBrief, /a{40} -> b{40}\n {9}REWRITE MARKER: a rewrite or a merge lies between these heads/);
 		assert.match(markedBrief, /a run containing a marker is never NONE/);
 		assert.match(markedBrief, /INDETERMINATE otherwise/);
+		const mixedBrief = composeDiagnosisBrief(basis(mixed), context);
+		assert.match(mixedBrief, /b{40} -> c{40}\n {9}REWRITE MARKER/);
+		assert.match(mixedBrief, /a run containing a marker is never NONE/);
 		assert.doesNotMatch(composeDiagnosisBrief(basis([delta]), context), /REWRITE MARKER/);
 	});
 
@@ -400,6 +406,7 @@ describe("issue #437 a marker run is never NONE (§1.4)", () => {
 			freshDiagnosisBrief(original, basis([marked]), spec, result),
 			/a run containing a marker is never NONE/,
 		);
+		assert.match(freshDiagnosisBrief(original, basis(mixed), spec, result), /a run containing a marker is never NONE/);
 		assert.doesNotMatch(freshDiagnosisBrief(original, basis([delta]), spec, result), /REWRITE MARKER/);
 	});
 });

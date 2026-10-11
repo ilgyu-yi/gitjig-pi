@@ -22,9 +22,9 @@ type Sources = typeof SOURCES;
  * way (missing, malformed, capped or past the deadline), so it is pinned
  * for its line but owes no weakening (§3.12). The caller's ban on `admitDiagnosis(` is unowned too: restoring that call beside the pinned one is a new action, not a weakening (§3.12).
  *
- * Measured sweep: each of the 26 weakenings below, and the joint later-head
+ * Measured sweep: each of the 27 weakenings below, and the joint later-head
  * weakening, was applied to the source and run against the behavioural arms
- * (the #437, #238, #404, history and coordinator unit tests). 23 are killed
+ * (the #437, #238, #404, history and coordinator unit tests). 24 are killed
  * there on an assertion; four survive and are recorded as decisions:
  * - the self-parent refusal is unreachable, since a commit's name hashes its
  *   own parent lines;
@@ -128,6 +128,7 @@ describe("issue #437 rewrite-marker guards", () => {
 			["interval", 'if (shape === "rewrite") return', "if (false) return"],
 			["interval", "|| !OID.test(earlierHead) ||", "||"],
 			["history", "return basis.intervals.some(isRewriteMarker);", "return false;"],
+			["history", "return basis.intervals.some(isRewriteMarker);", "return basis.intervals.every(isRewriteMarker);"],
 			["history", 'admitted.diagnosis.value === "NONE" && hasRewriteMarker(basis)', "false"],
 			["history", "...(hasRewriteMarker(basis) ? REWRITE_MARKER_RULE : []),", ""],
 			[
