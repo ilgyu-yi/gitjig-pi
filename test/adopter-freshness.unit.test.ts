@@ -289,6 +289,25 @@ describe("#365 the classifier's carried observer", () => {
 			assert.deepEqual(observeCarried(root, Date.now() + 2000), { kind: "differs" }, label);
 	});
 
+	it("refuses past the byte bound before reading, so an oversized member is never classified", () => {
+		// The member would classify as a difference; the bound must stop the walk first.
+		const root = target();
+		writeFileSync(join(root, ".pi/prompts/bad.md"), Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x0a]));
+		assert.deepEqual(observeCarried(root, Date.now() + 2000, { maxBytes: 10 }), { kind: "unreadable" });
+	});
+
+	it("refuses a member that grew past the byte bound between its lstat and its read", () => {
+		const root = target();
+		const total = Object.values(CARRIED).reduce((sum, text) => sum + Buffer.byteLength(text), 0);
+		const grown = observeCarried(root, Date.now() + 2000, {
+			maxBytes: total + 2,
+			afterLstat: (path) => {
+				if (path === ".pi/prompts/p.md") writeFileSync(join(root, path), "x".repeat(100));
+			},
+		});
+		assert.deepEqual(grown, { kind: "unreadable" });
+	});
+
 	it("reads a projection past the byte bound as unreadable", () => {
 		const root = target();
 		assert.deepEqual(observeCarried(root, Date.now() + 2000, { maxBytes: 4 }), { kind: "unreadable" });
