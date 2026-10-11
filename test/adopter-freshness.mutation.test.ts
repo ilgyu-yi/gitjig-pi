@@ -13,6 +13,7 @@ after(() => rmSync(root, { recursive: true, force: true }));
 
 const FRESHNESS = ".pi/extensions/gitjig/install/freshness.ts";
 const CLASSIFIER = ".pi/extensions/gitjig/install/classifier.ts";
+const COMMAND = ".pi/extensions/gitjig/commands/freshness.ts";
 const TEST = "test/adopter-freshness.unit.test.ts";
 
 const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
@@ -69,6 +70,38 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		CLASSIFIER,
 		"else if (stats.isDirectory() && !stats.isSymbolicLink()) walk(abs, Buffer.from(carried), found, stats, bounded);",
 		"else if (stats.isDirectory() && !stats.isSymbolicLink()) continue;",
+	],
+	[
+		"source omission: a record naming another source agrees",
+		FRESHNESS,
+		"\t\t!sourceEqual(installed.source, committed.source) ||\n",
+		"",
+	],
+	[
+		"the measurement's own budget omitted",
+		FRESHNESS,
+		'\tif (clock() > deadline) projection = { kind: "unreadable" };\n',
+		"",
+	],
+	["the capture retaken on a factory re-run", FRESHNESS, "\tif (held !== undefined) return held;\n", ""],
+	["the byte bound omitted", CLASSIFIER, "> (options.maxBytes ?? MAX_CARRIED_BYTES)", "> Number.POSITIVE_INFINITY"],
+	[
+		"a name or byte refusal read as unreadable",
+		CLASSIFIER,
+		'if (error instanceof ClassificationRefusal) throw new ClassificationRefusal(error.message, "differs");',
+		"if (error instanceof ClassificationRefusal) throw error;",
+	],
+	[
+		"the renderer's help branch",
+		COMMAND,
+		'if (message.details === "help") return new Text(FRESHNESS_HELP, options.outputPad, 0);',
+		'if (message.details === "help") return new Text("x", options.outputPad, 0);',
+	],
+	[
+		"the renderer's record branch",
+		COMMAND,
+		'outcome === undefined ? "[invalid gitjig freshness record]" : freshnessLine(outcome),',
+		'outcome === undefined ? "[invalid gitjig freshness record]" : "x",',
 	],
 	[
 		"an unbounded observation",

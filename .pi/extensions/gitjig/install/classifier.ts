@@ -133,6 +133,20 @@ function sameObject(left: Stats, right: Stats): boolean {
 	return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
 }
 
+/**
+ * A refusal caused by an entry's name or bytes — a non-canonical or non-UTF-8
+ * name, an ill-formed declaration — is a property of what stands there, so it
+ * is a difference rather than an unreadable entry.
+ */
+function asDifference<T>(read: () => T): T {
+	try {
+		return read();
+	} catch (error) {
+		if (error instanceof ClassificationRefusal) throw new ClassificationRefusal(error.message, "differs");
+		throw error;
+	}
+}
+
 /** Read one regular file without following a link, refusing a replacement between lstat, open and read. */
 function readRegular(abs: Buffer, stats: Stats, path: string, options: ObservationOptions): Buffer {
 	if (!stats.isFile())
@@ -185,15 +199,15 @@ function walk(
 		} catch {
 			throw new ClassificationRefusal("candidate is unreadable");
 		}
-		const path = decodeCandidatePath(childRel);
+		const path = asDifference(() => decodeCandidatePath(childRel));
 		options.afterLstat?.(path);
 		if (stats.isDirectory()) {
 			walk(childAbs, childRel, out, stats, options);
 			continue;
 		}
 		const bytes = readRegular(childAbs, stats, path, options);
-		const disposition = classifyCandidate(path, bytes);
-		if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition");
+		const disposition = asDifference(() => classifyCandidate(path, bytes));
+		if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition", "differs");
 		out.push({ path, disposition, bytes });
 	}
 	options.afterDirectoryRead?.(decodeCandidatePath(relative));
@@ -244,7 +258,7 @@ export function observeCandidates(sourceRoot: string, options: ObservationOption
  */
 export const CARRIED_ROOTS = [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig", ".pi/prompts"] as const;
 const CARRIED_CONTAINERS = [".pi", ".pi/extensions"] as const;
-const MAX_CARRIED_BYTES = 64 * 1024 * 1024;
+export const MAX_CARRIED_BYTES = 64 * 1024 * 1024;
 export interface CarriedMember {
 	path: string;
 	bytes: Buffer;
@@ -264,7 +278,7 @@ export type CarriedObservation =
 export function observeCarried(
 	targetRoot: string,
 	deadline: number,
-	options: ObservationOptions = {},
+	options: ObservationOptions & { maxBytes?: number } = {},
 ): CarriedObservation {
 	const root = Buffer.from(resolve(targetRoot));
 	const found: ObservedCandidate[] = [];
@@ -305,7 +319,7 @@ export function observeCarried(
 	} catch (error) {
 		return { kind: error instanceof ClassificationRefusal ? error.shape : "unreadable" };
 	}
-	if (found.reduce((total, member) => total + member.bytes.length, 0) > MAX_CARRIED_BYTES)
+	if (found.reduce((total, member) => total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES))
 		return { kind: "unreadable" };
 	return {
 		kind: "observed",
