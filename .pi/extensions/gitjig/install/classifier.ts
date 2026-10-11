@@ -156,7 +156,9 @@ function readRegular(abs: Buffer, stats: Stats, path: string, options: Observati
 		);
 	let descriptor: number | undefined;
 	try {
-		descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW);
+		// Non-blocking, so a FIFO swapped in after the lstat opens at once and is
+		// refused by the identity check instead of blocking the open forever.
+		descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		const opened = fstatSync(descriptor);
 		if (!opened.isFile() || !sameObject(stats, opened)) throw new ClassificationRefusal("candidate identity changed");
 		const bytes = readFileSync(descriptor);

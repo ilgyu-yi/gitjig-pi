@@ -143,7 +143,8 @@ export function readPinFile(
 	seams.afterLstat?.();
 	let descriptor: number | undefined;
 	try {
-		descriptor = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
+		// Non-blocking: a FIFO swapped in after the lstat opens at once and fails the identity check.
+		descriptor = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		const opened = fstatSync(descriptor);
 		if (!opened.isFile() || !sameObject(before, opened)) return { kind: "unreadable" };
 		const bytes = readFileSync(descriptor);
