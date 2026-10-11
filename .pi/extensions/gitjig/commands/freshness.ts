@@ -25,7 +25,7 @@ export const FRESHNESS_HELP = [
 	"",
 	"Known false positives:",
 	"- an intended local edit to a carried file reports placement-mismatch (true per SPEC 4.5, perhaps unwanted);",
-	"- a provision running at the same time reports cannot-measure;",
+	"- a provision running at the same time reports placement-mismatch until it advances the record;",
 	"- a case- or normalization-insensitive filesystem can report a rename as placement-mismatch.",
 	"",
 	`placement-mismatch: run ${PROVISION_COMMAND}. Its provision run converges when:`,

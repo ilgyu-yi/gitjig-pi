@@ -259,21 +259,27 @@ export function observeCandidates(sourceRoot: string, options: ObservationOption
  * carried projection under exactly these (#365).
  */
 export const CARRIED_ROOTS = [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig", ".pi/prompts"] as const;
-/** Whether every container of a carried root stands as a real directory; absent is false, anything else refuses. */
-function containersStand(root: Buffer, carried: string): boolean {
+/**
+ * The containers of a carried root as they stand: undefined when one is
+ * absent, a refusal when one is a link, non-regular or unreadable.
+ */
+function standingContainers(root: Buffer, carried: string): Array<{ path: Buffer; stats: Stats }> | undefined {
 	const parts = carried.split("/").slice(0, -1);
+	const standing: Array<{ path: Buffer; stats: Stats }> = [];
 	for (let index = 1; index <= parts.length; index++) {
+		const path = appendPath(root, Buffer.from(parts.slice(0, index).join("/")));
 		let stats: Stats;
 		try {
-			stats = lstatSync(appendPath(root, Buffer.from(parts.slice(0, index).join("/"))));
+			stats = lstatSync(path);
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
 			throw new ClassificationRefusal("carried container is unreadable");
 		}
 		if (!stats.isDirectory() || stats.isSymbolicLink())
 			throw new ClassificationRefusal("carried container is non-regular", "differs");
+		standing.push({ path, stats });
 	}
-	return true;
+	return standing;
 }
 export const MAX_CARRIED_BYTES = 64 * 1024 * 1024;
 export interface CarriedMember {
@@ -310,7 +316,8 @@ export function observeCarried(
 		for (const carried of CARRIED_ROOTS) {
 			// Each root's own containers: one root's absent container never
 			// hides another root, and a linked container is a difference.
-			if (!containersStand(root, carried)) continue;
+			const containers = standingContainers(root, carried);
+			if (containers === undefined) continue;
 			const abs = appendPath(root, Buffer.from(carried));
 			let stats: Stats;
 			try {
@@ -324,6 +331,11 @@ export function observeCarried(
 				found.push({ path: carried, disposition: "carried", bytes: readRegular(abs, stats, carried, bounded) });
 			else if (stats.isDirectory() && !stats.isSymbolicLink()) walk(abs, Buffer.from(carried), found, stats, bounded);
 			else throw new ClassificationRefusal("carried root is non-regular", "differs");
+			// The reads resolved through these containers; one replaced by a
+			// link meanwhile would have been followed, so each is checked again.
+			for (const container of containers)
+				if (!sameObject(container.stats, lstatSync(container.path)))
+					throw new ClassificationRefusal("carried container identity changed");
 		}
 	} catch (error) {
 		return { kind: error instanceof ClassificationRefusal ? error.shape : "unreadable" };

@@ -246,6 +246,20 @@ describe("#365 the classifier's carried observer", () => {
 			assert.deepEqual(observeCarried(root, Date.now() + 2000), { kind: "differs" }, label);
 	});
 
+	it("refuses a projection whose container became a link during the walk", () => {
+		const root = target();
+		const moved = mkdtempSync(join(tmpdir(), "gitjig-365-moved-"));
+		roots.push(moved);
+		const observation = observeCarried(root, Date.now() + 2000, {
+			afterLstat: (path) => {
+				if (path !== ".pi/extensions/gitjig/a.ts") return;
+				renameSync(join(root, ".pi/extensions"), join(moved, "extensions"));
+				symlinkSync(join(moved, "extensions"), join(root, ".pi/extensions"));
+			},
+		});
+		assert.notEqual(observation.kind, "observed", "a linked container was followed");
+	});
+
 	it("reads a replaced, unreadable or late observation as unreadable", () => {
 		const replaced = target();
 		const swapped = observeCarried(replaced, Date.now() + 2000, {
@@ -372,6 +386,22 @@ describe("#365 the pin reads under replacement", () => {
 		});
 		assert.equal(run.signal, null, "a swapped-in FIFO blocked the open");
 		assert.deepEqual(JSON.parse(run.stdout), ["unreadable", "unreadable"]);
+	});
+
+	it("read a record whose container became a link after its check as unreadable, never following it", () => {
+		const root = target(CARRIED, null);
+		const moved = mkdtempSync(join(tmpdir(), "gitjig-365-moved-"));
+		roots.push(moved);
+		writeFileSync(join(moved, "installed-pin.json"), COMMITTED);
+		mkdirSync(join(root, ".gitjig"));
+		writeFileSync(join(root, INSTALLED_PIN_PATH), "placeholder\n");
+		const read = readPinFile(root, INSTALLED_PIN_PATH, {
+			afterContainers: () => {
+				rmSync(join(root, ".gitjig"), { recursive: true });
+				symlinkSync(moved, join(root, ".gitjig"));
+			},
+		});
+		assert.notEqual(read.kind, "bytes", "a linked container was followed");
 	});
 
 	it("read an unreadable container as unreadable", (context) => {
