@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -279,14 +279,39 @@ describe("#404 the record every history hand-off writes", () => {
 	});
 
 	it("writes limb (c) for an environmental projection failure, never limb (a)", async () => {
+		// A commit the walk must read between the two heads is unreadable, so
+		// the walk cannot complete (§1.4, #437). A missing earlier head no longer
+		// fails: the walk from the later head completes and the pair is marked.
 		const r = repository();
-		const missing = "f".repeat(40);
+		unlinkSync(join(r.root, ".git", "objects", r.first.slice(0, 2), r.first.slice(2)));
 		const h = harness(r.root, subjectAt(r.base, r.second), [
-			writer(1, composeReviewRecord(repair(missing))),
+			writer(1, composeReviewRecord(repair(r.base))),
 			writer(2, composeReviewRecord(repair(r.second))),
 		]);
 		await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(h.dispatches(), 0);
 		assert.deepEqual(h.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
+	});
+
+	it("refuses NONE over a rewrite-marker basis as limb (c) and rules other values over it (#437)", async () => {
+		const r = repository();
+		const git = (...args: string[]) => execFileSync("git", args, { cwd: r.root, encoding: "utf8" }).trim();
+		git("checkout", "-q", "--detach", r.base);
+		writeFileSync(join(r.root, ".pi", "seed.ts"), "export const a = 3;\n");
+		git("commit", "-qam", "rebased");
+		const rebased = git("rev-parse", "HEAD");
+		const history = [writer(1, composeReviewRecord(repair(r.first))), writer(2, composeReviewRecord(repair(rebased)))];
+		const none = harness(r.root, subjectAt(r.base, rebased), history, {
+			diagnosis: { value: "NONE", invalidation: "nothing", evidence: "advancing" },
+		});
+		const outcome = await driveReviewRound(spec(), r.root, none.seams);
+		assert.equal(outcome.disposition, "hand-off");
+		assert.equal(none.dispatches(), 1, "the marker basis was derived and the Judge dispatched");
+		assert.deepEqual(none.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.c]);
+		assert.equal(none.rounds(), 0, "NONE over a marker never continues to the panel");
+		const ruled = harness(r.root, subjectAt(r.base, rebased), history, { diagnosis: STAGNATION });
+		await driveReviewRound(spec(), r.root, ruled.seams);
+		assert.deepEqual(ruled.published.map(causeOf), [HISTORY_HANDOFF_CAUSE.b]);
 	});
 
 	it("writes limb (c) when the Judge is unavailable, and limb (b) with the invalidation for a handed-off ruling", async () => {
@@ -383,13 +408,16 @@ describe("#404 standing records", () => {
 	});
 
 	it("keeps a standing limb-(c) record on an environmental projection failure", async () => {
+		// An unreadable commit between the heads leaves the walk incomplete (#437).
 		const r = repository();
+		unlinkSync(join(r.root, ".git", "objects", r.first.slice(0, 2), r.first.slice(2)));
 		const h = harness(r.root, subjectAt(r.base, r.second), [
-			writer(1, composeReviewRecord(repair("f".repeat(40)))),
+			writer(1, composeReviewRecord(repair(r.base))),
 			writer(2, composeReviewRecord(repair(r.second))),
 			writer(3, handoffBody(HISTORY_HANDOFF_CAUSE.c, r.second, r.base)),
 		]);
 		const outcome = await driveReviewRound(spec(), r.root, h.seams);
+		assert.equal(h.dispatches(), 0);
 		assert.ok(outcome.disposition === "hand-off" && outcome.cause.includes("standing"), JSON.stringify(outcome));
 		assert.equal(h.published.length, 0);
 	});

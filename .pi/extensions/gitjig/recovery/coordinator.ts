@@ -18,7 +18,7 @@ import type { DispatchOutcome } from "../dispatch/index.ts";
 import { runDispatch } from "../dispatch/index.ts";
 import type { PiInvocation } from "../dispatch/pi-run.ts";
 import type { ResolvedModes } from "../modes.ts";
-import type { DiagnosisInput, RepairBasis, StateSummary } from "../review/history.ts";
+import { type DiagnosisInput, hasRewriteMarker, type RepairBasis, type StateSummary } from "../review/history.ts";
 import {
 	admitObservedDispatch,
 	createRecoveryAttemptLedger,
@@ -1524,7 +1524,12 @@ export async function coordinateHistoryRecovery(input: CoordinateRecoveryInput):
 				freshDiagnosisBrief(input.diagnosis, input.basis, spec, measured),
 			);
 			if (diagnosisRun === undefined) return finalizeHandoff();
-			const parsedDiagnosis = diagnosis(payload(diagnosisRun.outcome));
+			// §1.4 (#437): a fresh NONE over a basis containing a rewrite marker is
+			// refused as invalid where it is parsed, so the reentry stays the
+			// initial ruling's and the route finalizes as handoff.
+			const decodedDiagnosis = diagnosis(payload(diagnosisRun.outcome));
+			const parsedDiagnosis =
+				decodedDiagnosis?.value === "NONE" && hasRewriteMarker(input.basis) ? undefined : decodedDiagnosis;
 			const freshDiagnosis = retainWithinRouteBudget(
 				parsedDiagnosis,
 				parsedDiagnosis === undefined ? [] : [parsedDiagnosis.evidence],
