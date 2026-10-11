@@ -205,9 +205,12 @@ type GitPlan = {
 	failAt?: string;
 	// The invocation whose arguments end so outlives any bound the suite sets.
 	sleepAt?: string;
-	// The invocation whose arguments end so writes past any cap the suite sets, on
-	// stderr, and otherwise runs as usual.
+	// The invocation whose arguments end so writes one byte past the suite's
+	// 1024-byte cap, on stderr, and otherwise runs as usual.
 	overflowAt?: string;
+	// Where a sleeping child records the moment it starts, so an arm can measure
+	// the deadline that ended it from the child's side.
+	stamp?: string;
 };
 
 function gitSeam({
@@ -254,8 +257,12 @@ for (const [tail, text] of Object.entries(plan.say ?? {}))
 	}
 // Past the cap on stderr, which the launcher counts and discards, and then Git
 // runs as usual: only the cap itself can refuse this invocation.
-if (plan.overflowAt && args.join(" ").endsWith(plan.overflowAt)) process.stderr.write("x".repeat(4096));
-if (plan.sleepAt && args.join(" ").endsWith(plan.sleepAt)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
+if (plan.overflowAt && args.join(" ").endsWith(plan.overflowAt)) process.stderr.write("x".repeat(1025));
+const sleep = () => {
+	if (plan.stamp) require("node:fs").writeFileSync(plan.stamp, String(Date.now()));
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
+};
+if (plan.sleepAt && args.join(" ").endsWith(plan.sleepAt)) sleep();
 if (plan.failAt && args.join(" ").endsWith(plan.failAt)) {
 	process.stderr.write("the seam refused this invocation\\n");
 	process.exit(3);
@@ -263,8 +270,8 @@ if (plan.failAt && args.join(" ").endsWith(plan.failAt)) {
 let env = process.env;
 if (args.includes("fetch")) {
 	if (plan.fetch === "signal") process.kill(process.pid, "SIGTERM");
-	if (plan.fetch === "overflow") process.stdout.write("x".repeat(4096));
-	if (plan.fetch === "sleep") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
+	if (plan.fetch === "overflow") process.stdout.write("x".repeat(1025));
+	if (plan.fetch === "sleep") sleep();
 	env = { ...env, GIT_ALLOW_PROTOCOL: "file" };
 	args = ["-c", ${JSON.stringify(`url.file://${bare}.insteadOf=${sourceUrl}`)}, ...args];
 }
@@ -762,6 +769,28 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Criterion 3/4: the source and its bounds.
 
+/** A file a sleeping child stamps with the moment it starts. */
+function stampPath(): string {
+	const dir = mkdtempSync(join(tmpdir(), "gitjig-362-stamp-"));
+	roots.push(dir);
+	return join(dir, "started");
+}
+
+/**
+ * A sleeping child outlives any bound this suite sets, so what ended it is the
+ * deadline that was applied, not the child finishing. Measured from the child's
+ * own start to the launcher's exit, a deadline widened to twice the narrowed
+ * one shows even past the kill and cleanup that follow it, where a status alone
+ * cannot see it.
+ */
+function appliedDeadline(stamp: string, boundMs: number, label: string): void {
+	const ran = Date.now() - Number(readFileSync(stamp, "utf8"));
+	assert.ok(
+		ran < boundMs * 1.6,
+		`${label}: the applied deadline was not the narrowed one (${ran} ms after the child started)`,
+	);
+}
+
 async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	// A pin naming a source the caller's network does not serve.
 	const elsewhere = fixture(launcher, {
@@ -783,20 +812,13 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	for (const [label, fetch, seams] of [
 		["a signalled fetch", "signal", ""],
 		["an overflowing fetch", "overflow", "streamBytes: 1024"],
-		["a fetch past its bound", "sleep", "gitTimeoutMs: 500"],
+		["a fetch past its bound", "sleep", "gitTimeoutMs: 1500"],
 	] as const) {
-		const f = fixture(launcher, { plan: { fetch } });
+		const stamp = stampPath();
+		const f = fixture(launcher, { plan: { fetch, stamp } });
 		const before = snapshot(f.target);
-		const started = Date.now();
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "source-unavailable", 69, label);
-		// The sleeping child outlives any bound this suite sets, so what ended it is
-		// the deadline that was applied, not the child finishing: a widened deadline
-		// shows up here as elapsed time, where a status alone cannot see it.
-		if (fetch === "sleep")
-			assert.ok(
-				Date.now() - started < 4000,
-				`${label}: the applied deadline was not the narrowed one (${Date.now() - started} ms)`,
-			);
+		if (fetch === "sleep") appliedDeadline(stamp, 1500, label);
 		invariant(f, before, label);
 	}
 	// A snapshot-check Git child that fails is that node's cause, not another's.
@@ -811,14 +833,18 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	);
 	invariant(overflowingAdmission, overflowingBefore, "an admission child past its cap");
 	// The target-admission Git child carries its own deadline, applied as narrowly.
-	const sleepingAdmission = fixture(launcher, { plan: { sleepAt: "target rev-parse --show-toplevel" } });
+	const admissionStamp = stampPath();
+	const sleepingAdmission = fixture(launcher, {
+		plan: { sleepAt: "target rev-parse --show-toplevel", stamp: admissionStamp },
+	});
 	const sleepingBefore = snapshot(sleepingAdmission.target);
-	const admissionStarted = Date.now();
-	refused(launchWith(sleepingAdmission, "gitTimeoutMs: 500"), "invalid-input", 64, "an admission child past its bound");
-	assert.ok(
-		Date.now() - admissionStarted < 4000,
-		`an admission child past its bound: the applied deadline was not the narrowed one (${Date.now() - admissionStarted} ms)`,
+	refused(
+		launchWith(sleepingAdmission, "gitTimeoutMs: 1500"),
+		"invalid-input",
+		64,
+		"an admission child past its bound",
 	);
+	appliedDeadline(admissionStamp, 1500, "an admission child past its bound");
 	invariant(sleepingAdmission, sleepingBefore, "an admission child past its bound");
 	const failing = fixture(launcher, { plan: { failAt: "snapshot rev-parse --git-common-dir" } });
 	const failingBefore = snapshot(failing.target);
@@ -1440,37 +1466,32 @@ async function armOwnsEveryArtifact(launcher: string): Promise<void> {
 
 async function armOrdersTheTerminals(launcher: string): Promise<void> {
 	// The provision child refusing, overflowing and outliving its bound.
+	const provisionStamp = stampPath();
 	for (const [label, body, seams] of [
 		["a refused provision", "process.exit(2);\n", ""],
-		["an overflowing provision", 'process.stdout.write("x".repeat(4096));\n', "streamBytes: 1024"],
+		["an overflowing provision", 'process.stdout.write("x".repeat(1025));\n', "streamBytes: 1024"],
 		// The cap is per stream and cumulative: two writes each under it, apart in
 		// time so they arrive as separate chunks, together exceed it.
 		...(["stdout", "stderr"] as const).map(
 			(stream) =>
 				[
 					`a provision whose ${stream} overflows across writes`,
-					`process.${stream}.write("x".repeat(600));\nawait new Promise((resolve) => setTimeout(resolve, 200));\nprocess.${stream}.write("x".repeat(600));\n`,
+					`process.${stream}.write("x".repeat(513));\nawait new Promise((resolve) => setTimeout(resolve, 200));\nprocess.${stream}.write("x".repeat(512));\n`,
 					"streamBytes: 1024",
 				] as const,
 		),
 		[
 			"a provision past its bound",
-			"await new Promise((resolve) => setTimeout(resolve, 30000));\n",
-			"nodeTimeoutMs: 500",
+			`(await import("node:fs")).writeFileSync(${JSON.stringify(provisionStamp)}, String(Date.now()));\nawait new Promise((resolve) => setTimeout(resolve, 30000));\n`,
+			"nodeTimeoutMs: 1500",
 		],
 	] as const) {
 		const f = fixture(launcher, {
 			source: (work) => writeFileSync(join(work, ".pi/extensions/gitjig/install/provision-cli.ts"), body),
 		});
-		const started = Date.now();
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "provision-refused", 70, label);
-		// As with the Git bound: this child never ends on its own, so the elapsed time
-		// is the deadline that was actually applied.
-		if (label === "a provision past its bound")
-			assert.ok(
-				Date.now() - started < 4000,
-				`${label}: the applied deadline was not the narrowed one (${Date.now() - started} ms)`,
-			);
+		// As with the Git bound: this child never ends on its own.
+		if (label === "a provision past its bound") appliedDeadline(provisionStamp, 1500, label);
 		assert.deepEqual(readdirSync(f.scratch), [], `${label}: the child was not removed`);
 	}
 	// Cleanup that cannot confirm absence overrides success and every other cause.
@@ -2004,14 +2025,40 @@ test(
 		await killed(
 			armSourcesOnlyTheProjection,
 			"\t\t\ttimeoutMs: seams.gitTimeoutMs,\n",
-			"\t\t\ttimeoutMs: seams.gitTimeoutMs * 10,\n",
-			"the admission child's applied deadline widened tenfold",
+			"\t\t\ttimeoutMs: seams.gitTimeoutMs * 2,\n",
+			"the admission child's applied deadline doubled",
 		);
 		await killed(
 			armSourcesOnlyTheProjection,
 			'bounded(seams, "git", [...GIT_CONFIG, "-C", top, ...args]',
-			'bounded({ ...seams, streamBytes: seams.streamBytes * 10 }, "git", [...GIT_CONFIG, "-C", top, ...args]',
-			"the admission child's applied output cap widened tenfold",
+			'bounded({ ...seams, streamBytes: seams.streamBytes + 1 }, "git", [...GIT_CONFIG, "-C", top, ...args]',
+			"the admission child's applied output cap widened by one byte",
+		);
+		// The acquisition Git children and the provision child, each bound as
+		// precisely: a cap one byte wider and a deadline twice as long.
+		await killed(
+			armSourcesOnlyTheProjection,
+			"{ env: env.git, cwd, timeoutMs: seams.gitTimeoutMs, cause });",
+			"{ env: env.git, cwd, timeoutMs: seams.gitTimeoutMs * 2, cause });",
+			"the acquisition Git children's applied deadline doubled",
+		);
+		await killed(
+			armSourcesOnlyTheProjection,
+			'bounded(seams, "git", [...GIT_CONFIG, ...args], { env: env.git',
+			'bounded({ ...seams, streamBytes: seams.streamBytes + 1 }, "git", [...GIT_CONFIG, ...args], { env: env.git',
+			"the acquisition Git children's applied output cap widened by one byte",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			'{ env: env.node, cwd: real, timeoutMs: seams.nodeTimeoutMs, cause: "provision-refused" },',
+			'{ env: env.node, cwd: real, timeoutMs: seams.nodeTimeoutMs * 2, cause: "provision-refused" },',
+			"the provision child's applied deadline doubled",
+		);
+		await killed(
+			armOrdersTheTerminals,
+			"\tawait bounded(\n\t\tseams,\n\t\tprocess.execPath,",
+			"\tawait bounded(\n\t\t{ ...seams, streamBytes: seams.streamBytes + 1 },\n\t\tprocess.execPath,",
+			"the provision child's applied output cap widened by one byte",
 		);
 		await killed(
 			armExcludesAlternateObjectStores,
