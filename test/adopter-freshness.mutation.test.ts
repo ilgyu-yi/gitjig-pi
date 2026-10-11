@@ -122,6 +122,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'if (!containersStand(root, carried)) return { kind: "observed", members: [] };',
 	],
 	[
+		"a blocking pin open",
+		FRESHNESS,
+		"constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK",
+		"constants.O_RDONLY | constants.O_NOFOLLOW",
+	],
+	[
+		"a blocking member open",
+		CLASSIFIER,
+		"descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
+		"descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW);",
+	],
+	[
 		"an unbounded observation",
 		CLASSIFIER,
 		'if (Date.now() > deadline) throw new ClassificationRefusal("carried observation is past its bound");',
@@ -132,6 +144,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 function run(name: string, mutation?: (typeof mutations)[number]): ReturnType<typeof spawnSync> {
 	const box = mkdtempSync(join(root, `${name.replace(/[^a-z]+/giu, "-").slice(0, 40)}-`));
 	cpSync(join(repository, ".pi"), join(box, ".pi"), { recursive: true });
+	cpSync(join(repository, ".github/bin"), join(box, ".github/bin"), { recursive: true });
 	mkdirSync(join(box, "test"), { recursive: true });
 	cpSync(join(repository, TEST), join(box, TEST));
 	symlinkSync(join(repository, "node_modules"), join(box, "node_modules"), "dir");
