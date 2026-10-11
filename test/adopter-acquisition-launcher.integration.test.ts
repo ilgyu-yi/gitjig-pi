@@ -208,8 +208,7 @@ type GitPlan = {
 	// The invocation whose arguments end so writes one byte past the suite's
 	// 1024-byte cap, on stderr, and otherwise runs as usual.
 	overflowAt?: string;
-	// Where a sleeping child records the moment it starts, so an arm can measure
-	// the deadline that ended it from the child's side.
+	// Where a sleeping child's watcher records the moment the child dies.
 	stamp?: string;
 };
 
@@ -259,8 +258,7 @@ for (const [tail, text] of Object.entries(plan.say ?? {}))
 // runs as usual: only the cap itself can refuse this invocation.
 if (plan.overflowAt && args.join(" ").endsWith(plan.overflowAt)) process.stderr.write("x".repeat(1025));
 const sleep = () => {
-	if (plan.stamp) require("node:fs").writeFileSync(plan.stamp, String(Date.now()));
-	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
+	${plan.stamp === undefined ? "" : watchDeath(plan.stamp)}	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
 };
 if (plan.sleepAt && args.join(" ").endsWith(plan.sleepAt)) sleep();
 if (plan.failAt && args.join(" ").endsWith(plan.failAt)) {
@@ -769,7 +767,25 @@ async function armAdmitsOnlyTheCommittedPin(launcher: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Criterion 3/4: the source and its bounds.
 
-/** A file a sleeping child stamps with the moment it starts. */
+/**
+ * Code a sleeping child runs first: a watcher outside its process group that
+ * stamps the moment the child dies, so the kill is timed without the cleanup
+ * and exit that follow it.
+ */
+function watchDeath(stamp: string): string {
+	const watcher = `const fs = process.getBuiltinModule("node:fs"); const pid = Number(process.argv[1]); const tick = setInterval(() => { try { process.kill(pid, 0); } catch { fs.writeFileSync(${JSON.stringify(`${stamp}.killed`)}, String(Date.now())); clearInterval(tick); } }, 2);`;
+	return `process.getBuiltinModule("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(watcher)}, String(process.pid)], { detached: true, stdio: "ignore" }).unref();\n`;
+}
+
+/**
+ * A spawn seam that stamps the moment the launcher spawned the matching child,
+ * which is when the launcher arms that child's deadline.
+ */
+function spawnStamp(stamp: string, match: string): string {
+	return `spawn: (executable, args, options) => { const child = defaultSeams().spawn(executable, args, options); if ([executable, ...args].join(" ").includes(${JSON.stringify(match)})) fs.writeFileSync(${JSON.stringify(stamp)}, String(Date.now())); return child; }`;
+}
+
+/** Where a deadline arm's spawn and death stamps go. */
 function stampPath(): string {
 	const dir = mkdtempSync(join(tmpdir(), "gitjig-362-stamp-"));
 	roots.push(dir);
@@ -778,15 +794,19 @@ function stampPath(): string {
 
 /**
  * A sleeping child outlives any bound this suite sets, so what ended it is the
- * deadline that was applied, not the child finishing. Measured from the child's
- * own start to the launcher's exit, a deadline widened to twice the narrowed
- * one shows even past the kill and cleanup that follow it, where a status alone
- * cannot see it.
+ * deadline the launcher applied. Timed from the launcher's spawn of that child
+ * to the child's death (measured 2004 to 2009 ms on a 2000 ms bound), a widening
+ * of 5% or more shows. RESIDUAL, stated: a widening under 5% of the bound is not
+ * told apart from scheduling jitter; at production that is under 6 s on Git's
+ * 120 s and 15 s on provision's 300 s.
  */
 function appliedDeadline(stamp: string, boundMs: number, label: string): void {
-	const ran = Date.now() - Number(readFileSync(stamp, "utf8"));
+	const deadline = Date.now() + 2000;
+	while (!existsSync(`${stamp}.killed`) && Date.now() < deadline)
+		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+	const ran = Number(readFileSync(`${stamp}.killed`, "utf8")) - Number(readFileSync(stamp, "utf8"));
 	assert.ok(
-		ran < boundMs * 1.6,
+		ran >= boundMs && ran < boundMs * 1.05,
 		`${label}: the applied deadline was not the narrowed one (${ran} ms after the child started)`,
 	);
 }
@@ -812,13 +832,14 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	for (const [label, fetch, seams] of [
 		["a signalled fetch", "signal", ""],
 		["an overflowing fetch", "overflow", "streamBytes: 1024"],
-		["a fetch past its bound", "sleep", "gitTimeoutMs: 1500"],
+		["a fetch past its bound", "sleep", "gitTimeoutMs: 2000"],
 	] as const) {
 		const stamp = stampPath();
 		const f = fixture(launcher, { plan: { fetch, stamp } });
 		const before = snapshot(f.target);
-		refused(seams === "" ? launch(f) : launchWith(f, seams), "source-unavailable", 69, label);
-		if (fetch === "sleep") appliedDeadline(stamp, 1500, label);
+		const narrowed = fetch === "sleep" ? `${seams}, ${spawnStamp(stamp, " fetch ")}` : seams;
+		refused(narrowed === "" ? launch(f) : launchWith(f, narrowed), "source-unavailable", 69, label);
+		if (fetch === "sleep") appliedDeadline(stamp, 2000, label);
 		invariant(f, before, label);
 	}
 	// A snapshot-check Git child that fails is that node's cause, not another's.
@@ -839,12 +860,12 @@ async function armSourcesOnlyTheProjection(launcher: string): Promise<void> {
 	});
 	const sleepingBefore = snapshot(sleepingAdmission.target);
 	refused(
-		launchWith(sleepingAdmission, "gitTimeoutMs: 1500"),
+		launchWith(sleepingAdmission, `gitTimeoutMs: 2000, ${spawnStamp(admissionStamp, "rev-parse --show-toplevel")}`),
 		"invalid-input",
 		64,
 		"an admission child past its bound",
 	);
-	appliedDeadline(admissionStamp, 1500, "an admission child past its bound");
+	appliedDeadline(admissionStamp, 2000, "an admission child past its bound");
 	invariant(sleepingAdmission, sleepingBefore, "an admission child past its bound");
 	const failing = fixture(launcher, { plan: { failAt: "snapshot rev-parse --git-common-dir" } });
 	const failingBefore = snapshot(failing.target);
@@ -1482,8 +1503,8 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 		),
 		[
 			"a provision past its bound",
-			`(await import("node:fs")).writeFileSync(${JSON.stringify(provisionStamp)}, String(Date.now()));\nawait new Promise((resolve) => setTimeout(resolve, 30000));\n`,
-			"nodeTimeoutMs: 1500",
+			`${watchDeath(provisionStamp)}await new Promise((resolve) => setTimeout(resolve, 30000));\n`,
+			`nodeTimeoutMs: 2000, ${spawnStamp(provisionStamp, "provision-cli")}`,
 		],
 	] as const) {
 		const f = fixture(launcher, {
@@ -1491,7 +1512,7 @@ async function armOrdersTheTerminals(launcher: string): Promise<void> {
 		});
 		refused(seams === "" ? launch(f) : launchWith(f, seams), "provision-refused", 70, label);
 		// As with the Git bound: this child never ends on its own.
-		if (label === "a provision past its bound") appliedDeadline(provisionStamp, 1500, label);
+		if (label === "a provision past its bound") appliedDeadline(provisionStamp, 2000, label);
 		assert.deepEqual(readdirSync(f.scratch), [], `${label}: the child was not removed`);
 	}
 	// Cleanup that cannot confirm absence overrides success and every other cause.
@@ -2025,8 +2046,8 @@ test(
 		await killed(
 			armSourcesOnlyTheProjection,
 			"\t\t\ttimeoutMs: seams.gitTimeoutMs,\n",
-			"\t\t\ttimeoutMs: seams.gitTimeoutMs * 2,\n",
-			"the admission child's applied deadline doubled",
+			"\t\t\ttimeoutMs: seams.gitTimeoutMs * 1.1,\n",
+			"the admission child's applied deadline widened by a tenth",
 		);
 		await killed(
 			armSourcesOnlyTheProjection,
@@ -2035,12 +2056,12 @@ test(
 			"the admission child's applied output cap widened by one byte",
 		);
 		// The acquisition Git children and the provision child, each bound as
-		// precisely: a cap one byte wider and a deadline twice as long.
+		// precisely: a cap one byte wider and a deadline a tenth longer.
 		await killed(
 			armSourcesOnlyTheProjection,
 			"{ env: env.git, cwd, timeoutMs: seams.gitTimeoutMs, cause });",
-			"{ env: env.git, cwd, timeoutMs: seams.gitTimeoutMs * 2, cause });",
-			"the acquisition Git children's applied deadline doubled",
+			"{ env: env.git, cwd, timeoutMs: seams.gitTimeoutMs * 1.1, cause });",
+			"the acquisition Git children's applied deadline widened by a tenth",
 		);
 		await killed(
 			armSourcesOnlyTheProjection,
@@ -2051,8 +2072,8 @@ test(
 		await killed(
 			armOrdersTheTerminals,
 			'{ env: env.node, cwd: real, timeoutMs: seams.nodeTimeoutMs, cause: "provision-refused" },',
-			'{ env: env.node, cwd: real, timeoutMs: seams.nodeTimeoutMs * 2, cause: "provision-refused" },',
-			"the provision child's applied deadline doubled",
+			'{ env: env.node, cwd: real, timeoutMs: seams.nodeTimeoutMs * 1.1, cause: "provision-refused" },',
+			"the provision child's applied deadline widened by a tenth",
 		);
 		await killed(
 			armOrdersTheTerminals,
