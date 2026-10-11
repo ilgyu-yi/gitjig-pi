@@ -26,6 +26,8 @@ export interface ObservationOptions {
 	afterLstat?: (path: string) => void;
 	afterRead?: (path: string) => void;
 	afterDirectoryRead?: (path: string) => void;
+	/** Admits a regular file's lstat size before it is read; may refuse. */
+	admitSize?: (size: number) => void;
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -154,6 +156,7 @@ function readRegular(abs: Buffer, stats: Stats, path: string, options: Observati
 			stats.isSymbolicLink() ? "candidate is a symlink" : "candidate is non-regular",
 			"differs",
 		);
+	options.admitSize?.(stats.size);
 	let descriptor: number | undefined;
 	try {
 		// Non-blocking, so a FIFO swapped in after the lstat opens at once and is
@@ -305,8 +308,16 @@ export function observeCarried(
 ): CarriedObservation {
 	const root = Buffer.from(resolve(targetRoot));
 	const found: ObservedCandidate[] = [];
+	let admitted = 0;
 	const bounded: ObservationOptions = {
 		...options,
+		// The byte bound applies before each read, so no member is read, or
+		// classified, past it.
+		admitSize: (size) => {
+			admitted += size;
+			if (admitted > (options.maxBytes ?? MAX_CARRIED_BYTES))
+				throw new ClassificationRefusal("carried observation is past its byte bound");
+		},
 		afterLstat: (path) => {
 			if (Date.now() > deadline) throw new ClassificationRefusal("carried observation is past its bound");
 			options.afterLstat?.(path);

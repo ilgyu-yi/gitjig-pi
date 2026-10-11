@@ -84,7 +84,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"",
 	],
 	["the capture retaken on a factory re-run", FRESHNESS, "\tif (held !== undefined) return held;\n", ""],
-	["the byte bound omitted", CLASSIFIER, "> (options.maxBytes ?? MAX_CARRIED_BYTES)", "> Number.POSITIVE_INFINITY"],
+	[
+		"the byte bound omitted after the reads",
+		CLASSIFIER,
+		"total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES)",
+		"total + member.bytes.length, 0) > Number.POSITIVE_INFINITY",
+	],
 	[
 		"a name or byte refusal read as unreadable",
 		CLASSIFIER,
@@ -145,6 +150,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'\t\t\tfor (const container of containers)\n\t\t\t\tif (!sameObject(container.stats, lstatSync(container.path)))\n\t\t\t\t\tthrow new ClassificationRefusal("carried container identity changed");\n',
 		"",
 	],
+	["the byte bound applied only after every read", CLASSIFIER, "\toptions.admitSize?.(stats.size);\n", ""],
 	[
 		"an unbounded observation",
 		CLASSIFIER,
