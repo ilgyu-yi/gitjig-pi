@@ -71,12 +71,14 @@ function commitParents(raw: Buffer): string[] | undefined {
 	}
 	if (lines.length === 0 || !/^tree [0-9a-f]{40}$/.test(lines[0].toString("ascii"))) return undefined;
 	const parents: string[] = [];
+	const named = new Set<string>();
 	let index = 1;
 	while (index < lines.length && lines[index].subarray(0, 7).equals(Buffer.from("parent "))) {
 		const line = lines[index];
 		if (!/^parent [0-9a-f]{40}$/.test(line.toString("ascii"))) return undefined;
 		const parent = line.subarray(7).toString("ascii");
-		if (parents.includes(parent)) return undefined;
+		if (named.has(parent)) return undefined;
+		named.add(parent);
 		parents.push(parent);
 		index += 1;
 	}
@@ -183,8 +185,9 @@ async function walkPair(
 			const parents = await parentsOf(oid);
 			if (parents === undefined) return undefined;
 			// First parent popped first, so an earlier head on the first-parent
-			// line is met before a merged-in base history is walked.
-			pending.push(...parents.toReversed());
+			// line is met before a merged-in base history is walked. A loop, not
+			// a spread: a commit may list more parents than a call's arguments.
+			for (let index = parents.length - 1; index >= 0; index -= 1) pending.push(parents[index]);
 		}
 		return "rewrite";
 	} finally {

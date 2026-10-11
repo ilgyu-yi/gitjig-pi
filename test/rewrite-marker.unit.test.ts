@@ -306,6 +306,20 @@ describe("issue #437 the walk decides each pair (§1.4)", () => {
 		}
 	});
 
+	it("withholds, never throws, when a commit lists more parents than a call takes arguments", async () => {
+		const root = repo();
+		const base = commit(root, "a", "1");
+		const tree = git(root, ["rev-parse", `${base}^{tree}`]);
+		const author = "author A <a@example.test> 0 +0000\ncommitter A <a@example.test> 0 +0000\n";
+		const parents = Array.from({ length: 130_000 }, (_, index) => `parent ${index.toString(16).padStart(40, "0")}\n`);
+		const later = git(
+			root,
+			["hash-object", "-t", "commit", "-w", "--literally", "--stdin"],
+			`tree ${tree}\n${parents.join("")}${author}\nwide\n`,
+		);
+		assert.equal(await readCorrectionInterval(root, "e".repeat(40), later), undefined);
+	});
+
 	it("withholds, never marks, when the walk's reads pass the byte cap", async () => {
 		const root = repo();
 		const base = commit(root, "a", "1");
