@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
 	chmodSync,
 	lstatSync,
@@ -351,6 +351,29 @@ describe("#365 the pin reads under replacement", () => {
 		assert.deepEqual(readPinFile(late, INSTALLED_PIN_PATH, { afterRead: swap(late) }), { kind: "unreadable" });
 	});
 
+	it("refuse, within the bound, a FIFO swapped in between lstat and open", () => {
+		// In a child under a timeout: a blocking open would hang this process.
+		const root = target();
+		const freshness = new URL("../.pi/extensions/gitjig/install/freshness.ts", import.meta.url).href;
+		const classifier = new URL("../.pi/extensions/gitjig/install/classifier.ts", import.meta.url).href;
+		const script = [
+			`import { readPinFile } from ${JSON.stringify(freshness)};`,
+			`import { observeCarried } from ${JSON.stringify(classifier)};`,
+			'import { rmSync } from "node:fs"; import { execFileSync } from "node:child_process"; import { join } from "node:path";',
+			`const root = ${JSON.stringify(root)};`,
+			'const fifo = (rel) => { rmSync(join(root, rel)); execFileSync("mkfifo", [join(root, rel)]); };',
+			'const pin = readPinFile(root, ".gitjig/installed-pin.json", { afterLstat: () => fifo(".gitjig/installed-pin.json") });',
+			'const walk = observeCarried(root, Date.now() + 2000, { afterLstat: (path) => { if (path === ".pi/prompts/p.md") fifo(path); } });',
+			"console.log(JSON.stringify([pin.kind, walk.kind]));",
+		].join("\n");
+		const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+			encoding: "utf8",
+			timeout: 10_000,
+		});
+		assert.equal(run.signal, null, "a swapped-in FIFO blocked the open");
+		assert.deepEqual(JSON.parse(run.stdout), ["unreadable", "unreadable"]);
+	});
+
 	it("read an unreadable container as unreadable", (context) => {
 		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 directory");
 		const root = target();
@@ -499,6 +522,16 @@ describe("#365 the registered renderer and command", () => {
 			state: "placement-mismatch",
 			recovery: PROVISION_COMMAND,
 		});
+	});
+
+	it("names each launcher exit by the cause and status the launcher itself defines", () => {
+		const launcher = readFileSync(new URL("../.github/bin/gitjig-bootstrap.mjs", import.meta.url), "utf8");
+		const start = launcher.indexOf("export const STATUS");
+		const block = launcher.slice(start, launcher.indexOf("});", start));
+		const status = new Map([...block.matchAll(/"([a-z-]+)": (\d+)/gu)].map(([, cause, code]) => [cause, Number(code)]));
+		const named = [...FRESHNESS_HELP.matchAll(/([a-z-]+) \(exit (\d+)\)/gu)];
+		assert.equal(named.length, 5);
+		for (const [, cause, code] of named) assert.equal(status.get(cause as string), Number(code), cause);
 	});
 
 	it("sends one content-free message per run, taking no model turn", async () => {
