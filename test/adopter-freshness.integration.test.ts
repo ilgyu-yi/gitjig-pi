@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { FRESHNESS_HELP } from "../.pi/extensions/gitjig/commands/freshness.ts";
 import { observeCarried } from "../.pi/extensions/gitjig/install/classifier.ts";
 import { composeAdopter } from "../.pi/extensions/gitjig/install/compose.ts";
 import {
@@ -174,7 +175,30 @@ async function provisioned(at: Snapshot): Promise<string> {
 	return target;
 }
 
+/** Each converge or refuse clause /freshness help states, and the arm here that pins it against the real provision run. */
+const HELP_CLAUSES: Readonly<Record<string, string>> = {
+	"exactly its committed bytes, and a handed-over file only the old pin lists is absent;":
+		"refuses a missing handed-over file and one only the old pin lists; refuses a handed-over file that differs",
+	"every carried file both pins list is exactly the old or the new":
+		"converges a behind record over exact-old bytes; refuses an edited, missing or linked carried file",
+	"one only the new pin lists is absent or exactly the new bytes": "converges a carried file only one pin lists",
+	"exactly the old bytes or absent;": "converges a carried file only one pin lists",
+	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes.":
+		"converges an absent record over absent or exact-next bytes; refuses ... under an absent record",
+	"It refuses (provision-refused) otherwise, on a malformed record, and on a changed source or class transition.":
+		"refuses a malformed record; refuses a record naming another source, or another class for a path",
+	"A carried file neither pin lists is left alone, so it keeps reporting until removed.":
+		"leaves a carried file neither pin lists alone",
+	"Removing an edited carried file both pins list, alone, still refuses.":
+		"removing an edited both-listed carried file alone still refuses",
+};
+
 describe("#365 the recovery, shape by shape, against the real provision run", () => {
+	it("is what /freshness help states, clause by clause", () => {
+		for (const [clause, arm] of Object.entries(HELP_CLAUSES))
+			assert.ok(FRESHNESS_HELP.includes(clause), `help no longer states the clause pinned by: ${arm}`);
+	});
+
 	it("converges a behind record over exact-old bytes, and an absent record over absent or exact-next bytes", async () => {
 		const behind = await provisioned(OLD);
 		commitPin(behind, NEXT);
@@ -329,18 +353,19 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		}
 	});
 
-	it("converges an absent carried file that only one pin lists, under a present record", async () => {
-		const upgrade = await provisioned(NEXT);
-		commitPin(upgrade, ADDED);
-		assert.deepEqual(freshness(upgrade), MISMATCH);
-		assert.equal(await provision(upgrade, ADDED), "verified");
-		assert.deepEqual(freshness(upgrade), CURRENT);
+	it("converges a carried file only one pin lists when absent or exact, and refuses it edited, under a present record", async () => {
+		for (const held of ["absent", "exact", "edited"] as const) {
+			const upgrade = await provisioned(NEXT);
+			commitPin(upgrade, ADDED);
+			if (held !== "absent") write(upgrade, ADDED_PATH, Buffer.from(held === "exact" ? "Added.\n" : "edited\n"));
+			assert.equal((await provision(upgrade, ADDED)) === "refused", held === "edited", `new-only ${held}`);
 
-		const retire = await provisioned(ADDED);
-		commitPin(retire, NEXT);
-		rmSync(join(retire, ADDED_PATH));
-		assert.notEqual(await provision(retire, NEXT), "refused");
-		assert.deepEqual(freshness(retire), CURRENT);
+			const retire = await provisioned(ADDED);
+			commitPin(retire, NEXT);
+			if (held === "absent") rmSync(join(retire, ADDED_PATH));
+			if (held === "edited") writeFileSync(join(retire, ADDED_PATH), "edited\n");
+			assert.equal((await provision(retire, NEXT)) === "refused", held === "edited", `old-only ${held}`);
+		}
 	});
 
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {

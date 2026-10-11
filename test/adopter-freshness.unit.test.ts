@@ -303,6 +303,16 @@ describe("#365 the classifier's carried observer", () => {
 		assert.deepEqual(observeCarried(lockedRoot, Date.now() + 2000), { kind: "unreadable" });
 	});
 
+	it("observes the prompt root even when the extension container is absent", () => {
+		const root = target({ ".pi/prompts/p.md": "prompt\n", ".pi/prompts/extra.md": "x\n" });
+		rmSync(join(root, ".pi/extensions"), { recursive: true, force: true });
+		const observation = observeCarried(root, Date.now() + 2000);
+		assert.deepEqual(observation.kind === "observed" ? observation.members.map(({ path }) => path) : observation, [
+			".pi/prompts/extra.md",
+			".pi/prompts/p.md",
+		]);
+	});
+
 	it("reads an absent .pi as an empty projection", () => {
 		const root = mkdtempSync(join(tmpdir(), "gitjig-365-empty-"));
 		roots.push(root);
@@ -388,6 +398,20 @@ describe("#365 one measurement, end to end", () => {
 		});
 	});
 
+	it("passes its own deadline to the walk", () => {
+		// A clock whose budget is already spent for the walk, while the closing
+		// check sees none: only the deadline handed to the walk can refuse.
+		const root = target();
+		const spent = Date.now() - 5000;
+		assert.deepEqual(
+			measureFreshness(root, captureCarriedProjection(root), () => spent),
+			{
+				state: "cannot-measure",
+				recovery: PROVISION_COMMAND,
+			},
+		);
+	});
+
 	it("measures against its own target only", () => {
 		const one = target();
 		const other = target({ ...CARRIED, ".pi/prompts/p.md": "elsewhere\n" });
@@ -462,6 +486,19 @@ describe("#365 the registered renderer and command", () => {
 			"other",
 		])
 			assert.equal(render(details), "[invalid gitjig freshness record]", JSON.stringify(details));
+	});
+
+	it("runs the command itself without writing anything, whatever it reports", async () => {
+		const root = target(CARRIED, pinFor(CARRIED, "b".repeat(40)));
+		const { command, sent } = registered(root);
+		const before = tree(root);
+		await command.handler("", {});
+		await command.handler("help", {});
+		assert.equal(tree(root), before, "the command wrote to the target");
+		assert.deepEqual(sent[0]?.[0].details, {
+			state: "placement-mismatch",
+			recovery: PROVISION_COMMAND,
+		});
 	});
 
 	it("sends one content-free message per run, taking no model turn", async () => {

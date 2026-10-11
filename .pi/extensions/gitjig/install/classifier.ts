@@ -257,7 +257,22 @@ export function observeCandidates(sourceRoot: string, options: ObservationOption
  * carried projection under exactly these (#365).
  */
 export const CARRIED_ROOTS = [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig", ".pi/prompts"] as const;
-const CARRIED_CONTAINERS = [".pi", ".pi/extensions"] as const;
+/** Whether every container of a carried root stands as a real directory; absent is false, anything else refuses. */
+function containersStand(root: Buffer, carried: string): boolean {
+	const parts = carried.split("/").slice(0, -1);
+	for (let index = 1; index <= parts.length; index++) {
+		let stats: Stats;
+		try {
+			stats = lstatSync(appendPath(root, Buffer.from(parts.slice(0, index).join("/"))));
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+			throw new ClassificationRefusal("carried container is unreadable");
+		}
+		if (!stats.isDirectory() || stats.isSymbolicLink())
+			throw new ClassificationRefusal("carried container is non-regular", "differs");
+	}
+	return true;
+}
 export const MAX_CARRIED_BYTES = 64 * 1024 * 1024;
 export interface CarriedMember {
 	path: string;
@@ -290,18 +305,10 @@ export function observeCarried(
 		},
 	};
 	try {
-		for (const container of CARRIED_CONTAINERS) {
-			let stats: Stats;
-			try {
-				stats = lstatSync(appendPath(root, Buffer.from(container)));
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "observed", members: [] };
-				throw new ClassificationRefusal("carried container is unreadable");
-			}
-			if (!stats.isDirectory() || stats.isSymbolicLink())
-				throw new ClassificationRefusal("carried container is non-regular", "differs");
-		}
 		for (const carried of CARRIED_ROOTS) {
+			// Each root's own containers: one root's absent container never
+			// hides another root, and a linked container is a difference.
+			if (!containersStand(root, carried)) continue;
 			const abs = appendPath(root, Buffer.from(carried));
 			let stats: Stats;
 			try {
