@@ -132,6 +132,7 @@ describe("#365 the evaluator's total precedence", () => {
 			{ kind: "differs" },
 			{ kind: "unreadable" },
 			bytes(Buffer.from("{}")),
+			bytes(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), COMMITTED])),
 		] as PinRead[])
 			assert.deepEqual(evaluate({ committedPin, installedPin: { kind: "absent" } }), {
 				state: "cannot-measure",
@@ -592,7 +593,7 @@ describe("#365 the registered renderer and command", () => {
 		const block = launcher.slice(start, launcher.indexOf("});", start));
 		const status = new Map([...block.matchAll(/"([a-z-]+)": (\d+)/gu)].map(([, cause, code]) => [cause, Number(code)]));
 		const named = [...FRESHNESS_HELP.matchAll(/([a-z-]+) \(exit (\d+)\)/gu)];
-		assert.equal(named.length, 5);
+		assert.equal(new Set(named.map(([, cause]) => cause)).size, 5, "every pre-provision or cleanup exit named");
 		for (const [, cause, code] of named) assert.equal(status.get(cause as string), Number(code), cause);
 	});
 
