@@ -20,7 +20,7 @@ type Sources = typeof SOURCES;
  * chain's own read failure: breaking to the completing walk there is
  * equivalent, because that walk rereads the same commit and fails the same
  * way (missing, malformed, capped or past the deadline), so it is pinned
- * for its line but owes no weakening (§3.12).
+ * for its line but owes no weakening (§3.12). The caller's ban on `admitDiagnosis(` is unowned too: restoring that call beside the pinned one is a new action, not a weakening (§3.12).
  *
  * Measured sweep: each of the 26 weakenings below, and the joint later-head
  * weakening, was applied to the source and run against the behavioural arms
