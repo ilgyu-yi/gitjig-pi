@@ -119,19 +119,26 @@ export function readPinFile(
 	targetRoot: string,
 	relative: string,
 	/** Test seams at the exact phases a replacement could slip in. */
-	seams: { afterLstat?: () => void; afterRead?: () => void } = {},
+	seams: { afterContainers?: () => void; afterLstat?: () => void; afterRead?: () => void } = {},
 ): PinRead {
 	const parts = relative.split("/");
 	let current = resolve(targetRoot);
+	const containers: Array<{ path: string; stats: Stats }> = [];
 	for (const part of parts.slice(0, -1)) {
 		current = join(current, part);
 		try {
 			const stats = lstatSync(current);
 			if (!stats.isDirectory() || stats.isSymbolicLink()) return { kind: "differs" };
+			containers.push({ path: current, stats });
 		} catch (error) {
 			return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "unreadable" };
 		}
 	}
+	// O_NOFOLLOW guards the last component only: a container replaced by a
+	// link after its check would be followed, so every container is checked
+	// again once the read is done.
+	const containersHeld = () => containers.every(({ path, stats }) => sameObject(stats, lstatSync(path)));
+	seams.afterContainers?.();
 	const absolute = join(current, parts.at(-1) as string);
 	let before: Stats;
 	try {
@@ -149,7 +156,7 @@ export function readPinFile(
 		if (!opened.isFile() || !sameObject(before, opened)) return { kind: "unreadable" };
 		const bytes = readFileSync(descriptor);
 		seams.afterRead?.();
-		if (!sameObject(opened, lstatSync(absolute))) return { kind: "unreadable" };
+		if (!sameObject(opened, lstatSync(absolute)) || !containersHeld()) return { kind: "unreadable" };
 		return { kind: "bytes", bytes };
 	} catch {
 		return { kind: "unreadable" };

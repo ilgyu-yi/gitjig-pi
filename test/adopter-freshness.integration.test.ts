@@ -368,6 +368,36 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		}
 	});
 
+	it("reads placement-mismatch while a provision runs, until it advances the record", async () => {
+		/** The real platform, measured at the moment it is about to advance the record. */
+		class Probe extends LocalProvisionPlatform {
+			seen: unknown;
+			override async advanceInstalledPin(pinBytes: Buffer): Promise<Buffer | null> {
+				this.seen = freshness(this.root);
+				return super.advanceInstalledPin(pinBytes);
+			}
+		}
+		const upgrade = await provisioned(OLD);
+		commitPin(upgrade, NEXT);
+		const install = adopter(NEXT);
+		for (const [label, target, record] of [
+			["upgrade", upgrade, readFileSync(join(upgrade, INSTALLED_PIN_PATH))],
+			["first install", install, null],
+		] as const) {
+			const probe = new Probe(target);
+			const result = await provisionAdopter({
+				snapshotRoot: NEXT.root,
+				targetRoot: target,
+				committedPinBytes: NEXT.pin,
+				installedPinBytes: record,
+				platform: probe,
+			});
+			assert.equal(result.outcome, "verified", label);
+			assert.deepEqual(probe.seen, MISMATCH, label);
+			assert.deepEqual(freshness(target), CURRENT, label);
+		}
+	});
+
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {
 		const target = await provisioned(NEXT);
 		const extra = ".pi/prompts/extra-local.md";
