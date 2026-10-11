@@ -184,8 +184,10 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses a missing handed-over file and one only the old pin lists; refuses a handed-over file that differs",
 	"every carried file both pins list is exactly the old or the new":
 		"converges a behind record over exact-old bytes, and over exact-new bytes; refuses an edited, missing or linked carried file",
-	"It also refuses a record it cannot read or that is not a regular file, and a carried file it cannot read.":
-		"refuses an unreadable or non-regular record through the real provision CLI, and an unreadable carried file",
+	"It also refuses a record it cannot read, a directory included, and a carried file it cannot read; it reads a":
+		"refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file",
+	"linked record through its link, and a dangling one as absent.":
+		"refuses an unreadable or directory record through the real provision CLI ... a linked or dangling record converges",
 	"one only the new pin lists is absent or exactly the new bytes": "converges a carried file only one pin lists",
 	"exactly the old bytes or absent;": "converges a carried file only one pin lists",
 	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes.":
@@ -412,7 +414,7 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		assert.deepEqual(freshness(target), CURRENT);
 	});
 
-	it("refuses an unreadable or non-regular record through the real provision CLI, and an unreadable carried file", async (context) => {
+	it("refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file", async (context) => {
 		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 file");
 		const cli = (target: string) =>
 			spawnSync(
@@ -443,6 +445,22 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		rmSync(join(directory, INSTALLED_PIN_PATH), { recursive: true });
 		fallback(directory, NEXT);
 		assert.equal(cli(directory), 0, "removing it, then the absent-record step, converges");
+
+		// A linked record is read through its link, and a dangling one as absent: both converge.
+		const linked = await provisioned(NEXT);
+		const elsewhere = join(scratch("record"), "installed-pin.json");
+		writeFileSync(elsewhere, readFileSync(join(linked, INSTALLED_PIN_PATH)));
+		rmSync(join(linked, INSTALLED_PIN_PATH));
+		symlinkSync(elsewhere, join(linked, INSTALLED_PIN_PATH));
+		assert.deepEqual(freshness(linked), MISMATCH);
+		assert.equal(cli(linked), 0, "a linked record converges");
+		assert.deepEqual(freshness(linked), CURRENT);
+		const dangling = await provisioned(NEXT);
+		rmSync(join(dangling, INSTALLED_PIN_PATH));
+		symlinkSync(join(scratch("record"), "missing.json"), join(dangling, INSTALLED_PIN_PATH));
+		assert.deepEqual(freshness(dangling), MISMATCH);
+		assert.equal(cli(dangling), 0, "a dangling record reads as absent and converges");
+		assert.deepEqual(freshness(dangling), CURRENT);
 
 		const carried = await provisioned(NEXT);
 		chmodSync(join(carried, PROMPT), 0o000);
@@ -525,7 +543,7 @@ const only = (entries: Array<Record<string, unknown>>) => {
 };
 
 describe("#365 /freshness in the target's own installed Pi", () => {
-	it("renders current, then placement-mismatch, as one content-free message each, changing nothing", async () => {
+	it("renders current, then placement-mismatch, as one content-free message each, leaving both pins' bytes unchanged", async () => {
 		const target = await provisioned(NEXT);
 		const pins = () => [GENERATED_PIN_PATH, INSTALLED_PIN_PATH].map((path) => readFileSync(join(target, path)));
 		const before = pins();
