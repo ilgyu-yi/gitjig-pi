@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { deriveRepairBasis, repairHistory, type StateSummary } from "../.pi/extensions/gitjig/review/history.ts";
-import { readCorrectionInterval } from "../.pi/extensions/gitjig/review/interval.ts";
+import {
+	type CorrectionInterval,
+	isRewriteMarker,
+	readCorrectionInterval,
+	type TreeDelta,
+} from "../.pi/extensions/gitjig/review/interval.ts";
 import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 
 const roots: string[] = [];
@@ -85,6 +90,10 @@ function state(source: ReviewRecord): StateSummary {
 		record: source,
 	};
 }
+function treeDelta(interval: CorrectionInterval | undefined): TreeDelta {
+	assert.ok(interval !== undefined && !isRewriteMarker(interval), "expected a linear pair's tree delta");
+	return interval;
+}
 afterEach(() => {
 	for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
@@ -159,7 +168,7 @@ describe("issue #238 repair-basis projection", () => {
 		);
 		assert.equal(basis.intervals.length, 1);
 		assert.deepEqual([basis.intervals[0].earlierHead, basis.intervals[0].laterHead], [a, b]);
-		assert.equal(basis.intervals[0].entries.length, 1);
+		assert.equal(treeDelta(basis.intervals[0]).entries.length, 1);
 		assert.deepEqual(
 			assembled.map(({ record }) => record.bundle),
 			rawBundlesBeforeAssembly,
@@ -229,7 +238,9 @@ describe("issue #238 repair-basis projection", () => {
 		assert.equal(basis.intervals.length, 1);
 		assert.deepEqual([basis.intervals[0].earlierHead, basis.intervals[0].laterHead], [h3, h4]);
 		assert.ok(
-			basis.intervals[0].entries.some((entry) => Buffer.from(entry.pathBase64, "base64").toString() === "method.txt"),
+			treeDelta(basis.intervals[0]).entries.some(
+				(entry) => Buffer.from(entry.pathBase64, "base64").toString() === "method.txt",
+			),
 		);
 	});
 
@@ -525,7 +536,7 @@ describe("issue #238 repair-basis projection", () => {
 		assert.equal(await deriveRepairBasis(root, [state(incompleteRefuted), state(record(b, [valid]))]), undefined);
 	});
 
-	it("withholds on repeated, missing or non-ancestor correction endpoints", async () => {
+	it("withholds on repeated or missing later endpoints and marks a non-ancestor pair (#437)", async () => {
 		const root = repo();
 		const finding: Finding = {
 			finding: "effective",
@@ -542,10 +553,8 @@ describe("issue #238 repair-basis projection", () => {
 		);
 		git(root, ["checkout", "-q", "--detach", a]);
 		const divergent = commit(root, "divergent", "other");
-		assert.equal(
-			await deriveRepairBasis(root, [state(record(b, [finding])), state(record(divergent, [finding]))]),
-			undefined,
-		);
+		const marked = await deriveRepairBasis(root, [state(record(b, [finding])), state(record(divergent, [finding]))]);
+		assert.deepEqual(marked?.intervals, [{ kind: "rewrite-marker", earlierHead: b, laterHead: divergent }]);
 	});
 });
 
@@ -565,8 +574,7 @@ describe("issue #238 canonical correction interval", () => {
 		mkdirSync(join(root, ".git", "info"), { recursive: true });
 		writeFileSync(join(root, ".git", "info", "attributes"), "* diff=hostile\n");
 		writeFileSync(join(root, ".git", "info", "grafts"), `${b} ${replacement}\n`);
-		const interval = await readCorrectionInterval(root, a, b);
-		assert.ok(interval);
+		const interval = treeDelta(await readCorrectionInterval(root, a, b));
 		const paths = interval.entries.map((entry) => Buffer.from(entry.pathBase64, "base64").toString());
 		assert.ok(paths.includes("old.bin") && paths.includes("new.bin") && paths.includes("sub"));
 		const gitlink = interval.entries.find((entry) => Buffer.from(entry.pathBase64, "base64").toString() === "sub");
@@ -575,7 +583,7 @@ describe("issue #238 canonical correction interval", () => {
 		assert.equal(added?.after?.bytesBase64, Buffer.from([2, 254, 3]).toString("base64"));
 	});
 
-	it("reads a merge endpoint as one complete tree rather than selecting a parent", async () => {
+	it("marks a pair whose later endpoint is a merge rather than selecting a parent (#437)", async () => {
 		const root = repo();
 		const base = commit(root, "base", "base");
 		const trunk = git(root, ["symbolic-ref", "--short", "HEAD"]);
@@ -585,12 +593,11 @@ describe("issue #238 canonical correction interval", () => {
 		commit(root, "right", "right");
 		git(root, ["merge", "--no-ff", "--no-gpg-sign", "-qm", "merge", "left"]);
 		const merged = git(root, ["rev-parse", "HEAD"]);
-		const interval = await readCorrectionInterval(root, base, merged);
-		assert.ok(interval);
-		assert.deepEqual(
-			interval.entries.map((entry) => Buffer.from(entry.pathBase64, "base64").toString()),
-			["left", "right"],
-		);
+		assert.deepEqual(await readCorrectionInterval(root, base, merged), {
+			kind: "rewrite-marker",
+			earlierHead: base,
+			laterHead: merged,
+		});
 	});
 
 	it("admits a successful empty endpoint delta", async () => {
@@ -601,15 +608,24 @@ describe("issue #238 canonical correction interval", () => {
 		assert.deepEqual(await readCorrectionInterval(root, a, b), { earlierHead: a, laterHead: b, entries: [] });
 	});
 
-	it("refuses duplicate heads, non-commits, and non-ancestor endpoints", async () => {
+	it("refuses duplicate heads and a non-commit later head; marks a non-commit earlier or non-ancestor pair", async () => {
 		const root = repo();
 		const base = commit(root, "base", "base");
 		const a = commit(root, "a", "a");
 		const blob = git(root, ["hash-object", "a"]);
 		assert.equal(await readCorrectionInterval(root, a, a), undefined);
-		assert.equal(await readCorrectionInterval(root, blob, a), undefined);
+		assert.equal(await readCorrectionInterval(root, a, blob), undefined);
+		assert.deepEqual(await readCorrectionInterval(root, blob, a), {
+			kind: "rewrite-marker",
+			earlierHead: blob,
+			laterHead: a,
+		});
 		git(root, ["checkout", "-qb", "other", base]);
 		const other = commit(root, "other", "x");
-		assert.equal(await readCorrectionInterval(root, a, other), undefined);
+		assert.deepEqual(await readCorrectionInterval(root, a, other), {
+			kind: "rewrite-marker",
+			earlierHead: a,
+			laterHead: other,
+		});
 	});
 });

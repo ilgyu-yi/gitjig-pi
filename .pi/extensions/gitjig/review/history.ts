@@ -50,7 +50,7 @@ import {
 	DELEGATE_RETURN_CONTRACT,
 	PI_RETURN_CONTRACT,
 } from "./briefs.ts";
-import { type CorrectionInterval, readCorrectionIntervals } from "./interval.ts";
+import { type CorrectionInterval, isRewriteMarker, readCorrectionIntervals } from "./interval.ts";
 // RESIDUAL DISCLOSURE (R-c), stated where the dependency is taken: a
 // type-only import of an absent or renamed module reds `tsc` with the
 // compiler's own message, never an authored one. The suite stays green
@@ -427,6 +427,20 @@ function utf8OrBase64(value: string): string {
 	}
 }
 
+/** True when some interval of the basis is a §1.4 rewrite marker (#437). */
+export function hasRewriteMarker(basis: RepairBasis): boolean {
+	return basis.intervals.some(isRewriteMarker);
+}
+
+/** §1.4's marker rule, stated wherever a Judge rules a taxonomy value over a basis (#437). */
+export const REWRITE_MARKER_RULE: readonly string[] = [
+	"A REWRITE MARKER is evidence for no value: it cannot support NONE, STAGNATION or OSCILLATION.",
+	"NONE needs every correction in the run, so a run containing a marker is never NONE: rule",
+	"STAGNATION or OSCILLATION only where the run's states and its measured intervals establish it,",
+	"and INDETERMINATE otherwise. A NONE ruling over this basis is refused as invalid.",
+	"",
+];
+
 /** Compose §1.4's Judge brief from the admitted repair basis only. */
 export function composeDiagnosisBrief(
 	basis: RepairBasis,
@@ -443,14 +457,19 @@ export function composeDiagnosisBrief(
 		const correction =
 			interval === undefined
 				? ["       outgoing correction interval: (terminal state intentionally unmatched)"]
-				: [
-						`       outgoing correction interval: ${interval.earlierHead} -> ${interval.laterHead}`,
-						...interval.entries.flatMap((entry) => [
-							`         path: ${utf8OrBase64(entry.pathBase64)}`,
-							`         before: ${entry.before === null ? "(absent)" : `${entry.before.mode}/${entry.before.type}/${entry.before.oid} ${entry.before.bytesBase64 === null ? "(gitlink)" : utf8OrBase64(entry.before.bytesBase64)}`}`,
-							`         after: ${entry.after === null ? "(absent)" : `${entry.after.mode}/${entry.after.type}/${entry.after.oid} ${entry.after.bytesBase64 === null ? "(gitlink)" : utf8OrBase64(entry.after.bytesBase64)}`}`,
-						]),
-					];
+				: isRewriteMarker(interval)
+					? [
+							`       outgoing correction interval: ${interval.earlierHead} -> ${interval.laterHead}`,
+							"         REWRITE MARKER: a rewrite or a merge lies between these heads; the correction is not measured",
+						]
+					: [
+							`       outgoing correction interval: ${interval.earlierHead} -> ${interval.laterHead}`,
+							...interval.entries.flatMap((entry) => [
+								`         path: ${utf8OrBase64(entry.pathBase64)}`,
+								`         before: ${entry.before === null ? "(absent)" : `${entry.before.mode}/${entry.before.type}/${entry.before.oid} ${entry.before.bytesBase64 === null ? "(gitlink)" : utf8OrBase64(entry.before.bytesBase64)}`}`,
+								`         after: ${entry.after === null ? "(absent)" : `${entry.after.mode}/${entry.after.type}/${entry.after.oid} ${entry.after.bytesBase64 === null ? "(gitlink)" : utf8OrBase64(entry.after.bytesBase64)}`}`,
+							]),
+						];
 		return [`  ${index + 1}. head ${renderedHead} resolved repair`, ...findings, ...correction];
 	});
 	return [
@@ -463,6 +482,7 @@ export function composeDiagnosisBrief(
 		"THE REPAIR BASIS (current trailing repair run, oldest first; excluded findings are not operands):",
 		...lines,
 		"",
+		...(hasRewriteMarker(basis) ? REWRITE_MARKER_RULE : []),
 		"Return TWO things and no third:",
 		"1. the taxonomy VALUE, exactly one of NONE / STAGNATION / OSCILLATION / INDETERMINATE —",
 		"   NONE: repair advanced, each attempt addressed ground the previous had not closed;",
@@ -554,6 +574,22 @@ export function admitDiagnosis(outcome: DispatchOutcome): DiagnosisAdmission {
 		};
 	}
 	return { available: true, diagnosis };
+}
+
+/**
+ * Admit a diagnosis over its basis (§1.4, #437): a NONE ruling over a basis
+ * containing a rewrite marker is refused as invalid, because a marker run can
+ * never be NONE. The refusal is the present-but-cannot-measure limb.
+ */
+export function admitBasisDiagnosis(basis: RepairBasis, outcome: DispatchOutcome): DiagnosisAdmission {
+	const admitted = admitDiagnosis(outcome);
+	if (admitted.available && admitted.diagnosis.value === "NONE" && hasRewriteMarker(basis))
+		return {
+			available: false,
+			disposition: "hand-off",
+			reason: "the diagnosis ruled NONE over a basis containing a rewrite marker — a marker run is never NONE (§1.4)",
+		};
+	return admitted;
 }
 
 /**

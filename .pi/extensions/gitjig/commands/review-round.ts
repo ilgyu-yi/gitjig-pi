@@ -28,7 +28,7 @@ import {
 	recordsFromAttestedComments,
 } from "../review/comments.ts";
 import {
-	admitDiagnosis,
+	admitBasisDiagnosis,
 	type Consequence,
 	composeDiagnosisBrief,
 	type DiagnosisInput,
@@ -533,7 +533,8 @@ export async function driveReviewRound(
 					cause: HANDOFF_DIAGNOSIS,
 					reentry: "none",
 				});
-			const admitted = admitDiagnosis(
+			const admitted = admitBasisDiagnosis(
+				basis,
 				await dispatch(
 					composeDiagnosisBrief(basis, {
 						changeDescription: spec.changeDescription,

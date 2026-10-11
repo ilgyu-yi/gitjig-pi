@@ -1,5 +1,5 @@
 /** Warning-surface roster: EXEMPT — this module emits no operator-facing warning text. */
-import type { DiagnosisInput, RepairBasis } from "../review/history.ts";
+import { type DiagnosisInput, hasRewriteMarker, REWRITE_MARKER_RULE, type RepairBasis } from "../review/history.ts";
 import {
 	type Challenger,
 	canonicalJson,
@@ -38,12 +38,13 @@ export function piRecoveryBrief(semantic: RecoverySemanticBrief): RecoverySemant
 	);
 }
 
-function brief(role: string, input: unknown, output: string): RecoverySemanticBrief {
+function brief(role: string, input: unknown, output: string, rule: readonly string[] = []): RecoverySemanticBrief {
 	return [
 		`Role: ${role}. This is independent recovery evidence, not author repair or authorization.`,
 		READ_ONLY,
 		RETURN,
 		`Input JSON: ${canonicalJson(input)}`,
+		...(rule.length === 0 ? [] : [rule.join("\n").trimEnd()]),
 		`The decoded payload must be exact JSON of shape ${output}. No extra keys.`,
 	].join("\n\n");
 }
@@ -94,5 +95,6 @@ export function freshDiagnosisBrief(
 		"fresh history Judge; the measurement result is new evidence and the original diagnosis is classification context only",
 		{ original, basis: { states: basis.states, intervals: basis.intervals }, spec, result },
 		'{"value":"NONE|STAGNATION|OSCILLATION|INDETERMINATE","invalidation":"nothing|plan|authorization","evidence":"string"}',
+		hasRewriteMarker(basis) ? REWRITE_MARKER_RULE : [],
 	);
 }
