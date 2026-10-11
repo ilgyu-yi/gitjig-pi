@@ -118,8 +118,8 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"one root's absent container hides the others",
 		CLASSIFIER,
-		"if (!containersStand(root, carried)) continue;",
-		'if (!containersStand(root, carried)) return { kind: "observed", members: [] };',
+		"if (containers === undefined) continue;",
+		'if (containers === undefined) return { kind: "observed", members: [] };',
 	],
 	[
 		"a blocking pin open",
@@ -132,6 +132,18 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		CLASSIFIER,
 		"descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
 		"descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW);",
+	],
+	[
+		"a pin container replaced by a link is followed",
+		FRESHNESS,
+		'if (!sameObject(opened, lstatSync(absolute)) || !containersHeld()) return { kind: "unreadable" };',
+		'if (!sameObject(opened, lstatSync(absolute))) return { kind: "unreadable" };',
+	],
+	[
+		"a carried container replaced by a link is followed",
+		CLASSIFIER,
+		'\t\t\tfor (const container of containers)\n\t\t\t\tif (!sameObject(container.stats, lstatSync(container.path)))\n\t\t\t\t\tthrow new ClassificationRefusal("carried container identity changed");\n',
+		"",
 	],
 	[
 		"an unbounded observation",
