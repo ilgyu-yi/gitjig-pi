@@ -186,6 +186,10 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"converges a behind record over exact-old bytes, and over exact-new bytes; refuses an edited, missing or linked carried file",
 	"It also refuses a record it cannot read, a directory included, and a carried file it cannot read; it reads a":
 		"refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file",
+	"It refuses as well when .gitjig, .pi, .pi/extensions or .pi/prompts is a link.":
+		"refuses a linked state root or carried container; a real directory converges",
+	"make an unreadable record or carried file readable, or else remove the record and the unreadable file and":
+		"removing only the record leaves an unreadable carried file or a behind unreadable record refusing",
 	"linked record through its link, and a dangling one as absent.":
 		"refuses an unreadable or directory record through the real provision CLI ... a linked or dangling record converges",
 	"one only the new pin lists is absent or exactly the new bytes": "converges a carried file only one pin lists",
@@ -469,6 +473,51 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		chmodSync(join(carried, PROMPT), 0o600);
 		assert.notEqual(await provision(carried, NEXT), "refused");
 		assert.deepEqual(freshness(carried), CURRENT);
+	});
+
+	it("removing only the record leaves an unreadable carried file or a behind unreadable record refusing", async (context) => {
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 file");
+		const carried = await provisioned(NEXT);
+		chmodSync(join(carried, PROMPT), 0o000);
+		rmSync(join(carried, INSTALLED_PIN_PATH));
+		assert.equal(await provision(carried, NEXT), "refused", "the record alone");
+		rmSync(join(carried, PROMPT));
+		fallback(carried, NEXT);
+		assert.notEqual(await provision(carried, NEXT), "refused", "the unreadable file too, then the absent-record step");
+		assert.deepEqual(freshness(carried), CURRENT);
+
+		const behind = await provisioned(OLD);
+		commitPin(behind, NEXT);
+		chmodSync(join(behind, INSTALLED_PIN_PATH), 0o000);
+		assert.equal(await provision(behind, NEXT), "refused", "an unreadable record");
+		rmSync(join(behind, INSTALLED_PIN_PATH));
+		assert.equal(await provision(behind, NEXT), "refused", "the behind record alone, over older bytes");
+		fallback(behind, NEXT);
+		assert.notEqual(await provision(behind, NEXT), "refused", "the absent-record step");
+		assert.deepEqual(freshness(behind), CURRENT);
+	});
+
+	it("refuses a linked state root or carried container; a real directory converges", async () => {
+		// A linked .pi also hides the committed pin, which is then not read at all.
+		const UNMEASURED = { state: "cannot-measure", recovery: PROVISION_COMMAND };
+		for (const [container, reads] of [
+			[".gitjig", MISMATCH],
+			[".pi", UNMEASURED],
+			[".pi/extensions", MISMATCH],
+			[".pi/prompts", MISMATCH],
+		] as const) {
+			const target = await provisioned(NEXT);
+			const away = join(scratch("container"), "held");
+			cpSync(join(target, container), away, { recursive: true });
+			rmSync(join(target, container), { recursive: true });
+			symlinkSync(away, join(target, container));
+			assert.deepEqual(freshness(target), reads, container);
+			assert.equal(await provision(target, NEXT), "refused", container);
+			rmSync(join(target, container));
+			cpSync(away, join(target, container), { recursive: true });
+			assert.notEqual(await provision(target, NEXT), "refused", container);
+			assert.deepEqual(freshness(target), CURRENT, container);
+		}
 	});
 
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {

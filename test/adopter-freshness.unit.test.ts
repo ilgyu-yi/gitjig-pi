@@ -484,6 +484,19 @@ describe("#365 one measurement, end to end", () => {
 		);
 	});
 
+	it("reads a committed pin that is a link as cannot-measure, never through the link", () => {
+		const root = target();
+		const elsewhere = join(mkdtempSync(join(tmpdir(), "gitjig-365-pin-")), "pin.json");
+		roots.push(dirname(elsewhere));
+		writeFileSync(elsewhere, COMMITTED);
+		rmSync(join(root, GENERATED_PIN_PATH));
+		symlinkSync(elsewhere, join(root, GENERATED_PIN_PATH));
+		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root)), {
+			state: "cannot-measure",
+			recovery: PROVISION_COMMAND,
+		});
+	});
+
 	it("measures against its own target only", () => {
 		const one = target();
 		const other = target({ ...CARRIED, ".pi/prompts/p.md": "elsewhere\n" });

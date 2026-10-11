@@ -93,7 +93,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"a name or byte refusal read as unreadable",
 		CLASSIFIER,
-		'if (error instanceof ClassificationRefusal) throw new ClassificationRefusal(error.message, "differs");',
+		'if (error instanceof ClassificationRefusal) throw Object.assign(error, { shape: "differs" as const });',
 		"if (error instanceof ClassificationRefusal) throw error;",
 	],
 	[
@@ -151,6 +151,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"",
 	],
 	["the byte bound applied only after every read", CLASSIFIER, "\toptions.admitSize?.(stats.size);\n", ""],
+	[
+		"the committed pin read through a link",
+		FRESHNESS,
+		"\tconst committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);\n",
+		'\tconst committedPin: PinRead = { kind: "bytes", bytes: process.getBuiltinModule("node:fs").readFileSync(join(targetRoot, GENERATED_PIN_PATH)) };\n',
+	],
 	[
 		"an unbounded observation",
 		CLASSIFIER,
