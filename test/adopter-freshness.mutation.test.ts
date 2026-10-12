@@ -69,7 +69,7 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"extras omitted by the observer: only manifest roots' entry file read",
 		CLASSIFIER,
 		"else if (stats.isDirectory() && !stats.isSymbolicLink()) walk(abs, Buffer.from(carried), found, stats, bounded);",
-		"else if (stats.isDirectory() && !stats.isSymbolicLink()) continue;",
+		"else if (stats.isDirectory() && !stats.isSymbolicLink()) return;",
 	],
 	[
 		"source omission: a record naming another source agrees",
@@ -129,8 +129,8 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"one root's absent container hides the others",
 		CLASSIFIER,
-		"if (containers === undefined) continue;",
-		'if (containers === undefined) return { kind: "observed", members: [] };',
+		"if (containers === undefined) return;",
+		'if (containers === undefined) throw new Error("one absent container ends the walk");',
 	],
 	[
 		"a blocking pin open",
@@ -153,10 +153,16 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"a carried container replaced by a link is followed",
 		CLASSIFIER,
-		'\t\t\tfor (const container of containers)\n\t\t\t\tif (!sameObject(container.stats, lstatSync(container.path)))\n\t\t\t\t\tthrow new ClassificationRefusal("carried container identity changed");\n',
+		'\t\t\t\tfor (const container of containers)\n\t\t\t\t\tif (!sameObject(container.stats, lstatSync(container.path)))\n\t\t\t\t\t\tthrow new ClassificationRefusal("carried container identity changed");\n',
 		"",
 	],
 	["the byte bound applied only after every read", CLASSIFIER, "\toptions.admitSize?.(stats.size);\n", ""],
+	[
+		"the first difference ends the walk, so path order decides",
+		CLASSIFIER,
+		"\t\tonDiffers: () => {\n\t\t\tdiffers = true;\n\t\t},\n",
+		"",
+	],
 	[
 		"the committed pin read through a link",
 		FRESHNESS,

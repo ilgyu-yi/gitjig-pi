@@ -165,7 +165,8 @@ const CURRENT = { state: "current", recovery: null };
 /**
  * The one step /freshness help states, done literally: the handed-over files
  * made the new pin's bytes (a linked directory replaced by a real one) and
- * old-only ones removed; a linked .gitjig removed whole, and the record; then,
+ * old-only ones removed; a linked .pi/extensions replaced by a real directory;
+ * a linked .gitjig removed whole, and the record; then,
  * under the carried roots, every link, every entry that cannot be read (made
  * readable to empty it), and every file that is not a listed file holding
  * exactly its new bytes, removed.
@@ -191,6 +192,11 @@ function fallback(target: string, at: Snapshot, retired: readonly string[] = [])
 		write(target, path, bytes);
 	}
 	for (const path of retired) rmSync(join(target, path), { force: true });
+	if (lstat(join(target, ".pi/extensions"))?.isSymbolicLink()) {
+		const real = realpathSync(join(target, ".pi/extensions"));
+		rmSync(join(target, ".pi/extensions"));
+		cpSync(real, join(target, ".pi/extensions"), { recursive: true });
+	}
 	if (lstat(join(target, ".gitjig"))?.isSymbolicLink()) rmSync(join(target, ".gitjig"));
 	rmSync(join(target, INSTALLED_PIN_PATH), { force: true, recursive: true });
 	const clean = (relative: string) => {
@@ -229,8 +235,10 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 	"exactly the old bytes or absent;": "converges a carried file only one pin lists",
 	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes;":
 		"converges ... an absent record over absent or exact-next bytes; refuses ... under an absent record",
-	"- and every entry it reads can be read and none on its path is a link.":
+	"- and every entry it reads can be read and none on its path is a link (the record excepted: it is read":
 		"refuses an unreadable or directory record; refuses a linked state root or carried container; refuses a linked handed-over directory",
+	"  through a link, and a dangling one reads as absent).":
+		"refuses an unreadable or directory record through the real provision CLI ... a linked or dangling record converges",
 	"Otherwise it refuses, or leaves the clone as it is: a carried file neither pin lists is left alone.":
 		"leaves a carried file neither pin lists alone; an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
 	"To converge from any such state: make each handed-over file the bytes the new pin lists (revert a committed":
@@ -699,6 +707,7 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 			],
 			["oversized extra", (t) => writeFileSync(join(t, ".pi/prompts/huge.md"), Buffer.alloc(65 * 1024 * 1024, 0x61))],
 			["linked .gitjig", (t) => link(t, ".gitjig")],
+			["linked .pi/extensions", (t) => link(t, ".pi/extensions")],
 			[
 				"committed handed-over edit",
 				(t) => {

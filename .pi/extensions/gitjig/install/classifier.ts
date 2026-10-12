@@ -28,6 +28,12 @@ export interface ObservationOptions {
 	afterDirectoryRead?: (path: string) => void;
 	/** Admits a regular file's lstat size before it is read; may refuse. */
 	admitSize?: (size: number) => void;
+	/**
+	 * When set, an entry refused as a difference is recorded here and skipped
+	 * rather than thrown, so the walk completes and any unreadable entry still
+	 * decides, whatever the path order.
+	 */
+	onDiffers?: () => void;
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -204,16 +210,22 @@ function walk(
 		} catch {
 			throw new ClassificationRefusal("candidate is unreadable");
 		}
-		const path = asDifference(() => decodeCandidatePath(childRel));
-		options.afterLstat?.(path);
-		if (stats.isDirectory()) {
-			walk(childAbs, childRel, out, stats, options);
-			continue;
+		try {
+			const path = asDifference(() => decodeCandidatePath(childRel));
+			options.afterLstat?.(path);
+			if (stats.isDirectory()) {
+				walk(childAbs, childRel, out, stats, options);
+				continue;
+			}
+			const bytes = readRegular(childAbs, stats, path, options);
+			const disposition = asDifference(() => classifyCandidate(path, bytes));
+			if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition", "differs");
+			out.push({ path, disposition, bytes });
+		} catch (error) {
+			if (options.onDiffers === undefined || !(error instanceof ClassificationRefusal) || error.shape !== "differs")
+				throw error;
+			options.onDiffers();
 		}
-		const bytes = readRegular(childAbs, stats, path, options);
-		const disposition = asDifference(() => classifyCandidate(path, bytes));
-		if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition", "differs");
-		out.push({ path, disposition, bytes });
 	}
 	options.afterDirectoryRead?.(decodeCandidatePath(relative));
 	let after: Stats;
@@ -309,6 +321,7 @@ export function observeCarried(
 	const root = Buffer.from(resolve(targetRoot));
 	const found: ObservedCandidate[] = [];
 	let admitted = 0;
+	let differs = false;
 	const bounded: ObservationOptions = {
 		...options,
 		// The byte bound applies before each read, so no member is read, or
@@ -322,37 +335,53 @@ export function observeCarried(
 			if (Date.now() > deadline) throw new ClassificationRefusal("carried observation is past its bound");
 			options.afterLstat?.(path);
 		},
+		onDiffers: () => {
+			differs = true;
+		},
+	};
+	// Each difference is recorded and the walk goes on, so an unreadable entry
+	// anywhere decides first (cannot-measure ranks above placement-mismatch).
+	const asRecorded = (read: () => void) => {
+		try {
+			read();
+		} catch (error) {
+			if (!(error instanceof ClassificationRefusal) || error.shape !== "differs") throw error;
+			differs = true;
+		}
 	};
 	try {
 		for (const carried of options.roots ?? CARRIED_ROOTS) {
-			// Each root's own containers: one root's absent container never
-			// hides another root, and a linked container is a difference.
-			const containers = standingContainers(root, carried);
-			if (containers === undefined) continue;
-			const abs = appendPath(root, Buffer.from(carried));
-			let stats: Stats;
-			try {
-				stats = lstatSync(abs);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-				throw new ClassificationRefusal("carried root is unreadable");
-			}
-			bounded.afterLstat?.(carried);
-			if (carried.endsWith(".ts"))
-				found.push({ path: carried, disposition: "carried", bytes: readRegular(abs, stats, carried, bounded) });
-			else if (stats.isDirectory() && !stats.isSymbolicLink()) walk(abs, Buffer.from(carried), found, stats, bounded);
-			else throw new ClassificationRefusal("carried root is non-regular", "differs");
-			// The reads resolved through these containers; one replaced by a
-			// link meanwhile would have been followed, so each is checked again.
-			for (const container of containers)
-				if (!sameObject(container.stats, lstatSync(container.path)))
-					throw new ClassificationRefusal("carried container identity changed");
+			asRecorded(() => {
+				// Each root's own containers: one root's absent container never
+				// hides another root, and a linked container is a difference.
+				const containers = standingContainers(root, carried);
+				if (containers === undefined) return;
+				const abs = appendPath(root, Buffer.from(carried));
+				let stats: Stats;
+				try {
+					stats = lstatSync(abs);
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+					throw new ClassificationRefusal("carried root is unreadable");
+				}
+				bounded.afterLstat?.(carried);
+				if (carried.endsWith(".ts"))
+					found.push({ path: carried, disposition: "carried", bytes: readRegular(abs, stats, carried, bounded) });
+				else if (stats.isDirectory() && !stats.isSymbolicLink()) walk(abs, Buffer.from(carried), found, stats, bounded);
+				else throw new ClassificationRefusal("carried root is non-regular", "differs");
+				// The reads resolved through these containers; one replaced by a
+				// link meanwhile would have been followed, so each is checked again.
+				for (const container of containers)
+					if (!sameObject(container.stats, lstatSync(container.path)))
+						throw new ClassificationRefusal("carried container identity changed");
+			});
 		}
 	} catch (error) {
 		return { kind: error instanceof ClassificationRefusal ? error.shape : "unreadable" };
 	}
 	if (found.reduce((total, member) => total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES))
 		return { kind: "unreadable" };
+	if (differs) return { kind: "differs" };
 	return {
 		kind: "observed",
 		members: found

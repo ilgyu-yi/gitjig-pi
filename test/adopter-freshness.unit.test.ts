@@ -262,6 +262,20 @@ describe("#365 the classifier's carried observer", () => {
 		assert.notEqual(observation.kind, "observed", "a linked container was followed");
 	});
 
+	it("reads an unreadable entry before any difference, whatever the path order", (context) => {
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 file");
+		for (const [link, locked] of [
+			["a-link.md", "b-locked.md"],
+			["b-link.md", "a-locked.md"],
+		]) {
+			const root = target();
+			symlinkSync(join(root, ".pi/prompts/p.md"), join(root, `.pi/prompts/${link}`));
+			writeFileSync(join(root, `.pi/prompts/${locked}`), "x\n");
+			chmodSync(join(root, `.pi/prompts/${locked}`), 0o000);
+			assert.deepEqual(observeCarried(root, Date.now() + 2000), { kind: "unreadable" }, `${link} then ${locked}`);
+		}
+	});
+
 	it("reads a replaced, unreadable or late observation as unreadable", () => {
 		const replaced = target();
 		const swapped = observeCarried(replaced, Date.now() + 2000, {
@@ -308,6 +322,19 @@ describe("#365 the classifier's carried observer", () => {
 			},
 		});
 		assert.deepEqual(grown, { kind: "unreadable" });
+	});
+
+	it("never reads a member past the byte bound", () => {
+		const root = target();
+		writeFileSync(join(root, ".pi/prompts/zz-big.md"), "x".repeat(100));
+		const total = Object.values(CARRIED).reduce((sum, text) => sum + Buffer.byteLength(text), 0);
+		const read: string[] = [];
+		const observation = observeCarried(root, Date.now() + 2000, {
+			maxBytes: total,
+			afterRead: (path) => read.push(path),
+		});
+		assert.deepEqual(observation, { kind: "unreadable" });
+		assert.ok(!read.includes(".pi/prompts/zz-big.md"), "a member past the bound was read");
 	});
 
 	it("reads a projection past the byte bound as unreadable", () => {
