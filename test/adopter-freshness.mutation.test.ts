@@ -206,6 +206,13 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"\t\tinstalled.revision !== committed.revision\n",
 	],
 	["the committed-pin read is unbounded", FRESHNESS, "\t\ttimeout: timeoutMs,\n", ""],
+	[
+		"the committed-pin read inherits the caller's environment",
+		FRESHNESS,
+		"\t\t\tenv: {\n\t\t\t\tPATH:",
+		"\t\t\tenv: {\n\t\t\t\t...process.env,\n\t\t\t\tPATH:",
+	],
+	["the committed pin read from the index", FRESHNESS, "`HEAD:${GENERATED_PIN_PATH}`", "`:${GENERATED_PIN_PATH}`"],
 	["the committed-pin read follows replace refs", FRESHNESS, '\t\t\tGIT_NO_REPLACE_OBJECTS: "1",\n', ""],
 	[
 		"the committed-pin read may fetch lazily",
