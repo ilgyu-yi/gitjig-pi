@@ -180,7 +180,7 @@ async function provisioned(at: Snapshot): Promise<string> {
 
 /** Each converge or refuse clause /freshness help states, and a description of the arm or arms here that pin it against the real provision run; the check below reads only the clause, never the arm. */
 const HELP_CLAUSES: Readonly<Record<string, string>> = {
-	"exactly its committed bytes, and a handed-over file only the old pin lists is absent;":
+	"exactly the bytes the new pin lists, and a handed-over file only the old pin lists is absent;":
 		"refuses a missing handed-over file and one only the old pin lists; refuses a handed-over file that differs",
 	"every carried file both pins list is exactly the old or the new":
 		"converges a behind record over exact-old bytes, and over exact-new bytes; refuses an edited, missing or linked carried file",
@@ -199,6 +199,8 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 	"linked record through its link, and a dangling one as absent.":
 		"refuses an unreadable or directory record through the real provision CLI ... a linked or dangling record converges",
 	"one only the new pin lists is absent or exactly the new bytes": "converges a carried file only one pin lists",
+	"it was committed, which must be reverted), and remove one only the old pin lists; remove a":
+		"a committed handed-over edit refuses until reverted; restoring from HEAD does not",
 	"exactly the old bytes or absent;": "converges a carried file only one pin lists",
 	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes.":
 		"converges an absent record over absent or exact-next bytes; refuses ... under an absent record",
@@ -292,6 +294,19 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		write(target, PROMPT, NEXT.carried.get(PROMPT) as Buffer);
 		assert.notEqual(await provision(target, NEXT), "refused");
 		assert.deepEqual(freshness(target), CURRENT);
+	});
+
+	it("a committed handed-over edit refuses until reverted; restoring from HEAD does not", async () => {
+		const target = await provisioned(NEXT);
+		const handed = [...NEXT.handed.keys()].find((path) => path.endsWith(".md") || path.endsWith(".yml")) as string;
+		writeFileSync(join(target, handed), "committed edit\n");
+		git(target, ["commit", "-qam", "chore: edit a handed-over file"]);
+		assert.equal(await provision(target, NEXT), "refused");
+		git(target, ["checkout", "--", handed]);
+		assert.equal(await provision(target, NEXT), "refused", "restoring from HEAD keeps the committed edit");
+		write(target, handed, NEXT.handed.get(handed) as Buffer);
+		git(target, ["commit", "-qam", "chore: revert the handed-over edit"]);
+		assert.notEqual(await provision(target, NEXT), "refused");
 	});
 
 	it("refuses a missing handed-over file and one only the old pin lists; restoring or removing it converges", async () => {
