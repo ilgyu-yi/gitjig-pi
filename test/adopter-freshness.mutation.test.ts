@@ -193,6 +193,13 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'const session = typeof cwd === "string" ? sessionClone(cwd) : undefined;',
 		"const session = undefined;",
 	],
+	[
+		"a record differing only in a handed-over file agrees",
+		FRESHNESS,
+		"\t\tinstalled.revision !== committed.revision ||\n\t\tinstalled.payloadDigest !== committed.payloadDigest\n",
+		"\t\tinstalled.revision !== committed.revision\n",
+	],
+	["the committed-pin read is unbounded", FRESHNESS, "\t\ttimeout: timeoutMs,\n", ""],
 	["the committed-pin read follows replace refs", FRESHNESS, '\t\t\tGIT_NO_REPLACE_OBJECTS: "1",\n', ""],
 	[
 		"the committed-pin read may fetch lazily",

@@ -162,6 +162,24 @@ describe("#365 the evaluator's total precedence", () => {
 			bytes(Buffer.from("not a pin")),
 			bytes(pinFor(CARRIED, "b".repeat(40))),
 			bytes(pinFor({ ...CARRIED, ".pi/prompts/p.md": "older\n" })),
+			bytes(
+				Buffer.from(
+					encodePin(
+						buildPin(source, "a".repeat(40), [
+							...Object.entries(CARRIED).map(([path, text]) => ({
+								path,
+								class: "carried" as const,
+								bytes: Buffer.from(text),
+							})),
+							{
+								path: ".github/workflows/x.yml",
+								class: "handed-over" as const,
+								bytes: Buffer.from("on: pull_request\n"),
+							},
+						]),
+					),
+				),
+			),
 			bytes(Buffer.from(COMMITTED.toString().replace('"owner":"o"', '"owner":"p"'))),
 		] as PinRead[])
 			assert.deepEqual(evaluate({ installedPin, projection: { kind: "unreadable" } }), {
@@ -587,6 +605,27 @@ describe("#365 one measurement, end to end", () => {
 				recovery: PROVISION_COMMAND,
 			},
 		);
+	});
+
+	it("bounds the HEAD read: a git that never answers reads unreadable within the budget", () => {
+		const root = target();
+		const bin = mkdtempSync(join(tmpdir(), "gitjig-365-bin-"));
+		roots.push(bin);
+		writeFileSync(join(bin, "git"), "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
+		const freshness = new URL("../.pi/extensions/gitjig/install/freshness.ts", import.meta.url).href;
+		const script = [
+			`import { readCommittedPin } from ${JSON.stringify(freshness)};`,
+			"const started = Date.now();",
+			`const read = readCommittedPin(${JSON.stringify(root)}, 300);`,
+			"console.log(JSON.stringify([read.kind, Date.now() - started < 5000]));",
+		].join("\n");
+		const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+			encoding: "utf8",
+			timeout: 10_000,
+			env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+		});
+		assert.equal(run.signal, null, "the HEAD read was not bounded");
+		assert.deepEqual(JSON.parse(run.stdout), ["unreadable", true]);
 	});
 
 	it("reads HEAD's own pin blob, never one a replace ref substitutes", () => {
