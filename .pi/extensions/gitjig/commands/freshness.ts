@@ -49,7 +49,8 @@ export const FRESHNESS_HELP = [
 	"(replace a linked .pi/extensions with one holding its files; remove anything else in either place whole);",
 	"remove .gitjig/installed-pin.json; then, under .pi/extensions/gitjig.ts, .pi/extensions/gitjig and",
 	".pi/prompts, keep only the files the new pin lists holding exactly their new bytes, and the directories that",
-	"hold them, and remove everything else (make an unreadable entry readable to remove it). Then run it. The",
+	"hold them, making each readable, and remove everything else (make an unreadable entry readable to remove",
+	"it). Then run it. The",
 	"provision run has further preconditions of its own (SPEC 4.6: its exclude file, the hooks binding), outside",
 	"what /freshness measures.",
 	"",
@@ -63,7 +64,9 @@ export const FRESHNESS_HELP = [
 	"first loaded it.",
 	`cannot-measure: run ${PROVISION_COMMAND}, or ${RELOAD_COMMAND} when only the load-time capture is missing. When`,
 	"a carried entry cannot be read, or the carried files pass 64 MiB, take the step above first: provision leaves",
-	"an entry neither pin lists alone, and the measurement would stay cannot-measure.",
+	"an entry neither pin lists alone, and the measurement would stay cannot-measure. A measurement whose reads",
+	"pass the 2-second budget also reads cannot-measure, which provision cannot change: run /freshness again",
+	"when the clone is idle.",
 ].join("\n");
 
 /** One content-free line: the state and its recovery token, never a path, operand or error. */

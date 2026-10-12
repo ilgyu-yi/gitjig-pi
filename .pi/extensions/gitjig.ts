@@ -53,7 +53,7 @@ export default function gitjig(pi: ExtensionAPI) {
 	registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface, modes);
 
 	// Installed-asset freshness (§4.5), on demand only (§5.9's measuring
-	// stage): the carried projection is captured here, as the extension
+	// stage): the extension code (not the prompts) is captured here, as the extension
 	// loads, so `/freshness` can tell a session behind already-correct bytes.
 	registerFreshnessCommand(pi, repoRoot, captureCarriedProjection(repoRoot));
 
