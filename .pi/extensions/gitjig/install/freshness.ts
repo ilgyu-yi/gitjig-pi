@@ -174,45 +174,45 @@ export function readPinFile(
 }
 
 /**
- * What a session runs comes from two loads. The extension code is imported
- * once per module instance: Pi's /new, /resume and fork re-run the factory
- * over the cached module, which still runs the code it first loaded, so that
- * part of the capture is kept for the module instance. The prompts are read
- * again for every session, so that part is observed again on every factory
- * run. A fresh module instance captures both anew.
+ * The extension code is imported once per module instance: Pi's /new,
+ * /resume and fork re-run the factory over the cached module, which still
+ * runs the code it first loaded, so the capture is kept for the module
+ * instance, and a fresh module instance captures anew. Only that code is
+ * captured. RESIDUAL, stated: Pi reads prompt templates after the extension
+ * factories and may read them again later, at a moment no capture here can
+ * meet, so prompts take no part in session-stale; a prompt edited and
+ * restored while a session runs is not seen.
  */
 const CODE_ROOTS = [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig"] as const;
-const PROMPT_ROOTS = [".pi/prompts"] as const;
+const PROMPT_PREFIX = ".pi/prompts/";
 const codeCaptures = new Map<string, CarriedObservation>();
 
-function joined(left: CarriedObservation, right: CarriedObservation): CarriedObservation {
-	if (left.kind === "unreadable" || right.kind === "unreadable") return { kind: "unreadable" };
-	if (left.kind === "differs" || right.kind === "differs") return { kind: "differs" };
-	return {
-		kind: "observed",
-		members: [...left.members, ...right.members].sort((a, b) =>
-			Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)),
-		),
-	};
-}
-
 /**
- * Capture the carried projection this session runs, at a factory run: the
- * extension code as this module instance first loaded it, and the prompts as
- * this session loads them. RESIDUAL, stated: the code part observes the files
- * on disk at that first load, not the bytes the extension's static imports
- * already evaluated, so a carried file corrected between those imports and
- * this capture is invisible to `session-stale`.
+ * Capture the extension code this process runs, at its first factory run.
+ * RESIDUAL, stated: this observes the files on disk at that load, not the
+ * bytes the extension's static imports already evaluated, so a carried file
+ * corrected between those imports and this capture is invisible to
+ * `session-stale`.
  */
 export function captureCarriedProjection(targetRoot: string): CarriedObservation {
 	const root = resolve(targetRoot);
-	const deadline = Date.now() + READ_BOUND_MS;
-	let code = codeCaptures.get(root);
-	if (code === undefined) {
-		code = observeCarried(root, deadline, { roots: CODE_ROOTS });
-		codeCaptures.set(root, code);
-	}
-	return Object.freeze(joined(code, observeCarried(root, deadline, { roots: PROMPT_ROOTS })));
+	const held = codeCaptures.get(root);
+	if (held !== undefined) return held;
+	const capture = Object.freeze(observeCarried(root, Date.now() + READ_BOUND_MS, { roots: CODE_ROOTS }));
+	codeCaptures.set(root, capture);
+	return capture;
+}
+
+/** The capture completed with the projection's own prompts, which take no part in session-stale. */
+function withCurrentPrompts(capture: CarriedObservation, projection: CarriedObservation): CarriedObservation {
+	if (capture.kind !== "observed" || projection.kind !== "observed") return capture;
+	return {
+		kind: "observed",
+		members: [
+			...capture.members.filter(({ path }) => !path.startsWith(PROMPT_PREFIX)),
+			...projection.members.filter(({ path }) => path.startsWith(PROMPT_PREFIX)),
+		].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path))),
+	};
 }
 
 /**
@@ -252,5 +252,10 @@ export function measureFreshness(
 	if (session !== undefined && realpathOrSelf(session) !== realpathOrSelf(targetRoot)) projection = { kind: "differs" };
 	// The pin reads and the walk share one budget; past it the projection is unobservable.
 	if (clock() > deadline) projection = { kind: "unreadable" };
-	return evaluateFreshness({ committedPin, installedPin, projection, capture });
+	return evaluateFreshness({
+		committedPin,
+		installedPin,
+		projection,
+		capture: capture === undefined ? undefined : withCurrentPrompts(capture, projection),
+	});
 }

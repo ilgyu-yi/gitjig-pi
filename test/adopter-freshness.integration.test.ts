@@ -648,14 +648,16 @@ describe("#365 /freshness in the target's own installed Pi", () => {
 		assert.ok(!String(mismatch.content).includes(target), "the message names no path");
 	});
 
-	it("renders session-stale when the files were corrected after this session loaded", async () => {
+	it("renders session-stale when the extension's files were corrected after this process loaded", async () => {
+		// A carried file the extension reads only when used, so a damaged copy loads.
+		const PROFILES = ".pi/extensions/gitjig/recovery/profiles.json";
 		const target = await provisioned(NEXT);
-		writeFileSync(join(target, PROMPT), "edited before load\n");
-		const restore = `cp ${JSON.stringify(join(NEXT.root, PROMPT))} ${JSON.stringify(join(target, PROMPT))}`;
+		writeFileSync(join(target, PROFILES), "edited before load\n");
+		const restore = `cp ${JSON.stringify(join(NEXT.root, PROFILES))} ${JSON.stringify(join(target, PROFILES))}`;
 		const stale = only(
 			runTargetPi(
 				target,
-				["restore the prompt", "/freshness"],
+				["restore the file", "/freshness"],
 				[
 					{ kind: "toolCall", name: "bash", arguments: { command: restore } },
 					{ kind: "text", text: "restored" },

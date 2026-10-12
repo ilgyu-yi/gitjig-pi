@@ -443,31 +443,43 @@ describe("#365 one measurement, end to end", () => {
 		assert.equal(tree(root), before, "a measurement mutated the target");
 		writeFileSync(join(root, ".pi/prompts/p.md"), "edited\n");
 		assert.deepEqual(measureFreshness(root, capture), { state: "placement-mismatch", recovery: PROVISION_COMMAND });
-		const staleCapture = observeCarried(root, Date.now() + 2000);
 		writeFileSync(join(root, ".pi/prompts/p.md"), CARRIED[".pi/prompts/p.md"]);
+		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), "export const a = 0;\n");
+		const staleCapture = observeCarried(root, Date.now() + 2000);
+		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), CARRIED[".pi/extensions/gitjig/a.ts"]);
 		assert.deepEqual(measureFreshness(root, staleCapture), { state: "session-stale", recovery: RELOAD_COMMAND });
 	});
 
-	it("keeps the code part per module instance and re-reads the prompts per session, as Pi does on /new and /resume", async () => {
+	it("keeps one code capture per module instance, as Pi's /new and /resume re-run the factory over the cached module", async () => {
 		const root = target();
 		const first = captureCarriedProjection(root);
-		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), "export const a = 2;\n");
-		assert.deepEqual(captureCarriedProjection(root), first, "a factory re-run retook the code the module still runs");
-		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), CARRIED[".pi/extensions/gitjig/a.ts"]);
-		writeFileSync(join(root, ".pi/prompts/p.md"), "read by this session\n");
-		const prompts = captureCarriedProjection(root);
 		assert.deepEqual(
-			prompts.kind === "observed"
-				? prompts.members.find(({ path }) => path === ".pi/prompts/p.md")?.bytes.toString()
-				: prompts.kind,
-			"read by this session\n",
-			"a new session's prompts were not re-read",
+			first.kind === "observed" ? first.members.map(({ path }) => path) : first,
+			[".pi/extensions/gitjig.ts", ".pi/extensions/gitjig/a.ts"],
+			"the capture holds the extension code only",
 		);
-		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), "export const a = 3;\n");
+		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), "export const a = 2;\n");
+		assert.equal(captureCarriedProjection(root), first, "a factory re-run retook the code the module still runs");
+		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root)).state, "placement-mismatch");
 		const fresh = (await import(
 			`../.pi/extensions/gitjig/install/freshness.ts?instance=${Date.now()}`
 		)) as typeof import("../.pi/extensions/gitjig/install/freshness.ts");
 		assert.notDeepEqual(fresh.captureCarriedProjection(root), first, "a fresh module instance did not capture anew");
+	});
+
+	it("names its prompt residual: prompts take no part in session-stale", () => {
+		// Edited when the session loaded, restored since: placement is current,
+		// and the session-stale comparison does not look at prompts at all.
+		const root = target({ ...CARRIED, ".pi/prompts/p.md": "edited at load\n" });
+		const capture = captureCarriedProjection(root);
+		writeFileSync(join(root, ".pi/prompts/p.md"), CARRIED[".pi/prompts/p.md"]);
+		assert.deepEqual(measureFreshness(root, capture), { state: "current", recovery: null });
+		const full = observeCarried(root, Date.now() + 2000);
+		assert.deepEqual(
+			measureFreshness(root, full),
+			{ state: "current", recovery: null },
+			"a capture's own prompts are set aside",
+		);
 	});
 
 	it("reads cannot-measure when the reads pass the measurement's own budget", () => {
