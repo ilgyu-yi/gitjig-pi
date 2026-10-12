@@ -188,10 +188,10 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file",
 	"It refuses as well when .gitjig, or any directory on a carried path (.pi/extensions, .pi/prompts or one":
 		"refuses a linked state root or carried container; a real directory converges",
-	"too when a directory on a handed-over path (.github, .githooks, changelog_unreleased or one below) is a link.":
+	"(exit 64). It refuses too when a directory on a handed-over path (.githooks, changelog_unreleased, or one":
 		"refuses a linked handed-over directory; a real directory converges",
-	"below them), is a link; a linked .pi stops the launcher earlier, with invalid-input (exit 64). It refuses":
-		"refuses a linked state root or carried container ... and the real launcher stops a linked .pi with 64",
+	"below them), is a link; a linked .pi, .github or .github/bin stops the launcher earlier, with invalid-input":
+		"the real launcher stops a linked .pi, .github or .github/bin with invalid-input before provision",
 	"make an unreadable record or carried file readable, or else remove the record and the unreadable file and":
 		"removing only the record leaves an unreadable carried file or a behind unreadable record refusing",
 	"linked record through its link, and a dangling one as absent.":
@@ -539,18 +539,20 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 		}
 	});
 
-	it("the real launcher stops a linked .pi with invalid-input before provision", async () => {
-		const target = await provisioned(NEXT);
-		const away = join(scratch("pi"), "held");
-		cpSync(join(target, ".pi"), away, { recursive: true });
-		rmSync(join(target, ".pi"), { recursive: true });
-		symlinkSync(away, join(target, ".pi"));
-		const run = spawnSync(process.execPath, [join(target, ".github/bin/gitjig-bootstrap.mjs")], {
-			encoding: "utf8",
-			env: { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: "C" },
-		});
-		assert.equal(run.status, 64, run.stderr);
-		assert.equal(run.stderr, "gitjig-bootstrap: invalid-input\n");
+	it("the real launcher stops a linked .pi, .github or .github/bin with invalid-input before provision", async () => {
+		for (const container of [".pi", ".github", ".github/bin"]) {
+			const target = await provisioned(NEXT);
+			const away = join(scratch("linked"), "held");
+			cpSync(join(target, container), away, { recursive: true });
+			rmSync(join(target, container), { recursive: true });
+			symlinkSync(away, join(target, container));
+			const run = spawnSync(process.execPath, [join(target, ".github/bin/gitjig-bootstrap.mjs")], {
+				encoding: "utf8",
+				env: { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: "C" },
+			});
+			assert.equal(run.status, 64, `${container}: ${run.stderr}`);
+			assert.equal(run.stderr, "gitjig-bootstrap: invalid-input\n", container);
+		}
 	});
 
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {
@@ -659,6 +661,15 @@ describe("#365 /freshness in the target's own installed Pi", () => {
 			),
 		);
 		assert.deepEqual(stale.details, { state: "session-stale", recovery: RELOAD_COMMAND });
+	});
+
+	it("renders placement-mismatch in a clone whose .pi/extensions links into a current one", async () => {
+		const current = await provisioned(NEXT);
+		const linked = adopter(NEXT);
+		rmSync(join(linked, ".pi/extensions"), { recursive: true, force: true });
+		symlinkSync(join(current, ".pi/extensions"), join(linked, ".pi/extensions"));
+		assert.deepEqual(only(runTargetPi(current, ["/freshness"])).details, CURRENT);
+		assert.deepEqual(only(runTargetPi(linked, ["/freshness"])).details, MISMATCH);
 	});
 
 	it("renders cannot-measure for an unreadable record, and its help names the shapes", async (context) => {
