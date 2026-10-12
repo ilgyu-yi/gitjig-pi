@@ -304,7 +304,7 @@ export type CarriedObservation =
 export function observeCarried(
 	targetRoot: string,
 	deadline: number,
-	options: ObservationOptions & { maxBytes?: number } = {},
+	options: ObservationOptions & { maxBytes?: number; roots?: readonly (typeof CARRIED_ROOTS)[number][] } = {},
 ): CarriedObservation {
 	const root = Buffer.from(resolve(targetRoot));
 	const found: ObservedCandidate[] = [];
@@ -324,7 +324,7 @@ export function observeCarried(
 		},
 	};
 	try {
-		for (const carried of CARRIED_ROOTS) {
+		for (const carried of options.roots ?? CARRIED_ROOTS) {
 			// Each root's own containers: one root's absent container never
 			// hides another root, and a linked container is a difference.
 			const containers = standingContainers(root, carried);

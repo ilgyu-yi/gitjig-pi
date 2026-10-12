@@ -39,7 +39,8 @@ export const FRESHNESS_HELP = [
 	"It also refuses a record it cannot read, a directory included, and a carried file it cannot read; it reads a",
 	"linked record through its link, and a dangling one as absent.",
 	"It refuses as well when .gitjig, or any directory on a carried path (.pi/extensions, .pi/prompts or one",
-	"below them), is a link; a linked .pi stops the launcher earlier, with invalid-input (exit 64).",
+	"below them), is a link; a linked .pi stops the launcher earlier, with invalid-input (exit 64). It refuses",
+	"too when a directory on a handed-over path (.github, .githooks, changelog_unreleased or one below) is a link.",
 	"A carried file neither pin lists is left alone, so it keeps reporting until removed.",
 	"Before running it: restore a handed-over file from HEAD, and remove one only the old pin lists; remove a",
 	"carried file neither pin lists; under a present record restore each listed carried file to the bytes",
@@ -58,7 +59,8 @@ export const FRESHNESS_HELP = [
 	"not a usable gitjig snapshot; 73, make the temporary directory writable; 74, remove the leftover",
 	"gitjig-acquire-* directory under the temporary directory, then run it again.",
 	"",
-	`session-stale: run ${RELOAD_COMMAND}; the files are current but this session loaded others.`,
+	`session-stale: run ${RELOAD_COMMAND}; the files are current but this session loaded others: the extension`,
+	"code as this process first imported it, and the prompts as this session read them.",
 	`cannot-measure: run ${PROVISION_COMMAND}, or ${RELOAD_COMMAND} when only the load-time capture is missing.`,
 ].join("\n");
 

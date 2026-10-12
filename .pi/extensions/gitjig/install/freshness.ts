@@ -166,27 +166,45 @@ export function readPinFile(
 }
 
 /**
- * The capture belongs to this module instance: Pi's /new, /resume and fork
- * re-run the extension factory over the cached module, which still runs the
- * code it first loaded, so a re-run keeps the first capture rather than
- * retaking it from corrected files. A fresh module instance captures anew.
+ * What a session runs comes from two loads. The extension code is imported
+ * once per module instance: Pi's /new, /resume and fork re-run the factory
+ * over the cached module, which still runs the code it first loaded, so that
+ * part of the capture is kept for the module instance. The prompts are read
+ * again for every session, so that part is observed again on every factory
+ * run. A fresh module instance captures both anew.
  */
-const captures = new Map<string, CarriedObservation>();
+const CODE_ROOTS = [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig"] as const;
+const PROMPT_ROOTS = [".pi/prompts"] as const;
+const codeCaptures = new Map<string, CarriedObservation>();
+
+function joined(left: CarriedObservation, right: CarriedObservation): CarriedObservation {
+	if (left.kind === "unreadable" || right.kind === "unreadable") return { kind: "unreadable" };
+	if (left.kind === "differs" || right.kind === "differs") return { kind: "differs" };
+	return {
+		kind: "observed",
+		members: [...left.members, ...right.members].sort((a, b) =>
+			Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)),
+		),
+	};
+}
 
 /**
- * Capture the target's carried projection as the extension first loads in
- * this module instance. RESIDUAL, stated: this observes the files on disk at
- * that load, not the bytes the extension's static imports already evaluated,
- * so a carried file corrected between those imports and this capture is
- * invisible to `session-stale`.
+ * Capture the carried projection this session runs, at a factory run: the
+ * extension code as this module instance first loaded it, and the prompts as
+ * this session loads them. RESIDUAL, stated: the code part observes the files
+ * on disk at that first load, not the bytes the extension's static imports
+ * already evaluated, so a carried file corrected between those imports and
+ * this capture is invisible to `session-stale`.
  */
 export function captureCarriedProjection(targetRoot: string): CarriedObservation {
 	const root = resolve(targetRoot);
-	const held = captures.get(root);
-	if (held !== undefined) return held;
-	const capture = Object.freeze(observeCarried(root, Date.now() + READ_BOUND_MS));
-	captures.set(root, capture);
-	return capture;
+	const deadline = Date.now() + READ_BOUND_MS;
+	let code = codeCaptures.get(root);
+	if (code === undefined) {
+		code = observeCarried(root, deadline, { roots: CODE_ROOTS });
+		codeCaptures.set(root, code);
+	}
+	return Object.freeze(joined(code, observeCarried(root, deadline, { roots: PROMPT_ROOTS })));
 }
 
 /** One on-demand measurement: every read under one budget, then the pure evaluation. */
