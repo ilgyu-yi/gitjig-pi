@@ -178,7 +178,7 @@ async function provisioned(at: Snapshot): Promise<string> {
 	return target;
 }
 
-/** Each converge or refuse clause /freshness help states, and the arm here that pins it against the real provision run. */
+/** Each converge or refuse clause /freshness help states, and a description of the arm or arms here that pin it against the real provision run; the check below reads only the clause, never the arm. */
 const HELP_CLAUSES: Readonly<Record<string, string>> = {
 	"exactly its committed bytes, and a handed-over file only the old pin lists is absent;":
 		"refuses a missing handed-over file and one only the old pin lists; refuses a handed-over file that differs",
@@ -188,12 +188,12 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file",
 	"It refuses as well when .gitjig, or any directory on a carried path (.pi/extensions, .pi/prompts or one":
 		"refuses a linked state root or carried container; a real directory converges",
-	"(exit 64). It refuses too when a directory on a handed-over path (.githooks, changelog_unreleased, or one":
+	"below them), is a link, and when a directory on a handed-over path (.githooks, changelog_unreleased, or one":
 		"refuses a linked handed-over directory; a real directory converges",
-	"below them), is a link; a linked .pi, .github or .github/bin stops the launcher earlier, with invalid-input":
+	"does not diagnose them. invalid-input includes checkouts the launcher never provisions: a linked .pi,":
 		"the real launcher stops a linked .pi, .github or .github/bin with invalid-input before provision",
-	"and repair .git; in a linked worktree, whose .git is a file, it always refuses, as it provisions a main":
-		"the real launcher refuses a linked worktree with invalid-input",
+	".github or .github/bin, a linked worktree (its .git a file), and a clone sharing another's objects.":
+		"the real launcher refuses a linked worktree, and a clone sharing another's objects, with invalid-input",
 	"make an unreadable record or carried file readable, or else remove the record and the unreadable file and":
 		"removing only the record leaves an unreadable carried file or a behind unreadable record refusing",
 	"linked record through its link, and a dangling one as absent.":
@@ -663,6 +663,18 @@ describe("#365 /freshness in the target's own installed Pi", () => {
 			),
 		);
 		assert.deepEqual(stale.details, { state: "session-stale", recovery: RELOAD_COMMAND });
+	});
+
+	it("the real launcher refuses a clone sharing another's objects with invalid-input", async () => {
+		const main = await provisioned(NEXT);
+		const shared = join(scratch("shared"), "clone");
+		execFileSync("git", ["clone", "-q", "--shared", main, shared], { env: { PATH: process.env.PATH, HOME: shared } });
+		const run = spawnSync(process.execPath, [join(shared, ".github/bin/gitjig-bootstrap.mjs")], {
+			encoding: "utf8",
+			env: { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: "C" },
+		});
+		assert.equal(run.status, 64, run.stderr);
+		assert.equal(run.stderr, "gitjig-bootstrap: invalid-input\n");
 	});
 
 	it("the real launcher refuses a linked worktree with invalid-input", async () => {
