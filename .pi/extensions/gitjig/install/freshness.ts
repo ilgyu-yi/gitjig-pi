@@ -177,8 +177,9 @@ export function readPinFile(
  * The extension code is imported once per module instance: Pi's /new,
  * /resume and fork re-run the factory over the cached module, which still
  * runs the code it first loaded, so the capture is kept for the module
- * instance, and a fresh module instance captures anew. Only that code is
- * captured. RESIDUAL, stated: Pi reads prompt templates after the extension
+ * instance, and a fresh module instance captures anew. Only the extension
+ * tree is captured, imported or not: a file the runtime reads from disk at
+ * each use is captured as first loaded too (a stated false positive). RESIDUAL, stated: Pi reads prompt templates after the extension
  * factories and may read them again later, at a moment no capture here can
  * meet, so prompts take no part in session-stale; a prompt edited and
  * restored while a session runs is not seen.
