@@ -638,6 +638,54 @@ describe("#365 one measurement, end to end", () => {
 		assert.deepEqual(JSON.parse(run.stdout), ["unreadable", true]);
 	});
 
+	it("reads HEAD's entry, never the index's staged one", () => {
+		const root = target();
+		writeFileSync(join(root, GENERATED_PIN_PATH), pinFor(CARRIED, "b".repeat(40)));
+		execFileSync("git", ["-C", root, "add", GENERATED_PIN_PATH], {
+			env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
+		});
+		assert.deepEqual(readCommittedPin(root, 2000), { kind: "bytes", bytes: COMMITTED });
+	});
+
+	it("reads the target's own repository whatever Git variables the caller carries", () => {
+		const root = target();
+		const other = target(CARRIED, null);
+		writeFileSync(join(other, GENERATED_PIN_PATH), pinFor(CARRIED, "c".repeat(40)));
+		execFileSync(
+			"git",
+			[
+				"-C",
+				other,
+				"-c",
+				"user.name=F",
+				"-c",
+				"user.email=f@example.invalid",
+				"commit",
+				"-q",
+				"--no-verify",
+				"-am",
+				"other",
+			],
+			{
+				stdio: "ignore",
+				env: { PATH: process.env.PATH, HOME: other, GIT_CONFIG_NOSYSTEM: "1" },
+			},
+		);
+		const freshness = new URL("../.pi/extensions/gitjig/install/freshness.ts", import.meta.url).href;
+		const script = `import { readCommittedPin } from ${JSON.stringify(freshness)}; const read = readCommittedPin(${JSON.stringify(root)}, 2000); console.log(read.kind === "bytes" ? read.bytes.toString("base64") : read.kind);`;
+		const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+			encoding: "utf8",
+			timeout: 10_000,
+			env: {
+				...process.env,
+				GIT_DIR: join(other, ".git"),
+				GIT_WORK_TREE: other,
+				GIT_INDEX_FILE: join(other, ".git/index"),
+			},
+		});
+		assert.equal(run.stdout.trim(), COMMITTED.toString("base64"), "another repository's pin was read");
+	});
+
 	it("reads HEAD's own pin blob, never one a replace ref substitutes", () => {
 		const root = target();
 		const git = (args: string[], input?: Buffer) =>
