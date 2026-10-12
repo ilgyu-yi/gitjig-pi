@@ -101,9 +101,21 @@ function target(carried: Record<string, string> = CARRIED, installed: Buffer | n
 		writeFileSync(join(root, path), value);
 	};
 	write(GENERATED_PIN_PATH, COMMITTED);
+	commitPin(root);
 	for (const [path, text] of Object.entries({ ...HANDED, ...carried })) write(path, text);
 	if (installed !== null) write(INSTALLED_PIN_PATH, installed);
 	return root;
+}
+/** Commit the working pin, so HEAD holds it: the committed pin is HEAD's. */
+function commitPin(root: string): void {
+	const git = (...args: string[]) =>
+		execFileSync("git", ["-C", root, "-c", "user.name=F", "-c", "user.email=f@example.invalid", ...args], {
+			stdio: "ignore",
+			env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
+		});
+	git("init", "-q");
+	git("add", GENERATED_PIN_PATH);
+	git("-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "pin");
 }
 /** Every path, type, mode, write time and byte under a root, without following links: any write shows. */
 function tree(root: string): string {
@@ -274,6 +286,45 @@ describe("#365 the classifier's carried observer", () => {
 			chmodSync(join(root, `.pi/prompts/${locked}`), 0o000);
 			assert.deepEqual(observeCarried(root, Date.now() + 2000), { kind: "unreadable" }, `${link} then ${locked}`);
 		}
+	});
+
+	it("reads unreadable over a root- or container-level difference, and over a difference past the byte bound", (context) => {
+		const outside = mkdtempSync(join(tmpdir(), "gitjig-365-outside-"));
+		roots.push(outside);
+		writeFileSync(join(outside, "entry.ts"), CARRIED[".pi/extensions/gitjig.ts"]);
+		const grown = target();
+		symlinkSync(join(grown, ".pi/prompts/p.md"), join(grown, ".pi/prompts/a-link.md"));
+		const total = Object.values(CARRIED).reduce((sum, text) => sum + Buffer.byteLength(text), 0);
+		assert.deepEqual(
+			observeCarried(grown, Date.now() + 2000, {
+				maxBytes: total + 2,
+				afterLstat: (path) => {
+					if (path === ".pi/prompts/p.md") writeFileSync(join(grown, path), "x".repeat(100));
+				},
+			}),
+			{ kind: "unreadable" },
+			"a difference and a member grown past the bound",
+		);
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 file");
+		const rootLevel = target();
+		rmSync(join(rootLevel, ".pi/extensions/gitjig.ts"));
+		symlinkSync(join(outside, "entry.ts"), join(rootLevel, ".pi/extensions/gitjig.ts"));
+		chmodSync(join(rootLevel, ".pi/prompts"), 0o000);
+		assert.deepEqual(
+			observeCarried(rootLevel, Date.now() + 2000),
+			{ kind: "unreadable" },
+			"a linked root, then an unreadable one",
+		);
+		const containerLevel = target();
+		const moved = join(outside, "extensions");
+		renameSync(join(containerLevel, ".pi/extensions"), moved);
+		symlinkSync(moved, join(containerLevel, ".pi/extensions"));
+		chmodSync(join(containerLevel, ".pi/prompts"), 0o000);
+		assert.deepEqual(
+			observeCarried(containerLevel, Date.now() + 2000),
+			{ kind: "unreadable" },
+			"a linked container, then an unreadable root",
+		);
 	});
 
 	it("reads a replaced, unreadable or late observation as unreadable", () => {
@@ -515,7 +566,7 @@ describe("#365 one measurement, end to end", () => {
 		// closing check sees the budget spent.
 		const start = Date.now();
 		let tick = 0;
-		const clock = () => (tick++ === 0 ? start : start + 2001);
+		const clock = () => (tick++ < 2 ? start : start + 2001);
 		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root), clock), {
 			state: "cannot-measure",
 			recovery: PROVISION_COMMAND,
@@ -536,13 +587,17 @@ describe("#365 one measurement, end to end", () => {
 		);
 	});
 
-	it("reads a committed pin that is a link as cannot-measure, never through the link", () => {
+	it("reads the committed pin from HEAD, never the working tree's file", () => {
 		const root = target();
+		writeFileSync(join(root, GENERATED_PIN_PATH), "an uncommitted edit\n");
+		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root)), { state: "current", recovery: null });
 		const elsewhere = join(mkdtempSync(join(tmpdir(), "gitjig-365-pin-")), "pin.json");
 		roots.push(dirname(elsewhere));
-		writeFileSync(elsewhere, COMMITTED);
+		writeFileSync(elsewhere, pinFor(CARRIED, "b".repeat(40)));
 		rmSync(join(root, GENERATED_PIN_PATH));
 		symlinkSync(elsewhere, join(root, GENERATED_PIN_PATH));
+		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root)).state, "current", "a linked working pin");
+		rmSync(join(root, ".git"), { recursive: true });
 		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root)), {
 			state: "cannot-measure",
 			recovery: PROVISION_COMMAND,
@@ -574,6 +629,26 @@ describe("#365 one measurement, end to end", () => {
 		writeFileSync(join(root, ".pi/extensions/gitjig/policy.json"), "{}\n");
 		const corrected = pinFor({ ...CARRIED, ".pi/extensions/gitjig/policy.json": "{}\n" });
 		writeFileSync(join(root, GENERATED_PIN_PATH), corrected);
+		execFileSync(
+			"git",
+			[
+				"-C",
+				root,
+				"-c",
+				"user.name=F",
+				"-c",
+				"user.email=f@example.invalid",
+				"commit",
+				"-q",
+				"--no-verify",
+				"-am",
+				"pin",
+			],
+			{
+				stdio: "ignore",
+				env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
+			},
+		);
 		writeFileSync(join(root, INSTALLED_PIN_PATH), corrected);
 		assert.deepEqual(measureFreshness(root, capture), { state: "session-stale", recovery: RELOAD_COMMAND });
 	});
