@@ -253,7 +253,19 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 	"Otherwise it refuses, or leaves the clone as it is: a carried file neither pin lists is left alone.":
 		"leaves a carried file neither pin lists alone; an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
 	"To converge from every state this help names: make each handed-over file the bytes the new pin lists (revert a committed":
-		"converges from every damaged state by the one step the help states",
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"edit, replace a linked directory with a real one) and remove one only the old pin lists; make .pi/extensions":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"a real, readable directory (replace a link with one holding its files, remove a file in its place); make":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	".gitjig a real, readable directory (remove anything else whole), remove .gitjig/installed-pin.json; then, under":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	".pi/extensions/gitjig.ts, .pi/extensions/gitjig and .pi/prompts, remove every link, every entry that cannot":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"be read (make it readable to empty it), every directory where the new pin lists a file, and every file that":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"is not a file the new pin lists holding exactly its new bytes. Then run it. The provision run has further":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
 	"a carried entry cannot be read, or the carried files pass 64 MiB, take the step above first: provision leaves":
 		"an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
 	"does not diagnose them. invalid-input includes checkouts the launcher never provisions: a linked .pi,":

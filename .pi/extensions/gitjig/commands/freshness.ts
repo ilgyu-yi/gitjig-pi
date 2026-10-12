@@ -28,7 +28,7 @@ export const FRESHNESS_HELP = [
 	"- an intended local edit to a carried file reports placement-mismatch (true per SPEC 4.5, perhaps unwanted);",
 	"- a provision running at the same time reports placement-mismatch until it advances the record;",
 	"- a case- or normalization-insensitive filesystem can report a rename as placement-mismatch;",
-	"- a carried file the session does not import (a launcher-run install module, a .json policy, or a file",
+	"- a carried file outside .pi/prompts the session does not import (a launcher-run install module, a .json policy, or a file",
 	"  it copies, say) that was edited when this process loaded and corrected since reports session-stale,",
 	"  though the session runs no stale code.",
 	"",
