@@ -166,7 +166,7 @@ const CURRENT = { state: "current", recovery: null };
  * The one step /freshness help states, done literally: the handed-over files
  * made the new pin's bytes (a linked directory replaced by a real one) and
  * old-only ones removed; .pi/extensions made a real, readable directory;
- * .gitjig removed whole unless a real directory, and the record; then,
+ * .gitjig made a real, readable directory, and the record removed; then,
  * under the carried roots, every link, every entry that cannot be read (made
  * readable to empty it), every directory where a file is listed, and every
  * file that is not a listed file holding exactly its new bytes, removed.
@@ -205,6 +205,7 @@ function fallback(target: string, at: Snapshot, retired: readonly string[] = [])
 	const state = lstat(join(target, ".gitjig"));
 	if (state !== undefined && (state.isSymbolicLink() || !state.isDirectory()))
 		rmSync(join(target, ".gitjig"), { recursive: true, force: true });
+	else if (state !== undefined) chmodSync(join(target, ".gitjig"), 0o700);
 	rmSync(join(target, INSTALLED_PIN_PATH), { force: true, recursive: true });
 	const clean = (relative: string) => {
 		const absolute = join(target, relative);
@@ -249,7 +250,7 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses an unreadable or directory record through the real provision CLI ... a linked or dangling record converges",
 	"Otherwise it refuses, or leaves the clone as it is: a carried file neither pin lists is left alone.":
 		"leaves a carried file neither pin lists alone; an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
-	"To converge from any such state: make each handed-over file the bytes the new pin lists (revert a committed":
+	"To converge from every state this help names: make each handed-over file the bytes the new pin lists (revert a committed":
 		"converges from every damaged state by the one step the help states",
 	"a carried entry cannot be read, or the carried files pass 64 MiB, take the step above first: provision leaves":
 		"an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
@@ -743,6 +744,7 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 				},
 			],
 			["unreadable .pi/extensions", (t) => chmodSync(join(t, ".pi/extensions"), 0o000), true],
+			["unreadable .gitjig", (t) => chmodSync(join(t, ".gitjig"), 0o000), true],
 			[
 				"committed handed-over edit",
 				(t) => {
@@ -930,6 +932,6 @@ describe("#365 /freshness in the target's own installed Pi", () => {
 		const help = only(runTargetPi(target, ["/freshness help"]));
 		assert.equal(help.details, "help");
 		assert.match(String(help.content), /Known false positives/);
-		assert.match(String(help.content), /To converge from any such state/);
+		assert.match(String(help.content), /To converge from every state this help names/);
 	});
 });

@@ -239,25 +239,30 @@ export function sessionClone(cwd: string): string | undefined {
 
 /**
  * The committed pin: HEAD's entry, never the working tree's file, which may
- * be edited or untracked. Read with the system Git (no program of the clone
- * runs), replace objects ignored, under what remains of the budget; anything
- * but HEAD's exact blob is unreadable.
+ * be edited or untracked. Read with the system Git, replace objects ignored
+ * and lazy fetching refused, so a partial clone missing the blob fetches
+ * nothing and runs no program it configures, under what remains of the
+ * budget; anything but HEAD's exact blob is unreadable.
  */
 export function readCommittedPin(targetRoot: string, timeoutMs: number): PinRead {
 	if (timeoutMs <= 0) return { kind: "unreadable" };
-	const run = spawnSync("git", ["-C", resolve(targetRoot), "cat-file", "blob", `HEAD:${GENERATED_PIN_PATH}`], {
-		env: {
-			PATH: process.env.PATH ?? "",
-			HOME: process.env.HOME ?? "",
-			LC_ALL: "C",
-			GIT_NO_REPLACE_OBJECTS: "1",
-			GIT_CONFIG_NOSYSTEM: "1",
-			GIT_TERMINAL_PROMPT: "0",
+	const run = spawnSync(
+		"git",
+		["--no-lazy-fetch", "-C", resolve(targetRoot), "cat-file", "blob", `HEAD:${GENERATED_PIN_PATH}`],
+		{
+			env: {
+				PATH: process.env.PATH ?? "",
+				HOME: process.env.HOME ?? "",
+				LC_ALL: "C",
+				GIT_NO_REPLACE_OBJECTS: "1",
+				GIT_CONFIG_NOSYSTEM: "1",
+				GIT_TERMINAL_PROMPT: "0",
+			},
+			timeout: timeoutMs,
+			maxBuffer: 16 * 1024 * 1024,
+			stdio: ["ignore", "pipe", "pipe"],
 		},
-		timeout: timeoutMs,
-		maxBuffer: 16 * 1024 * 1024,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
+	);
 	return run.status === 0 && run.signal === null && run.error === undefined
 		? { kind: "bytes", bytes: run.stdout }
 		: { kind: "unreadable" };
