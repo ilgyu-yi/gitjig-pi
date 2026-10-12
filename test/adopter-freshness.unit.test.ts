@@ -13,7 +13,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { after, describe, it } from "node:test";
 import {
 	FRESHNESS_HELP,
@@ -32,6 +32,7 @@ import {
 	PROVISION_COMMAND,
 	RELOAD_COMMAND,
 	readPinFile,
+	sessionClone,
 } from "../.pi/extensions/gitjig/install/freshness.ts";
 import { buildPin, encodePin, GENERATED_PIN_PATH } from "../.pi/extensions/gitjig/install/pin.ts";
 
@@ -505,6 +506,22 @@ describe("#365 one measurement, end to end", () => {
 		symlinkSync(elsewhere, join(root, GENERATED_PIN_PATH));
 		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root)), {
 			state: "cannot-measure",
+			recovery: PROVISION_COMMAND,
+		});
+	});
+
+	it("finds the session's clone lexically, and reads a session in another clone as a difference", () => {
+		const own = target();
+		mkdirSync(join(own, "sub/dir"), { recursive: true });
+		assert.equal(sessionClone(join(own, "sub/dir")), resolve(own));
+		const other = target();
+		rmSync(join(other, ".pi/extensions"), { recursive: true });
+		symlinkSync(join(own, ".pi/extensions"), join(other, ".pi/extensions"));
+		assert.equal(sessionClone(other), resolve(other), "a linked .pi/extensions still marks the clone");
+		const capture = captureCarriedProjection(own);
+		assert.deepEqual(measureFreshness(own, capture, Date.now, sessionClone(own)), { state: "current", recovery: null });
+		assert.deepEqual(measureFreshness(own, capture, Date.now, sessionClone(other)), {
+			state: "placement-mismatch",
 			recovery: PROVISION_COMMAND,
 		});
 	});

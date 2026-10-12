@@ -117,8 +117,8 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"the command writes: it copies the committed pin over the record before measuring",
 		COMMAND,
-		"const outcome = help ? undefined : measureFreshness(repoRoot, capture);",
-		'if (!help) process.getBuiltinModule("node:fs").copyFileSync(`${repoRoot}/.pi/gitjig.pin.json`, `${repoRoot}/.gitjig/installed-pin.json`);\n\t\t\tconst outcome = help ? undefined : measureFreshness(repoRoot, capture);',
+		"const outcome = help ? undefined : measureFreshness(repoRoot, capture, Date.now, session);",
+		'if (!help) process.getBuiltinModule("node:fs").copyFileSync(`${repoRoot}/.pi/gitjig.pin.json`, `${repoRoot}/.gitjig/installed-pin.json`);\n\t\t\tconst outcome = help ? undefined : measureFreshness(repoRoot, capture, Date.now, session);',
 	],
 	[
 		"the measurement's deadline not handed to the walk",
@@ -162,6 +162,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		FRESHNESS,
 		"\tconst committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);\n",
 		'\tconst committedPin: PinRead = { kind: "bytes", bytes: process.getBuiltinModule("node:fs").readFileSync(join(targetRoot, GENERATED_PIN_PATH)) };\n',
+	],
+	[
+		"a session in another clone read as this tree",
+		FRESHNESS,
+		'if (session !== undefined && realpathOrSelf(session) !== realpathOrSelf(targetRoot)) projection = { kind: "differs" };',
+		"",
 	],
 	[
 		"an unbounded observation",

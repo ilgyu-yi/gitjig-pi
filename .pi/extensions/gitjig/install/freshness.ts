@@ -10,8 +10,8 @@
  * Warning-surface roster: EXEMPT — states and recovery tokens are fixed
  * strings; no operand, path, pin byte or raw error is rendered.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, type Stats } from "node:fs";
-import { join, resolve } from "node:path";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, type Stats } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { TextDecoder } from "node:util";
 import { type CarriedMember, type CarriedObservation, observeCarried } from "./classifier.ts";
 import { buildPin, GENERATED_PIN_PATH, type PinV1, parsePin, sourceEqual } from "./pin.ts";
@@ -108,6 +108,14 @@ export function evaluateFreshness(inputs: FreshnessInputs): FreshnessResult {
 		return result("cannot-measure", RELOAD_COMMAND);
 	if (!agrees(committed, inputs.capture)) return result("session-stale", RELOAD_COMMAND);
 	return result("current", null);
+}
+
+function realpathOrSelf(path: string): string {
+	try {
+		return realpathSync(path);
+	} catch {
+		return resolve(path);
+	}
 }
 
 function sameObject(left: Stats, right: Stats): boolean {
@@ -207,16 +215,41 @@ export function captureCarriedProjection(targetRoot: string): CarriedObservation
 	return Object.freeze(joined(code, observeCarried(root, deadline, { roots: PROMPT_ROOTS })));
 }
 
+/**
+ * The clone a session runs in, found lexically from its working directory:
+ * the nearest ancestor holding a `.pi` entry, link or not. It is never a
+ * resolution input (the extension still self-locates, §4.6); it is compared
+ * with the self-located root only, so a session whose `.pi` or
+ * `.pi/extensions` links into another tree cannot read that tree as its own.
+ */
+export function sessionClone(cwd: string): string | undefined {
+	let current = resolve(cwd);
+	for (;;) {
+		try {
+			lstatSync(join(current, ".pi"));
+			return current;
+		} catch {}
+		const parent = dirname(current);
+		if (parent === current) return undefined;
+		current = parent;
+	}
+}
+
 /** One on-demand measurement: every read under one budget, then the pure evaluation. */
 export function measureFreshness(
 	targetRoot: string,
 	capture: CarriedObservation | undefined,
 	clock: () => number = Date.now,
+	/** The clone the session runs in (`sessionClone`), when one was found. */
+	session?: string,
 ): FreshnessResult {
 	const deadline = clock() + READ_BOUND_MS;
 	const committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);
 	const installedPin = readPinFile(targetRoot, INSTALLED_PIN_PATH);
 	let projection = observeCarried(targetRoot, deadline);
+	// A session in another clone runs this tree's carried files through a link:
+	// its own projection differs, whatever this tree holds.
+	if (session !== undefined && realpathOrSelf(session) !== realpathOrSelf(targetRoot)) projection = { kind: "differs" };
 	// The pin reads and the walk share one budget; past it the projection is unobservable.
 	if (clock() > deadline) projection = { kind: "unreadable" };
 	return evaluateFreshness({ committedPin, installedPin, projection, capture });
