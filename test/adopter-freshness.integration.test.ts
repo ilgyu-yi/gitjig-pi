@@ -271,7 +271,9 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"converges from every damaged state by the one step the help states (fallback does this line)",
 	".pi/prompts, keep only the files the new pin lists holding exactly their new bytes, and the directories that":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	"hold them, and remove everything else (make an unreadable entry readable to remove it). Then run it. The":
+	"hold them, making each readable, and remove everything else (make an unreadable entry readable to remove":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"it). Then run it. The":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
 	"provision run has further preconditions of its own (SPEC 4.6: its exclude file, the hooks binding), outside":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
