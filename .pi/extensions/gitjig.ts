@@ -22,7 +22,7 @@ import { maybeAdviseBindState } from "./gitjig/bind-state.ts";
 import { registerFreshnessCommand } from "./gitjig/commands/freshness.ts";
 import { registerSpineCommands } from "./gitjig/commands/index.ts";
 import { registerDispatchTool } from "./gitjig/dispatch/index.ts";
-import { captureCarriedProjection, sessionClone } from "./gitjig/install/freshness.ts";
+import { captureCarriedProjection } from "./gitjig/install/freshness.ts";
 import { locateRepoRoot } from "./gitjig/locate.ts";
 import { recordModeRun, resolveModes } from "./gitjig/modes.ts";
 import { registerPublishTool } from "./gitjig/publish/index.ts";
@@ -55,8 +55,7 @@ export default function gitjig(pi: ExtensionAPI) {
 	// Installed-asset freshness (§4.5), on demand only (§5.9's measuring
 	// stage): the carried projection is captured here, as the extension
 	// loads, so `/freshness` can tell a session behind already-correct bytes.
-	// The session's own clone is compared with the self-located root only.
-	registerFreshnessCommand(pi, repoRoot, captureCarriedProjection(repoRoot), sessionClone(process.cwd()));
+	registerFreshnessCommand(pi, repoRoot, captureCarriedProjection(repoRoot));
 
 	// Every append outcome of this session, folded: false the moment any
 	// append degrades open. Reported on the registration entry below.
