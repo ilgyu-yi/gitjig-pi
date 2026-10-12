@@ -601,6 +601,7 @@ describe("#365 one measurement, end to end", () => {
 			state: "cannot-measure",
 			recovery: PROVISION_COMMAND,
 		});
+		assert.match(FRESHNESS_HELP, /pass the 2-second budget also reads cannot-measure, which provision cannot change/);
 	});
 
 	it("passes its own deadline to the walk", () => {
