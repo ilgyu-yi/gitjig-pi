@@ -184,7 +184,7 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses a missing handed-over file and one only the old pin lists; refuses a handed-over file that differs",
 	"every carried file both pins list is exactly the old or the new":
 		"converges a behind record over exact-old bytes, and over exact-new bytes; refuses an edited, missing or linked carried file",
-	"It also refuses a record it cannot read, a directory included, and a carried file it cannot read; it reads a":
+	"It also refuses a record it cannot read, a directory included, and a listed carried file it cannot read; it reads a":
 		"refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file",
 	"It refuses as well when .gitjig, or any directory on a carried path (.pi/extensions, .pi/prompts or one":
 		"refuses a linked state root or carried container; a real directory converges",
@@ -208,6 +208,8 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses a malformed record; refuses a record naming another source, or another class for a path",
 	"A carried file neither pin lists is left alone, so it keeps reporting until removed.":
 		"leaves a carried file neither pin lists alone",
+	"neither pin lists it: provision leaves such a file alone, and the measurement would stay cannot-measure.":
+		"an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
 	"Removing an edited carried file both pins list, alone, still refuses.":
 		"removing an edited both-listed carried file alone still refuses",
 };
@@ -570,6 +572,24 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 			assert.equal(run.status, 64, `${container}: ${run.stderr}`);
 			assert.equal(run.stderr, "gitjig-bootstrap: invalid-input\n", container);
 		}
+	});
+
+	it("an unreadable or oversized unlisted carried file reads cannot-measure while provision converges", async (context) => {
+		const oversized = await provisioned(NEXT);
+		writeFileSync(join(oversized, ".pi/prompts/huge-local.md"), Buffer.alloc(65 * 1024 * 1024, 0x61));
+		assert.deepEqual(freshness(oversized), { state: "cannot-measure", recovery: PROVISION_COMMAND });
+		assert.notEqual(await provision(oversized, NEXT), "refused");
+		assert.deepEqual(freshness(oversized), { state: "cannot-measure", recovery: PROVISION_COMMAND });
+		rmSync(join(oversized, ".pi/prompts/huge-local.md"));
+		assert.deepEqual(freshness(oversized), CURRENT);
+		if (process.getuid?.() === 0) return context.skip("root reads a mode-000 file");
+		const unreadable = await provisioned(NEXT);
+		writeFileSync(join(unreadable, ".pi/prompts/locked-local.md"), "x\n");
+		chmodSync(join(unreadable, ".pi/prompts/locked-local.md"), 0o000);
+		assert.deepEqual(freshness(unreadable), { state: "cannot-measure", recovery: PROVISION_COMMAND });
+		assert.notEqual(await provision(unreadable, NEXT), "refused");
+		rmSync(join(unreadable, ".pi/prompts/locked-local.md"));
+		assert.deepEqual(freshness(unreadable), CURRENT);
 	});
 
 	it("leaves a carried file neither pin lists alone, so it keeps reporting until removed", async () => {
