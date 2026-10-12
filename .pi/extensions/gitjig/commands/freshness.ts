@@ -14,6 +14,7 @@ import {
 	measureFreshness,
 	PROVISION_COMMAND,
 	RELOAD_COMMAND,
+	sessionClone,
 } from "../install/freshness.ts";
 
 export const FRESHNESS_MESSAGE = "gitjig-freshness";
@@ -54,7 +55,8 @@ export const FRESHNESS_HELP = [
 	"The launcher can also refuse before provision: invalid-input (exit 64), for example when the working pin",
 	"differs from HEAD or .git is not a directory, source-unavailable (exit 69), snapshot-identity-mismatch (exit 65) or temporary-storage-unavailable (exit 73); cleanup-failed (exit 74) can follow even a completed provision run.",
 	"For those: 64, commit or restore the pin, replace a linked .pi, .github or .github/bin with a real directory,",
-	"and repair .git; 69, reach the pinned source and check that it",
+	"and repair .git; in a linked worktree, whose .git is a file, it always refuses, as it provisions a main",
+	"checkout only; 69, reach the pinned source and check that it",
 	"serves the pinned revision; 65, the fetched snapshot failed its checks (its HEAD, origin, alternates,",
 	"working files, scope file or provision entry), so run it again, and if it repeats the pinned revision is",
 	"not a usable gitjig snapshot; 73, make the temporary directory writable; 74, remove the leftover",
@@ -85,7 +87,6 @@ export function registerFreshnessCommand(
 	pi: ExtensionAPI,
 	repoRoot: string,
 	capture: CarriedObservation | undefined,
-	session?: string,
 ): void {
 	pi.registerMessageRenderer(FRESHNESS_MESSAGE, (message, options) => {
 		if (message.details === "help") return new Text(FRESHNESS_HELP, options.outputPad, 0);
@@ -98,8 +99,12 @@ export function registerFreshnessCommand(
 	});
 	pi.registerCommand("freshness", {
 		description: "Measure installed-asset freshness on demand (SPEC 4.5); `/freshness help` names its shapes.",
-		handler: async (args) => {
+		handler: async (args, ctx) => {
 			const help = args.trim() !== "";
+			// The session's own clone, from the cwd Pi loads it in (a resumed session
+			// keeps its recorded one), compared with the self-located root only.
+			const cwd = (ctx as { cwd?: unknown } | undefined)?.cwd;
+			const session = typeof cwd === "string" ? sessionClone(cwd) : undefined;
 			const outcome = help ? undefined : measureFreshness(repoRoot, capture, Date.now, session);
 			pi.sendMessage(
 				{
