@@ -167,9 +167,9 @@ const CURRENT = { state: "current", recovery: null };
  * made the new pin's bytes (a linked directory replaced by a real one) and
  * old-only ones removed; .pi/extensions made a real, readable directory;
  * .gitjig made a real, readable directory, and the record removed; then,
- * under the carried roots, every link, every entry that cannot be read (made
- * readable to empty it), every directory where a file is listed, and every
- * file that is not a listed file holding exactly its new bytes, removed.
+ * under the carried roots, only the listed files holding exactly their new
+ * bytes, and the directories that hold them, kept, and everything else (made
+ * readable first to remove it) removed.
  */
 function fallback(target: string, at: Snapshot, retired: readonly string[] = []): void {
 	const lstat = (path: string) => {
