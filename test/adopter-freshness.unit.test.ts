@@ -447,11 +447,22 @@ describe("#365 one measurement, end to end", () => {
 		assert.deepEqual(measureFreshness(root, staleCapture), { state: "session-stale", recovery: RELOAD_COMMAND });
 	});
 
-	it("keeps one capture per module instance, as Pi's /new and /resume re-run the factory over the cached module", async () => {
+	it("keeps the code part per module instance and re-reads the prompts per session, as Pi does on /new and /resume", async () => {
 		const root = target();
 		const first = captureCarriedProjection(root);
-		writeFileSync(join(root, ".pi/prompts/p.md"), "corrected later\n");
-		assert.equal(captureCarriedProjection(root), first, "a factory re-run retook the capture");
+		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), "export const a = 2;\n");
+		assert.deepEqual(captureCarriedProjection(root), first, "a factory re-run retook the code the module still runs");
+		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), CARRIED[".pi/extensions/gitjig/a.ts"]);
+		writeFileSync(join(root, ".pi/prompts/p.md"), "read by this session\n");
+		const prompts = captureCarriedProjection(root);
+		assert.deepEqual(
+			prompts.kind === "observed"
+				? prompts.members.find(({ path }) => path === ".pi/prompts/p.md")?.bytes.toString()
+				: prompts.kind,
+			"read by this session\n",
+			"a new session's prompts were not re-read",
+		);
+		writeFileSync(join(root, ".pi/extensions/gitjig/a.ts"), "export const a = 3;\n");
 		const fresh = (await import(
 			`../.pi/extensions/gitjig/install/freshness.ts?instance=${Date.now()}`
 		)) as typeof import("../.pi/extensions/gitjig/install/freshness.ts");
