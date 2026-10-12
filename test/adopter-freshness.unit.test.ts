@@ -476,7 +476,7 @@ describe("#365 one measurement, end to end", () => {
 		// closing check sees the budget spent.
 		const start = Date.now();
 		let tick = 0;
-		const clock = () => (tick++ === 0 ? start : start + 3000);
+		const clock = () => (tick++ === 0 ? start : start + 2001);
 		assert.deepEqual(measureFreshness(root, captureCarriedProjection(root), clock), {
 			state: "cannot-measure",
 			recovery: PROVISION_COMMAND,
@@ -524,6 +524,19 @@ describe("#365 one measurement, end to end", () => {
 			state: "placement-mismatch",
 			recovery: PROVISION_COMMAND,
 		});
+	});
+
+	it("states its data-file false positive: a re-read file corrected after load reads session-stale", () => {
+		// The runtime re-reads such a file at each use, so the session already
+		// runs the corrected bytes; the code capture still holds the edited ones.
+		const withData = { ...CARRIED, ".pi/extensions/gitjig/policy.json": '{"edited":true}\n' };
+		const root = target(withData);
+		const capture = captureCarriedProjection(root);
+		writeFileSync(join(root, ".pi/extensions/gitjig/policy.json"), "{}\n");
+		const corrected = pinFor({ ...CARRIED, ".pi/extensions/gitjig/policy.json": "{}\n" });
+		writeFileSync(join(root, GENERATED_PIN_PATH), corrected);
+		writeFileSync(join(root, INSTALLED_PIN_PATH), corrected);
+		assert.deepEqual(measureFreshness(root, capture), { state: "session-stale", recovery: RELOAD_COMMAND });
 	});
 
 	it("measures against its own target only", () => {
