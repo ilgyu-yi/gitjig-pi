@@ -83,7 +83,13 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'\tif (clock() > deadline) projection = { kind: "unreadable" };\n',
 		"",
 	],
-	["the capture retaken on a factory re-run", FRESHNESS, "\tif (held !== undefined) return held;\n", ""],
+	["the code capture retaken on a factory re-run", FRESHNESS, "\tif (code === undefined) {\n", "\tif (true) {\n"],
+	[
+		"the prompts not re-read per session",
+		FRESHNESS,
+		"return Object.freeze(joined(code, observeCarried(root, deadline, { roots: PROMPT_ROOTS })));",
+		"return Object.freeze(code);",
+	],
 	[
 		"the byte bound omitted after the reads",
 		CLASSIFIER,

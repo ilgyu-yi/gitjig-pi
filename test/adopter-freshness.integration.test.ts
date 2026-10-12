@@ -188,7 +188,9 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses an unreadable or directory record through the real provision CLI, and an unreadable carried file",
 	"It refuses as well when .gitjig, or any directory on a carried path (.pi/extensions, .pi/prompts or one":
 		"refuses a linked state root or carried container; a real directory converges",
-	"below them), is a link; a linked .pi stops the launcher earlier, with invalid-input (exit 64).":
+	"too when a directory on a handed-over path (.github, .githooks, changelog_unreleased or one below) is a link.":
+		"refuses a linked handed-over directory; a real directory converges",
+	"below them), is a link; a linked .pi stops the launcher earlier, with invalid-input (exit 64). It refuses":
 		"refuses a linked state root or carried container ... and the real launcher stops a linked .pi with 64",
 	"make an unreadable record or carried file readable, or else remove the record and the unreadable file and":
 		"removing only the record leaves an unreadable carried file or a behind unreadable record refusing",
@@ -520,6 +522,20 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 			cpSync(away, join(target, container), { recursive: true });
 			assert.notEqual(await provision(target, NEXT), "refused", container);
 			assert.deepEqual(freshness(target), CURRENT, container);
+		}
+	});
+
+	it("refuses a linked handed-over directory; a real directory converges", async () => {
+		for (const container of [".githooks", "changelog_unreleased", ".github/workflows"]) {
+			const target = await provisioned(NEXT);
+			const away = join(scratch("handed"), "held");
+			cpSync(join(target, container), away, { recursive: true });
+			rmSync(join(target, container), { recursive: true });
+			symlinkSync(away, join(target, container));
+			assert.equal(await provision(target, NEXT), "refused", container);
+			rmSync(join(target, container));
+			cpSync(away, join(target, container), { recursive: true });
+			assert.notEqual(await provision(target, NEXT), "refused", container);
 		}
 	});
 
