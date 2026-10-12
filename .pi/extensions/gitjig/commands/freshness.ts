@@ -60,8 +60,8 @@ export const FRESHNESS_HELP = [
 	"does not diagnose them. invalid-input includes checkouts the launcher never provisions: a linked .pi,",
 	".github or .github/bin, a linked worktree (its .git a file), and a clone sharing another's objects.",
 	"",
-	`session-stale: run ${RELOAD_COMMAND}; the files are current but this session loaded others: the extension`,
-	"code as this process first imported it, and the prompts as this session read them.",
+	`session-stale: run ${RELOAD_COMMAND}; the files are current but this process imported other extension code.`,
+	"Prompts take no part in it: a prompt edited and restored while a session runs is not seen.",
 	`cannot-measure: run ${PROVISION_COMMAND}, or ${RELOAD_COMMAND} when only the load-time capture is missing.`,
 ].join("\n");
 
