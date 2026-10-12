@@ -207,24 +207,31 @@ function fallback(target: string, at: Snapshot, retired: readonly string[] = [])
 		rmSync(join(target, ".gitjig"), { recursive: true, force: true });
 	else if (state !== undefined) chmodSync(join(target, ".gitjig"), 0o700);
 	rmSync(join(target, INSTALLED_PIN_PATH), { force: true, recursive: true });
-	const clean = (relative: string) => {
+	// Keep only the listed files holding exactly their new bytes, and the directories that hold them.
+	const holders = new Set<string>();
+	for (const path of at.carried.keys()) {
+		const parts = path.split("/");
+		for (let index = 1; index < parts.length; index++) holders.add(parts.slice(0, index).join("/"));
+	}
+	const prune = (relative: string) => {
 		const absolute = join(target, relative);
 		const stats = lstat(absolute);
 		if (stats === undefined) return;
-		if (stats.isSymbolicLink() || (!stats.isDirectory() && !stats.isFile())) return rmSync(absolute);
-		if (stats.isDirectory()) {
+		if (stats.isDirectory() && !stats.isSymbolicLink()) {
 			chmodSync(absolute, 0o700);
-			if (at.carried.has(relative)) return rmSync(absolute, { recursive: true, force: true });
-			for (const name of readdirSync(absolute)) clean(`${relative}/${name}`);
+			if (!holders.has(relative)) return rmSync(absolute, { recursive: true, force: true });
+			for (const name of readdirSync(absolute)) prune(`${relative}/${name}`);
 			return;
 		}
-		let held: Buffer | undefined;
-		try {
-			held = readFileSync(absolute);
-		} catch {}
-		if (held === undefined || !at.carried.get(relative)?.equals(held)) rmSync(absolute, { force: true });
+		let bytes: Buffer | undefined;
+		if (stats.isFile())
+			try {
+				chmodSync(absolute, 0o600);
+				bytes = readFileSync(absolute);
+			} catch {}
+		if (bytes === undefined || !at.carried.get(relative)?.equals(bytes)) rmSync(absolute, { force: true });
 	};
-	for (const root of [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig", ".pi/prompts"]) clean(root);
+	for (const root of [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig", ".pi/prompts"]) prune(root);
 }
 /** A provisioned adopter at `at`. */
 async function provisioned(at: Snapshot): Promise<string> {
@@ -252,19 +259,23 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses an unreadable or directory record through the real provision CLI ... a linked or dangling record converges",
 	"Otherwise it refuses, or leaves the clone as it is: a carried file neither pin lists is left alone.":
 		"leaves a carried file neither pin lists alone; an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
-	"To converge from every state this help names: make each handed-over file the bytes the new pin lists (revert a committed":
+	"To converge from every provision state named above (the launcher's own refusals below aside): make each":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	"edit, replace a linked directory with a real one) and remove one only the old pin lists; make .pi/extensions":
+	"handed-over file the bytes the new pin lists (revert a committed edit, replace a linked directory with a real":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	"a real, readable directory (replace a link with one holding its files, remove a file in its place); make":
+	"one) and remove one only the old pin lists; make .pi/extensions and .gitjig real, readable directories":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	".gitjig a real, readable directory (remove anything else whole), remove .gitjig/installed-pin.json; then, under":
+	"(replace a linked .pi/extensions with one holding its files; remove anything else in either place whole);":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	".pi/extensions/gitjig.ts, .pi/extensions/gitjig and .pi/prompts, remove every link, every entry that cannot":
+	"remove .gitjig/installed-pin.json; then, under .pi/extensions/gitjig.ts, .pi/extensions/gitjig and":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	"be read (make it readable to empty it), every directory where the new pin lists a file, and every file that":
+	".pi/prompts, keep only the files the new pin lists holding exactly their new bytes, and the directories that":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
-	"is not a file the new pin lists holding exactly its new bytes. Then run it. The provision run has further":
+	"hold them, and remove everything else (make an unreadable entry readable to remove it). Then run it. The":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"provision run has further preconditions of its own (SPEC 4.6: its exclude file, the hooks binding), outside":
+		"converges from every damaged state by the one step the help states (fallback does this line)",
+	"what /freshness measures.":
 		"converges from every damaged state by the one step the help states (fallback does this line)",
 	"a carried entry cannot be read, or the carried files pass 64 MiB, take the step above first: provision leaves":
 		"an unreadable or oversized unlisted carried file reads cannot-measure while provision converges",
@@ -759,6 +770,8 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 			],
 			["unreadable .pi/extensions", (t) => chmodSync(join(t, ".pi/extensions"), 0o000), true],
 			["unreadable .gitjig", (t) => chmodSync(join(t, ".gitjig"), 0o000), true],
+			["a non-canonical empty directory", (t) => mkdirSync(join(t, ".pi/prompts/cafe\u0301"))],
+			["a backslash-named empty directory", (t) => mkdirSync(join(t, ".pi/extensions/gitjig/a\\b"))],
 			[
 				"committed handed-over edit",
 				(t) => {
@@ -946,6 +959,6 @@ describe("#365 /freshness in the target's own installed Pi", () => {
 		const help = only(runTargetPi(target, ["/freshness help"]));
 		assert.equal(help.details, "help");
 		assert.match(String(help.content), /Known false positives/);
-		assert.match(String(help.content), /To converge from every state this help names/);
+		assert.match(String(help.content), /To converge from every provision state named above/);
 	});
 });

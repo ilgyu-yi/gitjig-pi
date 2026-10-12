@@ -291,7 +291,7 @@ describe("#365 the classifier's carried observer", () => {
 				symlinkSync(join(moved, "extensions"), join(root, ".pi/extensions"));
 			},
 		});
-		assert.notEqual(observation.kind, "observed", "a linked container was followed");
+		assert.deepEqual(observation, { kind: "unreadable" }, "a linked container was followed");
 	});
 
 	it("reads an unreadable entry before any difference, whatever the path order", (context) => {
@@ -393,6 +393,16 @@ describe("#365 the classifier's carried observer", () => {
 			},
 		});
 		assert.deepEqual(grown, { kind: "unreadable" });
+	});
+
+	it("never reads a member past the default 64 MiB bound", () => {
+		const root = target();
+		writeFileSync(join(root, ".pi/prompts/zz-huge.md"), Buffer.alloc(65 * 1024 * 1024, 0x61));
+		const read: string[] = [];
+		assert.deepEqual(observeCarried(root, Date.now() + 10_000, { afterRead: (path) => read.push(path) }), {
+			kind: "unreadable",
+		});
+		assert.ok(!read.includes(".pi/prompts/zz-huge.md"), "a member past the default bound was read");
 	});
 
 	it("never reads a member past the byte bound", () => {
@@ -520,7 +530,7 @@ describe("#365 the pin reads under replacement", () => {
 				symlinkSync(moved, join(root, ".gitjig"));
 			},
 		});
-		assert.notEqual(read.kind, "bytes", "a linked container was followed");
+		assert.deepEqual(read, { kind: "unreadable" }, "a linked container was followed");
 	});
 
 	it("read an unreadable container as unreadable", (context) => {
