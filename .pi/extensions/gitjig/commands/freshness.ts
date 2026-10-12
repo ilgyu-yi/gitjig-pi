@@ -39,6 +39,7 @@ export const FRESHNESS_HELP = [
 	"  bytes, one only the new pin lists is absent or exactly the new bytes, and one only the old pin lists is",
 	"  exactly the old bytes or absent;",
 	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes;",
+	"- a present record is a well-formed pin naming the same source, with no path changing class;",
 	"- and every entry it reads can be read and none on its path is a link (the record excepted: it is read",
 	"  through a link, and a dangling one reads as absent).",
 	"Otherwise it refuses, or leaves the clone as it is: a carried file neither pin lists is left alone.",

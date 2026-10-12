@@ -554,7 +554,7 @@ describe("#365 one measurement, end to end", () => {
 		const capture = captureCarriedProjection(root);
 		writeFileSync(join(root, ".pi/prompts/p.md"), CARRIED[".pi/prompts/p.md"]);
 		assert.deepEqual(measureFreshness(root, capture), { state: "current", recovery: null });
-		const full = observeCarried(root, Date.now() + 2000);
+		const full = observeCarried(target({ ...CARRIED, ".pi/prompts/p.md": "edited at load\n" }), Date.now() + 2000);
 		assert.deepEqual(
 			measureFreshness(root, full),
 			{ state: "current", recovery: null },
@@ -587,6 +587,25 @@ describe("#365 one measurement, end to end", () => {
 				recovery: PROVISION_COMMAND,
 			},
 		);
+	});
+
+	it("reads HEAD's own pin blob, never one a replace ref substitutes", () => {
+		const root = target();
+		const git = (args: string[], input?: Buffer) =>
+			execFileSync("git", ["-C", root, ...args], {
+				encoding: "utf8",
+				input,
+				env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
+			}).trim();
+		const blob = git(["rev-parse", `HEAD:${GENERATED_PIN_PATH}`]);
+		const other = git(["hash-object", "-w", "--stdin"], pinFor(CARRIED, "b".repeat(40)));
+		git(["replace", blob, other]);
+		assert.notEqual(
+			git(["cat-file", "blob", `HEAD:${GENERATED_PIN_PATH}`]),
+			COMMITTED.toString().trim(),
+			"the replace ref holds",
+		);
+		assert.deepEqual(readCommittedPin(root, 2000), { kind: "bytes", bytes: COMMITTED });
 	});
 
 	it("reads the committed pin in a partial clone without fetching or running its upload program", () => {

@@ -244,6 +244,8 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 	"exactly the old bytes or absent;": "converges a carried file only one pin lists",
 	"- under an absent record, every carried file the new pin lists is absent or exactly the new bytes;":
 		"converges ... an absent record over absent or exact-next bytes; refuses ... under an absent record",
+	"- a present record is a well-formed pin naming the same source, with no path changing class;":
+		"refuses a malformed record; refuses a record naming another source, or another class for a path",
 	"- and every entry it reads can be read and none on its path is a link (the record excepted: it is read":
 		"refuses an unreadable or directory record; refuses a linked state root or carried container; refuses a linked handed-over directory",
 	"  through a link, and a dangling one reads as absent).":
