@@ -194,6 +194,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"const session = undefined;",
 	],
 	[
+		"the committed-pin read may fetch lazily",
+		FRESHNESS,
+		'["--no-lazy-fetch", "-C", resolve(targetRoot), "cat-file"',
+		'["-C", resolve(targetRoot), "cat-file"',
+	],
+	[
 		"an unbounded observation",
 		CLASSIFIER,
 		'if (Date.now() > deadline) throw new ClassificationRefusal("carried observation is past its bound");',

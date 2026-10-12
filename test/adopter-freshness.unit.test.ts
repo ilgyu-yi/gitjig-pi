@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
 	chmodSync,
+	existsSync,
 	lstatSync,
 	mkdirSync,
 	mkdtempSync,
@@ -31,6 +32,7 @@ import {
 	type PinRead,
 	PROVISION_COMMAND,
 	RELOAD_COMMAND,
+	readCommittedPin,
 	readPinFile,
 	sessionClone,
 } from "../.pi/extensions/gitjig/install/freshness.ts";
@@ -585,6 +587,28 @@ describe("#365 one measurement, end to end", () => {
 				recovery: PROVISION_COMMAND,
 			},
 		);
+	});
+
+	it("reads the committed pin in a partial clone without fetching or running its upload program", () => {
+		const origin = target();
+		const git = (cwd: string, ...args: string[]) =>
+			execFileSync("git", ["-C", cwd, ...args], {
+				encoding: "utf8",
+				env: { PATH: process.env.PATH, HOME: cwd, GIT_CONFIG_NOSYSTEM: "1" },
+			});
+		git(origin, "config", "uploadpack.allowFilter", "true");
+		const partial = join(mkdtempSync(join(tmpdir(), "gitjig-365-partial-")), "clone");
+		roots.push(dirname(partial));
+		git(dirname(partial), "clone", "-q", "--filter=blob:none", "--no-checkout", `file://${origin}`, partial);
+		const marker = join(dirname(partial), "upload-ran");
+		const program = join(dirname(partial), "upload.sh");
+		writeFileSync(program, `#!/bin/sh\ntouch ${JSON.stringify(marker)}\nexec git-upload-pack "$@"\n`, { mode: 0o755 });
+		git(partial, "config", "remote.origin.uploadpack", program);
+		const packs = () => readdirSync(join(partial, ".git/objects/pack")).sort().join(",");
+		const before = packs();
+		assert.deepEqual(readCommittedPin(partial, 2000), { kind: "unreadable" });
+		assert.equal(existsSync(marker), false, "the clone's upload program ran");
+		assert.equal(packs(), before, "a promisor pack was written");
 	});
 
 	it("reads the committed pin from HEAD, never the working tree's file", () => {
