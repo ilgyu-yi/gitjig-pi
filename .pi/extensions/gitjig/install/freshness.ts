@@ -10,6 +10,7 @@
  * Warning-surface roster: EXEMPT — states and recovery tokens are fixed
  * strings; no operand, path, pin byte or raw error is rendered.
  */
+import { spawnSync } from "node:child_process";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, type Stats } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { TextDecoder } from "node:util";
@@ -236,6 +237,32 @@ export function sessionClone(cwd: string): string | undefined {
 	}
 }
 
+/**
+ * The committed pin: HEAD's entry, never the working tree's file, which may
+ * be edited or untracked. Read with the system Git (no program of the clone
+ * runs), replace objects ignored, under what remains of the budget; anything
+ * but HEAD's exact blob is unreadable.
+ */
+export function readCommittedPin(targetRoot: string, timeoutMs: number): PinRead {
+	if (timeoutMs <= 0) return { kind: "unreadable" };
+	const run = spawnSync("git", ["-C", resolve(targetRoot), "cat-file", "blob", `HEAD:${GENERATED_PIN_PATH}`], {
+		env: {
+			PATH: process.env.PATH ?? "",
+			HOME: process.env.HOME ?? "",
+			LC_ALL: "C",
+			GIT_NO_REPLACE_OBJECTS: "1",
+			GIT_CONFIG_NOSYSTEM: "1",
+			GIT_TERMINAL_PROMPT: "0",
+		},
+		timeout: timeoutMs,
+		maxBuffer: 16 * 1024 * 1024,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	return run.status === 0 && run.signal === null && run.error === undefined
+		? { kind: "bytes", bytes: run.stdout }
+		: { kind: "unreadable" };
+}
+
 /** One on-demand measurement: every read under one budget, then the pure evaluation. */
 export function measureFreshness(
 	targetRoot: string,
@@ -245,7 +272,7 @@ export function measureFreshness(
 	session?: string,
 ): FreshnessResult {
 	const deadline = clock() + READ_BOUND_MS;
-	const committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);
+	const committedPin = readCommittedPin(targetRoot, deadline - clock());
 	const installedPin = readPinFile(targetRoot, INSTALLED_PIN_PATH);
 	let projection = observeCarried(targetRoot, deadline);
 	// A session in another clone runs this tree's carried files through a link:
