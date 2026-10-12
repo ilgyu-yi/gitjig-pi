@@ -112,7 +112,7 @@ function tree(root: string): string {
 		const stats = lstatSync(path);
 		const rel = path.slice(root.length);
 		if (stats.isDirectory()) {
-			out.push(`d ${rel} ${stats.mode}`);
+			out.push(`d ${rel} ${stats.mode} ${stats.mtimeMs}`);
 			for (const name of readdirSync(path).sort()) visit(join(path, name));
 		} else if (stats.isFile())
 			out.push(`f ${rel} ${stats.mode} ${stats.mtimeMs} ${readFileSync(path).toString("base64")}`);
@@ -623,6 +623,20 @@ describe("#365 the registered renderer and command", () => {
 		const named = [...FRESHNESS_HELP.matchAll(/([a-z-]+) \(exit (\d+)\)/gu)];
 		assert.equal(new Set(named.map(([, cause]) => cause)).size, 5, "every pre-provision or cleanup exit named");
 		for (const [, cause, code] of named) assert.equal(status.get(cause as string), Number(code), cause);
+	});
+
+	it("compares the session's clone from the command context's cwd", async () => {
+		const own = target();
+		const other = target();
+		rmSync(join(other, ".pi/extensions"), { recursive: true });
+		symlinkSync(join(own, ".pi/extensions"), join(other, ".pi/extensions"));
+		const { command, sent } = registered(own);
+		await command.handler("", { cwd: join(own) });
+		await command.handler("", { cwd: other });
+		assert.deepEqual(
+			sent.map(([message]) => (message.details as { state: string }).state),
+			["current", "placement-mismatch"],
+		);
 	});
 
 	it("sends one content-free message per run, taking no model turn", async () => {

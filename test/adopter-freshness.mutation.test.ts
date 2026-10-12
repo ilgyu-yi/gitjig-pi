@@ -170,6 +170,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"",
 	],
 	[
+		"the command ignores the session's cwd",
+		COMMAND,
+		'const session = typeof cwd === "string" ? sessionClone(cwd) : undefined;',
+		"const session = undefined;",
+	],
+	[
 		"an unbounded observation",
 		CLASSIFIER,
 		'if (Date.now() > deadline) throw new ClassificationRefusal("carried observation is past its bound");',

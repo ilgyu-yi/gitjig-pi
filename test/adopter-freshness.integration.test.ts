@@ -192,6 +192,8 @@ const HELP_CLAUSES: Readonly<Record<string, string>> = {
 		"refuses a linked handed-over directory; a real directory converges",
 	"below them), is a link; a linked .pi, .github or .github/bin stops the launcher earlier, with invalid-input":
 		"the real launcher stops a linked .pi, .github or .github/bin with invalid-input before provision",
+	"and repair .git; in a linked worktree, whose .git is a file, it always refuses, as it provisions a main":
+		"the real launcher refuses a linked worktree with invalid-input",
 	"make an unreadable record or carried file readable, or else remove the record and the unreadable file and":
 		"removing only the record leaves an unreadable carried file or a behind unreadable record refusing",
 	"linked record through its link, and a dangling one as absent.":
@@ -661,6 +663,19 @@ describe("#365 /freshness in the target's own installed Pi", () => {
 			),
 		);
 		assert.deepEqual(stale.details, { state: "session-stale", recovery: RELOAD_COMMAND });
+	});
+
+	it("the real launcher refuses a linked worktree with invalid-input", async () => {
+		const main = await provisioned(NEXT);
+		const worktree = join(scratch("worktree"), "tree");
+		git(main, ["worktree", "add", "-q", "--detach", worktree]);
+		assert.deepEqual(freshness(worktree), MISMATCH, "a worktree holds no record of its own");
+		const run = spawnSync(process.execPath, [join(worktree, ".github/bin/gitjig-bootstrap.mjs")], {
+			encoding: "utf8",
+			env: { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: "C" },
+		});
+		assert.equal(run.status, 64, run.stderr);
+		assert.equal(run.stderr, "gitjig-bootstrap: invalid-input\n");
 	});
 
 	it("renders placement-mismatch in a clone whose .pi/extensions links into a current one", async () => {
