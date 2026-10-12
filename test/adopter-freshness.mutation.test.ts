@@ -170,6 +170,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		'\tif (differs) return { kind: "differs" };\n\tif (found.reduce((total, member) => total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES))\n\t\treturn { kind: "unreadable" };',
 	],
 	[
+		"the default pre-read byte bound widened",
+		CLASSIFIER,
+		"\t\t\tif (admitted > (options.maxBytes ?? MAX_CARRIED_BYTES))",
+		"\t\t\tif (admitted > (options.maxBytes ?? Number.POSITIVE_INFINITY))",
+	],
+	[
 		"the first difference ends the walk, so path order decides",
 		CLASSIFIER,
 		"\t\tonDiffers: () => {\n\t\t\tdiffers = true;\n\t\t},\n",
