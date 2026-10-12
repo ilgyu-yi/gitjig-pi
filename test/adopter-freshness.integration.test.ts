@@ -165,11 +165,11 @@ const CURRENT = { state: "current", recovery: null };
 /**
  * The one step /freshness help states, done literally: the handed-over files
  * made the new pin's bytes (a linked directory replaced by a real one) and
- * old-only ones removed; a linked .pi/extensions replaced by a real directory;
- * a linked .gitjig removed whole, and the record; then,
+ * old-only ones removed; .pi/extensions made a real, readable directory;
+ * .gitjig removed whole unless a real directory, and the record; then,
  * under the carried roots, every link, every entry that cannot be read (made
- * readable to empty it), and every file that is not a listed file holding
- * exactly its new bytes, removed.
+ * readable to empty it), every directory where a file is listed, and every
+ * file that is not a listed file holding exactly its new bytes, removed.
  */
 function fallback(target: string, at: Snapshot, retired: readonly string[] = []): void {
 	const lstat = (path: string) => {
@@ -192,12 +192,19 @@ function fallback(target: string, at: Snapshot, retired: readonly string[] = [])
 		write(target, path, bytes);
 	}
 	for (const path of retired) rmSync(join(target, path), { force: true });
-	if (lstat(join(target, ".pi/extensions"))?.isSymbolicLink()) {
-		const real = realpathSync(join(target, ".pi/extensions"));
-		rmSync(join(target, ".pi/extensions"));
-		cpSync(real, join(target, ".pi/extensions"), { recursive: true });
-	}
-	if (lstat(join(target, ".gitjig"))?.isSymbolicLink()) rmSync(join(target, ".gitjig"));
+	const extensions = join(target, ".pi/extensions");
+	const held = lstat(extensions);
+	if (held?.isSymbolicLink()) {
+		const real = realpathSync(extensions);
+		rmSync(extensions);
+		cpSync(real, extensions, { recursive: true });
+	} else if (held !== undefined && !held.isDirectory()) {
+		rmSync(extensions);
+		mkdirSync(extensions);
+	} else if (held !== undefined) chmodSync(extensions, 0o700);
+	const state = lstat(join(target, ".gitjig"));
+	if (state !== undefined && (state.isSymbolicLink() || !state.isDirectory()))
+		rmSync(join(target, ".gitjig"), { recursive: true, force: true });
 	rmSync(join(target, INSTALLED_PIN_PATH), { force: true, recursive: true });
 	const clean = (relative: string) => {
 		const absolute = join(target, relative);
@@ -206,6 +213,7 @@ function fallback(target: string, at: Snapshot, retired: readonly string[] = [])
 		if (stats.isSymbolicLink() || (!stats.isDirectory() && !stats.isFile())) return rmSync(absolute);
 		if (stats.isDirectory()) {
 			chmodSync(absolute, 0o700);
+			if (at.carried.has(relative)) return rmSync(absolute, { recursive: true, force: true });
 			for (const name of readdirSync(absolute)) clean(`${relative}/${name}`);
 			return;
 		}
@@ -558,11 +566,9 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 	});
 
 	it("refuses a linked state root or carried container; a real directory converges", async () => {
-		// A linked .pi also hides the committed pin, which is then not read at all.
-		const UNMEASURED = { state: "cannot-measure", recovery: PROVISION_COMMAND };
 		for (const [container, reads] of [
 			[".gitjig", MISMATCH],
-			[".pi", UNMEASURED],
+			[".pi", MISMATCH],
 			[".pi/extensions", MISMATCH],
 			[".pi/prompts", MISMATCH],
 			[".pi/extensions/gitjig/install", MISMATCH],
@@ -708,6 +714,35 @@ describe("#365 the recovery, shape by shape, against the real provision run", ()
 			["oversized extra", (t) => writeFileSync(join(t, ".pi/prompts/huge.md"), Buffer.alloc(65 * 1024 * 1024, 0x61))],
 			["linked .gitjig", (t) => link(t, ".gitjig")],
 			["linked .pi/extensions", (t) => link(t, ".pi/extensions")],
+			[
+				".gitjig as a file",
+				(t) => {
+					rmSync(join(t, ".gitjig"), { recursive: true });
+					writeFileSync(join(t, ".gitjig"), "a file\n");
+				},
+			],
+			[
+				".pi/extensions as a file",
+				(t) => {
+					rmSync(join(t, ".pi/extensions"), { recursive: true });
+					writeFileSync(join(t, ".pi/extensions"), "a file\n");
+				},
+			],
+			[
+				"a directory at the entry file",
+				(t) => {
+					rmSync(join(t, ".pi/extensions/gitjig.ts"));
+					mkdirSync(join(t, ".pi/extensions/gitjig.ts"));
+				},
+			],
+			[
+				"a directory at a listed prompt",
+				(t) => {
+					rmSync(join(t, PROMPT));
+					mkdirSync(join(t, PROMPT));
+				},
+			],
+			["unreadable .pi/extensions", (t) => chmodSync(join(t, ".pi/extensions"), 0o000), true],
 			[
 				"committed handed-over edit",
 				(t) => {

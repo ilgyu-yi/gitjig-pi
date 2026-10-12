@@ -158,16 +158,28 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	],
 	["the byte bound applied only after every read", CLASSIFIER, "\toptions.admitSize?.(stats.size);\n", ""],
 	[
+		"a root- or container-level difference ends the walk",
+		CLASSIFIER,
+		'\t\t\tif (!(error instanceof ClassificationRefusal) || error.shape !== "differs") throw error;\n\t\t\tdiffers = true;',
+		"\t\t\tthrow error;",
+	],
+	[
+		"a difference decided before the post-read byte bound",
+		CLASSIFIER,
+		'\tif (found.reduce((total, member) => total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES))\n\t\treturn { kind: "unreadable" };\n\tif (differs) return { kind: "differs" };',
+		'\tif (differs) return { kind: "differs" };\n\tif (found.reduce((total, member) => total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES))\n\t\treturn { kind: "unreadable" };',
+	],
+	[
 		"the first difference ends the walk, so path order decides",
 		CLASSIFIER,
 		"\t\tonDiffers: () => {\n\t\t\tdiffers = true;\n\t\t},\n",
 		"",
 	],
 	[
-		"the committed pin read through a link",
+		"the committed pin read from the working tree",
 		FRESHNESS,
+		"\tconst committedPin = readCommittedPin(targetRoot, deadline - clock());\n",
 		"\tconst committedPin = readPinFile(targetRoot, GENERATED_PIN_PATH);\n",
-		'\tconst committedPin: PinRead = { kind: "bytes", bytes: process.getBuiltinModule("node:fs").readFileSync(join(targetRoot, GENERATED_PIN_PATH)) };\n',
 	],
 	[
 		"a session in another clone read as this tree",
