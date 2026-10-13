@@ -28,7 +28,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 		"1.9",
 		"asserts more than its evidence (§2.4) shows and no SPEC section, acceptance criterion or declared interface requires the stated behaviour",
 	],
-	["1.9", "the flagged prose is never itself that declared interface"],
+	["1.9", "the flagged prose never counts as any of these owners"],
 	["1.9", "the finding is a behaviour defect: the behaviour is repaired, and deletion is never its repair"],
 	[
 		"1.9",
@@ -93,8 +93,8 @@ describe("#440 claim-beyond-evidence contract", () => {
 				"whatever any SPEC section, acceptance criterion or declared interface requires",
 			],
 			[
-				"the flagged prose is never itself that declared interface",
-				"the flagged prose may itself be that declared interface",
+				"the flagged prose never counts as any of these owners",
+				"the flagged prose never counts as a declared interface",
 			],
 			[
 				"the behaviour is repaired, and deletion is never its repair",
