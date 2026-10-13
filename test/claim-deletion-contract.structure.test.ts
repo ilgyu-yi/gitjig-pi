@@ -50,7 +50,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "Where the Judge cites one, the finding is SUBSTANTIVE and its ruling records the citation"],
 	[
 		"1.9",
-		"the author's repair narrows the claim to what the evidence shows or revises the cited criterion through activation (§2.2)",
+		"the author repairs it as any substantive finding, narrowing the claim to what the evidence shows or revising the cited criterion through activation (§2.2) among the repairs open to it",
 	],
 	["1.9", "widening the claim to cover the counterexample is never its repair"],
 	[
@@ -119,7 +119,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 			["Nit carry-forward applies unchanged", "Nit carry-forward does not apply"],
 			["a deletion so ruled is a ruling, not a designed repair", "a deletion so ruled is a designed repair"],
 			["the finding is SUBSTANTIVE and its ruling records the citation", "the finding is SUBSTANTIVE"],
-			["narrows the claim to what the evidence shows or revises", "widens the claim or revises"],
+			["narrowing the claim to what the evidence shows or revising", "widening the claim or revising"],
 			[
 				"widening the claim to cover the counterexample is never its repair",
 				"widening the claim to cover the counterexample is its repair",
