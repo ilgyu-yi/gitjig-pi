@@ -29,7 +29,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 		"1.9",
 		"asserts more than its evidence (§2.4) shows and no SPEC section, acceptance criterion or declared interface requires the stated behaviour",
 	],
-	["1.9", "the flagged prose never counts as any of these owners"],
+	["1.9", "the flagged prose never counts as any of these owners, nor as what owes the claim below"],
 	["1.9", "the finding is a behaviour defect: the behaviour is repaired, and deletion is never its repair"],
 	[
 		"1.9",
@@ -80,6 +80,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
 			["save the one withdrawal the claim-beyond-evidence rule below admits", "save any change a remedy makes"],
+			[", nor as what owes the claim below", ""],
 			[
 				"exact-mechanical-remedy rule holds — points",
 				"exact-mechanical-remedy rule holds: every commitment extensionally unchanged — points",
