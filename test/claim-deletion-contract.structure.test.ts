@@ -55,7 +55,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "widening the claim to cover the counterexample is never its repair"],
 	[
 		"1.9",
-		"is ruled by the Judge on all four axes at the next review; where confirmed it is SUBSTANTIVE, and the deletion default above does not reach it",
+		"once a finding at the next review reports it, is ruled by the Judge on all four axes; where confirmed it is SUBSTANTIVE, and the deletion default above does not reach it",
 	],
 	["1.9", "The rule narrows no panel's coverage (§1.7)."],
 	[
@@ -69,9 +69,6 @@ function failing(spec: string): number[] {
 		section(spec, number).split(literal).length === 2 ? [] : [index],
 	);
 }
-function holds(spec: string): boolean {
-	return failing(spec).length === 0;
-}
 
 describe("#440 claim-beyond-evidence contract", () => {
 	it("pins every clause once, in its own section", () => {
@@ -82,6 +79,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
 			["save the one withdrawal the claim-beyond-evidence rule below admits", "save any change a remedy makes"],
+			["once a finding at the next review reports it,", "whether or not any finding reports it,"],
 			["Where one of them does require it", "Where one of them may require it"],
 			["unless it cites the acceptance criterion or the passage", "unless it cites any passage"],
 			["**Claim beyond evidence.** A confirmed finding is", "**Claim beyond evidence.** Any finding is"],
@@ -131,7 +129,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 				"widening the claim to cover the counterexample is never its repair",
 				"widening the claim to cover the counterexample is its repair",
 			],
-			["ruled by the Judge on all four axes at the next review", "ruled by the panel at the next review"],
+			["is ruled by the Judge on all four axes; where", "is ruled by the panel; where"],
 			["and the deletion default above does not reach it", "and the deletion default above reaches it"],
 			["The rule narrows no panel's coverage (§1.7).", "The rule narrows the panel's coverage (§1.7)."],
 			["carries its claims as evidence or does not make them", "may carry its claims without evidence"],
