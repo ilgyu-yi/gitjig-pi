@@ -17,6 +17,7 @@
 			"prefixes": ["MISSION.md", "README.md", "docs/", "changelog_unreleased/"],
 			"anchors": [
 				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.4 Evidence discipline",
 				"### 2.5 Authoring doctrine",
 				"### 2.8 Artifact surfaces"
 			],
@@ -37,6 +38,7 @@
 			"prefixes": [".pi/", "src/", ".gitignore", "package.json", "package-lock.json", "tsconfig.json", "biome.jsonc"],
 			"anchors": [
 				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.4 Evidence discipline",
 				"### 2.5 Authoring doctrine",
 				"### 2.8 Artifact surfaces"
 			]
@@ -46,6 +48,7 @@
 			"prefixes": [".githooks/", ".github/"],
 			"anchors": [
 				"### 1.2 Authorization, evidence, and synchronization",
+				"### 2.4 Evidence discipline",
 				"### 2.5 Authoring doctrine",
 				"### 2.8 Artifact surfaces"
 			]

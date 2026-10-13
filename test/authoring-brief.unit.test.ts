@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe("the on-demand authoring brief", () => {
-	it("routes specification prose, tests, and production code to different canonical clause sets", () => {
+	it("routes specification prose and code to their canonical clause sets, §2.4 reaching shipped prose (#440)", () => {
 		const root = fixtureRoot();
 		const prose = composeAuthoringBrief(input(["SPEC.md"]), root);
 		const test = composeAuthoringBrief(input(["test/example.test.ts"]), root);
@@ -57,7 +57,8 @@ describe("the on-demand authoring brief", () => {
 		assert.equal(test.complete, true);
 		assert.equal(production.complete, true);
 		assert.notDeepEqual(headingSet(prose.text), headingSet(test.text));
-		assert.notDeepEqual(headingSet(test.text), headingSet(production.text));
+		const fragment = composeAuthoringBrief(input(["changelog_unreleased/added/1.md"]), root);
+		for (const reached of [test, production, fragment]) assert.match(reached.text, /### 2\.4 Evidence discipline/);
 		assert.match(
 			prose.text,
 			/Inherited default authoring act:\n\n- delete \(only on the rendered clause's own terms\)/,

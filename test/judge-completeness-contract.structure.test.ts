@@ -67,7 +67,7 @@ const OWNED = [
 const SECTION_SHA256: ReadonlyArray<readonly [string, string]> = [
 	["1.4", "dd78a72865ea3e51a65010005adada13d2d0848a5412d765976557a66a35a5c6"],
 	["1.7", "76327e76eb2141d4a7e2504725416479785cc98fddfdde6cb9fbafb206406aec"],
-	["1.9", "55c788ab7f28db0a6e2e897676cf3c5566f9fe0a4168ba1937a789d5c228b0ee"],
+	["1.9", "f948973d69675d6412d8ff6c772d856a1dbdb7c9d27bb17e4681ddceba1eafb2"],
 ];
 
 /** The adopter pointer, byte for byte: a present-tense claim now that #378's runtime has landed (#398). */

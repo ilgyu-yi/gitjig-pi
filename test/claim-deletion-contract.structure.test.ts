@@ -32,7 +32,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "the finding is a behaviour defect: the behaviour is repaired, and deletion is never its repair"],
 	[
 		"1.9",
-		"deleting whole claims, and only where the Judge rules that the remaining text, read in context, asserts nothing the original did not",
+		"deleting whole claims within the flagged span, so condition (b) holds, and only where the Judge rules that the remaining text, read in context, asserts nothing the original did not",
 	],
 	[
 		"1.9",
@@ -100,7 +100,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 				"the behaviour is repaired, and deletion is never its repair",
 				"the behaviour is repaired, or its description deleted",
 			],
-			["deleting whole claims, and only where", "deleting any span, and only where"],
+			["deleting whole claims within the flagged span, so condition (b) holds,", "deleting whole claims anywhere,"],
 			["read in context, asserts nothing the original did not", "read alone, asserts nothing the original did not"],
 			[
 				"or conditions another claim is never withdrawn this way",
