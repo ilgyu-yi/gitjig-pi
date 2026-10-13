@@ -64,8 +64,13 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	],
 ];
 
+function failing(spec: string): number[] {
+	return CLAUSES.flatMap(([number, literal], index) =>
+		section(spec, number).split(literal).length === 2 ? [] : [index],
+	);
+}
 function holds(spec: string): boolean {
-	return CLAUSES.every(([number, literal]) => section(spec, number).split(literal).length === 2);
+	return failing(spec).length === 0;
 }
 
 describe("#440 claim-beyond-evidence contract", () => {
@@ -77,6 +82,8 @@ describe("#440 claim-beyond-evidence contract", () => {
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
 			["save the one withdrawal the claim-beyond-evidence rule below admits", "save any change a remedy makes"],
+			["Where one of them does require it", "Where one of them may require it"],
+			["unless it cites the acceptance criterion or the passage", "unless it cites any passage"],
 			["**Claim beyond evidence.** A confirmed finding is", "**Claim beyond evidence.** Any finding is"],
 			[
 				"Where one of them does require it, the finding is a behaviour defect",
@@ -133,9 +140,16 @@ describe("#440 claim-beyond-evidence contract", () => {
 				"carries its claims as evidence or does not make them, where it can.\n",
 			],
 		];
+		const owned = new Set<number>();
 		for (const [index, [from, to]] of mutants.entries()) {
 			assert.equal(SPEC.split(from).length, 2, `mutant ${index} anchor is stale`);
-			assert.equal(holds(SPEC.replace(from, () => to)), false, `mutant ${index} survived`);
+			const reds = failing(SPEC.replace(from, () => to));
+			assert.notEqual(reds.length, 0, `mutant ${index} survived`);
+			if (reds.length === 1) owned.add(reds[0] as number);
 		}
+		// Ownership: every clause is the only one some mutant reds, so no clause
+		// rides on another's literal.
+		for (const [index, [number, literal]] of CLAUSES.entries())
+			assert.ok(owned.has(index), `§${number} clause ${index} owns no mutant: ${literal}`);
 	});
 });
