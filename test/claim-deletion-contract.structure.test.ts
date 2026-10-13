@@ -32,7 +32,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "the finding is a behaviour defect: the behaviour is repaired, and deletion is never its repair"],
 	[
 		"1.9",
-		"deleting whole claims within the flagged span, so condition (b) holds, and only where the Judge rules that the remaining text, read in context, asserts nothing the original did not",
+		"deleting whole claims within the flagged span, so condition (b) holds, and only where the Judge rules that the remaining text, read in context with every other withdrawal the same review rules applied, asserts nothing the original did not",
 	],
 	[
 		"1.9",
@@ -50,7 +50,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "Where the Judge cites one, the finding is SUBSTANTIVE and its ruling records the citation"],
 	[
 		"1.9",
-		"the author repairs it as any substantive finding, narrowing the claim to what the evidence shows or revising the cited criterion through activation (§2.2) among the repairs open to it",
+		"where it is repaired, narrowing the claim to what the evidence shows or revising the cited criterion through activation (§2.2) is among the repairs open to it",
 	],
 	["1.9", "widening the claim to cover the counterexample is never its repair"],
 	[
@@ -101,7 +101,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 				"the behaviour is repaired, or its description deleted",
 			],
 			["deleting whole claims within the flagged span, so condition (b) holds,", "deleting whole claims anywhere,"],
-			["read in context, asserts nothing the original did not", "read alone, asserts nothing the original did not"],
+			["read in context with every other withdrawal the same review rules applied", "read in context"],
 			[
 				"or conditions another claim is never withdrawn this way",
 				"or conditions another claim may be withdrawn this way",
