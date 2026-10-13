@@ -20,7 +20,7 @@ function section(text: string, number: string): string {
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "save the one withdrawal the claim-beyond-evidence rule below admits"],
 	["1.9", "**Claim beyond evidence.** A confirmed finding is a **claim-beyond-evidence** finding where the artifact"],
-	["1.9", "Where a settled contract does require it, the finding is a behaviour defect"],
+	["1.9", "Where one of them does require it, the finding is a behaviour defect"],
 	["1.9", "A claim-beyond-evidence finding admits **withdrawal**"],
 	["1.9", "Where one holds, the Judge rules the finding"],
 	["1.9", "A repair that answers such a finding by asserting more than its new evidence shows"],
@@ -60,7 +60,7 @@ const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "The rule narrows no panel's coverage (§1.7)."],
 	[
 		"2.4",
-		"Shipped operator-facing prose — help text, rendered messages, changelog fragments, and source comments that state behaviour — carries its claims as evidence or does not make them",
+		"\n- Shipped operator-facing prose — help text, rendered messages, changelog fragments, and source comments that state behaviour — carries its claims as evidence or does not make them.\n",
 	],
 ];
 
@@ -79,8 +79,8 @@ describe("#440 claim-beyond-evidence contract", () => {
 			["save the one withdrawal the claim-beyond-evidence rule below admits", "save any change a remedy makes"],
 			["**Claim beyond evidence.** A confirmed finding is", "**Claim beyond evidence.** Any finding is"],
 			[
-				"Where a settled contract does require it, the finding is a behaviour defect",
-				"Where a settled contract does require it, the finding is still a claim",
+				"Where one of them does require it, the finding is a behaviour defect",
+				"Where one of them does require it, the finding is still a claim",
 			],
 			["A claim-beyond-evidence finding admits **withdrawal**", "A claim-beyond-evidence finding admits **rewording**"],
 			["Where one holds, the Judge rules the finding", "Whether or not one holds, the Judge rules the finding"],
@@ -128,6 +128,10 @@ describe("#440 claim-beyond-evidence contract", () => {
 			["and the deletion default above does not reach it", "and the deletion default above reaches it"],
 			["The rule narrows no panel's coverage (§1.7).", "The rule narrows the panel's coverage (§1.7)."],
 			["carries its claims as evidence or does not make them", "may carry its claims without evidence"],
+			[
+				"carries its claims as evidence or does not make them.\n",
+				"carries its claims as evidence or does not make them, where it can.\n",
+			],
 		];
 		for (const [index, [from, to]] of mutants.entries()) {
 			assert.equal(SPEC.split(from).length, 2, `mutant ${index} anchor is stale`);
