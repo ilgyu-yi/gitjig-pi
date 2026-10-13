@@ -19,6 +19,11 @@ function section(text: string, number: string): string {
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "save the one withdrawal the claim-beyond-evidence rule below admits"],
+	["1.9", "**Claim beyond evidence.** A confirmed finding is a **claim-beyond-evidence** finding where the artifact"],
+	["1.9", "Where a settled contract does require it, the finding is a behaviour defect"],
+	["1.9", "A claim-beyond-evidence finding admits **withdrawal**"],
+	["1.9", "Where one holds, the Judge rules the finding"],
+	["1.9", "A repair that answers such a finding by asserting more than its new evidence shows"],
 	[
 		"1.9",
 		"asserts more than its evidence (§2.4) shows and no SPEC section, acceptance criterion or declared interface requires the stated behaviour",
@@ -72,6 +77,17 @@ describe("#440 claim-beyond-evidence contract", () => {
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
 			["save the one withdrawal the claim-beyond-evidence rule below admits", "save any change a remedy makes"],
+			["**Claim beyond evidence.** A confirmed finding is", "**Claim beyond evidence.** Any finding is"],
+			[
+				"Where a settled contract does require it, the finding is a behaviour defect",
+				"Where a settled contract does require it, the finding is still a claim",
+			],
+			["A claim-beyond-evidence finding admits **withdrawal**", "A claim-beyond-evidence finding admits **rewording**"],
+			["Where one holds, the Judge rules the finding", "Whether or not one holds, the Judge rules the finding"],
+			[
+				"A repair that answers such a finding by asserting more",
+				"A repair that answers such a finding by asserting less",
+			],
 			[
 				"and no SPEC section, acceptance criterion or declared interface requires",
 				"whatever any SPEC section, acceptance criterion or declared interface requires",
