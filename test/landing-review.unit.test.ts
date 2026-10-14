@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { landingReview } from "../.pi/extensions/gitjig/landing/platform.ts";
+import { landingReview, loadPlatformLanding } from "../.pi/extensions/gitjig/landing/platform.ts";
 import type { ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 
 /* #442: which review record at the current head decides Tier-1 landing (SPEC §3.8). */
@@ -20,8 +20,10 @@ const record = (review: unknown, findings = 0, head = HEAD): ReviewRecord =>
 	}) as unknown as ReviewRecord;
 const approved = record({ state: "approved" });
 const repair = record({ state: "resolved", resolution: { outcome: "repair", dispositions: [] } });
+const resolvedClear = record({ state: "resolved", resolution: { outcome: "clear", dispositions: [] } });
 const emptyIncomplete = record({ state: "incomplete", cause: "panel" });
 const foundIncomplete = record({ state: "incomplete", cause: "panel" }, 1);
+const elsewhereFound = record({ state: "incomplete", cause: "panel" }, 1, "b".repeat(40));
 
 type Select = typeof landingReview;
 const outcome = (select: Select, records: ReviewRecord[]) => {
@@ -30,11 +32,13 @@ const outcome = (select: Select, records: ReviewRecord[]) => {
 };
 const ARMS: ReadonlyArray<readonly [string, ReviewRecord[], string]> = [
 	["an empty incomplete record beside an approval lands", [emptyIncomplete, emptyIncomplete, approved], "clear"],
-	["an incomplete record carrying findings refuses", [foundIncomplete, approved], "review-record-incomplete-findings"],
+	["an incomplete record carrying findings leaves the review non-clear", [foundIncomplete, approved], "blocked"],
+	["an incomplete record carrying findings at another head is not read", [elsewhereFound, approved], "clear"],
 	["only empty incomplete records leave the review missing", [emptyIncomplete], "missing"],
 	["an approval beside a repair refuses as ambiguous", [repair, approved], "review-record-ambiguous"],
 	["two approvals refuse as ambiguous", [approved, approved], "review-record-ambiguous"],
 	["a single repair blocks", [repair], "blocked"],
+	["a resolved record with a clear Resolver outcome is clear", [emptyIncomplete, resolvedClear], "clear"],
 	["a record for another head is not read", [record({ state: "approved" }, 0, "b".repeat(40))], "missing"],
 ];
 
@@ -48,22 +52,24 @@ const box = mkdtempSync(join(tmpdir(), "gitjig-442-"));
 after(() => rmSync(box, { recursive: true, force: true }));
 const PLATFORM = ".pi/extensions/gitjig/landing/platform.ts";
 const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
-	[
-		"incomplete records counted",
-		'\tconst complete = atHead.filter((item) => item.review.state !== "incomplete");',
-		"\tconst complete = atHead;",
-	],
+	["incomplete records counted", 'atHead.filter((item) => item.review.state !== "incomplete")', "atHead"],
 	[
 		"findings on an incomplete record ignored",
-		' && item.bundle.length > 0))\n\t\treturn { arm: "review-record-incomplete-findings" };',
-		' && false))\n\t\treturn { arm: "review-record-incomplete-findings" };',
+		'if (withFindings !== undefined) return { resolver: "blocked"',
+		'if (false) return { resolver: "blocked"',
 	],
 	[
-		"the latest complete record taken",
-		'\tif (complete.length > 1) return { arm: "review-record-ambiguous" };\n\tconst reviewRecord = complete[0];',
-		"\tconst reviewRecord = complete.at(-1);",
+		"an incomplete record read at another head",
+		"const withFindings = atHead.find(",
+		"const withFindings = records.find(",
 	],
+	["the latest complete record taken", 'if (complete.length > 1) return { arm: "review-record-ambiguous" };', ""],
 	["another head read", "const atHead = records.filter((item) => item.head === headSha);", "const atHead = records;"],
+	[
+		"a resolved clear read as blocked",
+		'reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked"',
+		'"blocked"',
+	],
 ];
 
 describe("#442 owned mutants", () => {
@@ -74,10 +80,7 @@ describe("#442 owned mutants", () => {
 			symlinkSync(join(repository, "node_modules"), join(dir, "node_modules"), "dir");
 			const target = join(dir, PLATFORM);
 			const source = readFileSync(target, "utf8");
-			assert.ok(
-				source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from),
-				`${label}: anchor must exist once`,
-			);
+			assert.ok(source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from), `${label}: anchor`);
 			writeFileSync(
 				target,
 				source.replace(from, () => to),
@@ -88,4 +91,73 @@ describe("#442 owned mutants", () => {
 				`${label} survived`,
 			);
 		});
+});
+
+/*
+ * The call site: loadPlatformLanding over a fake platform whose comments are
+ * PR #441's three published records at one head (two incomplete, one
+ * approved), the population that stranded that head before this change.
+ */
+const FIXTURES = new URL("./fixtures/landing-442/", import.meta.url);
+const published = [0, 1, 2].map((index) => readFileSync(new URL(`record-${index}.txt`, FIXTURES), "utf8"));
+const PUBLISHED_HEAD = "545bd07e91c017fa7e88be98442ee945dae9fc9f";
+function platform(bodies: readonly string[]) {
+	const viewer = { node_id: "VIEWER", login: "operator" };
+	const responses: Record<string, unknown> = {
+		"repos/o/r": {
+			node_id: "REPO",
+			default_branch: "main",
+			allow_merge_commit: true,
+			allow_squash_merge: true,
+			allow_rebase_merge: true,
+		},
+		"repos/o/r/pulls/7": {
+			node_id: "PR",
+			head: { sha: PUBLISHED_HEAD },
+			base: { sha: "b".repeat(40), ref: "main" },
+			user: { node_id: "AUTHOR" },
+			labels: [],
+			mergeable_state: "clean",
+		},
+		user: viewer,
+		"repos/o/r/rulesets?includes_parents=true&per_page=100&page=1": [{ id: 1 }],
+		"repos/o/r/rulesets/1": {
+			target: "branch",
+			enforcement: "active",
+			conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+			source_type: "Repository",
+			rules: [],
+		},
+		"repos/o/r/pulls/7/reviews?per_page=100&page=1": [],
+		"repos/o/r/issues/7/comments?per_page=100&page=1": bodies.map((body, id) => ({ id, user: viewer, body })),
+		[`repos/o/r/commits/${PUBLISHED_HEAD}/check-runs?per_page=100&page=1`]: { total_count: 0, check_runs: [] },
+		"repos/o/r/branches/main": { commit: { sha: "b".repeat(40) } },
+		"repos/o/r/collaborators/operator/permission": { role_name: "admin" },
+	};
+	return async (argv: string[]) => {
+		if (argv.includes("graphql"))
+			return JSON.stringify({
+				data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } },
+			});
+		const key = argv.at(-1) as string;
+		return key in responses ? JSON.stringify(responses[key]) : undefined;
+	};
+}
+const load = (bodies: readonly string[]) =>
+	loadPlatformLanding("github.com", "o/r", 7, "/nonexistent", "now", platform(bodies));
+
+describe("#442 the landing load reads the head's review through landingReview", () => {
+	it("loads PR #441's stranded head as clear: two empty incomplete records and one approval", async () => {
+		const loaded = await load(published);
+		assert.equal(loaded.arm, "loaded", JSON.stringify(loaded));
+		assert.equal(loaded.snapshot?.resolver, "clear");
+		assert.equal(loaded.snapshot?.reviewHeadSha, PUBLISHED_HEAD);
+	});
+	it("refuses two approvals at the head as ambiguous", async () => {
+		assert.equal((await load([published[2] as string, published[2] as string])).arm, "review-record-ambiguous");
+	});
+	it("refuses a malformed review record", async () => {
+		const malformed = "<!-- gitjig-review-record: x -->\nnot a record";
+		assert.equal((await load([...published, malformed])).arm, "review-record-malformed");
+	});
 });

@@ -237,22 +237,21 @@ async function allThreadsResolved(
 
 /**
  * The current head's review for landing (SPEC §3.8, #442). An incomplete
- * record whose bundle is empty is a transport failure with nothing found, and
- * decides nothing; one whose bundle carries findings refuses, since a finding
- * survives any number of empty co-reviews (§1.7). More than one complete record
- * refuses as ambiguous, so a later approval never overrides an earlier repair.
+ * record whose bundle is empty found nothing and decides nothing. One whose
+ * bundle carries findings leaves the review non-clear, since a finding
+ * survives any number of empty co-reviews (§1.7); it stays a blocker the
+ * operator-directed path may waive, as before. More than one complete record
+ * refuses as ambiguous, so a later approval never overrides an earlier ruling.
  */
 export function landingReview(
 	records: readonly ReviewRecord[],
 	headSha: string,
-):
-	| { arm: "review-record-ambiguous" | "review-record-incomplete-findings" }
-	| { resolver: LandingSnapshot["resolver"]; record: ReviewRecord | undefined } {
+): { arm: "review-record-ambiguous" } | { resolver: LandingSnapshot["resolver"]; record: ReviewRecord | undefined } {
 	const atHead = records.filter((item) => item.head === headSha);
-	if (atHead.some((item) => item.review.state === "incomplete" && item.bundle.length > 0))
-		return { arm: "review-record-incomplete-findings" };
 	const complete = atHead.filter((item) => item.review.state !== "incomplete");
 	if (complete.length > 1) return { arm: "review-record-ambiguous" };
+	const withFindings = atHead.find((item) => item.review.state === "incomplete" && item.bundle.length > 0);
+	if (withFindings !== undefined) return { resolver: "blocked", record: withFindings };
 	const reviewRecord = complete[0];
 	if (reviewRecord === undefined) return { resolver: "missing", record: undefined };
 	if (reviewRecord.review.state === "approved") return { resolver: "clear", record: reviewRecord };
