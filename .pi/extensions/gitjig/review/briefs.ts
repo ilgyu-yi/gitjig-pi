@@ -118,11 +118,11 @@ const PROVISIONED_TREE_FACTS = [
 	"  treat any /tmp file you did not create as hostile.",
 	"- Never `git archive` a copy (it lacks .git and fails arms by itself); never mutate git state in",
 	"  any copy you make.",
-	"- Run the tests your finding is about: the whole suite runs at the final head and in CI, and suite",
-	"  evidence the change description gives for this head is not reproduced. Re-run",
-	"  serially before calling a failure a flake (#119). A kill may rest on the finding's own tests; for a",
-	"  survivor, run `npm run test:affected <parent commit>` against the mutant, and report it as a",
-	"  candidate, not a harness defect, until the whole suite run against the mutant confirms it.",
+	"- Run the tests your finding is about; do not reproduce suite evidence the change description gives",
+	"  for this head. Re-run serially before calling a failure a flake (#119). A kill may rest on the",
+	"  finding's own tests. For a survivor, run the affected-test selection the change description names,",
+	"  if any, against the mutant, else the finding's own tests, and report it as a candidate, not a",
+	"  harness defect, until the whole suite run against the mutant confirms it.",
 ].join("\n");
 
 const OBSERVATION_DISCIPLINE = [

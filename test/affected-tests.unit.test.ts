@@ -18,6 +18,16 @@ const git = (root: string, ...args: string[]) =>
 		env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
 	}).trim();
 
+/** Each rote tree, and a file directly in it that no narrower rote tree holds. */
+const ROTE: ReadonlyArray<readonly [string, string]> = [
+	[".pi", ".pi/settings.json"],
+	[".pi/extensions", ".pi/extensions/other.ts"],
+	[".pi/extensions/gitjig", ".pi/extensions/gitjig/deep.ts"],
+	[".github", ".github/CODEOWNERS"],
+	[".githooks", ".githooks/pre-commit"],
+	["test", "test/notes.md"],
+	["changelog_unreleased", "changelog_unreleased/x.md"],
+];
 /** A repository whose tests reach their subjects in each way the selector reads. */
 const FILES: Record<string, string> = {
 	"lib/a.ts": "export const a = 1;\n",
@@ -27,13 +37,14 @@ const FILES: Record<string, string> = {
 	"SPEC.md": "# spec\n",
 	"docs/guide.md": "guide\n",
 	".pi/extensions/gitjig.ts": "export default () => {};\n",
-	".pi/extensions/gitjig/deep.ts": "export const deep = 1;\n",
 	".pi/prompts/p.md": "prompt\n",
 	"test/imports.test.ts": 'import { d } from "../lib/d.ts";\nvoid d;\n',
 	"test/reads.test.ts": 'readFileSync("SPEC.md");\n',
 	"test/reads-dir.test.ts": 'readdirSync("docs");\n',
-	"test/rote.test.ts": 'cpSync(join(root, ".pi"), box);\ncpSync(join(root, ".pi/extensions/gitjig"), box);\n',
+	"test/rote.test.ts": ROTE.map(([tree]) => `cpSync(join(root, "${tree}"), box);\n`).join(""),
+	...Object.fromEntries(ROTE.map(([, file]) => [file, "rote\n"])),
 	"test/spawns-pi.test.ts": 'spawnSync("pi", ["-p"]);\n',
+	"test/runs-pi.test.ts": 'import { runPi } from "./harness/run-pi.ts";\nvoid runPi;\n',
 	"test/unrelated.test.ts": "export {};\n",
 	"test/harness/run.ts": "export {};\n",
 	"package.json": "{}\n",
@@ -90,19 +101,14 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		"test/reads-dir.test.ts <- reads docs/guide.md",
 	],
 	[
-		"a rote whole-tree copy is no dependency on a deep runtime file",
-		(root) => writeFileSync(join(root, ".pi/extensions/gitjig/deep.ts"), "export const deep = 2;\n"),
-		"",
-	],
-	[
 		"an extension entry change selects the tests that start Pi",
 		(root) => writeFileSync(join(root, ".pi/extensions/gitjig.ts"), "export default () => 1;\n"),
-		"test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/extensions/gitjig.ts",
+		"test/runs-pi.test.ts <- starts a real Pi, which loads .pi/extensions/gitjig.ts; test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/extensions/gitjig.ts",
 	],
 	[
 		"a prompt change selects the tests that start Pi",
 		(root) => writeFileSync(join(root, ".pi/prompts/p.md"), "changed\n"),
-		"test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/prompts/p.md",
+		"test/runs-pi.test.ts <- starts a real Pi, which loads .pi/prompts/p.md; test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/prompts/p.md",
 	],
 	[
 		"an untracked file is in the change set",
@@ -127,7 +133,7 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 	[
 		"a skill change selects the tests that start Pi",
 		(root) => writeFileSync(join(root, ".pi/skills/s.md"), "changed\n"),
-		"test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/skills/s.md",
+		"test/runs-pi.test.ts <- starts a real Pi, which loads .pi/skills/s.md; test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/skills/s.md",
 	],
 	[
 		"a tsconfig change selects the whole suite",
@@ -153,6 +159,14 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		"test/reads-new.test.ts <- reads notes/new.md",
 	],
 	["an unrelated change selects nothing", (root) => writeFileSync(join(root, "lib/c.ts"), "export const c = 4;\n"), ""],
+	...ROTE.map(
+		([tree, file]) =>
+			[
+				`a rote copy of ${tree} is no dependency on ${file}`,
+				(root: string) => writeFileSync(join(root, file), "changed\n"),
+				"",
+			] as const,
+	),
 ];
 const run = (select: Select, edit: (root: string) => void, base = "HEAD") => {
 	const root = fixture();
@@ -218,6 +232,8 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"for (const literal of file === test ? literals(source) : []) {",
 	],
 	["a rename yielding one side", "const count = /^[RC]/.test(status) ? 2 : 1;", "const count = 1;"],
+	...ROTE.map(([tree]) => [`${tree} not a rote tree`, `\t"${tree}",\n`, ""] as const),
+	["the run-pi harness not starting Pi", ", /harness\\/run-pi\\.ts[\"']/];", "];"],
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',
@@ -228,22 +244,49 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const MODULE = "test/harness/affected-tests.ts";
 
+/**
+ * Runs the command, from `source`, in a checkout whose path holds a space and
+ * non-ASCII characters, invoked through a link the arm makes itself, so the arm
+ * does not depend on the host's temporary directory being a link or not.
+ */
+function command(source: string): string {
+	const real = join(fixture(), "with space é");
+	mkdirSync(real);
+	for (const [path, text] of Object.entries(FILES)) {
+		mkdirSync(dirname(join(real, path)), { recursive: true });
+		writeFileSync(join(real, path), text);
+	}
+	writeFileSync(join(real, MODULE), source);
+	git(real, "init", "-q");
+	git(real, "add", "-A");
+	git(real, "-c", "user.name=F", "-c", "user.email=f@example.invalid", "commit", "-q", "--no-verify", "-m", "base");
+	writeFileSync(join(real, "SPEC.md"), "# changed\n");
+	const link = join(dirname(real), "link");
+	symlinkSync(real, link, "dir");
+	return execFileSync(process.execPath, [join(link, MODULE), "HEAD", "--list"], { encoding: "utf8" });
+}
+const LISTED = /^test:affected: 1 test file\(s\) against HEAD\n {2}test\/reads\.test\.ts: reads SPEC\.md\n$/;
+
 describe("#443 the command", () => {
-	it("runs from a checkout whose path holds a space and non-ASCII characters", () => {
-		const root = join(fixture(), "with space é");
-		mkdirSync(root);
-		for (const [path, text] of Object.entries(FILES)) {
-			mkdirSync(dirname(join(root, path)), { recursive: true });
-			writeFileSync(join(root, path), text);
-		}
-		cpSync(join(repository, MODULE), join(root, MODULE));
-		git(root, "init", "-q");
-		git(root, "add", "-A");
-		git(root, "-c", "user.name=F", "-c", "user.email=f@example.invalid", "commit", "-q", "--no-verify", "-m", "base");
-		writeFileSync(join(root, "SPEC.md"), "# changed\n");
-		const out = execFileSync(process.execPath, [join(root, MODULE), "HEAD", "--list"], { encoding: "utf8" });
-		assert.match(out, /^test:affected: 1 test file\(s\) against HEAD\n {2}test\/reads\.test\.ts: reads SPEC\.md\n$/);
-	});
+	const source = readFileSync(join(repository, MODULE), "utf8");
+	it("runs through a link from a checkout whose path holds a space and non-ASCII characters", () =>
+		assert.match(command(source), LISTED));
+	for (const [label, from, to] of [
+		[
+			"kills: the invoked path not resolved through links",
+			"realpathSync(resolve(process.argv[1]))",
+			"resolve(process.argv[1])",
+		],
+		[
+			"kills: the module path compared as an encoded URL",
+			"realpathSync(fileURLToPath(import.meta.url))",
+			"new URL(import.meta.url).pathname",
+		],
+	] as const)
+		it(label, () => {
+			assert.ok(source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from), `${label}: anchor`);
+			assert.doesNotMatch(command(source.replace(from, () => to)), LISTED);
+		});
 });
 
 describe("#443 owned mutants", () => {
