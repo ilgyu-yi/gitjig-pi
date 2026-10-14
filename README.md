@@ -108,7 +108,7 @@ npm run test:affected -- <base>  # against another base
 npm run test:affected -- --list  # print the selection and its reasons, run nothing
 ```
 
-It selects the changed tests, the tests importing a changed module, the tests naming a changed path, and the tests that start a real Pi when the extension entry or the prompts changed. It does not follow reach it cannot read statically, which the gate covers; a change to the suite's own machinery (`test/harness/`, `package.json`, the lock file, `tsconfig.json`) selects the whole suite.
+It selects the changed tests, the tests importing a changed module, the tests naming a changed path, and the tests that start a real Pi when the extension entry, the prompts or the skills changed. It does not follow reach it cannot read statically, which the gate covers; a change to the suite's own machinery (`test/harness/`, `package.json`, the lock file, `tsconfig.json`) selects the whole suite.
 
 ## Human operation and landing
 

@@ -96,7 +96,6 @@ function literals(source: string): string[] {
 			} else if (quote === "`" && source.startsWith("${", index)) {
 				index += 2;
 				code(true);
-				index += 1;
 				text += "${}";
 			} else if (char === "\n" && quote !== "`") break;
 			else {
