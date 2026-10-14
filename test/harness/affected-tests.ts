@@ -49,9 +49,10 @@ function git(root: string, args: string[]): string | undefined {
 export function changeSet(root: string, base: string): string[] | undefined {
 	const diff = git(root, ["diff", "--name-status", "-M", "-z", base, "--"]);
 	const untracked = git(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
+	// Git failing on ls-files alone is not reproducible here; without this check the split throws, never a silent pass.
 	if (diff === undefined || untracked === undefined) return undefined;
 	const paths = new Set<string>();
-	const fields = diff.split("\0").filter((field) => field.length > 0);
+	const fields = diff.split("\0");
 	for (let index = 0; index < fields.length; ) {
 		const status = fields[index] as string;
 		const count = /^[RC]/.test(status) ? 2 : 1;
@@ -70,15 +71,12 @@ function literals(source: string): string[] {
 /**
  * Repository-relative path a literal may name from a file. Existence is not
  * required, so a deleted file's former readers still match; a literal that is
- * not a path at all only ever selects more.
+ * not a path names nothing any changed path equals or lies below.
  */
-function named(root: string, from: string, literal: string): string | undefined {
-	if (literal.length === 0 || literal.includes("${") || /\s/.test(literal)) return undefined;
-	const candidate = /^\.\.?\//.test(literal)
+function named(root: string, from: string, literal: string): string {
+	return /^\.\.?\//.test(literal)
 		? relative(root, resolve(root, dirname(from), literal))
 		: normalize(literal).replace(/\/$/, "");
-	if (candidate.startsWith("..") || candidate === "" || candidate === ".") return undefined;
-	return candidate;
 }
 
 /** The modules a file imports by literal specifier, transitively, repository-relative. */
@@ -88,7 +86,9 @@ function importGraph(root: string, file: string, seen = new Set<string>()): Set<
 	let source: string;
 	try {
 		source = readFileSync(join(root, file), "utf8");
-	} catch {
+	} catch (error) {
+		// A missing or unreadable module ends this branch; any other error, such as a stack overflow, is not swallowed.
+		if (!(error instanceof Error && "code" in error)) throw error;
 		return seen;
 	}
 	for (const match of source.matchAll(/(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+)(["'])(\.{1,2}\/[^"']+)\1/g)) {
@@ -127,7 +127,7 @@ export function selectAffected(root: string, base: string | undefined): Selectio
 			}
 			for (const literal of literals(source)) {
 				const path = named(root, file, literal);
-				if (path !== undefined && !ROTE_TREES.has(path)) reads.add(path);
+				if (!ROTE_TREES.has(path)) reads.add(path);
 			}
 			if (file.startsWith("test/")) {
 				spawnsPi ||= SPAWNS_PI.some((pattern) => pattern.test(source));

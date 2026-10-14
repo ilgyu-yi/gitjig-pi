@@ -48,6 +48,13 @@ const FILES: Record<string, string> = {
 	"test/dynamic.test.ts": 'await import("../lib/dyn.ts");\n',
 	"assets/rel.md": "relative\n",
 	"test/reads-relative.test.ts": 'readFileSync(new URL("../assets/rel.md", import.meta.url));\n',
+	"lib/cycle-a.ts": 'import "./cycle-b.ts";\n',
+	"lib/cycle-b.ts": 'import "./cycle-a.ts";\n',
+	"test/cycle.test.ts": 'import "../lib/cycle-a.ts";\n',
+	"tables/t.json": "{}\n",
+	"test/reads-slash.test.ts": 'readdirSync("tables/");\n',
+	"lib/spawner.ts": 'spawnSync("pi", []);\n',
+	"test/uses-spawner.test.ts": 'import "../lib/spawner.ts";\n',
 	"test/runs-pi.test.ts": 'import { runPi } from "./harness/run-pi.ts";\nvoid runPi;\n',
 	"test/unrelated.test.ts": "export {};\n",
 	"test/harness/run.ts": "export {};\n",
@@ -172,6 +179,16 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		(root) => writeFileSync(join(root, "assets/rel.md"), "changed\n"),
 		"test/reads-relative.test.ts <- reads assets/rel.md",
 	],
+	[
+		"an import cycle is walked once",
+		(root) => writeFileSync(join(root, "lib/cycle-b.ts"), 'import "./cycle-a.ts";\nexport {};\n'),
+		"test/cycle.test.ts <- imports lib/cycle-b.ts",
+	],
+	[
+		"a directory literal with a trailing slash selects readers of the files in it",
+		(root) => writeFileSync(join(root, "tables/t.json"), '{"x":1}\n'),
+		"test/reads-slash.test.ts <- reads tables/t.json",
+	],
 	["an unrelated change selects nothing", (root) => writeFileSync(join(root, "lib/c.ts"), "export const c = 4;\n"), ""],
 	...ROTE.map(
 		([tree, file]) =>
@@ -225,11 +242,7 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"changed === path || changed.startsWith(`${path}/`)",
 		"changed === path",
 	],
-	[
-		"rote trees read as dependencies",
-		"if (path !== undefined && !ROTE_TREES.has(path)) reads.add(path);",
-		"if (path !== undefined) reads.add(path);",
-	],
+	["rote trees read as dependencies", "if (!ROTE_TREES.has(path)) reads.add(path);", "reads.add(path);"],
 	[
 		"Pi tests not selected",
 		"\t\t\telse if (spawnsPi && PI_LOADED.some((prefix) => path.startsWith(prefix)))",
@@ -249,11 +262,10 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 	...ROTE.map(([tree]) => [`${tree} not a rote tree`, `\t"${tree}",\n`, ""] as const),
 	["the run-pi harness not starting Pi", ", /harness\\/run-pi\\.ts[\"']/];", "];"],
 	["dynamic imports not followed", "|\\bimport\\s*\\(\\s*|", "|"],
-	[
-		"relative literals not resolved from their file",
-		"const candidate = /^\\.\\.?\\//.test(literal)",
-		"const candidate = false",
-	],
+	["relative literals not resolved from their file", "return /^\\.\\.?\\//.test(literal)", "return false"],
+	["an import cycle walked without end", "\tif (seen.has(file)) return seen;\n", ""],
+	["a trailing slash kept on a directory literal", 'normalize(literal).replace(/\\/$/, "")', "normalize(literal)"],
+	["a module that spawns Pi counted as a test that starts Pi", 'if (file.startsWith("test/")) {', "if (true) {"],
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',
