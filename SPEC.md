@@ -21,51 +21,51 @@ This document is the repository's behavioural SSOT: every enforced norm, gate cl
 | &nbsp;&nbsp;§1.7 | The reviewer panel | 213 |
 | &nbsp;&nbsp;§1.8 | Plan contest | 241 |
 | &nbsp;&nbsp;§1.9 | Finding judgment | 253 |
-| &nbsp;&nbsp;§1.10 | Release backbone | 296 |
-| §2 | Artifact hierarchy and lifecycle | 304 |
-| &nbsp;&nbsp;§2.1 | Issue types | 308 |
-| &nbsp;&nbsp;§2.2 | Lifecycle states | 321 |
-| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 348 |
-| &nbsp;&nbsp;§2.4 | Evidence discipline | 352 |
-| &nbsp;&nbsp;§2.5 | Authoring doctrine | 369 |
-| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 409 |
-| &nbsp;&nbsp;§2.7 | Canonical naming | 423 |
-| &nbsp;&nbsp;§2.8 | Artifact surfaces | 433 |
-| §3 | Enforcement-layer architecture | 445 |
-| &nbsp;&nbsp;§3.1 | The constraint | 449 |
-| &nbsp;&nbsp;§3.2 | The three tiers | 456 |
-| &nbsp;&nbsp;§3.3 | Gate classes | 464 |
-| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 587 |
-| &nbsp;&nbsp;§3.5 | Gate conduct | 597 |
-| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 601 |
-| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 613 |
-| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 629 |
-| &nbsp;&nbsp;§3.9 | Fail policy | 765 |
-| &nbsp;&nbsp;§3.10 | Delegated computation | 779 |
-| &nbsp;&nbsp;§3.11 | Gate design | 793 |
-| &nbsp;&nbsp;§3.12 | Gate verification | 815 |
-| §4 | Substrate and install contract | 827 |
-| &nbsp;&nbsp;§4.1 | Namespaces | 831 |
-| &nbsp;&nbsp;§4.2 | Target-parameterization | 855 |
-| &nbsp;&nbsp;§4.3 | PR-based installs | 1047 |
-| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1053 |
-| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1057 |
-| &nbsp;&nbsp;§4.6 | Binding and resolution | 1061 |
-| &nbsp;&nbsp;§4.7 | Host boundary | 1077 |
-| &nbsp;&nbsp;§4.8 | The command layer | 1143 |
-| &nbsp;&nbsp;§4.9 | The delegation layer | 1200 |
-| §5 | Cross-cutting contracts | 1325 |
-| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1329 |
-| &nbsp;&nbsp;§5.2 | Graceful degradation | 1335 |
-| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1339 |
-| &nbsp;&nbsp;§5.4 | Work language | 1343 |
-| &nbsp;&nbsp;§5.5 | State boundary | 1347 |
-| &nbsp;&nbsp;§5.6 | Operating modes | 1365 |
-| &nbsp;&nbsp;§5.7 | Run conduct | 1377 |
-| &nbsp;&nbsp;§5.8 | Context lifecycle | 1387 |
-| &nbsp;&nbsp;§5.9 | Session surfaces | 1395 |
-| §6 | Self-governance milestone | 1411 |
-| &nbsp;&nbsp;§6.1 | Substrate posture | 1422 |
+| &nbsp;&nbsp;§1.10 | Release backbone | 298 |
+| §2 | Artifact hierarchy and lifecycle | 306 |
+| &nbsp;&nbsp;§2.1 | Issue types | 310 |
+| &nbsp;&nbsp;§2.2 | Lifecycle states | 323 |
+| &nbsp;&nbsp;§2.3 | PR-as-living-doc | 350 |
+| &nbsp;&nbsp;§2.4 | Evidence discipline | 354 |
+| &nbsp;&nbsp;§2.5 | Authoring doctrine | 372 |
+| &nbsp;&nbsp;§2.6 | SSOT change-reach protocol | 412 |
+| &nbsp;&nbsp;§2.7 | Canonical naming | 426 |
+| &nbsp;&nbsp;§2.8 | Artifact surfaces | 436 |
+| §3 | Enforcement-layer architecture | 448 |
+| &nbsp;&nbsp;§3.1 | The constraint | 452 |
+| &nbsp;&nbsp;§3.2 | The three tiers | 459 |
+| &nbsp;&nbsp;§3.3 | Gate classes | 467 |
+| &nbsp;&nbsp;§3.4 | Human-value precedence and agent-agnostic tiers | 590 |
+| &nbsp;&nbsp;§3.5 | Gate conduct | 600 |
+| &nbsp;&nbsp;§3.6 | Enforcement-face selection | 604 |
+| &nbsp;&nbsp;§3.7 | Approval-gate completeness | 616 |
+| &nbsp;&nbsp;§3.8 | Landing authority, administration, and configurable governance | 632 |
+| &nbsp;&nbsp;§3.9 | Fail policy | 768 |
+| &nbsp;&nbsp;§3.10 | Delegated computation | 782 |
+| &nbsp;&nbsp;§3.11 | Gate design | 796 |
+| &nbsp;&nbsp;§3.12 | Gate verification | 818 |
+| §4 | Substrate and install contract | 830 |
+| &nbsp;&nbsp;§4.1 | Namespaces | 834 |
+| &nbsp;&nbsp;§4.2 | Target-parameterization | 858 |
+| &nbsp;&nbsp;§4.3 | PR-based installs | 1050 |
+| &nbsp;&nbsp;§4.4 | Headless and scripted operation | 1056 |
+| &nbsp;&nbsp;§4.5 | Installed-asset freshness | 1060 |
+| &nbsp;&nbsp;§4.6 | Binding and resolution | 1064 |
+| &nbsp;&nbsp;§4.7 | Host boundary | 1080 |
+| &nbsp;&nbsp;§4.8 | The command layer | 1146 |
+| &nbsp;&nbsp;§4.9 | The delegation layer | 1203 |
+| §5 | Cross-cutting contracts | 1328 |
+| &nbsp;&nbsp;§5.1 | Self-contained artifacts | 1332 |
+| &nbsp;&nbsp;§5.2 | Graceful degradation | 1338 |
+| &nbsp;&nbsp;§5.3 | Gate-activation conditions | 1342 |
+| &nbsp;&nbsp;§5.4 | Work language | 1346 |
+| &nbsp;&nbsp;§5.5 | State boundary | 1350 |
+| &nbsp;&nbsp;§5.6 | Operating modes | 1368 |
+| &nbsp;&nbsp;§5.7 | Run conduct | 1380 |
+| &nbsp;&nbsp;§5.8 | Context lifecycle | 1390 |
+| &nbsp;&nbsp;§5.9 | Session surfaces | 1398 |
+| §6 | Self-governance milestone | 1414 |
+| &nbsp;&nbsp;§6.1 | Substrate posture | 1425 |
 <!-- TOC END -->
 
 ## 0. Intent and scope
@@ -104,7 +104,7 @@ Every change to a governed repository rides one backbone: **issue → branch →
 
 Within one issue, work discharges three obligations. They are not phases and own no commit slots: exactly three orderings bind — authorization precedes implementation, a check's failure is observed before the implementation turns it green, synchronization is authored from the implemented tree — and beyond them no order among commits is owed. Implementation is the minimal change that satisfies the authorized contract and its checks. A spike stands outside all three: no branch, no PR, an empty change surface, and a findings note on the issue as its terminal artifact (e.g. issue #4).
 
-1. **Authorization** — before implementation begins, the change names what authorizes its intended behavior, as a resolvable pointer, recorded in the PR body's Plan (§2.3) from the draft's opening: a settled contract in this SPEC, another existing normative source, the change's own activated issue where its acceptance criteria suffice and no normative contract is altered, or — for a trivial correction alone — the artifact it corrects. Where nothing yet authorizes the behavior, the contract is settled first (the settlement rule below). A missing or unresolvable pointer is a review finding; prose is never authored merely to have something to point at. Honest residual, stated: naming-time itself leaves no artifact — the Plan entry is contemporaneous with the draft at best — so review reads the pointer's age where it needs an anchor: a pointer at an activated issue or a settled section predates the branch by construction (§1.1's issue-first entry; the settlement rule below), and tightening the uncovered case — a pointer minted at draft time — is a named deferred limitation. A `fix`'s authorization is the violated contract and its first evidence the reproduction; a `refactor`'s is the invariant it preserves; a `perf` change's authorization is the invariant it must not regress, and its first evidence the baseline measurement taken before the change; a trivial correction — trivial exactly where §1.9's exact-mechanical-remedy rule holds: remedy fully specified, local, every commitment extensionally unchanged — points at the artifact it corrects, still recorded in the Plan, with §1.9's audit carried over: a correction later shown to have moved a commitment is a substantive finding on that clause's terms; a `feat` owes new SSOT prose only where it introduces or changes a normative contract. **Precedence:** an activated issue authorizes only within what settled normative sources leave open — where its acceptance criteria conflict with a settled contract, the issue authorizes nothing, and the executor does not silently follow the contract either, since inferring intent is not starting work (the pickup rule below): the conflict stops the work with a question, resolved by amending the contract through settlement, or by reworking the issue through the same gate as its original activation (§2.2).
+1. **Authorization** — before implementation begins, the change names what authorizes its intended behavior, as a resolvable pointer, recorded in the PR body's Plan (§2.3) from the draft's opening: a settled contract in this SPEC, another existing normative source, the change's own activated issue where its acceptance criteria suffice and no normative contract is altered, or — for a trivial correction alone — the artifact it corrects. Where nothing yet authorizes the behavior, the contract is settled first (the settlement rule below). A missing or unresolvable pointer is a review finding; prose is never authored merely to have something to point at. Honest residual, stated: naming-time itself leaves no artifact — the Plan entry is contemporaneous with the draft at best — so review reads the pointer's age where it needs an anchor: a pointer at an activated issue or a settled section predates the branch by construction (§1.1's issue-first entry; the settlement rule below), and tightening the uncovered case — a pointer minted at draft time — is a named deferred limitation. A `fix`'s authorization is the violated contract and its first evidence the reproduction; a `refactor`'s is the invariant it preserves; a `perf` change's authorization is the invariant it must not regress, and its first evidence the baseline measurement taken before the change; a trivial correction — trivial exactly where §1.9's exact-mechanical-remedy rule holds — points at the artifact it corrects, still recorded in the Plan, with §1.9's audit carried over: a correction later shown to have moved a commitment is a substantive finding on that clause's terms; a `feat` owes new SSOT prose only where it introduces or changes a normative contract. **Precedence:** an activated issue authorizes only within what settled normative sources leave open — where its acceptance criteria conflict with a settled contract, the issue authorizes nothing, and the executor does not silently follow the contract either, since inferring intent is not starting work (the pickup rule below): the conflict stops the work with a question, resolved by amending the contract through settlement, or by reworking the issue through the same gate as its original activation (§2.2).
 
 2. **Evidence** — a contract that can be translated into an executable check observes its failure before the implementation satisfies it. A check that has never failed proves nothing; the failing observation is pinned (§2.4). The check states the invariant asserted, never the schedule — "fails because the target does not exist yet" becomes a lie the moment the plan succeeds. A check that unexpectedly passes is a diagnosis, never an automatic acceptance and never an automatic restart: the contract is wrong, or the check is too weak — strengthen one — or it is a legitimate regression check over existing behavior, noted as such. An invariant a change must preserve rather than newly satisfy discharges the obligation through its existing checks, recorded green before and after — the regression form of the observation. A document-only deliverable discharges it through the pre-existing gates exercised failing-first and §2.4/§2.5's claims-and-evidence discipline.
 
@@ -259,9 +259,11 @@ An adversarial reviewer's success condition is "find something" — a structural
 **The Judge.** The **Judge** — coined here as this actor's durable name (§2.7), and a different actor from §1.8's plan-contest judge, which rules candidate plans and never a panel's findings — is dispatched independently of the panel. It first performs **deduplication**, the one bundle-level operation: raw findings that are semantically one finding become one **effective finding**, with **every raw finding's provenance preserved**. Dedup merges and never discards — the surviving effective finding carries which slots reported it, so a later reader can tell one reviewer's finding from four reviewers' agreement without the merge having been a vote — and it is owed on the whole bundle, whatever the rulings that follow, with its performance attested in the return so the Resolver can read completeness without judging it. Honest residual, stated: nothing detects a Judge that attests a dedup it did not perform — what is retained instead is the surface a later reader checks it on, the preserved per-slot provenance above, alongside §3.7(d)'s requirement that the adjudication come from a real Judge run. It then rules **each effective finding** on four axes and no others. Its input is the bundle plus a **caller-derived criterion manifest** — the criterion set the AC-impact axis below reads, derived at dispatch from existing SSOT on §1.8's manifest pattern, never invented by the Judge and never assembled by the author, and crossing into the brief as §1.5's dispatch-facts form (i), derived at dispatch by a command. The manifest is what makes the AC-impact ruling reachable at all: a provisioned tree cannot reach the platform record where the criteria live (the dispatch clause below), so an axis whose input the caller does not supply is an axis the Judge cannot rule. **Absent and empty are distinct states here, as they are at the defer disposition below (§2.6).** An *absent* manifest — none supplied — is a missing input, and the review is incomplete on the availability rule below rather than adjudicated without it. An *empty* manifest is a manifest: a change with no closing issue, or one whose criteria are empty however they came to be empty, yields the empty set with an attestation of what was checked — never a withholding and never a block, §1.8's rule for its own manifest — on which the AC-impact axis rules every finding to sit on no criterion, and the adjudication completes.
 
 - **Validity** — **CONFIRMED**, **REFUTED**, or **INDETERMINATE**, each recorded with the command it ran or the citation it rests on. INDETERMINATE is a ruling, not an absence: where the Judge cannot decide, it says so, and uncertainty is never resolved by defaulting to either of the other two.
-- **Severity** — **SUBSTANTIVE** or **NIT**. A finding is a NIT only where the Judge states an **exact mechanical remedy** — the remedy is part of the ruling, not a note beside it, so a bare NIT token with no remedy stated leaves this axis unruled and the adjudication incomplete: a verbatim replacement or a mechanical derivation (a) fully specified by the ruling itself, leaving no design choice with the receiver, (b) local to the flagged span, and (c) leaving every commitment of the artifact extensionally unchanged — obligations, decisions, interfaces, and the content of measured claims. Condition (a) is the soundness condition: skipping re-review is sound only because the skipped review could have verified nothing but a verbatim application. **A remaining design choice makes the finding SUBSTANTIVE**, and the Judge designs no substantive repair — for a substantive finding it rules and stops; authoring the repair is the author's, and a Judge that wrote one would have something of its own to grade. The exact mechanical remedy remains in §1.4's complete record but is excluded from its repair-basis projection: it is neither an author repair method nor a side of OSCILLATION.
+- **Severity** — **SUBSTANTIVE** or **NIT**. A finding is a NIT only where the Judge states an **exact mechanical remedy** — the remedy is part of the ruling, not a note beside it, so a bare NIT token with no remedy stated leaves this axis unruled and the adjudication incomplete: a verbatim replacement or a mechanical derivation (a) fully specified by the ruling itself, leaving no design choice with the receiver, (b) local to the flagged span, and (c) leaving every commitment of the artifact extensionally unchanged — obligations, decisions, interfaces, and the content of measured claims — save the one withdrawal the claim-beyond-evidence rule below admits. Condition (a) is the soundness condition: skipping re-review is sound only because the skipped review could have verified nothing but a verbatim application. **A remaining design choice makes the finding SUBSTANTIVE**, and the Judge designs no substantive repair — for a substantive finding it rules and stops; authoring the repair is the author's, and a Judge that wrote one would have something of its own to grade. The exact mechanical remedy remains in §1.4's complete record but is excluded from its repair-basis projection: it is neither an author repair method nor a side of OSCILLATION.
 - **Harm direction** — ruled **explicitly on every confirmed finding**, in one of two tokens this clause commits to as their referents' durable names (§2.7). **`fail-closed`**: the demonstrated cost is a refusal where an act was intended, a declared interface narrower than the instrument it declares, or an over-report in the safe direction; where the finding's subject is a norm and nothing operates, the limbs are read through what the norm costs the changes that consume it. **`live-harm`**: anything else — a cost reachable in the artifact's own operation. Where the Judge cannot rule the direction, it rules the finding INDETERMINATE. **There is no silence default**: an unstated direction is a missing ruling, not a value, and it is never filled in by whoever reads the record next — a confirmed finding whose direction is unruled has an incomplete adjudication whatever its severity, which the Resolver's never-list rules as incompleteness rather than disposing of as a finding. (`fail-closed` is §3.9's token, deliberately extended here to a second referent — there a posture a gate takes on its own failure, here a cost a finding has — which §2.7 permits; the complement is `live-harm`, not `fail-open`, which names a gate's posture and this is not a posture.)
 - **AC impact** — whether the finding sits on an acceptance criterion of the change under review, judged against **the criterion set as a whole**: a whole-set read, distinct from AC closeout (§2.2), which is a separate gate run against the criteria one by one at a different moment; naming both is what keeps them from being conflated into one pass. The set the Judge reads is fixed against drift in one direction: it is the **union** of the criteria as activation — or a re-activation through the same gate (§2.2) — adjudicated them and the criteria as they stand when the panel opens, so a criterion present in either set counts, and drift under §1.2's rule can narrow the relief the Resolver's defer rule grants and never widen it. The drift record is executor-authored, and a set the relieved party could shrink would hand that party its own relief.
+
+**Claim beyond evidence.** A confirmed finding is a **claim-beyond-evidence** finding where the artifact asserts more than its evidence (§2.4) shows and no SPEC section, acceptance criterion or declared interface requires the stated behaviour; the flagged prose never counts as any of these owners, nor as what owes the claim below. Where one of them does require it, the finding is a behaviour defect — the owed behaviour, or its evidence, is missing — repaired by supplying what is missing, and deletion is never its repair. A claim-beyond-evidence finding admits **withdrawal**: deleting whole claims within the flagged span, so condition (b) holds, and only where the Judge rules that the remaining text, read in context with every other withdrawal the same review rules applied, asserts nothing the original did not. A qualifier, a negation, a scope limiter, or a claim that excepts, limits or conditions another claim is never withdrawn this way, since its removal can strengthen what remains; where the Judge cannot rule that check, the finding is SUBSTANTIVE. A withdrawal satisfies condition (c). Where one holds, the Judge rules the finding **NIT** with that deletion as its exact mechanical remedy unless it cites the acceptance criterion or the passage of the artifact's own contract that owes the claim; with no citation, the deletion is ruled. The Resolver disposes it as remedy and Nit carry-forward applies unchanged; a deletion so ruled is a ruling, not a designed repair. Where the Judge cites one, the finding is SUBSTANTIVE and its ruling records the citation; where it is repaired, narrowing the claim to what the evidence shows or revising the cited criterion through activation (§2.2) is among the repairs open to it, and widening the claim to cover the counterexample is never its repair. A repair that answers such a finding by asserting more than its new evidence shows, once a finding at the next review reports it, is ruled by the Judge on all four axes; where confirmed it is SUBSTANTIVE, and the deletion default above does not reach it. The rule narrows no panel's coverage (§1.7).
 
 **Judge availability is review completeness.** Where the bundle is non-empty and no valid Judge adjudication exists — the Judge was not dispatched, was dispatched without an input its rulings need such as the criterion manifest above, returned invalid under the same compare the panel rides (§1.6), or is unavailable — the **review is incomplete**, and an incomplete review passes no gate. Two paths are named as closed rather than left to be rediscovered: proceeding on the raw findings, which acts on unadjudicated false positives and is exactly the bias the layer exists to remove; and the author filling the Judge's slot, which returns to the adjudicator something of its own to grade. This layer fails **closed** on its own evidence — it is an evidence gate, not a best-effort aid, and §5.2's fail-open direction does not reach it.
 
@@ -357,6 +359,7 @@ Durable artifacts — issue bodies, PR bodies, commit messages, review verdicts 
 - A claim about a corpus ("zero matches", "all files pass") carries the command that measured it and its output, pinned to a commit — and licenses exactly what that command read. Three distinct defects: ranging past the corpus the pattern could reach, silently narrowing a returned set into an enumeration, and printing a readable paraphrase in place of the pipeline actually run.
 - No claim that expires before the artifact does — expiring claims are removed or pinned to their snapshot, never left to rot.
 - Where a rule generates the instances, the artifact states the rule — never a count or roster a future commit can silently falsify; an exact count belongs where going stale fails a check. A measurement quantified over a corpus containing its own carrier pins that corpus or excludes itself. Review archaeology — prior-defect narrative, which review said what when — lives in the review record, never on a living surface. Archaeology is one species of a genus: **development provenance**, text a reader does not need in order to understand the current contract because it describes the repository's development rather than its present state — how it got here, or where its work is going next. A distinct term from §3.7's evidence provenance, which governs where a verdict artifact came from rather than what a sentence may say. A historical *fact* that explains current behavior stays ("v1 messages remain accepted for compatibility"); its provenance does not ("we added v1 in #123"). Both tenses are the same defect because both date the sentence to a moment that is not now: §1.2's schedule species is the forward-facing half, which is why one reader covers both.
+- Shipped operator-facing prose — help text, rendered messages, changelog fragments, and source comments that state behaviour — carries its claims as evidence or does not make them.
 - A self-claim about the same change ("localized", "reviewed") ships its evidence or is not written. The three same-change claim shapes carry canonical evidence: a predicate claim ships the run against the real input; a coverage claim ships the count and the command that counted it; a machine-pair claim ("this arm refuses X") ships one attempted violation and its red.
 - Reviews are pinned to the exact commit they examined (`reviewed-head`); a review result for one head never carries forward to another — one named exception: §1.9's **Nit carry-forward** clause, on that clause's terms alone. The mechanism that verifies the pin — the caller-side blind compare — lives at §1.6.
 
