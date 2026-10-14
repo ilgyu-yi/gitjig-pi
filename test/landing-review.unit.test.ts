@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { landingReview, loadPlatformLanding } from "../.pi/extensions/gitjig/landing/platform.ts";
-import type { ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
+import { composeReviewRecord, parseReviewRecord, type ReviewRecord } from "../.pi/extensions/gitjig/review/record.ts";
 
 /* #442: which review record at the current head decides Tier-1 landing (SPEC §3.8). */
 const HEAD = "a".repeat(40);
@@ -204,6 +204,18 @@ describe("#442 the landing load reads the head's review through landingReview", 
 		assert.equal(loaded.arm, "loaded", JSON.stringify(loaded));
 		assert.equal(loaded.snapshot?.resolver, "clear");
 		assert.equal(loaded.snapshot?.reviewHeadSha, PUBLISHED_HEAD);
+	});
+	it("loads a findings-carrying incomplete record as non-clear, reading that record", async () => {
+		// PR #441's first incomplete record, with one finding from a valid slot.
+		const base = parseReviewRecord(published[0] as string) as ReviewRecord;
+		const valid = base.slots.find((item) => item.valid) as ReviewRecord["slots"][number];
+		const found = composeReviewRecord({ ...base, bundle: [{ rawOrdinal: 0, finding: "a finding", slot: valid.slot }] });
+		const loaded = await load([found, published[2] as string]);
+		assert.equal(loaded.arm, "loaded", JSON.stringify(loaded));
+		assert.equal(loaded.snapshot?.resolver, "blocked");
+		assert.equal(loaded.snapshot?.reviewHeadSha, PUBLISHED_HEAD);
+		assert.equal(loaded.snapshot?.reviewComplete, true);
+		assert.equal(loaded.snapshot?.judgeComplete, false, "the snapshot reads the incomplete record, not the approval");
 	});
 	it("refuses two approvals at the head as ambiguous", async () => {
 		assert.equal((await load([published[2] as string, published[2] as string])).arm, "review-record-ambiguous");
