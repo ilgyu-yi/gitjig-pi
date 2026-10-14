@@ -4,7 +4,7 @@
  * changed tests, the tests importing a changed module, and the tests naming a
  * changed path. It is a fast local signal, not the gate: reach it cannot read
  * statically (spawned modules, directory walks) is not followed. The whole
- * suite runs once at the final head and on every PR head in CI. A change to the
+ * suite runs once at the final head and in CI on every PR head to main or a maintenance branch. A change to the
  * suite's own machinery, or an unknown change set, selects the whole suite.
  *
  *   node test/harness/affected-tests.ts [base] [--list]
