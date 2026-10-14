@@ -21,37 +21,58 @@ const record = (review: unknown, findings = 0, head = HEAD): ReviewRecord =>
 const approved = record({ state: "approved" });
 const repair = record({ state: "resolved", resolution: { outcome: "repair", dispositions: [] } });
 const escalate = record({ state: "resolved", resolution: { outcome: "measure-escalate", dispositions: [] } });
-const resolvedClear = record({ state: "resolved", resolution: { outcome: "clear", dispositions: [] } });
+const resolvedClear = record({ state: "resolved", resolution: { outcome: "clear", dispositions: [] } }, 1);
 const emptyIncomplete = record({ state: "incomplete", cause: "panel" });
 const foundIncomplete = record({ state: "incomplete", cause: "panel" }, 1);
 const elsewhereFound = record({ state: "incomplete", cause: "panel" }, 1, "b".repeat(40));
 
 type Select = typeof landingReview;
+/** The arm or resolver token, and which record landing reads (its review fields derive from it). */
 const outcome = (select: Select, records: ReviewRecord[]) => {
 	const result = select(records, HEAD);
-	return "arm" in result ? result.arm : result.resolver;
+	return "arm" in result ? [result.arm, undefined] : [result.resolver, result.record];
 };
-const ARMS: ReadonlyArray<readonly [string, ReviewRecord[], string]> = [
-	["an empty incomplete record beside an approval lands", [emptyIncomplete, emptyIncomplete, approved], "clear"],
-	["an incomplete record carrying findings leaves the review non-clear", [foundIncomplete, approved], "blocked"],
-	["an incomplete record carrying findings at another head is not read", [elsewhereFound, approved], "clear"],
-	["only empty incomplete records leave the review missing", [emptyIncomplete], "missing"],
-	["an approval beside a repair refuses as ambiguous", [repair, approved], "review-record-ambiguous"],
-	["two approvals refuse as ambiguous", [approved, approved], "review-record-ambiguous"],
-	["a single repair blocks", [repair], "blocked"],
-	["a single measure-escalate blocks", [escalate], "blocked"],
+const ARMS: ReadonlyArray<readonly [string, ReviewRecord[], string, ReviewRecord | undefined]> = [
+	[
+		"an empty incomplete record beside an approval lands",
+		[emptyIncomplete, emptyIncomplete, approved],
+		"clear",
+		approved,
+	],
+	[
+		"an incomplete record carrying findings leaves the review non-clear",
+		[foundIncomplete, approved],
+		"blocked",
+		foundIncomplete,
+	],
+	["an incomplete record carrying findings at another head is not read", [elsewhereFound, approved], "clear", approved],
+	["only empty incomplete records leave the review missing", [emptyIncomplete], "missing", undefined],
+	["an approval beside a repair refuses as ambiguous", [repair, approved], "review-record-ambiguous", undefined],
+	["two approvals refuse as ambiguous", [approved, approved], "review-record-ambiguous", undefined],
+	["a single repair blocks", [repair], "blocked", repair],
+	["a single measure-escalate blocks", [escalate], "blocked", escalate],
 	[
 		"two complete records refuse even beside findings on an incomplete one",
 		[foundIncomplete, repair, approved],
 		"review-record-ambiguous",
+		undefined,
 	],
-	["a resolved record with a clear Resolver outcome is clear", [emptyIncomplete, resolvedClear], "clear"],
-	["a record for another head is not read", [record({ state: "approved" }, 0, "b".repeat(40))], "missing"],
+	[
+		"a resolved record with a clear Resolver outcome is clear",
+		[emptyIncomplete, resolvedClear],
+		"clear",
+		resolvedClear,
+	],
+	["a record for another head is not read", [record({ state: "approved" }, 0, "b".repeat(40))], "missing", undefined],
 ];
 
 describe("#442 landing reads the current head's complete review", () => {
-	for (const [label, records, expected] of ARMS)
-		it(label, () => assert.equal(outcome(landingReview, records), expected));
+	for (const [label, records, expected, read] of ARMS)
+		it(label, () => {
+			const [token, chosen] = outcome(landingReview, records);
+			assert.equal(token, expected);
+			assert.equal(chosen, read, "landing reads another record");
+		});
 });
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -76,6 +97,17 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"a resolved clear read as blocked",
 		'reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked"',
 		'"blocked"',
+	],
+	[
+		"the findings record dropped",
+		'return { resolver: "blocked", record: withFindings };',
+		'return { resolver: "blocked", record: undefined };',
+	],
+	["the resolved record dropped", "\t\t\trecord: reviewRecord,\n\t\t};", "\t\t\trecord: undefined,\n\t\t};"],
+	[
+		"any record with findings read as an incomplete one",
+		'item.review.state === "incomplete" && item.bundle.length > 0',
+		"item.bundle.length > 0",
 	],
 	[
 		"a resolved non-clear outcome read as clear",
@@ -104,7 +136,10 @@ describe("#442 owned mutants", () => {
 			);
 			const mutated = (await import(pathToFileURL(target).href)) as { landingReview: Select };
 			assert.ok(
-				ARMS.some(([, records, expected]) => outcome(mutated.landingReview, records) !== expected),
+				ARMS.some(([, records, expected, read]) => {
+					const [token, chosen] = outcome(mutated.landingReview, records);
+					return token !== expected || chosen !== read;
+				}),
 				`${label} survived`,
 			);
 		});
