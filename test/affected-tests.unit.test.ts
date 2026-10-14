@@ -97,10 +97,15 @@ function fixture(): string {
 	return root;
 }
 type Select = typeof selectAffected;
+/** The whole suite of the fixture as `picked` renders it: every test file, not just the mode. */
+const ALL = `all ${Object.keys(FILES)
+	.filter((path) => /^test\/[^/]+\.test\.ts$/.test(path))
+	.sort()
+	.join(" ")}`;
 /** The selected tests, each with its first reason, so each rule is told apart from another that also selects. */
 const picked = (selection: Selection) =>
 	selection.mode === "all"
-		? "all"
+		? `all ${[...selection.tests].sort().join(" ")}`
 		: [...selection.tests]
 				.map(([test, reasons]) => `${test} <- ${reasons[0]}`)
 				.sort()
@@ -151,27 +156,23 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 	[
 		"a harness change selects the whole suite",
 		(root) => writeFileSync(join(root, "test/harness/run.ts"), "export const x = 1;\n"),
-		"all",
+		ALL,
 	],
 	[
 		"a package manifest change selects the whole suite",
 		(root) => writeFileSync(join(root, "package.json"), '{"x":1}\n'),
-		"all",
+		ALL,
 	],
 	[
 		"a skill change selects the tests that start Pi",
 		(root) => writeFileSync(join(root, ".pi/skills/s.md"), "changed\n"),
 		"test/runs-pi.test.ts <- starts a real Pi, which loads .pi/skills/s.md; test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/skills/s.md",
 	],
-	[
-		"a tsconfig change selects the whole suite",
-		(root) => writeFileSync(join(root, "tsconfig.json"), '{"x":1}\n'),
-		"all",
-	],
+	["a tsconfig change selects the whole suite", (root) => writeFileSync(join(root, "tsconfig.json"), '{"x":1}\n'), ALL],
 	[
 		"a lock file change selects the whole suite",
 		(root) => writeFileSync(join(root, "package-lock.json"), '{"x":1}\n'),
-		"all",
+		ALL,
 	],
 	[
 		"a path an imported module names selects the importing test",
@@ -272,8 +273,8 @@ describe("#443 affected-test selection", () => {
 
 	it("selects the whole suite without a base or with an unreadable one", () => {
 		const root = fixture();
-		assert.equal(picked(selectAffected(root, undefined)), "all");
-		assert.equal(picked(selectAffected(root, "no-such-ref")), "all");
+		assert.equal(picked(selectAffected(root, undefined)), ALL);
+		assert.equal(picked(selectAffected(root, "no-such-ref")), ALL);
 	});
 
 	it("gives a reason for every selected test", () => {
@@ -347,6 +348,11 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 	["a quote not ending at a newline", '} else if (char === "\\n" && quote !== "`") break;', "} else if (false) break;"],
 	["a template ending at a newline", ' && quote !== "`") break;', ") break;"],
 	["the closing quote read again", "\t\tindex += 1;\n\t\tfound.push(text);", "\t\tfound.push(text);"],
+	...[
+		'"no base to compare against", tests }',
+		"`the change set against ${base} is unreadable`, tests }",
+		"`${whole} configures every test`, tests }",
+	].map((from) => [`the whole suite emptied at ${from}`, from, from.replace("tests }", "tests: [] }")] as const),
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',
@@ -449,7 +455,7 @@ describe("#443 owned mutants", () => {
 			};
 			const killed =
 				[undefined, "no-such-ref"].some(
-					(base) => observe(() => picked(mutated.selectAffected(fixture(), base))) !== "all",
+					(base) => observe(() => picked(mutated.selectAffected(fixture(), base))) !== ALL,
 				) || ARMS.some(([, edit, expected]) => observe(() => run(mutated.selectAffected, edit)) !== expected);
 			assert.ok(killed, `${label} survived`);
 		});
