@@ -531,10 +531,10 @@ function armProjectsTheRecoveryBrief(briefs: RecoveryBriefs): void {
  * change; the six recovery and diagnosis digests are untouched.
  */
 const BASE_GENERIC_BRIEFS: Readonly<Record<string, string>> = {
-	reviewer: "ab7f6986d1db9d380611dce95cc148caa7c0b885ccd7a9ab33e8698e02b3a8e6",
-	reviewerDefaultTiming: "dfe50ad2bc672c97c44d17e9946d1453d84c5d044a1d4b2177769436aa1ecd43",
-	judge: "a26f4afc10b2be401268a10f97a01fab81f0010c1503e500bb3cd81c939ef380",
-	judgeReRequest: "e65bb771465e0d5fb11ae2ef246153e8a5876515e087ac6b2dc95522dc781fad",
+	reviewer: "4df0954911f15465d33a63818f4ff2d071adac06545ba18e04442f4dde0b18db",
+	reviewerDefaultTiming: "c69d09824723f2106626ba9079847cf177df2d1c3c8af5a89cdeba29e0088129",
+	judge: "5a243815db313f8107ba1076bcfac1041346079ff598f0803da5e3f1bca2181e",
+	judgeReRequest: "087e0984bea2eb30a1aaaeef3f0df7b7f165d0e64e2f6ea9b413fa009c51dd2e",
 	diagnosis: "b1335518c12cd04544809218aa5c928e473b701e368d6c2e814fef6e5f79cabe",
 	challenger: "4be7936af25cf80285f3aeee821d61d3b4af6a71b2392130653f828663243294",
 	contestSelector: "b43b7e943c36ed42695b66918457414086062134505956d618306d456de9e190",

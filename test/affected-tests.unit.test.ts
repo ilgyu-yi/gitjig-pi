@@ -37,6 +37,13 @@ const FILES: Record<string, string> = {
 	"test/unrelated.test.ts": "export {};\n",
 	"test/harness/run.ts": "export {};\n",
 	"package.json": "{}\n",
+	"package-lock.json": "{}\n",
+	"tsconfig.json": "{}\n",
+	".pi/skills/s.md": "skill\n",
+	"lib/reader.ts": 'readFileSync("data/table.json");\n',
+	"data/table.json": "{}\n",
+	"test/graph-reads.test.ts": 'import "../lib/reader.ts";\n',
+	"test/reads-new.test.ts": 'readFileSync("notes/new.md");\n',
 };
 function fixture(): string {
 	const root = mkdtempSync(join(tmpdir(), "gitjig-443-"));
@@ -117,6 +124,34 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		(root) => writeFileSync(join(root, "package.json"), '{"x":1}\n'),
 		"all",
 	],
+	[
+		"a skill change selects the tests that start Pi",
+		(root) => writeFileSync(join(root, ".pi/skills/s.md"), "changed\n"),
+		"test/spawns-pi.test.ts <- starts a real Pi, which loads .pi/skills/s.md",
+	],
+	[
+		"a tsconfig change selects the whole suite",
+		(root) => writeFileSync(join(root, "tsconfig.json"), '{"x":1}\n'),
+		"all",
+	],
+	[
+		"a lock file change selects the whole suite",
+		(root) => writeFileSync(join(root, "package-lock.json"), '{"x":1}\n'),
+		"all",
+	],
+	[
+		"a path an imported module names selects the importing test",
+		(root) => writeFileSync(join(root, "data/table.json"), '{"x":1}\n'),
+		"test/graph-reads.test.ts <- reads data/table.json",
+	],
+	[
+		"a rename selects the readers of its new path",
+		(root) => {
+			mkdirSync(join(root, "notes"));
+			git(root, "mv", "lib/c.ts", "notes/new.md");
+		},
+		"test/reads-new.test.ts <- reads notes/new.md",
+	],
 	["an unrelated change selects nothing", (root) => writeFileSync(join(root, "lib/c.ts"), "export const c = 4;\n"), ""],
 ];
 const run = (select: Select, edit: (root: string) => void, base = "HEAD") => {
@@ -144,8 +179,6 @@ describe("#443 affected-test selection", () => {
 	});
 });
 
-const repository = fileURLToPath(new URL("..", import.meta.url));
-const MODULE = "test/harness/affected-tests.ts";
 const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 	[
 		"changed tests not selected",
@@ -176,12 +209,42 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 	],
 	["untracked files dropped", 'for (const path of untracked.split("\\0")) if (path.length > 0) paths.add(path);', ""],
 	["whole-suite machinery ignored", 'if (whole !== undefined) return { mode: "all"', 'if (false) return { mode: "all"'],
+	["skills not loaded by Pi", '".pi/prompts/", ".pi/skills/"]', '".pi/prompts/"]'],
+	["tsconfig not configuring the suite", ", /^tsconfig\\.json$/];", "];"],
+	["the lock file not configuring the suite", "/^package-lock\\.json$/, ", ""],
+	[
+		"paths read only in the test file itself",
+		"for (const literal of literals(source)) {",
+		"for (const literal of file === test ? literals(source) : []) {",
+	],
+	["a rename yielding one side", "const count = /^[RC]/.test(status) ? 2 : 1;", "const count = 1;"],
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',
 		'if (false) return { mode: "all"',
 	],
 ];
+
+const repository = fileURLToPath(new URL("..", import.meta.url));
+const MODULE = "test/harness/affected-tests.ts";
+
+describe("#443 the command", () => {
+	it("runs from a checkout whose path holds a space and non-ASCII characters", () => {
+		const root = join(fixture(), "with space é");
+		mkdirSync(root);
+		for (const [path, text] of Object.entries(FILES)) {
+			mkdirSync(dirname(join(root, path)), { recursive: true });
+			writeFileSync(join(root, path), text);
+		}
+		cpSync(join(repository, MODULE), join(root, MODULE));
+		git(root, "init", "-q");
+		git(root, "add", "-A");
+		git(root, "-c", "user.name=F", "-c", "user.email=f@example.invalid", "commit", "-q", "--no-verify", "-m", "base");
+		writeFileSync(join(root, "SPEC.md"), "# changed\n");
+		const out = execFileSync(process.execPath, [join(root, MODULE), "HEAD", "--list"], { encoding: "utf8" });
+		assert.match(out, /^test:affected: 1 test file\(s\) against HEAD\n {2}test\/reads\.test\.ts: reads SPEC\.md\n$/);
+	});
+});
 
 describe("#443 owned mutants", () => {
 	const box = mkdtempSync(join(tmpdir(), "gitjig-443-mutants-"));

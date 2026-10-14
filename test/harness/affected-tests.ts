@@ -12,8 +12,9 @@
  * The base defaults to the merge base with origin/main.
  */
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type Selection =
 	| { mode: "all"; reason: string; tests: string[] }
@@ -147,8 +148,11 @@ function defaultBase(root: string): string | undefined {
 	return git(root, ["merge-base", "origin/main", "HEAD"])?.trim() || undefined;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
-	const root = resolve(dirname(new URL(import.meta.url).pathname), "../..");
+// Compared as real paths: the invoked path may run through a link (macOS /var) or
+// carry characters a file URL percent-encodes, and a mismatch would run nothing.
+const SELF = realpathSync(fileURLToPath(import.meta.url));
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === SELF) {
+	const root = resolve(dirname(SELF), "../..");
 	const args = process.argv.slice(2);
 	const list = args.includes("--list");
 	const base = args.find((arg) => !arg.startsWith("--")) ?? defaultBase(root);
