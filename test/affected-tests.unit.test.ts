@@ -44,6 +44,10 @@ const FILES: Record<string, string> = {
 	"test/rote.test.ts": ROTE.map(([tree]) => `cpSync(join(root, "${tree}"), box);\n`).join(""),
 	...Object.fromEntries(ROTE.map(([, file]) => [file, "rote\n"])),
 	"test/spawns-pi.test.ts": 'spawnSync("pi", ["-p"]);\n',
+	"lib/dyn.ts": "export const dyn = 1;\n",
+	"test/dynamic.test.ts": 'await import("../lib/dyn.ts");\n',
+	"assets/rel.md": "relative\n",
+	"test/reads-relative.test.ts": 'readFileSync(new URL("../assets/rel.md", import.meta.url));\n',
 	"test/runs-pi.test.ts": 'import { runPi } from "./harness/run-pi.ts";\nvoid runPi;\n',
 	"test/unrelated.test.ts": "export {};\n",
 	"test/harness/run.ts": "export {};\n",
@@ -158,6 +162,16 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		},
 		"test/reads-new.test.ts <- reads notes/new.md",
 	],
+	[
+		"a module imported dynamically by a relative specifier selects its importer",
+		(root) => writeFileSync(join(root, "lib/dyn.ts"), "export const dyn = 2;\n"),
+		"test/dynamic.test.ts <- imports lib/dyn.ts",
+	],
+	[
+		"a relative path literal selects its reader",
+		(root) => writeFileSync(join(root, "assets/rel.md"), "changed\n"),
+		"test/reads-relative.test.ts <- reads assets/rel.md",
+	],
 	["an unrelated change selects nothing", (root) => writeFileSync(join(root, "lib/c.ts"), "export const c = 4;\n"), ""],
 	...ROTE.map(
 		([tree, file]) =>
@@ -234,6 +248,12 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 	["a rename yielding one side", "const count = /^[RC]/.test(status) ? 2 : 1;", "const count = 1;"],
 	...ROTE.map(([tree]) => [`${tree} not a rote tree`, `\t"${tree}",\n`, ""] as const),
 	["the run-pi harness not starting Pi", ", /harness\\/run-pi\\.ts[\"']/];", "];"],
+	["dynamic imports not followed", "|\\bimport\\s*\\(\\s*|", "|"],
+	[
+		"relative literals not resolved from their file",
+		"const candidate = /^\\.\\.?\\//.test(literal)",
+		"const candidate = false",
+	],
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',
@@ -249,7 +269,7 @@ const MODULE = "test/harness/affected-tests.ts";
  * non-ASCII characters, invoked through a link the arm makes itself, so the arm
  * does not depend on the host's temporary directory being a link or not.
  */
-function command(source: string): string {
+function command(source: string, base: "HEAD" | "default" = "HEAD"): string {
 	const real = join(fixture(), "with space é");
 	mkdirSync(real);
 	for (const [path, text] of Object.entries(FILES)) {
@@ -261,16 +281,37 @@ function command(source: string): string {
 	git(real, "add", "-A");
 	git(real, "-c", "user.name=F", "-c", "user.email=f@example.invalid", "commit", "-q", "--no-verify", "-m", "base");
 	writeFileSync(join(real, "SPEC.md"), "# changed\n");
+	if (base === "default") {
+		// origin/main stays at the base commit; the change is committed, so only the merge base sees it.
+		git(real, "update-ref", "refs/remotes/origin/main", "HEAD");
+		git(real, "-c", "user.name=F", "-c", "user.email=f@example.invalid", "commit", "-qam", "change", "--no-verify");
+	}
 	const link = join(dirname(real), "link");
 	symlinkSync(real, link, "dir");
-	return execFileSync(process.execPath, [join(link, MODULE), "HEAD", "--list"], { encoding: "utf8" });
+	const args = base === "HEAD" ? ["HEAD", "--list"] : ["--list"];
+	return execFileSync(process.execPath, [join(link, MODULE), ...args], { encoding: "utf8" });
 }
 const LISTED = /^test:affected: 1 test file\(s\) against HEAD\n {2}test\/reads\.test\.ts: reads SPEC\.md\n$/;
+const LISTED_DEFAULT =
+	/^test:affected: 1 test file\(s\) against [0-9a-f]{40}\n {2}test\/reads\.test\.ts: reads SPEC\.md\n$/;
 
 describe("#443 the command", () => {
 	const source = readFileSync(join(repository, MODULE), "utf8");
 	it("runs through a link from a checkout whose path holds a space and non-ASCII characters", () =>
 		assert.match(command(source), LISTED));
+	it("defaults its base to the merge base with origin/main", () =>
+		assert.match(command(source, "default"), LISTED_DEFAULT));
+	it("kills: the default base not the merge base with origin/main", () => {
+		const from = '["merge-base", "origin/main", "HEAD"]';
+		assert.ok(source.indexOf(from) >= 0 && source.indexOf(from) === source.lastIndexOf(from), "anchor");
+		assert.doesNotMatch(
+			command(
+				source.replace(from, () => '["merge-base", "HEAD", "HEAD"]'),
+				"default",
+			),
+			LISTED_DEFAULT,
+		);
+	});
 	for (const [label, from, to] of [
 		[
 			"kills: the invoked path not resolved through links",
