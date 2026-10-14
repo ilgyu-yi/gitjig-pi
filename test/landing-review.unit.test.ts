@@ -24,6 +24,9 @@ const escalate = record({ state: "resolved", resolution: { outcome: "measure-esc
 const resolvedClear = record({ state: "resolved", resolution: { outcome: "clear", dispositions: [] } }, 1);
 const emptyIncomplete = record({ state: "incomplete", cause: "panel" });
 const foundIncomplete = record({ state: "incomplete", cause: "panel" }, 1);
+// The runtime also writes findings-carrying incomplete records whose Judge did not finish.
+const judgeIncomplete = record({ state: "incomplete", cause: "adjudication-incomplete", gaps: ["g"] }, 1);
+const judgeMissing = record({ state: "incomplete", cause: "adjudication-missing" }, 1);
 const elsewhereFound = record({ state: "incomplete", cause: "panel" }, 1, "b".repeat(40));
 
 type Select = typeof landingReview;
@@ -87,6 +90,8 @@ describe("#442 landing reads the current head's complete review", () => {
 const KINDS: ReadonlyArray<ReviewRecord> = [
 	emptyIncomplete,
 	foundIncomplete,
+	judgeIncomplete,
+	judgeMissing,
 	elsewhereFound,
 	record({ state: "approved" }, 0, "b".repeat(40)),
 	approved,
@@ -170,6 +175,11 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"findings ignored beside a resolved record",
 		'if (withFindings !== undefined) return { resolver: "blocked"',
 		'if (withFindings !== undefined && complete[0]?.review.state !== "resolved") return { resolver: "blocked"',
+	],
+	[
+		"only a panel-cause incomplete record read for findings",
+		'item.review.state === "incomplete" && item.bundle.length > 0',
+		'item.review.state === "incomplete" && (item.review as { cause?: string }).cause === "panel" && item.bundle.length > 0',
 	],
 	[
 		"a resolved non-clear outcome read as clear",
