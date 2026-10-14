@@ -88,6 +88,7 @@ const KINDS: ReadonlyArray<ReviewRecord> = [
 	emptyIncomplete,
 	foundIncomplete,
 	elsewhereFound,
+	record({ state: "approved" }, 0, "b".repeat(40)),
 	approved,
 	repair,
 	escalate,
