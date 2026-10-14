@@ -1,7 +1,7 @@
 /** Warning-surface roster: EXEMPT — platform bytes enter closed parsers/results and this adapter renders no text. */
 import { runPlatformRead } from "../platform/read.ts";
 import { runPlatformMutation } from "../platform/write.ts";
-import { parseReviewRecord } from "../review/record.ts";
+import { parseReviewRecord, type ReviewRecord } from "../review/record.ts";
 import { BYPASS_LABEL, type LandingEffects, type LandingSnapshot } from "./service.ts";
 
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -235,6 +235,35 @@ async function allThreadsResolved(
 	return undefined;
 }
 
+/**
+ * The current head's review for landing (SPEC §3.8, #442). An incomplete
+ * record whose bundle is empty is a transport failure with nothing found, and
+ * decides nothing; one whose bundle carries findings refuses, since a finding
+ * survives any number of empty co-reviews (§1.7). More than one complete record
+ * refuses as ambiguous, so a later approval never overrides an earlier repair.
+ */
+export function landingReview(
+	records: readonly ReviewRecord[],
+	headSha: string,
+):
+	| { arm: "review-record-ambiguous" | "review-record-incomplete-findings" }
+	| { resolver: LandingSnapshot["resolver"]; record: ReviewRecord | undefined } {
+	const atHead = records.filter((item) => item.head === headSha);
+	if (atHead.some((item) => item.review.state === "incomplete" && item.bundle.length > 0))
+		return { arm: "review-record-incomplete-findings" };
+	const complete = atHead.filter((item) => item.review.state !== "incomplete");
+	if (complete.length > 1) return { arm: "review-record-ambiguous" };
+	const reviewRecord = complete[0];
+	if (reviewRecord === undefined) return { resolver: "missing", record: undefined };
+	if (reviewRecord.review.state === "approved") return { resolver: "clear", record: reviewRecord };
+	if (reviewRecord.review.state === "resolved")
+		return {
+			resolver: reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked",
+			record: reviewRecord,
+		};
+	return { resolver: "blocked", record: reviewRecord };
+}
+
 export interface PlatformLandingLoad {
 	snapshot?: LandingSnapshot;
 	arm: string;
@@ -456,16 +485,12 @@ export async function loadPlatformLanding(
 	);
 	if (markedComments.some((item) => parseReviewRecord(String(record(item)?.body ?? "")) === undefined))
 		return { arm: "review-record-malformed" };
-	const reviewRecords = markedComments
-		.map((item) => parseReviewRecord(String(record(item)?.body ?? "")))
-		.filter((item) => item?.head === headSha);
-	if (reviewRecords.length > 1) return { arm: "review-record-ambiguous" };
-	const reviewRecord = reviewRecords[0];
-	let resolver: LandingSnapshot["resolver"] = "missing";
-	if (reviewRecord?.review.state === "approved") resolver = "clear";
-	else if (reviewRecord?.review.state === "resolved")
-		resolver = reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked";
-	else if (reviewRecord) resolver = "blocked";
+	const selected = landingReview(
+		markedComments.map((item) => parseReviewRecord(String(record(item)?.body ?? "")) as ReviewRecord),
+		headSha,
+	);
+	if ("arm" in selected) return { arm: selected.arm };
+	const { resolver, record: reviewRecord } = selected;
 	const labels = array(pr.labels)
 		.map(record)
 		.map((item) => String(item?.name));
