@@ -1,0 +1,92 @@
+<!-- gitjig-review-record: 545bd07e91c017fa7e88be98442ee945dae9fc9f -->
+
+```json
+{
+	"schemaVersion": 2,
+	"head": "545bd07e91c017fa7e88be98442ee945dae9fc9f",
+	"slots": [
+		{
+			"slot": {
+				"lens": "spec\u002dcontract",
+				"surface": "the behavioural SSOT and the direction document"
+			},
+			"valid": true
+		},
+		{
+			"slot": {
+				"lens": "runtime",
+				"surface": "the shell's runtime extensions"
+			},
+			"valid": true
+		},
+		{
+			"slot": {
+				"lens": "suite",
+				"surface": "the test suite"
+			},
+			"valid": false,
+			"reason": "timed out"
+		},
+		{
+			"slot": {
+				"lens": "docs",
+				"surface": "adopter\u002dfacing prose and the changelog fragments"
+			},
+			"valid": true
+		}
+	],
+	"bundle": [],
+	"manifest": {
+		"state": "present",
+		"criteria": [
+			"\u0023440\u003a [ ] SPEC §2.4 names shipped operator\u002dfacing prose (help, rendered messages, changelog fragments, behaviour\u002dstating comments) as carrying its claims as evidence.",
+			"\u0023440\u003a [ ] SPEC §1.9 defines a claim\u002dbeyond\u002devidence finding as one no SPEC section, acceptance criterion or declared interface requires, and makes every other such finding a behaviour defect that deletion cannot repair.",
+			"\u0023440\u003a [ ] SPEC §1.9 amends NIT condition (c) so that deleting whole unevidenced claims is mechanical only where the Judge rules the remaining text in context asserts nothing new, never for a qualifier, negation, limiter or a claim that excepts, limits or conditions another, and otherwise SUBSTANTIVE.",
+			"\u0023440\u003a [ ] SPEC §1.9 states that the Judge rules a confirmed claim\u002dbeyond\u002devidence finding NIT with its whole\u002dclaim deletion where that check holds, unless it cites the criterion or contract passage that owes the claim.",
+			"\u0023440\u003a [ ] SPEC §1.9 states that a cited claim's finding is SUBSTANTIVE, its repair narrows the claim or revises the criterion through activation, and widening the claim is never its repair.",
+			"\u0023440\u003a [ ] SPEC §1.9 states that the Judge rules on all four axes a repair asserting more than its new evidence shows in answer to such a finding, that where confirmed it is SUBSTANTIVE outside the deletion default, and that §1.7's panel coverage is not narrowed.",
+			"\u0023440\u003a [ ] SPEC §1.9 leaves the four axes, the Resolver's dispositions, its never\u002dlist and Nit carry\u002dforward otherwise unchanged.",
+			"\u0023440\u003a [ ] A structure test pins each new clause with its own literal and owned mutant.",
+			"\u0023440\u003a [ ] The PR passes check, typecheck, TOC and diff gates, the full serial suite, CI, an immutable\u002dhead review and an exact AC closeout."
+		]
+	},
+	"judgeAttempts": [],
+	"adjudication": null,
+	"review": {
+		"state": "incomplete",
+		"cause": "panel",
+		"missing": [
+			{
+				"lens": "suite",
+				"surface": "the test suite"
+			}
+		]
+	},
+	"summaries": [
+		{
+			"from": "slot",
+			"slot": {
+				"lens": "docs",
+				"surface": "adopter\u002dfacing prose and the changelog fragments"
+			},
+			"text": "VERDICT\u003a APPROVED — docs slot (surface\u003a adopter\u002dfacing prose and the changelog fragments). Zero findings.\nScope read\u003a net change against the base (the branch's parent commit, which the local main ref equals) and the commit range; the only file in my surface is changelog_unreleased\u002fchanged\u002f440.md. README.md, MISSION.md, docs\u002f are untouched.\nChecks\u003a npm ci exit 0. Fragment is one '\u002d ' bullet ending '(\u0023440)' with stem 440, in changed\u002f (cat + JSON.stringify of file). Fragment gate run over the net listing\u003a `bash .github\u002fworkflows\u002fcheck\u002dchangelog.sh \u002d\u002dpr 441 \u002d\u002dexpected\u002dcount 7 \u002d\u002dallowed '441 440' \u002d\u002droot .` \u002d> exit 0. Claim 1 ('SPEC §1.9 now has a rule for a claim beyond its evidence') matches the new §1.9 'Claim beyond evidence' paragraph; claim 2 ('§2.4 ... now reaches shipped operator\u002dfacing prose') matches the new §2.4 bullet, and §2.4's lead sentence at base enumerated only issue\u002fPR bodies, commit messages, review verdicts (sed \u002dn 354,358p SPEC.md). Stale\u002drestatement search\u003a `grep \u002drn \u002di 'NIT|withdraw|§1.9|1.9|§2.4|help text|changelog fragment' README.md MISSION.md docs` \u002d> only README\u003a64 (indexed\u002dbundle completeness, unaffected); `grep \u002di extensionally|mechanical remedy|claim.beyond|evidence discipline` over README\u002fMISSION\u002fdocs \u002d> only README\u003a3's generic 'evidence discipline'. Serial run of the three affected test files\u003a 18\u002f18 pass.\nPRIOR FINDINGS (re\u002dverified individually at HEAD)\u003a\nPR441\u002dR1\u003a REPAIRED — §2.4 bullet ends at 'does not make them.' pinned with line boundaries; fragment carries no restated conditions.\nPR441\u002dR2\u003a REPAIRED — `grep \u002dci 'never widen' 440.md` \u002d> 0; 'among the repairs open to it' present once in SPEC.\nPR441\u002dR3\u003a REPAIRED — 'one of them does require' present; §2.4 pin is the whole line with a ', where it can.' mutant in the test.\nPR441\u002dG1\u003a REPAIRED — 'within the flagged span, so condition (b) holds' present; policy.json routes §2.4 to repository prose, implementation code, enforcement; authoring\u002dbrief test asserts test, production, fragment paths.\nPR441\u002dR5\u003a REPAIRED — conditional 'where it is repaired' sentence and 'read in context with every other withdrawal' present.\nPR441\u002dG2\u003a REPAIRED — 'the flagged prose never counts as any of these owners' present.\nPR441\u002dR7\u003a REPAIRED — measured\u003a in a private mktemp copy, deleting the 'Nit carry\u002dforward' mutant made the ownership arm red with '§1.9 clause 16 owns no mutant\u003a The Resolver disposes it as remedy and Nit carry\u002dforward applies unchanged'.\nPR441\u002dR8\u003a REPAIRED — 'once a finding at the next review reports it' present; no holds() in the test.\nPR441\u002dR9\u003a REPAIRED — §1.2 now reads 'trivial exactly where §1.9's exact\u002dmechanical\u002dremedy rule holds — points' (git diff), pinned with an owned mutant.\nPR441\u002dR10\u003a REPAIRED — 'nor as what owes the claim below' present, with mutant.\nPR441\u002dR11\u003a REPAIRED — 'the owed behaviour, or its evidence, is missing' present.\nPR441\u002dR12\u003a REPAIRED (vacuous\u003a that round carried zero findings; nothing at HEAD contradicts it).\nOBSERVATION 1\u003a unlike the contract\u002donly sibling fragments for \u0023435 and \u0023412, the \u0023440 fragment does not say that the runtime is still pending. It makes no runtime claim, and no contract I found (SPEC §1.3, TEMPLATE.md) requires that caveat, so this is not a finding.\nOBSERVATION 2\u003a the change also routes §2.4 into the carried authoring policy (.pi\u002fextensions\u002fgitjig\u002fauthoring\u002fpolicy.json, disposition 'carried'), so adopters' \u002fauthoring\u002dbrief output for code, enforcement and repository\u002dprose paths now includes §2.4. The fragment's second sentence covers this only implicitly. §1.3 says a fragment 'describes only what its PR lands' and does not require it to list everything, so this is not a finding.\nOBSERVATION 3 (outside my surface; R10 previously REFUTED this; not re\u002draised)\u003a in a private copy, adding a sibling §2.4 bullet that exempts help text left the \u0023440 structure test green (2\u002f2).\nEXCULPATORY\u002dCLAIM LIMITS\u003a my stale\u002dprose check covered only the grep patterns listed above over README.md, MISSION.md and docs\u002f. Prose that restates §1.9 or §2.4 in other words would not match them. I am not claiming the class of stale adopter restatements is closed."
+		},
+		{
+			"from": "slot",
+			"slot": {
+				"lens": "spec\u002dcontract",
+				"surface": "the behavioural SSOT and the direction document"
+			},
+			"text": "VERDICT\u003a APPROVED. Lens spec\u002dcontract, surface SPEC.md (behavioural SSOT) and MISSION.md (direction document). No findings. Net change read against the branch's parent (the merge of \u0023427; the local main ref resolves to that same commit, although the brief said there was none) with git diff over SPEC.md, MISSION.md (unchanged), the fragment and policy.\n\nWhat I checked\u003a §1.9 condition (c) exception against the new 'Claim beyond evidence' paragraph (sed \u002dn 253,300p SPEC.md). It is coherent with\u003a the four axes (harm direction is still owed on every confirmed finding; AC\u002dimpact is unchanged); NIT soundness condition (a) (the deletion is the ruling's own remedy); condition (b) (within the flagged span); the Resolver's remedy disposition and never\u002dlist (the Resolver does not evaluate whether a withdrawal is valid); Nit carry\u002dforward (the literally\u002dfalse wording is still fixed, and the delta is checked against the ruling); §1.4 (exact mechanical remedies are excluded from the repair\u002dbasis projection, so a withdrawal never feeds OSCILLATION); §2.2 (criterion revision goes through the activation gate); and §1.7 (the closing sentence). The never\u002dlist in the brief holds\u003a qualifiers, negations, limiters and conditioning claims are never withdrawn; a behaviour defect is never repaired by deletion; the Judge rules the widened repair; coverage is not narrowed. The §2.4 bullet keeps the preamble's 'carry their claims as evidence' wording. MISSION Evidence\u002fTraceability\u003a no contradiction (grep of MISSION.md).\n\nChecks run\u003a the claim\u002ddeletion, judge\u002dcompleteness and authoring\u002dbrief tests passed 18\u002f18 serially; biome check ran clean on 238 files after npm ci; tsc \u002d\u002dnoEmit was clean.\n\nPRIOR FINDINGS (re\u002dverified by grep of SPEC.md, the test and the fragment)\u003a\nPR441\u002dR1\u003a REPAIRED\nPR441\u002dR2\u003a REPAIRED\nPR441\u002dR3\u003a REPAIRED\nPR441\u002dG1\u003a REPAIRED\nPR441\u002dR5\u003a REPAIRED\nPR441\u002dG2\u003a REPAIRED\nPR441\u002dR7\u003a REPAIRED. I measured it\u003a in a scratch copy, removing mutant 0 makes the ownership arm fail with 'clause 0 owns no mutant'.\nPR441\u002dR8\u003a REPAIRED (no holds() left in the test)\nPR441\u002dR9\u003a REPAIRED\nPR441\u002dR10\u003a REPAIRED\nPR441\u002dR11\u003a REPAIRED\nPR441\u002dR12\u003a no defect to re\u002dverify (it was APPROVED); nothing in it was introduced or reverted.\n\nOBSERVATION 1 (coverage attribution, measured)\u003a I instrumented a scratch copy of the test to print which clauses each mutant reds. Clause 8 (self\u002dexclusion) is the sole red of two mutants\u003a the ', nor as what owes' deletion and the 'declared interface' narrowing. So removing R10's mutant leaves the test green (fail 0). R10's own mutant does sole\u002dred clause 8, but ownership of that clause does not depend on it. This is not a defect.\nOBSERVATION 2\u003a 'unless it cites' lets the Judge choose whether to cite. No sentence ties the citation to the Judge's own AC\u002dimpact ruling when an owing criterion exists. This matches the activated wording in the brief; AC closeout (§2.2) still runs on each criterion. It is not raised as a finding.\nOBSERVATION 3\u003a the full serial suite did not finish within my deadline\u003a 377 top\u002dlevel passes logged, then I stopped. test\u002fdispatch\u002dpi.integration.test.ts fails ('the dispatch round trip ... issue \u002388' \u002f 'emits a distinctive marker ...'), and it failed again when I re\u002dran that file serially. This change touches no file under that runtime. I did not run a base comparison, because that needs a worktree, which mutates git state. The prior rounds' 'Serial 2321\u002f2321' is therefore NOT re\u002dconfirmed here.\n\nLIMITS OF THIS REVIEW (no class is closed)\u003a coherence was checked only against the sections listed above (§1.2, §1.4, §1.7, §1.9's axes\u002fResolver\u002fnever\u002dlist\u002fcarry\u002dforward\u002freconsideration, §2.2, §2.4, §2.7, MISSION). Other SPEC sections that cite §1.9 or §2.4 were not swept. The mutant measurement covers only the 31 mutants in the test; it says nothing about other weakenings."
+		},
+		{
+			"from": "slot",
+			"slot": {
+				"lens": "runtime",
+				"surface": "the shell's runtime extensions"
+			},
+			"text": "VERDICT\u003a APPROVED (lens runtime, surface\u003a the shell's runtime extensions). Findings\u003a none.\nSCOPE\u003a net change base = parent of the branch's first commit (equals the local main copy, verified by git merge\u002dbase). The only runtime\u002dextension file changed is .pi\u002fextensions\u002fgitjig\u002fauthoring\u002fpolicy.json\u003a the anchor '\u0023\u0023\u0023 2.4 Evidence discipline' is added to the routes 'repository prose', 'implementation code' and 'enforcement and automation' ('test code' already had it at base). No .pi TypeScript changed (git diff \u002d\u002dstat base..HEAD).\nCHECKS (after npm ci exit 0, in a private mktemp copy)\u003a npx biome check . \u002d> 238 files, no issues; npx tsc \u002d\u002dnoEmit \u002d> exit 0; node \u002d\u002dtest test\u002fauthoring\u002dbrief.unit.test.ts \u002d> 9\u002f9 pass. Live probe of composeAuthoringBrief at HEAD\u003a .github\u002f, .githooks\u002f, README.md, .pi\u002f, changelog_unreleased\u002f paths all complete\u003atrue and render 1.2,2.4,2.5,2.8; SPEC.md renders 1.2,2.5,2.6,2.8 (unchanged from base, not in the §2.4 bullet's list).\nCOVERAGE ATTRIBUTION (measured\u003a dropped the 2.4 anchor from one route at a time, ran authoring\u002dbrief.unit + warning\u002dsurface.structure)\u003a repository\u002dprose drop \u002d> red only in 'routes specification prose and code ... §2.4 reaching shipped prose (\u0023440)'; implementation\u002dcode drop \u002d> red only in that same test; test\u002dcode drop \u002d> 3 reds (that test, 'renders the canonical section bytes unchanged', 'rejects inline and Markdown\u002dblock anchor decoys'); enforcement\u002dand\u002dautomation drop \u002d> 0 reds, 73\u002f73 pass.\nOBSERVATION\u003a the enforcement\u002dand\u002dautomation route's §2.4 anchor has no pin (its mutant survives, measured above). A prior round (R5) adjudicated this REFUTED (the anchor needs no own pin), so it is not raised as a finding.\nOBSERVATION\u003a the full serial suite (\u002d\u002dtest\u002dconcurrency=1) did not finish within my 2000 s command limit and was stopped at 1904 passing tests. Two reds were seen, both outside this surface\u003a 'emits a distinctive marker on the real JSON update surface ...' and 'the dispatch round trip\u003a clone, child session, bounded return (issue \u002388)'. I did not rerun them in isolation, so I attribute them to nothing (nested\u002ddispatch environment and the \u0023119 flake class remain possible). The change touches no dispatch code.\nEXCULPATORY CLAIM (enumeration only, not a class closure)\u003a I covered the four routes carrying §2.4, every tracked top\u002dlevel path prefix (git ls\u002dfiles\u003a all fall under some route) and six live probe paths. Open\u003a rendering for untracked prefixes, and mixed\u002dpath inputs that combine routes with conflicting defaultAct were not probed for the new anchor.\nPRIOR FINDINGS (re\u002dverified by grep of SPEC.md \u002f test files at HEAD, plus the routing measurements above)\u003a PR441\u002dR1\u003a REPAIRED; PR441\u002dR2\u003a REPAIRED; PR441\u002dR3\u003a REPAIRED; PR441\u002dG1\u003a REPAIRED; PR441\u002dR5\u003a REPAIRED; PR441\u002dG2\u003a REPAIRED; PR441\u002dR7\u003a REPAIRED; PR441\u002dR8\u003a REPAIRED; PR441\u002dR9\u003a REPAIRED; PR441\u002dR10\u003a REPAIRED; PR441\u002dR11\u003a REPAIRED; PR441\u002dR12\u003a REPAIRED (approval; nothing to repair). Grep evidence\u003a 'within the flagged span', 'never counts as any of these owners', 'among the repairs open to it', 'once a finding at the next review reports it', 'or its evidence, is missing', 'with every other withdrawal the same review rules applied' each present in SPEC.md; the structure test has 'kills one weakening of every clause' and 'pins every clause once'; the fragment changelog_unreleased\u002fchanged\u002f440.md carries no 'never widen' clause. Clauses outside the runtime surface were checked for presence only, not semantically re\u002druled."
+		}
+	]
+}
+```
