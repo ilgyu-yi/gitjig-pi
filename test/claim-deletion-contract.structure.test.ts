@@ -19,6 +19,7 @@ function section(text: string, number: string): string {
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
 	["1.9", "save the one withdrawal the claim-beyond-evidence rule below admits"],
+	["1.9", "since its removal can strengthen what remains"],
 	["1.2", "trivial exactly where §1.9's exact-mechanical-remedy rule holds — points"],
 	["1.9", "**Claim beyond evidence.** A confirmed finding is a **claim-beyond-evidence** finding where the artifact"],
 	["1.9", "Where one of them does require it, the finding is a behaviour defect"],
@@ -83,6 +84,7 @@ describe("#440 claim-beyond-evidence contract", () => {
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
 			["save the one withdrawal the claim-beyond-evidence rule below admits", "save any change a remedy makes"],
+			["since its removal can strengthen what remains", "since its removal changes nothing"],
 			[", nor as what owes the claim below", ""],
 			[
 				"exact-mechanical-remedy rule holds — points",
