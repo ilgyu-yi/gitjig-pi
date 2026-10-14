@@ -20,6 +20,7 @@ const record = (review: unknown, findings = 0, head = HEAD): ReviewRecord =>
 	}) as unknown as ReviewRecord;
 const approved = record({ state: "approved" });
 const repair = record({ state: "resolved", resolution: { outcome: "repair", dispositions: [] } });
+const escalate = record({ state: "resolved", resolution: { outcome: "measure-escalate", dispositions: [] } });
 const resolvedClear = record({ state: "resolved", resolution: { outcome: "clear", dispositions: [] } });
 const emptyIncomplete = record({ state: "incomplete", cause: "panel" });
 const foundIncomplete = record({ state: "incomplete", cause: "panel" }, 1);
@@ -38,6 +39,12 @@ const ARMS: ReadonlyArray<readonly [string, ReviewRecord[], string]> = [
 	["an approval beside a repair refuses as ambiguous", [repair, approved], "review-record-ambiguous"],
 	["two approvals refuse as ambiguous", [approved, approved], "review-record-ambiguous"],
 	["a single repair blocks", [repair], "blocked"],
+	["a single measure-escalate blocks", [escalate], "blocked"],
+	[
+		"two complete records refuse even beside findings on an incomplete one",
+		[foundIncomplete, repair, approved],
+		"review-record-ambiguous",
+	],
 	["a resolved record with a clear Resolver outcome is clear", [emptyIncomplete, resolvedClear], "clear"],
 	["a record for another head is not read", [record({ state: "approved" }, 0, "b".repeat(40))], "missing"],
 ];
@@ -69,6 +76,16 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"a resolved clear read as blocked",
 		'reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked"',
 		'"blocked"',
+	],
+	[
+		"a resolved non-clear outcome read as clear",
+		'reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked"',
+		'reviewRecord.review.resolution.outcome !== "repair" ? "clear" : "blocked"',
+	],
+	[
+		"findings checked before ambiguity",
+		'\tif (complete.length > 1) return { arm: "review-record-ambiguous" };\n\tconst withFindings = atHead.find((item) => item.review.state === "incomplete" && item.bundle.length > 0);\n\tif (withFindings !== undefined) return { resolver: "blocked", record: withFindings };',
+		'\tconst withFindings = atHead.find((item) => item.review.state === "incomplete" && item.bundle.length > 0);\n\tif (withFindings !== undefined) return { resolver: "blocked", record: withFindings };\n\tif (complete.length > 1) return { arm: "review-record-ambiguous" };',
 	],
 ];
 
