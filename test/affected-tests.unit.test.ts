@@ -55,6 +55,8 @@ const FILES: Record<string, string> = {
 	"test/reads-slash.test.ts": 'readdirSync("tables/");\n',
 	"lib/spawner.ts": 'spawnSync("pi", []);\n',
 	"test/uses-spawner.test.ts": 'import "../lib/spawner.ts";\n',
+	"lib/template.ts": "export {};\n",
+	"test/template.test.ts": 'await import(`${pathToFileURL(join(root, "lib/template.ts")).href}`);\n',
 	"test/runs-pi.test.ts": 'import { runPi } from "./harness/run-pi.ts";\nvoid runPi;\n',
 	"test/unrelated.test.ts": "export {};\n",
 	"test/harness/run.ts": "export {};\n",
@@ -189,6 +191,11 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		(root) => writeFileSync(join(root, "tables/t.json"), '{"x":1}\n'),
 		"test/reads-slash.test.ts <- reads tables/t.json",
 	],
+	[
+		"a literal inside a template substitution selects its reader",
+		(root) => writeFileSync(join(root, "lib/template.ts"), "export const t = 1;\n"),
+		"test/template.test.ts <- reads lib/template.ts",
+	],
 	["an unrelated change selects nothing", (root) => writeFileSync(join(root, "lib/c.ts"), "export const c = 4;\n"), ""],
 	...ROTE.map(
 		([tree, file]) =>
@@ -266,6 +273,11 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 	["an import cycle walked without end", "\tif (seen.has(file)) return seen;\n", ""],
 	["a trailing slash kept on a directory literal", 'normalize(literal).replace(/\\/$/, "")', "normalize(literal)"],
 	["a module that spawns Pi counted as a test that starts Pi", 'if (file.startsWith("test/")) {', "if (true) {"],
+	[
+		"template substitutions not scanned",
+		'else if (quote === "`" && source.startsWith("${", index)) {',
+		"else if (false) {",
+	],
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',

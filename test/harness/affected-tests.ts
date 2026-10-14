@@ -63,9 +63,52 @@ export function changeSet(root: string, base: string): string[] | undefined {
 	return [...paths].sort();
 }
 
-/** String literals in a source text: the operands a static reading can resolve. */
+/**
+ * String literals in a source text, including those inside a template's
+ * substitutions: the operands a static reading can resolve.
+ */
 function literals(source: string): string[] {
-	return [...source.matchAll(/(["'`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)].map((match) => match[2] as string);
+	const found: string[] = [];
+	let index = 0;
+	const code = (inSubstitution: boolean): void => {
+		let depth = 0;
+		while (index < source.length) {
+			const char = source[index] as string;
+			if (char === '"' || char === "'" || char === "`") quoted(char);
+			else if (char === "{") {
+				depth += 1;
+				index += 1;
+			} else if (char === "}" && depth === 0 && inSubstitution) return;
+			else {
+				if (char === "}") depth -= 1;
+				index += 1;
+			}
+		}
+	};
+	const quoted = (quote: string): void => {
+		let text = "";
+		index += 1;
+		while (index < source.length && source[index] !== quote) {
+			const char = source[index] as string;
+			if (char === "\\") {
+				text += source.slice(index, index + 2);
+				index += 2;
+			} else if (quote === "`" && source.startsWith("${", index)) {
+				index += 2;
+				code(true);
+				index += 1;
+				text += "${}";
+			} else if (char === "\n" && quote !== "`") break;
+			else {
+				text += char;
+				index += 1;
+			}
+		}
+		index += 1;
+		found.push(text);
+	};
+	code(false);
+	return found;
 }
 
 /**

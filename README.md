@@ -100,7 +100,7 @@ npm run typecheck
 
 ### Local test cadence
 
-The whole suite is the gate: `npm test` runs it once at the final head of a change, and CI runs it on every pull-request head. While iterating on a change, run only the tests it is likely to break:
+The whole suite is the gate: `npm test` runs it once at the final head of a change, and CI runs it on every pull-request head to `main` or a maintenance branch. While iterating on a change, run only the tests it is likely to break:
 
 ```sh
 npm run test:affected            # against the merge base with origin/main
