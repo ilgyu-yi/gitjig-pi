@@ -75,6 +75,62 @@ describe("#442 landing reads the current head's complete review", () => {
 		});
 });
 
+/*
+ * Every population of up to three records drawn from the kinds below, checked
+ * against an oracle written from SPEC §3.8's sentence alone, so no pairing is
+ * left to a hand-picked arm: other heads are not read; more than one complete
+ * record refuses as ambiguous; an incomplete record carrying findings blocks,
+ * reading that record; otherwise the single complete record decides (approved
+ * or a clear Resolver outcome is clear, any other outcome blocks) and none is
+ * missing.
+ */
+const KINDS: ReadonlyArray<ReviewRecord> = [
+	emptyIncomplete,
+	foundIncomplete,
+	elsewhereFound,
+	approved,
+	repair,
+	escalate,
+	resolvedClear,
+];
+function oracle(records: readonly ReviewRecord[]): [string, ReviewRecord | undefined] {
+	const here = records.filter((item) => item.head === HEAD);
+	const done = here.filter((item) => item.review.state !== "incomplete");
+	if (done.length > 1) return ["review-record-ambiguous", undefined];
+	const found = here.find((item) => item.review.state === "incomplete" && item.bundle.length > 0);
+	if (found) return ["blocked", found];
+	const only = done[0];
+	if (!only) return ["missing", undefined];
+	const review = only.review as { state: string; resolution?: { outcome: string } };
+	const clear = review.state === "approved" || review.resolution?.outcome === "clear";
+	return [clear ? "clear" : "blocked", only];
+}
+const POPULATIONS: ReviewRecord[][] = [];
+for (const first of KINDS) {
+	POPULATIONS.push([first]);
+	for (const second of KINDS) {
+		POPULATIONS.push([first, second]);
+		for (const third of KINDS) POPULATIONS.push([first, second, third]);
+	}
+}
+const agrees = (select: Select) =>
+	POPULATIONS.every((records) => {
+		const [token, chosen] = outcome(select, records);
+		const [expected, read] = oracle(records);
+		return token === expected && chosen === read;
+	});
+
+describe("#442 every small population agrees with SPEC §3.8's rule", () => {
+	it(`agrees on all ${POPULATIONS.length} populations of up to three records`, () => {
+		for (const records of POPULATIONS)
+			assert.deepEqual(
+				outcome(landingReview, records),
+				oracle(records),
+				records.map((item) => JSON.stringify(item.review)).join(" + "),
+			);
+	});
+});
+
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const box = mkdtempSync(join(tmpdir(), "gitjig-442-"));
 after(() => rmSync(box, { recursive: true, force: true }));
@@ -110,6 +166,11 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"item.bundle.length > 0",
 	],
 	[
+		"findings ignored beside a resolved record",
+		'if (withFindings !== undefined) return { resolver: "blocked"',
+		'if (withFindings !== undefined && complete[0]?.review.state !== "resolved") return { resolver: "blocked"',
+	],
+	[
 		"a resolved non-clear outcome read as clear",
 		'reviewRecord.review.resolution.outcome === "clear" ? "clear" : "blocked"',
 		'reviewRecord.review.resolution.outcome !== "repair" ? "clear" : "blocked"',
@@ -135,13 +196,7 @@ describe("#442 owned mutants", () => {
 				source.replace(from, () => to),
 			);
 			const mutated = (await import(pathToFileURL(target).href)) as { landingReview: Select };
-			assert.ok(
-				ARMS.some(([, records, expected, read]) => {
-					const [token, chosen] = outcome(mutated.landingReview, records);
-					return token !== expected || chosen !== read;
-				}),
-				`${label} survived`,
-			);
+			assert.ok(!agrees(mutated.landingReview), `${label} survived the exhaustive populations`);
 		});
 });
 
