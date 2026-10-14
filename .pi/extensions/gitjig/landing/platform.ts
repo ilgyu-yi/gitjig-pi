@@ -238,8 +238,7 @@ async function allThreadsResolved(
 /**
  * The current head's review for landing (SPEC §3.8, #442). An incomplete
  * record whose bundle is empty found nothing and decides nothing. One whose
- * bundle carries findings leaves the review non-clear, since a finding
- * survives any number of empty co-reviews (§1.7); it stays a blocker the
+ * bundle carries findings leaves the review non-clear; it stays a blocker the
  * operator-directed path may waive, as before. More than one complete record
  * refuses as ambiguous, so a later approval never overrides an earlier ruling.
  */
