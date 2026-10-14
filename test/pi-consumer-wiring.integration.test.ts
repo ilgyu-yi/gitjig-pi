@@ -525,13 +525,16 @@ function armProjectsTheRecoveryBrief(briefs: RecoveryBriefs): void {
  * composers must reproduce them. The two Judge digests are the one deliberate
  * exception: #432 restated limb C of the admission block, which only the Judge
  * brief carries, so they were regenerated from the composers at that change and
- * every other digest is still the base commit's.
+ * every other digest is still the base commit's. #443 then replaced one line of
+ * the provisioned-tree facts both the reviewer and Judge briefs carry (scoped
+ * suite runs), so those four digests were regenerated from the composers at that
+ * change; the six recovery and diagnosis digests are untouched.
  */
 const BASE_GENERIC_BRIEFS: Readonly<Record<string, string>> = {
-	reviewer: "167f983e4815df5159d6c9682129a48ae8d241d32dc232667834e004e74a0771",
-	reviewerDefaultTiming: "3784794b0732d89709794b95c7cbf7e6281bb39f8a810a9eba541c69fb58deed",
-	judge: "83d060600bb728a8a02f092bfa773c210c5455c7246d2fd68331c912ee4d9c15",
-	judgeReRequest: "e53c1aad7885ac4c3225e2121d8920e980b5143f3d82b8c3fe81791f0e972c0d",
+	reviewer: "ab7f6986d1db9d380611dce95cc148caa7c0b885ccd7a9ab33e8698e02b3a8e6",
+	reviewerDefaultTiming: "dfe50ad2bc672c97c44d17e9946d1453d84c5d044a1d4b2177769436aa1ecd43",
+	judge: "a26f4afc10b2be401268a10f97a01fab81f0010c1503e500bb3cd81c939ef380",
+	judgeReRequest: "e65bb771465e0d5fb11ae2ef246153e8a5876515e087ac6b2dc95522dc781fad",
 	diagnosis: "b1335518c12cd04544809218aa5c928e473b701e368d6c2e814fef6e5f79cabe",
 	challenger: "4be7936af25cf80285f3aeee821d61d3b4af6a71b2392130653f828663243294",
 	contestSelector: "b43b7e943c36ed42695b66918457414086062134505956d618306d456de9e190",

@@ -98,6 +98,18 @@ npm run typecheck
 
 `typecheck` runs `tsc --noEmit`: it checks the annotations node's type stripping erases, and emits nothing. No path in the run path depends on its output.
 
+### Local test cadence
+
+The whole suite is the gate: `npm test` runs it once at the final head of a change, and CI runs it on every pull-request head. While iterating on a change, run only the tests it is likely to break:
+
+```sh
+npm run test:affected            # against the merge base with origin/main
+npm run test:affected -- <base>  # against another base
+npm run test:affected -- --list  # print the selection and its reasons, run nothing
+```
+
+It selects the changed tests, the tests importing a changed module, the tests naming a changed path, and the tests that start a real Pi when the extension entry or the prompts changed. It does not follow reach it cannot read statically, which the gate covers; a change to the suite's own machinery (`test/harness/`, `package.json`, the lock file, `tsconfig.json`) selects the whole suite.
+
 ## Human operation and landing
 
 Pi is optional. Humans can use Tier-2 Git discipline and Tier-3 GitHub governance directly, including native multi-person approval and ordinary merge, single-administrator own-PR landing, broad emergency administrator bypass, and governance installation/audit. Direct human administration relies on GitHub's audit surfaces and is outside Tier-1 guarantees.
