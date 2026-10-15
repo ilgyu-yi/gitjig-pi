@@ -8,6 +8,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { type Selection, selectAffected } from "./harness/affected-tests.ts";
 
 /* #443: the between-rounds selector, measured over fixture repositories. */
+// The selector runs in this process and in the commands it spawns, so neither
+// may read the host's Git configuration (diff.renames=false, for one, would
+// change what a rename reports); the fixture helper below isolates its own calls.
+process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+process.env.GIT_CONFIG_NOSYSTEM = "1";
 const roots: string[] = [];
 after(() => {
 	for (const root of roots) rmSync(root, { recursive: true, force: true });
