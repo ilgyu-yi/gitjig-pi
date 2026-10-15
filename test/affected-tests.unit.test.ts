@@ -72,6 +72,8 @@ const FILES: Record<string, string> = {
 	"test/q-escape.test.ts": 'const q = "it\\"s"; readFileSync("lit/escape.md");\n',
 	"test/q-apostrophe.test.ts": "// don't\nreadFileSync(\"lit/apostrophe.md\");\nconst s = 'z';\n",
 	"test/q-multiline.test.ts": 'const t = `\nline\n`; readFileSync("lit/multiline.md");\n',
+	".gitignore": "scratch.md\n",
+	"test/reads-scratch.test.ts": 'readFileSync("scratch.md");\n',
 	"test/runs-pi.test.ts": 'import { runPi } from "./harness/run-pi.ts";\nvoid runPi;\n',
 	"test/unrelated.test.ts": "export {};\n",
 	"test/harness/run.ts": "export {};\n",
@@ -252,6 +254,11 @@ const ARMS: ReadonlyArray<readonly [string, (root: string) => void, string]> = [
 		(root) => writeFileSync(join(root, "lit/multiline.md"), "changed\n"),
 		"test/q-multiline.test.ts <- reads lit/multiline.md",
 	],
+	[
+		"an untracked file Git ignores is not in the change set",
+		(root) => writeFileSync(join(root, "scratch.md"), "ignored\n"),
+		"",
+	],
 	["an unrelated change selects nothing", (root) => writeFileSync(join(root, "lib/c.ts"), "export const c = 4;\n"), ""],
 	...ROTE.map(
 		([tree, file]) =>
@@ -353,6 +360,7 @@ const MUTANTS: ReadonlyArray<readonly [string, string, string]> = [
 		"`the change set against ${base} is unreadable`, tests }",
 		"`${whole} configures every test`, tests }",
 	].map((from) => [`the whole suite emptied at ${from}`, from, from.replace("tests }", "tests: [] }")] as const),
+	["ignored files counted as untracked", '"--others", "--exclude-standard", "-z"', '"--others", "-z"'],
 	[
 		"an unreadable change set not falling back",
 		'if (changed === undefined) return { mode: "all"',

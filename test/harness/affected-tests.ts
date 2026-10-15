@@ -47,7 +47,7 @@ function git(root: string, args: string[]): string | undefined {
 
 /** Repository-relative paths changed from the base to the working tree; a rename yields both sides. */
 export function changeSet(root: string, base: string): string[] | undefined {
-	const diff = git(root, ["diff", "--name-status", "-M", "-z", base, "--"]);
+	const diff = git(root, ["diff", "--name-status", "-z", base, "--"]);
 	const untracked = git(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
 	// Git failing on ls-files alone is not reproducible here; without this check the split throws, never a silent pass.
 	if (diff === undefined || untracked === undefined) return undefined;
