@@ -129,7 +129,14 @@ export function startPiRpc(options: PiRpcOptions): PiRpcSession {
 	const end = (outcome: PiRpcOutcome) => {
 		if (terminal !== undefined) return;
 		terminal = outcome;
-		for (const timer of [timeout, flush, escalate]) if (timer !== undefined) clearTimeout(timer);
+		for (const timer of [timeout, flush]) if (timer !== undefined) clearTimeout(timer);
+		// An abort's escalation outlives settlement (§4.9: SIGTERM, then SIGKILL
+		// after two seconds): a descendant that ignores SIGTERM and holds no pipe
+		// lets the run settle first, and only this SIGKILL ends it (#447). Every
+		// other stop has already SIGKILLed the group, so it schedules nothing
+		// after settlement. RESIDUAL: the escalation may signal a process group
+		// that has emptied, and whose id was reused, within the grace.
+		if (stopping !== "abort" && escalate !== undefined) clearTimeout(escalate);
 		options.signal?.removeEventListener("abort", abort);
 		for (const request of pending.values()) {
 			clearTimeout(request.timer);
@@ -303,7 +310,9 @@ export function startPiRpc(options: PiRpcOptions): PiRpcSession {
 				timeout = undefined;
 				options.signal?.removeEventListener("abort", abort);
 			}
-			group("SIGKILL");
+			// During an abort the escalation alone SIGKILLs the group, after the
+			// grace; a child that dies on SIGTERM must not cut it short (#447).
+			if (stopping !== "abort") group("SIGKILL");
 			if (stdoutClosed && stderrClosed) end(completed());
 			else flush ??= setTimeout(() => end(completed()), FLUSH_GRACE_MS);
 		});
