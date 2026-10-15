@@ -352,7 +352,8 @@ describe("#365 the classifier's carried observer", () => {
 		const swapped = observeCarried(replaced, Date.now() + 2000, {
 			afterRead: (path) => {
 				if (path !== ".pi/prompts/p.md") return;
-				rmSync(join(replaced, path));
+				// Moved aside, so the replacement cannot reuse its inode.
+				renameSync(join(replaced, path), join(replaced, `${path}.aside`));
 				writeFileSync(join(replaced, path), "swapped\n");
 			},
 		});
@@ -484,8 +485,11 @@ describe("#365 the pin reads", () => {
 
 describe("#365 the pin reads under replacement", () => {
 	it("read a record replaced between lstat and open, or after the read, as unreadable", () => {
+		// The replaced file is moved aside, not removed: a removed file's inode can
+		// be reused at once (ext4 does), and an identical file on the same inode is
+		// no observable replacement at all.
 		const swap = (root: string) => () => {
-			rmSync(join(root, INSTALLED_PIN_PATH));
+			renameSync(join(root, INSTALLED_PIN_PATH), join(root, `${INSTALLED_PIN_PATH}.aside`));
 			writeFileSync(join(root, INSTALLED_PIN_PATH), COMMITTED);
 		};
 		const early = target();
