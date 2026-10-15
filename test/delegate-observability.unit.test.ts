@@ -273,6 +273,40 @@ describe("#132 bounded delegate trace", () => {
 		}
 	});
 
+	it("keeps an otherwise idle host alive until the abort's SIGKILL, so the descendant does not outlive it", async () => {
+		// A host that ends naturally right after the run settles: only a ref'd
+		// escalation keeps it until the SIGKILL is sent (R3).
+		const executorUrl = pathToFileURL(join(process.cwd(), ".pi/extensions/gitjig/dispatch/executor.ts")).href;
+		const fixture = "sh -c 'trap \"\" TERM; echo $$ > zq-child.pid; exec sleep 30' >/dev/null 2>&1 & wait";
+		const host = `import {existsSync,mkdirSync,mkdtempSync,readFileSync} from "node:fs"; import {tmpdir} from "node:os"; import {join} from "node:path"; import {runDelegate} from ${JSON.stringify(executorUrl)}; const tree=mkdtempSync(join(tmpdir(),"zq-host-")); const stateDir=join(tree,"state"); mkdirSync(stateDir); const c=new AbortController(); const run=runDelegate({treeDir:tree,stateDir},["sh","-c",${JSON.stringify(fixture)}],{timeoutMs:10000,signal:c.signal}); let pid=0; for(let i=0;i<500&&pid===0;i++){const t=existsSync(join(tree,"zq-child.pid"))?readFileSync(join(tree,"zq-child.pid"),"utf8"):""; if(/^\\d+\\n$/.test(t)) pid=Number(t); else await new Promise(r=>setTimeout(r,10));} const abortedAt=Date.now(); c.abort(); await run; process.stdout.write(JSON.stringify({pid,abortedAt}));`;
+		let descendant = 0;
+		try {
+			const ran = spawnSync(process.execPath, ["--input-type=module", "-e", host], {
+				cwd: process.cwd(),
+				encoding: "utf8",
+				timeout: 15_000,
+			});
+			const hostEnded = Date.now();
+			assert.equal(ran.status, 0, ran.stderr);
+			const { pid, abortedAt } = JSON.parse(ran.stdout) as { pid: number; abortedAt: number };
+			descendant = pid;
+			assert.ok(
+				Number.isInteger(descendant) && descendant > 1,
+				`no whole descendant pid within the bound: ${descendant}`,
+			);
+			assert.equal(
+				await goneBy(descendant, Date.now() + 1_500),
+				true,
+				`descendant ${descendant} outlived the host, which ended ${hostEnded - abortedAt}ms after the abort`,
+			);
+		} finally {
+			if (descendant > 1 && alive(descendant))
+				try {
+					process.kill(descendant, "SIGKILL");
+				} catch {}
+		}
+	});
+
 	it("schedules no signal after a run that was not aborted settles", async () => {
 		// A delegate-spawned descendant that survives a normal exit is not
 		// group-killed, now or after the grace (#448: only an abort arms it).
