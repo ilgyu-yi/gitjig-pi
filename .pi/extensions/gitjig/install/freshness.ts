@@ -248,16 +248,26 @@ export function readCommittedPin(targetRoot: string, timeoutMs: number): PinRead
 	if (timeoutMs <= 0) return { kind: "unreadable" };
 	const run = spawnSync(
 		"git",
-		["--no-lazy-fetch", "-C", resolve(targetRoot), "cat-file", "blob", `HEAD:${GENERATED_PIN_PATH}`],
+		// The target's own repository or none: an explicit git directory means no
+		// discovery, so Git never climbs into an enclosing repository, whose root
+		// pin is not this target's committed pin, whatever the path holds (a
+		// ceiling list would split on a ":" in it). A linked worktree's .git file
+		// is followed to its own HEAD.
+		[
+			"--no-lazy-fetch",
+			"-C",
+			resolve(targetRoot),
+			`--git-dir=${join(resolve(targetRoot), ".git")}`,
+			"cat-file",
+			"blob",
+			`HEAD:${GENERATED_PIN_PATH}`,
+		],
 		{
 			env: {
 				PATH: process.env.PATH ?? "",
 				HOME: process.env.HOME ?? "",
 				LC_ALL: "C",
 				GIT_NO_REPLACE_OBJECTS: "1",
-				// The target's own repository or none: discovery never climbs into an
-				// enclosing one, whose root pin is not this target's committed pin.
-				GIT_CEILING_DIRECTORIES: dirname(realpathOrSelf(targetRoot)),
 				GIT_CONFIG_NOSYSTEM: "1",
 				GIT_TERMINAL_PROMPT: "0",
 			},

@@ -641,7 +641,8 @@ describe("#365 one measurement, end to end", () => {
 
 	it("bounds the HEAD read: a git that never answers reads unreadable within the budget", () => {
 		const root = target();
-		const bin = mkdtempSync(join(tmpdir(), "gitjig-365-bin-"));
+		// PATH splits on ":", so the fake git's directory must not hold one.
+		const bin = mkdtempSync(join(tmpdir().includes(":") ? "/tmp" : tmpdir(), "gitjig-365-bin-"));
 		roots.push(bin);
 		writeFileSync(join(bin, "git"), "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
 		const freshness = new URL("../.pi/extensions/gitjig/install/freshness.ts", import.meta.url).href;
@@ -693,6 +694,8 @@ describe("#365 one measurement, end to end", () => {
 				env: { PATH: process.env.PATH, HOME: other, GIT_CONFIG_NOSYSTEM: "1" },
 			},
 		);
+		const emptyObjects = mkdtempSync(join(tmpdir(), "gitjig-365-objects-"));
+		roots.push(emptyObjects);
 		const freshness = new URL("../.pi/extensions/gitjig/install/freshness.ts", import.meta.url).href;
 		const script = `import { readCommittedPin } from ${JSON.stringify(freshness)}; const read = readCommittedPin(${JSON.stringify(root)}, 2000); console.log(read.kind === "bytes" ? read.bytes.toString("base64") : read.kind);`;
 		const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
@@ -703,6 +706,10 @@ describe("#365 one measurement, end to end", () => {
 				GIT_DIR: join(other, ".git"),
 				GIT_WORK_TREE: other,
 				GIT_INDEX_FILE: join(other, ".git/index"),
+				// An explicit --git-dir overrides GIT_DIR, but not an object directory:
+				// only the closed environment keeps the read in the target's own store.
+				// An empty one, since the fixtures' first commits share their hashes.
+				GIT_OBJECT_DIRECTORY: emptyObjects,
 			},
 		});
 		assert.equal(run.stdout.trim(), COMMITTED.toString("base64"), "another repository's pin was read");
@@ -711,11 +718,11 @@ describe("#365 one measurement, end to end", () => {
 	it("reads no enclosing repository's pin: a target without a repository of its own is cannot-measure", () => {
 		// The enclosing repository commits the very pin the nested copy's record
 		// and carried files match; only its own HEAD may decide (R25 F2).
-		// A direct child and a deeper descendant: the ceiling sits at the target's
-		// own parent, so neither climbs (R27 F1: a ceiling one level higher let the
-		// direct child through).
+		// A direct child, a deeper descendant and one whose parent path holds a
+		// ":": none climbs (R27 F1, R28: a ceiling list one level high, or split
+		// on a colon, let the enclosing pin through).
 		const outer = target();
-		for (const nested of [join(outer, "copy"), join(outer, "vendor/copy")]) {
+		for (const nested of [join(outer, "copy"), join(outer, "vendor/copy"), join(outer, "co:lon/copy")]) {
 			for (const [path, text] of Object.entries({ ...HANDED, ...CARRIED, [INSTALLED_PIN_PATH]: COMMITTED })) {
 				mkdirSync(dirname(join(nested, path)), { recursive: true });
 				writeFileSync(join(nested, path), text);
