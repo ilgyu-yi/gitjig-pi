@@ -33,7 +33,7 @@ export const FRESHNESS_HELP = [
 	`placement-mismatch: run ${PROVISION_COMMAND}. What its provision run converges, refuses or leaves alone`,
 	"is SPEC 4.6 (Installed-pin authority); the launcher's own stop causes are SPEC 4.2, their exit statuses SPEC 4.7.",
 	`session-stale: run ${RELOAD_COMMAND}; the files are current, but the extension tree differed when this process`,
-	"first loaded it.",
+	"last loaded it.",
 	`cannot-measure: run ${PROVISION_COMMAND}, or ${RELOAD_COMMAND} when only the load-time capture is missing.`,
 	"A measurement whose reads pass the 2-second budget never reads current.",
 ].join("\n");
