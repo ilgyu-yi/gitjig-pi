@@ -39,8 +39,9 @@
  * second finite grace settles even if process or pipe teardown never reports.
  * The escalation outlives settlement (#448): a descendant that ignores SIGTERM
  * and holds no pipe lets the run settle first, and only that SIGKILL ends it.
- * Named residual: the escalation may signal a process group that has emptied,
- * and whose id was reused, within the grace.
+ * Named residuals: the escalation may signal a process group that has emptied,
+ * and whose id was reused, within the grace; and a host that exits through
+ * process.exit() before the grace ends discards the timer, so it is not sent.
  */
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
@@ -123,8 +124,10 @@ export function runDelegate(
 		};
 		const cleanup = (): void => {
 			// An abort's escalation is not among these: it stays armed, and ref'd so
-			// a host exiting at once still sends it, because §4.9's SIGKILL after two
-			// seconds is owed even when the run settles first (#448).
+			// a host that would otherwise go idle waits to send it, because §4.9's
+			// SIGKILL after two seconds is owed even when the run settles first
+			// (#448). A host that exits through process.exit() before then discards
+			// it: a residual the header names.
 			for (const timer of [updateTimer, killTimer, graceTimer, outerTimer]) {
 				if (timer !== undefined) clearTimeout(timer);
 			}
