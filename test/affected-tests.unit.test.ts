@@ -10,7 +10,10 @@ import { type Selection, selectAffected } from "./harness/affected-tests.ts";
 /* #443: the between-rounds selector, measured over fixture repositories. */
 // The selector runs in this process and in the commands it spawns, so neither
 // may read the host's Git configuration (diff.renames=false, for one, would
-// change what a rename reports); the fixture helper below isolates its own calls.
+// change what a rename reports). Every GIT_* variable is dropped, which closes
+// the environment channels (GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG_PARAMETERS
+// and any other) as a class, and the file channels are then pointed at nothing.
+for (const key of Object.keys(process.env)) if (key.startsWith("GIT_")) delete process.env[key];
 process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 const roots: string[] = [];
