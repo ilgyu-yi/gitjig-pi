@@ -630,6 +630,15 @@ describe("#365 one measurement, end to end", () => {
 		);
 	});
 
+	it("reads a spent budget as unreadable without starting the HEAD read", () => {
+		// spawnSync takes a zero timeout as none and refuses a negative one, so a
+		// spent budget must stop before the child (R26 F1).
+		const root = target();
+		assert.deepEqual(readCommittedPin(root, 0), { kind: "unreadable" });
+		assert.deepEqual(readCommittedPin(root, -1), { kind: "unreadable" });
+		assert.equal(readCommittedPin(root, 2000).kind, "bytes", "the same target reads with budget left");
+	});
+
 	it("bounds the HEAD read: a git that never answers reads unreadable within the budget", () => {
 		const root = target();
 		const bin = mkdtempSync(join(tmpdir(), "gitjig-365-bin-"));
@@ -870,7 +879,7 @@ describe("#365 the help", () => {
 				"placement-mismatch: run node .github/bin/gitjig-bootstrap.mjs. What its provision run converges, refuses or leaves alone",
 				"is SPEC 4.6 (Installed-pin authority); the launcher's own stop causes are SPEC 4.2, their exit statuses SPEC 4.7.",
 				"session-stale: run /reload; the files are current, but the extension tree differed when this process",
-				"first loaded it.",
+				"last loaded it.",
 				"cannot-measure: run node .github/bin/gitjig-bootstrap.mjs, or /reload when only the load-time capture is missing.",
 				"A measurement whose reads pass the 2-second budget never reads current.",
 			].join("\n"),

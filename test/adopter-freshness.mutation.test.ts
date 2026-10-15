@@ -205,6 +205,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"\t\tinstalled.revision !== committed.revision ||\n\t\tinstalled.payloadDigest !== committed.payloadDigest\n",
 		"\t\tinstalled.revision !== committed.revision\n",
 	],
+	[
+		"a spent budget still starts the HEAD read",
+		FRESHNESS,
+		'\tif (timeoutMs <= 0) return { kind: "unreadable" };\n',
+		"",
+	],
 	["the committed-pin read is unbounded", FRESHNESS, "\t\ttimeout: timeoutMs,\n", ""],
 	[
 		"the committed-pin read inherits the caller's environment",
