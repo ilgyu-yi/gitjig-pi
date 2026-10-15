@@ -18,6 +18,9 @@ import {
 	TRACE_RETAIN_MS,
 } from "../.pi/extensions/gitjig/dispatch/trace.ts";
 
+/** The TERM/KILL arm's bounds (#426): pid-file reads 10 ms apart, and the wait for its killed grandchild to be reaped. */
+const PID_READ_TRIES = 100;
+const REAP_BOUND_MS = 2_000;
 const roots: string[] = [];
 after(() => roots.forEach((root) => void rmSync(root, { recursive: true, force: true })));
 
@@ -139,23 +142,59 @@ describe("#132 bounded delegate trace", () => {
 		const controller = new AbortController();
 		const started = Date.now();
 		const lifecycles: string[] = [];
+		// The grandchild holds none of the runner's pipes, so a grandchild the runner
+		// never signals cannot hold the run open and fail the timing window instead
+		// of the reap wait below (#426).
 		const run = runDelegate(
 			{ treeDir: tree, stateDir } as never,
-			["sh", "-c", 'trap "" TERM; sleep 30 & echo $! > zq-child.pid; wait'],
+			["sh", "-c", 'trap "" TERM; sleep 30 >/dev/null 2>&1 & echo $! > zq-child.pid; wait'],
 			{ timeoutMs: 10_000, signal: controller.signal, onTrace: (snapshot) => lifecycles.push(snapshot.lifecycle) },
 		);
-		for (let tries = 0; tries < 100 && !existsSync(join(tree, "zq-child.pid")); tries++)
-			await new Promise((resolve) => setTimeout(resolve, 10));
-		const grandchild = Number(readFileSync(join(tree, "zq-child.pid"), "utf8"));
-		controller.abort();
-		const outcome = await run;
-		const elapsed = Date.now() - started;
-		assert.equal(outcome.timedOut, false);
-		assert.equal(outcome.aborted, true);
-		assert.equal(outcome.spawnFailed, false);
-		assert.equal(lifecycles.at(-1), "aborted");
-		assert.ok(elapsed >= 1_800 && elapsed < 3_500, `TERM/KILL escalation settled in ${elapsed}ms`);
-		assert.throws(() => process.kill(grandchild, 0), /ESRCH/);
+		// The redirect creates the file before echo writes it, so an empty read is
+		// not yet a pid; read until the file holds a whole one, within the bound.
+		const pidFile = join(tree, "zq-child.pid");
+		let grandchild = 0;
+		let gone = false;
+		try {
+			for (let tries = 0; tries < PID_READ_TRIES && grandchild === 0; tries++) {
+				const text = existsSync(pidFile) ? readFileSync(pidFile, "utf8") : "";
+				if (/^\d+\n$/.test(text)) grandchild = Number(text);
+				else await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			assert.ok(
+				Number.isInteger(grandchild) && grandchild > 1,
+				`no whole grandchild pid within the bound: ${grandchild}`,
+			);
+			controller.abort();
+			const outcome = await run;
+			const elapsed = Date.now() - started;
+			assert.equal(outcome.timedOut, false);
+			assert.equal(outcome.aborted, true);
+			assert.equal(outcome.spawnFailed, false);
+			assert.equal(lifecycles.at(-1), "aborted");
+			assert.ok(elapsed >= 1_800 && elapsed < 3_500, `TERM/KILL escalation settled in ${elapsed}ms`);
+			// A killed grandchild exists until it is reaped, which happens after the
+			// run settles, so wait for it to go rather than probing once.
+			const deadline = Date.now() + REAP_BOUND_MS;
+			for (;;) {
+				try {
+					process.kill(grandchild, 0);
+				} catch (error) {
+					assert.equal((error as NodeJS.ErrnoException).code, "ESRCH");
+					gone = true;
+					break;
+				}
+				if (Date.now() >= deadline) break;
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			assert.ok(gone, `grandchild ${grandchild} outlived the ${REAP_BOUND_MS}ms reap bound`);
+		} finally {
+			controller.abort();
+			if (grandchild > 1 && !gone)
+				try {
+					process.kill(grandchild, "SIGKILL");
+				} catch {}
+		}
 	});
 
 	it("emits the correct terminal lifecycle when cancellation precedes spawn", async () => {

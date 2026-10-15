@@ -92,13 +92,44 @@ describe("#132 named isolated observability mutants", () => {
 		);
 	});
 
-	it("kills the child-only abort mutant", () => {
-		kill(
-			"abort-process-group",
-			"executor.ts",
-			"process.kill(-child.pid, signal);",
-			"child.kill(signal);",
-			`import assert from "node:assert/strict"; import {existsSync,mkdtempSync,mkdirSync,readFileSync} from "node:fs"; import {tmpdir} from "node:os"; import {join} from "node:path"; import {runDelegate} from "./gitjig/dispatch/executor.ts"; const tree=mkdtempSync(join(tmpdir(),"zq-group-")); const stateDir=join(tree,"state"); mkdirSync(stateDir); const c=new AbortController(); const run=runDelegate({treeDir:tree,stateDir},["sh","-c",'trap "" TERM; sleep 30 & echo $! > child.pid; wait'],{timeoutMs:10000,signal:c.signal}); for(let i=0;i<100&&!existsSync(join(tree,"child.pid"));i++)await new Promise(r=>setTimeout(r,10)); const pid=Number(readFileSync(join(tree,"child.pid"),"utf8")); c.abort(); await run; let alive=true; try{process.kill(pid,0)}catch{alive=false} if(alive)process.kill(pid,"SIGKILL"); assert.equal(alive,false);`,
-		);
+	it("kills the child-only abort mutant at the TERM/KILL arm's reap wait, every other assertion passing", () => {
+		// The arm itself runs against a private copy, unmutated then mutated: the
+		// mutant must fail on the reap wait's own message alone (#426).
+		const ARM = "propagates TERM then KILL to the child group without misclassifying abort as timeout";
+		const TEST = "test/delegate-observability.unit.test.ts";
+		for (const variant of ["baseline", "mutant"] as const) {
+			const box = mkdtempSync(join(root, `abort-process-group-${variant}-`));
+			cpSync(join(repository, ".pi/extensions/gitjig"), join(box, ".pi/extensions/gitjig"), { recursive: true });
+			cpSync(join(repository, TEST), join(box, TEST));
+			const target = join(box, ".pi/extensions/gitjig/dispatch/executor.ts");
+			const source = readFileSync(target, "utf8");
+			assert.equal(source.split("process.kill(-child.pid, signal);").length, 2, "the group signal must be unique");
+			if (variant === "mutant")
+				writeFileSync(
+					target,
+					source.replace("process.kill(-child.pid, signal);", () => "child.kill(signal);"),
+				);
+			const env = { ...process.env };
+			delete env.NODE_TEST_CONTEXT;
+			const result = spawnSync(process.execPath, ["--test", "--test-name-pattern", ARM, TEST], {
+				cwd: box,
+				encoding: "utf8",
+				timeout: 30_000,
+				env,
+			});
+			const output = `${result.stdout}${result.stderr}`;
+			assert.match(output, /^ℹ tests 1$/m, `${variant}: the arm alone runs\n${output}`);
+			if (variant === "baseline") {
+				assert.equal(result.status, 0, `baseline failed\n${output}`);
+				continue;
+			}
+			assert.notEqual(result.status, 0, "the child-only abort mutant survived");
+			assert.match(output, /^ℹ fail 1$/m, output);
+			assert.match(
+				output,
+				/grandchild \d+ outlived the \d+ms reap bound/,
+				`the mutant failed before the reap wait\n${output}`,
+			);
+		}
 	});
 });
