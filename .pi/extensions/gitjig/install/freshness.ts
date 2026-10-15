@@ -255,6 +255,9 @@ export function readCommittedPin(targetRoot: string, timeoutMs: number): PinRead
 				HOME: process.env.HOME ?? "",
 				LC_ALL: "C",
 				GIT_NO_REPLACE_OBJECTS: "1",
+				// The target's own repository or none: discovery never climbs into an
+				// enclosing one, whose root pin is not this target's committed pin.
+				GIT_CEILING_DIRECTORIES: dirname(realpathOrSelf(targetRoot)),
 				GIT_CONFIG_NOSYSTEM: "1",
 				GIT_TERMINAL_PROMPT: "0",
 			},

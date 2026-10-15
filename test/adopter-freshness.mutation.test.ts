@@ -212,6 +212,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"\t\t\tenv: {\n\t\t\t\tPATH:",
 		"\t\t\tenv: {\n\t\t\t\t...process.env,\n\t\t\t\tPATH:",
 	],
+	[
+		"the committed-pin read climbs into an enclosing repository",
+		FRESHNESS,
+		"\t\t\t\tGIT_CEILING_DIRECTORIES: dirname(realpathOrSelf(targetRoot)),\n",
+		"",
+	],
 	["the committed pin read from the index", FRESHNESS, "`HEAD:${GENERATED_PIN_PATH}`", "`:${GENERATED_PIN_PATH}`"],
 	["the committed-pin read follows replace refs", FRESHNESS, '\t\t\tGIT_NO_REPLACE_OBJECTS: "1",\n', ""],
 	[

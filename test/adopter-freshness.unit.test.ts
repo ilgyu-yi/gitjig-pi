@@ -594,7 +594,7 @@ describe("#365 one measurement, end to end", () => {
 		);
 	});
 
-	it("reads cannot-measure when the reads pass the measurement's own budget", () => {
+	it("never reads current past the measurement's own budget: cannot-measure, unless the record already mismatches", () => {
 		const root = target();
 		// The walk itself finishes inside its deadline; only the measurement's
 		// closing check sees the budget spent.
@@ -605,7 +605,15 @@ describe("#365 one measurement, end to end", () => {
 			state: "cannot-measure",
 			recovery: PROVISION_COMMAND,
 		});
-		assert.match(FRESHNESS_HELP, /pass the 2-second budget also reads cannot-measure\./);
+		// Past the budget the projection is unobservable, so the state is what the
+		// precedence ranks first: a mismatching record still decides placement.
+		const unrecorded = target(CARRIED, null);
+		tick = 0;
+		assert.deepEqual(measureFreshness(unrecorded, captureCarriedProjection(unrecorded), clock), {
+			state: "placement-mismatch",
+			recovery: PROVISION_COMMAND,
+		});
+		assert.match(FRESHNESS_HELP, /pass the 2-second budget never reads current\./);
 	});
 
 	it("passes its own deadline to the walk", () => {
@@ -689,6 +697,22 @@ describe("#365 one measurement, end to end", () => {
 			},
 		});
 		assert.equal(run.stdout.trim(), COMMITTED.toString("base64"), "another repository's pin was read");
+	});
+
+	it("reads no enclosing repository's pin: a target without a repository of its own is cannot-measure", () => {
+		// The enclosing repository commits the very pin the nested copy's record
+		// and carried files match; only its own HEAD may decide (R25 F2).
+		const outer = target();
+		const nested = join(outer, "vendor/copy");
+		for (const [path, text] of Object.entries({ ...HANDED, ...CARRIED, [INSTALLED_PIN_PATH]: COMMITTED })) {
+			mkdirSync(dirname(join(nested, path)), { recursive: true });
+			writeFileSync(join(nested, path), text);
+		}
+		assert.deepEqual(readCommittedPin(nested, 2000), { kind: "unreadable" });
+		assert.deepEqual(measureFreshness(nested, captureCarriedProjection(nested)), {
+			state: "cannot-measure",
+			recovery: PROVISION_COMMAND,
+		});
 	});
 
 	it("reads HEAD's own pin blob, never one a replace ref substitutes", () => {
@@ -848,7 +872,7 @@ describe("#365 the help", () => {
 				"session-stale: run /reload; the files are current, but the extension tree differed when this process",
 				"first loaded it.",
 				"cannot-measure: run node .github/bin/gitjig-bootstrap.mjs, or /reload when only the load-time capture is missing.",
-				"A measurement whose reads pass the 2-second budget also reads cannot-measure.",
+				"A measurement whose reads pass the 2-second budget never reads current.",
 			].join("\n"),
 		);
 	});

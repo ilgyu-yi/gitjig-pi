@@ -35,7 +35,7 @@ export const FRESHNESS_HELP = [
 	`session-stale: run ${RELOAD_COMMAND}; the files are current, but the extension tree differed when this process`,
 	"first loaded it.",
 	`cannot-measure: run ${PROVISION_COMMAND}, or ${RELOAD_COMMAND} when only the load-time capture is missing.`,
-	"A measurement whose reads pass the 2-second budget also reads cannot-measure.",
+	"A measurement whose reads pass the 2-second budget never reads current.",
 ].join("\n");
 
 /** One content-free line: the state and its recovery token, never a path, operand or error. */
