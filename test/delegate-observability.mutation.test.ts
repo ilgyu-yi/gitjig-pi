@@ -134,4 +134,50 @@ describe("#132 named isolated observability mutants", () => {
 			);
 		}
 	});
+	it("kills the escalation-cancelled-at-settlement mutant at the pipe-less descendant arm's last assertion, every other assertion passing", () => {
+		// #448: the arm itself runs against a private copy, unmutated then mutated;
+		// the mutant must fail on the escalation assertion's own message alone.
+		const ARM =
+			"ends a SIGTERM-ignoring, pipe-less descendant by the abort's SIGKILL after the grace, even once the run has settled";
+		const TEST = "test/delegate-observability.unit.test.ts";
+		const escalation = 'setTimeout(() => killGroup("SIGKILL"), STREAM_GRACE_MS);';
+		for (const variant of ["baseline", "mutant"] as const) {
+			const box = mkdtempSync(join(root, `abort-escalation-${variant}-`));
+			cpSync(join(repository, ".pi/extensions/gitjig"), join(box, ".pi/extensions/gitjig"), { recursive: true });
+			cpSync(join(repository, TEST), join(box, TEST));
+			const target = join(box, ".pi/extensions/gitjig/dispatch/executor.ts");
+			const source = readFileSync(target, "utf8");
+			assert.notEqual(source.indexOf(escalation), -1, "the escalation must exist");
+			assert.equal(source.indexOf(escalation), source.lastIndexOf(escalation), "the escalation must be unique");
+			if (variant === "mutant")
+				writeFileSync(
+					target,
+					source.replace(
+						escalation,
+						() => 'setTimeout(() => { if (!settled) killGroup("SIGKILL"); }, STREAM_GRACE_MS);',
+					),
+				);
+			const env = { ...process.env };
+			delete env.NODE_TEST_CONTEXT;
+			const result = spawnSync(process.execPath, ["--test", "--test-name-pattern", ARM, TEST], {
+				cwd: box,
+				encoding: "utf8",
+				timeout: 30_000,
+				env,
+			});
+			const output = `${result.stdout}${result.stderr}`;
+			assert.match(output, /^ℹ tests 1$/m, `${variant}: the arm alone runs\n${output}`);
+			if (variant === "baseline") {
+				assert.equal(result.status, 0, `baseline failed\n${output}`);
+				continue;
+			}
+			assert.notEqual(result.status, 0, "the escalation-cancelled-at-settlement mutant survived");
+			assert.match(output, /^ℹ fail 1$/m, output);
+			assert.match(
+				output,
+				/descendant \d+ outlived the abort's SIGKILL escalation/,
+				`the mutant failed elsewhere\n${output}`,
+			);
+		}
+	});
 });
