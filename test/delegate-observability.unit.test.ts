@@ -21,6 +21,31 @@ import {
 /** The TERM/KILL arm's bounds (#426): pid-file reads 10 ms apart, and the wait for its killed grandchild to be reaped. */
 const PID_READ_TRIES = 100;
 const REAP_BOUND_MS = 2_000;
+/** The executor's abort grace, `STREAM_GRACE_MS`: SIGTERM, then SIGKILL this long after (§4.9). */
+const ABORT_GRACE_MS = 2_000;
+/** Whether a pid still exists (a zombie included). */
+const alive = (pid: number): boolean => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+};
+/** Read a whole pid from the file the fixture shell writes, within PID_READ_TRIES reads 10 ms apart. */
+async function wholePid(file: string): Promise<number> {
+	for (let tries = 0; tries < PID_READ_TRIES; tries++) {
+		const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+		if (/^\d+\n$/.test(text)) return Number(text);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+	return 0;
+}
+/** Wait until `until` (epoch ms), or less if the pid goes first; returns whether it is gone. */
+async function goneBy(pid: number, until: number): Promise<boolean> {
+	while (alive(pid) && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 20));
+	return !alive(pid);
+}
 const roots: string[] = [];
 after(() => roots.forEach((root) => void rmSync(root, { recursive: true, force: true })));
 
@@ -193,6 +218,88 @@ describe("#132 bounded delegate trace", () => {
 			if (grandchild > 1 && !gone)
 				try {
 					process.kill(grandchild, "SIGKILL");
+				} catch {}
+		}
+	});
+
+	it("ends a SIGTERM-ignoring, pipe-less descendant by the abort's SIGKILL after the grace, even once the run has settled", async () => {
+		// The shell dies on the abort's SIGTERM and the descendant holds none of
+		// its pipes, so the run settles at once; only the escalation, two seconds
+		// after the SIGTERM, may end the descendant (§4.9, #448).
+		const tree = root();
+		const stateDir = join(tree, "state");
+		mkdirSync(stateDir);
+		const controller = new AbortController();
+		const run = runDelegate(
+			{ treeDir: tree, stateDir } as never,
+			["sh", "-c", '(trap "" TERM; exec sleep 30) >/dev/null 2>&1 & echo $! > zq-child.pid; wait'],
+			{ timeoutMs: 10_000, signal: controller.signal },
+		);
+		let descendant = 0;
+		try {
+			descendant = await wholePid(join(tree, "zq-child.pid"));
+			assert.ok(
+				Number.isInteger(descendant) && descendant > 1,
+				`no whole descendant pid within the bound: ${descendant}`,
+			);
+			const aborted = Date.now();
+			controller.abort();
+			const outcome = await run;
+			assert.equal(outcome.aborted, true);
+			assert.equal(outcome.timedOut, false);
+			assert.ok(Date.now() - aborted < ABORT_GRACE_MS / 2, "the run waited instead of settling at once");
+			assert.equal(
+				alive(descendant),
+				true,
+				"the descendant was gone at settlement, so nothing here measures the escalation",
+			);
+			await new Promise((resolve) => setTimeout(resolve, Math.max(0, aborted + ABORT_GRACE_MS - 500 - Date.now())));
+			assert.equal(alive(descendant), true, "the descendant was SIGKILLed before the grace");
+			assert.equal(
+				await goneBy(descendant, aborted + ABORT_GRACE_MS + 1_500),
+				true,
+				`descendant ${descendant} outlived the abort's SIGKILL escalation`,
+			);
+		} finally {
+			controller.abort();
+			if (descendant > 1 && alive(descendant))
+				try {
+					process.kill(descendant, "SIGKILL");
+				} catch {}
+		}
+	});
+
+	it("schedules no signal after a run that was not aborted settles", async () => {
+		// A delegate-spawned descendant that survives a normal exit is not
+		// group-killed, now or after the grace (#448: only an abort arms it).
+		const tree = root();
+		const stateDir = join(tree, "state");
+		mkdirSync(stateDir);
+		const run = runDelegate(
+			{ treeDir: tree, stateDir } as never,
+			["sh", "-c", '(trap "" TERM; exec sleep 30) >/dev/null 2>&1 & echo $! > zq-child.pid'],
+			{ timeoutMs: 10_000 },
+		);
+		let descendant = 0;
+		try {
+			const outcome = await run;
+			assert.equal(outcome.exitCode, 0);
+			descendant = await wholePid(join(tree, "zq-child.pid"));
+			assert.ok(
+				Number.isInteger(descendant) && descendant > 1,
+				`no whole descendant pid within the bound: ${descendant}`,
+			);
+			const settledAt = Date.now();
+			await new Promise((resolve) => setTimeout(resolve, ABORT_GRACE_MS + 500));
+			assert.equal(
+				alive(descendant),
+				true,
+				`a signal reached the descendant ${Date.now() - settledAt}ms after settlement`,
+			);
+		} finally {
+			if (descendant > 1)
+				try {
+					process.kill(descendant, "SIGKILL");
 				} catch {}
 		}
 	});
