@@ -240,11 +240,6 @@ async function abortGroupScenario(
 }
 
 /**
- * A fake that answers the prompt, leaves an orphan holding the stdout pipe
- * open past its own exit, and exits 17. An operator abort arrives while the
- * pipe is still held, after the numeric exit was observed.
- */
-/**
  * A fake whose grandchild ignores SIGTERM and holds none of the child's pipes,
  * so the run settles as soon as the child dies on the abort's SIGTERM and only
  * the escalation can end the grandchild (#447). Liveness is read at settlement,
@@ -309,6 +304,11 @@ async function abortDescendantScenario(start: Start): Promise<{
 	}
 }
 
+/**
+ * A fake that answers the prompt, leaves an orphan holding the stdout pipe
+ * open past its own exit, and exits 17. An operator abort arrives while the
+ * pipe is still held, after the numeric exit was observed.
+ */
 async function exitOwnsLifecycleScenario(start: Start): Promise<{ outcome: string; exitCode: number | null }> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-exit-owns-"));
 	try {
@@ -1670,26 +1670,6 @@ test("baseline-first private-copy mutant: signalling the child alone leaves its 
 	assert.deepEqual(control, baseline, "a behaviour-preserving control changed the observation");
 });
 
-/*
- * The four statements by which an observed numeric exit keeps the terminal.
- * They are TWO independent pairs: the exit handler defuses the still-armed
- * bound and the abort listener, and the bound and abort callbacks each also
- * refuse once `exited` is set. Within a pair either member suffices, so a
- * single-statement mutant on this property is equivalent by construction.
- * That is measured below rather than asserted: each of the four alone is
- * shown to change nothing observable, and one mutant per pair — removing
- * both of that pair's members — lets the bound and then the later abort
- * actually steal the terminal. Reporting a single-statement mutant as dead
- * here would claim a measurement no run made.
- */
-const DEFUSE_BOUND: readonly [string, string] = ["if (timeout !== undefined) clearTimeout(timeout);", "void 0;"];
-const DEFUSE_ABORT: readonly [string, string] = [
-	'\t\t\t\toptions.signal?.removeEventListener("abort", abort);',
-	"\t\t\t\tvoid 0;",
-];
-const BOUND_EXITED_CHECK: readonly [string, string] = ['if (!exited) stop("timeout");', 'stop("timeout");'];
-const ABORT_EXITED_CHECK: readonly [string, string] = ['if (!exited) stop("abort");', 'stop("abort");'];
-
 test("an abort's SIGKILL ends a SIGTERM-ignoring descendant after the grace, even once the run has settled", async () => {
 	assert.deepEqual(await abortDescendantScenario(startPiRpc), {
 		outcome: "abort",
@@ -1721,6 +1701,26 @@ test("baseline-first private-copy mutants: an abort's group SIGKILL comes early,
 	);
 	assert.deepEqual(control, baseline, "a behaviour-preserving control changed the observation");
 });
+
+/*
+ * The four statements by which an observed numeric exit keeps the terminal.
+ * They are TWO independent pairs: the exit handler defuses the still-armed
+ * bound and the abort listener, and the bound and abort callbacks each also
+ * refuse once `exited` is set. Within a pair either member suffices, so a
+ * single-statement mutant on this property is equivalent by construction.
+ * That is measured below rather than asserted: each of the four alone is
+ * shown to change nothing observable, and one mutant per pair — removing
+ * both of that pair's members — lets the bound and then the later abort
+ * actually steal the terminal. Reporting a single-statement mutant as dead
+ * here would claim a measurement no run made.
+ */
+const DEFUSE_BOUND: readonly [string, string] = ["if (timeout !== undefined) clearTimeout(timeout);", "void 0;"];
+const DEFUSE_ABORT: readonly [string, string] = [
+	'\t\t\t\toptions.signal?.removeEventListener("abort", abort);',
+	"\t\t\t\tvoid 0;",
+];
+const BOUND_EXITED_CHECK: readonly [string, string] = ['if (!exited) stop("timeout");', 'stop("timeout");'];
+const ABORT_EXITED_CHECK: readonly [string, string] = ['if (!exited) stop("abort");', 'stop("abort");'];
 
 test("baseline-first private-copy mutants: the observed exit owns the terminal against bound and abort", async () => {
 	const baseline = await exitOwnsLifecycleScenario(startPiRpc);
