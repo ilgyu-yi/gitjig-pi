@@ -605,7 +605,7 @@ describe("#365 one measurement, end to end", () => {
 			state: "cannot-measure",
 			recovery: PROVISION_COMMAND,
 		});
-		assert.match(FRESHNESS_HELP, /pass the 2-second budget also reads cannot-measure, which provision cannot change/);
+		assert.match(FRESHNESS_HELP, /pass the 2-second budget also reads cannot-measure\./);
 	});
 
 	it("passes its own deadline to the walk", () => {
@@ -829,6 +829,31 @@ describe("#365 the rendered line", () => {
 	});
 });
 
+describe("#365 the help", () => {
+	it("is this exact text: each state's token, and SPEC 4.6, 4.2 and 4.7 for what the recovery does, restating none", () => {
+		assert.equal(
+			FRESHNESS_HELP,
+			[
+				"/freshness compares the committed pin, the verified installed-pin record and this clone's carried files.",
+				"It runs only when asked, reads under a 2-second budget, caches nothing, and changes nothing.",
+				"",
+				"Known false positives:",
+				"- an intended local edit to a carried file reports placement-mismatch (true per SPEC 4.5, perhaps unwanted);",
+				"- a provision running at the same time reports placement-mismatch until it advances the record;",
+				"- a carried data file (a .json policy, say) edited when this process loaded and corrected since reports",
+				"  session-stale, though no code the session imported changed.",
+				"",
+				"placement-mismatch: run node .github/bin/gitjig-bootstrap.mjs. What its provision run converges, refuses or leaves alone",
+				"is SPEC 4.6 (Installed-pin authority); the launcher's own stop causes are SPEC 4.2, their exit statuses SPEC 4.7.",
+				"session-stale: run /reload; the files are current, but the extension tree differed when this process",
+				"first loaded it.",
+				"cannot-measure: run node .github/bin/gitjig-bootstrap.mjs, or /reload when only the load-time capture is missing.",
+				"A measurement whose reads pass the 2-second budget also reads cannot-measure.",
+			].join("\n"),
+		);
+	});
+});
+
 describe("#365 the registered renderer and command", () => {
 	type Renderer = (
 		message: { details: unknown },
@@ -885,16 +910,6 @@ describe("#365 the registered renderer and command", () => {
 			state: "placement-mismatch",
 			recovery: PROVISION_COMMAND,
 		});
-	});
-
-	it("names each launcher exit by the cause and status the launcher itself defines", () => {
-		const launcher = readFileSync(new URL("../.github/bin/gitjig-bootstrap.mjs", import.meta.url), "utf8");
-		const start = launcher.indexOf("export const STATUS");
-		const block = launcher.slice(start, launcher.indexOf("});", start));
-		const status = new Map([...block.matchAll(/"([a-z-]+)": (\d+)/gu)].map(([, cause, code]) => [cause, Number(code)]));
-		const named = [...FRESHNESS_HELP.matchAll(/([a-z-]+) \(exit (\d+)\)/gu)];
-		assert.equal(new Set(named.map(([, cause]) => cause)).size, 5, "every pre-provision or cleanup exit named");
-		for (const [, cause, code] of named) assert.equal(status.get(cause as string), Number(code), cause);
 	});
 
 	it("compares the session's clone from the command context's cwd", async () => {
