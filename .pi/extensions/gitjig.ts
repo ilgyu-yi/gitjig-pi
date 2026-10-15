@@ -19,8 +19,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendAuditRecord } from "./gitjig/audit.ts";
 import { maybeAdviseBindState } from "./gitjig/bind-state.ts";
+import { registerFreshnessCommand } from "./gitjig/commands/freshness.ts";
 import { registerSpineCommands } from "./gitjig/commands/index.ts";
 import { registerDispatchTool } from "./gitjig/dispatch/index.ts";
+import { captureCarriedProjection } from "./gitjig/install/freshness.ts";
 import { locateRepoRoot } from "./gitjig/locate.ts";
 import { recordModeRun, resolveModes } from "./gitjig/modes.ts";
 import { registerPublishTool } from "./gitjig/publish/index.ts";
@@ -49,6 +51,11 @@ export default function gitjig(pi: ExtensionAPI) {
 	// The command spine (§4.8): rung-1 review, review-round, and ship
 	// extension commands; every act they take runs inside a handler.
 	registerSpineCommands(pi, repoRoot, stateRoot, sessionSurface, modes);
+
+	// Installed-asset freshness (§4.5), on demand only (§5.9's measuring
+	// stage): the extension code (not the prompts) is captured here, as the extension
+	// loads, so `/freshness` can tell a session behind already-correct bytes.
+	registerFreshnessCommand(pi, repoRoot, captureCarriedProjection(repoRoot));
 
 	// Every append outcome of this session, folded: false the moment any
 	// append degrades open. Reported on the registration entry below.

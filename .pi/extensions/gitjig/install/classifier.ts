@@ -26,14 +26,28 @@ export interface ObservationOptions {
 	afterLstat?: (path: string) => void;
 	afterRead?: (path: string) => void;
 	afterDirectoryRead?: (path: string) => void;
+	/** Admits a regular file's lstat size before it is read; may refuse. */
+	admitSize?: (size: number) => void;
+	/**
+	 * When set, an entry refused as a difference is recorded here and skipped
+	 * rather than thrown, so the walk completes and any unreadable entry still
+	 * decides, whatever the path order.
+	 */
+	onDiffers?: () => void;
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const DECLARATIONS = new Set(["# gitjig: source-only", "// gitjig: source-only"]);
 
 export class ClassificationRefusal extends Error {
-	constructor(cause: string) {
+	/**
+	 * `differs`: a link or non-regular entry stands where a member would, which
+	 * freshness reads as a placement difference; `unreadable`: anything else.
+	 */
+	readonly shape: "differs" | "unreadable";
+	constructor(cause: string, shape: "differs" | "unreadable" = "unreadable") {
 		super(`candidate classification refused: ${cause}`);
+		this.shape = shape;
 	}
 }
 
@@ -127,6 +141,47 @@ function sameObject(left: Stats, right: Stats): boolean {
 	return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
 }
 
+/**
+ * A refusal caused by an entry's name or bytes — a non-canonical or non-UTF-8
+ * name, an ill-formed declaration — is a property of what stands there, so it
+ * is a difference rather than an unreadable entry.
+ */
+function asDifference<T>(read: () => T): T {
+	try {
+		return read();
+	} catch (error) {
+		if (error instanceof ClassificationRefusal) throw Object.assign(error, { shape: "differs" as const });
+		throw error;
+	}
+}
+
+/** Read one regular file without following a link, refusing a replacement between lstat, open and read. */
+function readRegular(abs: Buffer, stats: Stats, path: string, options: ObservationOptions): Buffer {
+	if (!stats.isFile())
+		throw new ClassificationRefusal(
+			stats.isSymbolicLink() ? "candidate is a symlink" : "candidate is non-regular",
+			"differs",
+		);
+	options.admitSize?.(stats.size);
+	let descriptor: number | undefined;
+	try {
+		// Non-blocking, so a FIFO swapped in after the lstat opens at once and is
+		// refused by the identity check instead of blocking the open forever.
+		descriptor = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+		const opened = fstatSync(descriptor);
+		if (!opened.isFile() || !sameObject(stats, opened)) throw new ClassificationRefusal("candidate identity changed");
+		const bytes = readFileSync(descriptor);
+		options.afterRead?.(path);
+		if (!sameObject(opened, lstatSync(abs))) throw new ClassificationRefusal("candidate identity changed");
+		return bytes;
+	} catch (error) {
+		if (error instanceof ClassificationRefusal) throw error;
+		throw new ClassificationRefusal("candidate is unreadable or was replaced");
+	} finally {
+		if (descriptor !== undefined) closeSync(descriptor);
+	}
+}
+
 function walk(
 	abs: Buffer,
 	relative: Buffer,
@@ -155,32 +210,22 @@ function walk(
 		} catch {
 			throw new ClassificationRefusal("candidate is unreadable");
 		}
-		const path = decodeCandidatePath(childRel);
-		options.afterLstat?.(path);
-		if (stats.isDirectory()) {
-			walk(childAbs, childRel, out, stats, options);
-			continue;
-		}
-		if (!stats.isFile())
-			throw new ClassificationRefusal(stats.isSymbolicLink() ? "candidate is a symlink" : "candidate is non-regular");
-		let bytes: Buffer;
-		let descriptor: number | undefined;
 		try {
-			descriptor = openSync(childAbs, constants.O_RDONLY | constants.O_NOFOLLOW);
-			const opened = fstatSync(descriptor);
-			if (!opened.isFile() || !sameObject(stats, opened)) throw new ClassificationRefusal("candidate identity changed");
-			bytes = readFileSync(descriptor);
-			options.afterRead?.(path);
-			if (!sameObject(opened, lstatSync(childAbs))) throw new ClassificationRefusal("candidate identity changed");
+			const path = asDifference(() => decodeCandidatePath(childRel));
+			options.afterLstat?.(path);
+			if (stats.isDirectory()) {
+				walk(childAbs, childRel, out, stats, options);
+				continue;
+			}
+			const bytes = readRegular(childAbs, stats, path, options);
+			const disposition = asDifference(() => classifyCandidate(path, bytes));
+			if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition", "differs");
+			out.push({ path, disposition, bytes });
 		} catch (error) {
-			if (error instanceof ClassificationRefusal) throw error;
-			throw new ClassificationRefusal("candidate is unreadable or was replaced");
-		} finally {
-			if (descriptor !== undefined) closeSync(descriptor);
+			if (options.onDiffers === undefined || !(error instanceof ClassificationRefusal) || error.shape !== "differs")
+				throw error;
+			options.onDiffers();
 		}
-		const disposition = classifyCandidate(path, bytes);
-		if (disposition === "refuse") throw new ClassificationRefusal("candidate has no admitted disposition");
-		out.push({ path, disposition, bytes });
 	}
 	options.afterDirectoryRead?.(decodeCandidatePath(relative));
 	let after: Stats;
@@ -221,6 +266,128 @@ export function observeCandidates(sourceRoot: string, options: ObservationOption
 		walk(abs, Buffer.from(namespace), found, stats, options);
 	}
 	return found.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
+}
+
+/**
+ * The carried roots `classifyCandidate` names: the extension entry, its
+ * runtime directory and the prompt directory. Freshness observes the target's
+ * carried projection under exactly these (#365).
+ */
+export const CARRIED_ROOTS = [".pi/extensions/gitjig.ts", ".pi/extensions/gitjig", ".pi/prompts"] as const;
+/**
+ * The containers of a carried root as they stand: undefined when one is
+ * absent, a refusal when one is a link, non-regular or unreadable.
+ */
+function standingContainers(root: Buffer, carried: string): Array<{ path: Buffer; stats: Stats }> | undefined {
+	const parts = carried.split("/").slice(0, -1);
+	const standing: Array<{ path: Buffer; stats: Stats }> = [];
+	for (let index = 1; index <= parts.length; index++) {
+		const path = appendPath(root, Buffer.from(parts.slice(0, index).join("/")));
+		let stats: Stats;
+		try {
+			stats = lstatSync(path);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+			throw new ClassificationRefusal("carried container is unreadable");
+		}
+		if (!stats.isDirectory() || stats.isSymbolicLink())
+			throw new ClassificationRefusal("carried container is non-regular", "differs");
+		standing.push({ path, stats });
+	}
+	return standing;
+}
+export const MAX_CARRIED_BYTES = 64 * 1024 * 1024;
+export interface CarriedMember {
+	path: string;
+	bytes: Buffer;
+}
+export type CarriedObservation =
+	| { kind: "observed"; members: readonly CarriedMember[] }
+	| { kind: "differs" }
+	| { kind: "unreadable" };
+
+/**
+ * Observe the target's complete carried projection, members no manifest lists
+ * included, by the same no-follow reads as candidate observation. A link or
+ * non-regular entry where a member would stand is `differs`; an unreadable or
+ * replaced entry, or a read past `deadline` (epoch ms) or the byte bound, is
+ * `unreadable`. It never follows a link and writes nothing.
+ */
+export function observeCarried(
+	targetRoot: string,
+	deadline: number,
+	options: ObservationOptions & { maxBytes?: number; roots?: readonly (typeof CARRIED_ROOTS)[number][] } = {},
+): CarriedObservation {
+	const root = Buffer.from(resolve(targetRoot));
+	const found: ObservedCandidate[] = [];
+	let admitted = 0;
+	let differs = false;
+	const bounded: ObservationOptions = {
+		...options,
+		// The byte bound applies before each read, so no member is read, or
+		// classified, past it.
+		admitSize: (size) => {
+			admitted += size;
+			if (admitted > (options.maxBytes ?? MAX_CARRIED_BYTES))
+				throw new ClassificationRefusal("carried observation is past its byte bound");
+		},
+		afterLstat: (path) => {
+			if (Date.now() > deadline) throw new ClassificationRefusal("carried observation is past its bound");
+			options.afterLstat?.(path);
+		},
+		onDiffers: () => {
+			differs = true;
+		},
+	};
+	// Each difference is recorded and the walk goes on, so an unreadable entry
+	// anywhere decides first (cannot-measure ranks above placement-mismatch).
+	const asRecorded = (read: () => void) => {
+		try {
+			read();
+		} catch (error) {
+			if (!(error instanceof ClassificationRefusal) || error.shape !== "differs") throw error;
+			differs = true;
+		}
+	};
+	try {
+		for (const carried of options.roots ?? CARRIED_ROOTS) {
+			asRecorded(() => {
+				// Each root's own containers: one root's absent container never
+				// hides another root, and a linked container is a difference.
+				const containers = standingContainers(root, carried);
+				if (containers === undefined) return;
+				const abs = appendPath(root, Buffer.from(carried));
+				let stats: Stats;
+				try {
+					stats = lstatSync(abs);
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+					throw new ClassificationRefusal("carried root is unreadable");
+				}
+				bounded.afterLstat?.(carried);
+				if (carried.endsWith(".ts"))
+					found.push({ path: carried, disposition: "carried", bytes: readRegular(abs, stats, carried, bounded) });
+				else if (stats.isDirectory() && !stats.isSymbolicLink()) walk(abs, Buffer.from(carried), found, stats, bounded);
+				else throw new ClassificationRefusal("carried root is non-regular", "differs");
+				// The reads resolved through these containers; one replaced by a
+				// link meanwhile would have been followed, so each is checked again.
+				for (const container of containers)
+					if (!sameObject(container.stats, lstatSync(container.path)))
+						throw new ClassificationRefusal("carried container identity changed");
+			});
+		}
+	} catch (error) {
+		return { kind: error instanceof ClassificationRefusal ? error.shape : "unreadable" };
+	}
+	if (found.reduce((total, member) => total + member.bytes.length, 0) > (options.maxBytes ?? MAX_CARRIED_BYTES))
+		return { kind: "unreadable" };
+	if (differs) return { kind: "differs" };
+	return {
+		kind: "observed",
+		members: found
+			.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)))
+			.map(({ path, bytes }) => ({ path, bytes })),
+	};
 }
 
 export function observeOccupants(targetRoot: string, paths: readonly string[]): ReadonlyMap<string, Occupant> {
