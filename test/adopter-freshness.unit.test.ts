@@ -956,7 +956,7 @@ describe("#365 the registered renderer and command", () => {
 });
 
 describe("#451 the fixtures' Git children", () => {
-	it("start through fixtureGit alone, which disables detached maintenance", () => {
+	it("start through fixtureGit alone", () => {
 		// Counted in this file's own source: a Git child started any other way
 		// would carry no maintenance.auto=false. A call building the binary name,
 		// or another spawning API, is outside what this check sees.
@@ -966,8 +966,26 @@ describe("#451 the fixtures' Git children", () => {
 		const start = source.indexOf("function fixtureGit(");
 		const end = source.indexOf("\n}\n", start);
 		assert.ok(start >= 0 && end > start, "fixtureGit is defined");
-		const helper = source.slice(start, end);
-		assert.ok(helper.includes('"maintenance.auto=false"'), "fixtureGit disables detached maintenance");
 		assert.ok((calls[0]?.index ?? -1) > start && (calls[0]?.index ?? -1) < end, "the one call is fixtureGit's");
+	});
+
+	it("passes -c maintenance.auto=false to the Git child it starts, observed in its argv", () => {
+		// Measured at the child, not read from the helper's text (R1): a fake git
+		// first on PATH records the argv fixtureGit really passes.
+		const bin = mkdtempSync(join(tmpdir().includes(":") ? "/tmp" : tmpdir(), "gitjig-451-bin-"));
+		roots.push(bin);
+		const log = join(bin, "argv");
+		writeFileSync(join(bin, "git"), `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(log)}\n`, { mode: 0o755 });
+		const saved = process.env.PATH;
+		process.env.PATH = `${bin}:${saved ?? ""}`;
+		try {
+			fixtureGit(bin, ["status"]);
+		} finally {
+			process.env.PATH = saved;
+		}
+		const recorded = readFileSync(log, "utf8").trimEnd().split("\n");
+		const at = recorded.indexOf("maintenance.auto=false");
+		assert.ok(at > 0 && recorded[at - 1] === "-c", `no -c maintenance.auto=false in ${JSON.stringify(recorded)}`);
+		assert.ok(at < recorded.indexOf("status"), "the setting precedes the subcommand");
 	});
 });
