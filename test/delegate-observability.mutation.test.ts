@@ -103,11 +103,13 @@ describe("#132 named isolated observability mutants", () => {
 			cpSync(join(repository, TEST), join(box, TEST));
 			const target = join(box, ".pi/extensions/gitjig/dispatch/executor.ts");
 			const source = readFileSync(target, "utf8");
-			assert.equal(source.split("process.kill(-child.pid, signal);").length, 2, "the group signal must be unique");
+			const groupSignal = "process.kill(-child.pid, signal);";
+			assert.notEqual(source.indexOf(groupSignal), -1, "the group signal must exist");
+			assert.equal(source.indexOf(groupSignal), source.lastIndexOf(groupSignal), "the group signal must be unique");
 			if (variant === "mutant")
 				writeFileSync(
 					target,
-					source.replace("process.kill(-child.pid, signal);", () => "child.kill(signal);"),
+					source.replace(groupSignal, () => "child.kill(signal);"),
 				);
 			const env = { ...process.env };
 			delete env.NODE_TEST_CONTEXT;
