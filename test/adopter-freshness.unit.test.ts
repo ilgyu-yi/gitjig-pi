@@ -16,6 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
 	FRESHNESS_HELP,
 	FRESHNESS_MESSAGE,
@@ -108,13 +109,22 @@ function target(carried: Record<string, string> = CARRIED, installed: Buffer | n
 	if (installed !== null) write(INSTALLED_PIN_PATH, installed);
 	return root;
 }
+/**
+ * Every Git child these fixtures start, and the only call that starts one: a
+ * closed configuration with the directory as HOME, and no detached
+ * `git maintenance run --auto`, which would write into .git while a tree walk
+ * reads it and make the zero-mutation arms lie either way (#451).
+ */
+function fixtureGit(cwd: string, args: readonly string[], input?: Buffer): string {
+	return execFileSync(
+		"git",
+		["-C", cwd, "-c", "maintenance.auto=false", "-c", "user.name=F", "-c", "user.email=f@example.invalid", ...args],
+		{ encoding: "utf8", input, env: { PATH: process.env.PATH, HOME: cwd, GIT_CONFIG_NOSYSTEM: "1" } },
+	);
+}
 /** Commit the working pin, so HEAD holds it: the committed pin is HEAD's. */
 function commitPin(root: string): void {
-	const git = (...args: string[]) =>
-		execFileSync("git", ["-C", root, "-c", "user.name=F", "-c", "user.email=f@example.invalid", ...args], {
-			stdio: "ignore",
-			env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
-		});
+	const git = (...args: string[]) => fixtureGit(root, args);
 	git("init", "-q");
 	git("add", GENERATED_PIN_PATH);
 	git("-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "pin");
@@ -664,9 +674,7 @@ describe("#365 one measurement, end to end", () => {
 	it("reads HEAD's entry, never the index's staged one", () => {
 		const root = target();
 		writeFileSync(join(root, GENERATED_PIN_PATH), pinFor(CARRIED, "b".repeat(40)));
-		execFileSync("git", ["-C", root, "add", GENERATED_PIN_PATH], {
-			env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
-		});
+		fixtureGit(root, ["add", GENERATED_PIN_PATH]);
 		assert.deepEqual(readCommittedPin(root, 2000), { kind: "bytes", bytes: COMMITTED });
 	});
 
@@ -674,26 +682,7 @@ describe("#365 one measurement, end to end", () => {
 		const root = target();
 		const other = target(CARRIED, null);
 		writeFileSync(join(other, GENERATED_PIN_PATH), pinFor(CARRIED, "c".repeat(40)));
-		execFileSync(
-			"git",
-			[
-				"-C",
-				other,
-				"-c",
-				"user.name=F",
-				"-c",
-				"user.email=f@example.invalid",
-				"commit",
-				"-q",
-				"--no-verify",
-				"-am",
-				"other",
-			],
-			{
-				stdio: "ignore",
-				env: { PATH: process.env.PATH, HOME: other, GIT_CONFIG_NOSYSTEM: "1" },
-			},
-		);
+		fixtureGit(other, ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-am", "other"]);
 		const emptyObjects = mkdtempSync(join(tmpdir(), "gitjig-365-objects-"));
 		roots.push(emptyObjects);
 		const freshness = new URL("../.pi/extensions/gitjig/install/freshness.ts", import.meta.url).href;
@@ -738,12 +727,7 @@ describe("#365 one measurement, end to end", () => {
 
 	it("reads HEAD's own pin blob, never one a replace ref substitutes", () => {
 		const root = target();
-		const git = (args: string[], input?: Buffer) =>
-			execFileSync("git", ["-C", root, ...args], {
-				encoding: "utf8",
-				input,
-				env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
-			}).trim();
+		const git = (args: string[], input?: Buffer) => fixtureGit(root, args, input).trim();
 		const blob = git(["rev-parse", `HEAD:${GENERATED_PIN_PATH}`]);
 		const other = git(["hash-object", "-w", "--stdin"], pinFor(CARRIED, "b".repeat(40)));
 		git(["replace", blob, other]);
@@ -757,11 +741,7 @@ describe("#365 one measurement, end to end", () => {
 
 	it("reads the committed pin in a partial clone without fetching or running its upload program", () => {
 		const origin = target();
-		const git = (cwd: string, ...args: string[]) =>
-			execFileSync("git", ["-C", cwd, ...args], {
-				encoding: "utf8",
-				env: { PATH: process.env.PATH, HOME: cwd, GIT_CONFIG_NOSYSTEM: "1" },
-			});
+		const git = (cwd: string, ...args: string[]) => fixtureGit(cwd, args);
 		git(origin, "config", "uploadpack.allowFilter", "true");
 		const partial = join(mkdtempSync(join(tmpdir(), "gitjig-365-partial-")), "clone");
 		roots.push(dirname(partial));
@@ -819,26 +799,7 @@ describe("#365 one measurement, end to end", () => {
 		writeFileSync(join(root, ".pi/extensions/gitjig/policy.json"), "{}\n");
 		const corrected = pinFor({ ...CARRIED, ".pi/extensions/gitjig/policy.json": "{}\n" });
 		writeFileSync(join(root, GENERATED_PIN_PATH), corrected);
-		execFileSync(
-			"git",
-			[
-				"-C",
-				root,
-				"-c",
-				"user.name=F",
-				"-c",
-				"user.email=f@example.invalid",
-				"commit",
-				"-q",
-				"--no-verify",
-				"-am",
-				"pin",
-			],
-			{
-				stdio: "ignore",
-				env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
-			},
-		);
+		fixtureGit(root, ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-am", "pin"]);
 		writeFileSync(join(root, INSTALLED_PIN_PATH), corrected);
 		assert.deepEqual(measureFreshness(root, capture), { state: "session-stale", recovery: RELOAD_COMMAND });
 	});
@@ -991,5 +952,40 @@ describe("#365 the registered renderer and command", () => {
 				{ triggerTurn: false },
 			],
 		]);
+	});
+});
+
+describe("#451 the fixtures' Git children", () => {
+	it("start through fixtureGit alone", () => {
+		// Counted in this file's own source: a Git child started any other way
+		// would carry no maintenance.auto=false. A call building the binary name,
+		// or another spawning API, is outside what this check sees.
+		const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
+		const calls = [...source.matchAll(/\b(?:execFileSync|spawnSync)\(\s*"git"/g)];
+		assert.equal(calls.length, 1, "exactly one call starts a Git child");
+		const start = source.indexOf("function fixtureGit(");
+		const end = source.indexOf("\n}\n", start);
+		assert.ok(start >= 0 && end > start, "fixtureGit is defined");
+		assert.ok((calls[0]?.index ?? -1) > start && (calls[0]?.index ?? -1) < end, "the one call is fixtureGit's");
+	});
+
+	it("passes -c maintenance.auto=false to the Git child it starts, observed in its argv", () => {
+		// Measured at the child, not read from the helper's text (R1): a fake git
+		// first on PATH records the argv fixtureGit really passes.
+		const bin = mkdtempSync(join(tmpdir().includes(":") ? "/tmp" : tmpdir(), "gitjig-451-bin-"));
+		roots.push(bin);
+		const log = join(bin, "argv");
+		writeFileSync(join(bin, "git"), `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(log)}\n`, { mode: 0o755 });
+		const saved = process.env.PATH;
+		process.env.PATH = `${bin}:${saved ?? ""}`;
+		try {
+			fixtureGit(bin, ["status"]);
+		} finally {
+			process.env.PATH = saved;
+		}
+		const recorded = readFileSync(log, "utf8").trimEnd().split("\n");
+		const at = recorded.indexOf("maintenance.auto=false");
+		assert.ok(at > 0 && recorded[at - 1] === "-c", `no -c maintenance.auto=false in ${JSON.stringify(recorded)}`);
+		assert.ok(at < recorded.indexOf("status"), "the setting precedes the subcommand");
 	});
 });
