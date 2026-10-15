@@ -9,14 +9,18 @@ import { type Selection, selectAffected } from "./harness/affected-tests.ts";
 
 /* #443: the between-rounds selector, measured over fixture repositories. */
 // The selector runs in this process and in the commands it spawns, so neither
-// may read the host's Git configuration (diff.renames=false, for one, would
-// change what a rename reports). Every GIT_* variable is dropped, which closes
-// the environment channels (GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG_PARAMETERS
-// and any other) as a class, and the file channels are then pointed at nothing.
+// may read the host's Git state: configuration (diff.renames=false, for one,
+// changes what a rename reports) or a user-level ignore file (which hides an
+// untracked file). Every GIT_* variable is dropped, which closes the
+// environment channels as a class; the system file is disabled, and HOME and
+// XDG_CONFIG_HOME point at an empty directory, where Git looks for
+// ~/.gitconfig, $XDG_CONFIG_HOME/git/config and $XDG_CONFIG_HOME/git/ignore.
 for (const key of Object.keys(process.env)) if (key.startsWith("GIT_")) delete process.env[key];
-process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+const emptyHome = mkdtempSync(join(tmpdir(), "gitjig-443-home-"));
+process.env.HOME = emptyHome;
+process.env.XDG_CONFIG_HOME = emptyHome;
 process.env.GIT_CONFIG_NOSYSTEM = "1";
-const roots: string[] = [];
+const roots: string[] = [emptyHome];
 after(() => {
 	for (const root of roots) rmSync(root, { recursive: true, force: true });
 });
