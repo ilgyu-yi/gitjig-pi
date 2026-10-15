@@ -711,17 +711,22 @@ describe("#365 one measurement, end to end", () => {
 	it("reads no enclosing repository's pin: a target without a repository of its own is cannot-measure", () => {
 		// The enclosing repository commits the very pin the nested copy's record
 		// and carried files match; only its own HEAD may decide (R25 F2).
+		// A direct child and a deeper descendant: the ceiling sits at the target's
+		// own parent, so neither climbs (R27 F1: a ceiling one level higher let the
+		// direct child through).
 		const outer = target();
-		const nested = join(outer, "vendor/copy");
-		for (const [path, text] of Object.entries({ ...HANDED, ...CARRIED, [INSTALLED_PIN_PATH]: COMMITTED })) {
-			mkdirSync(dirname(join(nested, path)), { recursive: true });
-			writeFileSync(join(nested, path), text);
+		for (const nested of [join(outer, "copy"), join(outer, "vendor/copy")]) {
+			for (const [path, text] of Object.entries({ ...HANDED, ...CARRIED, [INSTALLED_PIN_PATH]: COMMITTED })) {
+				mkdirSync(dirname(join(nested, path)), { recursive: true });
+				writeFileSync(join(nested, path), text);
+			}
+			assert.deepEqual(readCommittedPin(nested, 2000), { kind: "unreadable" }, nested);
+			assert.deepEqual(
+				measureFreshness(nested, captureCarriedProjection(nested)),
+				{ state: "cannot-measure", recovery: PROVISION_COMMAND },
+				nested,
+			);
 		}
-		assert.deepEqual(readCommittedPin(nested, 2000), { kind: "unreadable" });
-		assert.deepEqual(measureFreshness(nested, captureCarriedProjection(nested)), {
-			state: "cannot-measure",
-			recovery: PROVISION_COMMAND,
-		});
 	});
 
 	it("reads HEAD's own pin blob, never one a replace ref substitutes", () => {

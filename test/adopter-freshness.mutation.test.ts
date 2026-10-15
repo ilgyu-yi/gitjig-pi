@@ -206,6 +206,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"\t\tinstalled.revision !== committed.revision\n",
 	],
 	[
+		"the committed-pin read's ceiling one level too high",
+		FRESHNESS,
+		"GIT_CEILING_DIRECTORIES: dirname(realpathOrSelf(targetRoot)),",
+		"GIT_CEILING_DIRECTORIES: dirname(dirname(realpathOrSelf(targetRoot))),",
+	],
+	[
 		"a spent budget still starts the HEAD read",
 		FRESHNESS,
 		'\tif (timeoutMs <= 0) return { kind: "unreadable" };\n',
