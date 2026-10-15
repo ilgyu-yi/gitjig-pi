@@ -32,9 +32,11 @@ const alive = (pid: number): boolean => {
 		return false;
 	}
 };
-/** Read a whole pid from the file the fixture shell writes, within PID_READ_TRIES reads 10 ms apart. */
+/** A descendant's pid, from a shell that starts under load: up to 5 s of reads 10 ms apart. */
+const DESCENDANT_PID_TRIES = 500;
+/** Read a whole pid from the file the fixture shell writes, within DESCENDANT_PID_TRIES reads 10 ms apart. */
 async function wholePid(file: string): Promise<number> {
-	for (let tries = 0; tries < PID_READ_TRIES; tries++) {
+	for (let tries = 0; tries < DESCENDANT_PID_TRIES; tries++) {
 		const text = existsSync(file) ? readFileSync(file, "utf8") : "";
 		if (/^\d+\n$/.test(text)) return Number(text);
 		await new Promise((resolve) => setTimeout(resolve, 10));
@@ -232,7 +234,9 @@ describe("#132 bounded delegate trace", () => {
 		const controller = new AbortController();
 		const run = runDelegate(
 			{ treeDir: tree, stateDir } as never,
-			["sh", "-c", '(trap "" TERM; exec sleep 30) >/dev/null 2>&1 & echo $! > zq-child.pid; wait'],
+			// The descendant ignores TERM before it records its pid, so the abort can
+			// never find it with TERM still at its default (R1 F1).
+			["sh", "-c", "sh -c 'trap \"\" TERM; echo $$ > zq-child.pid; exec sleep 30' >/dev/null 2>&1 & wait"],
 			{ timeoutMs: 10_000, signal: controller.signal },
 		);
 		let descendant = 0;
@@ -277,7 +281,7 @@ describe("#132 bounded delegate trace", () => {
 		mkdirSync(stateDir);
 		const run = runDelegate(
 			{ treeDir: tree, stateDir } as never,
-			["sh", "-c", '(trap "" TERM; exec sleep 30) >/dev/null 2>&1 & echo $! > zq-child.pid'],
+			["sh", "-c", "sleep 30 >/dev/null 2>&1 & echo $! > zq-child.pid"],
 			{ timeoutMs: 10_000 },
 		);
 		let descendant = 0;
