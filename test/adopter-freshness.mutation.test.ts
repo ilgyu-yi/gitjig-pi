@@ -206,12 +206,6 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 		"\t\tinstalled.revision !== committed.revision\n",
 	],
 	[
-		"the committed-pin read's ceiling one level too high",
-		FRESHNESS,
-		"GIT_CEILING_DIRECTORIES: dirname(realpathOrSelf(targetRoot)),",
-		"GIT_CEILING_DIRECTORIES: dirname(dirname(realpathOrSelf(targetRoot))),",
-	],
-	[
 		"a spent budget still starts the HEAD read",
 		FRESHNESS,
 		'\tif (timeoutMs <= 0) return { kind: "unreadable" };\n',
@@ -227,17 +221,12 @@ const mutations: ReadonlyArray<readonly [string, string, string, string]> = [
 	[
 		"the committed-pin read climbs into an enclosing repository",
 		FRESHNESS,
-		"\t\t\t\tGIT_CEILING_DIRECTORIES: dirname(realpathOrSelf(targetRoot)),\n",
+		'\t\t\t`--git-dir=${join(resolve(targetRoot), ".git")}`,\n',
 		"",
 	],
 	["the committed pin read from the index", FRESHNESS, "`HEAD:${GENERATED_PIN_PATH}`", "`:${GENERATED_PIN_PATH}`"],
 	["the committed-pin read follows replace refs", FRESHNESS, '\t\t\tGIT_NO_REPLACE_OBJECTS: "1",\n', ""],
-	[
-		"the committed-pin read may fetch lazily",
-		FRESHNESS,
-		'["--no-lazy-fetch", "-C", resolve(targetRoot), "cat-file"',
-		'["-C", resolve(targetRoot), "cat-file"',
-	],
+	["the committed-pin read may fetch lazily", FRESHNESS, '\t\t\t"--no-lazy-fetch",\n', ""],
 	[
 		"an unbounded observation",
 		CLASSIFIER,
