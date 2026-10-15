@@ -167,6 +167,11 @@ async function withMutant<T>(
  * inside, so the baseline arm and the mutant arm read the same measurement.
  */
 
+/** The abort grace, `FLUSH_GRACE_MS` in the supervisor: SIGTERM, then SIGKILL this long after (§4.9). */
+const ABORT_GRACE_MS = 2000;
+/** How late the abort-group grandchild handles SIGTERM: a margin of 1.7 s to the grace either way. */
+const SIGTERM_HANDLER_DELAY_MS = 300;
+
 /**
  * A fake that puts a grandchild in its own process group's reach, answers
  * every correlated request so nothing refuses the protocol, and then hangs.
@@ -184,7 +189,9 @@ async function abortGroupScenario(
 		const context = supervisorContext(scratch);
 		const grandchild =
 			'const fs = require("node:fs");' +
-			`process.on("SIGTERM", () => { fs.writeFileSync(${JSON.stringify(termFile)}, "sigterm"); process.exit(0); });` +
+			// The handler runs late, as a busy grandchild's would, so an early group
+			// SIGKILL would land first; well inside the grace either way (#447).
+			`process.on("SIGTERM", () => { const until = Date.now() + ${SIGTERM_HANDLER_DELAY_MS}; while (Date.now() < until); fs.writeFileSync(${JSON.stringify(termFile)}, "sigterm"); process.exit(0); });` +
 			// The readiness marker is written only once the handler is installed,
 			// so the abort below can never race the grandchild's startup.
 			`fs.writeFileSync(${JSON.stringify(readyFile)}, "ready");` +
@@ -237,6 +244,71 @@ async function abortGroupScenario(
  * open past its own exit, and exits 17. An operator abort arrives while the
  * pipe is still held, after the numeric exit was observed.
  */
+/**
+ * A fake whose grandchild ignores SIGTERM and holds none of the child's pipes,
+ * so the run settles as soon as the child dies on the abort's SIGTERM and only
+ * the escalation can end the grandchild (#447). Liveness is read at settlement,
+ * half a second before the grace, and within a bound after it.
+ */
+async function abortDescendantScenario(start: Start): Promise<{
+	outcome: string;
+	settledBeforeGrace: boolean;
+	aliveAtSettlement: boolean;
+	aliveBeforeGrace: boolean;
+	goneAfterGrace: boolean;
+}> {
+	const scratch = mkdtempSync(join(tmpdir(), "gitjig-447-abort-descendant-"));
+	const pidFile = join(scratch, "grandchild.pid");
+	const readyFile = join(scratch, "grandchild.ready");
+	let pid = 0;
+	const alive = () => {
+		try {
+			process.kill(pid, 0);
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	try {
+		const context = supervisorContext(scratch);
+		const grandchild =
+			'const fs = require("node:fs");' +
+			'process.on("SIGTERM", () => {});' +
+			`fs.writeFileSync(${JSON.stringify(readyFile)}, "ready");` +
+			"setInterval(() => {}, 1000);";
+		const executable = fakePi(
+			join(scratch, "fake-pi"),
+			'const cp = require("node:child_process"), fs = require("node:fs");\n' +
+				`const kid = cp.spawn(process.execPath, ["-e", ${JSON.stringify(grandchild)}], { stdio: "ignore" });\n` +
+				`fs.writeFileSync(${JSON.stringify(pidFile)}, String(kid.pid));\n` +
+				"setInterval(() => {}, 1000);\n",
+		);
+		const controller = new AbortController();
+		const session = start({
+			...parameters(context, trustedExtensionFile(scratch), executable),
+			timeoutMs: 15_000,
+			signal: controller.signal,
+		});
+		await settled(() => existsSync(pidFile) && existsSync(readyFile));
+		assert.equal(existsSync(readyFile), true, "the grandchild never installed its SIGTERM handler");
+		pid = Number(readFileSync(pidFile, "utf8"));
+		assert.ok(Number.isInteger(pid) && pid > 1, `no grandchild pid recorded: ${pid}`);
+		const aborted = Date.now();
+		controller.abort();
+		const outcome = await session.done;
+		const settledBeforeGrace = Date.now() - aborted < ABORT_GRACE_MS / 2;
+		const aliveAtSettlement = alive();
+		await new Promise((resolve) => setTimeout(resolve, Math.max(0, aborted + ABORT_GRACE_MS - 500 - Date.now())));
+		const aliveBeforeGrace = alive();
+		const deadline = aborted + ABORT_GRACE_MS + 1500;
+		while (alive() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+		return { outcome, settledBeforeGrace, aliveAtSettlement, aliveBeforeGrace, goneAfterGrace: !alive() };
+	} finally {
+		if (pid > 1) kill(pid);
+		cleanup(scratch);
+	}
+}
+
 async function exitOwnsLifecycleScenario(start: Start): Promise<{ outcome: string; exitCode: number | null }> {
 	const scratch = mkdtempSync(join(tmpdir(), "gitjig-416-exit-owns-"));
 	try {
@@ -1617,6 +1689,38 @@ const DEFUSE_ABORT: readonly [string, string] = [
 ];
 const BOUND_EXITED_CHECK: readonly [string, string] = ['if (!exited) stop("timeout");', 'stop("timeout");'];
 const ABORT_EXITED_CHECK: readonly [string, string] = ['if (!exited) stop("abort");', 'stop("abort");'];
+
+test("an abort's SIGKILL ends a SIGTERM-ignoring descendant after the grace, even once the run has settled", async () => {
+	assert.deepEqual(await abortDescendantScenario(startPiRpc), {
+		outcome: "abort",
+		settledBeforeGrace: true,
+		aliveAtSettlement: true,
+		aliveBeforeGrace: true,
+		goneAfterGrace: true,
+	});
+});
+
+test("baseline-first private-copy mutants: an abort's group SIGKILL comes early, or never", async () => {
+	const baseline = await abortDescendantScenario(startPiRpc);
+	assert.equal(baseline.goneAfterGrace, true, "the baseline left the descendant running");
+	const EXIT_KILL = 'if (stopping !== "abort") group("SIGKILL");';
+	const early = await withMutant([[EXIT_KILL, 'group("SIGKILL");']], abortDescendantScenario);
+	assert.equal(early.aliveBeforeGrace, false, "the exit-time SIGKILL mutant still waited for the grace");
+	const earlyGroup = await withMutant([[EXIT_KILL, 'group("SIGKILL");']], abortGroupScenario);
+	assert.equal(earlyGroup.grandchildSawSigterm, false, "the exit-time SIGKILL mutant still let a late handler run");
+	const CANCEL = 'if (stopping !== "abort" && escalate !== undefined) clearTimeout(escalate);';
+	const never = await withMutant(
+		[[CANCEL, "if (escalate !== undefined) clearTimeout(escalate);"]],
+		abortDescendantScenario,
+	);
+	assert.equal(never.goneAfterGrace, false, "the settlement-cancelled escalation mutant still killed the descendant");
+	// A behaviour-preserving control of the same statement keeps the baseline.
+	const control = await withMutant(
+		[[CANCEL, 'if (escalate !== undefined && stopping !== "abort") clearTimeout(escalate);']],
+		abortDescendantScenario,
+	);
+	assert.deepEqual(control, baseline, "a behaviour-preserving control changed the observation");
+});
 
 test("baseline-first private-copy mutants: the observed exit owns the terminal against bound and abort", async () => {
 	const baseline = await exitOwnsLifecycleScenario(startPiRpc);
