@@ -37,6 +37,11 @@
  * environment, and outlives the scratch's removal. Operator abort sends
  * SIGTERM to the group, escalates to SIGKILL after the stream grace, and a
  * second finite grace settles even if process or pipe teardown never reports.
+ * The escalation outlives settlement (#448): a descendant that ignores SIGTERM
+ * and holds no pipe lets the run settle first, and only that SIGKILL ends it.
+ * Named residuals: the escalation may signal a process group that has emptied,
+ * and whose id was reused, within the grace; and a host that exits through
+ * process.exit() before the grace ends discards the timer, so it is not sent.
  */
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
@@ -98,7 +103,6 @@ export function runDelegate(
 		let updateTimer: ReturnType<typeof setTimeout> | undefined;
 		let killTimer: ReturnType<typeof setTimeout> | undefined;
 		let graceTimer: ReturnType<typeof setTimeout> | undefined;
-		let abortEscalation: ReturnType<typeof setTimeout> | undefined;
 		let outerTimer: ReturnType<typeof setTimeout> | undefined;
 		let abortListener: (() => void) | undefined;
 		let releaseChildResources = (): void => {};
@@ -119,13 +123,17 @@ export function runDelegate(
 			updateTimer = setTimeout(() => emitTrace(), TRACE_UPDATE_MS);
 		};
 		const cleanup = (): void => {
-			for (const timer of [updateTimer, killTimer, graceTimer, abortEscalation, outerTimer]) {
+			// An abort's escalation is not among these: it stays armed, and ref'd so
+			// a host that would otherwise go idle waits to send it, because §4.9's
+			// SIGKILL after two seconds is owed even when the run settles first
+			// (#448). A host that exits through process.exit() before then discards
+			// it: a residual the header names.
+			for (const timer of [updateTimer, killTimer, graceTimer, outerTimer]) {
 				if (timer !== undefined) clearTimeout(timer);
 			}
 			updateTimer = undefined;
 			killTimer = undefined;
 			graceTimer = undefined;
-			abortEscalation = undefined;
 			outerTimer = undefined;
 			if (abortListener !== undefined) options.signal?.removeEventListener("abort", abortListener);
 		};
@@ -230,7 +238,7 @@ export function runDelegate(
 			if (settled || termination !== "none") return;
 			termination = "abort";
 			killGroup("SIGTERM");
-			abortEscalation = setTimeout(() => killGroup("SIGKILL"), STREAM_GRACE_MS);
+			setTimeout(() => killGroup("SIGKILL"), STREAM_GRACE_MS);
 			armOuter();
 		};
 		abortListener = abort;
