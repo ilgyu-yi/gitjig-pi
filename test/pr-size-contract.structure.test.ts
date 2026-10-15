@@ -19,6 +19,7 @@ function section(text: string, number: string): string {
 }
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	["1.11", "It is subject-bound, and its freshness bound is that head"],
 	["1.1", "- **Change size.** A pull request to the default branch stays within §1.11's size bound"],
 	[
 		"1.11",
@@ -70,6 +71,7 @@ describe("#408 pull-request size contract", () => {
 
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			["its freshness bound is that head", "its freshness bound is a day"],
 			["stays within §1.11's size bound", "stays near §1.11's size bound"],
 			["over every path, tests included", "over every path, tests excluded"],
 			["between its start and end markers", "anywhere in the file"],
