@@ -19,6 +19,22 @@ function section(text: string, number: string): string {
 }
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	[
+		"1.11",
+		"The class has one sanctioned escape on §3.8's escape architecture, which is this class's explicit total-coverage disposition.",
+	],
+	[
+		"1.11",
+		"a pull-request comment under the `gitjig-pr-size-escape: v1` marker whose JSON names the pull request number, its head commit, the measured value and a reason",
+	],
+	["1.11", "It is observable: the check output names the honoured record."],
+	["1.11", ", and the check output names the refusing arm"],
+	[
+		"1.11",
+		"Its measured basis is the 60 pull requests merged into `main` from #295 through #445, as of 2026-10-15T15:00Z",
+	],
+	["1.11", "Published review records (`gitjig-review-record`) exist on 40 of them"],
+	["1.11", "at that window's p90, rounded up to the next hundred"],
 	["1.11", "It is subject-bound, and its freshness bound is that head"],
 	["1.1", "- **Change size.** A pull request to the default branch stays within §1.11's size bound"],
 	[
@@ -71,6 +87,16 @@ describe("#408 pull-request size contract", () => {
 
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			["which is this class's explicit total-coverage disposition", "which is one of several escapes"],
+			[
+				"under the `gitjig-pr-size-escape: v1` marker whose JSON names the pull request number, its head commit, the measured value and a reason",
+				"under the `gitjig-size-ok` marker whose JSON names a reason",
+			],
+			["It is observable: the check output names the honoured record.", "It is silent."],
+			[", and the check output names the refusing arm. A label", ". A label"],
+			["from #295 through #445, as of 2026-10-15T15:00Z", "from #1 through #445, as of 2025-01-01"],
+			["exist on 40 of them", "exist on 4 of them"],
+			["rounded up to the next hundred", "rounded down"],
 			["its freshness bound is that head", "its freshness bound is a day"],
 			["stays within §1.11's size bound", "stays near §1.11's size bound"],
 			["over every path, tests included", "over every path, tests excluded"],
