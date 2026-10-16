@@ -7,10 +7,10 @@ import { describe, it } from "node:test";
  * #408: SPEC §1.11 settles one pull-request size bound, its measured basis, the
  * disposition of an over-bound change, the reporting check and its escape; §1.1
  * points at it and §3.3 carries its row. Each clause is pinned by its own literal
- * and owned by one mutant below. The whole settled text — §1.11, the §1.1
- * bullet and the §3.3 row — is also pinned by digest, so a weakening of any
- * clause the literals do not name still reds this test; a deliberate edit to
- * the settlement updates the digests in the same change.
+ * and owned by one mutant below. The settled text — §1.11, the §1.1 bullet
+ * and the §3.3 row — is also pinned by digest, so a weakening of any clause
+ * the literals do not name still reds this test; a deliberate edit to the
+ * settlement updates the digests in the same change.
  */
 const SPEC = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
 
@@ -24,9 +24,9 @@ function section(text: string, number: string): string {
 
 /** SHA-256 of the settled §1.11 section, the §1.1 bullet and the §3.3 row. */
 const DIGESTS = {
-	section: "0ddf305f91394fc1f8254e8286cd3b0efe7387235e69d2450d396cb553bb2493",
+	section: "15278412b5439ef92d278c5f3a6f92277ac6d8cb9300f316c142d57c4789d95f",
 	bullet: "cd55bc4eb81e36fc79b571680ccb9cdcbb334cf95b0334f627139544a79428d7",
-	row: "07f0f19eba59e515a7ca882565fb53d1ceb33107df8e7a9f17a3065093be0a63",
+	row: "8fec7dbc37799265ed6cb96fe38101d2bbbadbdd8d4bc0ccb1d717c60ed8b374",
 };
 
 function settled(spec: string): { section: string; bullet: string; row: string } {
@@ -43,37 +43,22 @@ function settled(spec: string): { section: string; bullet: string; row: string }
 }
 
 /**
- * A line with markdown emphasis, code spans, case and whitespace stripped, so
- * a copy differing only in those still reads as the same heading, bullet or
- * row (R4).
- */
-function plain(line: string): string {
-	return line.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-/**
- * Whether a SPEC text keeps the whole settlement byte for byte, and keeps it
- * the only one after plain(): a second §1.11 heading, Change size bullet or
- * pr-size row, in any emphasis, code-span, case or whitespace spelling, would
- * contradict the settled text without touching its bytes (R3, R4). RESIDUAL:
- * a contradiction that does not read as one of these three after plain() — a
- * renamed heading, say — is outside what this check sees; review owns it.
+ * Whether a SPEC text keeps the settled bytes: the first §1.11 section, the
+ * first Change size bullet and the first pr-size row. RESIDUAL: it does not
+ * claim the settlement is the only one; a contradicting copy elsewhere in the
+ * SPEC is outside what this sees, and review owns it (R3–R5: matching every
+ * spelling of a copy is not a finite check).
  */
 function intact(spec: string): boolean {
-	const lines = spec.split("\n").map(plain);
-	const once = (test: (line: string) => boolean) => lines.filter(test).length === 1;
 	const now = settled(spec);
-	return (
-		once((line) => /^#{1,6} ?1\.11\b/.test(line)) &&
-		once((line) => /^[-*+] change size\b/.test(line)) &&
-		once((line) => /^\| ?pr-size ?\|/.test(line)) &&
-		now.section === DIGESTS.section &&
-		now.bullet === DIGESTS.bullet &&
-		now.row === DIGESTS.row
-	);
+	return now.section === DIGESTS.section && now.bullet === DIGESTS.bullet && now.row === DIGESTS.row;
 }
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	[
+		"1.11",
+		"The bound is **procedural today**, enforced at review (§2.3); the check derives from this section per §1.2's macro-phase clause",
+	],
 	[
 		"1.11",
 		"counted as the platform counts a pull request: renames detected, so a moved file counts only its changed lines, and a binary path contributes no lines",
@@ -149,35 +134,9 @@ describe("#408 pull-request size contract", () => {
 		assert.deepEqual(failing(SPEC), []);
 	});
 
-	it("pins the whole settlement by digest, and as the only one", () => {
+	it("pins the settled text by digest", () => {
 		assert.deepEqual(settled(SPEC), DIGESTS);
 		assert.equal(intact(SPEC), true);
-	});
-
-	it("kills a contradicting second section, bullet or row", () => {
-		const row = SPEC.split("\n").find((line) => line.startsWith("| pr-size |")) as string;
-		const bullet = SPEC.split("\n").find((line) => line.startsWith("- **Change size.**")) as string;
-		const copies: ReadonlyArray<readonly [string, string]> = [
-			[row, `${row}\n| pr-size | advisory only | \`home:\` none | \`supplies:\` none / \`infers:\` none |`],
-			[bullet, `${bullet}\n- **Change size.** The bound is advisory and may be ignored.`],
-			[
-				"\n## 2. Artifact hierarchy and lifecycle\n",
-				"\n### 1.11 Change size\n\nThe bound is advisory; no check applies.\n\n## 2. Artifact hierarchy and lifecycle\n",
-			],
-			[
-				"\n## 2. Artifact hierarchy and lifecycle\n",
-				"\n###  1.11 Change size\n\nThe bound is advisory; no check applies.\n\n## 2. Artifact hierarchy and lifecycle\n",
-			],
-			[row, `${row}\n| \`pr-size\` | advisory only | \`home:\` none | \`supplies:\` none / \`infers:\` none |`],
-			[row, `${row}\n | pr-size | advisory only | \`home:\` none | \`supplies:\` none / \`infers:\` none |`],
-			[bullet, `${bullet}\n- **Change size**. The bound is advisory and may be ignored.`],
-			[bullet, `- **Change size**: the bound is advisory and may be ignored.\n${bullet}`],
-		];
-		for (const [index, [from, to]] of copies.entries()) {
-			const at = SPEC.indexOf(from);
-			assert.ok(at >= 0 && at === SPEC.lastIndexOf(from), `copy ${index} anchor is stale or ambiguous`);
-			assert.equal(intact(SPEC.replace(from, () => to)), false, `contradicting copy ${index} survived`);
-		}
 	});
 
 	it("kills, by digest, weakenings of clauses the literals do not name", () => {
@@ -187,7 +146,7 @@ describe("#408 pull-request size contract", () => {
 			["Otherwise it takes the escape below.", "Otherwise it lands anyway."],
 			["It is narrower than the gate:", "It is wider than the gate:"],
 			["§3.8's refusal-record rule decides honor:", "The author decides honor:"],
-			["; procedural today until it lands, §1.11; not a required context in the shipped default", ""],
+			["; procedural today, §1.11; not a required context in the shipped default", ""],
 			["It ships as a **reporting** check", "It ships as a **required** check"],
 			["with generated content included, at nearest rank", "with generated content excluded, at nearest rank"],
 			["and names the measured value and the threshold in its output", "and names nothing in its output"],
@@ -202,6 +161,10 @@ describe("#408 pull-request size contract", () => {
 
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			[
+				"The bound is **procedural today**, enforced at review (§2.3)",
+				"The bound is **optional today**, enforced at review (§2.3)",
+			],
 			[
 				"renames detected, so a moved file counts only its changed lines",
 				"renames ignored, so a moved file counts every line",
