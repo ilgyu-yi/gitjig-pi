@@ -17,6 +17,12 @@ const TEST = "test/pr-size.unit.test.ts";
 /** [label, exact source text, replacement] — each weakens one guard SPEC §1.11 settles. */
 const mutations: ReadonlyArray<readonly [string, string, string]> = [
 	[
+		"another account's marker comment parsed as a record",
+		"const written = candidates.filter((record) => WRITER_ROLES.includes(String(record.permission)));",
+		"const written = candidates;",
+	],
+	["the permission level ignored", 'level === "admin" || level === "write" ? "WRITE" : role', "role"],
+	[
 		"a base with no default branch read as ungoverned",
 		'return { head: undefined, result: { ok: false, arm: "base-unknown" } };',
 		'return { head: undefined, result: { ok: true, arm: "not-governed" } };',

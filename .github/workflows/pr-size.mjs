@@ -26,6 +26,9 @@ export const EXCLUSIONS = Object.freeze({
 
 export const ESCAPE_MARKER = "<!-- gitjig-pr-size-escape: v1 -->";
 
+/** The permissions the platform reports for an account that can write. */
+export const WRITER_ROLES = Object.freeze(["ADMIN", "MAINTAIN", "WRITE"]);
+
 /**
  * The region's inner line numbers (1-based, exclusive of both markers) in one
  * version of a file, or null when the version has neither marker.
@@ -116,12 +119,16 @@ export function decide({ number, head, measured, records }) {
 	if (measured <= THRESHOLD) return { ok: true, arm: "within-bound" };
 	const candidates = records.filter((record) => record.body.startsWith(ESCAPE_MARKER));
 	if (candidates.length === 0) return { ok: false, arm: "over-bound" };
-	/** @type {{id:number,value:any,permission:string|undefined}[]} */
+	// Only a writer's comment is a record (§1.11): another account's marker
+	// comment is ignored, so it can neither honour nor refuse a writer's record.
+	const written = candidates.filter((record) => WRITER_ROLES.includes(String(record.permission)));
+	if (written.length === 0) return { ok: false, arm: "escape-unauthorized" };
+	/** @type {{id:number,value:any}[]} */
 	const parsed = [];
-	for (const record of candidates) {
+	for (const record of written) {
 		const value = parseEscape(record.body);
 		if (value === undefined) return { ok: false, arm: "escape-malformed" };
-		parsed.push({ id: record.id, value, permission: record.permission });
+		parsed.push({ id: record.id, value });
 	}
 	const current = parsed.filter((record) => record.value.pr === number && record.value.head === head);
 	if (current.length === 0)
@@ -130,9 +137,7 @@ export function decide({ number, head, measured, records }) {
 			arm: parsed.some((record) => record.value.pr === number) ? "escape-stale" : "escape-other-pull",
 		};
 	if (current.length > 1) return { ok: false, arm: "escape-duplicate" };
-	const [record] = current;
-	if (!record || !["ADMIN", "MAINTAIN", "WRITE"].includes(String(record.permission)))
-		return { ok: false, arm: "escape-unauthorized" };
+	const record = /** @type {{id:number,value:any}} */ (current[0]);
 	if (record.value.measured !== measured) return { ok: false, arm: "escape-value-mismatch" };
 	return { ok: true, arm: "escape-honoured", record: record.id };
 }
@@ -195,7 +200,7 @@ export async function evaluate({ api, raw, number }) {
 	const pull = await api(`/pulls/${number}`);
 	const base = pull?.base?.sha;
 	// Governance is decided only from a complete base: a missing ref or default
-	// branch is an unknown base, never an ungoverned one (R3).
+	// branch is an unknown base, never an ungoverned one.
 	const baseRef = pull?.base?.ref;
 	const defaultBranch = pull?.base?.repo?.default_branch;
 	if (typeof baseRef !== "string" || typeof defaultBranch !== "string")
@@ -232,7 +237,11 @@ export async function evaluate({ api, raw, number }) {
 			const login = comment?.user?.login;
 			const authority =
 				typeof login === "string" ? await api(`/collaborators/${encodeURIComponent(login)}/permission`) : undefined;
-			const permission = typeof authority?.role_name === "string" ? authority.role_name.toUpperCase() : undefined;
+			const role = typeof authority?.role_name === "string" ? authority.role_name.toUpperCase() : undefined;
+			// A custom repository role carries its own name; its write level is the
+			// permission field's.
+			const level = typeof authority?.permission === "string" ? authority.permission.toLowerCase() : "";
+			const permission = level === "admin" || level === "write" ? "WRITE" : role;
 			records.push({ id: Number(comment.id), body: comment.body, permission });
 		}
 	}

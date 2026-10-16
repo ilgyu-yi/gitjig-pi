@@ -129,7 +129,7 @@ describe("#408 the measured quantity", () => {
 		assert.equal(regionBounds(null, TOC), null);
 		assert.equal(regionBounds("no markers", TOC), null);
 		assert.deepEqual(regionBounds("x\n<!-- TOC START -->\ny\n<!-- TOC END -->", TOC), { after: 2, before: 4 });
-		assert.throws(() => regionBounds("<!-- TOC START -->", TOC), /region-malformed/);
+		for (const lone of [TOC.start, TOC.end]) assert.throws(() => regionBounds(lone, TOC), /region-malformed/);
 		assert.throws(() => regionBounds("<!-- TOC END -->\n<!-- TOC START -->", TOC), /region-malformed/);
 		assert.throws(
 			() => regionBounds("<!-- TOC START -->\n<!-- TOC START -->\n<!-- TOC END -->", TOC),
@@ -189,6 +189,16 @@ describe("#408 the bound and its escape", () => {
 				arm: "escape-honoured",
 				record: 9,
 			});
+	});
+
+	it("ignores another account's marker comment, so it neither honours nor refuses a writer's record", () => {
+		const broken = { id: 1, body: `${ESCAPE_MARKER}\nnot json`, permission: "READ" };
+		const copied = { ...record(2, valid), permission: "READ" };
+		assert.deepEqual(decide({ number: 7, head: HEAD, measured: 3000, records: [broken, copied, record(3, valid)] }), {
+			ok: true,
+			arm: "escape-honoured",
+			record: 3,
+		});
 	});
 
 	it("names the refusing arm for every other record", () => {
@@ -408,9 +418,21 @@ describe("#408 one evaluation from platform reads", () => {
 		});
 	});
 
+	it("honours a custom role with write permission, and refuses one without", async () => {
+		const comments = [{ id: 5, body: escapeRecord(valid), user: { login: "writer" } }];
+		const custom = platform({ files: big, comments, permissionBody: { role_name: "deployer", permission: "write" } });
+		assert.deepEqual((await evaluate({ ...custom, number: 7 })).result, {
+			ok: true,
+			arm: "escape-honoured",
+			record: 5,
+		});
+		const reader = platform({ files: big, comments, permissionBody: { role_name: "deployer", permission: "read" } });
+		assert.deepEqual((await evaluate({ ...reader, number: 7 })).result, { ok: false, arm: "escape-unauthorized" });
+	});
+
 	it("refuses an escape whose writer's permission read names no role", async () => {
 		const comments = [{ id: 5, body: escapeRecord(valid), user: { login: "writer" } }];
-		const fake = platform({ files: big, comments, permissionBody: { permission: "write" } });
+		const fake = platform({ files: big, comments, permissionBody: {} });
 		assert.deepEqual((await evaluate({ ...fake, number: 7 })).result, { ok: false, arm: "escape-unauthorized" });
 	});
 
