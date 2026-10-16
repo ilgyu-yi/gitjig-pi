@@ -1,3 +1,4 @@
+# gitjig: source-only
 name: pr-size
 
 on:
@@ -5,7 +6,7 @@ on:
     branches:
       - main
       - '*-maintenance'
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   issue_comment:
     types: [created, edited, deleted]
 

@@ -183,11 +183,11 @@
 		},
 		{
 			"path": ".github/workflows/pr-size.mjs",
-			"disposition": "handed-over"
+			"disposition": "source-only"
 		},
 		{
 			"path": ".github/workflows/pr-size.yml",
-			"disposition": "handed-over"
+			"disposition": "source-only"
 		},
 		{
 			"path": ".github/workflows/resolve_parent_directive.sh",

@@ -1,12 +1,15 @@
 #!/usr/bin/env node
+// gitjig: source-only
 /*
  * The `pr-size` reporting check (SPEC §1.11, #408). It measures a pull
  * request to the default branch by the platform's own per-file counts and
  * reports success or failure on its head. It reads no pull-request code: every
  * input is a platform read, so it is safe under `pull_request_target`.
  *
- * Scope, stated: the exclusions below are this repository's generators. An
- * adopter's own generated content counts toward its bound.
+ * Scope, stated: this check is source-only (§4.1): its bound, basis and
+ * exclusions are this repository's, so it ships to no adopter. It governs
+ * pull requests to the default branch and to `*-maintenance` lines, the same
+ * set its workflow's branch filter names.
  */
 import { readFile } from "node:fs/promises";
 
@@ -166,7 +169,7 @@ export function parseEscape(body) {
  * @param {string} ref @param {unknown} defaultBranch
  */
 export function governedBase(ref, defaultBranch) {
-	return ref === defaultBranch || /-maintenance$/.test(ref);
+	return ref === defaultBranch || /^[^/]*-maintenance$/.test(ref);
 }
 
 /** @typedef {(path:string, init?:RequestInit)=>Promise<any>} Api */

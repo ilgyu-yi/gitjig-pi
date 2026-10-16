@@ -21,9 +21,11 @@ function owes(workflow: string): string[] {
 	need("trusted default-branch checkout", /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
 	need("no checkout credentials", /persist-credentials: false/);
 	need("runs the check", /run: node \.github\/workflows\/pr-size\.mjs/);
+	need("source-only declaration on its first line", /^# gitjig: source-only\n/);
+	need("re-runs on a retarget", /types: \[opened, synchronize, reopened, edited\]/);
 	need("check-run write only", /checks: write/);
 	need("queued, never cancelled", /cancel-in-progress: false/);
-	if (/(?:contents|pull-requests|issues): write/.test(workflow)) missing.push("no other write permission");
+	if (/^\s+(?!checks:)[a-z-]+: write\b/m.test(workflow)) missing.push("no other write permission");
 	if (/github\.event\.pull_request\.head\.(?:sha|ref)/.test(workflow)) missing.push("no pull-request code checked out");
 	return missing;
 }
@@ -42,6 +44,9 @@ describe("#408 pr-size workflow", () => {
 			["persist-credentials: false", "persist-credentials: true"],
 			["cancel-in-progress: false", "cancel-in-progress: true"],
 			["  contents: read", "  contents: write"],
+			["  issues: read", "  issues: read\n  statuses: write"],
+			["# gitjig: source-only\n", ""],
+			["reopened, edited]", "reopened]"],
 		];
 		for (const [from, to] of mutants) {
 			const at = WORKFLOW.indexOf(from);

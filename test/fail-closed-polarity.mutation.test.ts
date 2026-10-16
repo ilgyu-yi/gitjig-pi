@@ -20,6 +20,7 @@ const owners = [
 	{ source: ".github/workflows/ac-closeout.mjs", owner: "test/ac-closeout.mutation.test.ts" },
 	{ source: ".github/workflows/ac-closeout-event.mjs", owner: "test/ac-closeout-event.unit.test.ts" },
 	{ source: ".github/workflows/gitjig-lifecycle.mjs", owner: "test/lifecycle-governance.unit.test.ts" },
+	{ source: ".github/workflows/pr-size.mjs", owner: "test/pr-size.unit.test.ts" },
 ] as const satisfies readonly PolarityOwner[];
 
 function box(name: string): string {

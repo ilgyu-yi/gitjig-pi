@@ -79,6 +79,29 @@ describe("#408 the measured quantity", () => {
 		assert.equal(await measure({ files, changedFiles: 1, regionText }), 2);
 	});
 
+	it("locates the region in each version separately, and counts a change to a marker line itself", async () => {
+		// The base region sits two lines lower than the head one: a removed line
+		// counts by where it stood in the base, an added one by the head.
+		const base = ["a", "b", "<!-- TOC START -->", "| x |", "<!-- TOC END -->", "tail"].join("\n");
+		const head = ["<!-- TOC START -->", "| x |", "<!-- TOC END -->", "tail"].join("\n");
+		const patch = ["@@ -1,6 +1,4 @@", "-a", "-b", " <!-- TOC START -->", " | x |", " <!-- TOC END -->", " tail"].join(
+			"\n",
+		);
+		const regionText = async (_path: string, side: "base" | "head") => (side === "base" ? base : head);
+		const files = [{ filename: "SPEC.md", status: "modified", additions: 0, deletions: 2, patch }];
+		assert.equal(await measure({ files, changedFiles: 1, regionText }), 2);
+		const marker = [
+			"@@ -1,3 +1,3 @@",
+			"-<!-- TOC START -->",
+			"+<!-- TOC START v2 -->",
+			" | x |",
+			" <!-- TOC END -->",
+		].join("\n");
+		const both = "<!-- TOC START -->\n| x |\n<!-- TOC END -->";
+		const moved = [{ filename: "SPEC.md", status: "modified", additions: 1, deletions: 1, patch: marker }];
+		assert.equal(await measure({ files: moved, changedFiles: 1, regionText: async () => both }), 2);
+	});
+
 	it("reads the markers' inner lines, and refuses a lone or reversed marker", () => {
 		assert.equal(regionBounds(null, TOC), null);
 		assert.equal(regionBounds("no markers", TOC), null);
@@ -184,6 +207,8 @@ describe("#408 the bound and its escape", () => {
 		assert.equal(governedBase("main", "main"), true);
 		assert.equal(governedBase("1.x-maintenance", "main"), true);
 		assert.equal(governedBase("integration/409-x", "main"), false);
+		// The workflow filter's `*` matches no slash, so neither does this.
+		assert.equal(governedBase("team/1.x-maintenance", "main"), false);
 	});
 });
 
@@ -196,6 +221,9 @@ function platform(options: {
 	base?: string;
 	baseRef?: string;
 	headAfter?: string;
+	baseAfter?: string;
+	headMissing?: boolean;
+	commentPages?: Array<Array<{ id: number; body: string; user: { login: string } }>>;
 }) {
 	const reads: string[] = [];
 	let pulls = 0;
@@ -204,14 +232,19 @@ function platform(options: {
 		if (path === "/pulls/7") {
 			pulls += 1;
 			const head = pulls > 1 && options.headAfter ? options.headAfter : HEAD;
+			const base = pulls > 1 && options.baseAfter ? options.baseAfter : (options.base ?? BASE);
 			return {
-				head: { sha: head },
-				base: { sha: options.base ?? BASE, ref: options.baseRef ?? "main", repo: { default_branch: "main" } },
+				head: options.headMissing ? {} : { sha: head },
+				base: { sha: base, ref: options.baseRef ?? "main", repo: { default_branch: "main" } },
 				changed_files: options.changedFiles ?? options.files.length,
 			};
 		}
 		if (path.startsWith("/pulls/7/files")) return path.includes("page=1") ? options.files : [];
-		if (path.startsWith("/issues/7/comments")) return path.includes("page=1") ? (options.comments ?? []) : [];
+		if (path.startsWith("/issues/7/comments")) {
+			const page = Number(/[?&]page=(\d+)/.exec(path)?.[1] ?? "1");
+			const pages = options.commentPages ?? [options.comments ?? []];
+			return pages[page - 1] ?? [];
+		}
 		const login = /^\/collaborators\/([^/]+)\/permission$/.exec(path)?.[1];
 		if (login) return { role_name: options.permissions?.[login] ?? "read" };
 		throw new Error(`unexpected read ${path}`);
@@ -262,6 +295,30 @@ describe("#408 one evaluation from platform reads", () => {
 			).result,
 			{ ok: false, arm: "subject-changed" },
 		);
+	});
+
+	it("fails closed on a missing head, and on a base that moved during the read", async () => {
+		assert.deepEqual((await evaluate({ ...platform({ files: big, headMissing: true }), number: 7 })).result, {
+			ok: false,
+			arm: "head-unknown",
+		});
+		const small = [{ filename: "a.ts", additions: 1, deletions: 0 }];
+		assert.deepEqual((await evaluate({ ...platform({ files: small, baseAfter: OTHER }), number: 7 })).result, {
+			ok: false,
+			arm: "subject-changed",
+		});
+	});
+
+	it("reads every comment page, so a duplicate on a later page refuses", async () => {
+		const filler = Array.from({ length: 100 }, (_, index) => ({
+			id: 100 + index,
+			body: "noise",
+			user: { login: "x" },
+		}));
+		const first = [{ id: 5, body: escapeRecord(valid), user: { login: "writer" } }, ...filler.slice(1)];
+		const second = [{ id: 6, body: escapeRecord(valid), user: { login: "writer" } }];
+		const fake = platform({ files: big, commentPages: [first, second], permissions: { writer: "write" } });
+		assert.deepEqual((await evaluate({ ...fake, number: 7 })).result, { ok: false, arm: "escape-duplicate" });
 	});
 
 	it("leaves a pull request to another base ungoverned", async () => {

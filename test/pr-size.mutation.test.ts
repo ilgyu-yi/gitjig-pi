@@ -63,6 +63,24 @@ const mutations: ReadonlyArray<readonly [string, string, string]> = [
 		'result: { ok: true, arm: "base-unknown" }',
 	],
 	[
+		"a missing head admitted",
+		'return { head: undefined, result: { ok: false, arm: "head-unknown" } };',
+		'return { head: undefined, result: { ok: true, arm: "head-unknown" } };',
+	],
+	["a moved base admitted", "after?.head?.sha !== head || after?.base?.sha !== base", "after?.head?.sha !== head"],
+	["only the first comment page read", "if (batch.length < 100) return all;", "return all;"],
+	[
+		"the base region read from the head version",
+		'regionText(file.filename, "base")',
+		'regionText(file.filename, "head")',
+	],
+	[
+		"the start marker counted inside the region",
+		"oldLine > base.after && oldLine < base.before",
+		"oldLine >= base.after && oldLine < base.before",
+	],
+	["a maintenance line with a slash governed", "/^[^/]*-maintenance$/", "/-maintenance$/"],
+	[
 		"a moved head admitted",
 		'result: { ok: false, arm: "subject-changed" }',
 		'result: { ok: true, arm: "subject-changed" }',
