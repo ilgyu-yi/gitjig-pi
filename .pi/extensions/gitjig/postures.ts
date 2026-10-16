@@ -591,7 +591,7 @@ export const POSTURES: readonly PostureRow[] = [
 	{
 		dependency: "pr-size-measurement",
 		failureShape:
-			"the pull request's base or head, its complete file listing, a per-file count, the SPEC.md patch, a lone or reversed region marker, its comment listing or a commenter's permission is absent, truncated, malformed or unreadable, or the head or base moves during the read; a version with no region markers excludes nothing",
+			"the pull request's base, merge base or head, its complete file listing, a per-file count, the SPEC.md patch, a lone, duplicated or reversed region marker, its comment listing or a commenter's permission is absent, truncated, malformed or unreadable, or the head or base moves during the read; a version with no region markers excludes nothing",
 		posture: "closed",
 		justification:
 			"A partial count cannot vouch that a change is within SPEC §1.11's bound. The false-block cost is a delayed reporting check; restore the platform reads and push, or comment, to re-run it.",

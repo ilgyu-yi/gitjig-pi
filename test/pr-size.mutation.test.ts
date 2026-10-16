@@ -16,6 +16,25 @@ const TEST = "test/pr-size.unit.test.ts";
 
 /** [label, exact source text, replacement] — each weakens one guard SPEC §1.11 settles. */
 const mutations: ReadonlyArray<readonly [string, string, string]> = [
+	[
+		"the base-side region read from the base tip, not the merge base",
+		'side === "base" ? mergeBase : head',
+		'side === "base" ? base : head',
+	],
+	["the base-side end marker counted inside", "oldLine < base.before) inside", "oldLine <= base.before) inside"],
+	["the head-side end marker counted inside", "newLine < head.before) inside", "newLine <= head.before) inside"],
+	["a non-integer deletion count admitted", " || !Number.isSafeInteger(deleted))", ")"],
+	[
+		"a non-list listing page taken as the last",
+		'if (!Array.isArray(batch)) throw new Error("listing-malformed");',
+		"if (!Array.isArray(batch)) return all;",
+	],
+	[
+		"an evaluation failure posted as a pass",
+		'measured: undefined, result: { ok: false, arm: "lookup-unavailable" }',
+		'measured: undefined, result: { ok: true, arm: "lookup-unavailable" }',
+	],
+	["every report posted as success", 'conclusion: outcome.result.ok ? "success" : "failure"', 'conclusion: "success"'],
 	["a widened threshold", "export const THRESHOLD = 2400;", "export const THRESHOLD = 24000;"],
 	["the bound compared as strictly below", "if (measured <= THRESHOLD)", "if (measured < THRESHOLD)"],
 	[

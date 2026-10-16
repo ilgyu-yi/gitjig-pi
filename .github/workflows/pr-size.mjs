@@ -201,12 +201,18 @@ export async function evaluate({ api, raw, number }) {
 		return { head: undefined, result: { ok: false, arm: "head-unknown" } };
 	if (typeof base !== "string" || !/^[0-9a-f]{40}$/.test(base))
 		return { head, result: { ok: false, arm: "base-unknown" } };
+	// The platform's patch runs from the merge base, so the base-side region is
+	// located in that version, not in the base branch's tip.
+	const mergeBase = (await api(`/compare/${base}...${head}`))?.merge_base_commit?.sha;
+	if (typeof mergeBase !== "string" || !/^[0-9a-f]{40}$/.test(mergeBase))
+		return { head, result: { ok: false, arm: "merge-base-unknown" } };
 	let measured;
 	try {
 		measured = await measure({
 			files: await readPaginated(api, `/pulls/${number}/files`),
 			changedFiles: pull.changed_files,
-			regionText: (path, side) => raw(`/contents/${encodeURIComponent(path)}?ref=${side === "base" ? base : head}`),
+			regionText: (path, side) =>
+				raw(`/contents/${encodeURIComponent(path)}?ref=${side === "base" ? mergeBase : head}`),
 		});
 	} catch (error) {
 		const arm = error instanceof Error && /^[a-z-]+$/.test(error.message) ? error.message : "lookup-unavailable";
@@ -242,18 +248,48 @@ export function summary(measured, result) {
 	return `${value}; threshold ${THRESHOLD}; ${tail}`;
 }
 
+/**
+ * Evaluate the event's pull request and post its check run. Returns the
+ * posted body, or undefined when the event addresses no governed pull request.
+ * Any evaluation failure posts a failure: no measurement is no pass.
+ * @param {{event:any,api:Api,raw:(path:string)=>Promise<string|null>}} input
+ */
+export async function report({ event, api, raw }) {
+	const number = event.pull_request?.number ?? (event.issue?.pull_request ? event.issue.number : undefined);
+	if (!Number.isSafeInteger(number)) return undefined;
+	// A comment can address any pull request; the check governs those to the
+	// default branch and maintenance lines only, as the workflow's own filter does.
+	const baseRef = event.pull_request?.base?.ref;
+	if (typeof baseRef === "string" && !governedBase(baseRef, event.repository?.default_branch)) return undefined;
+	let outcome;
+	try {
+		outcome = await evaluate({ api, raw, number });
+	} catch {
+		outcome = { head: undefined, measured: undefined, result: { ok: false, arm: "lookup-unavailable" } };
+	}
+	if (outcome.result.arm === "not-governed") return undefined;
+	const head = outcome.head ?? (await api(`/pulls/${number}`))?.head?.sha;
+	if (typeof head !== "string") throw new Error("pr-size: head unavailable");
+	const body = {
+		name: "pr-size",
+		head_sha: head,
+		status: "completed",
+		conclusion: outcome.result.ok ? "success" : "failure",
+		output: {
+			title: outcome.result.ok ? "Within the size bound" : "Size bound refused",
+			summary: summary(outcome.measured, outcome.result),
+		},
+	};
+	await api("/check-runs", { method: "POST", body: JSON.stringify(body) });
+	return body;
+}
+
 async function main() {
 	const token = process.env.GITHUB_TOKEN;
 	const repository = process.env.GITHUB_REPOSITORY;
 	const eventPath = process.env.GITHUB_EVENT_PATH;
 	if (!token || !repository || !eventPath) throw new Error("pr-size: event context unavailable");
 	const event = JSON.parse(await readFile(eventPath, "utf8"));
-	const number = event.pull_request?.number ?? (event.issue?.pull_request ? event.issue.number : undefined);
-	if (!Number.isSafeInteger(number)) return;
-	// A comment can address any pull request; the check governs those to the
-	// default branch and maintenance lines only, as the workflow's own filter does.
-	const baseRef = event.pull_request?.base?.ref;
-	if (typeof baseRef === "string" && !governedBase(baseRef, event.repository?.default_branch)) return;
 	const headers = {
 		Accept: "application/vnd.github+json",
 		Authorization: `Bearer ${token}`,
@@ -278,28 +314,7 @@ async function main() {
 		if (!response.ok) throw new Error("lookup-unavailable");
 		return response.text();
 	};
-	let outcome;
-	try {
-		outcome = await evaluate({ api, raw, number });
-	} catch {
-		outcome = { head: undefined, result: { ok: false, arm: "lookup-unavailable" } };
-	}
-	if (outcome.result.arm === "not-governed") return;
-	const head = outcome.head ?? (await api(`/pulls/${number}`))?.head?.sha;
-	if (typeof head !== "string") throw new Error("pr-size: head unavailable");
-	await api("/check-runs", {
-		method: "POST",
-		body: JSON.stringify({
-			name: "pr-size",
-			head_sha: head,
-			status: "completed",
-			conclusion: outcome.result.ok ? "success" : "failure",
-			output: {
-				title: outcome.result.ok ? "Within the size bound" : "Size bound refused",
-				summary: summary(outcome.measured, outcome.result),
-			},
-		}),
-	});
+	await report({ event, api, raw });
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href)

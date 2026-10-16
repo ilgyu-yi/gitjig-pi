@@ -26,7 +26,27 @@ function owes(workflow: string): string[] {
 	need("check-run write only", /checks: write/);
 	need("queued, never cancelled", /cancel-in-progress: false/);
 	if (/^\s+(?!checks:)[a-z-]+: write\b/m.test(workflow)) missing.push("no other write permission");
-	if (/github\.event\.pull_request\.head\.(?:sha|ref)/.test(workflow)) missing.push("no pull-request code checked out");
+	// Closed allowlists, so no spelling of a pull-request ref or a second
+	// checkout reaches the job (R2): every expression, action and command in
+	// the file must be one of these.
+	const expressions = [...workflow.matchAll(/\$\{\{([^}]*)\}\}/g)].map((match) => (match[1] ?? "").trim());
+	const allowed = new Set([
+		"github.repository_id",
+		"github.event.pull_request.number || github.event.issue.number",
+		"github.event.pull_request || github.event.issue.pull_request",
+		"github.event.repository.default_branch",
+		"github.token",
+	]);
+	if (expressions.length === 0 || expressions.some((expression) => !allowed.has(expression)))
+		missing.push("only allowlisted expressions");
+	const uses = [...workflow.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((match) => match[1]);
+	if (uses.length !== 1 || uses[0] !== "actions/checkout@v4") missing.push("exactly one checkout action");
+	const runs = [...workflow.matchAll(/^\s*(?:-\s+)?run:\s*(.+)$/gm)].map((match) => match[1]);
+	if (runs.length !== 1 || runs[0] !== "node .github/workflows/pr-size.mjs")
+		missing.push("exactly one command, the check");
+	const checkout = /uses: actions\/checkout@v4\n {8}with:\n((?: {10}[a-z-]+: .+\n)+)/.exec(workflow)?.[1] ?? "";
+	const keys = [...checkout.matchAll(/^ {10}([a-z-]+):/gm)].map((match) => match[1]).sort();
+	if (keys.join(",") !== "persist-credentials,ref") missing.push("checkout takes only ref and credentials");
 	return missing;
 }
 
@@ -37,6 +57,19 @@ describe("#408 pr-size workflow", () => {
 
 	it("reds when the check is removed or any property is weakened", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			["ref: ${{ github.event.repository.default_branch }}", "ref: ${{ github.event.pull_request.merge_commit_sha }}"],
+			[
+				"          persist-credentials: false\n",
+				"          persist-credentials: false\n          repository: ${{ github.event.repository.full_name }}\n",
+			],
+			[
+				"run: node .github/workflows/pr-size.mjs",
+				"run: git fetch origin pull/${{ github.event.pull_request.number }}/head && node .github/workflows/pr-size.mjs",
+			],
+			[
+				"      - name: Measure the pull request",
+				"      - uses: actions/checkout@v4\n      - name: Measure the pull request",
+			],
 			["run: node .github/workflows/pr-size.mjs", "run: echo skipped"],
 			["      - '*-maintenance'\n", ""],
 			["  issue_comment:\n    types: [created, edited, deleted]\n", ""],

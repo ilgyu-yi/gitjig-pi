@@ -10,6 +10,7 @@ import {
 	parseEscape,
 	regionBounds,
 	regionChangedLines,
+	report,
 	summary,
 	THRESHOLD,
 } from "../.github/workflows/pr-size.mjs";
@@ -19,6 +20,7 @@ import {
 const HEAD = "a".repeat(40);
 const BASE = "b".repeat(40);
 const OTHER = "c".repeat(40);
+const MERGE_BASE = "d".repeat(40);
 const TOC = { path: "SPEC.md", start: "<!-- TOC START", end: "<!-- TOC END" };
 const escapeRecord = (value: Record<string, unknown>) =>
 	`${ESCAPE_MARKER}\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\`\n`;
@@ -100,6 +102,27 @@ describe("#408 the measured quantity", () => {
 		const both = "<!-- TOC START -->\n| x |\n<!-- TOC END -->";
 		const moved = [{ filename: "SPEC.md", status: "modified", additions: 1, deletions: 1, patch: marker }];
 		assert.equal(await measure({ files: moved, changedFiles: 1, regionText: async () => both }), 2);
+	});
+
+	it("counts a change to the end marker line itself, on either side", async () => {
+		const text = "<!-- TOC START -->\n| x |\n<!-- TOC END -->";
+		const patch = [
+			"@@ -1,3 +1,3 @@",
+			" <!-- TOC START -->",
+			" | x |",
+			"-<!-- TOC END -->",
+			"+<!-- TOC END v2 -->",
+		].join("\n");
+		const files = [{ filename: "SPEC.md", status: "modified", additions: 1, deletions: 1, patch }];
+		assert.equal(await measure({ files, changedFiles: 1, regionText: async () => text }), 2);
+	});
+
+	it("refuses a per-file count of either kind that is not an integer", async () => {
+		for (const file of [
+			{ filename: "a.ts", additions: "1", deletions: 0 },
+			{ filename: "a.ts", additions: 1, deletions: "0" },
+		])
+			await assert.rejects(measure({ files: [file], changedFiles: 1, regionText: noText }), /listing-malformed/);
 	});
 
 	it("reads the markers' inner lines, and refuses a lone or reversed marker", () => {
@@ -224,11 +247,19 @@ function platform(options: {
 	baseAfter?: string;
 	headMissing?: boolean;
 	commentPages?: Array<Array<{ id: number; body: string; user: { login: string } }>>;
+	filePages?: unknown[];
+	mergeBase?: string;
+	texts?: Record<string, string>;
+	posts?: unknown[];
 }) {
 	const reads: string[] = [];
 	let pulls = 0;
-	const api = async (path: string) => {
+	const api = async (path: string, init?: RequestInit) => {
 		reads.push(path);
+		if (path === "/check-runs" && init?.method === "POST") {
+			options.posts?.push(JSON.parse(String(init.body ?? "null")));
+			return { id: 1 };
+		}
 		if (path === "/pulls/7") {
 			pulls += 1;
 			const head = pulls > 1 && options.headAfter ? options.headAfter : HEAD;
@@ -239,7 +270,12 @@ function platform(options: {
 				changed_files: options.changedFiles ?? options.files.length,
 			};
 		}
-		if (path.startsWith("/pulls/7/files")) return path.includes("page=1") ? options.files : [];
+		if (path.startsWith("/pulls/7/files")) {
+			const page = Number(/[?&]page=(\d+)/.exec(path)?.[1] ?? "1");
+			const pages = options.filePages ?? [options.files];
+			return pages[page - 1] ?? [];
+		}
+		if (path.startsWith("/compare/")) return { merge_base_commit: { sha: options.mergeBase ?? MERGE_BASE } };
 		if (path.startsWith("/issues/7/comments")) {
 			const page = Number(/[?&]page=(\d+)/.exec(path)?.[1] ?? "1");
 			const pages = options.commentPages ?? [options.comments ?? []];
@@ -249,7 +285,12 @@ function platform(options: {
 		if (login) return { role_name: options.permissions?.[login] ?? "read" };
 		throw new Error(`unexpected read ${path}`);
 	};
-	return { api, raw: noText, reads };
+	const raw = async (path: string) => {
+		reads.push(path);
+		const ref = /[?&]ref=([0-9a-f]{40})/.exec(path)?.[1] ?? "";
+		return options.texts?.[ref] ?? null;
+	};
+	return { api, raw, reads };
 }
 
 describe("#408 one evaluation from platform reads", () => {
@@ -321,6 +362,39 @@ describe("#408 one evaluation from platform reads", () => {
 		assert.deepEqual((await evaluate({ ...fake, number: 7 })).result, { ok: false, arm: "escape-duplicate" });
 	});
 
+	it("locates the base-side region in the merge base, the version the platform's patch starts from", async () => {
+		// The base branch has since moved its markers; only the merge base's
+		// positions decide which removed lines lie inside the region.
+		const mergeBaseText = ["<!-- TOC START -->", "| x |", "<!-- TOC END -->", "old"].join("\n");
+		const baseTipText = ["<!-- TOC START -->", "| x |", "| y |", "| z |", "<!-- TOC END -->"].join("\n");
+		const headText = ["<!-- TOC START -->", "| x |", "<!-- TOC END -->"].join("\n");
+		const patch = ["@@ -1,4 +1,3 @@", " <!-- TOC START -->", " | x |", " <!-- TOC END -->", "-old"].join("\n");
+		const fake = platform({
+			files: [{ filename: "SPEC.md", status: "modified", additions: 0, deletions: 1, patch }],
+			texts: { [MERGE_BASE]: mergeBaseText, [BASE]: baseTipText, [HEAD]: headText },
+		});
+		assert.deepEqual(await evaluate({ ...fake, number: 7 }), {
+			head: HEAD,
+			measured: 1,
+			result: { ok: true, arm: "within-bound" },
+		});
+		assert.ok(fake.reads.some((path) => path.endsWith(`ref=${MERGE_BASE}`)));
+		assert.equal(
+			fake.reads.some((path) => path.endsWith(`ref=${BASE}`)),
+			false,
+		);
+		assert.deepEqual((await evaluate({ ...platform({ files: big, mergeBase: "x" }), number: 7 })).result, {
+			ok: false,
+			arm: "merge-base-unknown",
+		});
+	});
+
+	it("fails closed on a listing page that is not a list", async () => {
+		const full = Array.from({ length: 100 }, (_, index) => ({ filename: `f${index}.ts`, additions: 1, deletions: 0 }));
+		const fake = platform({ files: full, filePages: [full, { message: "rate limited" }], changedFiles: 100 });
+		assert.deepEqual((await evaluate({ ...fake, number: 7 })).result, { ok: false, arm: "listing-malformed" });
+	});
+
 	it("leaves a pull request to another base ungoverned", async () => {
 		assert.deepEqual(
 			(await evaluate({ ...platform({ files: big, baseRef: "integration/409-x" }), number: 7 })).result,
@@ -329,5 +403,55 @@ describe("#408 one evaluation from platform reads", () => {
 				arm: "not-governed",
 			},
 		);
+	});
+});
+
+describe("#408 one report from an event", () => {
+	it("posts success or failure by the decision, with its summary", async () => {
+		const posts: unknown[] = [];
+		const small = platform({ files: [{ filename: "a.ts", additions: 4, deletions: 1 }], posts });
+		const event = { pull_request: { number: 7, base: { ref: "main" } }, repository: { default_branch: "main" } };
+		await report({ event, ...small });
+		const refused = platform({ files: [{ filename: "a.ts", additions: 3000, deletions: 0 }], posts });
+		await report({ event, ...refused });
+		assert.deepEqual(
+			posts.map((post) => {
+				const body = post as { name: string; head_sha: string; conclusion: string; output: { summary: string } };
+				return [body.name, body.head_sha, body.conclusion, body.output.summary];
+			}),
+			[
+				["pr-size", HEAD, "success", "5 changed lines; threshold 2400; arm: within-bound"],
+				["pr-size", HEAD, "failure", "3000 changed lines; threshold 2400; arm: over-bound"],
+			],
+		);
+	});
+
+	it("posts a failure, never a pass, when evaluation throws", async () => {
+		const posts: unknown[] = [];
+		const fake = platform({ files: [], posts });
+		const throwing = async (path: string, init?: RequestInit) => {
+			if (path.startsWith("/compare/")) throw new Error("API 502");
+			return fake.api(path, init);
+		};
+		const event = { issue: { number: 7, pull_request: {} }, repository: { default_branch: "main" } };
+		await report({ event, api: throwing, raw: fake.raw });
+		const [body] = posts as Array<{ conclusion: string; output: { summary: string } }>;
+		assert.equal(body?.conclusion, "failure");
+		assert.equal(body?.output.summary, "not measured; threshold 2400; arm: lookup-unavailable");
+	});
+
+	it("posts nothing for an issue comment, or for a pull request to an ungoverned base", async () => {
+		const posts: unknown[] = [];
+		const fake = platform({ files: [], posts, baseRef: "integration/409-x" });
+		assert.equal(await report({ event: { issue: { number: 7 } }, ...fake }), undefined);
+		assert.equal(
+			await report({
+				event: { pull_request: { number: 7, base: { ref: "feature" } }, repository: { default_branch: "main" } },
+				...fake,
+			}),
+			undefined,
+		);
+		assert.equal(await report({ event: { issue: { number: 7, pull_request: {} } }, ...fake }), undefined);
+		assert.deepEqual(posts, []);
 	});
 });
