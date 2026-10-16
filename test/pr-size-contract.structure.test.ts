@@ -43,18 +43,30 @@ function settled(spec: string): { section: string; bullet: string; row: string }
 }
 
 /**
+ * A line with markdown emphasis, code spans, case and whitespace stripped, so
+ * a copy differing only in those still reads as the same heading, bullet or
+ * row (R4).
+ */
+function plain(line: string): string {
+	return line.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
  * Whether a SPEC text keeps the whole settlement byte for byte, and keeps it
- * the only one: a second §1.11 heading, `Change size` bullet or `pr-size` row
- * would contradict the settled text without touching its bytes (R3).
+ * the only one after plain(): a second §1.11 heading, Change size bullet or
+ * pr-size row, in any emphasis, code-span, case or whitespace spelling, would
+ * contradict the settled text without touching its bytes (R3, R4). RESIDUAL:
+ * a contradiction that does not read as one of these three after plain() — a
+ * renamed heading, say — is outside what this check sees; review owns it.
  */
 function intact(spec: string): boolean {
-	const lines = spec.split("\n");
+	const lines = spec.split("\n").map(plain);
 	const once = (test: (line: string) => boolean) => lines.filter(test).length === 1;
 	const now = settled(spec);
 	return (
-		once((line) => /^#{2,6} 1\.11\b/.test(line)) &&
-		once((line) => line.includes("**Change size.**")) &&
-		once((line) => /^\|\s*pr-size\s*\|/.test(line)) &&
+		once((line) => /^#{1,6} ?1\.11\b/.test(line)) &&
+		once((line) => /^[-*+] change size\b/.test(line)) &&
+		once((line) => /^\| ?pr-size ?\|/.test(line)) &&
 		now.section === DIGESTS.section &&
 		now.bullet === DIGESTS.bullet &&
 		now.row === DIGESTS.row
@@ -152,6 +164,14 @@ describe("#408 pull-request size contract", () => {
 				"\n## 2. Artifact hierarchy and lifecycle\n",
 				"\n### 1.11 Change size\n\nThe bound is advisory; no check applies.\n\n## 2. Artifact hierarchy and lifecycle\n",
 			],
+			[
+				"\n## 2. Artifact hierarchy and lifecycle\n",
+				"\n###  1.11 Change size\n\nThe bound is advisory; no check applies.\n\n## 2. Artifact hierarchy and lifecycle\n",
+			],
+			[row, `${row}\n| \`pr-size\` | advisory only | \`home:\` none | \`supplies:\` none / \`infers:\` none |`],
+			[row, `${row}\n | pr-size | advisory only | \`home:\` none | \`supplies:\` none / \`infers:\` none |`],
+			[bullet, `${bullet}\n- **Change size**. The bound is advisory and may be ignored.`],
+			[bullet, `- **Change size**: the bound is advisory and may be ignored.\n${bullet}`],
 		];
 		for (const [index, [from, to]] of copies.entries()) {
 			const at = SPEC.indexOf(from);
