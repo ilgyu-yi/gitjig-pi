@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
@@ -6,7 +7,10 @@ import { describe, it } from "node:test";
  * #408: SPEC §1.11 settles one pull-request size bound, its measured basis, the
  * disposition of an over-bound change, the reporting check and its escape; §1.1
  * points at it and §3.3 carries its row. Each clause is pinned by its own literal
- * and owned by one mutant below.
+ * and owned by one mutant below. The whole settled text — §1.11, the §1.1
+ * bullet and the §3.3 row — is also pinned by digest, so a weakening of any
+ * clause the literals do not name still reds this test; a deliberate edit to
+ * the settlement updates the digests in the same change.
  */
 const SPEC = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
 
@@ -18,7 +22,38 @@ function section(text: string, number: string): string {
 	return lines.slice(start, end < 0 ? undefined : end).join("\n");
 }
 
+/** SHA-256 of the settled §1.11 section, the §1.1 bullet and the §3.3 row. */
+const DIGESTS = {
+	section: "e037a189526752fee73d0cd6ae47383d143bfad757a7b5a51de7c87d9de3f4e6",
+	bullet: "cd55bc4eb81e36fc79b571680ccb9cdcbb334cf95b0334f627139544a79428d7",
+	row: "07f0f19eba59e515a7ca882565fb53d1ceb33107df8e7a9f17a3065093be0a63",
+};
+
+function settled(spec: string): { section: string; bullet: string; row: string } {
+	const sha = (text: string | undefined) =>
+		createHash("sha256")
+			.update(text ?? "")
+			.digest("hex");
+	const lines = spec.split("\n");
+	return {
+		section: sha(section(spec, "1.11")),
+		bullet: sha(lines.find((line) => line.startsWith("- **Change size.**"))),
+		row: sha(lines.find((line) => line.startsWith("| pr-size |"))),
+	};
+}
+
+/** Whether a SPEC text keeps the whole settlement byte for byte. */
+function intact(spec: string): boolean {
+	const now = settled(spec);
+	return now.section === DIGESTS.section && now.bullet === DIGESTS.bullet && now.row === DIGESTS.row;
+}
+
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	[
+		"1.11",
+		"Its measured value must equal the check's own measurement at that head; a record whose value differs is refused, never honoured as informational.",
+	],
+	["1.11", "counted by the platform as additions plus deletions with generated content included, at nearest rank:"],
 	[
 		"1.11",
 		"The class has one sanctioned escape on §3.8's escape architecture, which is this class's explicit total-coverage disposition.",
@@ -85,8 +120,37 @@ describe("#408 pull-request size contract", () => {
 		assert.deepEqual(failing(SPEC), []);
 	});
 
+	it("pins the whole settlement by digest", () => {
+		assert.deepEqual(settled(SPEC), DIGESTS);
+	});
+
+	it("kills, by digest, weakenings of clauses the literals do not name", () => {
+		const weakenings: ReadonlyArray<readonly [string, string]> = [
+			["; unpublished review rounds are not in that record", ""],
+			["So the bound is a **reviewability bound**", "So the bound is a **cost bound**"],
+			["Otherwise it takes the escape below.", "Otherwise it lands anyway."],
+			["It is narrower than the gate:", "It is wider than the gate:"],
+			["§3.8's refusal-record rule decides honor:", "The author decides honor:"],
+			["; procedural today until it lands, §1.11; not a required context in the shipped default", ""],
+			["It ships as a **reporting** check", "It ships as a **required** check"],
+			["with generated content included, at nearest rank", "with generated content excluded, at nearest rank"],
+			["and names the measured value and the threshold in its output", "and names nothing in its output"],
+		];
+		assert.equal(intact(SPEC), true);
+		for (const [index, [from, to]] of weakenings.entries()) {
+			const at = SPEC.indexOf(from);
+			assert.ok(at >= 0 && at === SPEC.lastIndexOf(from), `digest weakening ${index} anchor is stale or ambiguous`);
+			assert.equal(intact(SPEC.replace(from, () => to)), false, `digest weakening ${index} survived`);
+		}
+	});
+
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			[
+				"a record whose value differs is refused, never honoured as informational",
+				"a record whose value differs is honoured as informational",
+			],
+			["generated content included, at nearest rank:", "generated content included, by any method:"],
 			["which is this class's explicit total-coverage disposition", "which is one of several escapes"],
 			[
 				"under the `gitjig-pr-size-escape: v1` marker whose JSON names the pull request number, its head commit, the measured value and a reason",
