@@ -26,7 +26,7 @@ function section(text: string, number: string): string {
 const DIGESTS = {
 	section: "61c88d8efcd47f32b546caa78d626c222261d358da60f59621c44d9e35e2b8c6",
 	bullet: "cd55bc4eb81e36fc79b571680ccb9cdcbb334cf95b0334f627139544a79428d7",
-	row: "c8f62f93c773c5b9d5e22e4f8c6edf1579bde50ea74b122ef190178b80bd9325",
+	row: "a2ef5bfb4095d61d7f8d072a36d3b1c6bb85298d11f773542bef656e9c6baca5",
 };
 
 function settled(spec: string): { section: string; bullet: string; row: string } {
@@ -55,6 +55,10 @@ function intact(spec: string): boolean {
 }
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	[
+		"3.3",
+		"`supplies:` platform (the pull request's base, head and per-file changed-line counts, and its comments for an escape) + git (the `SPEC.md` diff, for the table-of-contents region)",
+	],
 	["1.11", "as several pull requests under one Issue (§1.2) or as separate Issues"],
 	["3.3", "`backstop:` none (none owed: an over-bound landing is reversible, §3.11)"],
 	[
@@ -162,6 +166,10 @@ describe("#408 pull-request size contract", () => {
 
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			[
+				"`supplies:` platform (the pull request's base, head and per-file changed-line counts",
+				"`supplies:` git (the pull request's base, head and per-file changed-line counts",
+			],
 			["as several pull requests under one Issue (§1.2) or as separate Issues", "as one pull request"],
 			["none owed: an over-bound landing is reversible, §3.11", "none owed: an over-bound landing is advisory"],
 			[
