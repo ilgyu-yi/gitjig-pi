@@ -17,6 +17,22 @@ const TEST = "test/pr-size.unit.test.ts";
 /** [label, exact source text, replacement] — each weakens one guard SPEC §1.11 settles. */
 const mutations: ReadonlyArray<readonly [string, string, string]> = [
 	[
+		"a base with no default branch read as ungoverned",
+		'return { head: undefined, result: { ok: false, arm: "base-unknown" } };',
+		'return { head: undefined, result: { ok: true, arm: "not-governed" } };',
+	],
+	[
+		"an event with no default branch read as ungoverned",
+		'typeof baseRef === "string" && typeof defaultBranch === "string" && !governedBase',
+		'typeof baseRef === "string" && !governedBase',
+	],
+	[
+		"a roleless permission read honoured",
+		"authority.role_name.toUpperCase() : undefined",
+		'authority.role_name.toUpperCase() : "WRITE"',
+	],
+	["a duplicated end marker admitted", "starts.length !== 1 || ends.length !== 1 ||", "starts.length !== 1 ||"],
+	[
 		"the base-side region read from the base tip, not the merge base",
 		'side === "base" ? mergeBase : head',
 		'side === "base" ? base : head',
@@ -78,8 +94,8 @@ const mutations: ReadonlyArray<readonly [string, string, string]> = [
 	],
 	[
 		"an unknown base admitted",
-		'result: { ok: false, arm: "base-unknown" }',
-		'result: { ok: true, arm: "base-unknown" }',
+		'return { head, result: { ok: false, arm: "base-unknown" } }',
+		'return { head, result: { ok: true, arm: "base-unknown" } }',
 	],
 	[
 		"a missing head admitted",

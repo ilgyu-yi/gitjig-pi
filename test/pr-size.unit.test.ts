@@ -135,6 +135,10 @@ describe("#408 the measured quantity", () => {
 			() => regionBounds("<!-- TOC START -->\n<!-- TOC START -->\n<!-- TOC END -->", TOC),
 			/region-malformed/,
 		);
+		assert.throws(
+			() => regionBounds("<!-- TOC START -->\n<!-- TOC END -->\n<!-- TOC END -->", TOC),
+			/region-malformed/,
+		);
 	});
 
 	it("counts only changed lines inside the region, and refuses a patch with no hunk", () => {
@@ -243,6 +247,8 @@ function platform(options: {
 	permissions?: Record<string, string>;
 	base?: string;
 	baseRef?: string;
+	baseRepo?: Record<string, unknown>;
+	permissionBody?: Record<string, unknown>;
 	headAfter?: string;
 	baseAfter?: string;
 	headMissing?: boolean;
@@ -266,7 +272,7 @@ function platform(options: {
 			const base = pulls > 1 && options.baseAfter ? options.baseAfter : (options.base ?? BASE);
 			return {
 				head: options.headMissing ? {} : { sha: head },
-				base: { sha: base, ref: options.baseRef ?? "main", repo: { default_branch: "main" } },
+				base: { sha: base, ref: options.baseRef ?? "main", repo: options.baseRepo ?? { default_branch: "main" } },
 				changed_files: options.changedFiles ?? options.files.length,
 			};
 		}
@@ -282,7 +288,7 @@ function platform(options: {
 			return pages[page - 1] ?? [];
 		}
 		const login = /^\/collaborators\/([^/]+)\/permission$/.exec(path)?.[1];
-		if (login) return { role_name: options.permissions?.[login] ?? "read" };
+		if (login) return options.permissionBody ?? { role_name: options.permissions?.[login] ?? "read" };
 		throw new Error(`unexpected read ${path}`);
 	};
 	const raw = async (path: string) => {
@@ -395,6 +401,19 @@ describe("#408 one evaluation from platform reads", () => {
 		assert.deepEqual((await evaluate({ ...fake, number: 7 })).result, { ok: false, arm: "listing-malformed" });
 	});
 
+	it("reads a base with no default branch as unknown, never as ungoverned", async () => {
+		assert.deepEqual((await evaluate({ ...platform({ files: big, baseRepo: {} }), number: 7 })).result, {
+			ok: false,
+			arm: "base-unknown",
+		});
+	});
+
+	it("refuses an escape whose writer's permission read names no role", async () => {
+		const comments = [{ id: 5, body: escapeRecord(valid), user: { login: "writer" } }];
+		const fake = platform({ files: big, comments, permissionBody: { permission: "write" } });
+		assert.deepEqual((await evaluate({ ...fake, number: 7 })).result, { ok: false, arm: "escape-unauthorized" });
+	});
+
 	it("leaves a pull request to another base ungoverned", async () => {
 		assert.deepEqual(
 			(await evaluate({ ...platform({ files: big, baseRef: "integration/409-x" }), number: 7 })).result,
@@ -438,6 +457,13 @@ describe("#408 one report from an event", () => {
 		const [body] = posts as Array<{ conclusion: string; output: { summary: string } }>;
 		assert.equal(body?.conclusion, "failure");
 		assert.equal(body?.output.summary, "not measured; threshold 2400; arm: lookup-unavailable");
+	});
+
+	it("posts for a pull request event whose payload names no default branch, letting the platform read decide", async () => {
+		const posts: unknown[] = [];
+		const fake = platform({ files: [{ filename: "a.ts", additions: 1, deletions: 0 }], posts });
+		await report({ event: { pull_request: { number: 7, base: { ref: "feature" } } }, ...fake });
+		assert.equal((posts[0] as { conclusion: string } | undefined)?.conclusion, "success");
 	});
 
 	it("posts nothing for an issue comment, or for a pull request to an ungoverned base", async () => {

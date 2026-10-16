@@ -194,7 +194,13 @@ async function readPaginated(api, path) {
 export async function evaluate({ api, raw, number }) {
 	const pull = await api(`/pulls/${number}`);
 	const base = pull?.base?.sha;
-	if (typeof pull?.base?.ref === "string" && !governedBase(pull.base.ref, pull?.base?.repo?.default_branch))
+	// Governance is decided only from a complete base: a missing ref or default
+	// branch is an unknown base, never an ungoverned one (R3).
+	const baseRef = pull?.base?.ref;
+	const defaultBranch = pull?.base?.repo?.default_branch;
+	if (typeof baseRef !== "string" || typeof defaultBranch !== "string")
+		return { head: undefined, result: { ok: false, arm: "base-unknown" } };
+	if (!governedBase(baseRef, defaultBranch))
 		return { head: pull?.head?.sha, result: { ok: true, arm: "not-governed" } };
 	const head = pull?.head?.sha;
 	if (typeof head !== "string" || !/^[0-9a-f]{40}$/.test(head))
@@ -260,7 +266,9 @@ export async function report({ event, api, raw }) {
 	// A comment can address any pull request; the check governs those to the
 	// default branch and maintenance lines only, as the workflow's own filter does.
 	const baseRef = event.pull_request?.base?.ref;
-	if (typeof baseRef === "string" && !governedBase(baseRef, event.repository?.default_branch)) return undefined;
+	const defaultBranch = event.repository?.default_branch;
+	if (typeof baseRef === "string" && typeof defaultBranch === "string" && !governedBase(baseRef, defaultBranch))
+		return undefined;
 	let outcome;
 	try {
 		outcome = await evaluate({ api, raw, number });
