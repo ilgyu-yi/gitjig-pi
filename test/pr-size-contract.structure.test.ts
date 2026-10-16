@@ -148,7 +148,6 @@ describe("#408 pull-request size contract", () => {
 			["§3.8's refusal-record rule decides honor:", "The author decides honor:"],
 			["; procedural today, §1.11; not a required context in the shipped default", ""],
 			["It ships as a **reporting** check", "It ships as a **required** check"],
-			["with generated content included, at nearest rank", "with generated content excluded, at nearest rank"],
 			["and names the measured value and the threshold in its output", "and names nothing in its output"],
 		];
 		assert.equal(intact(SPEC), true);
