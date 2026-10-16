@@ -24,7 +24,7 @@ function section(text: string, number: string): string {
 
 /** SHA-256 of the settled §1.11 section, the §1.1 bullet and the §3.3 row. */
 const DIGESTS = {
-	section: "e037a189526752fee73d0cd6ae47383d143bfad757a7b5a51de7c87d9de3f4e6",
+	section: "0ddf305f91394fc1f8254e8286cd3b0efe7387235e69d2450d396cb553bb2493",
 	bullet: "cd55bc4eb81e36fc79b571680ccb9cdcbb334cf95b0334f627139544a79428d7",
 	row: "07f0f19eba59e515a7ca882565fb53d1ceb33107df8e7a9f17a3065093be0a63",
 };
@@ -42,13 +42,30 @@ function settled(spec: string): { section: string; bullet: string; row: string }
 	};
 }
 
-/** Whether a SPEC text keeps the whole settlement byte for byte. */
+/**
+ * Whether a SPEC text keeps the whole settlement byte for byte, and keeps it
+ * the only one: a second §1.11 heading, `Change size` bullet or `pr-size` row
+ * would contradict the settled text without touching its bytes (R3).
+ */
 function intact(spec: string): boolean {
+	const lines = spec.split("\n");
+	const once = (test: (line: string) => boolean) => lines.filter(test).length === 1;
 	const now = settled(spec);
-	return now.section === DIGESTS.section && now.bullet === DIGESTS.bullet && now.row === DIGESTS.row;
+	return (
+		once((line) => /^#{2,6} 1\.11\b/.test(line)) &&
+		once((line) => line.includes("**Change size.**")) &&
+		once((line) => /^\|\s*pr-size\s*\|/.test(line)) &&
+		now.section === DIGESTS.section &&
+		now.bullet === DIGESTS.bullet &&
+		now.row === DIGESTS.row
+	);
 }
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	[
+		"1.11",
+		"counted as the platform counts a pull request: renames detected, so a moved file counts only its changed lines, and a binary path contributes no lines",
+	],
 	[
 		"1.11",
 		"Its measured value must equal the check's own measurement at that head; a record whose value differs is refused, never honoured as informational.",
@@ -120,8 +137,27 @@ describe("#408 pull-request size contract", () => {
 		assert.deepEqual(failing(SPEC), []);
 	});
 
-	it("pins the whole settlement by digest", () => {
+	it("pins the whole settlement by digest, and as the only one", () => {
 		assert.deepEqual(settled(SPEC), DIGESTS);
+		assert.equal(intact(SPEC), true);
+	});
+
+	it("kills a contradicting second section, bullet or row", () => {
+		const row = SPEC.split("\n").find((line) => line.startsWith("| pr-size |")) as string;
+		const bullet = SPEC.split("\n").find((line) => line.startsWith("- **Change size.**")) as string;
+		const copies: ReadonlyArray<readonly [string, string]> = [
+			[row, `${row}\n| pr-size | advisory only | \`home:\` none | \`supplies:\` none / \`infers:\` none |`],
+			[bullet, `${bullet}\n- **Change size.** The bound is advisory and may be ignored.`],
+			[
+				"\n## 2. Artifact hierarchy and lifecycle\n",
+				"\n### 1.11 Change size\n\nThe bound is advisory; no check applies.\n\n## 2. Artifact hierarchy and lifecycle\n",
+			],
+		];
+		for (const [index, [from, to]] of copies.entries()) {
+			const at = SPEC.indexOf(from);
+			assert.ok(at >= 0 && at === SPEC.lastIndexOf(from), `copy ${index} anchor is stale or ambiguous`);
+			assert.equal(intact(SPEC.replace(from, () => to)), false, `contradicting copy ${index} survived`);
+		}
 	});
 
 	it("kills, by digest, weakenings of clauses the literals do not name", () => {
@@ -146,6 +182,10 @@ describe("#408 pull-request size contract", () => {
 
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			[
+				"renames detected, so a moved file counts only its changed lines",
+				"renames ignored, so a moved file counts every line",
+			],
 			[
 				"a record whose value differs is refused, never honoured as informational",
 				"a record whose value differs is honoured as informational",

@@ -87,7 +87,7 @@ Sections are numbered (`## N.` / `### N.M`) and indexed by the generated table o
 
 ## 1. Work norms
 
-This section states the standard flow every change rides — issue → branch → draft PR → authorized landing — the authorization, evidence, and synchronization obligations with their settlement rule and pre-1.0 macro-phase, the per-PR changelog-fragment discipline, the cross-review repair diagnosis for a change that keeps coming back (§1.4), and the delegation-and-review architecture: delegated work (§1.5), review integrity (§1.6), the reviewer panel (§1.7), the plan contest (§1.8), and finding judgment — the Judge and the Resolver (§1.9) — the release backbone that periodically consolidates what the flow lands (§1.10), and the size bound a pull request stays within (§1.11).
+This section states the standard flow every change rides — issue → branch → draft PR → authorized landing — the authorization, evidence, and synchronization obligations with their settlement rule and pre-1.0 macro-phase, the per-PR changelog-fragment discipline, the cross-review repair diagnosis for a change that keeps coming back (§1.4), and the delegation-and-review architecture: delegated work (§1.5), review integrity (§1.6), the reviewer panel (§1.7), the plan contest (§1.8), and finding judgment — the Judge and the Resolver (§1.9) — and the release backbone that periodically consolidates what the flow lands (§1.10) and the size bound a pull request stays within (§1.11).
 
 ### 1.1 The standard flow
 
@@ -309,7 +309,7 @@ The norm is **procedural today**, enforced at review (§2.3); release instrument
 
 A pull request to the default branch stays within one size bound, so that a review panel (§1.7) can hold the whole change at one head.
 
-**The measured quantity.** The quantity is the pull request's **changed lines**: additions plus deletions in the diff from its merge base to its head, over every path, tests included, deletions weighing as additions. Generated content is excluded at the granularity its generator writes it, and only there:
+**The measured quantity.** The quantity is the pull request's **changed lines**: additions plus deletions in the diff from its merge base to its head, over every path, tests included, deletions weighing as additions, counted as the platform counts a pull request: renames detected, so a moved file counts only its changed lines, and a binary path contributes no lines. Generated content is excluded at the granularity its generator writes it, and only there:
 - the SPEC table of contents, a **region** of `SPEC.md` written by `.github/workflows/build_toc.sh` between its start and end markers — changed lines inside the region do not count, and lines outside it in the same file do;
 - `test/fixtures/adopter-membership.snapshot.json`, a **file** written by `renderMembershipSnapshot`.
 
