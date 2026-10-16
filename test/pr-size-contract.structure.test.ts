@@ -24,9 +24,9 @@ function section(text: string, number: string): string {
 
 /** SHA-256 of the settled §1.11 section, the §1.1 bullet and the §3.3 row. */
 const DIGESTS = {
-	section: "15278412b5439ef92d278c5f3a6f92277ac6d8cb9300f316c142d57c4789d95f",
+	section: "61c88d8efcd47f32b546caa78d626c222261d358da60f59621c44d9e35e2b8c6",
 	bullet: "cd55bc4eb81e36fc79b571680ccb9cdcbb334cf95b0334f627139544a79428d7",
-	row: "8fec7dbc37799265ed6cb96fe38101d2bbbadbdd8d4bc0ccb1d717c60ed8b374",
+	row: "c8f62f93c773c5b9d5e22e4f8c6edf1579bde50ea74b122ef190178b80bd9325",
 };
 
 function settled(spec: string): { section: string; bullet: string; row: string } {
@@ -55,6 +55,8 @@ function intact(spec: string): boolean {
 }
 
 const CLAUSES: ReadonlyArray<readonly [string, string]> = [
+	["1.11", "as several pull requests under one Issue (§1.2) or as separate Issues"],
+	["3.3", "`backstop:` none (none owed: an over-bound landing is reversible, §3.11)"],
 	[
 		"1.11",
 		"The bound is **procedural today**, enforced at review (§2.3); the check derives from this section per §1.2's macro-phase clause",
@@ -160,6 +162,8 @@ describe("#408 pull-request size contract", () => {
 
 	it("kills one weakening of every clause", () => {
 		const mutants: ReadonlyArray<readonly [string, string]> = [
+			["as several pull requests under one Issue (§1.2) or as separate Issues", "as one pull request"],
+			["none owed: an over-bound landing is reversible, §3.11", "none owed: an over-bound landing is advisory"],
 			[
 				"The bound is **procedural today**, enforced at review (§2.3)",
 				"The bound is **optional today**, enforced at review (§2.3)",
