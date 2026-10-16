@@ -1,0 +1,31 @@
+# gitjig: source-only
+name: pr-size
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pr-size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # SPEC §1.11. CodelyTV/pr-size-labeler v1.12.0, pinned by commit.
+      - uses: CodelyTV/pr-size-labeler@19c335e7695ba922de938806dd129f0a9b992644
+        with:
+          xs_max_size: "10"
+          s_max_size: "100"
+          m_max_size: "500"
+          # xl, and a failure, at 2,401 or more: the action labels xl at >= l_max_size.
+          l_max_size: "2401"
+          fail_if_xl: "true"
+          message_if_xl: >
+            This pull request is over the 2,400-line bound of SPEC §1.11.
+            Split it, or state in its body why it cannot split.
+          files_to_ignore: "test/fixtures/adopter-membership.snapshot.json"
