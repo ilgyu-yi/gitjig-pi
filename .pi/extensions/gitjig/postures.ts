@@ -589,6 +589,29 @@ export const POSTURES: readonly PostureRow[] = [
 			"Contributor-controlled policy code or stale operands cannot decide the Tier-3 check. The false-block cost is a delayed PR; replay from the current trusted base revision after platform reads recover.",
 	},
 	{
+		dependency: "pr-size-measurement",
+		failureShape:
+			"the pull request's base or head, its complete file listing, a per-file count, the SPEC.md patch, or a region marker is absent, truncated, malformed or unreadable",
+		posture: "closed",
+		justification:
+			"A partial count cannot vouch that a change is within SPEC §1.11's bound. The false-block cost is a delayed reporting check; restore the platform reads and push, or comment, to re-run it.",
+	},
+	{
+		dependency: "pr-size-escape-record",
+		failureShape:
+			"an escape record is malformed, duplicated, stale, for another pull request, from an account without write permission, or names a value other than the measurement",
+		posture: "closed",
+		justification:
+			"§3.8's refusal-record rule: only the full conjunction honours an escape, and the check output names the refusing arm. Correct the record at the current head, or split the change.",
+	},
+	{
+		dependency: "pr-size-check-publication",
+		failureShape: "the pr-size check run cannot be created on the pull request's head",
+		posture: "closed",
+		justification:
+			"No check run is no pass: the reporting check is absent, and the workflow job fails visibly. Re-run the job once the platform accepts check runs.",
+	},
+	{
 		dependency: "landing-label-hygiene",
 		failureShape:
 			"the landing-label-hygiene.yml invalidate job cannot completely enumerate or reread the synchronize/base-push population, or its exact label removal cannot be observed",

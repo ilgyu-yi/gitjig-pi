@@ -38,6 +38,7 @@
 		".github/workflows/gitjig-lifecycle.mjs",
 		".github/workflows/ac-closeout.mjs",
 		".github/workflows/ac-closeout-event.mjs",
+		".github/workflows/pr-size.mjs",
 		".github/workflows/lifecycle-event.mjs",
 		".github/workflows/gitjig-governance.mjs",
 		".github/workflows/gitjig-governance-service.mjs",

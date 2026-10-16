@@ -182,6 +182,14 @@
 			"disposition": "handed-over"
 		},
 		{
+			"path": ".github/workflows/pr-size.mjs",
+			"disposition": "handed-over"
+		},
+		{
+			"path": ".github/workflows/pr-size.yml",
+			"disposition": "handed-over"
+		},
+		{
 			"path": ".github/workflows/resolve_parent_directive.sh",
 			"disposition": "handed-over"
 		},
@@ -731,6 +739,10 @@
 		},
 		{
 			"path": "changelog_unreleased/added/404.md",
+			"disposition": "instance-state"
+		},
+		{
+			"path": "changelog_unreleased/added/408.md",
 			"disposition": "instance-state"
 		},
 		{

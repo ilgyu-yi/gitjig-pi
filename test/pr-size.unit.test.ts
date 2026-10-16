@@ -1,0 +1,276 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+	decide,
+	ESCAPE_MARKER,
+	EXCLUSIONS,
+	evaluate,
+	governedBase,
+	measure,
+	parseEscape,
+	regionBounds,
+	regionChangedLines,
+	summary,
+	THRESHOLD,
+} from "../.github/workflows/pr-size.mjs";
+
+/* #408: the pr-size reporting check against SPEC §1.11. */
+
+const HEAD = "a".repeat(40);
+const BASE = "b".repeat(40);
+const OTHER = "c".repeat(40);
+const TOC = { path: "SPEC.md", start: "<!-- TOC START", end: "<!-- TOC END" };
+const escapeRecord = (value: Record<string, unknown>) =>
+	`${ESCAPE_MARKER}\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\`\n`;
+const record = (id: number, value: Record<string, unknown>, permission: string | undefined = "WRITE") => ({
+	id,
+	body: escapeRecord(value),
+	permission,
+});
+const valid = { pr: 7, head: HEAD, measured: 3000, reason: "one migration" };
+const noText = async () => null;
+
+describe("#408 the measured quantity", () => {
+	it("owns exactly §1.11's bound and exclusions", () => {
+		assert.equal(THRESHOLD, 2400);
+		assert.deepEqual(EXCLUSIONS.files, ["test/fixtures/adopter-membership.snapshot.json"]);
+		assert.deepEqual(EXCLUSIONS.regions, [TOC]);
+	});
+
+	it("sums every listed file's additions and deletions, a binary or moved file by its platform count", async () => {
+		const files = [
+			{ filename: "a.ts", additions: 10, deletions: 5 },
+			{ filename: "test/a.test.ts", additions: 7, deletions: 0 },
+			{ filename: "moved.ts", status: "renamed", additions: 1, deletions: 1 },
+			{ filename: "logo.png", status: "modified", additions: 0, deletions: 0 },
+		];
+		assert.equal(await measure({ files, changedFiles: 4, regionText: noText }), 24);
+	});
+
+	it("excludes the membership snapshot whole", async () => {
+		const files = [
+			{ filename: "a.ts", additions: 3, deletions: 0 },
+			{ filename: "test/fixtures/adopter-membership.snapshot.json", additions: 400, deletions: 20 },
+		];
+		assert.equal(await measure({ files, changedFiles: 2, regionText: noText }), 3);
+	});
+
+	it("excludes only the SPEC table-of-contents region, by its base and head marker positions", async () => {
+		const base = ["# SPEC", "<!-- TOC START -->", "| a |", "| b |", "<!-- TOC END -->", "body", "old"].join("\n");
+		const head = ["# SPEC", "<!-- TOC START -->", "| a |", "| b2 |", "| c |", "<!-- TOC END -->", "body", "new"].join(
+			"\n",
+		);
+		// -1 +1 inside (b → b2), +1 inside (c), -1 +1 outside (old → new).
+		const patch = [
+			"@@ -1,7 +1,8 @@",
+			" # SPEC",
+			" <!-- TOC START -->",
+			" | a |",
+			"-| b |",
+			"+| b2 |",
+			"+| c |",
+			" <!-- TOC END -->",
+			" body",
+			"-old",
+			"+new",
+		].join("\n");
+		const files = [{ filename: "SPEC.md", status: "modified", additions: 3, deletions: 2, patch }];
+		const regionText = async (_path: string, side: "base" | "head") => (side === "base" ? base : head);
+		assert.equal(await measure({ files, changedFiles: 1, regionText }), 2);
+	});
+
+	it("reads the markers' inner lines, and refuses a lone or reversed marker", () => {
+		assert.equal(regionBounds(null, TOC), null);
+		assert.equal(regionBounds("no markers", TOC), null);
+		assert.deepEqual(regionBounds("x\n<!-- TOC START -->\ny\n<!-- TOC END -->", TOC), { after: 2, before: 4 });
+		assert.throws(() => regionBounds("<!-- TOC START -->", TOC), /region-malformed/);
+		assert.throws(() => regionBounds("<!-- TOC END -->\n<!-- TOC START -->", TOC), /region-malformed/);
+		assert.throws(
+			() => regionBounds("<!-- TOC START -->\n<!-- TOC START -->\n<!-- TOC END -->", TOC),
+			/region-malformed/,
+		);
+	});
+
+	it("counts only changed lines inside the region, and refuses a patch with no hunk", () => {
+		const patch = [
+			"@@ -3,2 +3,2 @@",
+			"-in",
+			"+in",
+			"@@ -10,1 +10,1 @@",
+			"-out",
+			"+out",
+			"\\ No newline at end of file",
+		].join("\n");
+		assert.equal(regionChangedLines(patch, { after: 2, before: 5 }, { after: 2, before: 5 }), 2);
+		assert.equal(regionChangedLines(patch, null, null), 0);
+		assert.throws(() => regionChangedLines("+orphan", null, null), /diff-unavailable/);
+	});
+
+	it("fails closed on a truncated or malformed listing, or a SPEC.md change with no patch", async () => {
+		const one = [{ filename: "a.ts", additions: 1, deletions: 0 }];
+		await assert.rejects(measure({ files: one, changedFiles: 2, regionText: noText }), /listing-truncated/);
+		await assert.rejects(
+			measure({ files: [{ filename: "a.ts", additions: "1", deletions: 0 }], changedFiles: 1, regionText: noText }),
+			/listing-malformed/,
+		);
+		await assert.rejects(
+			measure({ files: [{ filename: "SPEC.md", additions: 1, deletions: 0 }], changedFiles: 1, regionText: noText }),
+			/diff-unavailable/,
+		);
+	});
+});
+
+describe("#408 the bound and its escape", () => {
+	it("passes at the bound and fails one line past it with no record", () => {
+		assert.deepEqual(decide({ number: 7, head: HEAD, measured: THRESHOLD, records: [] }), {
+			ok: true,
+			arm: "within-bound",
+		});
+		assert.deepEqual(decide({ number: 7, head: HEAD, measured: THRESHOLD + 1, records: [] }), {
+			ok: false,
+			arm: "over-bound",
+		});
+	});
+
+	it("honours one record at this head of this pull request, by a writer, naming the measured value", () => {
+		for (const permission of ["WRITE", "MAINTAIN", "ADMIN"])
+			assert.deepEqual(decide({ number: 7, head: HEAD, measured: 3000, records: [record(9, valid, permission)] }), {
+				ok: true,
+				arm: "escape-honoured",
+				record: 9,
+			});
+	});
+
+	it("names the refusing arm for every other record", () => {
+		const cases: Array<[string, Array<{ id: number; body: string; permission: string | undefined }>]> = [
+			["escape-stale", [record(1, { ...valid, head: OTHER })]],
+			["escape-other-pull", [record(1, { ...valid, pr: 8 })]],
+			["escape-duplicate", [record(1, valid), record(2, valid)]],
+			["escape-unauthorized", [record(1, valid, "READ")]],
+			["escape-unauthorized", [{ id: 1, body: escapeRecord(valid), permission: undefined }]],
+			["escape-value-mismatch", [record(1, { ...valid, measured: 2999 })]],
+			["escape-malformed", [{ id: 1, body: `${ESCAPE_MARKER}\nnot json`, permission: "WRITE" }]],
+			["escape-malformed", [record(1, { ...valid, extra: true })]],
+		];
+		for (const [arm, records] of cases)
+			assert.deepEqual(decide({ number: 7, head: HEAD, measured: 3000, records }), { ok: false, arm }, arm);
+	});
+
+	it("parses exactly the four fields, fenced or bare", () => {
+		assert.deepEqual(parseEscape(escapeRecord(valid)), valid);
+		assert.deepEqual(parseEscape(`${ESCAPE_MARKER}\n${JSON.stringify(valid)}`), valid);
+		for (const broken of [
+			{ ...valid, pr: 0 },
+			{ ...valid, head: "abc" },
+			{ ...valid, measured: -1 },
+			{ ...valid, reason: " " },
+			{ pr: 7, head: HEAD, measured: 3000 },
+		])
+			assert.equal(parseEscape(escapeRecord(broken)), undefined, JSON.stringify(broken));
+	});
+
+	it("reports the measured value, the threshold, and the honoured record or the refusing arm", () => {
+		assert.equal(
+			summary(3000, { arm: "escape-honoured", record: 9 }),
+			"3000 changed lines; threshold 2400; honoured escape record: comment 9",
+		);
+		assert.equal(
+			summary(undefined, { arm: "listing-truncated" }),
+			"not measured; threshold 2400; arm: listing-truncated",
+		);
+	});
+
+	it("governs the default branch and maintenance lines only", () => {
+		assert.equal(governedBase("main", "main"), true);
+		assert.equal(governedBase("1.x-maintenance", "main"), true);
+		assert.equal(governedBase("integration/409-x", "main"), false);
+	});
+});
+
+/** A fake platform: the pull request, its files and comments, and writer permissions. */
+function platform(options: {
+	files: unknown[];
+	changedFiles?: number;
+	comments?: Array<{ id: number; body: string; user: { login: string } }>;
+	permissions?: Record<string, string>;
+	base?: string;
+	baseRef?: string;
+	headAfter?: string;
+}) {
+	const reads: string[] = [];
+	let pulls = 0;
+	const api = async (path: string) => {
+		reads.push(path);
+		if (path === "/pulls/7") {
+			pulls += 1;
+			const head = pulls > 1 && options.headAfter ? options.headAfter : HEAD;
+			return {
+				head: { sha: head },
+				base: { sha: options.base ?? BASE, ref: options.baseRef ?? "main", repo: { default_branch: "main" } },
+				changed_files: options.changedFiles ?? options.files.length,
+			};
+		}
+		if (path.startsWith("/pulls/7/files")) return path.includes("page=1") ? options.files : [];
+		if (path.startsWith("/issues/7/comments")) return path.includes("page=1") ? (options.comments ?? []) : [];
+		const login = /^\/collaborators\/([^/]+)\/permission$/.exec(path)?.[1];
+		if (login) return { role_name: options.permissions?.[login] ?? "read" };
+		throw new Error(`unexpected read ${path}`);
+	};
+	return { api, raw: noText, reads };
+}
+
+describe("#408 one evaluation from platform reads", () => {
+	const big = [{ filename: "a.ts", additions: 3000, deletions: 0 }];
+
+	it("measures within the bound without reading any comment", async () => {
+		const fake = platform({ files: [{ filename: "a.ts", additions: 10, deletions: 2 }] });
+		assert.deepEqual(await evaluate({ ...fake, number: 7 }), {
+			head: HEAD,
+			measured: 12,
+			result: { ok: true, arm: "within-bound" },
+		});
+		assert.equal(fake.reads.filter((path) => path.startsWith("/issues")).length, 0);
+	});
+
+	it("honours a writer's record at this head over the bound, and refuses a reader's", async () => {
+		const comments = [{ id: 5, body: escapeRecord(valid), user: { login: "writer" } }];
+		const honoured = platform({ files: big, comments, permissions: { writer: "write" } });
+		assert.deepEqual((await evaluate({ ...honoured, number: 7 })).result, {
+			ok: true,
+			arm: "escape-honoured",
+			record: 5,
+		});
+		const refused = platform({ files: big, comments, permissions: { writer: "read" } });
+		assert.deepEqual((await evaluate({ ...refused, number: 7 })).result, { ok: false, arm: "escape-unauthorized" });
+	});
+
+	it("fails closed on an unknown base, a truncated listing, or a head that moved during the read", async () => {
+		assert.deepEqual((await evaluate({ ...platform({ files: big, base: "nope" }), number: 7 })).result, {
+			ok: false,
+			arm: "base-unknown",
+		});
+		assert.deepEqual((await evaluate({ ...platform({ files: big, changedFiles: 2 }), number: 7 })).result, {
+			ok: false,
+			arm: "listing-truncated",
+		});
+		assert.deepEqual(
+			(
+				await evaluate({
+					...platform({ files: [{ filename: "a.ts", additions: 1, deletions: 0 }], headAfter: OTHER }),
+					number: 7,
+				})
+			).result,
+			{ ok: false, arm: "subject-changed" },
+		);
+	});
+
+	it("leaves a pull request to another base ungoverned", async () => {
+		assert.deepEqual(
+			(await evaluate({ ...platform({ files: big, baseRef: "integration/409-x" }), number: 7 })).result,
+			{
+				ok: true,
+				arm: "not-governed",
+			},
+		);
+	});
+});

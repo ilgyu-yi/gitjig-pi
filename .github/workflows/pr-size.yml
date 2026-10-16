@@ -1,0 +1,37 @@
+name: pr-size
+
+on:
+  pull_request_target:
+    branches:
+      - main
+      - '*-maintenance'
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited, deleted]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  checks: write
+
+concurrency:
+  group: pr-size-${{ github.repository_id }}-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: pr-size-evaluator
+    if: ${{ github.event.pull_request || github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out trusted default-branch check
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Measure the pull request against SPEC §1.11's bound
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/workflows/pr-size.mjs
